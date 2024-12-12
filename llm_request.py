@@ -74,7 +74,7 @@ model = Model(api_key=OPENAI_API_KEY, model_name="gpt-4o")
     
 github = GithubRequest(token=TOKEN)
 #repos = github.request_repos(ORGANISATION)
-repos = [REPO, "https://github.com/stardist/stardist/"] # -> trying on less repos
+repos = ["https://github.com/stardist/stardist/"] # -> trying on less repos
 
 # checking if repo is an imaging software or not
 imaging_software = {}
