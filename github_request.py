@@ -56,8 +56,7 @@ class GithubRequest:
                 "login": repo.owner.login,
                 "url": repo.owner.html_url
             },
-            "topics": repo.get_topics(),
-            "license": repo.license.name if repo.license else None
+            "topics": repo.get_topics()
         }
         
         readme_url = None
@@ -80,24 +79,6 @@ class GithubRequest:
             "readme": readme_url,
             "last_commit_date": last_commit_date
             })
-        
-        contributors = []
-        try:
-            for contrib in repo.get_contributors():
-                contributors.append(contrib.login)
-            
-            repo_dict["contributors"] = contributors
-        except:
-            repo_dict["contributors"] = []
-
-        collaborators = []
-        try:
-            for collab in repo.get_collaborators():
-                collaborators.append(collab.login)
-            
-            repo_dict["collaborators"] = collaborators
-        except:
-            repo_dict["collaborators"] = []
 
         return repo_dict
 

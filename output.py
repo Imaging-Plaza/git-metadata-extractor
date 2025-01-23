@@ -6,6 +6,12 @@ class OutputIsImagingSoftware(BaseModel):
 
 class OutputRepoInfos(BaseModel):
     repo: str = Field(description="The URL of the repository being analyzed.")
-    doi: str = Field(description="Citation DOI link.")
+    docker: str = Field(description="Docker link.")
     documentation: str = Field(description="Link to an official documentation of the project.")
-    license: str = Field(description="SPDX link to the project license.")
+    image: str = Field(description="Project image link.")
+    requirements: str = Field(description="Project requirements.")
+    executable: str = Field(description="Link to executable instructions.")
+
+class OutputDescription(BaseModel):
+    repo: str = Field(description="The URL of the repository being analyzed.")
+    description: str = Field(description="Short description of the project.")

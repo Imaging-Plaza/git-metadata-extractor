@@ -12,3 +12,6 @@ def dict_to_json(data):
 
     json_string = json.dumps(data, default=convert_datetime, indent=4)
     return json_string
+
+def process_list(string):
+    return string.split(" ,")
