@@ -6,3 +6,5 @@ langchain-core
 PyGithub
 openai
 langchain_openai
+google-genai
+repo-to-text

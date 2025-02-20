@@ -25,6 +25,13 @@ question_repo_description = """From the following GitHub repository: {repo_url} 
             Please answer only with a short description around 50 words. No additional text or explanation
             """
 
+system_prompt = """You are an expert in scientific software categorization.  
+            The user will provide a GitHub repository's codebase (in a flattened text format) along with metadata and a specific SHACL shape.  
+            Your task is to extract and structure the relevant metadata from the repository, ensuring that the output strictly follows the given SHACL shape.  
+            Only properties explicitly defined in the SHACL shape may be included in the final JSON-LD output.
+            """
+
+
 ###########################################
 
 
