@@ -1,9 +1,9 @@
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 
-from utils import *
-from output import *
-from prompts import *
+from utils.utils import *
+from utils.output import *
+from utils.prompts import *
 
 # output parsers
 output_parser_is_imaging_software = PydanticOutputParser(pydantic_object=OutputIsImagingSoftware)

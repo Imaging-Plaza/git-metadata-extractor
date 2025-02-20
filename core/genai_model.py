@@ -7,9 +7,10 @@ from pathlib import Path
 import tiktoken
 from pprint import pprint
 
-from prompts import system_prompt
+from utils.prompts import system_prompt
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 def request(repo_url):   
     # Load schema context
@@ -70,7 +71,7 @@ def request(repo_url):
         }
 
         # Send request to OpenRouter
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", 
+        response = requests.post(ENDPOINT, 
                                  headers=headers, json=payload)
 
         if response.status_code == 200:

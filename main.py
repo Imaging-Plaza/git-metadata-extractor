@@ -1,13 +1,13 @@
 from dotenv import load_dotenv
-from github_request import GithubRequest
+from core.github_request import GithubRequest
 import os
 from urllib.parse import urlparse
 from pprint import pprint
 
-from utils import *
-from prompts import *
-from genai_model import request
-from gpt_model import Model
+from utils.utils import *
+from utils.prompts import *
+from core.genai_model import request
+from core.gpt_model import Model
 
 load_dotenv()
 
