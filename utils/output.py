@@ -20,7 +20,6 @@ class OutputDescription(BaseModel):
 class RepositoryInfo(BaseModel):
     title: str
     description: str
-    #urls: List[str]
     images: List[str]
     disciplines: List[str]
     institutions: List[str]

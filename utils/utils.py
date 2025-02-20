@@ -25,3 +25,11 @@ def fetch_jsonld(url):
         return response.json()
     else:
         raise Exception(f"Error fetching data: {response.status_code} - {response.text}")
+    
+def clean_json_string(raw_text):
+    """Remove triple backticks and 'json' from the response."""
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]  # Remove leading ```json
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]  # Remove trailing ```
+    return raw_text.strip()

@@ -25,10 +25,29 @@ question_repo_description = """From the following GitHub repository: {repo_url} 
             Please answer only with a short description around 50 words. No additional text or explanation
             """
 
-system_prompt = """You are an expert in scientific software categorization.  
+system_prompt_jsonLD = """You are an expert in scientific software categorization.  
             The user will provide a GitHub repository's codebase (in a flattened text format) along with metadata and a specific SHACL shape.  
             Your task is to extract and structure the relevant metadata from the repository, ensuring that the output strictly follows the given SHACL shape.  
             Only properties explicitly defined in the SHACL shape may be included in the final JSON-LD output.
+            """
+
+system_prompt_json = """You are an expert in scientfic software that is trying to categorize github repositories. 
+            The user will provide you the codebase + some metadata and you'll need to fill the following fields:
+
+            - title: Title of the software
+            - description: Try to describe the software in a few sentences.
+            - images: A few image URLs representatives of the software. 
+            - disciplines: List of disciplines that the software is compatible with.
+            - institutions: List of institutions that have contributed to the software.
+            - compatible_inputs: List of inputs that the software can take.
+            - outputs: List of outputs that the software can generate.
+            - docker_images: List of Docker images URLs that are relevant to the software.
+            - notebooks: List of Jupyter notebooks URLs that are relevant to the software.
+            - datasets: List of datasets URLs that are relevant to the software.
+            - epfl_tool: True/False if the software is an EPFL tool. EPFL means Ecole Polytechnique Fédérale de Lausanne.
+            - reasons_to_be_epfl_tool: If the software is an EPFL tool, why is it an EPFL tool?
+
+            Please output in a json format for easier post-processing.
             """
 
 
