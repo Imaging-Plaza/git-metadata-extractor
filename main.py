@@ -64,7 +64,7 @@ imaging_repo_infos = {}
 # github.close()
 
 for url in repos:
-    # jsonld_gimie_data = fetch_jsonld(GIMIE_ENDPOINT + url)
-    # pprint(jsonld_gimie_data)
+    jsonld_gimie_data = fetch_jsonld(GIMIE_ENDPOINT + url)
+    pprint(jsonld_gimie_data)
 
     request(url)
