@@ -3,9 +3,7 @@ import tempfile
 import subprocess
 import glob
 import requests
-from pathlib import Path
 import tiktoken
-from pprint import pprint
 
 from utils.prompts import system_prompt_json
 from utils.output import RepositoryInfo
@@ -15,19 +13,7 @@ GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemini-2.0-flash-001"
 
-def request(repo_url):   
-    # Load schema context
-    # file_path_schema = Path(__file__).parent / "files" / "schema_context.txt"
-    # schema_context = ""
-    # if file_path_schema.exists():
-    #     with open(file_path_schema, "r", encoding="utf-8") as f:
-    #         schema_context = f.read()
-
-    # # Count tokens in schema_context
-    limiter_encoding = tiktoken.get_encoding("cl100k_base")
-    # schema_tokens = len(limiter_encoding.encode(schema_context))
-    # print(f"Schema context token count: {schema_tokens}")
-    
+def llm_request_repo_infos(repo_url):    
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Cloning {repo_url} into {temp_dir}...")
@@ -46,6 +32,7 @@ def request(repo_url):
                 combined_text += f.read() + "\n"
                 
         # Limit combined_text to 950000 tokens
+        limiter_encoding = tiktoken.get_encoding("cl100k_base")
         tokens = limiter_encoding.encode(combined_text)
         
         print(f"Original amount of tokens: {len(tokens)}")
@@ -65,6 +52,10 @@ def request(repo_url):
                 {"role": "system", "content": system_prompt_json},
                 {"role": "user", "content": combined_text}# + "\n\n" + schema_context}
             ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": RepositoryInfo.model_json_schema()
+            },
             "temperature": 0.7
         }
 
@@ -82,7 +73,6 @@ def request(repo_url):
             
             try:
                 parsed_result = RepositoryInfo.model_validate_json(clean_json_string(raw_result))
-                pprint(parsed_result)  # Pretty-print validated result
                 return parsed_result
             
             except Exception as e:

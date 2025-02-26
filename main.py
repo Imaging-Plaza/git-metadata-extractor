@@ -6,7 +6,7 @@ from pprint import pprint
 
 from utils.utils import *
 from utils.prompts import *
-from core.genai_model import request
+from core.genai_model import llm_request_repo_infos
 from core.gpt_model import Model
 
 load_dotenv()
@@ -67,4 +67,5 @@ for url in repos:
     jsonld_gimie_data = fetch_jsonld(GIMIE_ENDPOINT + url)
     pprint(jsonld_gimie_data)
 
-    request(url)
+    response = llm_request_repo_infos(url)
+    pprint(response)

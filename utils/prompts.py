@@ -32,7 +32,7 @@ system_prompt_jsonLD = """You are an expert in scientific software categorizatio
             """
 
 system_prompt_json = """You are an expert in scientfic software that is trying to categorize github repositories. 
-            The user will provide you the codebase + some metadata and you'll need to fill the following fields:
+            The user will provide you the codebase + some metadata and you will need to fill the following fields:
 
             - title: Title of the software
             - description: Try to describe the software in a few sentences.
@@ -47,7 +47,7 @@ system_prompt_json = """You are an expert in scientfic software that is trying t
             - epfl_tool: True/False if the software is an EPFL tool. EPFL means Ecole Polytechnique Fédérale de Lausanne.
             - reasons_to_be_epfl_tool: If the software is an EPFL tool, why is it an EPFL tool?
 
-            Please output in a json format for easier post-processing.
+            Ensure output is well-formatted, valid JSON.
             """
 
 
