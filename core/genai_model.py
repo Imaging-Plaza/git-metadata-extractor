@@ -6,7 +6,8 @@ import requests
 import tiktoken
 
 from utils.prompts import system_prompt_json
-from utils.output import RepositoryInfo
+# from utils.output import RepositoryInfo
+from utils.pydantic import SoftwareSourceCode
 from utils.utils import *
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
@@ -36,7 +37,7 @@ def llm_request_repo_infos(repo_url):
         tokens = limiter_encoding.encode(combined_text)
         
         print(f"Original amount of tokens: {len(tokens)}")
-        if len(tokens) > 950000: #- schema_tokens:
+        if len(tokens) > 950000:
             tokens = tokens[:800000]
             combined_text = limiter_encoding.decode(tokens)
                 
@@ -50,11 +51,11 @@ def llm_request_repo_infos(repo_url):
             "model": MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt_json},
-                {"role": "user", "content": combined_text}# + "\n\n" + schema_context}
+                {"role": "user", "content": combined_text}
             ],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": RepositoryInfo.model_json_schema()
+                "json_schema": SoftwareSourceCode.model_json_schema()
             },
             "temperature": 0.7
         }
@@ -69,11 +70,11 @@ def llm_request_repo_infos(repo_url):
                                  headers=headers, json=payload)
 
         if response.status_code == 200:
-            raw_result = response.json()["choices"][0]["message"]["content"]
+            raw_result = response.json()["choices"][0]["message"]["content"] # Read response
             
             try:
-                parsed_result = RepositoryInfo.model_validate_json(clean_json_string(raw_result))
-                return parsed_result
+                parsed_result = clean_json_string(raw_result) # Parse result into clean json
+                return json_to_jsonLD(parsed_result) # Return converted data to jsonLD
             
             except Exception as e:
                 print("Error:", e)
