@@ -74,7 +74,8 @@ def llm_request_repo_infos(repo_url):
             
             try:
                 parsed_result = clean_json_string(raw_result) # Parse result into clean json
-                return json_to_jsonLD(parsed_result) # Return converted data to jsonLD
+                json_data = json.loads(parsed_result)
+                return json_to_jsonLD(json_data) # Return converted data to jsonLD
             
             except Exception as e:
                 print("Error:", e)
