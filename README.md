@@ -7,7 +7,6 @@ pip install -r requirements.txt
 ```
 Create a `.env` file and fill it as follows:
 ```.env
-TOKEN = "GitHub token"
 OPENAI_API_KEY = "openAI api key"
 GEMINI_API_KEY = "gemini api key"
 ```
