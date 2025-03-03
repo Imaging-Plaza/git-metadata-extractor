@@ -8,3 +8,4 @@ openai
 langchain_openai
 google-genai
 repo-to-text
+PyLD
