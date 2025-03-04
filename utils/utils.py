@@ -2,6 +2,8 @@ import json
 import requests
 from datetime import datetime
 from pyld import jsonld
+from rdflib import Graph
+import ast
 
 def to_bool(s):
     """Return a boolean based on a string boolean"""
@@ -25,16 +27,17 @@ def fetch_jsonld(url):
     headers = {"Accept": "application/ld+json"}
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json()
+        return ast.literal_eval(response.json().get("output", "{}"))
     else:
         raise Exception(f"Error fetching data: {response.status_code} - {response.text}")
     
 def clean_json_string(raw_text):
     """Remove triple backticks and 'json' from the response."""
     if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]  # Remove leading ```json
+        raw_text = raw_text[7:]
     if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]  # Remove trailing ```
+        raw_text = raw_text[:-3]
+
     return raw_text.strip()
 
 def json_to_jsonLD(json_data):
@@ -46,12 +49,15 @@ def json_to_jsonLD(json_data):
 
     return expanded_data[0]
 
-def merge_jsonld(data1, data2):
-    """Recursively merges two JSON-LD objects, giving priority to data1."""
-    merged = data1.copy()
-    for key, value in data2.items():
-        if key in merged:
-            merged[key] = merge_jsonld(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+def merge_jsonld(data1, data2, output_path):
+    """Merges two JSON-LD objects and puts the output in output_path"""
+    g1 = Graph()
+    g1.parse(data=json.dumps(data1), format="json-ld")
+
+    g2 = Graph()
+    g2.parse(data=json.dumps(data2), format="json-ld")
+
+    g3 = g1 + g2
+
+    # Serialize to N-Triples format in output path
+    g3.serialize(destination=output_path, format="json-ld", indent=4)       
