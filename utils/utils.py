@@ -1,26 +1,8 @@
 import json
 import requests
-from datetime import datetime
 from pyld import jsonld
 from rdflib import Graph
 import ast
-
-def to_bool(s):
-    """Return a boolean based on a string boolean"""
-    return s == "True"
-
-def dict_to_json(data):
-    """Convert a python dict to json."""
-    def convert_datetime(obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        raise TypeError(f"Type {obj.__class__.__name__} not serializable")
-
-    json_string = json.dumps(data, default=convert_datetime, indent=4)
-    return json_string
-
-def process_list(string):
-    return string.split(" ,")
 
 def fetch_jsonld(url):
     """Fetch JSON-LD data from a given URL."""
@@ -60,4 +42,4 @@ def merge_jsonld(data1, data2, output_path):
     g3 = g1 + g2
 
     # Serialize to N-Triples format in output path
-    g3.serialize(destination=output_path, format="json-ld", indent=4)       
+    g3.serialize(destination=output_path, format="json-ld", indent=4)
