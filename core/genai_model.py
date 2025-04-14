@@ -7,10 +7,10 @@ import tiktoken
 import logging
 from dotenv import load_dotenv
 
-from utils.prompts import system_prompt_json
-from utils.pydantic import SoftwareSourceCode
+from core.prompts import system_prompt_json
+from core.pydantic import SoftwareSourceCode
 from utils.utils import *
-from utils.verification import Verification
+from core.verification import Verification
 
 load_dotenv()
 
@@ -19,7 +19,6 @@ ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "google/gemini-2.0-flash-001"
 
 # Setup logger
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def llm_request_repo_infos(repo_url):    

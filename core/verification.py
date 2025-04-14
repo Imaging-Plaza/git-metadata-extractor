@@ -7,18 +7,12 @@ logger = logging.getLogger(__name__)
 
 class Verification:
     def __init__(self, metadata: dict):
-        """
-        Initialize the Verification instance with metadata to validate.
-        """
-        self.data = metadata  # Original metadata dictionary
-        self.issues = []  # Critical validation failures
-        self.warnings = []  # Non-blocking warnings (like unreachable URLs)
-        self.invalid_fields = {}  # Fields to sanitize after validation
+        self.data = metadata
+        self.issues = []
+        self.warnings = []
+        self.invalid_fields = {}
 
     def run(self):
-        """
-        Run the full validation suite on the metadata.
-        """
         logger.info("Running metadata validation checks...")
         self._check_required_fields()
         self._check_formats()
@@ -26,7 +20,6 @@ class Verification:
         self._check_software_images()
         self._check_url_accessibility()
 
-        # Return overall result
         if not self.issues:
             logger.info("Metadata is valid.")
             return ["✅ Metadata appears valid."]
@@ -35,9 +28,6 @@ class Verification:
             return self.issues
 
     def _check_required_fields(self):
-        """
-        Ensure all required fields are present and not empty.
-        """
         logger.debug("Checking required fields...")
         required_fields = [
             "name", "description", "author", "codeRepository", "citation",
@@ -53,12 +43,9 @@ class Verification:
                 self.invalid_fields[field] = "Missing required field"
 
     def _check_formats(self):
-        """
-        Validate formatting of license, dates, and various URL fields.
-        """
-        logger.debug("Checking field formats...")
+        logger.debug("Checking formats for license, dates, and URLs...")
 
-        # SPDX license check (must include SPDX URL)
+        # License format
         license_val = self.data.get("license", "")
         if license_val and "spdx.org/licenses/" not in license_val:
             msg = f"License is not a valid SPDX URL: {license_val}"
@@ -66,7 +53,7 @@ class Verification:
             self.issues.append(msg)
             self.invalid_fields["license"] = msg
 
-        # ISO date format check for creation and publication dates
+        # Date fields
         for date_field in ["dateCreated", "datePublished"]:
             date_val = self.data.get(date_field)
             if date_val and not self._is_date(date_val):
@@ -75,30 +62,36 @@ class Verification:
                 self.issues.append(msg)
                 self.invalid_fields[date_field] = msg
 
-        # Single URL fields
+        # Single string URLs
         url_fields = ["url", "readme", "hasDocumentation"]
         for field in url_fields:
             url_val = self.data.get(field)
-            if url_val and not self._is_valid_url(url_val):
-                msg = f"Invalid or unreachable URL in {field}: {url_val}"
+            if not isinstance(url_val, str) or not self._is_valid_url(url_val):
+                msg = f"Invalid or missing URL in {field}: {url_val}"
                 logger.error(msg)
                 self.issues.append(msg)
                 self.invalid_fields[field] = msg
 
-        # List fields with URLs
-        for list_field in ["codeRepository", "citation", "image"]:
-            for url in self.data.get(list_field, []):
-                if not self._is_valid_url(url):
-                    msg = f"Invalid or unreachable URL in {list_field}: {url}"
-                    logger.error(msg)
-                    self.issues.append(msg)
-                    self.invalid_fields.setdefault(list_field, []).append(url)
+        # Lists of URLs
+        list_fields = ["codeRepository", "citation", "image"]
+        for field in list_fields:
+            val = self.data.get(field)
+            if not isinstance(val, list):
+                msg = f"Expected list in {field}, got {type(val).__name__}"
+                logger.error(msg)
+                self.issues.append(msg)
+                self.invalid_fields[field] = msg
+                continue
+
+            bad_items = [v for v in val if not isinstance(v, str) or not self._is_valid_url(v)]
+            if bad_items:
+                msg = f"{len(bad_items)} invalid URLs in {field}: {bad_items}"
+                logger.error(msg)
+                self.issues.append(msg)
+                self.invalid_fields[field] = bad_items
 
     def _check_authors(self):
-        """
-        Validate structure and values in the author list.
-        """
-        logger.debug("Checking author fields...")
+        logger.debug("Checking author objects...")
         authors = self.data.get("author", [])
         if not isinstance(authors, list):
             msg = "`author` must be a list"
@@ -108,26 +101,27 @@ class Verification:
             return
 
         for author in authors:
-            # Name is required for each author
-            if "name" not in author:
+            if not isinstance(author, dict):
+                msg = f"Invalid author entry (not a dict): {author}"
+                logger.error(msg)
+                self.issues.append(msg)
+                continue
+
+            if "name" not in author or not author["name"]:
                 msg = "Missing `name` in author object"
                 logger.error(msg)
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("author", []).append("Missing name")
 
-            # ORCID must be a valid URL if provided
             orcid = author.get("orcidId")
             if orcid and not self._is_valid_url(orcid):
-                msg = f"Invalid ORCID ID URL: {orcid}"
+                msg = f"Invalid ORCID ID: {orcid}"
                 logger.error(msg)
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("author", []).append("Invalid ORCID ID")
 
     def _check_software_images(self):
-        """
-        Validate entries in hasSoftwareImage, including version and registry URL.
-        """
-        logger.debug("Checking software image versions and registry URLs...")
+        logger.debug("Checking software image objects...")
         images = self.data.get("hasSoftwareImage", [])
         if not isinstance(images, list):
             msg = "`hasSoftwareImage` must be a list"
@@ -137,96 +131,98 @@ class Verification:
             return
 
         for img in images:
+            if not isinstance(img, dict):
+                msg = f"Invalid image entry (not a dict): {img}"
+                logger.error(msg)
+                self.issues.append(msg)
+                continue
+
             if "softwareVersion" in img and not self._is_version(img["softwareVersion"]):
                 msg = f"Invalid softwareVersion: {img['softwareVersion']}"
                 logger.error(msg)
                 self.issues.append(msg)
-                self.invalid_fields.setdefault("hasSoftwareImage", []).append("Invalid softwareVersion")
+                self.invalid_fields.setdefault("hasSoftwareImage", []).append("Invalid version")
 
             if "availableInRegistry" in img and not self._is_valid_url(img["availableInRegistry"]):
                 msg = f"Invalid registry URL: {img['availableInRegistry']}"
                 logger.error(msg)
                 self.issues.append(msg)
-                self.invalid_fields.setdefault("hasSoftwareImage", []).append("Invalid registry URL")
+                self.invalid_fields.setdefault("hasSoftwareImage", []).append("Invalid URL")
 
     def _check_url_accessibility(self):
-        """
-        Make HEAD requests to check if URLs are reachable.
-        """
-        logger.debug("Checking if URLs are accessible...")
+        logger.debug("Checking URL accessibility...")
+        url_fields = ["url", "readme", "hasDocumentation"]
+        list_fields = ["codeRepository", "citation", "image"]
+
         all_urls = []
-        all_urls += self.data.get("image", [])
-        all_urls += self.data.get("codeRepository", [])
-        all_urls += self.data.get("citation", [])
-        for field in ["url", "readme", "hasDocumentation"]:
+
+        for field in url_fields:
             val = self.data.get(field)
-            if val:
+            if isinstance(val, str):
                 all_urls.append(val)
+
+        for field in list_fields:
+            urls = self.data.get(field, [])
+            if isinstance(urls, list):
+                all_urls.extend([u for u in urls if isinstance(u, str)])
 
         for url in all_urls:
             if not self._url_responds(url):
-                msg = f"URL does not resolve (might be broken or slow): {url}"
+                msg = f"Unreachable URL: {url}"
                 logger.warning(msg)
                 self.warnings.append(msg)
 
     def sanitize_metadata(self):
-        """
-        Remove or fix fields identified as invalid after validation.
-        """
-        logger.info("Sanitizing metadata based on validation results.")
+        logger.info("Sanitizing metadata...")
         clean_data = self.data.copy()
 
         for field, reason in self.invalid_fields.items():
-            if field in clean_data:
-                # Remove simple fields
-                if isinstance(reason, str):
-                    logger.warning(f"Removing invalid field `{field}`: {reason}")
+            if field not in clean_data:
+                continue
+
+            if isinstance(reason, str):
+                logger.warning(f"Removing invalid field: {field}")
+                del clean_data[field]
+
+            elif isinstance(reason, list) and isinstance(clean_data[field], list):
+                valid_items = [v for v in clean_data[field] if isinstance(v, str) and self._is_valid_url(v)]
+                if valid_items:
+                    clean_data[field] = valid_items
+                else:
                     del clean_data[field]
+                    logger.warning(f"Removed entire invalid list: {field}")
 
-                # Remove invalid items from URL lists
-                elif isinstance(reason, list) and isinstance(clean_data[field], list):
-                    original_len = len(clean_data[field])
-                    valid_items = [item for item in clean_data[field] if self._is_valid_url(item)]
-                    if valid_items:
-                        clean_data[field] = valid_items
-                        logger.warning(f"Removed {original_len - len(valid_items)} invalid entries from `{field}`.")
-                    else:
-                        logger.warning(f"Removing entire list `{field}` (no valid entries).")
-                        del clean_data[field]
+            elif field == "author":
+                authors = clean_data.get("author", [])
+                valid = [a for a in authors if a.get("name")]
+                clean_data["author"] = valid if valid else None
+                if not valid:
+                    del clean_data["author"]
+                    logger.warning("Removed invalid author entries.")
 
-                # Clean author entries
-                elif field == "author":
-                    valid_authors = []
-                    for author in clean_data["author"]:
-                        if "name" in author and author["name"]:
-                            if "orcidId" in author and not self._is_valid_url(author["orcidId"]):
-                                del author["orcidId"]
-                            valid_authors.append(author)
-                    if valid_authors:
-                        clean_data["author"] = valid_authors
-                    else:
-                        logger.warning("Removing `author` field entirely (no valid entries).")
-                        del clean_data["author"]
+            elif field == "hasSoftwareImage":
+                imgs = []
+                for img in clean_data["hasSoftwareImage"]:
+                    if not isinstance(img, dict):
+                        continue
+                    if "softwareVersion" in img and not self._is_version(img["softwareVersion"]):
+                        del img["softwareVersion"]
+                    if "availableInRegistry" in img and not self._is_valid_url(img["availableInRegistry"]):
+                        del img["availableInRegistry"]
+                    imgs.append(img)
+                clean_data["hasSoftwareImage"] = imgs
 
-                # Clean software image entries
-                elif field == "hasSoftwareImage":
-                    valid_images = []
-                    for img in clean_data["hasSoftwareImage"]:
-                        if "softwareVersion" in img and not self._is_version(img["softwareVersion"]):
-                            del img["softwareVersion"]
-                        if "availableInRegistry" in img and not self._is_valid_url(img["availableInRegistry"]):
-                            del img["availableInRegistry"]
-                        valid_images.append(img)
-                    clean_data["hasSoftwareImage"] = valid_images
+        # 🧼 Remove any empty fields
+        empty_keys = [k for k, v in clean_data.items() if v in ["", [], {}, [{}]]]
+        for k in empty_keys:
+            del clean_data[k]
+            logger.info(f"Removed empty field: {k}")
 
         logger.info("Sanitization complete.")
         return clean_data
 
     def summary(self):
-        """
-        Print a human-readable summary of validation results.
-        """
-        logger.info("Printing validation summary.")
+        logger.info("Validation Summary:")
         print("\n🔍 Validation Summary:\n")
         if self.issues:
             for issue in self.issues:
@@ -238,12 +234,9 @@ class Verification:
             for warn in self.warnings:
                 print(f"⚠️ {warn}")
         else:
-            print("✅ All links are reachable (or not provided).")
+            print("✅ All tested links are reachable.")
 
     def as_dict(self):
-        """
-        Export validation results in a dictionary format (for logging or output).
-        """
         return {
             "status": "valid" if not self.issues else "invalid",
             "issues": self.issues,
@@ -251,12 +244,9 @@ class Verification:
             "invalid_fields": self.invalid_fields
         }
 
-    # --- Utility functions ---
+    # --- Utility methods ---
 
     def _is_valid_url(self, url):
-        """
-        Validate if a string is a well-formed HTTP or HTTPS URL.
-        """
         try:
             result = urlparse(url)
             return result.scheme in ("http", "https") and bool(result.netloc)
@@ -264,9 +254,6 @@ class Verification:
             return False
 
     def _url_responds(self, url):
-        """
-        Check if a URL resolves with an HTTP HEAD request.
-        """
         try:
             response = requests.head(url, timeout=5)
             return response.status_code < 400
@@ -274,13 +261,7 @@ class Verification:
             return False
 
     def _is_date(self, date):
-        """
-        Check if a string matches YYYY-MM-DD format.
-        """
         return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", date))
 
     def _is_version(self, version):
-        """
-        Check if a version matches X.Y.Z format (semver or date-like).
-        """
         return bool(re.fullmatch(r"\d+\.\d+\.\d+", version))

@@ -88,6 +88,6 @@ The user will provide the full codebase of a software project. Your task is to e
 - `isPluginModuleOf` (list of strings, **optional**): The software or app the software is plugin or module of.
 - `hasAcknowledgements` (string, **optional**): The acknowledgements of the software.
 - `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software.
-- `readme` (valid URL, **optional**): README of the software
+- `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
 """
