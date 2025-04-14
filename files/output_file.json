@@ -1,340 +1,262 @@
-[
-    {
-        "@id": "https://github.com/qchapp/lungs-segmentation",
-        "@type": [
-            "http://schema.org/SoftwareSourceCode"
-        ],
-        "http://schema.org/author": [
-            {
-                "@id": "https://github.com/qchapp"
-            }
-        ],
-        "http://schema.org/codeRepository": [
-            {
-                "@id": "https://github.com/qchapp/lungs-segmentation"
-            }
-        ],
-        "http://schema.org/contributor": [
-            {
-                "@id": "https://github.com/qchapp"
-            }
-        ],
-        "http://schema.org/dateCreated": [
-            {
-                "@value": "2025-03-10"
-            }
-        ],
-        "http://schema.org/dateModified": [
-            {
-                "@value": "2025-03-28"
-            }
-        ],
-        "http://schema.org/datePublished": [
-            {
-                "@value": "2025-03-28"
-            }
-        ],
-        "http://schema.org/description": [
-            {
-                "@value": "A deep-learning pipeline for automated lung segmentation in mice CT scans, aiding lung cancer research by isolating lung regions for more precise analysis."
-            }
-        ],
-        "http://schema.org/downloadUrl": [
-            {
-                "@id": "https://github.com/qchapp/lungs-segmentation/archive/refs/tags/v1.0.9.tar.gz"
-            }
-        ],
-        "http://schema.org/license": [
-            {
-                "@id": "https://spdx.org/licenses/BSD-3-Clause.html"
-            }
-        ],
-        "http://schema.org/name": [
-            {
-                "@value": "qchapp/lungs-segmentation"
-            }
-        ],
-        "http://schema.org/programmingLanguage": [
-            {
-                "@value": "Python"
-            }
-        ],
-        "http://schema.org/version": [
-            {
-                "@value": "v1.0.9"
-            }
-        ]
-    },
-    {
-        "@id": "_:Nbe069cc660a845148d90cd9b0e009d2f",
-        "http://schema.org/applicationCategory": [
-            {
-                "@value": "Image Processing"
-            },
-            {
-                "@value": "Scientific/Engineering"
-            }
-        ],
-        "http://schema.org/codeRepository": [
-            {
-                "@value": "https://github.com/qchapp/lungs-segmentation.git"
-            }
-        ],
-        "http://schema.org/dateCreated": [
-            {
-                "@value": "2023-01-01"
-            }
-        ],
-        "http://schema.org/datePublished": [
-            {
-                "@value": "2023-01-01"
-            }
-        ],
-        "http://schema.org/description": [
-            {
-                "@value": "3D U-Net model for the segmentation of the lungs in mice CT scans. The goal of our tool is to provid a reliable way to segment the lungs in mouse CT scans. The U-net model produces a binary mask representing the segmentation of the lungs."
-            }
-        ],
-        "http://schema.org/featureList": [
-            {
-                "@value": "Segmentation of the lungs"
-            },
-            {
-                "@value": "CLI interface"
-            },
-            {
-                "@value": "Napari plugin"
-            }
-        ],
-        "http://schema.org/identifier": [
-            {
-                "@value": "PLACEHOLDER_IDENTIFIER"
-            }
-        ],
-        "http://schema.org/image": [
-            {
-                "@value": "https://raw.githubusercontent.com/qchapp/lungs-segmentation/refs/heads/master/images/main_fig.png"
-            },
-            {
-                "@value": "https://raw.githubusercontent.com/qchapp/lungs-segmentation/refs/heads/master/images/napari-screenshot.png"
-            }
-        ],
-        "http://schema.org/isAccessibleForFree": [
-            {
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean",
-                "@value": true
-            }
-        ],
-        "http://schema.org/license": [
-            {
-                "@value": "https://spdx.org/licenses/BSD-3-Clause"
-            }
-        ],
-        "http://schema.org/name": [
-            {
-                "@value": "unet_lungs_segmentation"
-            }
-        ],
-        "http://schema.org/operatingSystem": [
-            {
-                "@value": "OS Independent"
-            }
-        ],
-        "http://schema.org/programmingLanguage": [
-            {
-                "@value": "Python"
-            }
-        ],
-        "http://schema.org/softwareRequirements": [
-            {
-                "@value": "tifffile"
-            },
-            {
-                "@value": "napari[all]>=0.4.16"
-            },
-            {
-                "@value": "huggingface_hub"
-            },
-            {
-                "@value": "pytorch>=2.0"
-            },
-            {
-                "@value": "qtpy"
-            },
-            {
-                "@value": "napari-label-focus"
-            },
-            {
-                "@value": "python-dotenv"
-            },
-            {
-                "@value": "magicgui"
-            },
-            {
-                "@value": "scikit-image"
-            },
-            {
-                "@value": "matplotlib"
-            },
-            {
-                "@value": "csbdeep"
-            },
-            {
-                "@value": "python>=3.9"
-            }
-        ],
-        "http://schema.org/url": [
-            {
-                "@value": "https://github.com/qchapp/lungs-segmentation.git"
-            }
-        ],
-        "https://imaging-plaza.epfl.ch/ontology#imagingModality": [
-            {
-                "@value": "CT"
-            }
-        ],
-        "https://imaging-plaza.epfl.ch/ontology#relatedToOrganization": [
-            {
-                "@value": "Ecole Polytechnique Federale de Lausanne (EPFL)"
-            }
-        ],
-        "https://imaging-plaza.epfl.ch/ontology#requiresGPU": [
-            {
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean",
-                "@value": true
-            }
-        ],
-        "https://w3id.org/okn/o/sd#hasDocumentation": [
-            {
-                "@value": ""
-            }
-        ],
-        "https://w3id.org/okn/o/sd#hasExecutableInstructions": [
-            {
-                "@value": "pip install unet_lungs_segmentation"
-            }
-        ],
-        "https://w3id.org/okn/o/sd#hasFunding": [
-            {
-                "@id": "_:N7ecbd278d4f94d249caa3747f213a5f4"
-            }
-        ],
-        "https://w3id.org/okn/o/sd#hasParameter": [
-            {
-                "@id": "_:N44654c84205640b19d199b5184b87d1b"
-            }
-        ],
-        "https://w3id.org/okn/o/sd#readme": [
-            {
-                "@value": "https://github.com/qchapp/lungs-segmentation/blob/master/README.md"
-            }
-        ]
-    },
-    {
-        "@id": "_:N7ecbd278d4f94d249caa3747f213a5f4",
-        "http://schema.org/identifier": [
-            {
-                "@value": ""
-            }
-        ],
-        "https://w3id.org/okn/o/sd#fundingGrant": [
-            {
-                "@value": ""
-            }
-        ],
-        "https://w3id.org/okn/o/sd#fundingSource": [
-            {
-                "@id": "_:Nfdc747861ef84937ba4b5e06e83ac87d"
-            }
-        ]
-    },
-    {
-        "@id": "_:Nfdc747861ef84937ba4b5e06e83ac87d",
-        "http://schema.org/legalName": [
-            {
-                "@value": ""
-            }
-        ],
-        "http://w3id.org/nfdi4ing/metadata4ing#hasRorId": [
-            {
-                "@value": ""
-            }
-        ]
-    },
-    {
-        "@id": "_:N44654c84205640b19d199b5184b87d1b",
-        "http://schema.org/defaultValue": [
-            {
-                "@value": "0.5"
-            }
-        ],
-        "http://schema.org/description": [
-            {
-                "@value": "Threshold applied during postprocessing. Default to 0.5."
-            }
-        ],
-        "http://schema.org/encodingFormat": [
-            {
-                "@value": ""
-            }
-        ],
-        "http://schema.org/name": [
-            {
-                "@value": "threshold"
-            }
-        ],
-        "http://schema.org/valueRequired": [
-            {
-                "@type": "http://www.w3.org/2001/XMLSchema#boolean",
-                "@value": false
-            }
-        ],
-        "https://w3id.org/okn/o/sd#hasFormat": [
-            {
-                "@value": "float"
-            }
-        ]
-    },
-    {
-        "@id": "https://github.com/qchapp",
-        "@type": [
-            "http://schema.org/Person"
-        ],
-        "http://schema.org/affiliation": [
-            {
-                "@id": "https://github.com/Imaging-Plaza"
-            }
-        ],
-        "http://schema.org/identifier": [
-            {
-                "@value": "qchapp"
-            }
-        ],
-        "http://schema.org/name": [
-            {
-                "@value": "Quentin"
-            }
-        ]
-    },
-    {
-        "@id": "https://github.com/Imaging-Plaza",
-        "@type": [
-            "http://schema.org/Organization"
-        ],
-        "http://schema.org/legalName": [
-            {
-                "@value": "Imaging Plaza"
-            }
-        ],
-        "http://schema.org/logo": [
-            {
-                "@id": "https://avatars.githubusercontent.com/u/163422059?v=4"
-            }
-        ],
-        "http://schema.org/name": [
-            {
-                "@value": "Imaging-Plaza"
-            }
-        ]
-    }
-]
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@id": "https://github.com/Imaging-Plaza",
+            "@type": [
+                "http://schema.org/Organization"
+            ],
+            "http://schema.org/legalName": [
+                {
+                    "@value": "Imaging Plaza"
+                }
+            ],
+            "http://schema.org/logo": [
+                {
+                    "@id": "https://avatars.githubusercontent.com/u/163422059?v=4"
+                }
+            ],
+            "http://schema.org/name": [
+                {
+                    "@value": "Imaging-Plaza"
+                }
+            ]
+        },
+        {
+            "@id": "https://github.com/qchapp",
+            "@type": [
+                "http://schema.org/Person"
+            ],
+            "http://schema.org/affiliation": [
+                {
+                    "@id": "https://github.com/Imaging-Plaza"
+                }
+            ],
+            "http://schema.org/identifier": [
+                {
+                    "@value": "qchapp"
+                }
+            ],
+            "http://schema.org/name": [
+                {
+                    "@value": "Quentin"
+                }
+            ]
+        },
+        {
+            "@id": "https://github.com/qchapp/lungs-segmentation",
+            "@type": [
+                "http://schema.org/SoftwareSourceCode"
+            ],
+            "http://schema.org/author": [
+                {
+                    "@id": "https://github.com/qchapp"
+                }
+            ],
+            "http://schema.org/codeRepository": [
+                {
+                    "@id": "https://github.com/qchapp/lungs-segmentation"
+                }
+            ],
+            "http://schema.org/contributor": [
+                {
+                    "@id": "https://github.com/qchapp"
+                }
+            ],
+            "http://schema.org/dateCreated": [
+                {
+                    "@value": "2025-03-10"
+                }
+            ],
+            "http://schema.org/dateModified": [
+                {
+                    "@value": "2025-03-28"
+                }
+            ],
+            "http://schema.org/datePublished": [
+                {
+                    "@value": "2025-03-28"
+                }
+            ],
+            "http://schema.org/description": [
+                {
+                    "@value": "A deep-learning pipeline for automated lung segmentation in mice CT scans, aiding lung cancer research by isolating lung regions for more precise analysis."
+                }
+            ],
+            "http://schema.org/downloadUrl": [
+                {
+                    "@id": "https://github.com/qchapp/lungs-segmentation/archive/refs/tags/v1.0.9.tar.gz"
+                }
+            ],
+            "http://schema.org/license": [
+                {
+                    "@id": "https://spdx.org/licenses/BSD-3-Clause.html"
+                }
+            ],
+            "http://schema.org/name": [
+                {
+                    "@value": "qchapp/lungs-segmentation"
+                }
+            ],
+            "http://schema.org/programmingLanguage": [
+                {
+                    "@value": "Python"
+                }
+            ],
+            "http://schema.org/version": [
+                {
+                    "@value": "v1.0.9"
+                }
+            ],
+            "http://schema.org/applicationCategory": [
+                {
+                    "@value": "Image Processing"
+                },
+                {
+                    "@value": "Scientific/Engineering"
+                }
+            ],
+            "http://schema.org/conditionsOfAccess": [
+                {
+                    "@value": "Free to access"
+                }
+            ],
+            "http://schema.org/featureList": [
+                {
+                    "@value": "Lungs segmentation in mice CT scans"
+                },
+                {
+                    "@value": "U-Net architecture"
+                },
+                {
+                    "@value": "Binary mask representing the segmentation of the lungs"
+                }
+            ],
+            "https://w3id.org/okn/o/sd#hasParameter": [
+                {
+                    "http://schema.org/defaultValue": [
+                        {
+                            "@value": "0.5"
+                        }
+                    ],
+                    "http://schema.org/description": [
+                        {
+                            "@value": "Threshold applied during postprocessing. Should be a float between 0 and 1."
+                        }
+                    ],
+                    "http://schema.org/encodingFormat": [
+                        {
+                            "@value": ""
+                        }
+                    ],
+                    "https://w3id.org/okn/o/sd#hasFormat": [
+                        {
+                            "@value": "float"
+                        }
+                    ],
+                    "http://schema.org/name": [
+                        {
+                            "@value": "threshold"
+                        }
+                    ],
+                    "http://schema.org/valueRequired": [
+                        {
+                            "@value": false
+                        }
+                    ]
+                }
+            ],
+            "http://schema.org/identifier": [
+                {
+                    "@value": "placeholder"
+                }
+            ],
+            "http://schema.org/image": [
+                {
+                    "@value": "https://raw.githubusercontent.com/qchapp/lungs-segmentation/refs/heads/master/images/main_fig.png"
+                },
+                {
+                    "@value": "https://raw.githubusercontent.com/qchapp/lungs-segmentation/refs/heads/master/images/napari-screenshot.png"
+                }
+            ],
+            "https://imaging-plaza.epfl.ch/ontology#imagingModality": [
+                {
+                    "@value": "CT"
+                }
+            ],
+            "http://schema.org/isAccessibleForFree": [
+                {
+                    "@value": true
+                }
+            ],
+            "https://imaging-plaza.epfl.ch/ontology#isPluginModuleOf": [
+                {
+                    "@value": "napari"
+                }
+            ],
+            "http://schema.org/operatingSystem": [
+                {
+                    "@value": "OS Independent"
+                }
+            ],
+            "https://w3id.org/okn/o/sd#readme": [
+                {
+                    "@value": "https://github.com/qchapp/lungs-segmentation/blob/master/README.md"
+                }
+            ],
+            "https://imaging-plaza.epfl.ch/ontology#relatedToOrganization": [
+                {
+                    "@value": "Ecole Polytechnique Federale de Lausanne (EPFL)"
+                }
+            ],
+            "https://imaging-plaza.epfl.ch/ontology#requiresGPU": [
+                {
+                    "@value": true
+                }
+            ],
+            "http://schema.org/softwareRequirements": [
+                {
+                    "@value": "magicgui"
+                },
+                {
+                    "@value": "qtpy"
+                },
+                {
+                    "@value": "napari[all]>=0.4.16"
+                },
+                {
+                    "@value": "napari-label-focus"
+                },
+                {
+                    "@value": "tifffile"
+                },
+                {
+                    "@value": "scikit-image"
+                },
+                {
+                    "@value": "matplotlib"
+                },
+                {
+                    "@value": "csbdeep"
+                },
+                {
+                    "@value": "python-dotenv"
+                },
+                {
+                    "@value": "huggingface_hub"
+                },
+                {
+                    "@value": "python>=3.8"
+                },
+                {
+                    "@value": "pytorch>=2.0"
+                }
+            ],
+            "http://schema.org/url": [
+                {
+                    "@value": "https://github.com/qchapp/lungs-segmentation.git"
+                }
+            ]
+        }
+    ]
+}

@@ -1,9 +1,9 @@
 import argparse
 from pathlib import Path
 from utils.utils import fetch_jsonld, merge_jsonld
-from utils.verification import Verification
 from core.genai_model import llm_request_repo_infos
 import logging
+from utils.logging_config import setup_logging
 
 # Environment variables
 GIMIE_ENDPOINT = "http://imagingplazadev.epfl.ch:7511/gimie/jsonld/"
@@ -11,11 +11,7 @@ DEFAULT_REPO = "https://github.com/qchapp/lungs-segmentation"
 DEFAULT_OUTPUT_PATH = "output_file.json"
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
