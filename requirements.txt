@@ -1,12 +1,7 @@
-langchain
 pydantic
 python-dotenv
-langchain-community
-langchain-core
-PyGithub
-openai
-langchain_openai
 google-genai
 repo-to-text
 PyLD
 rdflib
+tiktoken
