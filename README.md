@@ -48,6 +48,6 @@ If no arguments are provided, it will use the default repository and output path
 ```
 
 ## Roadmap
-- [✔️] Improve Gemini prompt.
-- [✔️] Add logging and error handling.
+- [x] Improve Gemini prompt.
+- [x] Add logging and error handling.
 - [ ] Add a post-response verification step for the LLM to check the accuracy of the returned information. -> Already there but can still be improved
