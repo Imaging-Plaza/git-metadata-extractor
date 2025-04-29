@@ -95,6 +95,7 @@ def llm_request_repo_infos(repo_url):
 
         if response.status_code == 200:
             try:
+                print(response.json())
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)

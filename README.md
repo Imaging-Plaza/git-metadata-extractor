@@ -3,6 +3,7 @@
 This project is designed to classify imaging software repositories and extract relevant information using AI models like GPT and Gemini. It integrates with external services to analyze repositories and store the extracted data in JSON-LD format.
 
 ## Features
+
 - Extracts repository metadata using GIMIE and AI models.
 - Merges extracted data into JSON-LD format.
 - Supports CLI usage for flexible execution.
@@ -10,27 +11,54 @@ This project is designed to classify imaging software repositories and extract r
 ## Installation
 
 Clone the repository and install dependencies:
-```sh
+
+``` sh
 pip install -r requirements.txt
 ```
 
-Create a `.env` file and fill it as follows:
-```.env
+Create a `.env` (or modify `.env.dist`) file and fill it as follows:
+
+``` bash
 OPENAI_API_KEY="your_openai_api_key"
 GEMINI_API_KEY="your_gemini_api_key"
 ```
 
 ## Usage
+
 You can run the script with the default settings or specify parameters via CLI:
 
 ```sh
-python main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
+python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
 ```
 
 If no arguments are provided, it will use the default repository and output path.
 
+## How to run the tool using Docker?
+
+1. You need to build the image.
+
+    ``` bash
+    docker build -t llm-software-finder . 
+    ```
+
+2. Run the image.
+
+    ``` bash
+    docker run -it --env-file .env llm-software-finder
+    ```
+
+3. Then you can run the tool via
+
+    ``` bash
+    python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
+    ```
+
+
 ## Project Structure
-```
+
+TODO: TO BE UPDATED
+
+``` bash
 ├── core/
 │   ├── genai_model.py          # Gemini model interaction
 ├── files/
@@ -48,6 +76,7 @@ If no arguments are provided, it will use the default repository and output path
 ```
 
 ## Roadmap
+
 - [x] Improve Gemini prompt.
 - [x] Add logging and error handling.
 - [ ] Add a post-response verification step for the LLM to check the accuracy of the returned information. -> Already there but can still be improved
