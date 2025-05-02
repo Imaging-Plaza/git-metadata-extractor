@@ -56,23 +56,25 @@ If no arguments are provided, it will use the default repository and output path
 
 ## Project Structure
 
-TODO: TO BE UPDATED
-
-``` bash
-├── core/
-│   ├── genai_model.py          # Gemini model interaction
-├── files/
-│   ├── json-ld-context.json    # Json-ld context for json to json-ld conversion
-│   ├── output_file.json        # Json-ld output example
-├── utils/
-│   ├── utils.py                # Utility functions
-│   ├── prompts.py              # Predefined AI prompts
-│   ├── pydantic.py             # Output schema for Gemini request
-│   ├── verification.py         # Post-response verification for LLM generated json
-├── main.py                     # Main entry point for the CLI
-├── README.md                   # Documentation
-├── .env                        # Env file to create and fill
-└── requirements.txt            # Dependencies
+```bash
+├── src/
+│   ├── core/
+│   │   ├── prompts.py              # Predefined AI prompts
+│   │   ├── pydantic.py             # Output schema for Gemini request
+│   │   ├── verification.py         # Post-response verification for LLM generated json
+│   │   └── genai_model.py          # Gemini model interaction
+│   ├── files/
+│   │   ├── json-ld-context.json    # Json-ld context for json to json-ld conversion
+│   │   └── output_file.json        # Json-ld output example
+│   ├── utils/
+│   │   ├── utils.py                # Utility functions
+│   │   └── logging_config.py       # Logging config file
+│   └── main.py                     # Main entry point for the CLI
+├── .env.dist                       # Env file template to fill
+├── .gitignore                      # Git exclusions
+├── Dockerfile                      # Container setup
+├── README.md                       # Documentation
+└── requirements.txt                # Dependencies
 ```
 
 ## Roadmap
