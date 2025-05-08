@@ -25,7 +25,7 @@ def clean_json_string(raw_text):
 
     return raw_text.strip()
 
-def json_to_jsonLD(json_data, file_path): #"files/json-ld-context.json"
+def json_to_jsonLD(json_data, file_path): 
     """Convert json to jsonLD using context file. Returns a jsonLD dictionary"""
     with open(file_path) as context:
         context_data = json.load(context)
@@ -73,4 +73,6 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
 
         logger.info(f"✅ Merged JSON-LD written to {output_path}")
     else:
+        logger.info(f"✅ Merged JSON-LD")
+
         return merged_jsonld

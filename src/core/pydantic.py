@@ -46,14 +46,14 @@ class SoftwareImage(BaseModel):
 #     variableMeasured: Optional[str] = None
 
 class SoftwareSourceCode(BaseModel):
-    name: str = None
+    name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
     citation: List[HttpUrl] = None
     codeRepository: List[HttpUrl] = None
     conditionsOfAccess: Optional[str] = None
-    dateCreated: date = None
-    datePublished: date = None
-    description: str = None
+    dateCreated: Optional[date] = None
+    datePublished: Optional[date] = None
+    description: Optional[str] = None
     featureList: Optional[List[str]] = None
     image: List[HttpUrl] = None
     isAccessibleForFree: Optional[bool] = None
@@ -69,8 +69,8 @@ class SoftwareSourceCode(BaseModel):
     memoryRequirements: Optional[int] = None
     requiresGPU: Optional[bool] = None
     # supportingData: Optional[List[DataFeed]] = None
-    url: HttpUrl = None
-    identifier: str = None
+    url: Optional[HttpUrl] = None
+    identifier: Optional[str] = None
     hasAcknowledgements: Optional[str] = None
     hasDocumentation: Optional[HttpUrl] = None
     hasExecutableInstructions: Optional[str] = None

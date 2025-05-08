@@ -101,4 +101,4 @@ uvicorn src.api:app --host 0.0.0.0 --port 1234
 - [x] Improve Gemini prompt.
 - [x] Add logging and error handling.
 - [ ] Add a post-response verification step for the LLM to check the accuracy of the returned information. -> Already there but can still be improved
-- [ ] Develop the API endpoint.
+- [] Develop the API endpoint

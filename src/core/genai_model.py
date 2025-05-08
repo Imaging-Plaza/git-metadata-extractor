@@ -6,6 +6,7 @@ import requests
 import tiktoken
 import logging
 from dotenv import load_dotenv
+from pprint import pprint
 
 from .prompts import system_prompt_json
 from .pydantic import SoftwareSourceCode
@@ -76,7 +77,7 @@ def llm_request_repo_infos(repo_url):
                 "type": "json_schema",
                 "json_schema": SoftwareSourceCode.model_json_schema()
             },
-            "temperature": 0.7
+            "temperature": 1
         }
 
         headers = {
@@ -94,11 +95,13 @@ def llm_request_repo_infos(repo_url):
             return None
 
         if response.status_code == 200:
+            print(response.json())
             try:
-                print(response.json())
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)
+                pprint(json_data)
+
                 logger.info("Successfully parsed API response")
 
                 # Run verification before converting to JSON-LD
@@ -109,10 +112,10 @@ def llm_request_repo_infos(repo_url):
                 # Sanitize metadata before conversion
                 cleaned_json = verifier.sanitize_metadata()
 
-                # Create a temporary folder to store JSON-LD output
-                temp_path = tempfile.mkdtemp()
+                # TODO. This is hardcoded. Not good.
+                context_path = "src/files/json-ld-context.jsonld"
                 # Now convert cleaned data to JSON-LD
-                return json_to_jsonLD(cleaned_json, temp_path)
+                return json_to_jsonLD(cleaned_json, context_path)
 
             except Exception as e:
                 logger.error(f"Error parsing response: {e}")
@@ -120,3 +123,9 @@ def llm_request_repo_infos(repo_url):
         else:
             logger.error(f"API Error: {response.status_code} - {response.text}")
             return None
+
+
+def get_pydantic_ai_data(json_data):
+    
+
+    pass
