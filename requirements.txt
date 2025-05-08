@@ -5,3 +5,7 @@ repo-to-text
 PyLD
 rdflib
 tiktoken
+fastapi
+uvicorn
+gimie==0.7.2
+pyyaml
