@@ -17,7 +17,8 @@ load_dotenv()
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-2.0-flash-001"
+#MODEL = "google/gemini-2.0-flash-001"
+MODEL="google/gemini-2.5-pro-preview"
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -113,7 +114,7 @@ def llm_request_repo_infos(repo_url):
                 cleaned_json = verifier.sanitize_metadata()
 
                 # TODO. This is hardcoded. Not good.
-                context_path = "src/files/json-ld-context.jsonld"
+                context_path = "src/files/json-ld-context.json"
                 # Now convert cleaned data to JSON-LD
                 return json_to_jsonLD(cleaned_json, context_path)
 

@@ -20,10 +20,10 @@ async def extract(full_path:str):
 
     llm_result = llm_request_repo_infos(full_path)
 
-    #merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
+    merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
 
-    #return {"link": full_path, "output": merged_results}
-    return {"link": full_path, "output": llm_result}
+    return {"link": full_path, "output": merged_results}
+    #return {"link": full_path, "output": llm_result}
     
 @app.get("/v1/gimie/{full_path:path}")
 async def gimie(full_path:str, 
