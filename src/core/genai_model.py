@@ -7,10 +7,10 @@ import tiktoken
 import logging
 from dotenv import load_dotenv
 
-from core.prompts import system_prompt_json
-from core.pydantic import SoftwareSourceCode
-from utils.utils import *
-from core.verification import Verification
+from .prompts import system_prompt_json
+from .pydantic import SoftwareSourceCode
+from ..utils.utils import *
+from .verification import Verification
 
 load_dotenv()
 
@@ -109,8 +109,10 @@ def llm_request_repo_infos(repo_url):
                 # Sanitize metadata before conversion
                 cleaned_json = verifier.sanitize_metadata()
 
+                # Create a temporary folder to store JSON-LD output
+                temp_path = tempfile.mkdtemp()
                 # Now convert cleaned data to JSON-LD
-                return json_to_jsonLD(cleaned_json)
+                return json_to_jsonLD(cleaned_json, temp_path)
 
             except Exception as e:
                 logger.error(f"Error parsing response: {e}")

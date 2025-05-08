@@ -4,6 +4,7 @@ google-genai
 repo-to-text
 PyLD
 rdflib
+rdflib-jsonld
 tiktoken
 fastapi
 uvicorn

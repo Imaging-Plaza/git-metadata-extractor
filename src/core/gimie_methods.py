@@ -1,13 +1,13 @@
 from gimie.project import Project
 import json
 
-def extract_gimie(full_path: str, format: str = "jsonld", serialize: bool = True):
+def extract_gimie(full_path: str, format: str = "json-ld", serialize: bool = True):
     """
     Extracts the GIMIE project from the given path.
     
     Args:
         full_path (str): The full path to the GIMIE project.
-        format (str): The format to serialize the graph. Default is 'jsonld'.
+        format (str): The format to serialize the graph. Default is 'json-ld', or 'ttl'.
         
     Returns:
         Project: The GIMIE project object.

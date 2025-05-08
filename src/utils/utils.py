@@ -25,16 +25,16 @@ def clean_json_string(raw_text):
 
     return raw_text.strip()
 
-def json_to_jsonLD(json_data):
+def json_to_jsonLD(json_data, file_path): #"files/json-ld-context.json"
     """Convert json to jsonLD using context file. Returns a jsonLD dictionary"""
-    with open("files/json-ld-context.json") as context:
+    with open(file_path) as context:
         context_data = json.load(context)
 
     expanded_data = jsonld.expand({**context_data, **json_data})
 
     return expanded_data[0]
 
-def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str) -> None:
+def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
     """Merge a GIMIE JSON-LD graph (list of nodes) with a flat LLM JSON-LD object,
     giving priority to GIMIE fields and preserving JSON-LD structure."""
 
@@ -66,8 +66,11 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str) -> None:
         "@graph": gimie_graph
     }
 
-    # Save to file
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(merged_jsonld, f, indent=4)
+    if output_path:
+        # Save to file
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(merged_jsonld, f, indent=4)
 
-    logger.info(f"✅ Merged JSON-LD written to {output_path}")
+        logger.info(f"✅ Merged JSON-LD written to {output_path}")
+    else:
+        return merged_jsonld

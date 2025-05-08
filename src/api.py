@@ -2,6 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import os
 from .core.gimie_methods import extract_gimie
+from .core.genai_model import llm_request_repo_infos
+from .utils.utils import merge_jsonld
+
+
 
 app = FastAPI()
 
@@ -12,10 +16,13 @@ def index():
 @app.get("/v1/extract/{full_path:path}")
 async def extract(full_path:str):
     # First Gimie
+    jsonld_gimie_data = extract_gimie(full_path)
 
-    # LLM
-    
-    pass
+    llm_result = llm_request_repo_infos(full_path)
+
+    merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
+
+    return {"link": full_path, "output": merged_results}
     
 @app.get("/v1/gimie/{full_path:path}")
 async def gimie(full_path:str, 
