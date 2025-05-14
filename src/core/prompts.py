@@ -90,4 +90,6 @@ The user will provide the full codebase of a software project. Your task is to e
 - `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software.
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
+
+PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

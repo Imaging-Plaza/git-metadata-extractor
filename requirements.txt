@@ -4,4 +4,9 @@ google-genai
 repo-to-text
 PyLD
 rdflib
+rdflib-jsonld
 tiktoken
+fastapi
+uvicorn
+gimie==0.7.2
+pyyaml
