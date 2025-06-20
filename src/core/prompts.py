@@ -92,5 +92,17 @@ The user will provide the full codebase of a software project. Your task is to e
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
 
+
+When dealing with Organization pay attention to
+- 
+- 
+- 
+
+When parsing Persons note:
+- 
+- 
+-
+
+
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

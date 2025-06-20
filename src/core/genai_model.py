@@ -19,6 +19,7 @@ load_dotenv()
 OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = os.environ["MODEL"]
+PROVIDER = os.environ["PROVIDER"]
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -103,41 +104,14 @@ def llm_request_repo_infos(repo_url):
         store_combined_text(input_text, combined_file_path)
 
 
-        # Prepare payload for OpenRouter API
-        payload = {
-            "model": MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt_json},
-                {"role": "user", "content": input_text}
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": SoftwareSourceCode.model_json_schema()
-            },
-            "temperature": 0.1
-        }
-
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-
-        # Send request to OpenRouter
-
-        n = 3
-        while n != 0:
-            try:
-                response = requests.post(OPENROUTER_ENDPOINT, headers=headers, json=payload)
-                logger.info(f"API response status: {response.status_code}")
-                n = 0
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed: {e}")
-                n -= 1
-                return None
+        if PROVIDER == "openrouter":
+            response = get_openrouter_response(input_text, model=MODEL)
+        elif PROVIDER == "openai":
+            response = get_openai_response(input_text, model=MODEL)
+        else:
+            logger.error("No provider provided")
 
         if response.status_code == 200:
-            print(response.json())
             try:
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
@@ -167,27 +141,62 @@ def llm_request_repo_infos(repo_url):
             return None
 
 
+def get_openrouter_response(input_text, model="google/gemini-2.5-flash", temperature=0.1):
+    """
+    Get structured response from openrouter
+    """
+    # Prepare payload for OpenRouter API
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt_json},
+            {"role": "user", "content": input_text}
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": SoftwareSourceCode.model_json_schema()
+        },
+        "temperature": temperature
+    }
 
-def get_openai_response(prompt, model="gpt-4o", temperature=0.7):
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+
+    # Send request to OpenRouter
+
+    n = 3
+    while n != 0:
+        try:
+            response = requests.post(OPENROUTER_ENDPOINT, headers=headers, json=payload)
+            logger.info(f"API response status: {response.status_code}")
+            n = 0
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
+            n -= 1
+            return None
+        
+    return response
+    
+
+def get_openai_response(prompt, model="gpt-4o", temperature=0.1):
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema.
     """
     try:
-        response = openai.chat.completions.create(
+        response = openai.beta.chat.completions.parse(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant. Respond in JSON format."},
                 {"role": "user", "content": prompt}
             ],
             temperature=temperature,
-            response_format={
-                "type": "json_object",
-                "schema": SoftwareSourceCode.model_json_schema()
-            }
+            response_format=convert_httpurl_to_str(SoftwareSourceCode)
         )
-        # The response content will be a JSON string matching your schema
-        result = response.choices[0].message.content
-        return result
+
+        return response
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
         return None

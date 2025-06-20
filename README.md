@@ -116,3 +116,5 @@ uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
     - Check for issues in Gimie
     - Check for issues in the LLM 
     - Check for issues in validation
+
+- ERROR :: OpenAI API error: Error code: 400 - {'error': {'message': "Invalid schema for response_format 'SoftwareSourceCode': In context=('properties', 'url'), 'uri' is not a valid format.", 'type': 'invalid_request_error', 'param': 'response_format', 'code': None}}

@@ -79,3 +79,22 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
         logger.info(f"✅ Merged JSON-LD")
 
         return merged_jsonld
+    
+from pydantic import HttpUrl, BaseModel
+from typing import Any
+
+def convert_httpurl_to_str(obj: Any) -> Any:
+    """
+    Recursively convert all HttpUrl fields in a Pydantic model (or nested structures)
+    to plain strings, so the resulting dict is OpenAI-compatible.
+    """
+    if isinstance(obj, HttpUrl):
+        return str(obj)
+    elif isinstance(obj, BaseModel):
+        return {k: convert_httpurl_to_str(v) for k, v in obj.dict(exclude_none=True).items()}
+    elif isinstance(obj, list):
+        return [convert_httpurl_to_str(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: convert_httpurl_to_str(v) for k, v in obj.items()}
+    else:
+        return obj
