@@ -32,7 +32,7 @@ async def gimie(full_path:str,
         result = extract_gimie(full_path, format=format, serialize=serialize)
         return result
     except Exception as e:
-        return {"link": full_path, "output": str(e)}
+        return {"link": full_path, "output": str(e["@graph"])}
     
 
 @app.get("/v1/llm/{full_path:path}")
