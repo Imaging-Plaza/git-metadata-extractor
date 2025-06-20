@@ -4,6 +4,7 @@ from pyld import jsonld
 from rdflib import Graph
 import ast
 import logging
+from pprint import pprint
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
     logger.info("Merging GIMIE (@graph list) and LLM JSON-LD (flat object)...")
 
     # Identify the SoftwareSourceCode node in GIMIE
+
+
     software_node = next(
         (node for node in gimie_graph if "http://schema.org/SoftwareSourceCode" in node.get("@type", [])),
         None

@@ -7,6 +7,7 @@ import tiktoken
 import logging
 from dotenv import load_dotenv
 from pprint import pprint
+import openai
 
 from .prompts import system_prompt_json
 from .pydantic import SoftwareSourceCode
@@ -15,13 +16,68 @@ from .verification import Verification
 
 load_dotenv()
 
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-#MODEL = "google/gemini-2.0-flash-001"
-MODEL="google/gemini-2.5-pro-preview"
+OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = os.environ["MODEL"]
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+def reduce_input_size(input_text, max_tokens=800000):
+    """
+    Reduce the size of the input text to fit within the specified token limit.
+    """
+    limiter_encoding = tiktoken.get_encoding("cl100k_base")
+    tokens = limiter_encoding.encode(input_text)
+    
+    logger.info(f"Original amount of tokens: {len(tokens)}")
+    if len(tokens) > max_tokens:
+        tokens = tokens[:max_tokens]
+        reduced_text = limiter_encoding.decode(tokens)
+        logger.warning(f"Token count exceeded limit, truncated to {max_tokens} tokens")
+        return reduced_text
+    return input_text
+
+def combine_text_files(directory):
+    """
+    Combine all text files in the specified directory into a single string.
+    """
+    combined_text = ""
+    txt_files = glob.glob(os.path.join(directory, "*.txt"))
+    
+    logger.info(f"Found {len(txt_files)} text files in {directory}")
+
+    for file in txt_files:
+        logger.debug(f"Reading file: {file}")
+        with open(file, "r", encoding="utf-8") as f:
+            combined_text += f.read() + "\n"
+    
+    return combined_text
+
+def store_combined_text(input_text, output_file):
+    """
+    Store the combined text into a specified output file.
+    """
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(input_text)
+    logger.info(f"Combined text saved to {output_file}")
+    return output_file
+        
+
+def clone_repo(repo_url):
+    """
+    Clone a GitHub repository into a temporary directory.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        logger.info(f"Cloning {repo_url} into {temp_dir}...")
+        try:
+            subprocess.run(["git", "clone", repo_url, temp_dir], check=True)
+            logger.info("Repository cloned successfully.")
+            return temp_dir
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to clone repository: {e}")
+            return None
+    
 
 def llm_request_repo_infos(repo_url):    
     # Clone the GitHub repository into a temporary folder
@@ -40,60 +96,45 @@ def llm_request_repo_infos(repo_url):
             logger.error(f"'repo-to-text' command failed: {e}")
             return None
 
-        # Retrieve all .txt files generated in the repository directory
-        txt_files = glob.glob(os.path.join(temp_dir, "*.txt"))
-        logger.info(f"Found {len(txt_files)} text files")
+        input_text = combine_text_files(temp_dir)
+        input_text = reduce_input_size(input_text, max_tokens=800000)
 
-        # Combine contents of all text files into a single string
-        combined_text = ""
-        for file in txt_files:
-            logger.debug(f"Reading file: {file}")
-            with open(file, "r", encoding="utf-8") as f:
-                combined_text += f.read() + "\n"
-                
-        # Limit combined_text to 950000 tokens
-        limiter_encoding = tiktoken.get_encoding("cl100k_base")
-        tokens = limiter_encoding.encode(combined_text)
-        
-        logger.info(f"Original amount of tokens: {len(tokens)}")
-        if len(tokens) > 950000:
-            tokens = tokens[:800000]
-            combined_text = limiter_encoding.decode(tokens)
-            logger.warning("Token count exceeded limit, truncated to 800000 tokens")
-
-        # Save the combined text to a new file
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
-        with open(combined_file_path, "w", encoding="utf-8") as f:
-            f.write(combined_text)
-        logger.info(f"Combined text saved to {combined_file_path}")
+        store_combined_text(input_text, combined_file_path)
+
 
         # Prepare payload for OpenRouter API
         payload = {
             "model": MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt_json},
-                {"role": "user", "content": combined_text}
+                {"role": "user", "content": input_text}
             ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": SoftwareSourceCode.model_json_schema()
             },
-            "temperature": 1
+            "temperature": 0.1
         }
 
         headers = {
-            "Authorization": f"Bearer {GEMINI_API_KEY}",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json"
         }
 
 
         # Send request to OpenRouter
-        try:
-            response = requests.post(ENDPOINT, headers=headers, json=payload)
-            logger.info(f"API response status: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {e}")
-            return None
+
+        n = 3
+        while n != 0:
+            try:
+                response = requests.post(OPENROUTER_ENDPOINT, headers=headers, json=payload)
+                logger.info(f"API response status: {response.status_code}")
+                n = 0
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed: {e}")
+                n -= 1
+                return None
 
         if response.status_code == 200:
             print(response.json())
@@ -126,7 +167,27 @@ def llm_request_repo_infos(repo_url):
             return None
 
 
-def get_pydantic_ai_data(json_data):
-    
 
-    pass
+def get_openai_response(prompt, model="gpt-4o", temperature=0.7):
+    """
+    Get structured response from OpenAI API using SoftwareSourceCode schema.
+    """
+    try:
+        response = openai.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Respond in JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=temperature,
+            response_format={
+                "type": "json_object",
+                "schema": SoftwareSourceCode.model_json_schema()
+            }
+        )
+        # The response content will be a JSON string matching your schema
+        result = response.choices[0].message.content
+        return result
+    except Exception as e:
+        logger.error(f"OpenAI API error: {e}")
+        return None

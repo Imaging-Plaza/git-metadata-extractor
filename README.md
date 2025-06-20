@@ -44,7 +44,7 @@ Create a `.env` (or modify `.env.dist`) file and fill it as follows:
 
 ``` bash
 OPENAI_API_KEY="your_openai_api_key"
-GEMINI_API_KEY="your_gemini_api_key"
+OPENROUTER_API_KEY="your_gemini_api_key"
 ```
 
 ## Usage
@@ -71,6 +71,12 @@ If no arguments are provided, it will use the default repository and output path
     docker run -it --env-file .env -p 1234:1234 llm-software-finder
     ```
 
+    If you are developping the application it's useful to mount the app volume. 
+
+    ``` bash
+    docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
+    ```
+
 3. Then you can run the tool via
 
     ``` bash
@@ -92,13 +98,21 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
 After running the docker container with port 8000, please execute.
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 1234
+uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
 ```
 
+```
+
+```
 
 ## Roadmap
 
 - [x] Improve Gemini prompt.
 - [x] Add logging and error handling.
 - [ ] Add a post-response verification step for the LLM to check the accuracy of the returned information. -> Already there but can still be improved
-- [] Develop the API endpoint
+- [x] Develop the API endpoint
+- [ ] Add HTTP Errors at output when using the API. 
+    - Check for lack of credits
+    - Check for issues in Gimie
+    - Check for issues in the LLM 
+    - Check for issues in validation

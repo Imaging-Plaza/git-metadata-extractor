@@ -10,3 +10,4 @@ fastapi
 uvicorn
 gimie==0.7.2
 pyyaml
+openai
