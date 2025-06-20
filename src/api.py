@@ -22,7 +22,7 @@ async def extract(full_path:str):
 
     merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
 
-    return {"link": full_path, "output": str(merged_results)}
+    return {"link": full_path, "output": str(merged_results["@graph"])}
     
 @app.get("/v1/gimie/{full_path:path}")
 async def gimie(full_path:str, 

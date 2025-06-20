@@ -10,6 +10,7 @@ The user will provide the full codebase of a software project. Your task is to e
 3. If metadata is not explicitly provided, intelligently infer from:
    - README text, code comments, filenames, or relevant inline documentation.
 4. Validate internally that required fields are non-empty and formatting constraints are met.
+5. Provide full links. These files are coming from a github repository. If you find images, please attach the full link to we can embed it.
 
 📌 **Key Formatting Rules:**
 - All **required fields** must be present and non-empty.
