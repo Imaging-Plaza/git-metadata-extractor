@@ -10,7 +10,7 @@ from pprint import pprint
 import openai
 
 from .prompts import system_prompt_json
-from .pydantic import SoftwareSourceCode
+from .models import SoftwareSourceCode
 from ..utils.utils import *
 from .verification import Verification
 
@@ -38,6 +38,36 @@ def reduce_input_size(input_text, max_tokens=800000):
         logger.warning(f"Token count exceeded limit, truncated to {max_tokens} tokens")
         return reduced_text
     return input_text
+
+def sort_files_by_priority(file_paths):
+    """
+    Sorts a list of file paths based on a predefined extension priority.
+
+    The order is:
+    1. Documentation files (.md, .txt, .html)
+    2. Code files (.py, .r)
+    3. All other files
+    """
+    priority_order = {
+        # Priority 0: Documentation
+        ".md": 0,
+        ".txt": 0,
+        ".html": 0,
+        # Priority 1: Code
+        ".py": 1,
+        ".r": 1,
+    }
+    # Priority 2 will be the default for all other extensions
+
+    def get_sort_key(filepath):
+        # Get the file extension
+        _, ext = os.path.splitext(filepath)
+        # Return a tuple: (priority, original_filepath)
+        # The priority is looked up from the map (defaulting to 2)
+        # The original filepath is used as a tie-breaker to maintain a stable sort
+        return (priority_order.get(ext.lower(), 2), filepath)
+
+    return sorted(file_paths, key=get_sort_key)
 
 def combine_text_files(directory):
     """
@@ -98,7 +128,7 @@ def llm_request_repo_infos(repo_url):
             return None
 
         input_text = combine_text_files(temp_dir)
-        input_text = reduce_input_size(input_text, max_tokens=800000)
+        input_text = reduce_input_size(input_text, max_tokens=80000)
 
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
         store_combined_text(input_text, combined_file_path)

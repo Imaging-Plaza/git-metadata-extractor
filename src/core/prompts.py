@@ -37,7 +37,7 @@ The user will provide the full codebase of a software project. Your task is to e
   - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
 - `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software. Do not mention Imaging Plaza unless is explicity mentioned.
 - `softwareRequirements` (list of strings, **optional**): Dependencies or prerequisites for running the software.
-- `operatingSystem` (list of strings, **optional**): Compatible operating systems.
+- `operatingSystem` (list of strings, **optional**): Compatible operating systems. Use only Windows, Linux, MacOS, or Other.
 - `programmingLanguage` (list of strings, **optional**): Programming languages used in the software.
 - `supportingData` (list of objects, **optional**): Each object must contain:
   - `name` (string, **optional**)
