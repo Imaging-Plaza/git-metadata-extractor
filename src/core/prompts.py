@@ -10,6 +10,7 @@ The user will provide the full codebase of a software project. Your task is to e
 3. If metadata is not explicitly provided, intelligently infer from:
    - README text, code comments, filenames, or relevant inline documentation.
 4. Validate internally that required fields are non-empty and formatting constraints are met.
+5. Provide full links. These files are coming from a github repository. If you find images, please attach the full link to we can embed it.
 
 📌 **Key Formatting Rules:**
 - All **required fields** must be present and non-empty.
@@ -23,6 +24,7 @@ The user will provide the full codebase of a software project. Your task is to e
 🔎 **Before producing output:**
 - Double-check that your output is **valid JSON**, matches all formatting constraints, and does **not include any explanatory text**.
 - If any required field is genuinely unknown, use a placeholder value consistent with the data type.
+- Be conservative. Leave the field empty if you have doubts.
 
 📂 **Schema Specification:**
 - `name` (string, **required**): Title of the software.
@@ -32,10 +34,10 @@ The user will provide the full codebase of a software project. Your task is to e
 - `author` (list of objects, **required**): Each author must be an object containing:
   - `name` (string, **required**)
   - `orcidId` (valid URL, **optional**)
-  - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with.
-- `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software.
+  - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
+- `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software. Do not mention Imaging Plaza unless is explicity mentioned.
 - `softwareRequirements` (list of strings, **optional**): Dependencies or prerequisites for running the software.
-- `operatingSystem` (list of strings, **optional**): Compatible operating systems.
+- `operatingSystem` (list of strings, **optional**): Compatible operating systems. Use only Windows, Linux, MacOS, or Other.
 - `programmingLanguage` (list of strings, **optional**): Programming languages used in the software.
 - `supportingData` (list of objects, **optional**): Each object must contain:
   - `name` (string, **optional**)
@@ -86,10 +88,22 @@ The user will provide the full codebase of a software project. Your task is to e
 - `featureList` (list of strings, **optional**): List of features representing the Software.
 - `isBasedOn` (valid URL, **optional**): The software, website or app the software is based on.
 - `isPluginModuleOf` (list of strings, **optional**): The software or app the software is plugin or module of.
-- `hasAcknowledgements` (string, **optional**): The acknowledgements of the software.
-- `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software.
+- `hasAcknowledgements` (string, **optional**): The acknowledgements to the software authors name.
+- `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software. This should point to an URL where the installation is explained. If this is the README file, please make the full URL. 
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
+
+
+When dealing with Organization pay attention to
+- 
+- 
+- 
+
+When parsing Persons note:
+- 
+- 
+-
+
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

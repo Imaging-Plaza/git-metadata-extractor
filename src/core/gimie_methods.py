@@ -1,7 +1,7 @@
 from gimie.project import Project
 import json
 
-def extract_gimie(full_path: str, format: str = "json-ld", serialize: bool = True):
+def extract_gimie(full_path: str, format: str = "json-ld"):
     """
     Extracts the GIMIE project from the given path.
     
@@ -18,16 +18,14 @@ def extract_gimie(full_path: str, format: str = "json-ld", serialize: bool = Tru
     # To retrieve the rdflib.Graph object
     g = proj.extract()
 
-
-
-    if serialize:
-        # To retrieve the serialized graph
-        output = g.serialize(format=format)
+    if format == "json-ld":
+        # To retrieve the graph in JSON-LD format
+        output = json.loads(g.serialize(format="json-ld"))
     else:
-        output = json.loads(g.serialize(format=format, encoding="utf-8"))
+        output = g.serialize(format=format)
 
     if output is None:
         return None
     else:
-        return {"link": full_path, "output": output}
+        return output
     

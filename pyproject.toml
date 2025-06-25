@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-software-finder"
+version = "0.1.0"
+description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Quentin Chappuis", email = "quentin.chappuis@epfl.ch" },
+    { name = "Robin Franken", email = "robin.franken@epfl.ch" },
+    { name = "Carlos Vivar Rios", email = "carlos.vivarrios@epfl.ch" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "gimie",
+    "pydantic",
+    "python-dotenv",
+    "requests",
+    "openai",
+    "tiktoken",
+    "typing-extensions"
+]
+
+[project.urls]
+Homepage = "https://github.com/Imaging-Plaza/llm-software-finder"
+Repository = "https://github.com/Imaging-Plaza/llm-software-finder"
+Issues = "https://github.com/Imaging-Plaza/llm-software-finder/issues"
+
+[project.scripts]
+# This assumes your CLI entry point is a function named 'main' in src/main.py
+llm-finder
