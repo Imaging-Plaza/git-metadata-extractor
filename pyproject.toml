@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-software-finder"
+name = "git-metadata-extractor"
 version = "0.1.0"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
@@ -44,9 +44,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Imaging-Plaza/llm-software-finder"
-Repository = "https://github.com/Imaging-Plaza/llm-software-finder"
-Issues = "https://github.com/Imaging-Plaza/llm-software-finder/issues"
+Homepage = "https://imaging-plaza.epfl.ch"
+Repository = "https://github.com/Imaging-Plaza/git-metadata-extractor"
+Issues = "https://github.com/Imaging-Plaza/git-metadata-extractor/issues"
 
 [project.scripts]
 # This assumes your CLI entry point is a function named 'main' in src/main.py
