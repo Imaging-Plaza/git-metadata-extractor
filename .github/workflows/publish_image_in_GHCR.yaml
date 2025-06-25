@@ -1,21 +1,25 @@
-name: Publish Docker Image to GHCR
+name: Publish Docker Image and Create Release
 
 on:
   push:
     branches: [ "main" ]
-  release:
-    types: [ published ]
 
 jobs:
-  build-and-push:
+  build-publish-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: write # needed to create the release
+      packages: write # needed to publish the image
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract version from pyproject.toml
+        id: project_version
+        run: |
+          VERSION=$(grep 'version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -30,10 +34,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            # tag with 'latest' on pushes to main
-            type=raw,value=latest,enable={{is_default_branch}}
-            # tag with the release version on release creation
-            type=ref,event=release
+            type=raw,value=latest
+            type=raw,value=${{ steps.project_version.outputs.version }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -43,3 +45,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.project_version.outputs.version }}
+          name: Release v${{ steps.project_version.outputs.version }}
+          body_path: CHANGELOG.md
+          fail_on_unmatched_files: true
