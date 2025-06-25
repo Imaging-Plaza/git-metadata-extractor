@@ -68,13 +68,13 @@ If no arguments are provided, it will use the default repository and output path
 2. Run the image.
 
     ``` bash
-    docker run -it --env-file .env -p 1234:1234 llm-software-finder
+    docker run -it --env-file .env -p 1234:1234 --entrypoint bash llm-software-finder
     ```
 
     If you are developping the application it's useful to mount the app volume. 
 
     ``` bash
-    docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
+    docker run -it --env-file .env -p 1234:1234 -v .:/app --entrypoint bash llm-software-finder
     ```
 
 3. Then you can run the tool via

@@ -27,15 +27,20 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "gimie",
-    "pydantic",
-    "python-dotenv",
-    "requests",
-    "openai",
-    "tiktoken",
-    "typing-extensions"
+    "fastapi==0.115.13",
+    "uvicorn[standard]==0.34.3",
+    "gimie==0.7.2",
+    "pydantic==2.11.7",
+    "python-dotenv==0.21.1",
+    "requests==2.32.4",
+    "openai==1.91.0",
+    "tiktoken==0.9.0",
+    "google-genai==0.1.0",
+    "repo-to-text==0.7.0",
+    "PyLD==2.0.4",
+    "rdflib==6.2.0",
+    "rdflib-jsonld==0.6.2",
+    "PyYAML==6.0.2",
 ]
 
 [project.urls]
@@ -45,4 +50,4 @@ Issues = "https://github.com/Imaging-Plaza/llm-software-finder/issues"
 
 [project.scripts]
 # This assumes your CLI entry point is a function named 'main' in src/main.py
-llm-finder
+llm-finder = "src.main:main"
