@@ -1,6 +1,8 @@
-# Imaging Software Metadata Extractor
+# Git Metadata Extractor
 
 This project is designed to classify imaging software repositories and extract relevant information using AI models like GPT and Gemini. It integrates with external services to analyze repositories and store the extracted data in JSON-LD format.
+
+The output of `/v1/extract` aligns with the softwareSourceCodeSchema of Imaging Plaza project. 
 
 ## Features
 
@@ -11,24 +13,40 @@ This project is designed to classify imaging software repositories and extract r
 ## Project Structure
 
 ```bash
-├── src/
-│   ├── core/
-│   │   ├── prompts.py              # Predefined AI prompts
-│   │   ├── pydantic.py             # Output schema for Gemini request
-│   │   ├── verification.py         # Post-response verification for LLM generated json
-│   │   └── genai_model.py          # Gemini model interaction
-│   ├── files/
-│   │   ├── json-ld-context.json    # Json-ld context for json to json-ld conversion
-│   │   └── output_file.json        # Json-ld output example
-│   ├── utils/
-│   │   ├── utils.py                # Utility functions
-│   │   └── logging_config.py       # Logging config file
-│   └── main.py                     # Main entry point for the CLI
-├── .env.dist                       # Env file template to fill
-├── .gitignore                      # Git exclusions
-├── Dockerfile                      # Container setup
-├── README.md                       # Documentation
-└── requirements.txt                # Dependencies
+.
+├── CHANGELOG.md
+├── Dockerfile
+├── LICENSE
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+└── src
+    ├── __init__.py
+    ├── __pycache__
+    │   └── __init__.cpython-311.pyc
+    ├── api.py
+    ├── core
+    │   ├── __init__.py
+    │   ├── __pycache__
+    │   │   ├── __init__.cpython-311.pyc
+    │   │   └── models.cpython-311.pyc
+    │   ├── genai_model.py
+    │   ├── gimie_methods.py
+    │   ├── models.py
+    │   ├── prompts.py
+    │   └── verification.py
+    ├── files
+    │   ├── json-ld-context.json
+    │   └── output_file.json
+    ├── main.py
+    ├── test
+    │   ├── __pycache__
+    │   │   └── test_conversion.cpython-311-pytest-8.4.1.pyc
+    │   └── test_conversion.py
+    └── utils
+        ├── __init__.py
+        ├── logging_config.py
+        └── utils.py
 ```
 
 
@@ -44,7 +62,11 @@ Create a `.env` (or modify `.env.dist`) file and fill it as follows:
 
 ``` bash
 OPENAI_API_KEY="your_openai_api_key"
-OPENROUTER_API_KEY="your_gemini_api_key"
+OPENROUTER_API_KEY="your_openrouter_api_key"
+GITHUB_TOKEN=
+GITLAB_TOKEN=
+MODEL="model to be used"
+PROVIDER="openai" or "openrouter"
 ```
 
 ## Usage
@@ -94,27 +116,25 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
 
 ## How to start the API?
 
+Simply run:
 
-After running the docker container with port 8000, please execute.
+```
+docker run -it --env-file .env -p 1234:1234 llm-software-finder
+```
+
+and go to `localhost:1234`
+
+
+Or if you are running the container with `bash` as the entrypoint, please execute.
 
 ```bash
 uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
 ```
 
-```
+`--reload` allows you to modify the files and reload automatically the api endpoint. Excellent for development.
 
-```
+## Credits
 
-## Roadmap
-
-- [x] Improve Gemini prompt.
-- [x] Add logging and error handling.
-- [ ] Add a post-response verification step for the LLM to check the accuracy of the returned information. -> Already there but can still be improved
-- [x] Develop the API endpoint
-- [ ] Add HTTP Errors at output when using the API. 
-    - Check for lack of credits
-    - Check for issues in Gimie
-    - Check for issues in the LLM 
-    - Check for issues in validation
-
-- ERROR :: OpenAI API error: Error code: 400 - {'error': {'message': "Invalid schema for response_format 'SoftwareSourceCode': In context=('properties', 'url'), 'uri' is not a valid format.", 'type': 'invalid_request_error', 'param': 'response_format', 'code': None}}
+Quentin Chappuis - EPFL Center for Imaging 
+Robin Franken - SDSC
+Carlos Vivar Rios - SDSC / EPFL Center for Imaging

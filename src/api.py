@@ -12,20 +12,18 @@ app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"title": "Hello, welcome to the Git Metadata Extractor v0.0.1. Gimie Version 0.7.2. "}
+    return {"title": "Hello, welcome to the Git Metadata Extractor v0.1.0. Gimie Version 0.7.2. "}
 
-@app.get("/v1/extract/{full_path:path}")
+@app.get("/v1/extract/json/{full_path:path}")
 async def extract(full_path:str):
-    # TODO: Add query parameter for json-ld output
 
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
 
     try:
         llm_result = llm_request_repo_infos(str(full_path))
     except Exception as e:
-        # Handle failures from the LLM service, like the 403 key limit error.
         raise HTTPException(
-            status_code=424, # Failed Dependency
+            status_code=424, 
             detail=f"Error from LLM service: {e}"
         )
 
@@ -35,29 +33,54 @@ async def extract(full_path:str):
 
     zod_data = convert_pydantic_to_zod_form_dict(pydantic_data)
 
-
     return {"link": full_path, 
             "output": zod_data}
 
-    # return {"link": full_path, 
-    #         "output": zod_data,
-    #         "gimie_jsonld": jsonld_gimie_data,
-    #         "output_jsonld": llm_result}
+@app.get("/v1/extract/json-ld/{full_path:path}")
+async def extract(full_path:str):
+
+    jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
+
+    try:
+        llm_result = llm_request_repo_infos(str(full_path))
+    except Exception as e:
+        raise HTTPException(
+            status_code=424, 
+            detail=f"Error from LLM service: {e}"
+        )
+
+    merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
+
+    return {"link": full_path, 
+            "output": merged_results}
     
 @app.get("/v1/gimie/{full_path:path}")
 async def gimie(full_path:str, 
                 format:str = "json-ld"):
     try:
-        result = extract_gimie(full_path, format=format)
-        return result
+        gimie_output = extract_gimie(full_path, format=format)
     except Exception as e:
-        return {"link": full_path, "output": e }
+        raise HTTPException(
+            status_code=424, #?
+            detail=f"Error from LLM service: {e}"
+        )
     
+    return {"link": full_path, 
+            "output": gimie_output}
 
 @app.get("/v1/llm/{full_path:path}")
 async def llm(full_path:str):
-    # Only LLM
-    pass
+
+    try:
+        llm_result = llm_request_repo_infos(str(full_path))
+    except Exception as e:
+        raise HTTPException(
+            status_code=424, 
+            detail=f"Error from LLM service: {e}"
+        )
+    
+    return {"link": full_path, 
+            "output": llm_result}
 
 @app.exception_handler(ValueError)
 async def value_error_exception_handler(request: Request, exc: ValueError):
