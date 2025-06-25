@@ -1,22 +1,18 @@
-# Use an official Python runtime as a parent image
 FROM python:3.9-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container
-COPY . /app
+# Install git, which is required by gimie
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y git
+COPY pyproject.toml ./
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install project dependencies from pyproject.toml
+RUN pip install --no-cache-dir .
 
-# Make port 80 available to the world outside this container
-EXPOSE 80
+# Copy the rest of the application's source code
+COPY . .
 
-# Define environment variable
 ENV PYTHONUNBUFFERED=1
 
-# Run the application
-ENTRYPOINT ["bash"]
+ENTRYPOINT ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "1234"]
