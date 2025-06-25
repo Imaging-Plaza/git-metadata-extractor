@@ -1,0 +1,192 @@
+name: Cleanup Development Images
+
+on:
+  # Clean up when PRs are closed
+  pull_request:
+    types: [closed]
+  
+  # Clean up when branches are deleted
+  delete:
+  
+  # Scheduled cleanup for old images (runs weekly)
+  schedule:
+    - cron: '0 2 * * 0'  # Every Sunday at 2 AM UTC
+  
+  # Manual trigger for cleanup
+  workflow_dispatch:
+    inputs:
+      days_old:
+        description: 'Delete images older than X days'
+        required: false
+        default: '100'
+        type: string
+      tag_pattern:
+        description: 'Tag pattern to clean (e.g., pr-*, develop, feature-*)'
+        required: false
+        default: 'pr-*'
+        type: string
+
+jobs:
+  cleanup-pr-images:
+    # Only run for closed PRs
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    
+    steps:
+      - name: Delete PR image
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const packageName = 'git-metadata-extractor';
+            const tag = `pr-${prNumber}`;
+            
+            try {
+              // Get package version for the PR tag
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                package_type: 'container',
+                package_name: packageName,
+                org: context.repo.owner
+              });
+              
+              const prVersion = versions.find(v => 
+                v.metadata && v.metadata.container && 
+                v.metadata.container.tags.includes(tag)
+              );
+              
+              if (prVersion) {
+                await github.rest.packages.deletePackageVersionForOrg({
+                  package_type: 'container',
+                  package_name: packageName,
+                  org: context.repo.owner,
+                  package_version_id: prVersion.id
+                });
+                console.log(`✅ Deleted image with tag: ${tag}`);
+              } else {
+                console.log(`ℹ️ No image found with tag: ${tag}`);
+              }
+            } catch (error) {
+              console.log(`⚠️ Error cleaning up image ${tag}:`, error.message);
+              // Don't fail the workflow if cleanup fails
+            }
+
+  cleanup-branch-images:
+    # Only run when branches are deleted
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    
+    steps:
+      - name: Delete branch image
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchName = context.payload.ref;
+            const packageName = 'git-metadata-extractor';
+            // Sanitize branch name to match Docker tag format
+            const tag = branchName.replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase();
+            
+            try {
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                package_type: 'container',
+                package_name: packageName,
+                org: context.repo.owner
+              });
+              
+              const branchVersion = versions.find(v => 
+                v.metadata && v.metadata.container && 
+                v.metadata.container.tags.includes(tag)
+              );
+              
+              if (branchVersion) {
+                await github.rest.packages.deletePackageVersionForOrg({
+                  package_type: 'container',
+                  package_name: packageName,
+                  org: context.repo.owner,
+                  package_version_id: branchVersion.id
+                });
+                console.log(`✅ Deleted image with tag: ${tag} (branch: ${branchName})`);
+              } else {
+                console.log(`ℹ️ No image found with tag: ${tag} (branch: ${branchName})`);
+              }
+            } catch (error) {
+              console.log(`⚠️ Error cleaning up image ${tag}:`, error.message);
+            }
+
+  cleanup-old-images:
+    # Run on schedule or manual trigger
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    
+    steps:
+      - name: Cleanup old development images
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const packageName = 'git-metadata-extractor';
+            const daysOld = parseInt('${{ inputs.days_old || 100 }}');
+            const tagPattern = '${{ inputs.tag_pattern }}' || 'pr-*';
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+            
+            console.log(`🧹 Cleaning up images older than ${daysOld} days (before ${cutoffDate.toISOString()})`);
+            console.log(`🎯 Tag pattern: ${tagPattern}`);
+            
+            try {
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                package_type: 'container',
+                package_name: packageName,
+                org: context.repo.owner,
+                per_page: 100
+              });
+              
+              let deletedCount = 0;
+              
+              for (const version of versions) {
+                const createdAt = new Date(version.created_at);
+                const tags = version.metadata?.container?.tags || [];
+                
+                // Skip if not old enough
+                if (createdAt > cutoffDate) continue;
+                
+                // Check if any tag matches the pattern
+                const matchesPattern = tags.some(tag => {
+                  if (tagPattern === 'pr-*') return tag.startsWith('pr-');
+                  if (tagPattern === 'feature-*') return tag.startsWith('feature-');
+                  if (tagPattern === 'develop') return tag === 'develop';
+                  return tag.includes(tagPattern.replace('*', ''));
+                });
+                
+                // Skip protected tags (latest, version numbers)
+                const hasProtectedTag = tags.some(tag => 
+                  tag === 'latest' || 
+                  /^\d+\.\d+\.\d+/.test(tag)
+                );
+                
+                if (matchesPattern && !hasProtectedTag) {
+                  try {
+                    await github.rest.packages.deletePackageVersionForOrg({
+                      package_type: 'container',
+                      package_name: packageName,
+                      org: context.repo.owner,
+                      package_version_id: version.id
+                    });
+                    console.log(`✅ Deleted old image: ${tags.join(', ')} (created: ${createdAt.toISOString()})`);
+                    deletedCount++;
+                  } catch (error) {
+                    console.log(`⚠️ Error deleting image ${tags.join(', ')}:`, error.message);
+                  }
+                }
+              }
+              
+              console.log(`🎉 Cleanup completed! Deleted ${deletedCount} images.`);
+              
+            } catch (error) {
+              console.error('❌ Error during cleanup:', error.message);
+              throw error;
+            }

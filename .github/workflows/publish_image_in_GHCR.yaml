@@ -1,15 +1,23 @@
-name: Publish Docker Image and Create Release
+name: Build and Publish Docker Images
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
 
 jobs:
-  build-publish-release:
+  build-and-publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write # needed to create the release
       packages: write # needed to publish the image
+    
+    # Skip building images for draft PRs or very old branches
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && 
+       github.event.pull_request.draft == false)
 
     steps:
       - name: Checkout repository
@@ -34,8 +42,22 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.project_version.outputs.version }}
+            # For main branch: latest and version tags
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.project_version.outputs.version }},enable={{is_default_branch}}
+            # For develop branch: develop tag
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            # For PRs: pr-{number} tag
+            type=ref,event=pr,prefix=pr-
+            # For feature branches: branch name (sanitized)
+            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -47,6 +69,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Create GitHub Release
+        # Only create releases for main branch pushes
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.project_version.outputs.version }}
