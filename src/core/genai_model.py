@@ -146,7 +146,6 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)
-                pprint(json_data)
 
                 logger.info("Successfully parsed API response")
 
