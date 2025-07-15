@@ -57,6 +57,62 @@ class Image(BaseModel):
     contentUrl: HttpUrl = None
     keywords: ImageKeyword = ImageKeyword.ILLUSTRATIVE_IMAGE
 
+
+class Discipline(str, Enum):
+    SOCIAL_SCIENCES = "Social sciences"
+    ANTHROPOLOGY = "Anthropology"
+    COMMUNICATION_STUDIES = "Communication studies"
+    EDUCATION = "Education"
+    LINGUISTICS = "Linguistics"
+    RESEARCH = "Research"
+    SOCIOLOGY = "Sociology"
+    GEOGRAPHY = "Geography"
+    PSYCHOLOGY = "Psychology"
+    POLITICS = "Politics"
+    ECONOMICS = "Economics"
+    APPLIED_SCIENCES = "Applied sciences"
+    HEALTH_SCIENCES = "Health sciences"
+    ELECTRICAL_ENGINEERING = "Electrical engineering"
+    CHEMICAL_ENGINEERING = "Chemical engineering"
+    CIVIL_ENGINEERING = "Civil engineering"
+    ARCHITECTURE = "Architecture"
+    COMPUTER_ENGINEERING = "Computer engineering"
+    ENERGY_ENGINEERING = "Energy engineering"
+    MILITARY_SCIENCE = "Military science"
+    INDUSTRIAL_PRODUCTION_ENGINEERING = "Industrial and production engineering"
+    MECHANICAL_ENGINEERING = "Mechanical engineering"
+    BIOLOGICAL_ENGINEERING = "Biological engineering"
+    ENVIRONMENTAL_SCIENCE = "Environmental science"
+    SYSTEMS_SCIENCE_ENGINEERING = "Systems science and engineering"
+    INFORMATION_ENGINEERING = "Information engineering"
+    AGRICULTURAL_FOOD_SCIENCES = "Agricultural and food sciences"
+    BUSINESS = "Business"
+    HUMANITIES = "Humanities"
+    HISTORY = "History"
+    LITERATURE = "Literature"
+    ART = "Art"
+    RELIGION = "Religion"
+    PHILOSOPHY = "Philosophy"
+    LAW = "Law"
+    FORMAL_SCIENCES = "Formal sciences"
+    MATHEMATICS = "Mathematics"
+    LOGIC = "Logic"
+    STATISTICS = "Statistics"
+    THEORETICAL_COMPUTER_SCIENCE = "Theoretical computer science"
+    NATURAL_SCIENCES = "Natural sciences"
+    PHYSICS = "Physics"
+    ASTRONOMY = "Astronomy"
+    BIOLOGY = "Biology"
+    CHEMISTRY = "Chemistry"
+    EARTH_SCIENCE = "Earth science"
+
+class RepositoryType(str, Enum):
+    SOFTWARE = "software"
+    EDUCATIONAL_RESOURCE = "educational resource"
+    DOCUMENTATION = "documentation"
+    DATA = "data"
+    OTHER = "other"
+
 class SoftwareSourceCode(BaseModel):
     name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
@@ -74,6 +130,7 @@ class SoftwareSourceCode(BaseModel):
     license: Annotated[str, StringConstraints(pattern=r"spdx\.org.*")] = None
     author: List[Union[Person, Organization]] = None
     relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
     operatingSystem: Optional[List[str]] = None
     programmingLanguage: Optional[List[str]] = None
     softwareRequirements: Optional[List[str]] = None
@@ -94,6 +151,10 @@ class SoftwareSourceCode(BaseModel):
     imagingModality: Optional[List[str]] = None
     fairLevel: Optional[str] = None
     graph: Optional[str] = None
+    discipline: Optional[List[Discipline]] = None
+    disciplineJustification: Optional[List[str]] = None
+    repositoryType: Optional[RepositoryType] = None
+    respositoryTypeJustification: Optional[List[str]] = None
 
 
 ############################################################

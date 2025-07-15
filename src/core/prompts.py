@@ -36,6 +36,7 @@ The user will provide the full codebase of a software project. Your task is to e
   - `orcidId` (valid URL, **optional**)
   - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
 - `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software. Do not mention Imaging Plaza unless is explicity mentioned.
+- `relatedToOrganizationJustification` (list of strings, **optional**): Justification for the related organizations.
 - `softwareRequirements` (list of strings, **optional**): Dependencies or prerequisites for running the software.
 - `operatingSystem` (list of strings, **optional**): Compatible operating systems. Use only Windows, Linux, MacOS, or Other.
 - `programmingLanguage` (list of strings, **optional**): Programming languages used in the software.
@@ -92,18 +93,10 @@ The user will provide the full codebase of a software project. Your task is to e
 - `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software. This should point to an URL where the installation is explained. If this is the README file, please make the full URL. 
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
-
-
-When dealing with Organization pay attention to
-- 
-- 
-- 
-
-When parsing Persons note:
-- 
-- 
--
-
+- `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
+- `disciplineJustification` (list of strings, **optional**): Justification for the discipline classification.
+- `repositoryType` (string, **optional**): Type of repository (e.g., software, educational resource, documentation, data, other).
+- `respositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

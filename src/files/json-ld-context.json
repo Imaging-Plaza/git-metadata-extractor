@@ -76,7 +76,9 @@
     "hasRorId": "md4i:hasRorId",
     "legalName": "schema:legalName",
     "fundingGrant": "sd:fundingGrant",
-    "fundingSource": "sd:fundingSource"
+    "fundingSource": "sd:fundingSource",
+    "discipline": "pulse:discipline",
+    "repositoryType": "pulse:repositoryType"
   }
 }
 

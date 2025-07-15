@@ -68,11 +68,25 @@ async def gimie(full_path:str,
     return {"link": full_path, 
             "output": gimie_output}
 
-@app.get("/v1/llm/{full_path:path}")
+@app.get("/v1/llm/json-ld/{full_path:path}")
 async def llm(full_path:str):
 
     try:
         llm_result = llm_request_repo_infos(str(full_path))
+    except Exception as e:
+        raise HTTPException(
+            status_code=424, 
+            detail=f"Error from LLM service: {e}"
+        )
+    
+    return {"link": full_path, 
+            "output": llm_result}
+
+@app.get("/v1/llm/json/{full_path:path}")
+async def llm(full_path:str):
+
+    try:
+        llm_result = llm_request_repo_infos(str(full_path), output_format="json")
     except Exception as e:
         raise HTTPException(
             status_code=424, 
