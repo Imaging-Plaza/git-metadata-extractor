@@ -110,7 +110,7 @@ def clone_repo(repo_url):
             return None
     
 
-def llm_request_repo_infos(repo_url):    
+def llm_request_repo_infos(repo_url, output_format="json-ld"):    
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(f"Cloning {repo_url} into {temp_dir}...")
@@ -146,7 +146,6 @@ def llm_request_repo_infos(repo_url):
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)
-                pprint(json_data)
 
                 logger.info("Successfully parsed API response")
 
@@ -161,7 +160,13 @@ def llm_request_repo_infos(repo_url):
                 # TODO. This is hardcoded. Not good.
                 context_path = "src/files/json-ld-context.json"
                 # Now convert cleaned data to JSON-LD
-                return json_to_jsonLD(cleaned_json, context_path)
+                if output_format == "json-ld":
+                    return json_to_jsonLD(cleaned_json, context_path)
+                elif output_format == "json":
+                    return cleaned_json
+                else:
+                    logger.error(f"Unsupported output format: {output_format}")
+                    return None
 
             except Exception as e:
                 logger.error(f"Error parsing response: {e}")
