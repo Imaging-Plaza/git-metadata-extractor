@@ -128,7 +128,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
             return None
 
         input_text = combine_text_files(temp_dir)
-        input_text = reduce_input_size(input_text, max_tokens=80000)
+        input_text = reduce_input_size(input_text, max_tokens=40000)
 
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
         store_combined_text(input_text, combined_file_path)
@@ -163,7 +163,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
                 if output_format == "json-ld":
                     return json_to_jsonLD(cleaned_json, context_path)
                 elif output_format == "json":
-                    return cleaned_json
+                    return json_data
                 else:
                     logger.error(f"Unsupported output format: {output_format}")
                     return None
