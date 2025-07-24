@@ -105,6 +105,12 @@ If no arguments are provided, it will use the default repository and output path
     python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
     ```
 
+4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file. 
+
+    ``` bash
+    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" selenium/standalone-firefox
+    ```
+
 ## How to develop using Docker?
 
 To facilitate the development we can mount the app folder in the docker. By doing this, all changes made in local will be accesible from the running container. 

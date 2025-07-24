@@ -4,6 +4,8 @@ import os
 from .core.gimie_methods import extract_gimie
 from .core.models import convert_jsonld_to_pydantic, convert_pydantic_to_zod_form_dict
 from .core.genai_model import llm_request_repo_infos
+from .core.users_parser import parse_github_user
+from .core.orgs_parser import parse_github_organization
 from .utils.utils import merge_jsonld
 
 
@@ -18,6 +20,8 @@ def index():
 async def extract(full_path:str):
 
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
+
+    print("jsonld_gimie_data", jsonld_gimie_data)
 
     try:
         llm_result = llm_request_repo_infos(str(full_path))
@@ -53,6 +57,34 @@ async def extract(full_path:str):
 
     return {"link": full_path, 
             "output": merged_results}
+
+@app.get("/v1/orgs/json/{full_path:path}")
+async def get_orgs_json(full_path: str):
+
+    try:
+        org_metadata = parse_github_organization(full_path.split("/")[-1])
+    except Exception as e:
+        raise HTTPException(
+            status_code=424, 
+            detail=f"Error from GitHub service: {e}"
+        )
+
+    return {"link": full_path, 
+            "output": org_metadata}
+
+@app.get("/v1/users/json/{full_path:path}")
+async def get_user_json(full_path: str):
+
+    try:
+        user_metadata = parse_github_user(full_path.split("/")[-1])
+    except Exception as e:
+        raise HTTPException(
+            status_code=424, 
+            detail=f"Error from GitHub service: {e}"
+        )
+
+    return {"link": full_path, 
+            "output": user_metadata}
     
 @app.get("/v1/gimie/{full_path:path}")
 async def gimie(full_path:str, 
@@ -62,7 +94,7 @@ async def gimie(full_path:str,
     except Exception as e:
         raise HTTPException(
             status_code=424, #?
-            detail=f"Error from LLM service: {e}"
+            detail=f"Error from Gimie service: {e}"
         )
     
     return {"link": full_path, 

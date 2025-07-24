@@ -50,6 +50,7 @@ def sort_files_by_priority(file_paths):
     """
     priority_order = {
         # Priority 0: Documentation
+        ".cff":0,
         ".md": 0,
         ".txt": 0,
         ".html": 0,
