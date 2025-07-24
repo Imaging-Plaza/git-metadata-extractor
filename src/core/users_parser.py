@@ -7,13 +7,13 @@ from pydantic import BaseModel, Field, validator
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.firefox.options import Options
 
@@ -51,7 +51,8 @@ class ORCIDActivities(BaseModel):
     education: List[ORCIDEducation] = Field(default_factory=list, description="Education history")
     works_count: Optional[int] = Field(None, description="Number of works/publications")
     peer_reviews_count: Optional[int] = Field(None, description="Number of peer reviews")
-    orcid_html: Optional[str] = Field(None, description="Raw HTML from ORCID Activities section")
+    orcid_content: Optional[str] = Field(None, description="Parsed ORCID Activities content as Markdown")
+    orcid_format: Optional[str] = Field(default="markdown", description="Format of orcid_content")
 
 
 class GitHubUserMetadata(BaseModel):
@@ -304,7 +305,7 @@ class GitHubUsersParser:
                 education=education_list,
                 works_count=works_count,
                 peer_reviews_count=peer_reviews_count,
-                orcid_html=activities_html
+                orcid_content=activities_html
             )
             
         except Exception as e:
@@ -810,26 +811,27 @@ class GitHubUsersParser:
             return None
     
     def _extract_activities_html(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract raw HTML from ORCID Activities section"""
+        """Extract text content from ORCID Activities section"""
         try:
-            # Look for the Activities section with aria-label="Activities"
+            # Find the Activities section by aria-label
             activities_section = soup.find('section', {'aria-label': 'Activities'})
             
-            if activities_section:
-                # Return the outer HTML of the entire Activities section
-                return str(activities_section)
+            if not activities_section:
+                print("Warning: Activities section not found")
+                return None
             
-            # Fallback: try to find by id="activities"
-            activities_section = soup.find('section', {'id': 'activities'})
+            # Extract all text content from the Activities section
+            activities_text = activities_section.get_text(separator='\n', strip=True)
             
-            if activities_section:
-                return str(activities_section)
+            # Clean up the text - remove excessive whitespace and empty lines
+            lines = [line.strip() for line in activities_text.split('\n') if line.strip()]
+            cleaned_text = '\n'.join(lines)
             
-            print("Warning: Activities section not found in ORCID page")
-            return None
+            print(f"Extracted {len(lines)} lines of activities text")
+            return cleaned_text
             
         except Exception as e:
-            print(f"Warning: Could not extract Activities HTML: {e}")
+            print(f"Warning: Could not extract Activities text: {e}")
             return None
 
 

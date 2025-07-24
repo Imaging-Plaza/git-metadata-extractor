@@ -154,7 +154,30 @@ class SoftwareSourceCode(BaseModel):
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
     repositoryType: Optional[RepositoryType] = None
-    respositoryTypeJustification: Optional[List[str]] = None
+    repositoryTypeJustification: Optional[List[str]] = None
+
+############################################################
+#
+# Github Users and Organizations Models
+#
+############################################################
+
+class GitHubOrganization(BaseModel):
+    name: Optional[str] = None
+    organizationType: Optional[str] = None
+    organizationTypeJustification: Optional[str] = None
+    description: Optional[str] = None
+    relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
+    discipline: Optional[List[Discipline]] = None
+    disciplineJustification: Optional[List[str]] = None
+
+class GitHubUser(BaseModel):
+    name: Optional[str] = None
+    relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
+    discipline: Optional[List[Discipline]] = None
+    disciplineJustification: Optional[List[str]] = None
 
 
 ############################################################

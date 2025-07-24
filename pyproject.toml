@@ -43,6 +43,7 @@ dependencies = [
     "PyYAML==6.0.2",
     "selenium>=4.0.0",
     "beautifulsoup4==4.12.2",
+    "docling",
 ]
 
 [project.urls]

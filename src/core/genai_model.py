@@ -10,7 +10,7 @@ from pprint import pprint
 import openai
 
 from .prompts import system_prompt_json
-from .models import SoftwareSourceCode
+from .models import SoftwareSourceCode, GitHubOrganization, GitHubUser
 from ..utils.utils import *
 from .verification import Verification
 
@@ -176,8 +176,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
             logger.error(f"API Error: {response.status_code} - {response.text}")
             return None
 
-
-def get_openrouter_response(input_text, model="google/gemini-2.5-flash", temperature=0.1):
+def get_openrouter_response(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.1, schema=SoftwareSourceCode):
     """
     Get structured response from openrouter
     """
@@ -185,12 +184,12 @@ def get_openrouter_response(input_text, model="google/gemini-2.5-flash", tempera
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system_prompt_json},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": input_text}
         ],
         "response_format": {
             "type": "json_schema",
-            "json_schema": SoftwareSourceCode.model_json_schema()
+            "json_schema": schema.model_json_schema()
         },
         "temperature": temperature
     }
@@ -217,7 +216,7 @@ def get_openrouter_response(input_text, model="google/gemini-2.5-flash", tempera
     return response
     
 
-def get_openai_response(prompt, model="gpt-4o", temperature=0.1):
+def get_openai_response(prompt, model="gpt-4o", temperature=0.1, schema=SoftwareSourceCode):
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema.
     """
@@ -229,10 +228,65 @@ def get_openai_response(prompt, model="gpt-4o", temperature=0.1):
                 {"role": "user", "content": prompt}
             ],
             temperature=temperature,
-            response_format=convert_httpurl_to_str(SoftwareSourceCode)
+            response_format=convert_httpurl_to_str(schema)
         )
 
         return response
+    
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
         return None
+    
+def llm_request_userorg_infos(metadata, item_type="user"):    
+
+    input_text = metadata.model_dump_json()
+
+    if item_type == "user":
+        schema = GitHubUser
+    elif item_type == "org":
+        schema = GitHubOrganization
+
+    if PROVIDER == "openrouter":
+        response = get_openrouter_response(input_text, 
+                                           system_prompt="Please parse this information and fill the json schema provided. Do not make new fields if they are not in the schema.", 
+                                           model=MODEL, 
+                                           schema=schema)
+    elif PROVIDER == "openai":
+        response = get_openai_response(input_text, model=MODEL, schema=schema)
+    else:
+        logger.error("No provider provided")
+
+    #if response.status_code == 200:
+    try:
+        #TODO: Such a mess this part. Needs refactoring.
+        if PROVIDER == "openrouter":
+            response_json = response.json()
+            raw_result = response_json["choices"][0]["message"]["content"]
+            parsed_result = clean_json_string(raw_result)
+            json_data = json.loads(parsed_result)
+        elif PROVIDER == "openai":
+            # OpenAI response has a different structure
+
+            # For OpenAI's structured outputs, the parsed content is directly available
+            json_data = response.choices[0].message.parsed
+            if json_data is None:
+                # Fallback to content if parsed is None
+                raw_result = response.choices[0].message.content
+                parsed_result = clean_json_string(raw_result)
+                json_data = json.loads(parsed_result)
+        else:
+            logger.error("Unknown provider")
+            return None
+
+        logger.info("Successfully parsed API response")
+
+        
+        return json_data
+
+    except Exception as e:
+        logger.error(f"Error parsing response: {e}")
+        return None
+    
+    # else:
+    #     logger.error(f"API Error: {response.status_code} - {response.text}")
+    #     return None
