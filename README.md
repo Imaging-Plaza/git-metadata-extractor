@@ -84,19 +84,19 @@ If no arguments are provided, it will use the default repository and output path
 1. You need to build the image.
 
     ``` bash
-    docker build -t llm-software-finder . 
+    docker build -t git-metadata-extractor . 
     ```
 
 2. Run the image.
 
     ``` bash
-    docker run -it --env-file .env -p 1234:1234 --entrypoint bash llm-software-finder
+    docker run -it --env-file .env -p 1234:1234 --entrypoint bash git-metadata-extractor
     ```
 
     If you are developping the application it's useful to mount the app volume. 
 
     ``` bash
-    docker run -it --env-file .env -p 1234:1234 -v .:/app --entrypoint bash llm-software-finder
+    docker run -it --env-file .env -p 1234:1234 -v .:/app --entrypoint bash git-metadata-extractor
     ```
 
 3. Then you can run the tool via
@@ -110,7 +110,7 @@ If no arguments are provided, it will use the default repository and output path
 To facilitate the development we can mount the app folder in the docker. By doing this, all changes made in local will be accesible from the running container. 
 
 ```bash
-docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
+docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
 ```
 
 
@@ -119,7 +119,7 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app llm-software-finder
 Simply run:
 
 ```
-docker run -it --env-file .env -p 1234:1234 llm-software-finder
+docker run -it --env-file .env -p 1234:1234 git-metadata-extractor
 ```
 
 and go to `localhost:1234`
