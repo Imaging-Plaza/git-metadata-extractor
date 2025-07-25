@@ -111,7 +111,7 @@ def clone_repo(repo_url):
             return None
     
 
-def llm_request_repo_infos(repo_url, output_format="json-ld"):    
+def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None):    
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(f"Cloning {repo_url} into {temp_dir}...")
@@ -131,6 +131,10 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
         input_text = combine_text_files(temp_dir)
         input_text = reduce_input_size(input_text, max_tokens=40000)
 
+        if gimie_output:
+            # If a GIMIE answer is provided, append it to the input text
+            input_text += "\n\n" + str(gimie_output)
+
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
         store_combined_text(input_text, combined_file_path)
 
@@ -142,39 +146,61 @@ def llm_request_repo_infos(repo_url, output_format="json-ld"):
         else:
             logger.error("No provider provided")
 
-        if response.status_code == 200:
-            try:
+
+        logger.info("Successfully parsed API response")
+
+        #if response.status_code == 200:
+        try:
+            if PROVIDER == "openrouter":
                 raw_result = response.json()["choices"][0]["message"]["content"]
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)
+            elif PROVIDER == "openai":
+                # For OpenAI's structured outputs, the parsed content is directly available
+                json_data = response.choices[0].message.parsed
+                logger.info("Clean result from OpenAI response:")
+                # Parse the JSON into a SoftwareSourceCode object
+                software_obj = SoftwareSourceCode(**json_data.model_dump())
+                logger.info("Parsed SoftwareSourceCode object:")
+                pprint(software_obj)
 
-                logger.info("Successfully parsed API response")
+                if json_data is None:
+                    # Fallback to content if parsed is None
+                    raw_result = response.choices[0].message.content
+                    parsed_result = clean_json_string(raw_result)
+                    json_data = json.loads(parsed_result)
 
-                # Run verification before converting to JSON-LD
-                verifier = Verification(json_data)
-                verifier.run()
-                verifier.summary()
+            logger.info("Successfully parsed API response")
 
-                # Sanitize metadata before conversion
-                cleaned_json = verifier.sanitize_metadata()
+            # # Run verification before converting to JSON-LD
+            # verifier = Verification(software_obj.model_dump())
+            # verifier.run()
+            # verifier.summary()
 
-                # TODO. This is hardcoded. Not good.
-                context_path = "src/files/json-ld-context.json"
-                # Now convert cleaned data to JSON-LD
-                if output_format == "json-ld":
-                    return json_to_jsonLD(cleaned_json, context_path)
-                elif output_format == "json":
-                    return json_data
-                else:
-                    logger.error(f"Unsupported output format: {output_format}")
-                    return None
+            pprint(json_data)
 
-            except Exception as e:
-                logger.error(f"Error parsing response: {e}")
+            # # Sanitize metadata before conversion
+            # cleaned_json = verifier.sanitize_metadata()
+            # pprint(cleaned_json)
+
+            # TODO. This is hardcoded. Not good.
+            context_path = "src/files/json-ld-context.json"
+            # Now convert cleaned data to JSON-LD
+            if output_format == "json-ld":
                 return None
-        else:
-            logger.error(f"API Error: {response.status_code} - {response.text}")
+                #return json_to_jsonLD(cleaned_json, context_path)
+            elif output_format == "json":
+                return json_data.model_dump() #json_data.model_dump()
+            else:
+                logger.error(f"Unsupported output format: {output_format}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error parsing response: {e}")
             return None
+        # else:
+        #     logger.error(f"API Error: {response.status_code} - {response.text}")
+        #     return None
 
 def get_openrouter_response(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.1, schema=SoftwareSourceCode):
     """
@@ -216,7 +242,7 @@ def get_openrouter_response(input_text, system_prompt=system_prompt_json, model=
     return response
     
 
-def get_openai_response(prompt, model="gpt-4o", temperature=0.1, schema=SoftwareSourceCode):
+def get_openai_response(prompt, system_prompt=system_prompt_json, model="gpt-4o", temperature=0.1, schema=SoftwareSourceCode):
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema.
     """
@@ -224,7 +250,7 @@ def get_openai_response(prompt, model="gpt-4o", temperature=0.1, schema=Software
         response = openai.beta.chat.completions.parse(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant. Respond in JSON format."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
             temperature=temperature,
@@ -246,13 +272,18 @@ def llm_request_userorg_infos(metadata, item_type="user"):
     elif item_type == "org":
         schema = GitHubOrganization
 
+    system_prompt_content = "Please parse this information and fill the json schema provided. Do not make new fields if they are not in the schema. Also, please add EPFL to relatedToOrganizations if the person is affiliated with any lab or center."
+
     if PROVIDER == "openrouter":
         response = get_openrouter_response(input_text, 
-                                           system_prompt="Please parse this information and fill the json schema provided. Do not make new fields if they are not in the schema.", 
+                                           system_prompt=system_prompt_content, 
                                            model=MODEL, 
                                            schema=schema)
     elif PROVIDER == "openai":
-        response = get_openai_response(input_text, model=MODEL, schema=schema)
+        response = get_openai_response(input_text, 
+                                       system_prompt=system_prompt_content, 
+                                       model=MODEL, 
+                                       schema=schema)
     else:
         logger.error("No provider provided")
 

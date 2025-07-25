@@ -8,23 +8,25 @@ from .core.users_parser import parse_github_user
 from .core.orgs_parser import parse_github_organization
 from .utils.utils import merge_jsonld
 
+from pprint import pprint
 
 
 app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"title": "Hello, welcome to the Git Metadata Extractor v0.1.0. Gimie Version 0.7.2. "}
+    return {"title": "Hello, welcome to the Git Metadata Extractor v0.2.0. Gimie Version 0.7.2. "}
 
 @app.get("/v1/extract/json/{full_path:path}")
 async def extract(full_path:str):
 
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
 
-    print("jsonld_gimie_data", jsonld_gimie_data)
+    pprint("jsonld_gimie_data")
+    pprint(jsonld_gimie_data)
 
     try:
-        llm_result = llm_request_repo_infos(str(full_path))
+        llm_result = llm_request_repo_infos(str(full_path), gimie_output=jsonld_gimie_data)
     except Exception as e:
         raise HTTPException(
             status_code=424, 

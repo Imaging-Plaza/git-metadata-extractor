@@ -144,3 +144,6 @@ uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
 Quentin Chappuis - EPFL Center for Imaging 
 Robin Franken - SDSC
 Carlos Vivar Rios - SDSC / EPFL Center for Imaging
+
+
+docker run --network open-pulse --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" selenium/standalone-firefox

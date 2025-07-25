@@ -151,10 +151,6 @@ class GitHubUsersParser:
         # Scrape ORCID from profile page
         orcid = self._scrape_orcid_from_profile(username)
         
-        # If not found in profile, try extracting from bio
-        if not orcid:
-            orcid = self._extract_orcid_from_bio(rest_data.get("bio", ""))
-        
         # Get ORCID activities if ORCID is found
         orcid_activities = None
         if orcid:
