@@ -6,10 +6,9 @@ import requests
 import tiktoken
 import logging
 from dotenv import load_dotenv
-from pprint import pprint
 import openai
 
-from .prompts import system_prompt_json
+from .prompts import system_prompt_json, system_prompt_user_content, system_prompt_org_content
 from .models import SoftwareSourceCode, GitHubOrganization, GitHubUser
 from ..utils.utils import *
 from .verification import Verification
@@ -111,7 +110,7 @@ def clone_repo(repo_url):
             return None
     
 
-def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None):    
+def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None, max_tokens=40000):    
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(f"Cloning {repo_url} into {temp_dir}...")
@@ -129,7 +128,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None)
             return None
 
         input_text = combine_text_files(temp_dir)
-        input_text = reduce_input_size(input_text, max_tokens=40000)
+        input_text = reduce_input_size(input_text, max_tokens=max_tokens)
 
         if gimie_output:
             # If a GIMIE answer is provided, append it to the input text
@@ -138,7 +137,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None)
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
         store_combined_text(input_text, combined_file_path)
 
-
+        
         if PROVIDER == "openrouter":
             response = get_openrouter_response(input_text, model=MODEL)
         elif PROVIDER == "openai":
@@ -147,9 +146,7 @@ def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None)
             logger.error("No provider provided")
 
 
-        logger.info("Successfully parsed API response")
 
-        #if response.status_code == 200:
         try:
             if PROVIDER == "openrouter":
                 raw_result = response.json()["choices"][0]["message"]["content"]
@@ -159,38 +156,27 @@ def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None)
                 # For OpenAI's structured outputs, the parsed content is directly available
                 json_data = response.choices[0].message.parsed
                 logger.info("Clean result from OpenAI response:")
+
                 # Parse the JSON into a SoftwareSourceCode object
-                software_obj = SoftwareSourceCode(**json_data.model_dump())
-                logger.info("Parsed SoftwareSourceCode object:")
-                pprint(software_obj)
+                json_data = json_data.model_dump(mode='json')
 
-                if json_data is None:
-                    # Fallback to content if parsed is None
-                    raw_result = response.choices[0].message.content
-                    parsed_result = clean_json_string(raw_result)
-                    json_data = json.loads(parsed_result)
+            logger.info("Successfully JSON API response")
 
-            logger.info("Successfully parsed API response")
-
-            # # Run verification before converting to JSON-LD
-            # verifier = Verification(software_obj.model_dump())
-            # verifier.run()
-            # verifier.summary()
-
-            pprint(json_data)
+            # Run verification before converting to JSON-LD
+            verifier = Verification(json_data)
+            verifier.run()
+            verifier.summary()
 
             # # Sanitize metadata before conversion
-            # cleaned_json = verifier.sanitize_metadata()
-            # pprint(cleaned_json)
+            cleaned_json = verifier.sanitize_metadata()
 
             # TODO. This is hardcoded. Not good.
             context_path = "src/files/json-ld-context.json"
             # Now convert cleaned data to JSON-LD
             if output_format == "json-ld":
-                return None
-                #return json_to_jsonLD(cleaned_json, context_path)
+                return json_to_jsonLD(cleaned_json, context_path)
             elif output_format == "json":
-                return json_data.model_dump() #json_data.model_dump()
+                return cleaned_json
             else:
                 logger.error(f"Unsupported output format: {output_format}")
                 return None
@@ -198,11 +184,9 @@ def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None)
         except Exception as e:
             logger.error(f"Error parsing response: {e}")
             return None
-        # else:
-        #     logger.error(f"API Error: {response.status_code} - {response.text}")
-        #     return None
 
-def get_openrouter_response(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.1, schema=SoftwareSourceCode):
+
+def get_openrouter_response(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.2, schema=SoftwareSourceCode):
     """
     Get structured response from openrouter
     """
@@ -242,7 +226,7 @@ def get_openrouter_response(input_text, system_prompt=system_prompt_json, model=
     return response
     
 
-def get_openai_response(prompt, system_prompt=system_prompt_json, model="gpt-4o", temperature=0.1, schema=SoftwareSourceCode):
+def get_openai_response(prompt, system_prompt=system_prompt_json, model="gpt-4o", temperature=0.2, schema=SoftwareSourceCode):
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema.
     """
@@ -269,25 +253,24 @@ def llm_request_userorg_infos(metadata, item_type="user"):
 
     if item_type == "user":
         schema = GitHubUser
+        system_promt = system_prompt_user_content
     elif item_type == "org":
         schema = GitHubOrganization
-
-    system_prompt_content = "Please parse this information and fill the json schema provided. Do not make new fields if they are not in the schema. Also, please add EPFL to relatedToOrganizations if the person is affiliated with any lab or center."
+        system_prompt = system_prompt_org_content
 
     if PROVIDER == "openrouter":
         response = get_openrouter_response(input_text, 
-                                           system_prompt=system_prompt_content, 
+                                           system_prompt=system_prompt_user_content, 
                                            model=MODEL, 
                                            schema=schema)
     elif PROVIDER == "openai":
         response = get_openai_response(input_text, 
-                                       system_prompt=system_prompt_content, 
+                                       system_prompt=system_prompt_user_content, 
                                        model=MODEL, 
                                        schema=schema)
     else:
         logger.error("No provider provided")
 
-    #if response.status_code == 200:
     try:
         #TODO: Such a mess this part. Needs refactoring.
         if PROVIDER == "openrouter":
@@ -296,15 +279,8 @@ def llm_request_userorg_infos(metadata, item_type="user"):
             parsed_result = clean_json_string(raw_result)
             json_data = json.loads(parsed_result)
         elif PROVIDER == "openai":
-            # OpenAI response has a different structure
-
-            # For OpenAI's structured outputs, the parsed content is directly available
             json_data = response.choices[0].message.parsed
-            if json_data is None:
-                # Fallback to content if parsed is None
-                raw_result = response.choices[0].message.content
-                parsed_result = clean_json_string(raw_result)
-                json_data = json.loads(parsed_result)
+            json_data = json_data.model_dump(mode='json')
         else:
             logger.error("Unknown provider")
             return None
@@ -318,6 +294,3 @@ def llm_request_userorg_infos(metadata, item_type="user"):
         logger.error(f"Error parsing response: {e}")
         return None
     
-    # else:
-    #     logger.error(f"API Error: {response.status_code} - {response.text}")
-    #     return None

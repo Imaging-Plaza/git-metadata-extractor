@@ -41,9 +41,8 @@ dependencies = [
     "rdflib==6.2.0",
     "rdflib-jsonld==0.6.2",
     "PyYAML==6.0.2",
-    "selenium>=4.0.0",
-    "beautifulsoup4==4.12.2",
-    "docling",
+    "selenium",
+    "beautifulsoup4",
 ]
 
 [project.urls]

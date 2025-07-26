@@ -161,3 +161,4 @@ def _convert_annotation(annotation):
     # Return unchanged for all other types
     else:
         return annotation
+    

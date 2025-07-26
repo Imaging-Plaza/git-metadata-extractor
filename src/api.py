@@ -15,18 +15,15 @@ app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"title": "Hello, welcome to the Git Metadata Extractor v0.2.0. Gimie Version 0.7.2. "}
+    return {"title": f"Hello, welcome to the Git Metadata Extractor v0.2.0. Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}"}
 
 @app.get("/v1/extract/json/{full_path:path}")
 async def extract(full_path:str):
 
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
 
-    pprint("jsonld_gimie_data")
-    pprint(jsonld_gimie_data)
-
     try:
-        llm_result = llm_request_repo_infos(str(full_path), gimie_output=jsonld_gimie_data)
+        llm_result = llm_request_repo_infos(str(full_path), output_format="json-ld", max_tokens=20000)
     except Exception as e:
         raise HTTPException(
             status_code=424, 
@@ -48,7 +45,7 @@ async def extract(full_path:str):
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
 
     try:
-        llm_result = llm_request_repo_infos(str(full_path))
+        llm_result = llm_request_repo_infos(str(full_path), max_tokens=20000)
     except Exception as e:
         raise HTTPException(
             status_code=424, 
@@ -60,7 +57,7 @@ async def extract(full_path:str):
     return {"link": full_path, 
             "output": merged_results}
 
-@app.get("/v1/org/json/{full_path:path}")
+@app.get("/v1/org/llm/json/{full_path:path}")
 async def get_org_json(full_path: str):
 
     try:
@@ -80,7 +77,7 @@ async def get_org_json(full_path: str):
     return {"link": full_path, 
             "output": org_metadata_dict}
 
-@app.get("/v1/user/json/{full_path:path}")
+@app.get("/v1/user/llm/json/{full_path:path}")
 async def get_user_json(full_path: str):
 
     try:
@@ -101,11 +98,10 @@ async def get_user_json(full_path: str):
     return {"link": full_path, 
             "output": user_metadata_dict}
     
-@app.get("/v1/gimie/{full_path:path}")
-async def gimie(full_path:str, 
-                format:str = "json-ld"):
+@app.get("/v1/repository/gimie/json-ld/{full_path:path}")
+async def gimie(full_path:str):
     try:
-        gimie_output = extract_gimie(full_path, format=format)
+        gimie_output = extract_gimie(full_path, format="json-ld")
     except Exception as e:
         raise HTTPException(
             status_code=424, #?
@@ -115,11 +111,11 @@ async def gimie(full_path:str,
     return {"link": full_path, 
             "output": gimie_output}
 
-@app.get("/v1/llm/json-ld/{full_path:path}")
+@app.get("/v1/repository/llm/json-ld/{full_path:path}")
 async def llm(full_path:str):
 
     try:
-        llm_result = llm_request_repo_infos(str(full_path))
+        llm_result = llm_request_repo_infos(str(full_path), max_tokens=20000)
     except Exception as e:
         raise HTTPException(
             status_code=424, 
@@ -129,11 +125,13 @@ async def llm(full_path:str):
     return {"link": full_path, 
             "output": llm_result}
 
-@app.get("/v1/llm/json/{full_path:path}")
+@app.get("/v1/repository/llm/json/{full_path:path}")
 async def llm(full_path:str):
 
+    jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
+
     try:
-        llm_result = llm_request_repo_infos(str(full_path), output_format="json")
+        llm_result = llm_request_repo_infos(str(full_path), gimie_output=jsonld_gimie_data, output_format="json", max_tokens=20000)
     except Exception as e:
         raise HTTPException(
             status_code=424, 
