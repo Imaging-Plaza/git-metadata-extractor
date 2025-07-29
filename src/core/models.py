@@ -178,7 +178,7 @@ class GitHubUser(BaseModel):
     relatedToOrganizationJustification: Optional[List[str]] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
-    position: Optional[List[Discipline]] = None
+    position: Optional[List[str]] = None
     positionJustification: Optional[List[str]] = None
 
 

@@ -43,6 +43,7 @@ dependencies = [
     "PyYAML==6.0.2",
     "selenium",
     "beautifulsoup4",
+    "aiohttp",
 ]
 
 [project.urls]

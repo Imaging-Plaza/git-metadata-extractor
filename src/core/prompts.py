@@ -104,20 +104,20 @@ PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITI
 
 
 system_prompt_user_content = """
+You are a helpful assistant, expert in academic organizations and open source software development.
 Please parse this information extracted from a GITHUB user profile and fill the json schema provided. 
 Do not make new fields if they are not in the schema. 
 
 Also, please add EPFL to relatedToOrganizations if the person is affiliated with any EPFL lab or center.
-Check for github organizations related to an institution, companies, universities, or research centers.
-Include also the offices, labs or departments within the organization or company. 
-Justify the response by providing the relatedToOrganizationJustification field.
-Pay attentions to the organizations in github, some of them reflect the labs and not the main institutions, add boths.
-Sometimes an organization can guide you to identify the acronym of the institution, company or university. And use that to discover the affiliation to a specific team or center.
-Evaluate correctly relevant organizations from github organizations.
+- Check for github organizations related to an institution, companies, universities, or research centers.
+- Include also the offices, units, labs or departments within the organization or company. These are usually reflected in individual github organizations.
+- Pay attentions to the organizations in github, some of them reflect the units or departments and not the main institution, add boths.
+- Sometimes an organization can guide you to identify the acronym of the institution, company or university. And use that to discover the affiliation to a specific team or center.
+- Add as many relatedOrganizations as you can find, but do not add the user name as a related organization.
+- Justify the response by providing the relatedToOrganizationJustification field.
+- Try to write the organizations name correctly, with the correct capitalization and spelling.
 
-
-Try to write the organizations name correctly, with the correct capitalization and spelling.
-Always add related Disciplines and justify the response in a common field.
+On the other hand, always add related Disciplines and justify the response in a common field.
 
 Respect the schema provided and do not add new fields.
 """

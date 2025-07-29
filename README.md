@@ -134,7 +134,7 @@ and go to `localhost:1234`
 Or if you are running the container with `bash` as the entrypoint, please execute.
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
+uvicorn src.api:app --host 0.0.0.0 --workers 4 --port 1234 --reload
 ```
 
 `--reload` allows you to modify the files and reload automatically the api endpoint. Excellent for development.
