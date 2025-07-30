@@ -83,18 +83,82 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
 from pydantic import HttpUrl, BaseModel
 from typing import Any
 
-def convert_httpurl_to_str(obj: Any) -> Any:
+# def convert_httpurl_to_str(obj: Any) -> Any:
+#     """
+#     Recursively convert all HttpUrl fields in a Pydantic model (or nested structures)
+#     to plain strings, so the resulting dict is OpenAI-compatible.
+#     """
+#     if isinstance(obj, HttpUrl):
+#         return str(obj)
+#     elif isinstance(obj, BaseModel):
+#         return {k: convert_httpurl_to_str(v) for k, v in obj.dict(exclude_none=True).items()}
+#     elif isinstance(obj, list):
+#         return [convert_httpurl_to_str(item) for item in obj]
+#     elif isinstance(obj, dict):
+#         return {k: convert_httpurl_to_str(v) for k, v in obj.items()}
+#     else:
+#         return obj
+
+import json
+from pydantic import create_model, HttpUrl, BaseModel
+from typing import get_origin, get_args, Union, List, Any, get_type_hints
+import inspect
+
+def convert_httpurl_to_str(schema_class):
     """
-    Recursively convert all HttpUrl fields in a Pydantic model (or nested structures)
-    to plain strings, so the resulting dict is OpenAI-compatible.
+    Convert HttpUrl fields to str fields for OpenAI compatibility, including nested models.
     """
-    if isinstance(obj, HttpUrl):
-        return str(obj)
-    elif isinstance(obj, BaseModel):
-        return {k: convert_httpurl_to_str(v) for k, v in obj.dict(exclude_none=True).items()}
-    elif isinstance(obj, list):
-        return [convert_httpurl_to_str(item) for item in obj]
-    elif isinstance(obj, dict):
-        return {k: convert_httpurl_to_str(v) for k, v in obj.items()}
+    if not issubclass(schema_class, BaseModel):
+        return schema_class
+    
+    # Get the original fields
+    original_fields = schema_class.model_fields
+    new_fields = {}
+    
+    for field_name, field_info in original_fields.items():
+        annotation = field_info.annotation
+        converted_annotation = _convert_annotation(annotation)
+        new_fields[field_name] = (converted_annotation, field_info.default)
+    
+    # Create new model class with converted fields
+    converted_model = create_model(
+        f"{schema_class.__name__}Converted",
+        **new_fields
+    )
+    
+    return converted_model
+
+def _convert_annotation(annotation):
+    """
+    Recursively convert annotations, replacing HttpUrl with str and handling nested models.
+    """
+    origin = get_origin(annotation)
+    
+    # Handle Union types (Optional, etc.)
+    if origin is Union:
+        args = get_args(annotation)
+        new_args = tuple(_convert_annotation(arg) for arg in args)
+        return Union[new_args]
+    
+    # Handle List types
+    elif origin is list or origin is List:
+        args = get_args(annotation)
+        if args:
+            new_args = tuple(_convert_annotation(arg) for arg in args)
+            return List[new_args[0]] if len(new_args) == 1 else List[new_args]
+        return annotation
+    
+    # Handle HttpUrl -> str conversion
+    elif annotation is HttpUrl:
+        return str
+    
+    # Handle nested BaseModel classes
+    elif (inspect.isclass(annotation) and 
+          issubclass(annotation, BaseModel) and 
+          annotation is not BaseModel):
+        return convert_httpurl_to_str(annotation)
+    
+    # Return unchanged for all other types
     else:
-        return obj
+        return annotation
+    

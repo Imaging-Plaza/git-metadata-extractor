@@ -11,3 +11,5 @@ uvicorn
 gimie==0.7.2
 pyyaml
 openai
+beautifulsoup4
+selenium
