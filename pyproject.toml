@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "git-metadata-extractor"
-version = "0.1.0"
+version = "0.2.0"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -41,6 +41,9 @@ dependencies = [
     "rdflib==6.2.0",
     "rdflib-jsonld==0.6.2",
     "PyYAML==6.0.2",
+    "selenium",
+    "beautifulsoup4",
+    "aiohttp",
 ]
 
 [project.urls]
