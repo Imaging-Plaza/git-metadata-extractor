@@ -106,7 +106,7 @@ async def clone_repo(repo_url, temp_dir):
     logger.info(f"Cloning {repo_url} into {temp_dir}...")
     try:
         process = await asyncio.create_subprocess_exec(
-            'git', 'clone', repo_url, temp_dir,
+            'git', 'clone', '-c', 'core.symlinks=false', repo_url, temp_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
