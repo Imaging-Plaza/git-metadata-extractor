@@ -23,16 +23,14 @@ async def extract(full_path:str):
     jsonld_gimie_data = extract_gimie(full_path, format="json-ld")
 
     try:
-        llm_result = await llm_request_repo_infos(str(full_path), output_format="json-ld", max_tokens=20000)
+        llm_result = await llm_request_repo_infos(str(full_path), output_format="json-ld", max_tokens=30000)
+        merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
+        pydantic_data = convert_jsonld_to_pydantic(merged_results["@graph"])
+
     except Exception as e:
-        raise HTTPException(
-            status_code=424, 
-            detail=f"Error from LLM service: {e}"
-        )
 
-    merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
-
-    pydantic_data = convert_jsonld_to_pydantic(merged_results["@graph"])
+        pydantic_data = convert_jsonld_to_pydantic(jsonld_gimie_data["@graph"])
+        print(f"Warning: LLM service failed, using fallback data: {e}")
 
     zod_data = convert_pydantic_to_zod_form_dict(pydantic_data)
 
