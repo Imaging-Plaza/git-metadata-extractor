@@ -15,4 +15,4 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "1234"]
+ENTRYPOINT ["gunicorn", "src.api:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:1234"]
