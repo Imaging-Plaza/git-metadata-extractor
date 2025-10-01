@@ -96,7 +96,11 @@ The user will provide the full codebase of a software project. Your task is to e
 - `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
 - `disciplineJustification` (list of strings, **optional**): Justification for the discipline classification.
 - `repositoryType` (string, **optional**): Type of repository (e.g., software, educational resource, documentation, data, other).
-- `respositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `repositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `relatedDatasets`: A list with any link to datasets stored in Zenodo, HuggingFace Datasets, Google Drive, etc.
+- `relatedPublications`: Any related publication mentioned in the readme or at any part of the documentation.
+- `relatedModels`: A list with any link to models stored in HuggingFace or any other machine learning model repository
+- `relatedAPI`: A list with any link to APIs related to the software.
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

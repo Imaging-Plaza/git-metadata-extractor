@@ -152,6 +152,10 @@ class SoftwareSourceCode(BaseModel):
     graph: Optional[str] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
+    relatedDatasets: Optional[List[str]] = None
+    relatedPublications: Optional[List[str]] = None
+    relatedModels: Optional[List[str]] = None
+    relatedAPI: Optional[List[str]] = None
     relatedToOrganization: Optional[List[str]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: Optional[RepositoryType] = None
