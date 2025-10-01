@@ -155,8 +155,8 @@ class SoftwareSourceCode(BaseModel):
     relatedDatasets: Optional[List[str]] = None
     relatedPublications: Optional[List[str]] = None
     relatedModels: Optional[List[str]] = None
-    relatedAPI: Optional[List[str]] = None
-    relatedToOrganization: Optional[List[str]] = None
+    relatedAPIs: Optional[List[str]] = None
+    relatedToOrganizations: Optional[List[str]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: Optional[RepositoryType] = None
     repositoryTypeJustification: Optional[List[str]] = None
