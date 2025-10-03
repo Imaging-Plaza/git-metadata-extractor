@@ -16,7 +16,7 @@ app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"title": f"Hello, welcome to the Git Metadata Extractor v0.2.0. Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}"}
+    return {"title": f"Hello, welcome to the Git Metadata Extractor v0.3.0 (Dev). Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}"}
 
 @app.get("/v1/extract/json/{full_path:path}")
 async def extract(full_path:str):

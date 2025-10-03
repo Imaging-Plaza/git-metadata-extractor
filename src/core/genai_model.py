@@ -12,6 +12,7 @@ from openai import AsyncOpenAI
 from .prompts import system_prompt_json, system_prompt_user_content, system_prompt_org_content
 from .models import SoftwareSourceCode, GitHubOrganization, GitHubUser
 from ..utils.utils import *
+from ..utils.utils import is_github_repo_public
 from .verification import Verification
 
 load_dotenv()
@@ -168,6 +169,11 @@ async def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output
     """
     Async version of llm_request_repo_infos
     """
+    # Check if the repository is public before proceeding
+    if not is_github_repo_public(repo_url):
+        logger.error(f"Cannot process repository: {repo_url} is not public or not accessible")
+        return None
+    
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         # Clone repository asynchronously

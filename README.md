@@ -125,7 +125,7 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
 Simply run:
 
 ``` bash
-docker run -it --env-file .env -p 1234:1234 git-metadata-extractor
+docker run -it --rm --env-file .env -p 1234:1234 --name git-metadata-extractor git-metadata-extractor
 ```
 
 and go to `localhost:1234`

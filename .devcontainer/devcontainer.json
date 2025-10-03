@@ -23,6 +23,7 @@
   },
 
   "forwardPorts": [1234],
+  "runArgs": ["--network", "dev"],
 
   // Install project in editable mode after the container is built  
   "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e . && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc"
