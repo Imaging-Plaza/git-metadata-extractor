@@ -55,3 +55,26 @@ Issues = "https://github.com/Imaging-Plaza/git-metadata-extractor/issues"
 [project.scripts]
 # This assumes your CLI entry point is a function named 'main' in src/main.py
 llm-finder = "src.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0"
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "TD", "FIX", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = ["E402"]
+"tests/*.py" = ["E402"]
+"src/test/*.py" = ["E402"]

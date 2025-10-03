@@ -1,18 +1,26 @@
 import os
 import tempfile
 import asyncio
-import subprocess
 import glob
 import aiohttp
 import tiktoken
 import logging
+import json
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from .prompts import system_prompt_json, system_prompt_user_content, system_prompt_org_content
+from .prompts import (
+    system_prompt_json,
+    system_prompt_user_content,
+    system_prompt_org_content,
+)
 from .models import SoftwareSourceCode, GitHubOrganization, GitHubUser
-from ..utils.utils import *
-from ..utils.utils import is_github_repo_public
+from ..utils.utils import (
+    is_github_repo_public,
+    clean_json_string,
+    json_to_jsonLD,
+    convert_httpurl_to_str,
+)
 from .verification import Verification
 
 load_dotenv()
@@ -28,20 +36,26 @@ async_openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # Setup logger
 logger = logging.getLogger(__name__)
 
-def reduce_input_size(input_text, max_tokens=800000):
+
+def reduce_input_size(input_text, max_tokens=800000, repo_url=None):
     """
     Reduce the size of the input text to fit within the specified token limit.
     """
     limiter_encoding = tiktoken.get_encoding("cl100k_base")
     tokens = limiter_encoding.encode(input_text)
-    
+
+    url_prefix = f"{repo_url} :: " if repo_url else ""
+
     logger.info(f"Original amount of tokens: {len(tokens)}")
     if len(tokens) > max_tokens:
         tokens = tokens[:max_tokens]
         reduced_text = limiter_encoding.decode(tokens)
-        logger.warning(f"Token count exceeded limit, truncated to {max_tokens} tokens")
+        logger.warning(
+            f"{url_prefix}Token count exceeded limit, truncated to {max_tokens} tokens"
+        )
         return reduced_text
     return input_text
+
 
 def sort_files_by_priority(file_paths):
     """
@@ -54,7 +68,7 @@ def sort_files_by_priority(file_paths):
     """
     priority_order = {
         # Priority 0: Documentation
-        ".cff":0,
+        ".cff": 0,
         ".md": 0,
         ".txt": 0,
         ".html": 0,
@@ -74,21 +88,23 @@ def sort_files_by_priority(file_paths):
 
     return sorted(file_paths, key=get_sort_key)
 
+
 def combine_text_files(directory):
     """
     Combine all text files in the specified directory into a single string.
     """
     combined_text = ""
     txt_files = glob.glob(os.path.join(directory, "*.txt"))
-    
+
     logger.info(f"Found {len(txt_files)} text files in {directory}")
 
     for file in txt_files:
         logger.debug(f"Reading file: {file}")
         with open(file, "r", encoding="utf-8") as f:
             combined_text += f.read() + "\n"
-    
+
     return combined_text
+
 
 def store_combined_text(input_text, output_file):
     """
@@ -98,7 +114,7 @@ def store_combined_text(input_text, output_file):
         f.write(input_text)
     logger.info(f"Combined text saved to {output_file}")
     return output_file
-        
+
 
 async def clone_repo(repo_url, temp_dir):
     """
@@ -107,12 +123,17 @@ async def clone_repo(repo_url, temp_dir):
     logger.info(f"Cloning {repo_url} into {temp_dir}...")
     try:
         process = await asyncio.create_subprocess_exec(
-            'git', 'clone', '-c', 'core.symlinks=false', repo_url, temp_dir,
+            "git",
+            "clone",
+            "-c",
+            "core.symlinks=false",
+            repo_url,
+            temp_dir,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate()
-        
+
         if process.returncode == 0:
             logger.info("Repository cloned successfully.")
             return temp_dir
@@ -123,19 +144,20 @@ async def clone_repo(repo_url, temp_dir):
         logger.error(f"Failed to clone repository: {e}")
         return None
 
+
 async def run_repo_to_text(temp_dir):
     """
     Run the repo-to-text command asynchronously.
     """
     try:
         process = await asyncio.create_subprocess_exec(
-            'repo-to-text',
+            "repo-to-text",
             cwd=temp_dir,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate()
-        
+
         if process.returncode == 0:
             logger.info("repo-to-text command completed successfully.")
             return True
@@ -146,12 +168,70 @@ async def run_repo_to_text(temp_dir):
         logger.error(f"'repo-to-text' command failed: {e}")
         return False
 
+
+async def extract_git_authors(temp_dir):
+    """
+    Extract git authors from the cloned repository using git shortlog.
+    Returns a list of GitAuthor objects.
+
+    Example output from git shortlog -sne:
+        120  Alice <alice@example.com>
+         95  Bob <bob@example.com>
+         10  Carlos <carlos@example.com>
+    """
+    from .models import GitAuthor
+    import re
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "shortlog",
+            "-sne",
+            "--all",
+            cwd=temp_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            git_authors = []
+            output = stdout.decode("utf-8").strip()
+
+            # Parse each line: "   120  Alice <alice@example.com>"
+            # Pattern: optional whitespace, number, whitespace, name, optional email in <>
+            pattern = r"^\s*(\d+)\s+(.+?)(?:\s+<([^>]+)>)?$"
+
+            for line in output.split("\n"):
+                if not line.strip():
+                    continue
+
+                match = re.match(pattern, line)
+                if match:
+                    commits = int(match.group(1))
+                    name = match.group(2).strip()
+                    email = match.group(3) if match.group(3) else None
+
+                    git_authors.append(
+                        GitAuthor(name=name, email=email, commits=commits)
+                    )
+
+            logger.info(f"Extracted {len(git_authors)} git authors from repository.")
+            return git_authors
+        else:
+            logger.error(f"Failed to extract git authors: {stderr.decode()}")
+            return []
+    except Exception as e:
+        logger.error(f"Failed to extract git authors: {e}")
+        return []
+
+
 def sanitize_special_tokens(text):
     """
     Remove special tokens using tiktoken encoding/decoding.
     """
     encoding = tiktoken.get_encoding("cl100k_base")
-    
+
     # Encode with disallowed_special=() to handle special tokens
     # Then decode to get clean text
     try:
@@ -162,24 +242,32 @@ def sanitize_special_tokens(text):
         logger.warning(f"Failed to sanitize with tiktoken: {e}")
         # Fallback to simple regex cleanup
         import re
-        return re.sub(r'<\|[^|]*\|>', '', text)
-    
 
-async def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output=None, max_tokens=40000):    
+        return re.sub(r"<\|[^|]*\|>", "", text)
+
+
+async def llm_request_repo_infos(
+    repo_url, output_format="json-ld", gimie_output=None, max_tokens=40000
+):
     """
     Async version of llm_request_repo_infos
     """
     # Check if the repository is public before proceeding
     if not is_github_repo_public(repo_url):
-        logger.error(f"Cannot process repository: {repo_url} is not public or not accessible")
+        logger.error(
+            f"Cannot process repository: {repo_url} is not public or not accessible"
+        )
         return None
-    
+
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         # Clone repository asynchronously
         clone_result = await clone_repo(repo_url, temp_dir)
         if not clone_result:
             return None
+
+        # Extract git authors from the cloned repository
+        git_authors = await extract_git_authors(temp_dir)
 
         # Run repo-to-text asynchronously
         repo_to_text_success = await run_repo_to_text(temp_dir)
@@ -188,7 +276,9 @@ async def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output
 
         input_text = combine_text_files(temp_dir)
         input_text = sanitize_special_tokens(input_text)
-        input_text = reduce_input_size(input_text, max_tokens=max_tokens)
+        input_text = reduce_input_size(
+            input_text, max_tokens=max_tokens, repo_url=repo_url
+        )
 
         if gimie_output:
             input_text += "\n\n" + str(gimie_output)
@@ -212,12 +302,23 @@ async def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output
             elif PROVIDER == "openai":
                 json_data = response.choices[0].message.parsed
                 logger.info("Clean result from OpenAI response:")
-                json_data = json_data.model_dump(mode='json')
+                json_data = json_data.model_dump(mode="json")
 
             logger.info("Successfully JSON API response")
 
+            # Add git authors to the JSON data
+            if git_authors:
+                json_data["gitAuthors"] = [
+                    {
+                        "name": author.name,
+                        "email": author.email,
+                        "commits": author.commits,
+                    }
+                    for author in git_authors
+                ]
+
             # Run verification before converting to JSON-LD
-            verifier = Verification(json_data)
+            verifier = Verification(json_data, repo_url)
             verifier.run()
             verifier.summary()
 
@@ -236,7 +337,14 @@ async def llm_request_repo_infos(repo_url, output_format="json-ld", gimie_output
             logger.error(f"Error parsing response: {e}")
             return None
 
-async def get_openrouter_response_async(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.2, schema=SoftwareSourceCode):
+
+async def get_openrouter_response_async(
+    input_text,
+    system_prompt=system_prompt_json,
+    model="google/gemini-2.5-flash",
+    temperature=0.2,
+    schema=SoftwareSourceCode,
+):
     """
     Get structured response from openrouter asynchronously
     """
@@ -244,31 +352,35 @@ async def get_openrouter_response_async(input_text, system_prompt=system_prompt_
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": input_text}
+            {"role": "user", "content": input_text},
         ],
         "response_format": {
             "type": "json_schema",
-            "json_schema": schema.model_json_schema()
+            "json_schema": schema.model_json_schema(),
         },
-        "temperature": temperature
+        "temperature": temperature,
     }
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
-    
+
     for attempt in range(3):
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(OPENROUTER_ENDPOINT, headers=headers, json=payload) as response:
+                async with session.post(
+                    OPENROUTER_ENDPOINT, headers=headers, json=payload
+                ) as response:
                     logger.info(f"API response status: {response.status}")
                     if response.status == 200:
                         return await response.json()
                     else:
-                        logger.error(f"API request failed with status {response.status}")
+                        logger.error(
+                            f"API request failed with status {response.status}"
+                        )
                         if attempt == 2:  # Last attempt
                             return None
         except aiohttp.ClientError as e:
@@ -279,10 +391,17 @@ async def get_openrouter_response_async(input_text, system_prompt=system_prompt_
             logger.error(f"Request timeout (attempt {attempt + 1}): {e}")
             if attempt == 2:  # Last attempt
                 return None
-    
+
     return None
 
-async def get_openai_response_async(prompt, system_prompt=system_prompt_json, model="gpt-4o", temperature=0.2, schema=SoftwareSourceCode):
+
+async def get_openai_response_async(
+    prompt,
+    system_prompt=system_prompt_json,
+    model="gpt-4o",
+    temperature=0.2,
+    schema=SoftwareSourceCode,
+):
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema asynchronously.
     """
@@ -293,28 +412,29 @@ async def get_openai_response_async(prompt, system_prompt=system_prompt_json, mo
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                response_format=convert_httpurl_to_str(schema)
+                response_format=convert_httpurl_to_str(schema),
             )
         else:
             response = await async_openai_client.beta.chat.completions.parse(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=temperature,
-                response_format=convert_httpurl_to_str(schema)
+                response_format=convert_httpurl_to_str(schema),
             )
 
         return response
-    
+
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
         return None
 
-async def llm_request_userorg_infos(metadata, item_type="user"):    
+
+async def llm_request_userorg_infos(metadata, item_type="user"):
     """
     Async version of llm_request_userorg_infos
     """
@@ -328,15 +448,13 @@ async def llm_request_userorg_infos(metadata, item_type="user"):
         system_prompt = system_prompt_org_content
 
     if PROVIDER == "openrouter":
-        response = await get_openrouter_response_async(input_text, 
-                                                     system_prompt=system_prompt, 
-                                                     model=MODEL, 
-                                                     schema=schema)
+        response = await get_openrouter_response_async(
+            input_text, system_prompt=system_prompt, model=MODEL, schema=schema
+        )
     elif PROVIDER == "openai":
-        response = await get_openai_response_async(input_text, 
-                                                 system_prompt=system_prompt, 
-                                                 model=MODEL, 
-                                                 schema=schema)
+        response = await get_openai_response_async(
+            input_text, system_prompt=system_prompt, model=MODEL, schema=schema
+        )
     else:
         logger.error("No provider provided")
         return None
@@ -348,7 +466,7 @@ async def llm_request_userorg_infos(metadata, item_type="user"):
             json_data = json.loads(parsed_result)
         elif PROVIDER == "openai":
             json_data = response.choices[0].message.parsed
-            json_data = json_data.model_dump(mode='json')
+            json_data = json_data.model_dump(mode="json")
         else:
             logger.error("Unknown provider")
             return None
@@ -360,45 +478,64 @@ async def llm_request_userorg_infos(metadata, item_type="user"):
         logger.error(f"Error parsing response: {e}")
         return None
 
+
 # Keep the synchronous versions for backward compatibility
-def get_openrouter_response(input_text, system_prompt=system_prompt_json, model="google/gemini-2.5-flash", temperature=0.2, schema=SoftwareSourceCode):
+def get_openrouter_response(
+    input_text,
+    system_prompt=system_prompt_json,
+    model="google/gemini-2.5-flash",
+    temperature=0.2,
+    schema=SoftwareSourceCode,
+):
     """
     Synchronous wrapper for backward compatibility
     """
     import asyncio
-    return asyncio.run(get_openrouter_response_async(input_text, system_prompt, model, temperature, schema))
 
-def get_openai_response(prompt, system_prompt=system_prompt_json, model="gpt-4o", temperature=0.2, schema=SoftwareSourceCode):
+    return asyncio.run(
+        get_openrouter_response_async(
+            input_text, system_prompt, model, temperature, schema
+        )
+    )
+
+
+def get_openai_response(
+    prompt,
+    system_prompt=system_prompt_json,
+    model="gpt-4o",
+    temperature=0.2,
+    schema=SoftwareSourceCode,
+):
     """
     Synchronous wrapper for backward compatibility
     """
     from openai import OpenAI
-    
+
     sync_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    
+
     try:
         if model.split("-")[0] == "o3":
             response = sync_client.beta.chat.completions.parse(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                response_format=convert_httpurl_to_str(schema)
+                response_format=convert_httpurl_to_str(schema),
             )
         else:
             response = sync_client.beta.chat.completions.parse(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=temperature,
-                response_format=convert_httpurl_to_str(schema)
+                response_format=convert_httpurl_to_str(schema),
             )
 
         return response
-    
+
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
         return None

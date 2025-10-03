@@ -1,23 +1,36 @@
-from pydantic import BaseModel, HttpUrl, EmailStr
-from typing import List, Optional, Union, get_origin, get_args
+from pydantic import BaseModel, HttpUrl
+from typing import (
+    List,
+    Optional,
+    Union,
+    get_origin,
+    get_args,
+    Any,
+    Dict,
+    List as ListType,
+)
 from datetime import date, datetime
 from typing_extensions import Annotated
 from pydantic import StringConstraints, conint
 from enum import Enum
+
 
 class Person(BaseModel):
     name: str = None
     orcidId: Optional[HttpUrl] = None
     affiliation: Optional[List[str]] = None
 
+
 class Organization(BaseModel):
     legalName: str = None
     hasRorId: Optional[HttpUrl] = None
+
 
 class FundingInformation(BaseModel):
     identifier: str = None
     fundingGrant: str = None
     fundingSource: Organization
+
 
 class FormalParameter(BaseModel):
     name: Annotated[str, StringConstraints(max_length=60)] = None
@@ -28,16 +41,21 @@ class FormalParameter(BaseModel):
     defaultValue: Optional[str] = None
     valueRequired: Optional[bool] = None
 
+
 class ExecutableNotebook(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     url: HttpUrl = None
 
+
 class SoftwareImage(BaseModel):
     name: str = None
     description: str = None
-    softwareVersion: Annotated[str, StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+")] = None
+    softwareVersion: Annotated[
+        str, StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+")
+    ] = None
     availableInRegistry: HttpUrl = None
+
 
 class DataFeed(BaseModel):
     name: Optional[str] = None
@@ -46,12 +64,14 @@ class DataFeed(BaseModel):
     measurementTechnique: Optional[str] = None
     variableMeasured: Optional[str] = None
 
+
 class ImageKeyword(str, Enum):
     LOGO = "logo"
     ILLUSTRATIVE_IMAGE = "illustrative image"
     BEFORE_IMAGE = "before image"
     AFTER_IMAGE = "after image"
     ANIMATED_IMAGE = "animated image"
+
 
 class Image(BaseModel):
     contentUrl: HttpUrl = None
@@ -106,12 +126,20 @@ class Discipline(str, Enum):
     CHEMISTRY = "Chemistry"
     EARTH_SCIENCE = "Earth science"
 
+
 class RepositoryType(str, Enum):
     SOFTWARE = "software"
     EDUCATIONAL_RESOURCE = "educational resource"
     DOCUMENTATION = "documentation"
     DATA = "data"
     OTHER = "other"
+
+
+class GitAuthor(BaseModel):
+    name: str = None
+    email: Optional[str] = None
+    commits: int = None
+
 
 class SoftwareSourceCode(BaseModel):
     parseTimestamp: str = None
@@ -162,12 +190,15 @@ class SoftwareSourceCode(BaseModel):
     repositoryTypeJustification: Optional[List[str]] = None
     relatedToEPFL: bool = None
     relatedToEPFLJustification: Optional[str] = None
+    gitAuthors: Optional[List[GitAuthor]] = None
+
 
 ############################################################
 #
 # Github Users and Organizations Models
 #
 ############################################################
+
 
 class GitHubOrganization(BaseModel):
     parseTimestamp: str = None
@@ -181,6 +212,7 @@ class GitHubOrganization(BaseModel):
     disciplineJustification: Optional[List[str]] = None
     relatedToEPFL: bool = None
     relatedToEPFLJustification: Optional[str] = None
+
 
 class GitHubUser(BaseModel):
     parseTimestamp: str = None
@@ -200,8 +232,6 @@ class GitHubUser(BaseModel):
 # JSON-LD to Pydantic Model Conversion
 #
 ############################################################
-
-from typing import Any, Dict, List as ListType
 
 # A dictionary to map JSON-LD property URIs to functions that can convert them.
 # This provides a clean, declarative way to define the conversion process.
@@ -238,7 +268,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "http://schema.org/variableMeasured": "variableMeasured",
     "http://schema.org/contentUrl": "contentUrl",
     "http://schema.org/softwareVersion": "softwareVersion",
-
     # SD ontology properties
     "https://w3id.org/okn/o/sd#hasDocumentation": "hasDocumentation",
     "https://w3id.org/okn/o/sd#hasExecutableInstructions": "hasExecutableInstructions",
@@ -252,7 +281,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "https://w3id.org/okn/o/sd#availableInRegistry": "availableInRegistry",
     "https://w3id.org/okn/o/sd#fundingGrant": "fundingGrant",
     "https://w3id.org/okn/o/sd#fundingSource": "fundingSource",
-
     # Imaging Plaza specific properties
     "https://imaging-plaza.epfl.ch/ontology#imagingModality": "imagingModality",
     "https://imaging-plaza.epfl.ch/ontology#isPluginModuleOf": "isPluginModuleOf",
@@ -261,11 +289,14 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "https://imaging-plaza.epfl.ch/ontology#hasExecutableNotebook": "hasExecutableNotebook",
     "https://imaging-plaza.epfl.ch/ontology#fairLevel": "fairLevel",
     "https://imaging-plaza.epfl.ch/ontology#graph": "graph",
-
     # MD4I properties
     "http://w3id.org/nfdi4ing/metadata4ing#orcidId": "orcidId",
     "http://w3id.org/nfdi4ing/metadata4ing#hasRorId": "hasRorId",
+    # Git metadata
+    "https://imaging-plaza.epfl.ch/ontology#gitAuthors": "gitAuthors",
+    "https://imaging-plaza.epfl.ch/ontology#commits": "commits",
 }
+
 
 def _get_value(obj: Any) -> Any:
     """Extracts a primitive value from a JSON-LD value object."""
@@ -275,10 +306,12 @@ def _get_value(obj: Any) -> Any:
         return _get_value(obj[0])
     return obj
 
+
 def _get_list(entity: Dict, key: str) -> ListType[Any]:
     """Ensures the value for a key is a list."""
     value = entity.get(key, [])
     return value if isinstance(value, list) else [value]
+
 
 def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
     """Converts a single JSON-LD entity node to its corresponding Pydantic model."""
@@ -287,27 +320,49 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
     if "http://schema.org/Person" in entity_types:
         return Person(
             name=_get_value(entity.get("http://schema.org/name")),
-            orcidId=_get_value(entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId")),
-            affiliation=[_get_value(v) for v in _get_list(entity, "http://schema.org/affiliation")] or None,
+            orcidId=_get_value(
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId")
+            ),
+            affiliation=[
+                _get_value(v)
+                for v in _get_list(entity, "http://schema.org/affiliation")
+            ]
+            or None,
         )
     if "http://schema.org/Organization" in entity_types:
         return Organization(
             legalName=_get_value(entity.get("http://schema.org/legalName")),
-            hasRorId=_get_value(entity.get("http://w3id.org/nfdi4ing/metadata4ing#hasRorId")),
+            hasRorId=_get_value(
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#hasRorId")
+            ),
+        )
+    if "https://imaging-plaza.epfl.ch/ontology#GitAuthor" in entity_types:
+        return GitAuthor(
+            name=_get_value(entity.get("http://schema.org/name")),
+            email=_get_value(entity.get("http://schema.org/email")),
+            commits=_get_value(
+                entity.get("https://imaging-plaza.epfl.ch/ontology#commits")
+            ),
         )
     if "https://w3id.org/okn/o/sd#FundingInformation" in entity_types:
         source_ref = _get_value(entity.get("https://w3id.org/okn/o/sd#fundingSource"))
         return FundingInformation(
             identifier=_get_value(entity.get("http://schema.org/identifier")),
-            fundingGrant=_get_value(entity.get("https://w3id.org/okn/o/sd#fundingGrant")),
-            fundingSource=_convert_entity(all_entities[source_ref], all_entities) if source_ref in all_entities else None,
+            fundingGrant=_get_value(
+                entity.get("https://w3id.org/okn/o/sd#fundingGrant")
+            ),
+            fundingSource=_convert_entity(all_entities[source_ref], all_entities)
+            if source_ref in all_entities
+            else None,
         )
     if "https://w3id.org/okn/o/sd#FormalParameter" in entity_types:
         return FormalParameter(
             name=_get_value(entity.get("http://schema.org/name")),
             description=_get_value(entity.get("http://schema.org/description")),
             encodingFormat=_get_value(entity.get("http://schema.org/encodingFormat")),
-            hasDimensionality=_get_value(entity.get("https://w3id.org/okn/o/sd#hasDimensionality")),
+            hasDimensionality=_get_value(
+                entity.get("https://w3id.org/okn/o/sd#hasDimensionality")
+            ),
             hasFormat=_get_value(entity.get("https://w3id.org/okn/o/sd#hasFormat")),
             defaultValue=_get_value(entity.get("http://schema.org/defaultValue")),
             valueRequired=_get_value(entity.get("http://schema.org/valueRequired")),
@@ -323,48 +378,80 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             name=_get_value(entity.get("http://schema.org/name")),
             description=_get_value(entity.get("http://schema.org/description")),
             softwareVersion=_get_value(entity.get("http://schema.org/softwareVersion")),
-            availableInRegistry=_get_value(entity.get("https://w3id.org/okn/o/sd#availableInRegistry")),
+            availableInRegistry=_get_value(
+                entity.get("https://w3id.org/okn/o/sd#availableInRegistry")
+            ),
         )
     if "http://schema.org/DataFeed" in entity_types:
         return DataFeed(
             name=_get_value(entity.get("http://schema.org/name")),
             description=_get_value(entity.get("http://schema.org/description")),
             contentUrl=_get_value(entity.get("http://schema.org/contentUrl")),
-            measurementTechnique=_get_value(entity.get("http://schema.org/measurementTechnique")),
-            variableMeasured=_get_value(entity.get("http://schema.org/variableMeasured")),
+            measurementTechnique=_get_value(
+                entity.get("http://schema.org/measurementTechnique")
+            ),
+            variableMeasured=_get_value(
+                entity.get("http://schema.org/variableMeasured")
+            ),
         )
     if "http://schema.org/SoftwareSourceCode" in entity_types:
         data = {}
         for key, value in entity.items():
             if key in JSONLD_TO_PYDANTIC_MAPPING:
                 pydantic_key = JSONLD_TO_PYDANTIC_MAPPING[key]
-                
+
                 # Handle nested objects and lists of objects by reference
-                if pydantic_key in ["author", "supportingData", "hasExecutableNotebook", "hasParameter", "hasFunding", "hasSoftwareImage"]:
+                if pydantic_key in [
+                    "author",
+                    "supportingData",
+                    "hasExecutableNotebook",
+                    "hasParameter",
+                    "hasFunding",
+                    "hasSoftwareImage",
+                    "gitAuthors",
+                ]:
                     refs = [_get_value(v) for v in _get_list(entity, key)]
-                    data[pydantic_key] = [_convert_entity(all_entities[ref], all_entities) for ref in refs if ref in all_entities]
+                    data[pydantic_key] = [
+                        _convert_entity(all_entities[ref], all_entities)
+                        for ref in refs
+                        if ref in all_entities
+                    ]
                 elif pydantic_key == "image":
                     urls = [_get_value(v) for v in _get_list(entity, key)]
-                    data[pydantic_key] = [Image(contentUrl=url, keywords=ImageKeyword.ILLUSTRATIVE_IMAGE) for url in urls if url]
+                    data[pydantic_key] = [
+                        Image(contentUrl=url, keywords=ImageKeyword.ILLUSTRATIVE_IMAGE)
+                        for url in urls
+                        if url
+                    ]
                 else:
                     # Check if the target field is a list type (including Optional[List[...]])
-                    field_annotation = SoftwareSourceCode.model_fields[pydantic_key].annotation
+                    field_annotation = SoftwareSourceCode.model_fields[
+                        pydantic_key
+                    ].annotation
                     origin = get_origin(field_annotation)
-                    
+
                     is_list = origin is list or origin is ListType
-                    if origin is Union: # Handles Optional[List[...]]
-                        is_list = any(get_origin(arg) in (list, ListType) for arg in get_args(field_annotation))
+                    if origin is Union:  # Handles Optional[List[...]]
+                        is_list = any(
+                            get_origin(arg) in (list, ListType)
+                            for arg in get_args(field_annotation)
+                        )
 
                     if is_list:
                         # Handle lists of strings/URLs
-                        data[pydantic_key] = [_get_value(v) for v in _get_list(entity, key)]
+                        data[pydantic_key] = [
+                            _get_value(v) for v in _get_list(entity, key)
+                        ]
                     else:
                         # Handle single values
                         data[pydantic_key] = _get_value(value)
         return SoftwareSourceCode(**data)
     return None
 
-def convert_jsonld_to_pydantic(jsonld_graph: ListType[Dict[str, Any]]) -> Optional[SoftwareSourceCode]:
+
+def convert_jsonld_to_pydantic(
+    jsonld_graph: ListType[Dict[str, Any]],
+) -> Optional[SoftwareSourceCode]:
     """
     Converts a JSON-LD graph into a Pydantic SoftwareSourceCode object.
 
@@ -379,7 +466,7 @@ def convert_jsonld_to_pydantic(jsonld_graph: ListType[Dict[str, Any]]) -> Option
         return None
 
     all_entities = {item["@id"]: item for item in jsonld_graph if "@id" in item}
-    
+
     for entity in jsonld_graph:
         entity_types = _get_list(entity, "@type")
         if "http://schema.org/SoftwareSourceCode" in entity_types:
@@ -387,7 +474,7 @@ def convert_jsonld_to_pydantic(jsonld_graph: ListType[Dict[str, Any]]) -> Option
             converted = _convert_entity(entity, all_entities)
             if isinstance(converted, SoftwareSourceCode):
                 return converted
-    
+
     return None
 
 
@@ -406,6 +493,11 @@ PYDANTIC_TO_ZOD_MAPPING = {
     "Organization": {
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
+    },
+    "GitAuthor": {
+        "name": "schema:name",
+        "email": "schema:email",
+        "commits": "imag:commits",
     },
     "FundingInformation": {
         "identifier": "schema:identifier",
@@ -480,8 +572,10 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "imagingModality": "imag:imagingModality",
         "fairLevel": "imag:fairLevel",
         "graph": "imag:graph",
+        "gitAuthors": "imag:gitAuthors",
     },
 }
+
 
 def convert_pydantic_to_zod_form_dict(pydantic_obj: Any) -> Any:
     """
@@ -509,7 +603,7 @@ def convert_pydantic_to_zod_form_dict(pydantic_obj: Any) -> Any:
 
     key_map = PYDANTIC_TO_ZOD_MAPPING[model_name]
     zod_dict = {}
-    
+
     # By iterating over the model directly (`for key, value in pydantic_obj`),
     # we process its fields. This ensures that nested Pydantic models are passed
     # to the recursive call as model instances, not as pre-converted dictionaries.
@@ -517,10 +611,8 @@ def convert_pydantic_to_zod_form_dict(pydantic_obj: Any) -> Any:
     for pydantic_key, value in pydantic_obj:
         if value is not None and pydantic_key in key_map:
             zod_key = key_map[pydantic_key]
-            
+
             # Recursively convert nested models or lists
             zod_dict[zod_key] = convert_pydantic_to_zod_form_dict(value)
 
     return zod_dict
-
-

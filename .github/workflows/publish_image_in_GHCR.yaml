@@ -12,11 +12,11 @@ jobs:
     permissions:
       contents: write # needed to create the release
       packages: write # needed to publish the image
-    
+
     # Skip building images for draft PRs
     if: |
-      github.event_name == 'push' || 
-      (github.event_name == 'pull_request' && 
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
        github.event.pull_request.draft == false)
 
     steps:
@@ -34,7 +34,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           VERSION="${{ steps.project_version.outputs.version }}"
-          
+
           # Extract the section for this version from CHANGELOG.md
           # This awk script finds the section between [VERSION] and the next [VERSION] or end of file
           CHANGELOG_SECTION=$(awk -v version="[$VERSION]" '
@@ -50,16 +50,16 @@ jobs:
             found { content = content $0 "\n" }
             END { print content }
           ' CHANGELOG.md)
-          
+
           # If no section found, use a default message
           if [ -z "$CHANGELOG_SECTION" ]; then
             CHANGELOG_SECTION="## Release v${VERSION}\n\nNo changelog entry found for this version."
           fi
-          
+
           # Save to file and output
           echo "$CHANGELOG_SECTION" > release_notes.md
           echo "changelog_file=release_notes.md" >> $GITHUB_OUTPUT
-          
+
           # Also output as multiline string for debugging
           {
             echo 'content<<EOF'
@@ -123,7 +123,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     permissions:
       packages: write
-    
+
     steps:
       - name: Delete PR image
         uses: actions/github-script@v7
@@ -135,7 +135,7 @@ jobs:
             const packageName = `${owner}/${repo}`;
             const prNumber = context.payload.pull_request.number;
             const prTag = `pr-${prNumber}`;
-            
+
             try {
               // Get all package versions
               const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
@@ -144,12 +144,12 @@ jobs:
                 org: owner,
                 per_page: 100
               });
-              
+
               // Find the PR image version
-              const prVersion = versions.find(version => 
+              const prVersion = versions.find(version =>
                 version.metadata.container.tags.includes(prTag)
               );
-              
+
               if (prVersion) {
                 console.log(`Deleting PR image: ${prTag} (version ID: ${prVersion.id})`);
                 await github.rest.packages.deletePackageVersionForOrg({

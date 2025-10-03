@@ -39,16 +39,33 @@ All notable changes to this project will be documented in this file.
   - Faster response times with instant cache retrieval
   - Rate limit protection for GitHub/ORCID APIs
   - Cost savings on LLM API calls
+- **ORCID affiliation enrichment**:
+  - Automatic extraction of ORCID IDs from author metadata
+  - Selenium-based scraping of ORCID profiles for employment and education history
+  - Smart affiliation merging that preserves existing affiliations and adds ORCID data
+  - Support for both Zod format (`schema:author`, `md4i:orcidId`) and plain format (`author`, `orcidId`)
+  - Cached ORCID data with 14-day TTL to avoid repeated scraping
+  - Integration with both main extraction and LLM JSON endpoints
+- **Enhanced logging system**:
+  - Comprehensive logging for ORCID enrichment process
+  - Detailed error handling and debugging information
+  - Cache operation logging for monitoring and troubleshooting
+  - Selenium operation logging for ORCID scraping
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
 - All data endpoints now support caching with `force_refresh` parameter
 - Response format includes `cached` status indicator
+- Author metadata now automatically enriched with ORCID affiliations
+- Both `/v1/extract/json/` and `/v1/repository/llm/json/` endpoints include ORCID enrichment
+- Selenium configuration now uses environment variable `SELENIUM_REMOTE_URL`
 
 ### Documentation
 - Added comprehensive cache documentation in `docs/CACHE_README.md`
 - Updated API endpoint documentation with caching information
 - Added cache configuration examples and environment variables reference
+- Added ORCID affiliations documentation in `docs/ORCID_AFFILIATIONS.md`
+- Created ORCID implementation summary with technical details
 
 
 ## [1.0.0] - 2025-08-06

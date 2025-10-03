@@ -13,7 +13,7 @@
     "dcterms": "http://purl.org/dc/terms/",
     "imag": "https://imaging-plaza.epfl.ch/ontology#",
     "md4i": "http://w3id.org/nfdi4ing/metadata4ing#",
-    
+
     "SoftwareApplication": "schema:SoftwareSourceCode",
     "Person": "schema:Person",
     "DataFeed": "schema:DataFeed",
@@ -22,7 +22,8 @@
     "ExecutableNotebook": "imag:ExecutableNotebook",
     "Organization": "schema:Organization",
     "FundingInformation": "sd:FundingInformation",
-    
+    "GitAuthor": "imag:GitAuthor",
+
     "name": "schema:name",
     "featureList": "schema:featureList",
     "conditionsOfAccess": "schema:conditionsOfAccess",
@@ -78,7 +79,8 @@
     "fundingGrant": "sd:fundingGrant",
     "fundingSource": "sd:fundingSource",
     "discipline": "pulse:discipline",
-    "repositoryType": "pulse:repositoryType"
+    "repositoryType": "pulse:repositoryType",
+    "gitAuthors": "imag:gitAuthors",
+    "commits": "imag:commits"
   }
 }
-

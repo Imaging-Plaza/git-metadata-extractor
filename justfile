@@ -16,18 +16,10 @@ default:
 
 # Install dependencies from pyproject.toml
 install:
-    pip install .
+    uv pip install .
 
 # Install in development mode with all dependencies
 install-dev:
-    pip install -e ".[dev]"
-
-# Install using uv (faster alternative)
-install-uv:
-    uv pip install .
-
-# Install in development mode using uv
-install-dev-uv:
     uv pip install -e ".[dev]"
 
 # Set up development environment (install + create .env if needed)
@@ -241,10 +233,38 @@ deps:
 # Complete development setup and start server
 dev: setup serve-dev
 
-# Run checks and tests before committing
-pre-commit: lint test
-    @echo "✓ All pre-commit checks passed!"
+# # Run checks and tests before committing
+# pre-commit: lint test
+#     @echo "✓ All pre-commit checks passed!"
 
 # Full CI pipeline (lint, type-check, test)
 ci: lint type-check test-coverage
     @echo "✓ CI pipeline completed successfully!"
+
+# ============================================================================
+# Pre-commit Commands
+# ============================================================================
+
+# Install pre-commit hooks
+pre-commit-install:
+    pre-commit install
+
+# Install pre-commit hooks for commit-msg
+pre-commit-install-msg:
+    pre-commit install --hook-type commit-msg
+
+# Run pre-commit on all files
+pre-commit:
+    pre-commit run --all-files
+
+# Run pre-commit on staged files only
+pre-commit-staged:
+    pre-commit run
+
+# Update pre-commit hooks to latest versions
+pre-commit-update:
+    pre-commit autoupdate
+
+# Clean pre-commit cache
+pre-commit-clean:
+    pre-commit clean
