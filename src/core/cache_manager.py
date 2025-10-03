@@ -1,0 +1,160 @@
+"""
+Cache management utilities and configuration for the API caching system.
+"""
+
+import os
+from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
+from .cache import get_cache, APICache
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class CacheConfig:
+    """Configuration for API caching behavior."""
+    
+    # Default TTL settings (in days)
+    DEFAULT_TTL_DAYS = 30
+    
+    # API-specific TTL settings
+    API_TTL_OVERRIDES = {
+        "github_user": 7,      # GitHub user data changes less frequently
+        "github_org": 7,       # GitHub org data changes less frequently
+        "orcid": 14,           # ORCID data is relatively stable
+        "gimie": 1,            # GIMIE data might change more frequently
+        "llm": 30,             # LLM responses can be cached longer
+    }
+    
+    # Force refresh parameter name
+    FORCE_REFRESH_PARAM = "force_refresh"
+    
+    # Cache enabled by default
+    CACHE_ENABLED = True
+
+
+class CacheManager:
+    """High-level cache management for API endpoints."""
+    
+    def __init__(self, cache_db_path: str = "api_cache.db"):
+        self.cache = APICache(cache_db_path)
+        self.config = CacheConfig()
+    
+    def get_cached_or_fetch(self, 
+                           api_type: str, 
+                           params: Dict[str, Any], 
+                           fetch_func: callable,
+                           force_refresh: bool = False,
+                           custom_ttl: Optional[int] = None) -> Any:
+        """
+        Get data from cache or fetch it if not cached/expired.
+        
+        Args:
+            api_type: Type of API (github_user, github_org, orcid, gimie, llm)
+            params: Parameters for the API call
+            fetch_func: Function to call if cache miss
+            force_refresh: If True, bypass cache
+            custom_ttl: Custom TTL in days
+            
+        Returns:
+            Cached or freshly fetched data
+        """
+        if not self.config.CACHE_ENABLED:
+            logger.info(f"Cache disabled, fetching fresh data for {api_type}")
+            return fetch_func()
+        
+        # Try to get from cache first
+        if not force_refresh:
+            cached_result = self.cache.get(api_type, params)
+            if cached_result is not None:
+                return cached_result
+        
+        # Fetch fresh data
+        logger.info(f"Fetching fresh data for {api_type}")
+        fresh_data = fetch_func()
+        
+        # Cache the result if successful
+        if fresh_data is not None:
+            ttl = custom_ttl or self.config.API_TTL_OVERRIDES.get(api_type, self.config.DEFAULT_TTL_DAYS)
+            self.cache.set(api_type, params, fresh_data, ttl)
+            logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
+        
+        return fresh_data
+    
+    def invalidate_api_cache(self, api_type: str, params: Dict[str, Any]) -> bool:
+        """Invalidate specific cache entry."""
+        return self.cache.invalidate(api_type, params)
+    
+    def cleanup_expired(self) -> int:
+        """Clean up expired cache entries."""
+        return self.cache.cleanup_expired()
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get comprehensive cache statistics."""
+        stats = self.cache.get_stats()
+        stats["config"] = {
+            "cache_enabled": self.config.CACHE_ENABLED,
+            "default_ttl_days": self.config.DEFAULT_TTL_DAYS,
+            "api_ttl_overrides": self.config.API_TTL_OVERRIDES
+        }
+        return stats
+    
+    def clear_all_cache(self) -> int:
+        """Clear all cache entries."""
+        return self.cache.clear_all()
+    
+    def enable_cache(self):
+        """Enable caching."""
+        self.config.CACHE_ENABLED = True
+        logger.info("Cache enabled")
+    
+    def disable_cache(self):
+        """Disable caching."""
+        self.config.CACHE_ENABLED = False
+        logger.info("Cache disabled")
+
+
+# Global cache manager instance
+_cache_manager: Optional[CacheManager] = None
+
+
+def get_cache_manager() -> CacheManager:
+    """Get the global cache manager instance."""
+    global _cache_manager
+    if _cache_manager is None:
+        _cache_manager = CacheManager()
+    return _cache_manager
+
+
+def extract_force_refresh_param(params: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    """
+    Extract force_refresh parameter from request parameters.
+    
+    Args:
+        params: Request parameters dictionary
+        
+    Returns:
+        Tuple of (cleaned_params, force_refresh_flag)
+    """
+    force_refresh = params.pop(CacheConfig.FORCE_REFRESH_PARAM, False)
+    
+    # Convert string values to boolean
+    if isinstance(force_refresh, str):
+        force_refresh = force_refresh.lower() in ('true', '1', 'yes', 'on')
+    
+    return params, force_refresh
+
+
+def should_use_cache(api_type: str) -> bool:
+    """
+    Check if caching should be used for the given API type.
+    
+    Args:
+        api_type: Type of API
+        
+    Returns:
+        True if caching should be used
+    """
+    manager = get_cache_manager()
+    return manager.config.CACHE_ENABLED
+
