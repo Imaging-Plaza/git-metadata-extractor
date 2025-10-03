@@ -5,8 +5,50 @@ from rdflib import Graph
 import ast
 import logging
 from pprint import pprint
+import re
 
 logger = logging.getLogger(__name__)
+
+def is_github_repo_public(repo_url: str) -> bool:
+    """
+    Check if a GitHub repository is public by making a request to the GitHub API.
+    
+    Args:
+        repo_url: The GitHub repository URL (e.g., 'https://github.com/owner/repo')
+        
+    Returns:
+        bool: True if the repository is public, False otherwise
+    """
+    # Extract owner and repo name from the URL
+    match = re.match(r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$', repo_url.strip())
+    if not match:
+        logger.error(f"Invalid GitHub URL format: {repo_url}")
+        return False
+    
+    owner, repo = match.groups()
+    api_url = f"https://api.github.com/repos/{owner}/{repo}"
+    
+    try:
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code == 200:
+            repo_data = response.json()
+            is_private = repo_data.get('private', True)
+            if is_private:
+                logger.warning(f"Repository {repo_url} is private")
+                return False
+            logger.info(f"Repository {repo_url} is public")
+            return True
+        elif response.status_code == 404:
+            logger.error(f"Repository not found or not accessible: {repo_url}")
+            return False
+        else:
+            logger.error(f"GitHub API returned status {response.status_code} for {repo_url}")
+            return False
+            
+    except requests.RequestException as e:
+        logger.error(f"Failed to check repository visibility: {e}")
+        return False
 
 def fetch_jsonld(url):
     """Fetch JSON-LD data from a given URL."""

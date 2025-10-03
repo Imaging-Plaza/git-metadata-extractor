@@ -114,6 +114,7 @@ class RepositoryType(str, Enum):
     OTHER = "other"
 
 class SoftwareSourceCode(BaseModel):
+    parseTimestamp: str = None
     name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
     citation: List[HttpUrl] = None
@@ -129,8 +130,6 @@ class SoftwareSourceCode(BaseModel):
     isPluginModuleOf: Optional[List[str]] = None
     license: Annotated[str, StringConstraints(pattern=r"spdx\.org.*")] = None
     author: List[Union[Person, Organization]] = None
-    relatedToOrganization: Optional[List[str]] = None
-    relatedToOrganizationJustification: Optional[List[str]] = None
     operatingSystem: Optional[List[str]] = None
     programmingLanguage: Optional[List[str]] = None
     softwareRequirements: Optional[List[str]] = None
@@ -153,8 +152,16 @@ class SoftwareSourceCode(BaseModel):
     graph: Optional[str] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
+    relatedDatasets: Optional[List[str]] = None
+    relatedPublications: Optional[List[str]] = None
+    relatedModels: Optional[List[str]] = None
+    relatedAPIs: Optional[List[str]] = None
+    relatedToOrganizations: Optional[List[str]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: Optional[RepositoryType] = None
     repositoryTypeJustification: Optional[List[str]] = None
+    relatedToEPFL: bool = None
+    relatedToEPFLJustification: Optional[str] = None
 
 ############################################################
 #
@@ -163,6 +170,7 @@ class SoftwareSourceCode(BaseModel):
 ############################################################
 
 class GitHubOrganization(BaseModel):
+    parseTimestamp: str = None
     name: Optional[str] = None
     organizationType: Optional[str] = None
     organizationTypeJustification: Optional[str] = None
@@ -171,8 +179,11 @@ class GitHubOrganization(BaseModel):
     relatedToOrganizationJustification: Optional[List[str]] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
+    relatedToEPFL: bool = None
+    relatedToEPFLJustification: Optional[str] = None
 
 class GitHubUser(BaseModel):
+    parseTimestamp: str = None
     name: Optional[str] = None
     relatedToOrganization: Optional[List[str]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
@@ -180,6 +191,8 @@ class GitHubUser(BaseModel):
     disciplineJustification: Optional[List[str]] = None
     position: Optional[List[str]] = None
     positionJustification: Optional[List[str]] = None
+    relatedToEPFL: bool = None
+    relatedToEPFLJustification: Optional[str] = None
 
 
 ############################################################

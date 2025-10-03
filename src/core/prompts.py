@@ -47,7 +47,7 @@ The user will provide the full codebase of a software project. Your task is to e
   - `measurementTechnique` (string, **optional**)
   - `variableMeasured` (string, **optional**)
 - `codeRepository` (list of **valid URLs**, **required**): URLs of code repositories (e.g., GitHub, GitLab).
-- `citation` (list of **valid URLs**, **required**): Academic references or citations.
+- `citation` (list of **valid URLs**, **required**): Academic references or citations. These should be URL to scientific articles, Arxiv, or DOI links.
 - `dateCreated` (string, **required, format YYYY-MM-DD**): The date the software was initially created.
 - `datePublished` (string, **required, format YYYY-MM-DD**): The date the software was made publicly available.
 - `license` (string matching pattern `spdx.org.*`, **required**).
@@ -96,7 +96,11 @@ The user will provide the full codebase of a software project. Your task is to e
 - `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
 - `disciplineJustification` (list of strings, **optional**): Justification for the discipline classification.
 - `repositoryType` (string, **optional**): Type of repository (e.g., software, educational resource, documentation, data, other).
-- `respositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `repositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `relatedDatasets`: A list with any link to datasets stored in Zenodo, HuggingFace Datasets, Google Drive, etc.
+- `relatedPublications`: Any related publication mentioned in the readme or at any part of the documentation.
+- `relatedModels`: A list with any link to models stored in HuggingFace or any other machine learning model repository
+- `relatedAPI`: A list with any link to APIs related to the software.
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """
@@ -148,5 +152,55 @@ Do not make new fields if they are not in the schema.
 7. Use correct capitalization and spelling for organization names.
 8. Provide clear justifications for your classifications.
 
+DISCIPLINES SHOULD BE ONE OF THE FOLLOWING:
+
+    SOCIAL_SCIENCES = "Social sciences"
+    ANTHROPOLOGY = "Anthropology"
+    COMMUNICATION_STUDIES = "Communication studies"
+    EDUCATION = "Education"
+    LINGUISTICS = "Linguistics"
+    RESEARCH = "Research"
+    SOCIOLOGY = "Sociology"
+    GEOGRAPHY = "Geography"
+    PSYCHOLOGY = "Psychology"
+    POLITICS = "Politics"
+    ECONOMICS = "Economics"
+    APPLIED_SCIENCES = "Applied sciences"
+    HEALTH_SCIENCES = "Health sciences"
+    ELECTRICAL_ENGINEERING = "Electrical engineering"
+    CHEMICAL_ENGINEERING = "Chemical engineering"
+    CIVIL_ENGINEERING = "Civil engineering"
+    ARCHITECTURE = "Architecture"
+    COMPUTER_ENGINEERING = "Computer engineering"
+    ENERGY_ENGINEERING = "Energy engineering"
+    MILITARY_SCIENCE = "Military science"
+    INDUSTRIAL_PRODUCTION_ENGINEERING = "Industrial and production engineering"
+    MECHANICAL_ENGINEERING = "Mechanical engineering"
+    BIOLOGICAL_ENGINEERING = "Biological engineering"
+    ENVIRONMENTAL_SCIENCE = "Environmental science"
+    SYSTEMS_SCIENCE_ENGINEERING = "Systems science and engineering"
+    INFORMATION_ENGINEERING = "Information engineering"
+    AGRICULTURAL_FOOD_SCIENCES = "Agricultural and food sciences"
+    BUSINESS = "Business"
+    HUMANITIES = "Humanities"
+    HISTORY = "History"
+    LITERATURE = "Literature"
+    ART = "Art"
+    RELIGION = "Religion"
+    PHILOSOPHY = "Philosophy"
+    LAW = "Law"
+    FORMAL_SCIENCES = "Formal sciences"
+    MATHEMATICS = "Mathematics"
+    LOGIC = "Logic"
+    STATISTICS = "Statistics"
+    THEORETICAL_COMPUTER_SCIENCE = "Theoretical computer science"
+    NATURAL_SCIENCES = "Natural sciences"
+    PHYSICS = "Physics"
+    ASTRONOMY = "Astronomy"
+    BIOLOGY = "Biology"
+    CHEMISTRY = "Chemistry"
+    EARTH_SCIENCE = "Earth science"
+
+    
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

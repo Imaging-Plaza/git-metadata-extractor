@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 import os
@@ -15,7 +16,7 @@ app = FastAPI()
 
 @app.get("/")
 def index():
-    return {"title": f"Hello, welcome to the Git Metadata Extractor v0.2.0. Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}"}
+    return {"title": f"Hello, welcome to the Git Metadata Extractor v0.3.0 (Dev). Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}"}
 
 @app.get("/v1/extract/json/{full_path:path}")
 async def extract(full_path:str):
@@ -64,6 +65,7 @@ async def get_org_json(full_path: str):
         parsed_org_metadata = await llm_request_userorg_infos(org_metadata, item_type="org")
 
         org_metadata_dict = org_metadata.model_dump()
+        org_metadata_dict["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
         org_metadata_dict.update(parsed_org_metadata)
 
     except Exception as e:
@@ -84,6 +86,7 @@ async def get_user_json(full_path: str):
         parsed_user_metadata = await llm_request_userorg_infos(user_metadata, item_type="user")
 
         user_metadata_dict = user_metadata.model_dump()
+        user_metadata_dict["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
 
         user_metadata_dict.update(parsed_user_metadata)
 
@@ -130,6 +133,7 @@ async def llm_json(full_path:str):
 
     try:
         llm_result = await llm_request_repo_infos(str(full_path), gimie_output=jsonld_gimie_data, output_format="json", max_tokens=20000)
+        llm_result["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
     except Exception as e:
         raise HTTPException(
             status_code=424, 
