@@ -3,13 +3,13 @@ Caching system for external API calls to reduce requests to GitHub, ORCID, and G
 Uses SQLite for structured storage with TTL support and force refresh capabilities.
 """
 
-import sqlite3
-import json
 import hashlib
-import os
-from datetime import datetime, timedelta
-from typing import Any, Optional, Dict
+import json
 import logging
+import os
+import sqlite3
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +53,18 @@ class APICache:
                     hit_count INTEGER DEFAULT 0,
                     last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """
+            """,
             )
 
             # Create indexes for better performance
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_expires_at ON cache_entries(expires_at)"
+                "CREATE INDEX IF NOT EXISTS idx_expires_at ON cache_entries(expires_at)",
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_api_type ON cache_entries(api_type)"
+                "CREATE INDEX IF NOT EXISTS idx_api_type ON cache_entries(api_type)",
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_created_at ON cache_entries(created_at)"
+                "CREATE INDEX IF NOT EXISTS idx_created_at ON cache_entries(created_at)",
             )
 
             conn.commit()
@@ -86,7 +86,10 @@ class APICache:
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get(
-        self, api_type: str, params: Dict[str, Any], force_refresh: bool = False
+        self,
+        api_type: str,
+        params: Dict[str, Any],
+        force_refresh: bool = False,
     ) -> Optional[Any]:
         """
         Retrieve cached data for the given API type and parameters.
@@ -132,9 +135,8 @@ class APICache:
 
                 logger.info(f"Cache hit for {api_type} with key {cache_key[:8]}...")
                 return json.loads(response_data)
-            else:
-                logger.info(f"Cache miss for {api_type} with key {cache_key[:8]}...")
-                return None
+            logger.info(f"Cache miss for {api_type} with key {cache_key[:8]}...")
+            return None
 
     def set(
         self,
@@ -174,7 +176,7 @@ class APICache:
             conn.commit()
 
         logger.info(
-            f"Cached {api_type} response with key {cache_key[:8]}... (expires in {ttl} days)"
+            f"Cached {api_type} response with key {cache_key[:8]}... (expires in {ttl} days)",
         )
 
     def invalidate(self, api_type: str, params: Dict[str, Any]) -> bool:
@@ -192,20 +194,20 @@ class APICache:
 
         with sqlite3.connect(self.cache_db_path) as conn:
             cursor = conn.execute(
-                "DELETE FROM cache_entries WHERE cache_key = ?", (cache_key,)
+                "DELETE FROM cache_entries WHERE cache_key = ?",
+                (cache_key,),
             )
             conn.commit()
 
             if cursor.rowcount > 0:
                 logger.info(
-                    f"Invalidated cache entry for {api_type} with key {cache_key[:8]}..."
+                    f"Invalidated cache entry for {api_type} with key {cache_key[:8]}...",
                 )
                 return True
-            else:
-                logger.info(
-                    f"No cache entry found for {api_type} with key {cache_key[:8]}..."
-                )
-                return False
+            logger.info(
+                f"No cache entry found for {api_type} with key {cache_key[:8]}...",
+            )
+            return False
 
     def cleanup_expired(self) -> int:
         """
@@ -216,7 +218,7 @@ class APICache:
         """
         with sqlite3.connect(self.cache_db_path) as conn:
             cursor = conn.execute(
-                "DELETE FROM cache_entries WHERE expires_at <= CURRENT_TIMESTAMP"
+                "DELETE FROM cache_entries WHERE expires_at <= CURRENT_TIMESTAMP",
             )
             conn.commit()
 
@@ -242,7 +244,7 @@ class APICache:
             active_cursor = conn.execute(
                 """
                 SELECT COUNT(*) FROM cache_entries WHERE expires_at > CURRENT_TIMESTAMP
-            """
+            """,
             )
             active_entries = active_cursor.fetchone()[0]
 
@@ -252,7 +254,7 @@ class APICache:
                 SELECT api_type, COUNT(*) FROM cache_entries
                 WHERE expires_at > CURRENT_TIMESTAMP
                 GROUP BY api_type
-            """
+            """,
             )
             entries_by_type = dict(type_cursor.fetchall())
 

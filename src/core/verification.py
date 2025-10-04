@@ -1,7 +1,8 @@
-import re
-import requests
 import logging
+import re
 from urllib.parse import urlparse
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,8 @@ class Verification:
         if not self.issues:
             logger.info("Metadata is valid.")
             return ["✅ Metadata appears valid."]
-        else:
-            logger.warning(f"{len(self.issues)} validation issue(s) found.")
-            return self.issues
+        logger.warning(f"{len(self.issues)} validation issue(s) found.")
+        return self.issues
 
     def _check_required_fields(self):
         logger.debug("Checking required fields...")
@@ -177,23 +177,23 @@ class Verification:
                 continue
 
             if "softwareVersion" in img and not self._is_version(
-                img["softwareVersion"]
+                img["softwareVersion"],
             ):
                 msg = f"Invalid softwareVersion: {img['softwareVersion']}"
                 logger.error(f"{self.repo_url} :: {msg}")
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("hasSoftwareImage", []).append(
-                    "Invalid version"
+                    "Invalid version",
                 )
 
             if "availableInRegistry" in img and not self._is_valid_url(
-                img["availableInRegistry"]
+                img["availableInRegistry"],
             ):
                 msg = f"Invalid registry URL: {img['availableInRegistry']}"
                 logger.error(f"{self.repo_url} :: {msg}")
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("hasSoftwareImage", []).append(
-                    "Invalid URL"
+                    "Invalid URL",
                 )
 
     def _check_url_accessibility(self):
@@ -285,11 +285,11 @@ class Verification:
                     if not isinstance(img, dict):
                         continue
                     if "softwareVersion" in img and not self._is_version(
-                        img["softwareVersion"]
+                        img["softwareVersion"],
                     ):
                         del img["softwareVersion"]
                     if "availableInRegistry" in img and not self._is_valid_url(
-                        img["availableInRegistry"]
+                        img["availableInRegistry"],
                     ):
                         del img["availableInRegistry"]
                     imgs.append(img)

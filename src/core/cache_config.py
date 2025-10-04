@@ -3,7 +3,7 @@ Cache configuration settings and environment variables.
 """
 
 import os
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Cache configuration
 CACHE_CONFIG = {
@@ -59,7 +59,8 @@ def get_cache_config() -> Dict[str, Any]:
 def get_cache_ttl(api_type: str) -> int:
     """Get TTL for specific API type."""
     return CACHE_CONFIG["api_ttl_overrides"].get(
-        api_type, CACHE_CONFIG["default_ttl_days"]
+        api_type,
+        CACHE_CONFIG["default_ttl_days"],
     )
 
 

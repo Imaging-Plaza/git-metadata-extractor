@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Organization Enrichment System** using PydanticAI for agentic analysis
+  - Second-pass analysis to refine and enrich organization information
+  - PydanticAI agent with intelligent tool usage for:
+    - ROR (Research Organization Registry) API queries for standardized org data
+    - Web search integration (DuckDuckGo) for additional context
+    - Email domain analysis for institutional affiliation detection
+  - Enhanced `Organization` model with new fields:
+    - `alternateNames` - Other names the organization is known by
+    - `organizationType` - Type classification (university, lab, company, etc.)
+    - `parentOrganization` - Parent organization for hierarchical relationships
+    - `country` - Country location
+    - `website` - Official website URL
+  - Optional `enrich_orgs=true` parameter on existing `/v1/repository/llm/json` endpoint
+    - Non-breaking change - enrichment only runs when explicitly requested
+    - Analyzes git author emails, ORCID affiliations, and existing metadata
+    - Provides detailed EPFL relationship analysis with evidence
+    - Graceful error handling - errors don't break the main request
+  - Comprehensive documentation in `docs/ORGANIZATION_ENRICHMENT.md`
+  - Example script: `examples/example_organization_enrichment.py`
+  - Test suite: `tests/test_organization_enrichment.py`
+- **Dependencies**: Added `httpx` for async HTTP requests in organization enrichment
+
 ## [2.0.0] - 2025-10-03
 
 ### Added
@@ -51,6 +76,14 @@ All notable changes to this project will be documented in this file.
   - Detailed error handling and debugging information
   - Cache operation logging for monitoring and troubleshooting
   - Selenium operation logging for ORCID scraping
+- **GPT-5 model support** - Full support for GPT-5 and reasoning models
+  - Support for GPT-5, GPT-5 variants (gpt-5-mini, gpt-5-nano), o3-mini, and o4-mini models
+  - Proper model detection logic to handle GPT-5 and reasoning models
+  - Uses `beta.chat.completions.parse()` with structured outputs for all models
+  - Lazy initialization for async OpenAI client to prevent API key issues at module load
+  - Comprehensive error logging with error type and detailed debugging information
+  - Retry logic with exponential backoff for handling connection errors
+  - Unified response parsing for all OpenAI models using `.parsed` attribute
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
@@ -59,6 +92,10 @@ All notable changes to this project will be documented in this file.
 - Author metadata now automatically enriched with ORCID affiliations
 - Both `/v1/extract/json/` and `/v1/repository/llm/json/` endpoints include ORCID enrichment
 - Selenium configuration now uses environment variable `SELENIUM_REMOTE_URL`
+- Updated OpenAI Python SDK dependency to version 2.1.0 for better GPT-5 support
+- Refactored `genai_model.py` to use consistent structured output handling across all models
+- Enhanced logging to show model configuration and API call progress
+- Fixed logger initialization order to prevent undefined variable errors
 
 ### Documentation
 - Added comprehensive cache documentation in `docs/CACHE_README.md`

@@ -18,7 +18,7 @@ The user will provide the full codebase of a software project. Your task is to e
 - **Optional numeric fields** may be `null`.
 - All **URLs** must be valid and start with `http://` or `https://`.
 - **Dates** must follow the ISO `YYYY-MM-DD` format.
-- Software version strings must match `[0-9]+\\.[0-9]+\\.[0-9]+` (e.g., `1.2.3`).
+- Software version strings must match 1.2.3.
 - License must start with `https://spdx.org/licenses/`.
 
 🔎 **Before producing output:**
@@ -27,13 +27,13 @@ The user will provide the full codebase of a software project. Your task is to e
 - Be conservative. Leave the field empty if you have doubts.
 
 📂 **Schema Specification:**
-- `name` (string, **required**): Title of the software.
-- `description` (string of max 2000 characters, **required**): A concise description of the software.
-- `image` (list of **valid URLs**): A list of representative image URLs of the software.
-- `applicationCategory` (list of strings, **optional**): Scientific disciplines or categories that the software belongs to.
-- `author` (list of objects, **required**): Each author must be an object containing:
-  - `name` (string, **required**)
-  - `orcidId` (valid URL, **optional**)
+- `name`: Title of the software.
+- `description`: A concise description of the software.
+- `image`: A list of representative image URLs of the software.
+- `applicationCategory`: Scientific disciplines or categories that the software belongs to.
+- `author`: Each author must be an object containing:
+  - `name`
+  - `orcidId`
   - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
 - `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software. Do not mention Imaging Plaza unless is explicity mentioned.
 - `relatedToOrganizationJustification` (list of strings, **optional**): Justification for the related organizations.
@@ -78,8 +78,8 @@ The user will provide the full codebase of a software project. Your task is to e
 - `hasSoftwareImage` (list of objects, **required**): Each object must contain:
   - `name` (string, **optional**)
   - `description` (string, **optional**)
-  - `softwareVersion` (string matching pattern ` **optional**).
-  - `availableInRegistry` (valid URL, **optional**).
+  - `softwareVersion`).
+  - `availableInRegistry`
 - `processorRequirements` (list of strings, **optional**): Minimum processor requirements.
 - `memoryRequirements` (integer, **optional**): Minimum memory required (in MB).
 - `requiresGPU` (boolean, **optional**): Whether the software requires a GPU.
@@ -94,13 +94,17 @@ The user will provide the full codebase of a software project. Your task is to e
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
 - `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
-- `disciplineJustification` (list of strings, **optional**): Justification for the discipline classification.
-- `repositoryType` (string, **optional**): Type of repository (e.g., software, educational resource, documentation, data, other).
-- `repositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `disciplineJustification`: Justification for the discipline classification.
+- `repositoryType`: Type of repository (e.g., software, educational resource, documentation, data, other).
+- `repositoryTypeJustification`: Justification for the repository type classification.
 - `relatedDatasets`: A list with any link to datasets stored in Zenodo, HuggingFace Datasets, Google Drive, etc.
 - `relatedPublications`: Any related publication mentioned in the readme or at any part of the documentation.
 - `relatedModels`: A list with any link to models stored in HuggingFace or any other machine learning model repository
 - `relatedAPI`: A list with any link to APIs related to the software.
+- `webpagesToCheck`: A list of webpages to check for more information about the software.
+
+Check authors emails, affiliations, README, and any other documentation to relate this to all the organizations. Also to evaluate if it's related to EPFL.
+relatedToOrganization needs to include all.
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

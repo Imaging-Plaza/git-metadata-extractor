@@ -1,22 +1,21 @@
-import requests
-import json
-import re
 import base64
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, validator
-from datetime import datetime
+import json
 import os
-from dotenv import load_dotenv
+import re
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
+import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, validator
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-
-import time
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 load_dotenv()
 
@@ -50,20 +49,25 @@ class ORCIDActivities(BaseModel):
     """ORCID activities data"""
 
     employment: List[ORCIDEmployment] = Field(
-        default_factory=list, description="Employment history"
+        default_factory=list,
+        description="Employment history",
     )
     education: List[ORCIDEducation] = Field(
-        default_factory=list, description="Education history"
+        default_factory=list,
+        description="Education history",
     )
     works_count: Optional[int] = Field(None, description="Number of works/publications")
     peer_reviews_count: Optional[int] = Field(
-        None, description="Number of peer reviews"
+        None,
+        description="Number of peer reviews",
     )
     orcid_content: Optional[str] = Field(
-        None, description="Parsed ORCID Activities content as Markdown"
+        None,
+        description="Parsed ORCID Activities content as Markdown",
     )
     orcid_format: Optional[str] = Field(
-        default="markdown", description="Format of orcid_content"
+        default="markdown",
+        description="Format of orcid_content",
     )
 
 
@@ -88,17 +92,21 @@ class GitHubUserMetadata(BaseModel):
     html_url: str = Field(..., description="GitHub profile URL")
     orcid: Optional[str] = Field(None, description="ORCID identifier")
     orcid_activities: Optional[ORCIDActivities] = Field(
-        None, description="ORCID activities data"
+        None,
+        description="ORCID activities data",
     )
     organizations: List[str] = Field(
-        default_factory=list, description="Public organizations"
+        default_factory=list,
+        description="Public organizations",
     )
     social_accounts: List[Dict[str, str]] = Field(
-        default_factory=list, description="Social media accounts"
+        default_factory=list,
+        description="Social media accounts",
     )
     readme_url: Optional[str] = Field(None, description="Profile README URL if exists")
     readme_content: Optional[str] = Field(
-        None, description="Profile README content if exists"
+        None,
+        description="Profile README content if exists",
     )
 
     @validator("orcid")
@@ -221,7 +229,7 @@ class GitHubUsersParser:
 
             # Use a browser-like user agent to avoid blocking
             scraping_headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             }
 
             response = requests.get(profile_url, headers=scraping_headers, timeout=10)
@@ -234,7 +242,8 @@ class GitHubUsersParser:
             # Look for ORCID links in social links section
             # Target the specific element structure you mentioned
             orcid_links = soup.find_all(
-                "a", href=re.compile(r"https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]")
+                "a",
+                href=re.compile(r"https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]"),
             )
 
             if orcid_links:
@@ -284,7 +293,7 @@ class GitHubUsersParser:
             options.add_argument("--width=1920")
             options.add_argument("--height=1080")
             options.add_argument(
-                "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
+                "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
             )
 
             # Try remote Selenium Grid first, fallback to local browser
@@ -305,7 +314,7 @@ class GitHubUsersParser:
 
             # Wait for the page to load
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
+                EC.presence_of_element_located((By.TAG_NAME, "body")),
             )
 
             # Wait a bit more for dynamic content to load
@@ -344,7 +353,8 @@ class GitHubUsersParser:
                 driver.quit()
 
     def _extract_employment_from_orcid_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEmployment]:
         """Extract employment information from ORCID page using Selenium-rendered HTML"""
         employment_list = []
@@ -365,7 +375,8 @@ class GitHubUsersParser:
             if not employment_containers:
                 # Try alternative selectors
                 employment_containers = employment_section.find_all(
-                    "div", string=re.compile(r"\d{4}")
+                    "div",
+                    string=re.compile(r"\d{4}"),
                 )
 
             for container in employment_containers:
@@ -402,7 +413,7 @@ class GitHubUsersParser:
                                 end_date=end_date,
                                 location=location,
                                 duration_years=duration_years,
-                            )
+                            ),
                         )
 
                 except Exception as e:
@@ -415,7 +426,8 @@ class GitHubUsersParser:
         return employment_list
 
     def _extract_education_from_orcid_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEducation]:
         """Extract education information from ORCID page using Selenium-rendered HTML"""
         education_list = []
@@ -423,7 +435,8 @@ class GitHubUsersParser:
         try:
             # Look for education section
             education_section = soup.find(
-                "section", {"id": "education-and-qualification"}
+                "section",
+                {"id": "education-and-qualification"},
             )
             if not education_section:
                 print("Warning: Education section not found")
@@ -437,7 +450,8 @@ class GitHubUsersParser:
 
             if not education_containers:
                 education_containers = education_section.find_all(
-                    "div", string=re.compile(r"\d{4}")
+                    "div",
+                    string=re.compile(r"\d{4}"),
                 )
 
             for container in education_containers:
@@ -462,7 +476,7 @@ class GitHubUsersParser:
                                 end_date=end_date,
                                 location=location,
                                 duration_years=duration_years,
-                            )
+                            ),
                         )
 
                 except Exception as e:
@@ -497,7 +511,8 @@ class GitHubUsersParser:
         return None
 
     def _extract_peer_reviews_count_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> Optional[int]:
         """Extract peer reviews count from ORCID page using Selenium-rendered HTML"""
         try:
@@ -532,7 +547,8 @@ class GitHubUsersParser:
         return None
 
     def _extract_dates_from_text(
-        self, text: str
+        self,
+        text: str,
     ) -> tuple[Optional[str], Optional[str]]:
         """Extract start and end dates from text"""
         # Look for "YYYY to YYYY" pattern first (most specific)
@@ -560,7 +576,7 @@ class GitHubUsersParser:
 
         if len(unique_dates) >= 2:
             return unique_dates[0], unique_dates[1]
-        elif len(unique_dates) == 1:
+        if len(unique_dates) == 1:
             return unique_dates[0], None
 
         return None, None
@@ -619,7 +635,8 @@ class GitHubUsersParser:
         return None
 
     def _extract_employment_from_orcid(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEmployment]:
         """Extract employment information from ORCID page"""
         employment_list = []
@@ -632,7 +649,7 @@ class GitHubUsersParser:
 
             # Find employment panels
             employment_panels = employment_section.find_all(
-                "app-affiliation-stack-group"
+                "app-affiliation-stack-group",
             )
 
             for panel in employment_panels:
@@ -668,7 +685,7 @@ class GitHubUsersParser:
                         end_date=end_date,
                         location=location,
                         duration_years=duration_years,
-                    )
+                    ),
                 )
 
         except Exception as e:
@@ -677,7 +694,8 @@ class GitHubUsersParser:
         return employment_list
 
     def _extract_education_from_orcid(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEducation]:
         """Extract education information from ORCID page"""
         education_list = []
@@ -685,7 +703,8 @@ class GitHubUsersParser:
         try:
             # Look for education section
             education_section = soup.find(
-                "section", {"id": "education-and-qualification"}
+                "section",
+                {"id": "education-and-qualification"},
             )
             if not education_section:
                 return education_list
@@ -716,7 +735,7 @@ class GitHubUsersParser:
         try:
             # Look for peer review section with count
             peer_review_text = soup.find(
-                string=re.compile(r"Peer review.*\((\d+)\s+reviews")
+                string=re.compile(r"Peer review.*\((\d+)\s+reviews"),
             )
             if peer_review_text:
                 match = re.search(r"\((\d+)\s+reviews", peer_review_text)
@@ -727,7 +746,9 @@ class GitHubUsersParser:
         return None
 
     def _calculate_duration(
-        self, start_date: Optional[str], end_date: Optional[str]
+        self,
+        start_date: Optional[str],
+        end_date: Optional[str],
     ) -> Optional[float]:
         """Calculate duration in years between start and end dates"""
         if not start_date:
@@ -786,7 +807,9 @@ class GitHubUsersParser:
         headers["Content-Type"] = "application/json"
 
         response = requests.post(
-            self.graphql_url, headers=headers, data=json.dumps(payload)
+            self.graphql_url,
+            headers=headers,
+            data=json.dumps(payload),
         )
 
         if response.status_code != 200:
@@ -811,7 +834,7 @@ class GitHubUsersParser:
                         "provider": account["provider"],
                         "url": account["url"],
                         "display_name": account.get("displayName", ""),
-                    }
+                    },
                 )
 
         return {"social_accounts": social_accounts}

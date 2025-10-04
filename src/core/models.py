@@ -1,18 +1,20 @@
-from pydantic import BaseModel, HttpUrl
+from datetime import date, datetime
+from enum import Enum
 from typing import (
+    Any,
+    Dict,
     List,
     Optional,
     Union,
-    get_origin,
     get_args,
-    Any,
-    Dict,
+    get_origin,
+)
+from typing import (
     List as ListType,
 )
-from datetime import date, datetime
+
+from pydantic import BaseModel, HttpUrl, StringConstraints, conint
 from typing_extensions import Annotated
-from pydantic import StringConstraints, conint
-from enum import Enum
 
 
 class Person(BaseModel):
@@ -24,6 +26,17 @@ class Person(BaseModel):
 class Organization(BaseModel):
     legalName: str = None
     hasRorId: Optional[HttpUrl] = None
+    alternateNames: Optional[
+        List[str]
+    ] = None  # Other names the organization is known by
+    organizationType: Optional[
+        str
+    ] = None  # university, research institute, lab, department, company, etc.
+    parentOrganization: Optional[
+        str
+    ] = None  # Name of parent organization if applicable
+    country: Optional[str] = None  # Country where the organization is located
+    website: Optional[HttpUrl] = None  # Official website
 
 
 class FundingInformation(BaseModel):
@@ -52,7 +65,8 @@ class SoftwareImage(BaseModel):
     name: str = None
     description: str = None
     softwareVersion: Annotated[
-        str, StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+")
+        str,
+        StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+"),
     ] = None
     availableInRegistry: HttpUrl = None
 
@@ -185,12 +199,14 @@ class SoftwareSourceCode(BaseModel):
     relatedModels: Optional[List[str]] = None
     relatedAPIs: Optional[List[str]] = None
     relatedToOrganizations: Optional[List[str]] = None
+    relatedToOrganizationsROR: Optional[List[Organization]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
-    repositoryType: Optional[RepositoryType] = None
-    repositoryTypeJustification: Optional[List[str]] = None
+    repositoryType: RepositoryType = None
+    repositoryTypeJustification: List[str] = None
     relatedToEPFL: bool = None
     relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
+    webpagesToCheck: Optional[List[HttpUrl]] = None
 
 
 ############################################################
@@ -321,7 +337,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         return Person(
             name=_get_value(entity.get("http://schema.org/name")),
             orcidId=_get_value(
-                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId")
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId"),
             ),
             affiliation=[
                 _get_value(v)
@@ -333,7 +349,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         return Organization(
             legalName=_get_value(entity.get("http://schema.org/legalName")),
             hasRorId=_get_value(
-                entity.get("http://w3id.org/nfdi4ing/metadata4ing#hasRorId")
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#hasRorId"),
             ),
         )
     if "https://imaging-plaza.epfl.ch/ontology#GitAuthor" in entity_types:
@@ -341,7 +357,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             name=_get_value(entity.get("http://schema.org/name")),
             email=_get_value(entity.get("http://schema.org/email")),
             commits=_get_value(
-                entity.get("https://imaging-plaza.epfl.ch/ontology#commits")
+                entity.get("https://imaging-plaza.epfl.ch/ontology#commits"),
             ),
         )
     if "https://w3id.org/okn/o/sd#FundingInformation" in entity_types:
@@ -349,7 +365,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         return FundingInformation(
             identifier=_get_value(entity.get("http://schema.org/identifier")),
             fundingGrant=_get_value(
-                entity.get("https://w3id.org/okn/o/sd#fundingGrant")
+                entity.get("https://w3id.org/okn/o/sd#fundingGrant"),
             ),
             fundingSource=_convert_entity(all_entities[source_ref], all_entities)
             if source_ref in all_entities
@@ -361,7 +377,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             description=_get_value(entity.get("http://schema.org/description")),
             encodingFormat=_get_value(entity.get("http://schema.org/encodingFormat")),
             hasDimensionality=_get_value(
-                entity.get("https://w3id.org/okn/o/sd#hasDimensionality")
+                entity.get("https://w3id.org/okn/o/sd#hasDimensionality"),
             ),
             hasFormat=_get_value(entity.get("https://w3id.org/okn/o/sd#hasFormat")),
             defaultValue=_get_value(entity.get("http://schema.org/defaultValue")),
@@ -379,7 +395,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             description=_get_value(entity.get("http://schema.org/description")),
             softwareVersion=_get_value(entity.get("http://schema.org/softwareVersion")),
             availableInRegistry=_get_value(
-                entity.get("https://w3id.org/okn/o/sd#availableInRegistry")
+                entity.get("https://w3id.org/okn/o/sd#availableInRegistry"),
             ),
         )
     if "http://schema.org/DataFeed" in entity_types:
@@ -388,10 +404,10 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             description=_get_value(entity.get("http://schema.org/description")),
             contentUrl=_get_value(entity.get("http://schema.org/contentUrl")),
             measurementTechnique=_get_value(
-                entity.get("http://schema.org/measurementTechnique")
+                entity.get("http://schema.org/measurementTechnique"),
             ),
             variableMeasured=_get_value(
-                entity.get("http://schema.org/variableMeasured")
+                entity.get("http://schema.org/variableMeasured"),
             ),
         )
     if "http://schema.org/SoftwareSourceCode" in entity_types:
@@ -493,6 +509,11 @@ PYDANTIC_TO_ZOD_MAPPING = {
     "Organization": {
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
+        "alternateNames": "schema:alternateName",
+        "organizationType": "schema:additionalType",
+        "parentOrganization": "schema:parentOrganization",
+        "country": "schema:addressCountry",
+        "website": "schema:url",
     },
     "GitAuthor": {
         "name": "schema:name",
@@ -573,6 +594,8 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "fairLevel": "imag:fairLevel",
         "graph": "imag:graph",
         "gitAuthors": "imag:gitAuthors",
+        "relatedToOrganizations": "imag:relatedToOrganizations",
+        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
     },
 }
 

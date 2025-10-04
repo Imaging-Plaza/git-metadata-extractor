@@ -1,40 +1,62 @@
-import os
-import tempfile
 import asyncio
 import glob
+import json
+import logging
+import os
+import tempfile
+
 import aiohttp
 import tiktoken
-import logging
-import json
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
+from ..utils.utils import (
+    clean_json_string,
+    convert_httpurl_to_str,
+    is_github_repo_public,
+    json_to_jsonLD,
+)
+from .models import GitHubOrganization, GitHubUser, SoftwareSourceCode
 from .prompts import (
     system_prompt_json,
-    system_prompt_user_content,
     system_prompt_org_content,
-)
-from .models import SoftwareSourceCode, GitHubOrganization, GitHubUser
-from ..utils.utils import (
-    is_github_repo_public,
-    clean_json_string,
-    json_to_jsonLD,
-    convert_httpurl_to_str,
+    system_prompt_user_content,
 )
 from .verification import Verification
 
+# Setup logger first, before anything else
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
-OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = os.environ["MODEL"]
-PROVIDER = os.environ["PROVIDER"]
+MODEL = os.environ.get("MODEL", "gpt-4o")  # Default fallback
+PROVIDER = os.environ.get("PROVIDER", "openai")  # Default fallback
 
-# Create async OpenAI client
-async_openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Validate required environment variables
+if not OPENROUTER_API_KEY and PROVIDER == "openrouter":
+    logger.error("OPENROUTER_API_KEY not found in environment variables")
+if not os.environ.get("OPENAI_API_KEY") and PROVIDER == "openai":
+    logger.error("OPENAI_API_KEY not found in environment variables")
 
-# Setup logger
-logger = logging.getLogger(__name__)
+# Lazy-initialized async OpenAI client (created on first use)
+async_openai_client = None
+
+
+def get_async_openai_client():
+    """Get or create the async OpenAI client with proper timeout configuration."""
+    global async_openai_client
+    if async_openai_client is None:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY not found in environment variables")
+            return None
+        async_openai_client = AsyncOpenAI(
+            api_key=api_key,
+            timeout=600.0,  # 10 minute timeout for GPT-5 and other models
+        )
+    return async_openai_client
 
 
 def reduce_input_size(input_text, max_tokens=800000, repo_url=None):
@@ -51,7 +73,7 @@ def reduce_input_size(input_text, max_tokens=800000, repo_url=None):
         tokens = tokens[:max_tokens]
         reduced_text = limiter_encoding.decode(tokens)
         logger.warning(
-            f"{url_prefix}Token count exceeded limit, truncated to {max_tokens} tokens"
+            f"{url_prefix}Token count exceeded limit, truncated to {max_tokens} tokens",
         )
         return reduced_text
     return input_text
@@ -100,7 +122,7 @@ def combine_text_files(directory):
 
     for file in txt_files:
         logger.debug(f"Reading file: {file}")
-        with open(file, "r", encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             combined_text += f.read() + "\n"
 
     return combined_text
@@ -137,9 +159,8 @@ async def clone_repo(repo_url, temp_dir):
         if process.returncode == 0:
             logger.info("Repository cloned successfully.")
             return temp_dir
-        else:
-            logger.error(f"Failed to clone repository: {stderr.decode()}")
-            return None
+        logger.error(f"Failed to clone repository: {stderr.decode()}")
+        return None
     except Exception as e:
         logger.error(f"Failed to clone repository: {e}")
         return None
@@ -161,9 +182,8 @@ async def run_repo_to_text(temp_dir):
         if process.returncode == 0:
             logger.info("repo-to-text command completed successfully.")
             return True
-        else:
-            logger.error(f"'repo-to-text' command failed: {stderr.decode()}")
-            return False
+        logger.error(f"'repo-to-text' command failed: {stderr.decode()}")
+        return False
     except Exception as e:
         logger.error(f"'repo-to-text' command failed: {e}")
         return False
@@ -179,8 +199,9 @@ async def extract_git_authors(temp_dir):
          95  Bob <bob@example.com>
          10  Carlos <carlos@example.com>
     """
-    from .models import GitAuthor
     import re
+
+    from .models import GitAuthor
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -213,14 +234,13 @@ async def extract_git_authors(temp_dir):
                     email = match.group(3) if match.group(3) else None
 
                     git_authors.append(
-                        GitAuthor(name=name, email=email, commits=commits)
+                        GitAuthor(name=name, email=email, commits=commits),
                     )
 
             logger.info(f"Extracted {len(git_authors)} git authors from repository.")
             return git_authors
-        else:
-            logger.error(f"Failed to extract git authors: {stderr.decode()}")
-            return []
+        logger.error(f"Failed to extract git authors: {stderr.decode()}")
+        return []
     except Exception as e:
         logger.error(f"Failed to extract git authors: {e}")
         return []
@@ -247,7 +267,10 @@ def sanitize_special_tokens(text):
 
 
 async def llm_request_repo_infos(
-    repo_url, output_format="json-ld", gimie_output=None, max_tokens=40000
+    repo_url,
+    output_format="json-ld",
+    gimie_output=None,
+    max_tokens=40000,
 ):
     """
     Async version of llm_request_repo_infos
@@ -255,7 +278,7 @@ async def llm_request_repo_infos(
     # Check if the repository is public before proceeding
     if not is_github_repo_public(repo_url):
         logger.error(
-            f"Cannot process repository: {repo_url} is not public or not accessible"
+            f"Cannot process repository: {repo_url} is not public or not accessible",
         )
         return None
 
@@ -277,7 +300,9 @@ async def llm_request_repo_infos(
         input_text = combine_text_files(temp_dir)
         input_text = sanitize_special_tokens(input_text)
         input_text = reduce_input_size(
-            input_text, max_tokens=max_tokens, repo_url=repo_url
+            input_text,
+            max_tokens=max_tokens,
+            repo_url=repo_url,
         )
 
         if gimie_output:
@@ -300,6 +325,7 @@ async def llm_request_repo_infos(
                 parsed_result = clean_json_string(raw_result)
                 json_data = json.loads(parsed_result)
             elif PROVIDER == "openai":
+                # All OpenAI models now use .parsed with beta.chat.completions.parse
                 json_data = response.choices[0].message.parsed
                 logger.info("Clean result from OpenAI response:")
                 json_data = json_data.model_dump(mode="json")
@@ -327,11 +353,10 @@ async def llm_request_repo_infos(
             context_path = "src/files/json-ld-context.json"
             if output_format == "json-ld":
                 return json_to_jsonLD(cleaned_json, context_path)
-            elif output_format == "json":
+            if output_format == "json":
                 return cleaned_json
-            else:
-                logger.error(f"Unsupported output format: {output_format}")
-                return None
+            logger.error(f"Unsupported output format: {output_format}")
+            return None
 
         except Exception as e:
             logger.error(f"Error parsing response: {e}")
@@ -372,17 +397,18 @@ async def get_openrouter_response_async(
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
-                    OPENROUTER_ENDPOINT, headers=headers, json=payload
+                    OPENROUTER_ENDPOINT,
+                    headers=headers,
+                    json=payload,
                 ) as response:
                     logger.info(f"API response status: {response.status}")
                     if response.status == 200:
                         return await response.json()
-                    else:
-                        logger.error(
-                            f"API request failed with status {response.status}"
-                        )
-                        if attempt == 2:  # Last attempt
-                            return None
+                    logger.error(
+                        f"API request failed with status {response.status}",
+                    )
+                    if attempt == 2:  # Last attempt
+                        return None
         except aiohttp.ClientError as e:
             logger.error(f"Request failed (attempt {attempt + 1}): {e}")
             if attempt == 2:  # Last attempt
@@ -405,33 +431,71 @@ async def get_openai_response_async(
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema asynchronously.
     """
-    try:
-        # Use the async OpenAI client
-        if model.split("-")[0] == "o3":
-            response = await async_openai_client.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=convert_httpurl_to_str(schema),
-            )
-        else:
-            response = await async_openai_client.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                response_format=convert_httpurl_to_str(schema),
-            )
-
-        return response
-
-    except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
+    # Get or create the async OpenAI client
+    client = get_async_openai_client()
+    if not client:
+        logger.error("Failed to initialize OpenAI client")
         return None
+
+    # Log the model being used
+    logger.info(f"Making OpenAI API call with model: {model}")
+
+    # Retry logic for connection errors
+    for attempt in range(3):
+        try:
+            # Use the async OpenAI client
+            # GPT-5 and reasoning models (o3, o4) have different requirements
+            if model.startswith("gpt-5"):
+                # GPT-5: use beta.parse like other models, it should work with structured outputs
+                logger.info(
+                    f"Using GPT-5 model configuration with structured outputs for: {model}",
+                )
+                response = await client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format=convert_httpurl_to_str(schema),
+                )
+            elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
+                # O3/O4 reasoning models: use beta parse without temperature
+                logger.info(f"Using reasoning model configuration for: {model}")
+                response = await client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format=convert_httpurl_to_str(schema),
+                )
+            else:
+                # Standard models (gpt-4o, etc.): use beta parse with temperature
+                logger.info(f"Using standard model configuration for: {model}")
+                response = await client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    response_format=convert_httpurl_to_str(schema),
+                )
+
+            logger.info(f"Successfully received response from {model}")
+            return response
+
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(
+                f"OpenAI API error (attempt {attempt + 1}/{3}): [{error_type}] {error_msg}",
+            )
+            logger.error(f"Model: {model}, Error details: {e!r}")
+            if attempt == 2:  # Last attempt
+                return None
+            # Wait before retry
+            await asyncio.sleep(2**attempt)  # Exponential backoff
 
 
 async def llm_request_userorg_infos(metadata, item_type="user"):
@@ -449,11 +513,17 @@ async def llm_request_userorg_infos(metadata, item_type="user"):
 
     if PROVIDER == "openrouter":
         response = await get_openrouter_response_async(
-            input_text, system_prompt=system_prompt, model=MODEL, schema=schema
+            input_text,
+            system_prompt=system_prompt,
+            model=MODEL,
+            schema=schema,
         )
     elif PROVIDER == "openai":
         response = await get_openai_response_async(
-            input_text, system_prompt=system_prompt, model=MODEL, schema=schema
+            input_text,
+            system_prompt=system_prompt,
+            model=MODEL,
+            schema=schema,
         )
     else:
         logger.error("No provider provided")
@@ -465,6 +535,7 @@ async def llm_request_userorg_infos(metadata, item_type="user"):
             parsed_result = clean_json_string(raw_result)
             json_data = json.loads(parsed_result)
         elif PROVIDER == "openai":
+            # All OpenAI models now use .parsed with beta.chat.completions.parse
             json_data = response.choices[0].message.parsed
             json_data = json_data.model_dump(mode="json")
         else:
@@ -494,8 +565,12 @@ def get_openrouter_response(
 
     return asyncio.run(
         get_openrouter_response_async(
-            input_text, system_prompt, model, temperature, schema
-        )
+            input_text,
+            system_prompt,
+            model,
+            temperature,
+            schema,
+        ),
     )
 
 
@@ -509,33 +584,76 @@ def get_openai_response(
     """
     Synchronous wrapper for backward compatibility
     """
+    import time
+
     from openai import OpenAI
 
-    sync_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-    try:
-        if model.split("-")[0] == "o3":
-            response = sync_client.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=convert_httpurl_to_str(schema),
-            )
-        else:
-            response = sync_client.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                response_format=convert_httpurl_to_str(schema),
-            )
-
-        return response
-
-    except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
+    # Check API key first
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        logger.error("OPENAI_API_KEY not found in environment variables")
         return None
+
+    # Log the model being used
+    logger.info(f"Making sync OpenAI API call with model: {model}")
+
+    # Retry logic for connection errors
+    for attempt in range(3):
+        try:
+            sync_client = OpenAI(
+                api_key=api_key,
+                timeout=600.0,  # 10 minute timeout for GPT-5 and other models
+            )
+
+            # GPT-5 and reasoning models (o3, o4) have different requirements
+            if model.startswith("gpt-5"):
+                # GPT-5: use beta.parse like other models, it should work with structured outputs
+                logger.info(
+                    f"Using GPT-5 model configuration with structured outputs for: {model}",
+                )
+                response = sync_client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format=convert_httpurl_to_str(schema),
+                )
+            elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
+                # O3/O4 reasoning models: use beta parse without temperature
+                logger.info(f"Using reasoning model configuration for: {model}")
+                response = sync_client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format=convert_httpurl_to_str(schema),
+                )
+            else:
+                # Standard models (gpt-4o, etc.): use beta parse with temperature
+                logger.info(f"Using standard model configuration for: {model}")
+                response = sync_client.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    response_format=convert_httpurl_to_str(schema),
+                )
+
+            logger.info(f"Successfully received response from {model}")
+            return response
+
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(
+                f"OpenAI API error (attempt {attempt + 1}/{3}): [{error_type}] {error_msg}",
+            )
+            logger.error(f"Model: {model}, Error details: {e!r}")
+            if attempt == 2:  # Last attempt
+                return None
+            # Wait before retry
+            time.sleep(2**attempt)  # Exponential backoff

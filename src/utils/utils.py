@@ -1,12 +1,13 @@
-import json
-import requests
-from pyld import jsonld
 import ast
+import inspect
+import json
 import logging
 import re
-import inspect
-from pydantic import HttpUrl, BaseModel, create_model
-from typing import get_origin, get_args, Union, List, Optional
+from typing import List, Optional, Union, get_args, get_origin
+
+import requests
+from pydantic import BaseModel, HttpUrl, create_model
+from pyld import jsonld
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,8 @@ def is_github_repo_public(repo_url: str) -> bool:
     """
     # Extract owner and repo name from the URL
     match = re.match(
-        r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", repo_url.strip()
+        r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$",
+        repo_url.strip(),
     )
     if not match:
         logger.error(f"Invalid GitHub URL format: {repo_url}")
@@ -43,14 +45,13 @@ def is_github_repo_public(repo_url: str) -> bool:
                 return False
             logger.info(f"Repository {repo_url} is public")
             return True
-        elif response.status_code == 404:
+        if response.status_code == 404:
             logger.error(f"Repository not found or not accessible: {repo_url}")
             return False
-        else:
-            logger.error(
-                f"GitHub API returned status {response.status_code} for {repo_url}"
-            )
-            return False
+        logger.error(
+            f"GitHub API returned status {response.status_code} for {repo_url}",
+        )
+        return False
 
     except requests.RequestException as e:
         logger.error(f"Failed to check repository visibility: {e}")
@@ -63,10 +64,9 @@ def fetch_jsonld(url):
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return ast.literal_eval(response.json().get("output", "{}"))
-    else:
-        raise Exception(
-            f"Error fetching data: {response.status_code} - {response.text}"
-        )
+    raise Exception(
+        f"Error fetching data: {response.status_code} - {response.text}",
+    )
 
 
 def clean_json_string(raw_text):
@@ -117,7 +117,7 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
             added_fields.append(key)
 
     logger.info(
-        f"Merged {len(added_fields)} fields from LLM into SoftwareSourceCode node."
+        f"Merged {len(added_fields)} fields from LLM into SoftwareSourceCode node.",
     )
     if added_fields:
         logger.debug(f"Fields added: {added_fields}")
@@ -189,7 +189,7 @@ def _convert_annotation(annotation):
         return Union[new_args]
 
     # Handle List types
-    elif origin is list or origin is List:
+    if origin is list or origin is List:
         args = get_args(annotation)
         if args:
             new_args = tuple(_convert_annotation(arg) for arg in args)
@@ -197,11 +197,11 @@ def _convert_annotation(annotation):
         return annotation
 
     # Handle HttpUrl -> str conversion
-    elif annotation is HttpUrl:
+    if annotation is HttpUrl:
         return str
 
     # Handle nested BaseModel classes
-    elif (
+    if (
         inspect.isclass(annotation)
         and issubclass(annotation, BaseModel)
         and annotation is not BaseModel
@@ -209,8 +209,7 @@ def _convert_annotation(annotation):
         return convert_httpurl_to_str(annotation)
 
     # Return unchanged for all other types
-    else:
-        return annotation
+    return annotation
 
 
 def extract_orcid_id(orcid_url: str) -> Optional[str]:
@@ -258,12 +257,12 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
     try:
-        from ..core.users_parser import GitHubUsersParser
         from ..core.cache_manager import get_cache_manager
+        from ..core.users_parser import GitHubUsersParser
     except ImportError:
         # Fallback for when called outside package context
-        from src.core.users_parser import GitHubUsersParser
         from src.core.cache_manager import get_cache_manager
+        from src.core.users_parser import GitHubUsersParser
 
     if not orcid_id:
         return []
@@ -271,7 +270,7 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
     # Normalize ORCID ID (remove URL if present)
     orcid_id = extract_orcid_id(orcid_id)
     if not orcid_id:
-        logger.warning(f"Invalid ORCID ID format")
+        logger.warning("Invalid ORCID ID format")
         return []
 
     def fetch_affiliations():
@@ -308,8 +307,7 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
             force_refresh=not use_cache,
         )
         return affiliations
-    else:
-        return fetch_affiliations()
+    return fetch_affiliations()
 
 
 def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
@@ -351,13 +349,12 @@ def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
 
     if not orcid_affiliations:
         logger.warning(
-            f"No ORCID affiliations found for {orcid_id} (author: {author.get('name') or author.get('schema:name')})"
+            f"No ORCID affiliations found for {orcid_id} (author: {author.get('name') or author.get('schema:name')})",
         )
         return author
-    else:
-        logger.info(
-            f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {orcid_affiliations}"
-        )
+    logger.info(
+        f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {orcid_affiliations}",
+    )
 
     # Detect which affiliation key is used (Zod format uses 'schema:affiliation', plain uses 'affiliation')
     affiliation_key = None
@@ -394,7 +391,7 @@ def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
 
     if added_count > 0:
         logger.info(
-            f"Enriched author {author.get('name') or author.get('schema:name')} with {added_count} new affiliations from ORCID (total: {len(merged_affiliations)})"
+            f"Enriched author {author.get('name') or author.get('schema:name')} with {added_count} new affiliations from ORCID (total: {len(merged_affiliations)})",
         )
 
     return author

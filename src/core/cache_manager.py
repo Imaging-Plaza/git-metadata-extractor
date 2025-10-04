@@ -2,10 +2,10 @@
 Cache management utilities and configuration for the API caching system.
 """
 
-from typing import Dict, Any, Optional, Union, Awaitable
-from .cache import APICache
 import logging
-import asyncio
+from typing import Any, Awaitable, Dict, Optional, Union
+
+from .cache import APICache
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +77,15 @@ class CacheManager:
         # Don't cache coroutines - return them to be awaited by the caller
         if hasattr(fresh_data, "__await__"):
             logger.info(
-                f"Fetch function returned a coroutine, returning without caching"
+                "Fetch function returned a coroutine, returning without caching",
             )
             return fresh_data
 
         # Cache the result if successful
         if fresh_data is not None:
             ttl = custom_ttl or self.config.API_TTL_OVERRIDES.get(
-                api_type, self.config.DEFAULT_TTL_DAYS
+                api_type,
+                self.config.DEFAULT_TTL_DAYS,
             )
             self.cache.set(api_type, params, fresh_data, ttl)
             logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
@@ -139,7 +140,8 @@ class CacheManager:
         # Cache the result if successful
         if fresh_data is not None:
             ttl = custom_ttl or self.config.API_TTL_OVERRIDES.get(
-                api_type, self.config.DEFAULT_TTL_DAYS
+                api_type,
+                self.config.DEFAULT_TTL_DAYS,
             )
             self.cache.set(api_type, params, fresh_data, ttl)
             logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")

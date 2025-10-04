@@ -10,17 +10,17 @@ This example demonstrates how to:
 The data is automatically cached with a 14-day TTL.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from utils.utils import (
+    enrich_author_with_orcid,
     extract_orcid_id,
     get_orcid_affiliations,
-    enrich_author_with_orcid,
 )
 
 
