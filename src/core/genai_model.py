@@ -329,22 +329,26 @@ async def extract_git_authors(temp_dir):
 
 def sanitize_special_tokens(text):
     """
-    Remove special tokens using tiktoken encoding/decoding.
+    Remove special tokens by replacing them with safe placeholders.
+    This prevents encoding errors when sending to OpenAI API.
     """
-    encoding = tiktoken.get_encoding("cl100k_base")
+    import re
 
-    # Encode with disallowed_special=() to handle special tokens
-    # Then decode to get clean text
-    try:
-        tokens = encoding.encode(text, disallowed_special=())
-        clean_text = encoding.decode(tokens)
-        return clean_text
-    except Exception as e:
-        logger.warning(f"Failed to sanitize with tiktoken: {e}")
-        # Fallback to simple regex cleanup
-        import re
+    # List of known special tokens that can cause issues
+    special_tokens_patterns = [
+        r"<\|endoftext\|>",
+        r"<\|startoftext\|>",
+        r"<\|fim_prefix\|>",
+        r"<\|fim_suffix\|>",
+        r"<\|fim_middle\|>",
+    ]
 
-        return re.sub(r"<\|[^|]*\|>", "", text)
+    # Replace all special tokens with safe placeholders
+    clean_text = text
+    for pattern in special_tokens_patterns:
+        clean_text = re.sub(pattern, "[SPECIAL_TOKEN]", clean_text, flags=re.IGNORECASE)
+
+    return clean_text
 
 
 async def llm_request_repo_infos(
@@ -387,7 +391,10 @@ async def llm_request_repo_infos(
         )
 
         if gimie_output:
-            input_text += "\n\n" + str(gimie_output)
+            # Sanitize GIMIE output to remove special tokens before adding
+            gimie_text = str(gimie_output)
+            gimie_text = sanitize_special_tokens(gimie_text)
+            input_text += "\n\n" + gimie_text
 
         combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
         store_combined_text(input_text, combined_file_path)
@@ -468,6 +475,10 @@ async def get_openrouter_response_async(
     """
     Get structured response from openrouter asynchronously
     """
+    # Sanitize the input to remove special tokens
+    input_text = sanitize_special_tokens(input_text)
+    system_prompt = sanitize_special_tokens(system_prompt)
+
     payload = {
         "model": model,
         "messages": [
@@ -526,6 +537,10 @@ async def get_openai_response_async(
     """
     Get structured response from OpenAI API using SoftwareSourceCode schema asynchronously.
     """
+    # Sanitize the prompt to remove special tokens
+    prompt = sanitize_special_tokens(prompt)
+    system_prompt = sanitize_special_tokens(system_prompt)
+
     # Get or create the async OpenAI client
     client = get_async_openai_client()
     if not client:
