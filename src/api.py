@@ -328,6 +328,10 @@ async def get_org_json(
         False,
         description="Force refresh from external APIs, bypassing cache",
     ),
+    enrich_orgs: bool = Query(
+        False,
+        description="Enable organization enrichment using PydanticAI agent to analyze and standardize organization information using ROR API",
+    ),
 ):
     """
     Retrieve and enrich GitHub organization metadata.
@@ -335,16 +339,24 @@ async def get_org_json(
     Fetches organization profile from GitHub API and enriches it using LLM
     to extract additional insights and structured information.
 
+    **Organization Enrichment** (optional):
+    When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
+    - Query ROR (Research Organization Registry) for standardized organization names and IDs
+    - Identify hierarchical relationships (departments, labs within universities)
+    - Provide detailed EPFL relationship analysis with evidence
+    - Enrich organization metadata with type, country, website, etc.
+
     **Caching**: Results are cached with TTL of 7 days.
 
     **Parameters**:
     - **full_path**: GitHub organization URL or path (e.g., `https://github.com/organization`)
     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    - **enrich_orgs**: Set to `true` to enable organization enrichment with PydanticAI agent
 
     **Returns**:
     - Organization link
     - Enriched organization metadata
-    - Cache status indicator
+    - Organization enrichment results (if `enrich_orgs=true`)
     """
 
     cache_manager = get_cache_manager()
@@ -384,7 +396,52 @@ async def get_org_json(
             detail=f"Error from Organization JSON service: {e}",
         )
 
-    return {"link": full_path, "output": org_metadata_dict, "cached": not force_refresh}
+    # Perform organization enrichment if requested
+    response = {"link": full_path, "output": org_metadata_dict}
+
+    if enrich_orgs:
+        logger.info(f"Starting organization enrichment for org {org_name}")
+        try:
+            organization_enrichment = await enrich_organizations_from_dict(
+                org_metadata_dict,
+                full_path,
+            )
+            logger.info(
+                f"Organization enrichment completed for org. Found {len(organization_enrichment.get('organizations', []))} organizations",
+            )
+
+            # Update the main output with enriched organization data
+            # Keep relatedToOrganizations as list of strings (backwards compatible)
+            # Add relatedToOrganizationsROR as list of Organization objects (new field)
+            enriched_orgs = organization_enrichment.get("organizations", [])
+            if enriched_orgs:
+                org_metadata_dict["relatedToOrganizations"] = [
+                    org.get("legalName")
+                    for org in enriched_orgs
+                    if org.get("legalName")
+                ]
+                org_metadata_dict["relatedToOrganizationsROR"] = enriched_orgs
+
+            # Update EPFL relationship with enriched analysis
+            org_metadata_dict["relatedToEPFL"] = organization_enrichment.get(
+                "relatedToEPFL",
+                org_metadata_dict.get("relatedToEPFL"),
+            )
+            org_metadata_dict[
+                "relatedToEPFLJustification"
+            ] = organization_enrichment.get(
+                "relatedToEPFLJustification",
+                org_metadata_dict.get("relatedToEPFLJustification"),
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error during organization enrichment for org: {e}",
+                exc_info=True,
+            )
+            # Don't fail the entire request or expose error in response, just log it
+
+    return response
 
 
 @app.get("/v1/user/llm/json/{full_path:path}", tags=["User"])
@@ -400,6 +457,10 @@ async def get_user_json(
         False,
         description="Force refresh from external APIs, bypassing cache",
     ),
+    enrich_orgs: bool = Query(
+        False,
+        description="Enable organization enrichment using PydanticAI agent to analyze and standardize organization information from ORCID affiliations and ROR API",
+    ),
 ):
     """
     Retrieve and enrich GitHub user profile metadata.
@@ -407,16 +468,25 @@ async def get_user_json(
     Fetches user profile from GitHub API and enriches it using LLM
     to extract additional insights, research interests, and structured information.
 
+    **Organization Enrichment** (optional):
+    When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
+    - Query ORCID for user affiliations
+    - Query ROR (Research Organization Registry) for standardized organization names and IDs
+    - Identify hierarchical relationships (departments, labs within universities)
+    - Provide detailed EPFL relationship analysis with evidence
+    - Enrich organization metadata with type, country, website, etc.
+
     **Caching**: Results are cached with TTL of 7 days.
 
     **Parameters**:
     - **full_path**: GitHub user URL or path (e.g., `https://github.com/username`)
     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    - **enrich_orgs**: Set to `true` to enable organization enrichment with PydanticAI agent
 
     **Returns**:
     - User profile link
     - Enriched user metadata
-    - Cache status indicator
+    - Organization enrichment results (if `enrich_orgs=true`)
     """
 
     cache_manager = get_cache_manager()
@@ -453,11 +523,52 @@ async def get_user_json(
     except Exception as e:
         raise HTTPException(status_code=424, detail=f"Error from Get User service: {e}")
 
-    return {
-        "link": full_path,
-        "output": user_metadata_dict,
-        "cached": not force_refresh,
-    }
+    # Perform organization enrichment if requested
+    response = {"link": full_path, "output": user_metadata_dict}
+
+    if enrich_orgs:
+        logger.info(f"Starting organization enrichment for user {username}")
+        try:
+            organization_enrichment = await enrich_organizations_from_dict(
+                user_metadata_dict,
+                full_path,
+            )
+            logger.info(
+                f"Organization enrichment completed for user. Found {len(organization_enrichment.get('organizations', []))} organizations",
+            )
+
+            # Update the main output with enriched organization data
+            # Keep relatedToOrganizations as list of strings (backwards compatible)
+            # Add relatedToOrganizationsROR as list of Organization objects (new field)
+            enriched_orgs = organization_enrichment.get("organizations", [])
+            if enriched_orgs:
+                user_metadata_dict["relatedToOrganizations"] = [
+                    org.get("legalName")
+                    for org in enriched_orgs
+                    if org.get("legalName")
+                ]
+                user_metadata_dict["relatedToOrganizationsROR"] = enriched_orgs
+
+            # Update EPFL relationship with enriched analysis
+            user_metadata_dict["relatedToEPFL"] = organization_enrichment.get(
+                "relatedToEPFL",
+                user_metadata_dict.get("relatedToEPFL"),
+            )
+            user_metadata_dict[
+                "relatedToEPFLJustification"
+            ] = organization_enrichment.get(
+                "relatedToEPFLJustification",
+                user_metadata_dict.get("relatedToEPFLJustification"),
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error during organization enrichment for user: {e}",
+                exc_info=True,
+            )
+            # Don't fail the entire request or expose error in response, just log it
+
+    return response
 
 
 @app.get("/v1/repository/gimie/json-ld/{full_path:path}", tags=["Repository"])

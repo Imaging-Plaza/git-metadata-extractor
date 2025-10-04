@@ -2,30 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Added
-- **Organization Enrichment System** using PydanticAI for agentic analysis
-  - Second-pass analysis to refine and enrich organization information
-  - PydanticAI agent with intelligent tool usage for:
-    - ROR (Research Organization Registry) API queries for standardized org data
-    - Web search integration (DuckDuckGo) for additional context
-    - Email domain analysis for institutional affiliation detection
-  - Enhanced `Organization` model with new fields:
-    - `alternateNames` - Other names the organization is known by
-    - `organizationType` - Type classification (university, lab, company, etc.)
-    - `parentOrganization` - Parent organization for hierarchical relationships
-    - `country` - Country location
-    - `website` - Official website URL
-  - Optional `enrich_orgs=true` parameter on existing `/v1/repository/llm/json` endpoint
-    - Non-breaking change - enrichment only runs when explicitly requested
-    - Analyzes git author emails, ORCID affiliations, and existing metadata
-    - Provides detailed EPFL relationship analysis with evidence
-    - Graceful error handling - errors don't break the main request
-  - Comprehensive documentation in `docs/ORGANIZATION_ENRICHMENT.md`
-  - Example script: `examples/example_organization_enrichment.py`
-  - Test suite: `tests/test_organization_enrichment.py`
-- **Dependencies**: Added `httpx` for async HTTP requests in organization enrichment
 
 ## [2.0.0] - 2025-10-03
 
@@ -84,6 +60,34 @@ All notable changes to this project will be documented in this file.
   - Comprehensive error logging with error type and detailed debugging information
   - Retry logic with exponential backoff for handling connection errors
   - Unified response parsing for all OpenAI models using `.parsed` attribute
+- **Organization Enrichment System** using PydanticAI for agentic analysis
+  - Second-pass analysis to refine and enrich organization information
+  - PydanticAI agent with intelligent tool usage for:
+    - ROR (Research Organization Registry) API queries for standardized org data
+    - Web search integration (DuckDuckGo) for additional context
+    - Email domain analysis for institutional affiliation detection
+  - Enhanced `Organization` model with new fields:
+    - `alternateNames` - Other names the organization is known by
+    - `organizationType` - Type classification (university, lab, company, etc.)
+    - `parentOrganization` - Parent organization for hierarchical relationships
+    - `country` - Country location
+    - `website` - Official website URL
+  - Optional `enrich_orgs=true` parameter on existing `/v1/repository/llm/json` endpoint
+    - Non-breaking change - enrichment only runs when explicitly requested
+    - Analyzes git author emails, ORCID affiliations, and existing metadata
+    - Provides detailed EPFL relationship analysis with evidence
+    - Graceful error handling - errors don't break the main request
+  - Comprehensive documentation in `docs/ORGANIZATION_ENRICHMENT.md`
+  - Example script: `examples/example_organization_enrichment.py`
+  - Test suite: `tests/test_organization_enrichment.py`
+- **Organization enrichment for User and Organization endpoints**
+  - Added `enrich_orgs=true` query parameter to `/v1/user/llm/json/{full_path:path}` endpoint
+  - Added `enrich_orgs=true` query parameter to `/v1/org/llm/json/{full_path:path}` endpoint
+  - Both endpoints now support ROR (Research Organization Registry) enrichment
+  - Consistent enrichment functionality across repository, user, and organization endpoints
+  - Enhanced organization metadata with ROR IDs, types, countries, websites, and hierarchical relationships
+  - Detailed EPFL relationship analysis for user and organization profiles
+- **Dependencies**: Added `httpx` for async HTTP requests in organization enrichment
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
@@ -96,6 +100,10 @@ All notable changes to this project will be documented in this file.
 - Refactored `genai_model.py` to use consistent structured output handling across all models
 - Enhanced logging to show model configuration and API call progress
 - Fixed logger initialization order to prevent undefined variable errors
+- Removed `cached` field from user and organization endpoint responses
+- Updated response structure to match repository endpoint: `{"link": ..., "output": ...}`
+- User and organization endpoints now return `relatedToOrganizationsROR` with full ROR metadata when `enrich_orgs=true`
+- Improved consistency across all LLM-based endpoints
 
 ### Documentation
 - Added comprehensive cache documentation in `docs/CACHE_README.md`
