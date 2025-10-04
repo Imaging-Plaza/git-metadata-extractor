@@ -108,7 +108,7 @@ If no arguments are provided, it will use the default repository and output path
 4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file.
 
     ``` bash
-    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox selenium/standalone-firefox
+    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox --network dev selenium/standalone-firefox
     ```
 
 ## How to develop using Docker?
@@ -125,7 +125,7 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
 Simply run:
 
 ``` bash
-docker run -it --rm --env-file .env -p 1234:1234 --name git-metadata-extractor git-metadata-extractor
+docker run -it --rm --env-file .env -p 1234:1234 --name git-metadata-extractor --network dev git-metadata-extractor
 ```
 
 and go to `localhost:1234`
