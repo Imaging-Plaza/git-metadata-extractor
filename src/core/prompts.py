@@ -78,7 +78,7 @@ The user will provide the full codebase of a software project. Your task is to e
 - `hasSoftwareImage` (list of objects, **required**): Each object must contain:
   - `name` (string, **optional**)
   - `description` (string, **optional**)
-  - `softwareVersion` (string matching pattern `[0-9]+\.[0-9]+\.[0-9]+`, **optional**).
+  - `softwareVersion` (string matching pattern ` **optional**).
   - `availableInRegistry` (valid URL, **optional**).
 - `processorRequirements` (list of strings, **optional**): Minimum processor requirements.
 - `memoryRequirements` (integer, **optional**): Minimum memory required (in MB).
@@ -90,7 +90,7 @@ The user will provide the full codebase of a software project. Your task is to e
 - `isBasedOn` (valid URL, **optional**): The software, website or app the software is based on.
 - `isPluginModuleOf` (list of strings, **optional**): The software or app the software is plugin or module of.
 - `hasAcknowledgements` (string, **optional**): The acknowledgements to the software authors name.
-- `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software. This should point to an URL where the installation is explained. If this is the README file, please make the full URL. 
+- `hasExecutableInstructions` (string, **optional**): Any exectuable instructions related to the software. This should point to an URL where the installation is explained. If this is the README file, please make the full URL.
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
 - `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
@@ -106,11 +106,10 @@ PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITI
 """
 
 
-
 system_prompt_user_content = """
 You are a helpful assistant, expert in academic organizations and open source software development.
-Please parse this information extracted from a GITHUB user profile and fill the json schema provided. 
-Do not make new fields if they are not in the schema. 
+Please parse this information extracted from a GITHUB user profile and fill the json schema provided.
+Do not make new fields if they are not in the schema.
 
 Also, please add EPFL to relatedToOrganizations if the person is affiliated with any EPFL lab or center.
 - Check for github organizations related to an institution, companies, universities, or research centers.
@@ -127,10 +126,9 @@ Respect the schema provided and do not add new fields.
 """
 
 
-
 system_prompt_org_content = """
-Please parse this information extracted from a GITHUB organization profile and fill the json schema provided. 
-Do not make new fields if they are not in the schema. 
+Please parse this information extracted from a GITHUB organization profile and fill the json schema provided.
+Do not make new fields if they are not in the schema.
 
 📌 **Schema Specification for GitHub Organization:**
 - `name` (string, **optional**): Name of the GitHub organization.
@@ -151,56 +149,8 @@ Do not make new fields if they are not in the schema.
 6. Pay attention to acronyms and abbreviations that might indicate institutional affiliations.
 7. Use correct capitalization and spelling for organization names.
 8. Provide clear justifications for your classifications.
+9. Github links to images should be the URL ended in ?raw=true please do that.
 
-DISCIPLINES SHOULD BE ONE OF THE FOLLOWING:
 
-    SOCIAL_SCIENCES = "Social sciences"
-    ANTHROPOLOGY = "Anthropology"
-    COMMUNICATION_STUDIES = "Communication studies"
-    EDUCATION = "Education"
-    LINGUISTICS = "Linguistics"
-    RESEARCH = "Research"
-    SOCIOLOGY = "Sociology"
-    GEOGRAPHY = "Geography"
-    PSYCHOLOGY = "Psychology"
-    POLITICS = "Politics"
-    ECONOMICS = "Economics"
-    APPLIED_SCIENCES = "Applied sciences"
-    HEALTH_SCIENCES = "Health sciences"
-    ELECTRICAL_ENGINEERING = "Electrical engineering"
-    CHEMICAL_ENGINEERING = "Chemical engineering"
-    CIVIL_ENGINEERING = "Civil engineering"
-    ARCHITECTURE = "Architecture"
-    COMPUTER_ENGINEERING = "Computer engineering"
-    ENERGY_ENGINEERING = "Energy engineering"
-    MILITARY_SCIENCE = "Military science"
-    INDUSTRIAL_PRODUCTION_ENGINEERING = "Industrial and production engineering"
-    MECHANICAL_ENGINEERING = "Mechanical engineering"
-    BIOLOGICAL_ENGINEERING = "Biological engineering"
-    ENVIRONMENTAL_SCIENCE = "Environmental science"
-    SYSTEMS_SCIENCE_ENGINEERING = "Systems science and engineering"
-    INFORMATION_ENGINEERING = "Information engineering"
-    AGRICULTURAL_FOOD_SCIENCES = "Agricultural and food sciences"
-    BUSINESS = "Business"
-    HUMANITIES = "Humanities"
-    HISTORY = "History"
-    LITERATURE = "Literature"
-    ART = "Art"
-    RELIGION = "Religion"
-    PHILOSOPHY = "Philosophy"
-    LAW = "Law"
-    FORMAL_SCIENCES = "Formal sciences"
-    MATHEMATICS = "Mathematics"
-    LOGIC = "Logic"
-    STATISTICS = "Statistics"
-    THEORETICAL_COMPUTER_SCIENCE = "Theoretical computer science"
-    NATURAL_SCIENCES = "Natural sciences"
-    PHYSICS = "Physics"
-    ASTRONOMY = "Astronomy"
-    BIOLOGY = "Biology"
-    CHEMISTRY = "Chemistry"
-    EARTH_SCIENCE = "Earth science"
-
-    
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

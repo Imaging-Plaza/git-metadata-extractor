@@ -1,5 +1,9 @@
 from gimie.project import Project
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def extract_gimie(full_path: str, format: str = "json-ld"):
     """
@@ -8,11 +12,11 @@ def extract_gimie(full_path: str, format: str = "json-ld"):
     Args:
         full_path (str): The full path to the URL.
         format (str): The format to serialize the graph. Default is 'json-ld', or 'ttl'.
-        
+
     Returns:
         Project: The GIMIE project object.
     """
-    print(full_path)
+    logger.info(f"Extracting GIMIE metadata for: {full_path}")
 
     proj = Project(full_path)
 
@@ -29,4 +33,3 @@ def extract_gimie(full_path: str, format: str = "json-ld"):
         return None
     else:
         return output
-    

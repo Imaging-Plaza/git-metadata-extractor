@@ -33,10 +33,16 @@ def main(url: str, output_path: Path) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch and process repository information.")
+    parser = argparse.ArgumentParser(
+        description="Fetch and process repository information."
+    )
     parser.add_argument("--url", default=DEFAULT_REPO, help="GitHub repository URL")
-    parser.add_argument("--output_path", default=DEFAULT_OUTPUT_PATH, help="Path to save the output jsonLD file")
-    
+    parser.add_argument(
+        "--output_path",
+        default=DEFAULT_OUTPUT_PATH,
+        help="Path to save the output jsonLD file",
+    )
+
     args = parser.parse_args()
     output_path = Path(args.output_path)
     url = args.url

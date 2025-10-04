@@ -2,7 +2,7 @@
 
 This project is designed to classify imaging software repositories and extract relevant information using AI models like GPT and Gemini. It integrates with external services to analyze repositories and store the extracted data in JSON-LD format.
 
-The output of `/v1/extract` aligns with the softwareSourceCodeSchema of Imaging Plaza project. 
+The output of `/v1/extract` aligns with the softwareSourceCodeSchema of Imaging Plaza project.
 
 ## Features
 
@@ -84,7 +84,7 @@ If no arguments are provided, it will use the default repository and output path
 1. You need to build the image.
 
     ``` bash
-    docker build -t git-metadata-extractor . 
+    docker build -t git-metadata-extractor .
     ```
 
 2. Run the image.
@@ -93,7 +93,7 @@ If no arguments are provided, it will use the default repository and output path
     docker run -it --env-file .env -p 1234:1234 --entrypoint bash git-metadata-extractor
     ```
 
-    If you are developping the application it's useful to mount the app volume. 
+    If you are developping the application it's useful to mount the app volume.
 
     ``` bash
     docker run -it --env-file .env -p 1234:1234 -v .:/app --entrypoint bash git-metadata-extractor
@@ -105,7 +105,7 @@ If no arguments are provided, it will use the default repository and output path
     python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
     ```
 
-4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file. 
+4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file.
 
     ``` bash
     docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox selenium/standalone-firefox
@@ -113,7 +113,7 @@ If no arguments are provided, it will use the default repository and output path
 
 ## How to develop using Docker?
 
-To facilitate the development we can mount the app folder in the docker. By doing this, all changes made in local will be accesible from the running container. 
+To facilitate the development we can mount the app folder in the docker. By doing this, all changes made in local will be accesible from the running container.
 
 ``` bash
 docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
@@ -140,6 +140,6 @@ uvicorn src.api:app --host 0.0.0.0 --workers 4 --port 1234 --reload
 
 ## Credits
 
-- Quentin Chappuis - EPFL Center for Imaging 
+- Quentin Chappuis - EPFL Center for Imaging
 - Robin Franken - SDSC
 - Carlos Vivar Rios - SDSC / EPFL Center for Imaging
