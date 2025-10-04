@@ -206,22 +206,13 @@ async def extract(
     )
 
     try:
-        # Get LLM data (cached or fetched)
-        llm_result_cached = cache_manager.get_cached_or_fetch(
+        # Get LLM data (cached or fetched) - automatically handles coroutines
+        llm_result = await cache_manager.get_cached_or_fetch_async(
             api_type="llm",
             params=cache_params,
             fetch_func=fetch_llm_data,
             force_refresh=force_refresh,
         )
-
-        # If fetch_func returned a coroutine, await it and cache the result
-        if hasattr(llm_result_cached, "__await__"):
-            llm_result = await llm_result_cached
-            # Cache the awaited result
-            if llm_result is not None:
-                cache_manager.cache.set("llm", cache_params, llm_result, ttl_days=30)
-        else:
-            llm_result = llm_result_cached
 
         merged_results = merge_jsonld(jsonld_gimie_data, llm_result)
         pydantic_data = convert_jsonld_to_pydantic(merged_results["@graph"])
@@ -299,23 +290,14 @@ async def extract_jsonld(
     )
 
     try:
-        # Get LLM data (cached or fetched)
+        # Get LLM data (cached or fetched) - automatically handles coroutines
         cache_params = {"full_path": full_path, "max_tokens": 20000}
-        llm_result_cached = cache_manager.get_cached_or_fetch(
+        llm_result = await cache_manager.get_cached_or_fetch_async(
             api_type="llm",
             params=cache_params,
             fetch_func=fetch_llm_data,
             force_refresh=force_refresh,
         )
-
-        # If fetch_func returned a coroutine, await it and cache the result
-        if hasattr(llm_result_cached, "__await__"):
-            llm_result = await llm_result_cached
-            # Cache the awaited result
-            if llm_result is not None:
-                cache_manager.cache.set("llm", cache_params, llm_result, ttl_days=30)
-        else:
-            llm_result = llm_result_cached
     except Exception as e:
         raise HTTPException(status_code=424, detail=f"Error from LLM service: {e}")
 
@@ -374,8 +356,8 @@ async def get_org_json(
             force_refresh=force_refresh,
         )
 
-        # Get LLM processed metadata (cached)
-        parsed_org_metadata = await cache_manager.get_cached_or_fetch(
+        # Get LLM processed metadata (cached) - automatically handles coroutines
+        parsed_org_metadata = await cache_manager.get_cached_or_fetch_async(
             api_type="llm_org",
             params={"org_name": org_name, "item_type": "org"},
             fetch_func=fetch_llm_metadata,
@@ -444,8 +426,8 @@ async def get_user_json(
             force_refresh=force_refresh,
         )
 
-        # Get LLM processed metadata (cached)
-        parsed_user_metadata = await cache_manager.get_cached_or_fetch(
+        # Get LLM processed metadata (cached) - automatically handles coroutines
+        parsed_user_metadata = await cache_manager.get_cached_or_fetch_async(
             api_type="llm_user",
             params={"username": username, "item_type": "user"},
             fetch_func=fetch_llm_metadata,
@@ -558,23 +540,14 @@ async def llm_jsonld(
         return await llm_request_repo_infos(str(full_path), max_tokens=20000)
 
     try:
-        # Get LLM data (cached or fetched)
+        # Get LLM data (cached or fetched) - automatically handles coroutines
         cache_params = {"full_path": full_path, "max_tokens": 20000}
-        llm_result_cached = cache_manager.get_cached_or_fetch(
+        llm_result = await cache_manager.get_cached_or_fetch_async(
             api_type="llm",
             params=cache_params,
             fetch_func=fetch_llm_data,
             force_refresh=force_refresh,
         )
-
-        # If fetch_func returned a coroutine, await it and cache the result
-        if hasattr(llm_result_cached, "__await__"):
-            llm_result = await llm_result_cached
-            # Cache the awaited result
-            if llm_result is not None:
-                cache_manager.cache.set("llm", cache_params, llm_result, ttl_days=30)
-        else:
-            llm_result = llm_result_cached
     except Exception as e:
         raise HTTPException(status_code=424, detail=f"Error from LLM service: {e}")
 
@@ -637,29 +610,18 @@ async def llm_json(
         )
 
     try:
-        # Get LLM data (cached or fetched)
+        # Get LLM data (cached or fetched) - automatically handles coroutines
         cache_params = {
             "full_path": full_path,
             "output_format": "json",
             "max_tokens": 20000,
         }
-        llm_result_cached = cache_manager.get_cached_or_fetch(
+        llm_result_raw = await cache_manager.get_cached_or_fetch_async(
             api_type="llm",
             params=cache_params,
             fetch_func=fetch_llm_data,
             force_refresh=force_refresh,
         )
-
-        # If fetch_func returned a coroutine, await it and cache the result
-        if hasattr(llm_result_cached, "__await__"):
-            llm_result_raw = await llm_result_cached
-            # Cache the awaited result
-            if llm_result_raw is not None:
-                cache_manager.cache.set(
-                    "llm", cache_params, llm_result_raw, ttl_days=30
-                )
-        else:
-            llm_result_raw = llm_result_cached
 
         # Make a copy to avoid modifying cached data
         if isinstance(llm_result_raw, dict):

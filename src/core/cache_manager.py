@@ -2,9 +2,10 @@
 Cache management utilities and configuration for the API caching system.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union, Awaitable
 from .cache import APICache
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,61 @@ class CacheManager:
                 f"Fetch function returned a coroutine, returning without caching"
             )
             return fresh_data
+
+        # Cache the result if successful
+        if fresh_data is not None:
+            ttl = custom_ttl or self.config.API_TTL_OVERRIDES.get(
+                api_type, self.config.DEFAULT_TTL_DAYS
+            )
+            self.cache.set(api_type, params, fresh_data, ttl)
+            logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
+
+        return fresh_data
+
+    async def get_cached_or_fetch_async(
+        self,
+        api_type: str,
+        params: Dict[str, Any],
+        fetch_func: Union[callable, Awaitable],
+        force_refresh: bool = False,
+        custom_ttl: Optional[int] = None,
+    ) -> Any:
+        """
+        Get data from cache or fetch it if not cached/expired.
+        Automatically handles coroutines by awaiting them and caching the result.
+
+        Args:
+            api_type: Type of API (github_user, github_org, orcid, gimie, llm)
+            params: Parameters for the API call
+            fetch_func: Function to call if cache miss (can be sync or async)
+            force_refresh: If True, bypass cache
+            custom_ttl: Custom TTL in days
+
+        Returns:
+            Cached or freshly fetched data (awaited if it was a coroutine)
+        """
+        if not self.config.CACHE_ENABLED:
+            logger.info(f"Cache disabled, fetching fresh data for {api_type}")
+            fresh_data = fetch_func()
+            # Handle coroutines even when cache is disabled
+            if hasattr(fresh_data, "__await__"):
+                return await fresh_data
+            return fresh_data
+
+        # Try to get from cache first
+        if not force_refresh:
+            cached_result = self.cache.get(api_type, params)
+            if cached_result is not None:
+                return cached_result
+
+        # Fetch fresh data
+        logger.info(f"Fetching fresh data for {api_type}")
+        fresh_data = fetch_func()
+
+        # Handle coroutines automatically
+        if hasattr(fresh_data, "__await__"):
+            logger.info(f"Awaiting coroutine for {api_type}")
+            fresh_data = await fresh_data
 
         # Cache the result if successful
         if fresh_data is not None:
