@@ -48,24 +48,68 @@ EXAMPLE_LLM_OUTPUT = {
     "relatedToEPFL": True,
     "relatedToEPFLJustification": "Swiss Data Science Center is established by EPFL and ETH Zürich.",
     "gitAuthors": [
-        {"name": "cmdoret", "email": "cyril.mattheydoret@gmail.com", "commits": 178},
-        {"name": "Sabine Maennel", "email": "sabine.maennel@gmail.com", "commits": 62},
-        {"name": "rmfranken", "email": "robin.franken@epfl.ch", "commits": 53},
+        {
+            "name": "cmdoret",
+            "email": "cyril.mattheydoret@gmail.com",
+            "commits": {
+                "total": 178,
+                "firstCommitDate": "2021-05-12",
+                "lastCommitDate": "2024-09-15",
+            },
+        },
+        {
+            "name": "Sabine Maennel",
+            "email": "sabine.maennel@gmail.com",
+            "commits": {
+                "total": 62,
+                "firstCommitDate": "2022-03-10",
+                "lastCommitDate": "2024-08-20",
+            },
+        },
+        {
+            "name": "rmfranken",
+            "email": "robin.franken@epfl.ch",
+            "commits": {
+                "total": 53,
+                "firstCommitDate": "2022-06-01",
+                "lastCommitDate": "2024-09-30",
+            },
+        },
         {
             "name": "Robin Franken",
             "email": "77491494+rmfranken@users.noreply.github.com",
-            "commits": 37,
+            "commits": {
+                "total": 37,
+                "firstCommitDate": "2022-07-15",
+                "lastCommitDate": "2024-09-25",
+            },
         },
-        {"name": "Martin Fontanet", "email": "martin.fontanet@epfl.ch", "commits": 26},
+        {
+            "name": "Martin Fontanet",
+            "email": "martin.fontanet@epfl.ch",
+            "commits": {
+                "total": 26,
+                "firstCommitDate": "2023-01-10",
+                "lastCommitDate": "2024-05-20",
+            },
+        },
         {
             "name": "Cyril Matthey-Doret",
             "email": "cyril.matthey-doret@epfl.ch",
-            "commits": 23,
+            "commits": {
+                "total": 23,
+                "firstCommitDate": "2021-06-01",
+                "lastCommitDate": "2023-12-15",
+            },
         },
         {
             "name": "Laure Vancau",
             "email": "laure.vancauwenberghe@epfl.ch",
-            "commits": 13,
+            "commits": {
+                "total": 13,
+                "firstCommitDate": "2023-03-01",
+                "lastCommitDate": "2024-04-10",
+            },
         },
     ],
 }
@@ -93,9 +137,11 @@ async def main():
     print("This will:")
     print("  1. Analyze git author email domains")
     print("  2. Extract affiliations from ORCID records")
-    print("  3. Query ROR API for standardized organization information")
-    print("  4. Identify organizational hierarchies")
-    print("  5. Assess EPFL relationship")
+    print("  3. Examine commit date patterns per author")
+    print("  4. Query ROR API for standardized organization information")
+    print("  5. Identify organizational hierarchies")
+    print("  6. Assess EPFL relationship with confidence scoring")
+    print("  7. Provide confidence scores for each organization attribution")
     print()
 
     try:
@@ -119,6 +165,8 @@ async def main():
             print(f"  Type: {org.get('organizationType', 'N/A')}")
             print(f"  Country: {org.get('country', 'N/A')}")
             print(f"  Website: {org.get('website', 'N/A')}")
+            if org.get("confidenceOfAttriution"):
+                print(f"  Confidence Score: {org['confidenceOfAttriution']:.2f}")
             if org.get("alternateNames"):
                 print(f"  Alternate Names: {', '.join(org['alternateNames'])}")
             if org.get("parentOrganization"):
@@ -126,6 +174,10 @@ async def main():
             print()
 
         print(f"Related to EPFL: {enrichment_result['relatedToEPFL']}")
+        if enrichment_result.get("relatedToEPFLConfidence"):
+            print(
+                f"EPFL Confidence Score: {enrichment_result['relatedToEPFLConfidence']:.2f}",
+            )
         print(f"Justification: {enrichment_result['relatedToEPFLJustification']}")
         print()
 

@@ -103,6 +103,8 @@ The user will provide the full codebase of a software project. Your task is to e
 - `relatedAPI`: A list with any link to APIs related to the software.
 - `webpagesToCheck`: A list of webpages to check for more information about the software.
 
+When assigning an attribution evaluate from 0.0 to 1.0 the confidence of your attribution.
+
 Check authors emails, affiliations, README, and any other documentation to relate this to all the organizations. Also to evaluate if it's related to EPFL.
 relatedToOrganization needs to include all.
 

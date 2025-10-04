@@ -37,6 +37,7 @@ class Organization(BaseModel):
     ] = None  # Name of parent organization if applicable
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
+    confidenceOfAttriution: Optional[float] = None  # Confidence score (0.0 to 1.0)
 
 
 class FundingInformation(BaseModel):
@@ -149,10 +150,16 @@ class RepositoryType(str, Enum):
     OTHER = "other"
 
 
+class Commits(BaseModel):
+    total: int = None
+    firstCommitDate: Optional[date] = None
+    lastCommitDate: Optional[date] = None
+
+
 class GitAuthor(BaseModel):
     name: str = None
     email: Optional[str] = None
-    commits: int = None
+    commits: Commits = None
 
 
 class SoftwareSourceCode(BaseModel):
@@ -204,7 +211,8 @@ class SoftwareSourceCode(BaseModel):
     repositoryType: RepositoryType = None
     repositoryTypeJustification: List[str] = None
     relatedToEPFL: bool = None
-    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
+    relatedToEPFLJustification: str = None
     gitAuthors: Optional[List[GitAuthor]] = None
     webpagesToCheck: Optional[List[HttpUrl]] = None
 
@@ -228,7 +236,8 @@ class GitHubOrganization(BaseModel):
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
     relatedToEPFL: bool = None
-    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLJustification: str = None
+    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
 
 
 class GitHubUser(BaseModel):
@@ -242,7 +251,8 @@ class GitHubUser(BaseModel):
     position: Optional[List[str]] = None
     positionJustification: Optional[List[str]] = None
     relatedToEPFL: bool = None
-    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLJustification: str = None
+    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
 
 
 ############################################################
@@ -516,6 +526,12 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "parentOrganization": "schema:parentOrganization",
         "country": "schema:addressCountry",
         "website": "schema:url",
+        "confidenceOfAttriution": "imag:confidenceOfAttribution",
+    },
+    "Commits": {
+        "total": "imag:totalCommits",
+        "firstCommitDate": "imag:firstCommitDate",
+        "lastCommitDate": "imag:lastCommitDate",
     },
     "GitAuthor": {
         "name": "schema:name",

@@ -192,7 +192,7 @@ async def run_repo_to_text(temp_dir):
 async def extract_git_authors(temp_dir):
     """
     Extract git authors from the cloned repository using git shortlog.
-    Returns a list of GitAuthor objects.
+    Returns a list of GitAuthor objects with commit counts and first/last commit dates.
 
     Example output from git shortlog -sne:
         120  Alice <alice@example.com>
@@ -200,10 +200,12 @@ async def extract_git_authors(temp_dir):
          10  Carlos <carlos@example.com>
     """
     import re
+    from datetime import datetime
 
-    from .models import GitAuthor
+    from .models import Commits, GitAuthor
 
     try:
+        # First, get the list of authors with commit counts
         process = await asyncio.create_subprocess_exec(
             "git",
             "shortlog",
@@ -229,9 +231,88 @@ async def extract_git_authors(temp_dir):
 
                 match = re.match(pattern, line)
                 if match:
-                    commits = int(match.group(1))
+                    total_commits = int(match.group(1))
                     name = match.group(2).strip()
                     email = match.group(3) if match.group(3) else None
+
+                    # Get first and last commit dates for this author
+                    # We'll use the email if available, otherwise the name
+                    author_identifier = email if email else name
+
+                    # Get first commit date (oldest)
+                    first_date_process = await asyncio.create_subprocess_exec(
+                        "git",
+                        "log",
+                        "--author=" + author_identifier,
+                        "--format=%ad",
+                        "--date=short",
+                        "--reverse",
+                        "--all",
+                        cwd=temp_dir,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    first_stdout, _ = await first_date_process.communicate()
+
+                    # Get last commit date (newest)
+                    last_date_process = await asyncio.create_subprocess_exec(
+                        "git",
+                        "log",
+                        "--author=" + author_identifier,
+                        "--format=%ad",
+                        "--date=short",
+                        "--all",
+                        "-1",
+                        cwd=temp_dir,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    last_stdout, _ = await last_date_process.communicate()
+
+                    # Parse dates
+                    first_commit_date = None
+                    last_commit_date = None
+
+                    if first_date_process.returncode == 0:
+                        first_date_str = (
+                            first_stdout.decode("utf-8").strip().split("\n")[0]
+                            if first_stdout.decode("utf-8").strip()
+                            else None
+                        )
+                        if first_date_str:
+                            try:
+                                first_commit_date = datetime.strptime(
+                                    first_date_str,
+                                    "%Y-%m-%d",
+                                ).date()
+                            except ValueError:
+                                logger.warning(
+                                    f"Failed to parse first commit date: {first_date_str}",
+                                )
+
+                    if last_date_process.returncode == 0:
+                        last_date_str = (
+                            last_stdout.decode("utf-8").strip().split("\n")[0]
+                            if last_stdout.decode("utf-8").strip()
+                            else None
+                        )
+                        if last_date_str:
+                            try:
+                                last_commit_date = datetime.strptime(
+                                    last_date_str,
+                                    "%Y-%m-%d",
+                                ).date()
+                            except ValueError:
+                                logger.warning(
+                                    f"Failed to parse last commit date: {last_date_str}",
+                                )
+
+                    # Create Commits object
+                    commits = Commits(
+                        total=total_commits,
+                        firstCommitDate=first_commit_date,
+                        lastCommitDate=last_commit_date,
+                    )
 
                     git_authors.append(
                         GitAuthor(name=name, email=email, commits=commits),
@@ -338,7 +419,21 @@ async def llm_request_repo_infos(
                     {
                         "name": author.name,
                         "email": author.email,
-                        "commits": author.commits,
+                        "commits": {
+                            "total": author.commits.total,
+                            "firstCommitDate": (
+                                author.commits.firstCommitDate.isoformat()
+                                if author.commits.firstCommitDate
+                                else None
+                            ),
+                            "lastCommitDate": (
+                                author.commits.lastCommitDate.isoformat()
+                                if author.commits.lastCommitDate
+                                else None
+                            ),
+                        }
+                        if author.commits
+                        else None,
                     }
                     for author in git_authors
                 ]

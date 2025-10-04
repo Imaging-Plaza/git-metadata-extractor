@@ -3,7 +3,6 @@ import json
 import os
 import re
 import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -366,44 +365,89 @@ class GitHubUsersParser:
                 print("Warning: Employment section not found")
                 return employment_list
 
-            # Find employment entries - they might be in different containers
-            employment_containers = employment_section.find_all(
-                ["app-affiliation-stack-group", "div"],
-                class_=re.compile(r"affiliation|employment"),
-            )
+            # Get all text and parse it line by line
+            all_text = employment_section.get_text(separator="\n")
+            lines = [line.strip() for line in all_text.split("\n") if line.strip()]
 
-            if not employment_containers:
-                # Try alternative selectors
-                employment_containers = employment_section.find_all(
-                    "div",
-                    string=re.compile(r"\d{4}"),
-                )
+            # Parse entries - each entry is from organization name until "Show more detail"
+            i = 0
+            while i < len(lines):
+                line = lines[i]
 
-            for container in employment_containers:
-                try:
-                    # Extract text content
-                    text_content = container.get_text(separator=" ", strip=True)
+                # Skip headers and navigation
+                if line in ["expand_more", "Employment", "sort", "Sort", "Source", ":"]:
+                    i += 1
+                    continue
 
-                    # Skip if empty or too short
-                    if len(text_content) < 10:
-                        continue
+                # Look for organization name (contains ":")
+                if ":" in line and not line.startswith("Source"):
+                    # Start of new entry
+                    organization = line.strip()
+                    location_parts = []
+                    dates_str = ""
+                    role = None
+                    i += 1
 
-                    # Extract organization name (usually the first substantial text)
-                    organization = self._extract_organization_name(text_content)
+                    # Collect location parts
+                    while i < len(lines) and lines[i] not in [
+                        "Employment",
+                        "Education",
+                        "Show more detail",
+                    ]:
+                        current_line = lines[i]
 
-                    # Extract dates
-                    start_date, end_date = self._extract_dates_from_text(text_content)
+                        # Check if this is a year (start of date range)
+                        if re.match(r"^\d{4}(?:-\d{2}-\d{2})?$", current_line):
+                            # Start collecting date string
+                            dates_str = current_line
+                            i += 1
+                            # Next line should be "to"
+                            if i < len(lines) and lines[i].lower() == "to":
+                                dates_str += " to "
+                                i += 1
+                                # Next line is end date
+                                if i < len(lines):
+                                    dates_str += lines[i]
+                                    i += 1
+                            break
+                        # Check for location (2-letter country code or city name)
+                        elif (
+                            re.match(r"^[A-Z]{2}$", current_line) or "," in current_line
+                        ):
+                            location_parts.append(current_line)
+                            i += 1
+                        else:
+                            i += 1
 
-                    # Extract role/title
-                    role = self._extract_role_from_text(text_content)
+                    # Look for role (after dates, marked with |)
+                    if i < len(lines) and lines[i] == "|":
+                        i += 1
+                        if i < len(lines):
+                            role = lines[i]
+                            i += 1
 
-                    # Extract location
-                    location = self._extract_location_from_text(text_content)
+                    # Parse dates
+                    start_date, end_date = None, None
+                    if dates_str:
+                        start_date, end_date = self._extract_dates_from_text(dates_str)
+
+                    # Build location string (filter out empties and strip commas)
+                    location = (
+                        ", ".join(
+                            [
+                                loc.rstrip(",")
+                                for loc in location_parts
+                                if loc and loc != ","
+                            ],
+                        )
+                        if location_parts
+                        else None
+                    )
 
                     # Calculate duration
                     duration_years = self._calculate_duration(start_date, end_date)
 
-                    # Only add if we have at least an organization
+                    # Add employment entry
                     if organization:
                         employment_list.append(
                             ORCIDEmployment(
@@ -415,13 +459,14 @@ class GitHubUsersParser:
                                 duration_years=duration_years,
                             ),
                         )
-
-                except Exception as e:
-                    print(f"Warning: Could not parse employment entry: {e}")
-                    continue
+                else:
+                    i += 1
 
         except Exception as e:
             print(f"Warning: Could not extract employment data: {e}")
+            import traceback
+
+            traceback.print_exc()
 
         return employment_list
 
@@ -442,31 +487,96 @@ class GitHubUsersParser:
                 print("Warning: Education section not found")
                 return education_list
 
-            # Find education entries
-            education_containers = education_section.find_all(
-                ["app-affiliation-stack-group", "div"],
-                class_=re.compile(r"affiliation|education"),
-            )
+            # Get all text and parse it line by line
+            all_text = education_section.get_text(separator="\n")
+            lines = [line.strip() for line in all_text.split("\n") if line.strip()]
 
-            if not education_containers:
-                education_containers = education_section.find_all(
-                    "div",
-                    string=re.compile(r"\d{4}"),
-                )
+            # Parse entries - each entry is from organization name until "Show more detail"
+            i = 0
+            while i < len(lines):
+                line = lines[i]
 
-            for container in education_containers:
-                try:
-                    text_content = container.get_text(separator=" ", strip=True)
+                # Skip headers and navigation
+                if line in [
+                    "expand_more",
+                    "Education and qualifications",
+                    "Education",
+                    "sort",
+                    "Sort",
+                    "Source",
+                    ":",
+                ]:
+                    i += 1
+                    continue
 
-                    if len(text_content) < 10:
-                        continue
+                # Look for organization name (contains ":")
+                if ":" in line and not line.startswith("Source"):
+                    # Start of new entry
+                    organization = line.strip()
+                    location_parts = []
+                    dates_str = ""
+                    degree = None
+                    i += 1
 
-                    organization = self._extract_organization_name(text_content)
-                    start_date, end_date = self._extract_dates_from_text(text_content)
-                    degree = self._extract_degree_from_text(text_content)
-                    location = self._extract_location_from_text(text_content)
+                    # Collect location parts
+                    while i < len(lines) and lines[i] not in [
+                        "Education",
+                        "Show more detail",
+                    ]:
+                        current_line = lines[i]
+
+                        # Check if this is a year (start of date range)
+                        if re.match(r"^\d{4}(?:-\d{2}-\d{2})?$", current_line):
+                            # Start collecting date string
+                            dates_str = current_line
+                            i += 1
+                            # Next line should be "to"
+                            if i < len(lines) and lines[i].lower() == "to":
+                                dates_str += " to "
+                                i += 1
+                                # Next line is end date
+                                if i < len(lines):
+                                    dates_str += lines[i]
+                                    i += 1
+                            break
+                        # Check for location (2-letter country code or city name)
+                        elif (
+                            re.match(r"^[A-Z]{2}$", current_line) or "," in current_line
+                        ):
+                            location_parts.append(current_line)
+                            i += 1
+                        else:
+                            i += 1
+
+                    # Look for degree (after dates, marked with |)
+                    if i < len(lines) and lines[i] == "|":
+                        i += 1
+                        if i < len(lines):
+                            degree = lines[i]
+                            i += 1
+
+                    # Parse dates
+                    start_date, end_date = None, None
+                    if dates_str:
+                        start_date, end_date = self._extract_dates_from_text(dates_str)
+
+                    # Build location string (filter out empties and strip commas)
+                    location = (
+                        ", ".join(
+                            [
+                                loc.rstrip(",")
+                                for loc in location_parts
+                                if loc and loc != ","
+                            ],
+                        )
+                        if location_parts
+                        else None
+                    )
+
+                    # Calculate duration
                     duration_years = self._calculate_duration(start_date, end_date)
 
+                    # Add education entry
                     if organization:
                         education_list.append(
                             ORCIDEducation(
@@ -478,13 +588,14 @@ class GitHubUsersParser:
                                 duration_years=duration_years,
                             ),
                         )
-
-                except Exception as e:
-                    print(f"Warning: Could not parse education entry: {e}")
-                    continue
+                else:
+                    i += 1
 
         except Exception as e:
             print(f"Warning: Could not extract education data: {e}")
+            import traceback
+
+            traceback.print_exc()
 
         return education_list
 
@@ -551,14 +662,27 @@ class GitHubUsersParser:
         text: str,
     ) -> tuple[Optional[str], Optional[str]]:
         """Extract start and end dates from text"""
-        # Look for "YYYY to YYYY" pattern first (most specific)
-        to_pattern = r"\b(\d{4})\s+to\s+(\d{4})\b"
-        to_match = re.search(to_pattern, text)
-        if to_match:
-            return to_match.group(1), to_match.group(2)
+        # Look for "YYYY-MM-DD to YYYY-MM-DD" pattern first (most specific)
+        full_date_pattern = r"(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})"
+        full_match = re.search(full_date_pattern, text)
+        if full_match:
+            return full_match.group(1), full_match.group(2)
+
+        # Look for "YYYY to YYYY" pattern
+        year_pattern = r"(\d{4})\s+to\s+(\d{4})"
+        year_match = re.search(year_pattern, text)
+        if year_match:
+            return year_match.group(1), year_match.group(2)
+
+        # Look for "YYYY-MM-DD to present" or similar
+        present_pattern = r"(\d{4}(?:-\d{2}-\d{2})?)\s+to\s+(?:present|now|current)"
+        present_match = re.search(present_pattern, text, re.IGNORECASE)
+        if present_match:
+            return present_match.group(1), None
 
         # Look for other date patterns as fallback
         date_patterns = [
+            r"\b(\d{4}-\d{2}-\d{2})\b",  # YYYY-MM-DD
             r"\b(\d{1,2}[/-]\d{4})\b",  # MM/YYYY or MM-YYYY
             r"\b(\d{4})\b",  # YYYY
         ]
@@ -583,6 +707,16 @@ class GitHubUsersParser:
 
     def _extract_role_from_text(self, text: str) -> Optional[str]:
         """Extract role/title from text"""
+        # ORCID often uses | separator for roles
+        # Pattern: "date info | Role Title | other info" or "date info | Role Title (department)"
+        pipe_pattern = r"\|\s*([^|()]+?)(?:\s*\(|\s*$)"
+        pipe_match = re.search(pipe_pattern, text)
+        if pipe_match:
+            role = pipe_match.group(1).strip()
+            # Filter out dates and locations
+            if not re.match(r"^\d{4}|^\w+,\s*\w+", role):
+                return role
+
         # Common role indicators
         role_keywords = [
             "professor",
@@ -606,11 +740,24 @@ class GitHubUsersParser:
 
     def _extract_degree_from_text(self, text: str) -> Optional[str]:
         """Extract degree from text"""
+        # ORCID often uses | separator for degree info
+        pipe_pattern = r"\|\s*([^|()]+?)(?:\s*\(|\s*$)"
+        pipe_match = re.search(pipe_pattern, text)
+        if pipe_match:
+            degree = pipe_match.group(1).strip()
+            # Check if it looks like a degree
+            if re.search(
+                r"\b(PhD|Ph\.D|MSc|M\.Sc|MA|M\.A|BSc|B\.Sc|BA|B\.A|Doctor|Master|Bachelor)",
+                degree,
+                re.IGNORECASE,
+            ):
+                return degree
+
         degree_patterns = [
             r"\b(Ph\.?D\.?|PhD|Doctor of Philosophy)\b",
-            r"\b(M\.?S\.?|MS|Master of Science)\b",
+            r"\b(M\.?S\.?c?|MSc|Master of Science)\b",
             r"\b(M\.?A\.?|MA|Master of Arts)\b",
-            r"\b(B\.?S\.?|BS|Bachelor of Science)\b",
+            r"\b(B\.?S\.?c?|BSc|Bachelor of Science)\b",
             r"\b(B\.?A\.?|BA|Bachelor of Arts)\b",
             r"\b(Bachelor|Master|Doctor)\s+[oO]f\s+\w+\b",
         ]
@@ -755,18 +902,36 @@ class GitHubUsersParser:
             return None
 
         try:
-            # Parse start year
-            start_year = int(start_date.split("/")[-1])
+            # Parse dates - handle both "YYYY" and "YYYY-MM-DD" formats
+            if "-" in start_date:
+                # Full date format YYYY-MM-DD
+                from datetime import datetime
 
-            # If no end date, assume current year
-            if not end_date:
-                end_year = datetime.now().year
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+
+                if end_date:
+                    if "-" in end_date:
+                        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                    else:
+                        # Just year, assume end of year
+                        end_dt = datetime(int(end_date), 12, 31)
+                else:
+                    # No end date, use current date
+                    end_dt = datetime.now()
+
+                # Calculate difference in years (with decimals)
+                duration_days = (end_dt - start_dt).days
+                return round(duration_days / 365.25, 1)
             else:
-                end_year = int(end_date.split("/")[-1])
+                # Just year format
+                start_year = int(start_date)
+                end_year = int(end_date) if end_date else datetime.now().year
+                return float(end_year - start_year)
 
-            return float(end_year - start_year)
-
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            print(
+                f"Warning: Could not calculate duration from {start_date} to {end_date}: {e}",
+            )
             return None
 
     def _get_rest_user_data(self, username: str) -> Dict[str, Any]:

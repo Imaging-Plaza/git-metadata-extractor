@@ -34,6 +34,9 @@ class OrganizationEnrichmentResult(BaseModel):
         description="List of all identified organizations with standardized information",
     )
     relatedToEPFL: bool = Field(description="Whether the repository is related to EPFL")
+    relatedToEPFLConfidence: float = Field(
+        description="Confidence score (0.0 to 1.0) for EPFL relationship",
+    )
     relatedToEPFLJustification: str = Field(
         description="Detailed justification for EPFL relationship",
     )
@@ -54,7 +57,7 @@ class OrganizationAnalysisContext(BaseModel):
 # Initialize the agent with OpenAI model
 # The agent will analyze organization information and use tools as needed
 agent = Agent(
-    model=f"openai:{os.getenv('MODEL', 'gpt-4o')}",
+    model=f"openai:{os.getenv('MODEL', 'gpt-4o-mini')}",
     result_type=OrganizationEnrichmentResult,
     system_prompt="""You are an expert at identifying and standardizing organization information from software repository metadata.
 
@@ -63,12 +66,19 @@ Your task is to analyze:
 2. Author affiliations from ORCID records
 3. Existing organization mentions
 4. Any other contextual information
+5. Git commit dates per author to assess temporal affiliation patterns
+6. ORCID affiliation start/end dates when available
 
 For each organization you identify:
 - Use the search_ror tool to find the official ROR entry and get standardized naming
 - Identify the organization type (university, research institute, department, lab, company, etc.)
 - For departments/labs, identify the parent organization
 - Extract country and website information when available
+- **Provide a confidence score (0.0 to 1.0)** for each organization attribution based on:
+  * Strength of evidence (institutional email = high, ORCID affiliation = high, generic email = low)
+  * Number of commits from authors affiliated with the organization
+  * Temporal alignment between commit dates and ORCID affiliation periods
+  * Consistency across multiple sources
 
 Pay special attention to:
 - Email domains (e.g., @epfl.ch, @ethz.ch, @pasteur.fr)
@@ -79,7 +89,22 @@ Pay special attention to:
 For EPFL relationship:
 - Consider direct affiliations (authors with @epfl.ch emails, ORCID affiliations mentioning EPFL)
 - Consider indirect relationships (Swiss Data Science Center, labs/departments at EPFL)
-- Provide detailed justification with specific evidence
+- **Provide a confidence score (0.0 to 1.0)** for EPFL relationship based on:
+  * Number and percentage of commits from EPFL-affiliated authors
+  * Temporal patterns: recent activity from EPFL authors vs. historical activity
+  * Strength of affiliation evidence (institutional email vs. ORCID vs. inference)
+  * Whether the repository is primarily developed by EPFL authors (>50% commits)
+  * Alignment between author commit dates and their ORCID affiliation periods at EPFL
+- Provide detailed justification with specific evidence including commit statistics and temporal patterns
+
+Confidence Scoring Guidelines:
+- 0.9-1.0: Strong evidence (institutional email + significant commits + temporal alignment)
+- 0.7-0.89: Good evidence (institutional email or ORCID + moderate commits)
+- 0.5-0.69: Moderate evidence (ORCID affiliation or some commits with institutional email)
+- 0.3-0.49: Weak evidence (few commits or only indirect indicators)
+- 0.0-0.29: Very weak or speculative evidence
+
+Think that one author might have multiple affiliations over time. Look at the commit dates to see if they align with the affiliation periods.
 
 Be thorough and use the tools available to you to verify and standardize organization information.""",
 )
@@ -296,8 +321,16 @@ async def enrich_organizations(
 
 Repository: {repository_url}
 
-Git Authors (with emails):
-{json.dumps([{"name": a.name, "email": a.email, "commits": a.commits} for a in context.git_authors], indent=2)}
+Git Authors (with emails and commit history):
+{json.dumps([{
+    "name": a.name,
+    "email": a.email,
+    "commits": {
+        "total": a.commits.total if a.commits else 0,
+        "firstCommitDate": str(a.commits.firstCommitDate) if a.commits and a.commits.firstCommitDate else None,
+        "lastCommitDate": str(a.commits.lastCommitDate) if a.commits and a.commits.lastCommitDate else None
+    }
+} for a in context.git_authors], indent=2)}
 
 Authors with ORCID affiliations:
 {json.dumps([{"name": a.name, "orcidId": str(a.orcidId) if a.orcidId else None, "affiliation": a.affiliation} for a in context.authors], indent=2)}
@@ -310,11 +343,20 @@ Existing EPFL justification: {context.existing_epfl_justification}
 Please:
 1. Analyze all email domains from git authors
 2. Review all affiliations from ORCID records
-3. For each organization identified, use the search_ror tool to find standardized information
-4. Identify all levels of organizations (universities, departments, labs, research centers, etc.)
-5. Determine hierarchical relationships where applicable
-6. Provide a comprehensive assessment of EPFL relationship with detailed evidence
-7. Return a complete list of organizations with standardized ROR information where available
+3. Examine commit patterns: look at the first and last commit dates per author to understand temporal affiliation
+4. For each organization identified, use the search_ror tool to find standardized information
+5. Identify all levels of organizations (universities, departments, labs, research centers, etc.)
+6. Determine hierarchical relationships where applicable
+7. Provide a comprehensive assessment of EPFL relationship with detailed evidence
+8. Return a complete list of organizations with standardized ROR information where available
+9. For each organization, provide a confidence score (0.0 to 1.0) based on:
+   - Strength of evidence (institutional email vs. ORCID vs. inference)
+   - Number and percentage of commits from affiliated authors
+   - Temporal alignment between commit dates and affiliation periods
+10. Provide an EPFL affiliation confidence score (0.0 to 1.0) considering:
+    - Percentage of commits from EPFL-affiliated authors
+    - Whether EPFL authors are still active (recent commits)
+    - Strength of affiliation evidence across multiple authors
 """
 
     logger.info(f"Starting organization enrichment for {repository_url}")
@@ -349,7 +391,50 @@ async def enrich_organizations_from_dict(
     if llm_output.get("gitAuthors"):
         for ga in llm_output["gitAuthors"]:
             if isinstance(ga, dict):
-                git_authors.append(GitAuthor(**ga))
+                # Handle Commits object conversion
+                commits_data = ga.get("commits")
+                if commits_data:
+                    if isinstance(commits_data, dict):
+                        # Parse dates from strings if needed
+                        from datetime import datetime
+
+                        first_date = commits_data.get("firstCommitDate")
+                        last_date = commits_data.get("lastCommitDate")
+
+                        if isinstance(first_date, str):
+                            first_date = datetime.strptime(
+                                first_date,
+                                "%Y-%m-%d",
+                            ).date()
+                        if isinstance(last_date, str):
+                            last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
+
+                        from .models import Commits
+
+                        commits_obj = Commits(
+                            total=commits_data.get("total"),
+                            firstCommitDate=first_date,
+                            lastCommitDate=last_date,
+                        )
+                        ga_with_commits = {
+                            "name": ga.get("name"),
+                            "email": ga.get("email"),
+                            "commits": commits_obj,
+                        }
+                        git_authors.append(GitAuthor(**ga_with_commits))
+                    else:
+                        # Legacy format where commits is just a number
+                        from .models import Commits
+
+                        commits_obj = Commits(total=commits_data)
+                        ga_with_commits = {
+                            "name": ga.get("name"),
+                            "email": ga.get("email"),
+                            "commits": commits_obj,
+                        }
+                        git_authors.append(GitAuthor(**ga_with_commits))
+                else:
+                    git_authors.append(GitAuthor(**ga))
 
     authors = []
     if llm_output.get("author"):
@@ -395,8 +480,16 @@ async def enrich_organizations_from_dict(
 
 Repository: {repository_url}
 
-Git Authors (with emails):
-{json.dumps([{"name": a.name, "email": a.email, "commits": a.commits} for a in context.git_authors], indent=2)}
+Git Authors (with emails and commit history):
+{json.dumps([{
+    "name": a.name,
+    "email": a.email,
+    "commits": {
+        "total": a.commits.total if a.commits else 0,
+        "firstCommitDate": str(a.commits.firstCommitDate) if a.commits and a.commits.firstCommitDate else None,
+        "lastCommitDate": str(a.commits.lastCommitDate) if a.commits and a.commits.lastCommitDate else None
+    }
+} for a in context.git_authors], indent=2)}
 
 Authors with ORCID affiliations:
 {json.dumps([{"name": a.name, "orcidId": str(a.orcidId) if a.orcidId else None, "affiliation": a.affiliation} for a in context.authors], indent=2)}
@@ -409,11 +502,20 @@ Existing EPFL justification: {context.existing_epfl_justification}
 Please:
 1. Analyze all email domains from git authors
 2. Review all affiliations from ORCID records
-3. For each organization identified, use the search_ror tool to find standardized information
-4. Identify all levels of organizations (universities, departments, labs, research centers, etc.)
-5. Determine hierarchical relationships where applicable
-6. Provide a comprehensive assessment of EPFL relationship with detailed evidence
-7. Return a complete list of organizations with standardized ROR information where available
+3. Examine commit patterns: look at the first and last commit dates per author to understand temporal affiliation
+4. For each organization identified, use the search_ror tool to find standardized information
+5. Identify all levels of organizations (universities, departments, labs, research centers, etc.)
+6. Determine hierarchical relationships where applicable
+7. Provide a comprehensive assessment of EPFL relationship with detailed evidence
+8. Return a complete list of organizations with standardized ROR information where available
+9. For each organization, provide a confidence score (0.0 to 1.0) based on:
+   - Strength of evidence (institutional email vs. ORCID vs. inference)
+   - Number and percentage of commits from affiliated authors
+   - Temporal alignment between commit dates and affiliation periods
+10. Provide an EPFL affiliation confidence score (0.0 to 1.0) considering:
+    - Percentage of commits from EPFL-affiliated authors
+    - Whether EPFL authors are still active (recent commits)
+    - Strength of affiliation evidence across multiple authors
 """
 
     logger.info(f"Starting organization enrichment for {repository_url}")

@@ -87,6 +87,35 @@ All notable changes to this project will be documented in this file.
   - Consistent enrichment functionality across repository, user, and organization endpoints
   - Enhanced organization metadata with ROR IDs, types, countries, websites, and hierarchical relationships
   - Detailed EPFL relationship analysis for user and organization profiles
+- **Git commit temporal tracking**:
+  - Added `Commits` model with `firstCommitDate` and `lastCommitDate` fields per author
+  - Enhanced `extract_git_authors()` to extract first and last commit dates using git log
+  - Dates stored in ISO format (YYYY-MM-DD) for consistency
+  - JSON-LD context mappings added for `imag:firstCommitDate` and `imag:lastCommitDate`
+- **Organization confidence scoring system**:
+  - Added `confidenceOfAttribution` field to `Organization` model (0.0-1.0 scale)
+  - Added `relatedToEPFLConfidence` field to `OrganizationEnrichmentResult` model
+  - Enhanced PydanticAI agent with detailed confidence scoring guidelines:
+    - 0.9-1.0: Strong evidence (verified affiliations, official emails, ORCID data)
+    - 0.7-0.89: Good evidence (domain match, indirect affiliation)
+    - 0.5-0.69: Moderate evidence (collaborations, shared projects)
+    - 0.3-0.49: Weak evidence (geographical proximity, field similarity)
+    - 0.0-0.29: Minimal or no evidence
+  - Confidence assessment considers temporal alignment between commit dates and affiliation dates
+  - JSON-LD context mapping for `imag:confidenceOfAttribution`
+- **ORCID parser overhaul** - Complete rewrite for reliability and data completeness:
+  - Fixed employment extraction to parse line-by-line text content instead of unreliable HTML containers
+  - Fixed education extraction with same line-by-line parsing approach
+  - Enhanced date extraction to support multiple formats:
+    - Full dates: `YYYY-MM-DD to YYYY-MM-DD`
+    - Year ranges: `YYYY to YYYY`
+    - Ongoing: `YYYY-MM-DD to present`
+  - Fixed role extraction to recognize ORCID's `|` separator format (e.g., "Institut Pasteur | PhD Student")
+  - Fixed degree extraction for education entries (MSc, BSc, PhD, etc.)
+  - Enhanced duration calculation to handle full date formats with decimal precision (e.g., 3.2 years)
+  - Fixed location parsing to eliminate double commas and clean formatting
+  - All fields now reliably extracted: dates, roles, degrees, locations, durations
+  - Validated with real ORCID profiles (e.g., 0000-0002-1126-1535)
 - **Dependencies**: Added `httpx` for async HTTP requests in organization enrichment
 
 ### Changed
