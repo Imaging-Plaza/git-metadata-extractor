@@ -110,11 +110,21 @@ class GitHubUserMetadata(BaseModel):
 
     @validator("orcid")
     def validate_orcid(cls, v):
-        """Validate ORCID format"""
+        """Validate ORCID format and convert ID to URL"""
         if v is not None:
-            orcid_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
-            if not re.match(orcid_pattern, v):
-                raise ValueError("Invalid ORCID format")
+            # If it's already a URL, validate and return
+            if v.startswith("http"):
+                orcid_url_pattern = r"^https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+                if not re.match(orcid_url_pattern, v):
+                    raise ValueError(f"Invalid ORCID URL format: {v}")
+                return v
+
+            # If it's an ID, validate and convert to URL
+            orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+            if re.match(orcid_id_pattern, v):
+                return f"https://orcid.org/{v}"
+
+            raise ValueError(f"Invalid ORCID format: {v}")
         return v
 
     @validator("email")
@@ -362,7 +372,10 @@ class GitHubUsersParser:
             # Look for employment section
             employment_section = soup.find("section", {"id": "affiliations"})
             if not employment_section:
-                print("Warning: Employment section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Employment section not found in ORCID profile")
                 return employment_list
 
             # Get all text and parse it line by line
@@ -484,7 +497,10 @@ class GitHubUsersParser:
                 {"id": "education-and-qualification"},
             )
             if not education_section:
-                print("Warning: Education section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Education section not found in ORCID profile")
                 return education_list
 
             # Get all text and parse it line by line
@@ -1063,7 +1079,10 @@ class GitHubUsersParser:
             activities_section = soup.find("section", {"aria-label": "Activities"})
 
             if not activities_section:
-                print("Warning: Activities section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Activities section not found in ORCID profile")
                 return None
 
             # Extract all text content from the Activities section

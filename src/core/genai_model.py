@@ -567,6 +567,7 @@ async def get_openai_response_async(
                         {"role": "user", "content": prompt},
                     ],
                     response_format=convert_httpurl_to_str(schema),
+                    max_tokens=16000,
                 )
             elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
                 # O3/O4 reasoning models: use beta parse without temperature
@@ -578,6 +579,7 @@ async def get_openai_response_async(
                         {"role": "user", "content": prompt},
                     ],
                     response_format=convert_httpurl_to_str(schema),
+                    max_tokens=16000,
                 )
             else:
                 # Standard models (gpt-4o, etc.): use beta parse with temperature
@@ -590,6 +592,7 @@ async def get_openai_response_async(
                     ],
                     temperature=temperature,
                     response_format=convert_httpurl_to_str(schema),
+                    max_tokens=16000,
                 )
 
             logger.info(f"Successfully received response from {model}")

@@ -84,7 +84,7 @@ If no arguments are provided, it will use the default repository and output path
 1. You need to build the image.
 
     ``` bash
-    docker build -t git-metadata-extractor .
+    docker build -t git-metadata-extractor -f tools/image/Dockerfile .
     ```
 
 2. Run the image.
@@ -125,10 +125,12 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
 Simply run:
 
 ``` bash
-docker run -it --rm --env-file .env -p 1234:1234 --name git-metadata-extractor --network dev git-metadata-extractor
+docker run -it --rm --env-file .env -p 1234:1234 -v ./data:/app/data --name git-metadata-extractor --network dev git-metadata-extractor
 ```
 
-and go to `localhost:1234`
+This mounts the local `data` folder to persist cache files. To configure the cache directory, set `CACHE_DIR=/app/data` in your `.env` file.
+
+Then go to `localhost:1234`
 
 Or if you are running the container with `bash` as the entrypoint, please execute.
 
