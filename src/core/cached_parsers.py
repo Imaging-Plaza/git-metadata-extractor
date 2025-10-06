@@ -2,10 +2,11 @@
 Cached versions of the GitHub parsers to reduce external API calls.
 """
 
-from .users_parser import GitHubUsersParser, GitHubUserMetadata
-from .orgs_parser import GitHubOrganizationsParser, GitHubOrganizationMetadata
-from .cache_manager import get_cache_manager
 import logging
+
+from .cache_manager import get_cache_manager
+from .orgs_parser import GitHubOrganizationMetadata, GitHubOrganizationsParser
+from .users_parser import GitHubUserMetadata, GitHubUsersParser
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ class CachedGitHubUsersParser(GitHubUsersParser):
         self.cache_manager = get_cache_manager()
 
     def get_user_metadata_cached(
-        self, username: str, force_refresh: bool = False
+        self,
+        username: str,
+        force_refresh: bool = False,
     ) -> GitHubUserMetadata:
         """
         Get user metadata with caching support.
@@ -53,7 +56,9 @@ class CachedGitHubOrganizationsParser(GitHubOrganizationsParser):
         self.cache_manager = get_cache_manager()
 
     def get_organization_metadata_cached(
-        self, org_name: str, force_refresh: bool = False
+        self,
+        org_name: str,
+        force_refresh: bool = False,
     ) -> GitHubOrganizationMetadata:
         """
         Get organization metadata with caching support.
@@ -82,7 +87,8 @@ class CachedGitHubOrganizationsParser(GitHubOrganizationsParser):
 
 # Convenience functions for backward compatibility
 def parse_github_user_cached(
-    username: str, force_refresh: bool = False
+    username: str,
+    force_refresh: bool = False,
 ) -> GitHubUserMetadata:
     """Parse GitHub user with caching support."""
     parser = CachedGitHubUsersParser()
@@ -90,7 +96,8 @@ def parse_github_user_cached(
 
 
 def parse_github_organization_cached(
-    org_name: str, force_refresh: bool = False
+    org_name: str,
+    force_refresh: bool = False,
 ) -> GitHubOrganizationMetadata:
     """Parse GitHub organization with caching support."""
     parser = CachedGitHubOrganizationsParser()

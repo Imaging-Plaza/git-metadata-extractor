@@ -84,7 +84,7 @@ If no arguments are provided, it will use the default repository and output path
 1. You need to build the image.
 
     ``` bash
-    docker build -t git-metadata-extractor .
+    docker build -t git-metadata-extractor -f tools/image/Dockerfile .
     ```
 
 2. Run the image.
@@ -107,8 +107,40 @@ If no arguments are provided, it will use the default repository and output path
 
 4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file.
 
+    **Option A: Standalone mode (single concurrent session - may cause errors with concurrent requests):**
     ``` bash
-    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox selenium/standalone-firefox
+    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox --network dev selenium/standalone-firefox
+    ```
+
+    **Option B: Standalone mode with multiple sessions (recommended for concurrent requests):**
+    ``` bash
+    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" \
+      -e SE_NODE_MAX_SESSIONS=5 \
+      -e SE_NODE_SESSION_TIMEOUT=300 \
+      --name selenium-standalone-firefox \
+      --network dev \
+      selenium/standalone-firefox
+    ```
+
+    **Option C: Grid mode with hub and multiple nodes (best for high concurrency):**
+    ``` bash
+    # Start the hub
+    docker run --rm -d -p 4444:4444 --name selenium-hub --network dev selenium/hub:latest
+
+    # Start 3 Firefox nodes
+    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
+      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
+      --name selenium-node-firefox-1 --network dev selenium/node-firefox:latest
+
+    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
+      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
+      --name selenium-node-firefox-2 --network dev selenium/node-firefox:latest
+
+    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
+      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
+      --name selenium-node-firefox-3 --network dev selenium/node-firefox:latest
+
+    # Update .env to use: SELENIUM_REMOTE_URL=http://selenium-hub:4444
     ```
 
 ## How to develop using Docker?
@@ -125,10 +157,12 @@ docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
 Simply run:
 
 ``` bash
-docker run -it --rm --env-file .env -p 1234:1234 --name git-metadata-extractor git-metadata-extractor
+docker run -it --rm --env-file .env -p 1234:1234 -v ./data:/app/data --name git-metadata-extractor --network dev git-metadata-extractor
 ```
 
-and go to `localhost:1234`
+This mounts the local `data` folder to persist cache files. To configure the cache directory, set `CACHE_DIR=/app/data` in your `.env` file.
+
+Then go to `localhost:1234`
 
 Or if you are running the container with `bash` as the entrypoint, please execute.
 

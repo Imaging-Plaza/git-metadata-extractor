@@ -1,10 +1,11 @@
-import requests
-import json
 import base64
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, validator
+import json
 import os
+from typing import Any, Dict, List, Optional
+
+import requests
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, validator
 
 load_dotenv()
 
@@ -42,21 +43,26 @@ class GitHubOrganizationMetadata(BaseModel):
 
     # Additional metadata
     public_members: List[str] = Field(
-        default_factory=list, description="Public members"
+        default_factory=list,
+        description="Public members",
     )
     repositories: List[str] = Field(
-        default_factory=list, description="Repository names"
+        default_factory=list,
+        description="Repository names",
     )
     teams: List[str] = Field(default_factory=list, description="Team names")
     readme_url: Optional[str] = Field(None, description="Profile README URL if exists")
     readme_content: Optional[str] = Field(
-        None, description="Profile README content if exists"
+        None,
+        description="Profile README content if exists",
     )
     social_accounts: List[Dict[str, str]] = Field(
-        default_factory=list, description="Social media accounts"
+        default_factory=list,
+        description="Social media accounts",
     )
     pinned_repositories: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Pinned repositories"
+        default_factory=list,
+        description="Pinned repositories",
     )
 
     @validator("email")
@@ -212,7 +218,9 @@ class GitHubOrganizationsParser:
         headers["Content-Type"] = "application/json"
 
         response = requests.post(
-            self.graphql_url, headers=headers, data=json.dumps(payload)
+            self.graphql_url,
+            headers=headers,
+            data=json.dumps(payload),
         )
 
         if response.status_code != 200:
@@ -236,7 +244,7 @@ class GitHubOrganizationsParser:
                         "provider": account["provider"],
                         "url": account["url"],
                         "display_name": account.get("displayName", ""),
-                    }
+                    },
                 )
 
         # Extract pinned repositories
@@ -278,7 +286,9 @@ class GitHubOrganizationsParser:
         return [member["login"] for member in members_data]
 
     def _get_organization_repositories(
-        self, org_name: str, limit: int = 100
+        self,
+        org_name: str,
+        limit: int = 100,
     ) -> List[str]:
         """Get organization's repositories (limited for performance)"""
         url = f"{self.rest_base_url}/orgs/{org_name}/repos"

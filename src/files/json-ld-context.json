@@ -81,6 +81,11 @@
     "discipline": "pulse:discipline",
     "repositoryType": "pulse:repositoryType",
     "gitAuthors": "imag:gitAuthors",
-    "commits": "imag:commits"
+    "commits": "imag:commits",
+    "totalCommits": "imag:totalCommits",
+    "firstCommitDate": "imag:firstCommitDate",
+    "lastCommitDate": "imag:lastCommitDate",
+    "confidenceOfAttribution": "imag:confidenceOfAttribution",
+    "relatedToEPFLConfidence": "imag:relatedToEPFLConfidence"
   }
 }

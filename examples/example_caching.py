@@ -5,8 +5,8 @@ This shows how to reduce external API calls for GitHub, ORCID, and GIMIE.
 """
 
 import asyncio
-import time
 import sys
+import time
 from pathlib import Path
 
 # Add src to path for imports
@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Import after path modification
 from core.cache_manager import get_cache_manager
-from core.users_parser import parse_github_user
-from core.orgs_parser import parse_github_organization
 from core.gimie_methods import extract_gimie
+from core.orgs_parser import parse_github_organization
+from core.users_parser import parse_github_user
 
 
 async def example_github_user_caching():
@@ -42,7 +42,7 @@ async def example_github_user_caching():
     first_call_time = time.time() - start_time
     print(f"   ⏱️  Time: {first_call_time:.3f}s")
     print(
-        f"   📊 User: {user_data.login if hasattr(user_data, 'login') else 'Unknown'}"
+        f"   📊 User: {user_data.login if hasattr(user_data, 'login') else 'Unknown'}",
     )
 
     # Second call - will use cache
@@ -57,7 +57,7 @@ async def example_github_user_caching():
     second_call_time = time.time() - start_time
     print(f"   ⏱️  Time: {second_call_time:.3f}s")
     print(
-        f"   📊 User: {user_data_cached.login if hasattr(user_data_cached, 'login') else 'Unknown'}"
+        f"   📊 User: {user_data_cached.login if hasattr(user_data_cached, 'login') else 'Unknown'}",
     )
 
     # Calculate speedup
@@ -105,7 +105,7 @@ async def example_github_org_caching():
     second_call_time = time.time() - start_time
     print(f"   ⏱️  Time: {second_call_time:.3f}s")
     print(
-        f"   📊 Org: {org_data_cached.login if hasattr(org_data_cached, 'login') else 'Unknown'}"
+        f"   📊 Org: {org_data_cached.login if hasattr(org_data_cached, 'login') else 'Unknown'}",
     )
 
     # Calculate speedup

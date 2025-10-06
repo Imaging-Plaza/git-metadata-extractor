@@ -4,17 +4,18 @@ Test script to demonstrate the caching functionality.
 This script shows how the caching system reduces external API calls.
 """
 
-import time
-import requests
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
+
+import requests
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Import after path modification
-from core.cache_manager import get_cache_manager
 from core.cache import get_cache
+from core.cache_manager import get_cache_manager
 
 
 def test_cache_basic_functionality():
@@ -154,7 +155,7 @@ def test_api_endpoints():
     except requests.exceptions.ConnectionError:
         print("   ⚠ Server not running, skipping API endpoint tests")
         print(
-            "   To test API endpoints, start the server with: uvicorn src.api:app --reload\n"
+            "   To test API endpoints, start the server with: uvicorn src.api:app --reload\n",
         )
 
 
@@ -176,7 +177,10 @@ def test_performance_comparison():
     print("1. Testing without cache (force refresh)...")
     start_time = time.time()
     result1 = cache_manager.get_cached_or_fetch(
-        api_type=api_type, params=params, fetch_func=slow_api_call, force_refresh=True
+        api_type=api_type,
+        params=params,
+        fetch_func=slow_api_call,
+        force_refresh=True,
     )
     time_without_cache = time.time() - start_time
     print(f"   Time without cache: {time_without_cache:.3f}s")
@@ -185,7 +189,10 @@ def test_performance_comparison():
     print("2. Testing with cache...")
     start_time = time.time()
     result2 = cache_manager.get_cached_or_fetch(
-        api_type=api_type, params=params, fetch_func=slow_api_call, force_refresh=False
+        api_type=api_type,
+        params=params,
+        fetch_func=slow_api_call,
+        force_refresh=False,
     )
     time_with_cache = time.time() - start_time
     print(f"   Time with cache: {time_with_cache:.3f}s")

@@ -1,7 +1,8 @@
-import re
-import requests
 import logging
+import re
 from urllib.parse import urlparse
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,8 @@ class Verification:
         if not self.issues:
             logger.info("Metadata is valid.")
             return ["✅ Metadata appears valid."]
-        else:
-            logger.warning(f"{len(self.issues)} validation issue(s) found.")
-            return self.issues
+        logger.warning(f"{len(self.issues)} validation issue(s) found.")
+        return self.issues
 
     def _check_required_fields(self):
         logger.debug("Checking required fields...")
@@ -176,24 +176,33 @@ class Verification:
                 self.issues.append(msg)
                 continue
 
-            if "softwareVersion" in img and not self._is_version(
-                img["softwareVersion"]
-            ):
-                msg = f"Invalid softwareVersion: {img['softwareVersion']}"
-                logger.error(f"{self.repo_url} :: {msg}")
-                self.issues.append(msg)
-                self.invalid_fields.setdefault("hasSoftwareImage", []).append(
-                    "Invalid version"
-                )
+            # Validate and normalize softwareVersion
+            if "softwareVersion" in img:
+                if not self._is_version(img["softwareVersion"]):
+                    msg = f"Invalid softwareVersion: {img['softwareVersion']}"
+                    logger.error(f"{self.repo_url} :: {msg}")
+                    self.issues.append(msg)
+                    self.invalid_fields.setdefault("hasSoftwareImage", []).append(
+                        "Invalid version",
+                    )
+                else:
+                    # Normalize the version if it's in a non-standard format
+                    normalized = self._normalize_version(img["softwareVersion"])
+                    if normalized and normalized != img["softwareVersion"]:
+                        logger.warning(
+                            f"{self.repo_url} :: Normalized softwareVersion from "
+                            f"'{img['softwareVersion']}' to '{normalized}'",
+                        )
+                        img["softwareVersion"] = normalized
 
             if "availableInRegistry" in img and not self._is_valid_url(
-                img["availableInRegistry"]
+                img["availableInRegistry"],
             ):
                 msg = f"Invalid registry URL: {img['availableInRegistry']}"
                 logger.error(f"{self.repo_url} :: {msg}")
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("hasSoftwareImage", []).append(
-                    "Invalid URL"
+                    "Invalid URL",
                 )
 
     def _check_url_accessibility(self):
@@ -284,12 +293,23 @@ class Verification:
                 for img in clean_data["hasSoftwareImage"]:
                     if not isinstance(img, dict):
                         continue
-                    if "softwareVersion" in img and not self._is_version(
-                        img["softwareVersion"]
-                    ):
-                        del img["softwareVersion"]
+
+                    # Normalize or remove invalid softwareVersion
+                    if "softwareVersion" in img:
+                        if self._is_version(img["softwareVersion"]):
+                            # Normalize the version
+                            normalized = self._normalize_version(img["softwareVersion"])
+                            if normalized:
+                                img["softwareVersion"] = normalized
+                        else:
+                            # Invalid version - remove it
+                            del img["softwareVersion"]
+                            logger.warning(
+                                f"Removed invalid softwareVersion: {img.get('softwareVersion')}",
+                            )
+
                     if "availableInRegistry" in img and not self._is_valid_url(
-                        img["availableInRegistry"]
+                        img["availableInRegistry"],
                     ):
                         del img["availableInRegistry"]
                     imgs.append(img)
@@ -306,18 +326,8 @@ class Verification:
 
     def summary(self):
         logger.info("Validation Summary:")
-        print("\n🔍 Validation Summary:\n")
-        if self.issues:
-            for issue in self.issues:
-                print(f"❌ {issue}")
-        else:
-            print("✅ No critical issues found.")
-
-        if self.warnings:
-            for warn in self.warnings:
-                print(f"⚠️ {warn}")
-        else:
-            print("✅ All tested links are reachable.")
+        # Individual issues and warnings are already logged via logger.error/warning
+        # No need to print them again
 
     def as_dict(self):
         return {
@@ -347,4 +357,35 @@ class Verification:
         return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", date))
 
     def _is_version(self, version):
-        return bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
+        """
+        Validate and extract semantic version from string.
+        Accepts formats like: "1.2.3", "v1.2.3", "Version 1.2.3", etc.
+        Returns True if a valid semantic version can be extracted.
+        """
+        if not version or not isinstance(version, str):
+            return False
+
+        # Try to extract version pattern (supports X.Y.Z with optional v prefix or text)
+        # Matches: "1.2.3", "v1.2.3", "Version 1.2.3", "release-1.2.3", etc.
+        match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", version.lower())
+        return bool(match)
+
+    def _normalize_version(self, version):
+        """
+        Extract and normalize semantic version from string.
+        Returns normalized version string (e.g., "1.2.3") or None if invalid.
+
+        Examples:
+            "1.2.3" -> "1.2.3"
+            "v1.2.3" -> "1.2.3"
+            "Version 1.2.3" -> "1.2.3"
+            "release-2.0.1" -> "2.0.1"
+        """
+        if not version or not isinstance(version, str):
+            return None
+
+        # Extract version numbers
+        match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", version.lower())
+        if match:
+            return f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
+        return None

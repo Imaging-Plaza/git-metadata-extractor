@@ -3,6 +3,12 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "runArgs": [
+    "--env-file",
+    "${localWorkspaceFolder}/.env",
+    "--network",
+    "dev"
+  ],
   "remoteUser": "vscode",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
@@ -15,12 +21,13 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "tamasfe.even-better-toml"
+        "tamasfe.even-better-toml",
+        "github.copilot",
+        "github.copilot-chat"
       ]
     }
   },
 
   "forwardPorts": [1234],
-  "runArgs": ["--network", "dev"],
   "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc"
 }

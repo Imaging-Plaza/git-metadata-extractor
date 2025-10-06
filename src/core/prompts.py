@@ -9,8 +9,16 @@ The user will provide the full codebase of a software project. Your task is to e
    - `CITATION.cff`, `codemeta.json`, `setup.py`, `pyproject.toml`, `package.json`, and `README.md`.
 3. If metadata is not explicitly provided, intelligently infer from:
    - README text, code comments, filenames, or relevant inline documentation.
-4. Validate internally that required fields are non-empty and formatting constraints are met.
-5. Provide full links. These files are coming from a github repository. If you find images, please attach the full link to we can embed it.
+4. **Check the README for contributors section** - any people mentioned as contributors, maintainers, or team members should be added to the author list with their information.
+5. Validate internally that required fields are non-empty and formatting constraints are met.
+6. Provide full links. These files are coming from a github repository. If you find images, please attach the full link to we can embed it.
+
+⚠️ **CRITICAL - DOI and Citation Rules:**
+- **NEVER use placeholder DOIs** like `https://doi.org/10.0000/unknown` or any DOI with `10.0000/` - these are invalid.
+- **DO NOT include Zenodo links in the `identifier` field** - Zenodo links should go in `relatedDatasets` instead.
+- **If no valid DOI or identifier exists, leave the `identifier` field as an empty string `""`** - it's better to have it blank than invalid.
+- For `citation` field: Only include **valid URLs to actual published papers** (DOI, arXiv, journal URLs).
+- If no citations are found, leave `citation` as an empty array `[]` - do not make up placeholder citations.
 
 📌 **Key Formatting Rules:**
 - All **required fields** must be present and non-empty.
@@ -18,7 +26,7 @@ The user will provide the full codebase of a software project. Your task is to e
 - **Optional numeric fields** may be `null`.
 - All **URLs** must be valid and start with `http://` or `https://`.
 - **Dates** must follow the ISO `YYYY-MM-DD` format.
-- Software version strings must match `[0-9]+\\.[0-9]+\\.[0-9]+` (e.g., `1.2.3`).
+- Software version strings must match 1.2.3.
 - License must start with `https://spdx.org/licenses/`.
 
 🔎 **Before producing output:**
@@ -27,14 +35,16 @@ The user will provide the full codebase of a software project. Your task is to e
 - Be conservative. Leave the field empty if you have doubts.
 
 📂 **Schema Specification:**
-- `name` (string, **required**): Title of the software.
-- `description` (string of max 2000 characters, **required**): A concise description of the software.
-- `image` (list of **valid URLs**): A list of representative image URLs of the software.
-- `applicationCategory` (list of strings, **optional**): Scientific disciplines or categories that the software belongs to.
-- `author` (list of objects, **required**): Each author must be an object containing:
-  - `name` (string, **required**)
-  - `orcidId` (valid URL, **optional**)
+- `name`: Title of the software.
+- `description`: A concise description of the software.
+- `image`: A list of representative image URLs of the software.
+- `applicationCategory`: Scientific disciplines or categories that the software belongs to.
+- `author`: Each author must be an object containing:
+  - `name`
+  - `orcidId`
   - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
+  - **IMPORTANT**: Check the README file for any "Contributors", "Authors", "Team", "Maintainers", or "Acknowledgments" sections and add those people to the author list.
+  - Look for GitHub usernames, email addresses, or names mentioned in these sections.
 - `relatedToOrganization` (list of strings, **optional**): Institutions associated with the software. Do not mention Imaging Plaza unless is explicity mentioned.
 - `relatedToOrganizationJustification` (list of strings, **optional**): Justification for the related organizations.
 - `softwareRequirements` (list of strings, **optional**): Dependencies or prerequisites for running the software.
@@ -47,12 +57,18 @@ The user will provide the full codebase of a software project. Your task is to e
   - `measurementTechnique` (string, **optional**)
   - `variableMeasured` (string, **optional**)
 - `codeRepository` (list of **valid URLs**, **required**): URLs of code repositories (e.g., GitHub, GitLab).
-- `citation` (list of **valid URLs**, **required**): Academic references or citations. These should be URL to scientific articles, Arxiv, or DOI links.
+- `citation` (list of **valid URLs**, **required but can be empty**): Academic references or citations. These should be URLs to **actual published scientific articles**, arXiv papers, or **valid DOI links**.
+  - **Leave as empty array `[]` if no valid citations exist**.
+  - **DO NOT include placeholder DOIs** or invalid references.
+  - **DO NOT include Zenodo dataset links here** - those belong in `relatedDatasets`.
 - `dateCreated` (string, **required, format YYYY-MM-DD**): The date the software was initially created.
 - `datePublished` (string, **required, format YYYY-MM-DD**): The date the software was made publicly available.
 - `license` (string matching pattern `spdx.org.*`, **required**).
 - `url` (valid URL, **required**): The main website or landing page of the software.
-- `identifier` (string, **required**): Unique identifier (DOI, UUID, etc.).
+- `identifier` (string, **required but can be empty**): Unique identifier such as a **valid DOI** (e.g., `https://doi.org/10.1234/actual-doi`).
+  - **Leave as empty string `""` if no valid identifier exists**.
+  - **DO NOT use placeholder DOIs** like `10.0000/unknown`.
+  - **DO NOT use Zenodo links here** - those belong in `relatedDatasets`.
 - `isAccessibleForFree` (boolean, **optional**): True/False indicating if the software is freely available.
 - `isBasedOn` (valid URL, **optional**): A reference to related work/software.
 - `isPluginModuleOf` (list of strings, **optional**): Software frameworks the software integrates with.
@@ -78,8 +94,8 @@ The user will provide the full codebase of a software project. Your task is to e
 - `hasSoftwareImage` (list of objects, **required**): Each object must contain:
   - `name` (string, **optional**)
   - `description` (string, **optional**)
-  - `softwareVersion` (string matching pattern ` **optional**).
-  - `availableInRegistry` (valid URL, **optional**).
+  - `softwareVersion`).
+  - `availableInRegistry`
 - `processorRequirements` (list of strings, **optional**): Minimum processor requirements.
 - `memoryRequirements` (integer, **optional**): Minimum memory required (in MB).
 - `requiresGPU` (boolean, **optional**): Whether the software requires a GPU.
@@ -94,13 +110,26 @@ The user will provide the full codebase of a software project. Your task is to e
 - `readme` (valid URL, **optional**): README url of the software (at the root of the repo)
 - `imagingModality (list of strings, **optional**): imaging modalities accepted by the software.
 - `discipline` (string, **optional**): Scientific discipline the software belongs to. Base your response on the README and other documentation files content.
-- `disciplineJustification` (list of strings, **optional**): Justification for the discipline classification.
-- `repositoryType` (string, **optional**): Type of repository (e.g., software, educational resource, documentation, data, other).
-- `repositoryTypeJustification` (list of strings, **optional**): Justification for the repository type classification.
+- `disciplineJustification`: Justification for the discipline classification.
+- `repositoryType`: Type of repository (e.g., software, educational resource, documentation, data, other).
+- `repositoryTypeJustification`: Justification for the repository type classification.
 - `relatedDatasets`: A list with any link to datasets stored in Zenodo, HuggingFace Datasets, Google Drive, etc.
 - `relatedPublications`: Any related publication mentioned in the readme or at any part of the documentation.
 - `relatedModels`: A list with any link to models stored in HuggingFace or any other machine learning model repository
 - `relatedAPI`: A list with any link to APIs related to the software.
+- `webpagesToCheck`: A list of webpages to check for more information about the software.
+
+When assigning an attribution evaluate from 0.0 to 1.0 the confidence of your attribution.
+
+Check authors emails, affiliations, README, and any other documentation to relate this to all the organizations. Also to evaluate if it's related to EPFL.
+relatedToOrganization needs to include all.
+
+**IMPORTANT REMINDERS:**
+1. Check README for contributors/authors sections - add all mentioned people to the author list.
+2. NEVER use placeholder DOIs like `https://doi.org/10.0000/unknown` - leave identifier empty if none exists.
+3. DO NOT put Zenodo links in `identifier` or `citation` - they belong in `relatedDatasets`.
+4. If no valid citations exist, leave `citation` as an empty array `[]`.
+5. Only include real, verifiable citations and identifiers.
 
 PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITIONAL TEXT. ALIGN THE RESPONSE TO THE SCHEMA SPECIFICATION.
 """

@@ -1,6 +1,7 @@
-from gimie.project import Project
 import json
 import logging
+
+from gimie.project import Project
 
 logger = logging.getLogger(__name__)
 
@@ -31,5 +32,4 @@ def extract_gimie(full_path: str, format: str = "json-ld"):
 
     if output is None:
         return None
-    else:
-        return output
+    return output

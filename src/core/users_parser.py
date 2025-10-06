@@ -1,22 +1,20 @@
-import requests
-import json
-import re
 import base64
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, validator
-from datetime import datetime
+import json
 import os
-from dotenv import load_dotenv
+import re
+import time
+from typing import Any, Dict, List, Optional
 
+import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, validator
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-
-import time
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 load_dotenv()
 
@@ -50,20 +48,25 @@ class ORCIDActivities(BaseModel):
     """ORCID activities data"""
 
     employment: List[ORCIDEmployment] = Field(
-        default_factory=list, description="Employment history"
+        default_factory=list,
+        description="Employment history",
     )
     education: List[ORCIDEducation] = Field(
-        default_factory=list, description="Education history"
+        default_factory=list,
+        description="Education history",
     )
     works_count: Optional[int] = Field(None, description="Number of works/publications")
     peer_reviews_count: Optional[int] = Field(
-        None, description="Number of peer reviews"
+        None,
+        description="Number of peer reviews",
     )
     orcid_content: Optional[str] = Field(
-        None, description="Parsed ORCID Activities content as Markdown"
+        None,
+        description="Parsed ORCID Activities content as Markdown",
     )
     orcid_format: Optional[str] = Field(
-        default="markdown", description="Format of orcid_content"
+        default="markdown",
+        description="Format of orcid_content",
     )
 
 
@@ -88,26 +91,40 @@ class GitHubUserMetadata(BaseModel):
     html_url: str = Field(..., description="GitHub profile URL")
     orcid: Optional[str] = Field(None, description="ORCID identifier")
     orcid_activities: Optional[ORCIDActivities] = Field(
-        None, description="ORCID activities data"
+        None,
+        description="ORCID activities data",
     )
     organizations: List[str] = Field(
-        default_factory=list, description="Public organizations"
+        default_factory=list,
+        description="Public organizations",
     )
     social_accounts: List[Dict[str, str]] = Field(
-        default_factory=list, description="Social media accounts"
+        default_factory=list,
+        description="Social media accounts",
     )
     readme_url: Optional[str] = Field(None, description="Profile README URL if exists")
     readme_content: Optional[str] = Field(
-        None, description="Profile README content if exists"
+        None,
+        description="Profile README content if exists",
     )
 
     @validator("orcid")
     def validate_orcid(cls, v):
-        """Validate ORCID format"""
+        """Validate ORCID format and convert ID to URL"""
         if v is not None:
-            orcid_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
-            if not re.match(orcid_pattern, v):
-                raise ValueError("Invalid ORCID format")
+            # If it's already a URL, validate and return
+            if v.startswith("http"):
+                orcid_url_pattern = r"^https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+                if not re.match(orcid_url_pattern, v):
+                    raise ValueError(f"Invalid ORCID URL format: {v}")
+                return v
+
+            # If it's an ID, validate and convert to URL
+            orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+            if re.match(orcid_id_pattern, v):
+                return f"https://orcid.org/{v}"
+
+            raise ValueError(f"Invalid ORCID format: {v}")
         return v
 
     @validator("email")
@@ -221,7 +238,7 @@ class GitHubUsersParser:
 
             # Use a browser-like user agent to avoid blocking
             scraping_headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             }
 
             response = requests.get(profile_url, headers=scraping_headers, timeout=10)
@@ -234,7 +251,8 @@ class GitHubUsersParser:
             # Look for ORCID links in social links section
             # Target the specific element structure you mentioned
             orcid_links = soup.find_all(
-                "a", href=re.compile(r"https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]")
+                "a",
+                href=re.compile(r"https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]"),
             )
 
             if orcid_links:
@@ -284,7 +302,7 @@ class GitHubUsersParser:
             options.add_argument("--width=1920")
             options.add_argument("--height=1080")
             options.add_argument(
-                "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
+                "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
             )
 
             # Try remote Selenium Grid first, fallback to local browser
@@ -305,7 +323,7 @@ class GitHubUsersParser:
 
             # Wait for the page to load
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
+                EC.presence_of_element_located((By.TAG_NAME, "body")),
             )
 
             # Wait a bit more for dynamic content to load
@@ -344,7 +362,8 @@ class GitHubUsersParser:
                 driver.quit()
 
     def _extract_employment_from_orcid_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEmployment]:
         """Extract employment information from ORCID page using Selenium-rendered HTML"""
         employment_list = []
@@ -353,46 +372,95 @@ class GitHubUsersParser:
             # Look for employment section
             employment_section = soup.find("section", {"id": "affiliations"})
             if not employment_section:
-                print("Warning: Employment section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Employment section not found in ORCID profile")
                 return employment_list
 
-            # Find employment entries - they might be in different containers
-            employment_containers = employment_section.find_all(
-                ["app-affiliation-stack-group", "div"],
-                class_=re.compile(r"affiliation|employment"),
-            )
+            # Get all text and parse it line by line
+            all_text = employment_section.get_text(separator="\n")
+            lines = [line.strip() for line in all_text.split("\n") if line.strip()]
 
-            if not employment_containers:
-                # Try alternative selectors
-                employment_containers = employment_section.find_all(
-                    "div", string=re.compile(r"\d{4}")
-                )
+            # Parse entries - each entry is from organization name until "Show more detail"
+            i = 0
+            while i < len(lines):
+                line = lines[i]
 
-            for container in employment_containers:
-                try:
-                    # Extract text content
-                    text_content = container.get_text(separator=" ", strip=True)
+                # Skip headers and navigation
+                if line in ["expand_more", "Employment", "sort", "Sort", "Source", ":"]:
+                    i += 1
+                    continue
 
-                    # Skip if empty or too short
-                    if len(text_content) < 10:
-                        continue
+                # Look for organization name (contains ":")
+                if ":" in line and not line.startswith("Source"):
+                    # Start of new entry
+                    organization = line.strip()
+                    location_parts = []
+                    dates_str = ""
+                    role = None
+                    i += 1
 
-                    # Extract organization name (usually the first substantial text)
-                    organization = self._extract_organization_name(text_content)
+                    # Collect location parts
+                    while i < len(lines) and lines[i] not in [
+                        "Employment",
+                        "Education",
+                        "Show more detail",
+                    ]:
+                        current_line = lines[i]
 
-                    # Extract dates
-                    start_date, end_date = self._extract_dates_from_text(text_content)
+                        # Check if this is a year (start of date range)
+                        if re.match(r"^\d{4}(?:-\d{2}-\d{2})?$", current_line):
+                            # Start collecting date string
+                            dates_str = current_line
+                            i += 1
+                            # Next line should be "to"
+                            if i < len(lines) and lines[i].lower() == "to":
+                                dates_str += " to "
+                                i += 1
+                                # Next line is end date
+                                if i < len(lines):
+                                    dates_str += lines[i]
+                                    i += 1
+                            break
+                        # Check for location (2-letter country code or city name)
+                        elif (
+                            re.match(r"^[A-Z]{2}$", current_line) or "," in current_line
+                        ):
+                            location_parts.append(current_line)
+                            i += 1
+                        else:
+                            i += 1
 
-                    # Extract role/title
-                    role = self._extract_role_from_text(text_content)
+                    # Look for role (after dates, marked with |)
+                    if i < len(lines) and lines[i] == "|":
+                        i += 1
+                        if i < len(lines):
+                            role = lines[i]
+                            i += 1
 
-                    # Extract location
-                    location = self._extract_location_from_text(text_content)
+                    # Parse dates
+                    start_date, end_date = None, None
+                    if dates_str:
+                        start_date, end_date = self._extract_dates_from_text(dates_str)
+
+                    # Build location string (filter out empties and strip commas)
+                    location = (
+                        ", ".join(
+                            [
+                                loc.rstrip(",")
+                                for loc in location_parts
+                                if loc and loc != ","
+                            ],
+                        )
+                        if location_parts
+                        else None
+                    )
 
                     # Calculate duration
                     duration_years = self._calculate_duration(start_date, end_date)
 
-                    # Only add if we have at least an organization
+                    # Add employment entry
                     if organization:
                         employment_list.append(
                             ORCIDEmployment(
@@ -402,20 +470,22 @@ class GitHubUsersParser:
                                 end_date=end_date,
                                 location=location,
                                 duration_years=duration_years,
-                            )
+                            ),
                         )
-
-                except Exception as e:
-                    print(f"Warning: Could not parse employment entry: {e}")
-                    continue
+                else:
+                    i += 1
 
         except Exception as e:
             print(f"Warning: Could not extract employment data: {e}")
+            import traceback
+
+            traceback.print_exc()
 
         return employment_list
 
     def _extract_education_from_orcid_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEducation]:
         """Extract education information from ORCID page using Selenium-rendered HTML"""
         education_list = []
@@ -423,36 +493,106 @@ class GitHubUsersParser:
         try:
             # Look for education section
             education_section = soup.find(
-                "section", {"id": "education-and-qualification"}
+                "section",
+                {"id": "education-and-qualification"},
             )
             if not education_section:
-                print("Warning: Education section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Education section not found in ORCID profile")
                 return education_list
 
-            # Find education entries
-            education_containers = education_section.find_all(
-                ["app-affiliation-stack-group", "div"],
-                class_=re.compile(r"affiliation|education"),
-            )
+            # Get all text and parse it line by line
+            all_text = education_section.get_text(separator="\n")
+            lines = [line.strip() for line in all_text.split("\n") if line.strip()]
 
-            if not education_containers:
-                education_containers = education_section.find_all(
-                    "div", string=re.compile(r"\d{4}")
-                )
+            # Parse entries - each entry is from organization name until "Show more detail"
+            i = 0
+            while i < len(lines):
+                line = lines[i]
 
-            for container in education_containers:
-                try:
-                    text_content = container.get_text(separator=" ", strip=True)
+                # Skip headers and navigation
+                if line in [
+                    "expand_more",
+                    "Education and qualifications",
+                    "Education",
+                    "sort",
+                    "Sort",
+                    "Source",
+                    ":",
+                ]:
+                    i += 1
+                    continue
 
-                    if len(text_content) < 10:
-                        continue
+                # Look for organization name (contains ":")
+                if ":" in line and not line.startswith("Source"):
+                    # Start of new entry
+                    organization = line.strip()
+                    location_parts = []
+                    dates_str = ""
+                    degree = None
+                    i += 1
 
-                    organization = self._extract_organization_name(text_content)
-                    start_date, end_date = self._extract_dates_from_text(text_content)
-                    degree = self._extract_degree_from_text(text_content)
-                    location = self._extract_location_from_text(text_content)
+                    # Collect location parts
+                    while i < len(lines) and lines[i] not in [
+                        "Education",
+                        "Show more detail",
+                    ]:
+                        current_line = lines[i]
+
+                        # Check if this is a year (start of date range)
+                        if re.match(r"^\d{4}(?:-\d{2}-\d{2})?$", current_line):
+                            # Start collecting date string
+                            dates_str = current_line
+                            i += 1
+                            # Next line should be "to"
+                            if i < len(lines) and lines[i].lower() == "to":
+                                dates_str += " to "
+                                i += 1
+                                # Next line is end date
+                                if i < len(lines):
+                                    dates_str += lines[i]
+                                    i += 1
+                            break
+                        # Check for location (2-letter country code or city name)
+                        elif (
+                            re.match(r"^[A-Z]{2}$", current_line) or "," in current_line
+                        ):
+                            location_parts.append(current_line)
+                            i += 1
+                        else:
+                            i += 1
+
+                    # Look for degree (after dates, marked with |)
+                    if i < len(lines) and lines[i] == "|":
+                        i += 1
+                        if i < len(lines):
+                            degree = lines[i]
+                            i += 1
+
+                    # Parse dates
+                    start_date, end_date = None, None
+                    if dates_str:
+                        start_date, end_date = self._extract_dates_from_text(dates_str)
+
+                    # Build location string (filter out empties and strip commas)
+                    location = (
+                        ", ".join(
+                            [
+                                loc.rstrip(",")
+                                for loc in location_parts
+                                if loc and loc != ","
+                            ],
+                        )
+                        if location_parts
+                        else None
+                    )
+
+                    # Calculate duration
                     duration_years = self._calculate_duration(start_date, end_date)
 
+                    # Add education entry
                     if organization:
                         education_list.append(
                             ORCIDEducation(
@@ -462,15 +602,16 @@ class GitHubUsersParser:
                                 end_date=end_date,
                                 location=location,
                                 duration_years=duration_years,
-                            )
+                            ),
                         )
-
-                except Exception as e:
-                    print(f"Warning: Could not parse education entry: {e}")
-                    continue
+                else:
+                    i += 1
 
         except Exception as e:
             print(f"Warning: Could not extract education data: {e}")
+            import traceback
+
+            traceback.print_exc()
 
         return education_list
 
@@ -497,7 +638,8 @@ class GitHubUsersParser:
         return None
 
     def _extract_peer_reviews_count_selenium(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> Optional[int]:
         """Extract peer reviews count from ORCID page using Selenium-rendered HTML"""
         try:
@@ -532,17 +674,31 @@ class GitHubUsersParser:
         return None
 
     def _extract_dates_from_text(
-        self, text: str
+        self,
+        text: str,
     ) -> tuple[Optional[str], Optional[str]]:
         """Extract start and end dates from text"""
-        # Look for "YYYY to YYYY" pattern first (most specific)
-        to_pattern = r"\b(\d{4})\s+to\s+(\d{4})\b"
-        to_match = re.search(to_pattern, text)
-        if to_match:
-            return to_match.group(1), to_match.group(2)
+        # Look for "YYYY-MM-DD to YYYY-MM-DD" pattern first (most specific)
+        full_date_pattern = r"(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})"
+        full_match = re.search(full_date_pattern, text)
+        if full_match:
+            return full_match.group(1), full_match.group(2)
+
+        # Look for "YYYY to YYYY" pattern
+        year_pattern = r"(\d{4})\s+to\s+(\d{4})"
+        year_match = re.search(year_pattern, text)
+        if year_match:
+            return year_match.group(1), year_match.group(2)
+
+        # Look for "YYYY-MM-DD to present" or similar
+        present_pattern = r"(\d{4}(?:-\d{2}-\d{2})?)\s+to\s+(?:present|now|current)"
+        present_match = re.search(present_pattern, text, re.IGNORECASE)
+        if present_match:
+            return present_match.group(1), None
 
         # Look for other date patterns as fallback
         date_patterns = [
+            r"\b(\d{4}-\d{2}-\d{2})\b",  # YYYY-MM-DD
             r"\b(\d{1,2}[/-]\d{4})\b",  # MM/YYYY or MM-YYYY
             r"\b(\d{4})\b",  # YYYY
         ]
@@ -560,13 +716,23 @@ class GitHubUsersParser:
 
         if len(unique_dates) >= 2:
             return unique_dates[0], unique_dates[1]
-        elif len(unique_dates) == 1:
+        if len(unique_dates) == 1:
             return unique_dates[0], None
 
         return None, None
 
     def _extract_role_from_text(self, text: str) -> Optional[str]:
         """Extract role/title from text"""
+        # ORCID often uses | separator for roles
+        # Pattern: "date info | Role Title | other info" or "date info | Role Title (department)"
+        pipe_pattern = r"\|\s*([^|()]+?)(?:\s*\(|\s*$)"
+        pipe_match = re.search(pipe_pattern, text)
+        if pipe_match:
+            role = pipe_match.group(1).strip()
+            # Filter out dates and locations
+            if not re.match(r"^\d{4}|^\w+,\s*\w+", role):
+                return role
+
         # Common role indicators
         role_keywords = [
             "professor",
@@ -590,11 +756,24 @@ class GitHubUsersParser:
 
     def _extract_degree_from_text(self, text: str) -> Optional[str]:
         """Extract degree from text"""
+        # ORCID often uses | separator for degree info
+        pipe_pattern = r"\|\s*([^|()]+?)(?:\s*\(|\s*$)"
+        pipe_match = re.search(pipe_pattern, text)
+        if pipe_match:
+            degree = pipe_match.group(1).strip()
+            # Check if it looks like a degree
+            if re.search(
+                r"\b(PhD|Ph\.D|MSc|M\.Sc|MA|M\.A|BSc|B\.Sc|BA|B\.A|Doctor|Master|Bachelor)",
+                degree,
+                re.IGNORECASE,
+            ):
+                return degree
+
         degree_patterns = [
             r"\b(Ph\.?D\.?|PhD|Doctor of Philosophy)\b",
-            r"\b(M\.?S\.?|MS|Master of Science)\b",
+            r"\b(M\.?S\.?c?|MSc|Master of Science)\b",
             r"\b(M\.?A\.?|MA|Master of Arts)\b",
-            r"\b(B\.?S\.?|BS|Bachelor of Science)\b",
+            r"\b(B\.?S\.?c?|BSc|Bachelor of Science)\b",
             r"\b(B\.?A\.?|BA|Bachelor of Arts)\b",
             r"\b(Bachelor|Master|Doctor)\s+[oO]f\s+\w+\b",
         ]
@@ -619,7 +798,8 @@ class GitHubUsersParser:
         return None
 
     def _extract_employment_from_orcid(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEmployment]:
         """Extract employment information from ORCID page"""
         employment_list = []
@@ -632,7 +812,7 @@ class GitHubUsersParser:
 
             # Find employment panels
             employment_panels = employment_section.find_all(
-                "app-affiliation-stack-group"
+                "app-affiliation-stack-group",
             )
 
             for panel in employment_panels:
@@ -668,7 +848,7 @@ class GitHubUsersParser:
                         end_date=end_date,
                         location=location,
                         duration_years=duration_years,
-                    )
+                    ),
                 )
 
         except Exception as e:
@@ -677,7 +857,8 @@ class GitHubUsersParser:
         return employment_list
 
     def _extract_education_from_orcid(
-        self, soup: BeautifulSoup
+        self,
+        soup: BeautifulSoup,
     ) -> List[ORCIDEducation]:
         """Extract education information from ORCID page"""
         education_list = []
@@ -685,7 +866,8 @@ class GitHubUsersParser:
         try:
             # Look for education section
             education_section = soup.find(
-                "section", {"id": "education-and-qualification"}
+                "section",
+                {"id": "education-and-qualification"},
             )
             if not education_section:
                 return education_list
@@ -716,7 +898,7 @@ class GitHubUsersParser:
         try:
             # Look for peer review section with count
             peer_review_text = soup.find(
-                string=re.compile(r"Peer review.*\((\d+)\s+reviews")
+                string=re.compile(r"Peer review.*\((\d+)\s+reviews"),
             )
             if peer_review_text:
                 match = re.search(r"\((\d+)\s+reviews", peer_review_text)
@@ -727,25 +909,45 @@ class GitHubUsersParser:
         return None
 
     def _calculate_duration(
-        self, start_date: Optional[str], end_date: Optional[str]
+        self,
+        start_date: Optional[str],
+        end_date: Optional[str],
     ) -> Optional[float]:
         """Calculate duration in years between start and end dates"""
         if not start_date:
             return None
 
         try:
-            # Parse start year
-            start_year = int(start_date.split("/")[-1])
+            # Parse dates - handle both "YYYY" and "YYYY-MM-DD" formats
+            if "-" in start_date:
+                # Full date format YYYY-MM-DD
+                from datetime import datetime
 
-            # If no end date, assume current year
-            if not end_date:
-                end_year = datetime.now().year
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+
+                if end_date:
+                    if "-" in end_date:
+                        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                    else:
+                        # Just year, assume end of year
+                        end_dt = datetime(int(end_date), 12, 31)
+                else:
+                    # No end date, use current date
+                    end_dt = datetime.now()
+
+                # Calculate difference in years (with decimals)
+                duration_days = (end_dt - start_dt).days
+                return round(duration_days / 365.25, 1)
             else:
-                end_year = int(end_date.split("/")[-1])
+                # Just year format
+                start_year = int(start_date)
+                end_year = int(end_date) if end_date else datetime.now().year
+                return float(end_year - start_year)
 
-            return float(end_year - start_year)
-
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            print(
+                f"Warning: Could not calculate duration from {start_date} to {end_date}: {e}",
+            )
             return None
 
     def _get_rest_user_data(self, username: str) -> Dict[str, Any]:
@@ -786,7 +988,9 @@ class GitHubUsersParser:
         headers["Content-Type"] = "application/json"
 
         response = requests.post(
-            self.graphql_url, headers=headers, data=json.dumps(payload)
+            self.graphql_url,
+            headers=headers,
+            data=json.dumps(payload),
         )
 
         if response.status_code != 200:
@@ -811,7 +1015,7 @@ class GitHubUsersParser:
                         "provider": account["provider"],
                         "url": account["url"],
                         "display_name": account.get("displayName", ""),
-                    }
+                    },
                 )
 
         return {"social_accounts": social_accounts}
@@ -875,7 +1079,10 @@ class GitHubUsersParser:
             activities_section = soup.find("section", {"aria-label": "Activities"})
 
             if not activities_section:
-                print("Warning: Activities section not found")
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug("Activities section not found in ORCID profile")
                 return None
 
             # Extract all text content from the Activities section
