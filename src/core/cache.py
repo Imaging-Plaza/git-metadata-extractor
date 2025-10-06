@@ -1,5 +1,19 @@
 """
-Caching system for external API calls to reduce requests to GitHub, ORCID, and GIMIE.
+Caching system for exter    def __init__(self, cache_db_path: str = "api_cache.db", default_ttl_days: int = 30):
+        \"\"\"
+        Initialize the API cache.
+
+        Args:
+            cache_db_path: Path to SQLite database file
+            default_ttl_days: Default TTL in days for cached entries
+        \"\"\"
+        self.cache_db_path = cache_db_path
+        self.default_ttl_days = default_ttl_days
+        # Maximum cache entries to prevent unbounded growth (configurable via env)
+        self.max_cache_entries = int(os.getenv(\"MAX_CACHE_ENTRIES\", \"10000\"))
+        self._init_database()
+        # Run initial cleanup on startup
+        self._auto_cleanup_if_needed()ls to reduce requests to GitHub, ORCID, and GIMIE.
 Uses SQLite for structured storage with TTL support and force refresh capabilities.
 """
 
@@ -36,7 +50,11 @@ class APICache:
         """
         self.cache_db_path = cache_db_path
         self.default_ttl_days = default_ttl_days
+        # Maximum cache entries to prevent unbounded growth (configurable via env)
+        self.max_cache_entries = int(os.getenv("MAX_CACHE_ENTRIES", "10000"))
         self._init_database()
+        # Run initial cleanup on startup
+        self._auto_cleanup_if_needed()
 
     def _init_database(self):
         """Initialize the SQLite database with required tables."""
@@ -175,6 +193,9 @@ class APICache:
             )
             conn.commit()
 
+            # Auto-cleanup if cache size exceeds limit
+            self._auto_cleanup_if_needed()
+
         logger.info(
             f"Cached {api_type} response with key {cache_key[:8]}... (expires in {ttl} days)",
         )
@@ -277,6 +298,145 @@ class APICache:
                 "total_hits": total_hits,
                 "database_size_bytes": db_size,
                 "database_size_mb": round(db_size / (1024 * 1024), 2),
+            }
+
+    def _auto_cleanup_if_needed(self) -> None:
+        """
+        Automatically cleanup cache if it exceeds size limits.
+        Removes expired entries first, then oldest entries if still over limit.
+        """
+        with sqlite3.connect(self.cache_db_path) as conn:
+            # First, remove expired entries
+            cursor = conn.execute(
+                "DELETE FROM cache_entries WHERE expires_at <= CURRENT_TIMESTAMP",
+            )
+            expired_count = cursor.rowcount
+
+            # Check total count
+            total_cursor = conn.execute("SELECT COUNT(*) FROM cache_entries")
+            total_entries = total_cursor.fetchone()[0]
+
+            # If still over limit, remove oldest entries
+            if total_entries > self.max_cache_entries:
+                entries_to_remove = total_entries - self.max_cache_entries
+                conn.execute(
+                    """
+                    DELETE FROM cache_entries
+                    WHERE cache_key IN (
+                        SELECT cache_key FROM cache_entries
+                        ORDER BY last_accessed ASC
+                        LIMIT ?
+                    )
+                """,
+                    (entries_to_remove,),
+                )
+                logger.warning(
+                    f"Cache size limit exceeded ({total_entries} > {self.max_cache_entries}), "
+                    f"removed {entries_to_remove} least recently used entries",
+                )
+
+            conn.commit()
+
+            if expired_count > 0:
+                logger.info(
+                    f"Auto-cleanup removed {expired_count} expired cache entries",
+                )
+
+    def list_entries(
+        self,
+        api_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+        include_expired: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        List cache entries with their details.
+
+        Args:
+            api_type: Filter by API type (None for all types)
+            limit: Maximum number of entries to return
+            offset: Number of entries to skip (for pagination)
+            include_expired: Include expired entries in results
+
+        Returns:
+            Dictionary with entries list and pagination info
+        """
+        with sqlite3.connect(self.cache_db_path) as conn:
+            # Build query conditions
+            conditions = []
+            params = []
+
+            if api_type:
+                conditions.append("api_type = ?")
+                params.append(api_type)
+
+            if not include_expired:
+                conditions.append("expires_at > CURRENT_TIMESTAMP")
+
+            where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+            # Get total count
+            count_query = f"SELECT COUNT(*) FROM cache_entries WHERE {where_clause}"
+            total_count = conn.execute(count_query, params).fetchone()[0]
+
+            # Get entries
+            list_query = f"""
+                SELECT
+                    api_type,
+                    request_params,
+                    created_at,
+                    expires_at,
+                    hit_count,
+                    last_accessed
+                FROM cache_entries
+                WHERE {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([limit, offset])
+
+            cursor = conn.execute(list_query, params)
+            rows = cursor.fetchall()
+
+            entries = []
+            for row in rows:
+                api_type_val, params_json, created, expires, hits, last_access = row
+
+                # Parse request params to extract readable info
+                try:
+                    request_params = json.loads(params_json)
+                    # Extract repository URL if present
+                    repo_url = request_params.get("full_path", "N/A")
+                    enrichment_info = []
+                    if request_params.get("enrich_orgs"):
+                        enrichment_info.append("orgs")
+                    if request_params.get("enrich_users"):
+                        enrichment_info.append("users")
+                    enrichment = (
+                        "+".join(enrichment_info) if enrichment_info else "none"
+                    )
+                except (json.JSONDecodeError, AttributeError):
+                    repo_url = "N/A"
+                    enrichment = "N/A"
+
+                entries.append(
+                    {
+                        "api_type": api_type_val,
+                        "repository": repo_url,
+                        "enrichment": enrichment,
+                        "created_at": created,
+                        "expires_at": expires,
+                        "hit_count": hits,
+                        "last_accessed": last_access,
+                    },
+                )
+
+            return {
+                "entries": entries,
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + limit) < total_count,
             }
 
     def clear_all(self) -> int:

@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -178,6 +179,34 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
         {"name": "System", "description": "System information and health checks"},
     ],
 )
+
+
+# Startup and shutdown events for resource management
+@app.on_event("startup")
+async def startup_event():
+    """Initialize resources on application startup"""
+    logger.info("🚀 Application startup - initializing resources")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources on application shutdown"""
+    logger.info("🛑 Application shutdown - cleaning up resources")
+
+    # Cleanup OpenAI client
+    try:
+        from .core.genai_model import cleanup_async_openai_client
+
+        await cleanup_async_openai_client()
+        logger.info("✅ Cleaned up OpenAI client")
+    except Exception as e:
+        logger.warning(f"Error cleaning up OpenAI client: {e}")
+
+    # Run garbage collection
+    import gc
+
+    gc.collect()
+    logger.info("✅ Garbage collection completed")
 
 
 # Add middleware to automatically set request context for all endpoints
@@ -1067,7 +1096,7 @@ async def llm_json(
     def fetch_gimie_data():
         return extract_gimie(full_path, format="json-ld")
 
-    # Get GIMIE data (cached)
+    # Get GIMIE data (cached separately with 1-day TTL)
     jsonld_gimie_data = cache_manager.get_cached_or_fetch(
         api_type="gimie",
         params={"full_path": full_path, "format": "json-ld"},
@@ -1075,122 +1104,128 @@ async def llm_json(
         force_refresh=force_refresh,
     )
 
-    async def fetch_llm_data():
-        return await llm_request_repo_infos(
+    # Define comprehensive fetch function that includes ALL enrichments
+    async def fetch_and_enrich_all():
+        """Fetch LLM data and perform all requested enrichments."""
+        # Get base LLM data
+        llm_data = await llm_request_repo_infos(
             str(full_path),
             gimie_output=jsonld_gimie_data,
             output_format="json",
             max_tokens=20000,
         )
 
-    try:
-        # Get LLM data (cached or fetched) - automatically handles coroutines
-        cache_params = {
-            "full_path": full_path,
-            "output_format": "json",
-            "max_tokens": 20000,
-        }
-        llm_result_raw = await cache_manager.get_cached_or_fetch_async(
-            api_type="llm",
-            params=cache_params,
-            fetch_func=fetch_llm_data,
-            force_refresh=force_refresh,
-        )
-
-        # Handle cached data - might be a JSON string or dict
-        if isinstance(llm_result_raw, str):
-            llm_result = json.loads(llm_result_raw)
-        elif isinstance(llm_result_raw, dict):
-            llm_result = llm_result_raw.copy()
+        # Handle JSON parsing for cached data
+        if isinstance(llm_data, str):
+            try:
+                llm_result = json.loads(llm_data)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Failed to parse LLM result as JSON: {e}. Result: {llm_data[:100]}",
+                )
+                # Return minimal valid response for empty/invalid repositories
+                llm_result = {
+                    "@context": "https://schema.org/",
+                    "@type": "SoftwareSourceCode",
+                    "name": full_path.split("/")[-1] if "/" in full_path else full_path,
+                    "codeRepository": full_path,
+                    "parseTimestamp": datetime.now().strftime("%Y-%m-%dT%H:%M"),
+                    "description": "Repository appears to be empty or has no analyzable content",
+                }
+        elif isinstance(llm_data, dict):
+            llm_result = llm_data.copy()
         else:
             raise ValueError(
-                f"Expected dict or JSON string from LLM, got {type(llm_result_raw).__name__}",
+                f"Expected dict or JSON string from LLM, got {type(llm_data).__name__}",
             )
 
         # Add timestamp
         llm_result["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+        # ORCID enrichment (always performed)
+        logger.info(f"ORCID enrichment for {full_path}")
+        llm_result = enrich_authors_with_orcid(llm_result, force_refresh=force_refresh)
+
+        # Organization enrichment (conditional)
+        if enrich_orgs:
+            logger.info(f"Organization enrichment for {full_path}")
+            try:
+                organization_enrichment = await enrich_organizations_from_dict(
+                    llm_result,
+                    full_path,
+                )
+
+                enriched_orgs = organization_enrichment.get("organizations", [])
+                if enriched_orgs:
+                    llm_result["relatedToOrganizations"] = [
+                        org.get("legalName")
+                        for org in enriched_orgs
+                        if org.get("legalName")
+                    ]
+                    llm_result["relatedToOrganizationsROR"] = enriched_orgs
+
+                llm_result["relatedToEPFL"] = organization_enrichment.get(
+                    "relatedToEPFL",
+                    llm_result.get("relatedToEPFL"),
+                )
+                llm_result["relatedToEPFLJustification"] = organization_enrichment.get(
+                    "relatedToEPFLJustification",
+                    llm_result.get("relatedToEPFLJustification"),
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error during organization enrichment: {e}",
+                    exc_info=True,
+                )
+
+        # User enrichment (conditional)
+        if enrich_users:
+            logger.info(f"User enrichment for {full_path}")
+            try:
+                git_authors_data = llm_result.get("gitAuthors", [])
+                existing_authors_data = llm_result.get("author", [])
+
+                user_enrichment = await enrich_users_from_dict(
+                    git_authors_data=git_authors_data,
+                    existing_authors_data=existing_authors_data,
+                    repository_url=full_path,
+                )
+
+                llm_result["enrichedAuthors"] = user_enrichment.get(
+                    "enrichedAuthors",
+                    [],
+                )
+                llm_result["authorEnrichmentSummary"] = user_enrichment.get(
+                    "summary",
+                    "",
+                )
+            except Exception as e:
+                logger.error(f"Error during user enrichment: {e}", exc_info=True)
+
+        return llm_result
+
+    try:
+        # Cache the FULLY ENRICHED result
+        # Include enrichment flags in cache key to maintain separate caches
+        cache_params = {
+            "full_path": full_path,
+            "output_format": "json",
+            "max_tokens": 20000,
+            "enrich_orgs": enrich_orgs,  # Different cache for org enrichment
+            "enrich_users": enrich_users,  # Different cache for user enrichment
+        }
+
+        llm_result = await cache_manager.get_cached_or_fetch_async(
+            api_type="llm",
+            params=cache_params,
+            fetch_func=fetch_and_enrich_all,
+            force_refresh=force_refresh,
+        )
+
     except Exception as e:
         raise HTTPException(status_code=424, detail=f"Error from LLM service: {e}")
 
-    # Enrich authors with ORCID affiliations
-    logger.info(
-        f"Starting ORCID enrichment for LLM JSON endpoint {full_path} (force_refresh={force_refresh})",
-    )
-    authors_before = len(llm_result.get("author", []))
-    logger.info(f"Found {authors_before} authors before enrichment")
-
-    llm_result = enrich_authors_with_orcid(llm_result, force_refresh=force_refresh)
-
-    authors_after = len(llm_result.get("author", []))
-    logger.info(
-        f"ORCID enrichment completed for LLM JSON. Authors after: {authors_after}",
-    )
-
-    # Perform organization enrichment if requested
-    response = {"link": full_path, "output": llm_result}
-
-    if enrich_orgs:
-        logger.info(f"Starting organization enrichment for {full_path}")
-        try:
-            organization_enrichment = await enrich_organizations_from_dict(
-                llm_result,
-                full_path,
-            )
-            logger.info(
-                f"Organization enrichment completed. Found {len(organization_enrichment.get('organizations', []))} organizations",
-            )
-
-            # Update the main output with enriched organization data
-            # Keep relatedToOrganizations as list of strings (backwards compatible)
-            # Add relatedToOrganizationsROR as list of Organization objects (new field)
-            enriched_orgs = organization_enrichment.get("organizations", [])
-            if enriched_orgs:
-                llm_result["relatedToOrganizations"] = [
-                    org.get("legalName")
-                    for org in enriched_orgs
-                    if org.get("legalName")
-                ]
-                llm_result["relatedToOrganizationsROR"] = enriched_orgs
-
-            # Update EPFL relationship with enriched analysis
-            llm_result["relatedToEPFL"] = organization_enrichment.get(
-                "relatedToEPFL",
-                llm_result.get("relatedToEPFL"),
-            )
-            llm_result["relatedToEPFLJustification"] = organization_enrichment.get(
-                "relatedToEPFLJustification",
-                llm_result.get("relatedToEPFLJustification"),
-            )
-
-        except Exception as e:
-            logger.error(f"Error during organization enrichment: {e}", exc_info=True)
-            # Don't fail the entire request or expose error in response, just log it
-
-    # Perform user enrichment if requested
-    if enrich_users:
-        logger.info(f"Starting user enrichment for {full_path}")
-        try:
-            # Extract git authors and existing authors from metadata
-            git_authors_data = llm_result.get("gitAuthors", [])
-            existing_authors_data = llm_result.get("author", [])
-
-            user_enrichment = await enrich_users_from_dict(
-                git_authors_data=git_authors_data,
-                existing_authors_data=existing_authors_data,
-                repository_url=full_path,
-            )
-            logger.info(
-                f"User enrichment completed. Enriched {len(user_enrichment.get('enrichedAuthors', []))} authors",
-            )
-
-            # Add enriched user data to output
-            llm_result["enrichedAuthors"] = user_enrichment.get("enrichedAuthors", [])
-            llm_result["authorEnrichmentSummary"] = user_enrichment.get("summary", "")
-
-        except Exception as e:
-            logger.error(f"Error during user enrichment: {e}", exc_info=True)
-
-    return response
+    return {"link": full_path, "output": llm_result}
 
 
 # Cache Management Endpoints
@@ -1212,6 +1247,59 @@ async def get_cache_stats():
     """
     cache_manager = get_cache_manager()
     return cache_manager.get_cache_stats()
+
+
+@app.get("/v1/cache/entries", tags=["Cache Management"])
+async def list_cache_entries(
+    api_type: Optional[str] = Query(
+        None,
+        description="Filter by API type (llm, gimie, orcid, github_user, github_org)",
+    ),
+    limit: int = Query(
+        100,
+        description="Maximum number of entries to return",
+        ge=1,
+        le=1000,
+    ),
+    offset: int = Query(
+        0,
+        description="Number of entries to skip (for pagination)",
+        ge=0,
+    ),
+    include_expired: bool = Query(
+        False,
+        description="Include expired entries in results",
+    ),
+):
+    """
+    List cached entries with details.
+
+    Returns a paginated list of cache entries showing:
+    - Repository URL
+    - API type (llm, gimie, orcid, etc.)
+    - Enrichment type (orgs, users, or none)
+    - Creation and expiration timestamps
+    - Hit count and last access time
+
+    **Filters**:
+    - `api_type`: Show only specific API type (e.g., "llm" for LLM results)
+    - `include_expired`: Include entries that have expired
+
+    **Pagination**:
+    - `limit`: Number of entries per page (default 100, max 1000)
+    - `offset`: Skip N entries (for page 2, use offset=100 with limit=100)
+
+    **Example**: List all cached LLM results:
+    ```
+    GET /v1/cache/entries?api_type=llm&limit=50
+    ```
+
+    **Returns**:
+    - List of cache entries with metadata
+    - Pagination information
+    """
+    cache_manager = get_cache_manager()
+    return cache_manager.list_cache_entries(api_type, limit, offset, include_expired)
 
 
 @app.post("/v1/cache/cleanup", tags=["Cache Management"])

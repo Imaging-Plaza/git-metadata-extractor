@@ -41,9 +41,9 @@ from .models import GitAuthor, Person
 logger = logging.getLogger(__name__)
 
 # Semaphore to limit concurrent Selenium sessions
-# Set to 1 to prevent concurrent access when using standalone Selenium
-# Increase this value if using Selenium Grid with multiple nodes
-_MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "3"))
+# Set to 1 to prevent memory issues (each browser instance uses 500MB-1GB)
+# Only increase if using Selenium Grid with multiple nodes AND have sufficient RAM
+_MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "1"))
 _selenium_semaphore = asyncio.Semaphore(_MAX_SELENIUM_SESSIONS)
 
 

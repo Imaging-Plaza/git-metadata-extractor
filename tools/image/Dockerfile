@@ -21,6 +21,7 @@ RUN useradd -ms /bin/bash -u 1000 non-root-user \
 WORKDIR /app
 COPY src ./src
 COPY pyproject.toml .
+COPY tools/config/gunicorn_conf.py ./gunicorn_conf.py
 
 RUN uv pip install --system .
 
@@ -35,5 +36,10 @@ ENV PYTHONPATH=/app
 # Set cache database path to writable directory
 ENV CACHE_DB_PATH=/app/data/api_cache.db
 
-#ENTRYPOINT ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "1234", "--workers", "4"]
-ENTRYPOINT ["gunicorn", "src.api:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:1234"]
+# Memory optimization environment variables
+ENV MAX_CACHE_ENTRIES=5000
+ENV MAX_SELENIUM_SESSIONS=1
+ENV WORKERS=2
+
+# Use gunicorn config file with memory optimizations
+ENTRYPOINT ["gunicorn", "src.api:app", "--config", "gunicorn_conf.py"]

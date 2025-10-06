@@ -35,9 +35,9 @@ from .models import GitAuthor, Organization, Person, SoftwareSourceCode
 logger = logging.getLogger(__name__)
 
 # Semaphore to limit concurrent Selenium sessions
-# Set to 1 to prevent concurrent access when using standalone Selenium
-# Increase this value if using Selenium Grid with multiple nodes
-_MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "3"))
+# Set to 1 to prevent memory issues (each browser instance uses 500MB-1GB)
+# Only increase if using Selenium Grid with multiple nodes AND have sufficient RAM
+_MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "1"))
 _selenium_semaphore = asyncio.Semaphore(_MAX_SELENIUM_SESSIONS)
 
 
@@ -538,18 +538,42 @@ async def enrich_organizations(
 Repository: {repository_url}
 
 Git Authors (with emails and commit history):
-{json.dumps([{
-    "name": a.name,
-    "email": a.email,
-    "commits": {
-        "total": a.commits.total if a.commits else 0,
-        "firstCommitDate": str(a.commits.firstCommitDate) if a.commits and a.commits.firstCommitDate else None,
-        "lastCommitDate": str(a.commits.lastCommitDate) if a.commits and a.commits.lastCommitDate else None
+{
+        json.dumps(
+            [
+                {
+                    "name": a.name,
+                    "email": a.email,
+                    "commits": {
+                        "total": a.commits.total if a.commits else 0,
+                        "firstCommitDate": str(a.commits.firstCommitDate)
+                        if a.commits and a.commits.firstCommitDate
+                        else None,
+                        "lastCommitDate": str(a.commits.lastCommitDate)
+                        if a.commits and a.commits.lastCommitDate
+                        else None,
+                    },
+                }
+                for a in context.git_authors
+            ],
+            indent=2,
+        )
     }
-} for a in context.git_authors], indent=2)}
 
 Authors with ORCID affiliations:
-{json.dumps([{"name": a.name, "orcidId": str(a.orcidId) if a.orcidId else None, "affiliation": a.affiliation} for a in context.authors], indent=2)}
+{
+        json.dumps(
+            [
+                {
+                    "name": a.name,
+                    "orcidId": str(a.orcidId) if a.orcidId else None,
+                    "affiliation": a.affiliation,
+                }
+                for a in context.authors
+            ],
+            indent=2,
+        )
+    }
 
 Existing organization mentions: {context.existing_organizations}
 Existing justification: {context.existing_justification}
@@ -713,18 +737,42 @@ async def enrich_organizations_from_dict(
 Repository: {repository_url}
 
 Git Authors (with emails and commit history):
-{json.dumps([{
-    "name": a.name,
-    "email": a.email,
-    "commits": {
-        "total": a.commits.total if a.commits else 0,
-        "firstCommitDate": str(a.commits.firstCommitDate) if a.commits and a.commits.firstCommitDate else None,
-        "lastCommitDate": str(a.commits.lastCommitDate) if a.commits and a.commits.lastCommitDate else None
+{
+        json.dumps(
+            [
+                {
+                    "name": a.name,
+                    "email": a.email,
+                    "commits": {
+                        "total": a.commits.total if a.commits else 0,
+                        "firstCommitDate": str(a.commits.firstCommitDate)
+                        if a.commits and a.commits.firstCommitDate
+                        else None,
+                        "lastCommitDate": str(a.commits.lastCommitDate)
+                        if a.commits and a.commits.lastCommitDate
+                        else None,
+                    },
+                }
+                for a in context.git_authors
+            ],
+            indent=2,
+        )
     }
-} for a in context.git_authors], indent=2)}
 
 Authors with ORCID affiliations:
-{json.dumps([{"name": a.name, "orcidId": str(a.orcidId) if a.orcidId else None, "affiliation": a.affiliation} for a in context.authors], indent=2)}
+{
+        json.dumps(
+            [
+                {
+                    "name": a.name,
+                    "orcidId": str(a.orcidId) if a.orcidId else None,
+                    "affiliation": a.affiliation,
+                }
+                for a in context.authors
+            ],
+            indent=2,
+        )
+    }
 
 Existing organization mentions: {context.existing_organizations}
 Existing justification: {context.existing_justification}

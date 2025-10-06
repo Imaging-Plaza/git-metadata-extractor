@@ -168,6 +168,16 @@ class CacheManager:
         }
         return stats
 
+    def list_cache_entries(
+        self,
+        api_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+        include_expired: bool = False,
+    ) -> Dict[str, Any]:
+        """List cache entries with details."""
+        return self.cache.list_entries(api_type, limit, offset, include_expired)
+
     def clear_all_cache(self) -> int:
         """Clear all cache entries."""
         return self.cache.clear_all()

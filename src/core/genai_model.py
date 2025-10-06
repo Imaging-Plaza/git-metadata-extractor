@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import tempfile
+from datetime import datetime
 
 import aiohttp
 import tiktoken
@@ -55,13 +56,29 @@ def get_async_openai_client():
         async_openai_client = AsyncOpenAI(
             api_key=api_key,
             timeout=600.0,  # 10 minute timeout for GPT-5 and other models
+            max_retries=2,  # Limit retries to reduce memory from retry buffers
+            # Connection pooling limits to prevent memory leaks
+            http_client=None,  # Use default httpx client with sensible limits
         )
     return async_openai_client
 
 
-def reduce_input_size(input_text, max_tokens=800000, repo_url=None):
+async def cleanup_async_openai_client():
+    """Cleanup the async OpenAI client to free resources."""
+    global async_openai_client
+    if async_openai_client is not None:
+        try:
+            await async_openai_client.close()
+        except Exception as e:
+            logger.warning(f"Error closing OpenAI client: {e}")
+        finally:
+            async_openai_client = None
+
+
+def reduce_input_size(input_text, max_tokens=400000, repo_url=None):
     """
     Reduce the size of the input text to fit within the specified token limit.
+    Reduced from 800k to 400k to prevent excessive memory usage.
     """
     limiter_encoding = tiktoken.get_encoding("cl100k_base")
     tokens = limiter_encoding.encode(input_text)
@@ -374,16 +391,35 @@ async def llm_request_repo_infos(
         if not clone_result:
             return None
 
-        # Extract git authors from the cloned repository
-        git_authors = await extract_git_authors(temp_dir)
-
-        # Run repo-to-text asynchronously
+        # Run repo-to-text asynchronously to check if repository has content
         repo_to_text_success = await run_repo_to_text(temp_dir)
         if not repo_to_text_success:
             return None
 
+        # Check early if repository has any analyzable content
         input_text = combine_text_files(temp_dir)
         input_text = sanitize_special_tokens(input_text)
+
+        # Early exit for empty repositories - skip expensive operations
+        if not input_text or len(input_text.strip()) < 10:
+            logger.warning(
+                f"Repository {repo_url} has no analyzable content (empty or minimal). Skipping further analysis.",
+            )
+            # Return minimal valid metadata for empty repositories
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            return {
+                "@context": "https://schema.org/",
+                "@type": "SoftwareSourceCode",
+                "name": repo_name,
+                "codeRepository": repo_url,
+                "parseTimestamp": datetime.now().strftime("%Y-%m-%dT%H:%M"),
+                "description": "Repository appears to be empty or has no analyzable content",
+            }
+
+        # Continue with normal processing for non-empty repositories
+        # Extract git authors from the cloned repository
+        git_authors = await extract_git_authors(temp_dir)
+
         input_text = reduce_input_size(
             input_text,
             max_tokens=max_tokens,
