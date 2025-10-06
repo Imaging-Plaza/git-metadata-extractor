@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 
-## [2.0.0] - 2025-10-03
+## [2.0.0] - 2025-10-06
 
 ### Added
 - **SQLite-based caching system** for external API calls (GitHub, ORCID, GIMIE, LLM)
@@ -153,6 +153,37 @@ All notable changes to this project will be documented in this file.
   - Updated system prompt to instruct agent to follow search suggestions
   - Improved organization discovery coverage beyond pre-configured domains
   - Known domains include: EPFL, ETH Zürich, Institut Pasteur, UNIL, Swiss Data Science Center
+- **Enhanced colored logging with request tracking**:
+  - ANSI color-coded logs with emojis for different log levels (🔵 DEBUG, ✅ INFO, ⚠️ WARNING, ❌ ERROR)
+  - Request ID tracking across all async operations using AsyncRequestContext
+  - Automatic request context via FastAPI middleware for all endpoints
+  - Request IDs formatted with endpoint prefix (org-, user-, repo-, cache-) + worker PID + unique ID
+  - Incoming request logging with 📥 emoji showing method, path, and query parameters
+  - Response logging with 📤 emoji showing status code
+  - All logs include request ID in brackets for easy correlation (e.g., [repo-8-6479])
+- **User enrichment system** using PydanticAI for comprehensive author analysis:
+  - Second-pass analysis to refine and enrich author/contributor information
+  - PydanticAI agent with intelligent analysis of:
+    - Git commit author data (names, emails, commit history)
+    - ORCID profile data (affiliations, publications)
+    - Email domain analysis for institutional connections
+  - Enhanced author metadata with enriched affiliations and profile data
+  - Available via `enrich_users=true` parameter on user and repository endpoints
+  - Graceful error handling - errors don't break the main request
+- **Complete enrichment coverage for all repository endpoints**:
+  - `/v1/extract/json/{full_path:path}` now supports:
+    - ✅ ORCID enrichment with `auto_enrich_orcid` parameter
+    - ✅ Organization enrichment with `enrich_orgs` parameter
+    - ✅ User enrichment with `enrich_users` parameter
+  - `/v1/extract/json-ld/{full_path:path}` now supports:
+    - ✅ ORCID enrichment with `auto_enrich_orcid` parameter
+    - ✅ Organization enrichment with `enrich_orgs` parameter
+    - ✅ User enrichment with `enrich_users` parameter
+  - `/v1/repository/llm/json/{full_path:path}` now supports:
+    - ✅ ORCID enrichment (existing)
+    - ✅ Organization enrichment with `enrich_orgs` parameter (existing)
+    - ✅ User enrichment with `enrich_users` parameter (new)
+  - All three main repository endpoints now have consistent, comprehensive enrichment capabilities
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
@@ -177,6 +208,17 @@ All notable changes to this project will be documented in this file.
 - Updated response structure to match repository endpoint: `{"link": ..., "output": ...}`
 - User and organization endpoints now return `relatedToOrganizationsROR` with full ROR metadata when `enrich_orgs=true`
 - Improved consistency across all LLM-based endpoints
+
+### Fixed
+
+- **Removed duplicate validation summary printing** in verification module:
+  - Validation issues now appear only once in logs (as ERROR/WARNING with request IDs)
+  - Removed redundant formatted print statements from `summary()` method
+  - Cleaner log output without duplicate validation summaries
+- **Fixed 400 Bad Request error** for cached LLM results in `/v1/repository/llm/json`:
+  - Added JSON parsing for cached responses that may be stored as JSON strings
+  - Handles both dict and JSON string responses from cache
+  - Prevents parsing errors when retrieving cached LLM data
 
 ### Documentation
 

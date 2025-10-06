@@ -243,6 +243,8 @@ class GitHubOrganization(BaseModel):
 class GitHubUser(BaseModel):
     parseTimestamp: str = None
     name: Optional[str] = None
+    fullname: Optional[str] = None
+    githubHandle: Optional[str] = None
     relatedToOrganization: Optional[List[str]] = None
     relatedToOrganizationsROR: Optional[List[Organization]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None

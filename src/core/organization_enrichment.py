@@ -12,6 +12,7 @@ The agent uses tools to:
 - Search the web for additional context
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -32,6 +33,12 @@ from .models import GitAuthor, Organization, Person, SoftwareSourceCode
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Semaphore to limit concurrent Selenium sessions
+# Set to 1 to prevent concurrent access when using standalone Selenium
+# Increase this value if using Selenium Grid with multiple nodes
+_MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "3"))
+_selenium_semaphore = asyncio.Semaphore(_MAX_SELENIUM_SESSIONS)
 
 
 class OrganizationEnrichmentResult(BaseModel):
@@ -78,7 +85,8 @@ Your task is to analyze:
 
 For each organization you identify:
 - Use the extract_domain_from_email tool first to check if the email domain is known
-- **If the domain is unknown**, the tool will suggest searching for it - follow the suggestion and use search_ror or search_web to find the organization
+- **If the domain is unknown**, use the search_ror tool (PREFERRED) to find the organization
+- The search_web tool (DuckDuckGo) is available for additional context and includes retry logic for reliability
 - Use the search_ror tool to find the official ROR entry and get standardized naming
 - Identify the organization type (university, research institute, department, lab, company, etc.)
 - For departments/labs, identify the parent organization
@@ -182,28 +190,98 @@ async def search_web(
     query: str,
 ) -> str:
     """
-    Search Google for information about an organization using Selenium.
+    Search DuckDuckGo for information about an organization using Selenium.
+    Includes retry logic (up to 3 attempts) to handle transient failures.
 
     Args:
         ctx: The run context
         query: The search query about an organization
 
     Returns:
-        Summary of search results from Google
+        Summary of search results from DuckDuckGo (JSON string)
     """
     logger.info(f"🔍 Agent tool called: search_web('{query}')")
+
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = await _search_duckduckgo_single_attempt(
+                query,
+                attempt,
+                max_retries,
+            )
+
+            # Check if we got results
+            result_data = json.loads(result)
+            if result_data.get("results") and len(result_data["results"]) > 0:
+                logger.info(
+                    f"✓ DuckDuckGo search for '{query}' returned {len(result_data['results'])} results (attempt {attempt})",
+                )
+                return result
+
+            # No results but no error - might retry
+            if attempt < max_retries:
+                logger.warning(
+                    f"⚠ DuckDuckGo search for '{query}' returned no results (attempt {attempt}/{max_retries}), retrying in {retry_delay}s...",
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.warning(
+                    f"⚠ DuckDuckGo search for '{query}' returned no results after {max_retries} attempts",
+                )
+                return result
+
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(
+                    f"⚠ Error on attempt {attempt}/{max_retries} for '{query}': {e}, retrying in {retry_delay}s...",
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(
+                    f"✗ Error searching DuckDuckGo for '{query}' after {max_retries} attempts: {e}",
+                )
+                return json.dumps({"error": str(e), "query": query})
+
+    # Should never reach here, but just in case
+    return json.dumps({"error": "Max retries exceeded", "query": query})
+
+
+async def _search_duckduckgo_single_attempt(
+    query: str,
+    attempt: int,
+    max_attempts: int,
+) -> str:
+    """
+    Single attempt to search DuckDuckGo.
+
+    Args:
+        query: Search query
+        attempt: Current attempt number
+        max_attempts: Maximum number of attempts
+
+    Returns:
+        JSON string with search results
+    """
     selenium_url = os.getenv(
         "SELENIUM_REMOTE_URL",
         "http://selenium-standalone-firefox:4444",
     )
 
-    try:
+    # Acquire semaphore to limit concurrent Selenium sessions
+    async with _selenium_semaphore:
+        logger.debug(
+            f"🔒 Acquired Selenium semaphore for query: '{query}' (attempt {attempt})",
+        )
+
         # Configure Firefox options
         options = Options()
         options.add_argument("--headless")
         options.set_preference(
             "general.useragent.override",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         )
 
         driver = None
@@ -214,98 +292,124 @@ async def search_web(
                 options=options,
             )
 
-            # Perform Google search
+            # Perform DuckDuckGo search
             search_query = quote_plus(query)
-            search_url = f"https://www.google.com/search?q={search_query}"
+            search_url = f"https://duckduckgo.com/?q={search_query}"
             driver.get(search_url)
 
-            # Wait for results to load
+            # Wait for page to load
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.ID, "search")),
+                EC.presence_of_element_located((By.TAG_NAME, "body")),
             )
 
-            # Give the page a moment to fully render
-            time.sleep(1)
+            # Give page time to render
+            time.sleep(2)
 
-            # Extract search results
+            # Extract search results using DuckDuckGo selectors
             results = []
-            try:
-                # Try to find search result containers (Google's structure can vary)
-                search_results = driver.find_elements(By.CSS_SELECTOR, "div.g")
 
-                for result in search_results[:5]:  # Top 5 results
-                    try:
-                        # Try to extract title
-                        title = ""
-                        try:
-                            title_elem = result.find_element(By.CSS_SELECTOR, "h3")
-                            title = title_elem.text
-                        except Exception:
-                            pass
+            # Try different result selectors (DuckDuckGo structure)
+            result_selectors = [
+                "article[data-testid='result']",  # Main results
+                "div[data-testid='result']",  # Alternative
+                "div.result",  # Older structure
+            ]
 
-                        # Try to extract link
-                        link = ""
-                        try:
-                            link_elem = result.find_element(By.CSS_SELECTOR, "a")
-                            link = link_elem.get_attribute("href")
-                        except Exception:
-                            pass
+            search_results = []
+            for selector in result_selectors:
+                search_results = driver.find_elements(By.CSS_SELECTOR, selector)
+                if search_results:
+                    logger.debug(
+                        f"Found {len(search_results)} results using selector: {selector}",
+                    )
+                    break
 
-                        # Try to extract snippet/description
-                        snippet = ""
-                        try:
-                            # Try multiple possible selectors for the snippet
-                            snippet_selectors = [
-                                "div.VwiC3b",
-                                "div.IsZvec",
-                                "span.aCOpRe",
-                                "div[data-sncf='1']",
-                            ]
-                            for selector in snippet_selectors:
-                                try:
-                                    snippet_elem = result.find_element(
-                                        By.CSS_SELECTOR,
-                                        selector,
-                                    )
-                                    snippet = snippet_elem.text
-                                    if snippet:
-                                        break
-                                except Exception:
-                                    continue
-                        except Exception:
-                            pass
-
-                        # Only add result if we got at least a title or link
-                        if title or link:
-                            results.append(
-                                {
-                                    "title": title,
-                                    "link": link,
-                                    "snippet": snippet,
-                                },
-                            )
-
-                    except Exception:
-                        continue
-
-            except Exception as e:
-                logger.warning(f"Could not extract search results: {e}")
-
-            if results:
-                logger.info(
-                    f"✓ Google search for '{query}' returned {len(results)} results",
-                )
-                return json.dumps(results, indent=2)
-            else:
-                logger.warning(
-                    f"⚠ Google search for '{query}' returned no results",
+            if not search_results:
+                logger.debug(
+                    f"No search results found for query: '{query}' (attempt {attempt})",
                 )
                 return json.dumps(
                     {
-                        "note": "No results found",
                         "query": query,
+                        "results": [],
+                        "note": "No results found",
+                        "attempt": attempt,
                     },
                 )
+
+            # Extract details from top 5 results
+            for result in search_results[:5]:
+                try:
+                    # Extract title
+                    title = ""
+                    title_selectors = [
+                        "h2",
+                        "a[data-testid='result-title-a']",
+                        ".result__a",
+                    ]
+                    for sel in title_selectors:
+                        try:
+                            title_elem = result.find_element(By.CSS_SELECTOR, sel)
+                            title = title_elem.text
+                            if title:
+                                break
+                        except Exception:
+                            continue
+
+                    # Extract link
+                    link = ""
+                    link_selectors = [
+                        "a[data-testid='result-title-a']",
+                        "a.result__a",
+                        "h2 a",
+                    ]
+                    for sel in link_selectors:
+                        try:
+                            link_elem = result.find_element(By.CSS_SELECTOR, sel)
+                            link = link_elem.get_attribute("href")
+                            if link:
+                                break
+                        except Exception:
+                            continue
+
+                    # Extract snippet
+                    snippet = ""
+                    snippet_selectors = [
+                        "div[data-result='snippet']",
+                        ".result__snippet",
+                        "div.snippet",
+                    ]
+                    for sel in snippet_selectors:
+                        try:
+                            snippet_elem = result.find_element(By.CSS_SELECTOR, sel)
+                            snippet = snippet_elem.text
+                            if snippet:
+                                break
+                        except Exception:
+                            continue
+
+                    # Only add result if we got at least a title or link
+                    if title or link:
+                        results.append(
+                            {
+                                "title": title,
+                                "link": link,
+                                "snippet": snippet,
+                            },
+                        )
+
+                except Exception as e:
+                    logger.debug(f"Error processing individual result: {e}")
+                    continue
+
+            return json.dumps(
+                {
+                    "query": query,
+                    "results": results,
+                    "attempt": attempt,
+                },
+                indent=2,
+            )
 
         finally:
             if driver:
@@ -313,10 +417,7 @@ async def search_web(
                     driver.quit()
                 except Exception:
                     pass
-
-    except Exception as e:
-        logger.error(f"✗ Error searching Google for '{query}': {e}")
-        return json.dumps({"error": str(e), "query": query})
+            logger.debug(f"🔓 Released Selenium semaphore for query: '{query}'")
 
 
 @agent.tool
