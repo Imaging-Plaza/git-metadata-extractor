@@ -117,9 +117,53 @@ All notable changes to this project will be documented in this file.
   - All fields now reliably extracted: dates, roles, degrees, locations, durations
   - Validated with real ORCID profiles (e.g., 0000-0002-1126-1535)
 - **Dependencies**: Added `httpx` for async HTTP requests in organization enrichment
+- **Docker volume mounting** for persistent cache storage:
+  - Support for mounting `./data` directory to `/app/data` in container
+  - Environment variable `CACHE_DB_PATH` for custom cache database location
+  - Enables cache persistence across container restarts
+- **ORCID validation and normalization**:
+  - Added `normalize_orcid_to_url()` function to convert ORCID IDs to standard URL format
+  - ORCID validation now accepts both ID format (0000-0002-1234-5678) and URL format (https://orcid.org/0000-0002-1234-5678)
+  - Automatic normalization to URL format before enrichment and scraping
+  - Enhanced validation in both scraping flow and enrichment flow
+- **Auto-enrichment flag** for conditional ORCID enrichment:
+  - Added `auto_enrich_orcid` query parameter (default: `true`) to repository endpoints
+  - Allows users to disable automatic ORCID enrichment when not needed
+  - Reduces API calls and processing time for use cases that don't require affiliation data
+- **GitHub API authentication** to avoid rate limits:
+  - Added GitHub token authentication to `is_github_repo_public()` function
+  - Uses `GITHUB_TOKEN` environment variable for authenticated requests
+  - Increased rate limit from 60/hour (unauthenticated) to 5000/hour (authenticated)
+  - Detailed rate limit logging for monitoring
+- **Google Search integration** via Selenium for organization enrichment:
+  - Replaced DuckDuckGo Instant Answer API with Selenium-based Google search
+  - Extracts top 5 search results with title, link, and snippet
+  - Reuses existing Selenium infrastructure (shared with ORCID scraping)
+  - Comprehensive error handling with multiple CSS selector fallbacks
+  - Improved search result quality and coverage for organization queries
+  - Documentation in `docs/GOOGLE_SEARCH_IMPLEMENTATION.md`
+- **Comprehensive logging** for organization enrichment:
+  - Added detailed logging to all PydanticAI agent tools (search_ror, search_web, extract_domain_from_email)
+  - Emoji indicators for visual scanning (🔍 calls, ✓ success, ✗ errors, 🤖 agent, 📍 results)
+  - Logging for main enrichment functions (enrich_organizations, enrich_organizations_from_dict)
+  - Enhanced observability into agent operations and decision-making
+- **Unknown domain detection** with automatic search suggestions:
+  - Enhanced `extract_domain_from_email` tool to detect unknown email domains
+  - Automatically suggests ROR and web searches for organizations not in known domains dictionary
+  - Updated system prompt to instruct agent to follow search suggestions
+  - Improved organization discovery coverage beyond pre-configured domains
+  - Known domains include: EPFL, ETH Zürich, Institut Pasteur, UNIL, Swiss Data Science Center
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
+- **Fixed token parameter handling** for OpenAI reasoning models:
+  - o3-mini and o4-mini now correctly use `max_completion_tokens` instead of `max_tokens`
+  - Standard models (gpt-4o-mini, gpt-5) continue to use `max_tokens`
+  - Prevents token limit errors with reasoning models
+- **Replaced DuckDuckGo with Google Search** for organization enrichment:
+  - DuckDuckGo Instant Answer API was returning empty results for many queries
+  - Google search via Selenium provides comprehensive, reliable results
+  - No additional infrastructure needed (reuses existing Selenium instance)
 - All data endpoints now support caching with `force_refresh` parameter
 - Response format includes `cached` status indicator
 - Author metadata now automatically enriched with ORCID affiliations
@@ -135,6 +179,7 @@ All notable changes to this project will be documented in this file.
 - Improved consistency across all LLM-based endpoints
 
 ### Documentation
+
 - Added comprehensive cache documentation in `docs/CACHE_README.md`
 - Updated API endpoint documentation with caching information
 - Added cache configuration examples and environment variables reference
@@ -145,6 +190,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.0] - 2025-08-06
 
 ### Added
+
 - Users and Organization compatibility
 - Endpoints refactoring
 - Parallel calling
@@ -153,6 +199,7 @@ All notable changes to this project will be documented in this file.
 ## [0.1.0] - 2025-06-25
 
 ### Added
+
 - Initial project setup.
 - Dockerfile for containerization.
 - GitHub Actions workflow for automated publishing and releases.

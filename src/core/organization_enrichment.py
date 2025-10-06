@@ -15,11 +15,18 @@ The agent uses tools to:
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote_plus
 
 import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from .models import GitAuthor, Organization, Person, SoftwareSourceCode
 
@@ -70,6 +77,8 @@ Your task is to analyze:
 6. ORCID affiliation start/end dates when available
 
 For each organization you identify:
+- Use the extract_domain_from_email tool first to check if the email domain is known
+- **If the domain is unknown**, the tool will suggest searching for it - follow the suggestion and use search_ror or search_web to find the organization
 - Use the search_ror tool to find the official ROR entry and get standardized naming
 - Identify the organization type (university, research institute, department, lab, company, etc.)
 - For departments/labs, identify the parent organization
@@ -126,6 +135,7 @@ async def search_ror(
     Returns:
         JSON string with ROR search results including standardized names, ROR IDs, types, countries, and websites
     """
+    logger.info(f"🔍 Agent tool called: search_ror('{query}')")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -158,11 +168,11 @@ async def search_ror(
                 }
                 results.append(org_info)
 
-            logger.info(f"ROR search for '{query}' returned {len(results)} results")
+            logger.info(f"✓ ROR search for '{query}' returned {len(results)} results")
             return json.dumps(results, indent=2)
 
     except Exception as e:
-        logger.error(f"Error searching ROR for '{query}': {e}")
+        logger.error(f"✗ Error searching ROR for '{query}': {e}")
         return json.dumps({"error": str(e)})
 
 
@@ -172,80 +182,141 @@ async def search_web(
     query: str,
 ) -> str:
     """
-    Search the web for information about an organization.
-    Uses DuckDuckGo as a simple search provider.
+    Search Google for information about an organization using Selenium.
 
     Args:
         ctx: The run context
         query: The search query about an organization
 
     Returns:
-        Summary of search results
+        Summary of search results from Google
     """
+    logger.info(f"🔍 Agent tool called: search_web('{query}')")
+    selenium_url = os.getenv(
+        "SELENIUM_REMOTE_URL",
+        "http://selenium-standalone-firefox:4444",
+    )
+
     try:
-        # Use DuckDuckGo's instant answer API (no API key required)
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://api.duckduckgo.com/",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "no_redirect": 1,
-                },
-                timeout=10.0,
+        # Configure Firefox options
+        options = Options()
+        options.add_argument("--headless")
+        options.set_preference(
+            "general.useragent.override",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        )
+
+        driver = None
+        try:
+            # Connect to remote Selenium
+            driver = webdriver.Remote(
+                command_executor=selenium_url,
+                options=options,
             )
-            response.raise_for_status()
 
-            # Check if response has content before parsing
-            if not response.text or response.text.strip() == "":
-                logger.warning(
-                    f"Web search for '{query}' returned empty response",
-                )
-                return json.dumps(
-                    {
-                        "abstract": "",
-                        "abstract_source": "",
-                        "abstract_url": "",
-                        "related_topics": [],
-                        "note": "No results found",
-                    },
-                )
+            # Perform Google search
+            search_query = quote_plus(query)
+            search_url = f"https://www.google.com/search?q={search_query}"
+            driver.get(search_url)
 
+            # Wait for results to load
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "search")),
+            )
+
+            # Give the page a moment to fully render
+            time.sleep(1)
+
+            # Extract search results
+            results = []
             try:
-                data = response.json()
-            except json.JSONDecodeError:
+                # Try to find search result containers (Google's structure can vary)
+                search_results = driver.find_elements(By.CSS_SELECTOR, "div.g")
+
+                for result in search_results[:5]:  # Top 5 results
+                    try:
+                        # Try to extract title
+                        title = ""
+                        try:
+                            title_elem = result.find_element(By.CSS_SELECTOR, "h3")
+                            title = title_elem.text
+                        except Exception:
+                            pass
+
+                        # Try to extract link
+                        link = ""
+                        try:
+                            link_elem = result.find_element(By.CSS_SELECTOR, "a")
+                            link = link_elem.get_attribute("href")
+                        except Exception:
+                            pass
+
+                        # Try to extract snippet/description
+                        snippet = ""
+                        try:
+                            # Try multiple possible selectors for the snippet
+                            snippet_selectors = [
+                                "div.VwiC3b",
+                                "div.IsZvec",
+                                "span.aCOpRe",
+                                "div[data-sncf='1']",
+                            ]
+                            for selector in snippet_selectors:
+                                try:
+                                    snippet_elem = result.find_element(
+                                        By.CSS_SELECTOR,
+                                        selector,
+                                    )
+                                    snippet = snippet_elem.text
+                                    if snippet:
+                                        break
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
+
+                        # Only add result if we got at least a title or link
+                        if title or link:
+                            results.append(
+                                {
+                                    "title": title,
+                                    "link": link,
+                                    "snippet": snippet,
+                                },
+                            )
+
+                    except Exception:
+                        continue
+
+            except Exception as e:
+                logger.warning(f"Could not extract search results: {e}")
+
+            if results:
+                logger.info(
+                    f"✓ Google search for '{query}' returned {len(results)} results",
+                )
+                return json.dumps(results, indent=2)
+            else:
                 logger.warning(
-                    f"Web search for '{query}' returned non-JSON response: {response.text[:100]}",
+                    f"⚠ Google search for '{query}' returned no results",
                 )
                 return json.dumps(
                     {
-                        "abstract": "",
-                        "abstract_source": "",
-                        "abstract_url": "",
-                        "related_topics": [],
-                        "note": "Invalid response format",
+                        "note": "No results found",
+                        "query": query,
                     },
                 )
 
-            result = {
-                "abstract": data.get("Abstract", ""),
-                "abstract_source": data.get("AbstractSource", ""),
-                "abstract_url": data.get("AbstractURL", ""),
-                "related_topics": [
-                    {
-                        "text": topic.get("Text", ""),
-                        "url": topic.get("FirstURL", ""),
-                    }
-                    for topic in data.get("RelatedTopics", [])[:3]
-                ],
-            }
-
-            logger.info(f"Web search for '{query}' completed")
-            return json.dumps(result, indent=2)
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
 
     except Exception as e:
-        logger.error(f"Error searching web for '{query}': {e}")
-        return json.dumps({"error": str(e)})
+        logger.error(f"✗ Error searching Google for '{query}': {e}")
+        return json.dumps({"error": str(e), "query": query})
 
 
 @agent.tool
@@ -263,7 +334,9 @@ async def extract_domain_from_email(
     Returns:
         Domain information including known organization associations
     """
+    logger.info(f"🔍 Agent tool called: extract_domain_from_email('{email}')")
     if not email or "@" not in email:
+        logger.warning(f"⚠ Invalid email format: '{email}'")
         return json.dumps({"error": "Invalid email format"})
 
     domain = email.split("@")[1].lower()
@@ -310,7 +383,18 @@ async def extract_domain_from_email(
         "known_organization": known_domains.get(domain),
     }
 
-    logger.info(f"Domain analysis for '{email}': {domain}")
+    # If domain is unknown, provide guidance to search for it
+    if not known_domains.get(domain):
+        logger.info(f"⚠ Unknown domain '{domain}' - suggesting search")
+        result["suggestion"] = (
+            f"Domain '{domain}' is not in the known domains list. "
+            f"Consider using search_ror('{domain}') to find the organization, "
+            f"or search_web('{domain} organization') for more information."
+        )
+        result["note"] = "Unknown institutional domain - search recommended"
+    else:
+        logger.info(f"✓ Domain analysis for '{email}': {domain} (known)")
+
     return json.dumps(result, indent=2)
 
 
@@ -390,13 +474,29 @@ Please:
     - Strength of affiliation evidence across multiple authors
 """
 
-    logger.info(f"Starting organization enrichment for {repository_url}")
+    logger.info(f"🚀 Starting organization enrichment for {repository_url}")
+    logger.info(
+        f"📊 Input data: {len(context.git_authors)} git authors, {len(context.authors)} ORCID authors",
+    )
 
     # Run the agent
+    logger.info("🤖 Running PydanticAI agent...")
     result = await agent.run(prompt, deps=context)
 
-    logger.info(f"Organization enrichment completed for {repository_url}")
-    logger.info(f"Identified {len(result.data.organizations)} organizations")
+    logger.info(f"✅ Organization enrichment completed for {repository_url}")
+    logger.info(
+        f"📍 Identified {len(result.data.organizations)} organizations",
+    )
+    logger.info(
+        f"🎯 EPFL relation: {result.data.relatedToEPFL} (confidence: {result.data.relatedToEPFLConfidence:.2f})",
+    )
+
+    # Log organization details
+    if result.data.organizations:
+        logger.info("📋 Organizations found:")
+        for i, org in enumerate(result.data.organizations, 1):
+            org_name = org.legalName if hasattr(org, "legalName") else str(org)
+            logger.info(f"  {i}. {org_name}")
 
     return result.data
 
@@ -549,13 +649,22 @@ Please:
     - Strength of affiliation evidence across multiple authors
 """
 
-    logger.info(f"Starting organization enrichment for {repository_url}")
+    logger.info(f"🚀 Starting organization enrichment from dict for {repository_url}")
+    logger.info(
+        f"📊 Input data: {len(git_authors)} git authors, {len(authors)} ORCID authors",
+    )
 
     # Run the agent
+    logger.info("🤖 Running PydanticAI agent...")
     result = await agent.run(prompt, deps=context)
 
-    logger.info(f"Organization enrichment completed for {repository_url}")
-    logger.info(f"Identified {len(result.data.organizations)} organizations")
+    logger.info(f"✅ Organization enrichment completed for {repository_url}")
+    logger.info(
+        f"📍 Identified {len(result.data.organizations)} organizations",
+    )
+    logger.info(
+        f"🎯 EPFL relation: {result.data.relatedToEPFL} (confidence: {result.data.relatedToEPFLConfidence:.2f})",
+    )
 
     # Return as dictionary
     return result.data.model_dump()

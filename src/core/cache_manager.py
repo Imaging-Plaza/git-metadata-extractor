@@ -3,6 +3,8 @@ Cache management utilities and configuration for the API caching system.
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import Any, Awaitable, Dict, Optional, Union
 
 from .cache import APICache
@@ -189,7 +191,16 @@ def get_cache_manager() -> CacheManager:
     """Get the global cache manager instance."""
     global _cache_manager
     if _cache_manager is None:
-        _cache_manager = CacheManager()
+        # Read cache path from environment variable with fallback
+        cache_db_path = os.getenv("CACHE_DB_PATH", "api_cache.db")
+
+        # Ensure the cache directory exists
+        cache_dir = Path(cache_db_path).parent
+        if cache_dir != Path():  # Only create if not current directory
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"📁 Initializing cache database at: {cache_db_path}")
+        _cache_manager = CacheManager(cache_db_path)
     return _cache_manager
 
 
