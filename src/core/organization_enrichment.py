@@ -96,6 +96,7 @@ For EPFL relationship:
   * Whether the repository is primarily developed by EPFL authors (>50% commits)
   * Alignment between author commit dates and their ORCID affiliation periods at EPFL
 - Provide detailed justification with specific evidence including commit statistics and temporal patterns
+- But please, provide a coherent confidence score for the EPFL relationship
 
 Confidence Scoring Guidelines:
 - 0.9-1.0: Strong evidence (institutional email + significant commits + temporal alignment)
@@ -194,7 +195,37 @@ async def search_web(
                 timeout=10.0,
             )
             response.raise_for_status()
-            data = response.json()
+
+            # Check if response has content before parsing
+            if not response.text or response.text.strip() == "":
+                logger.warning(
+                    f"Web search for '{query}' returned empty response",
+                )
+                return json.dumps(
+                    {
+                        "abstract": "",
+                        "abstract_source": "",
+                        "abstract_url": "",
+                        "related_topics": [],
+                        "note": "No results found",
+                    },
+                )
+
+            try:
+                data = response.json()
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"Web search for '{query}' returned non-JSON response: {response.text[:100]}",
+                )
+                return json.dumps(
+                    {
+                        "abstract": "",
+                        "abstract_source": "",
+                        "abstract_url": "",
+                        "related_topics": [],
+                        "note": "Invalid response format",
+                    },
+                )
 
             result = {
                 "abstract": data.get("Abstract", ""),

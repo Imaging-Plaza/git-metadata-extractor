@@ -2,6 +2,7 @@ import ast
 import inspect
 import json
 import logging
+import os
 import re
 from typing import List, Optional, Union, get_args, get_origin
 
@@ -34,8 +35,14 @@ def is_github_repo_public(repo_url: str) -> bool:
     owner, repo = match.groups()
     api_url = f"https://api.github.com/repos/{owner}/{repo}"
 
+    # Use GitHub token if available for higher rate limits
+    headers = {}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
+
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, headers=headers, timeout=10)
 
         if response.status_code == 200:
             repo_data = response.json()
@@ -47,6 +54,18 @@ def is_github_repo_public(repo_url: str) -> bool:
             return True
         if response.status_code == 404:
             logger.error(f"Repository not found or not accessible: {repo_url}")
+            return False
+        if response.status_code == 403:
+            # Check if it's a rate limit issue
+            rate_limit_remaining = response.headers.get(
+                "X-RateLimit-Remaining",
+                "unknown",
+            )
+            rate_limit_reset = response.headers.get("X-RateLimit-Reset", "unknown")
+            logger.error(
+                f"GitHub API rate limit or access issue for {repo_url}. "
+                f"Rate limit remaining: {rate_limit_remaining}, reset at: {rate_limit_reset}",
+            )
             return False
         logger.error(
             f"GitHub API returned status {response.status_code} for {repo_url}",
@@ -241,6 +260,43 @@ def extract_orcid_id(orcid_url: str) -> Optional[str]:
     return None
 
 
+def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
+    """
+    Normalize ORCID input to URL format, validating the format.
+
+    Args:
+        orcid_input: ORCID as either ID (0000-0000-0000-0000) or URL
+
+    Returns:
+        ORCID URL (e.g., "https://orcid.org/0000-0002-1126-1535") or None if invalid
+
+    Examples:
+        >>> normalize_orcid_to_url("0000-0002-1126-1535")
+        'https://orcid.org/0000-0002-1126-1535'
+        >>> normalize_orcid_to_url("https://orcid.org/0000-0002-1126-1535")
+        'https://orcid.org/0000-0002-1126-1535'
+    """
+    if not orcid_input:
+        return None
+
+    # If it's already a URL, validate and return
+    if orcid_input.startswith("http"):
+        orcid_url_pattern = r"^https://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])$"
+        match = re.match(orcid_url_pattern, orcid_input)
+        if match:
+            return orcid_input
+        logger.warning(f"Invalid ORCID URL format: {orcid_input}")
+        return None
+
+    # If it's an ID, validate and convert to URL
+    orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+    if re.match(orcid_id_pattern, orcid_input):
+        return f"https://orcid.org/{orcid_input}"
+
+    logger.warning(f"Invalid ORCID format: {orcid_input}")
+    return None
+
+
 def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
     """
     Fetch affiliations (organization names only) from ORCID.
@@ -313,20 +369,23 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
 def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
     """
     Enrich author object with ORCID affiliations if orcidId is present.
+    Also validates and normalizes ORCID ID to URL format.
 
     Args:
         author: Author dictionary with optional 'orcidId' field
         use_cache: Whether to use cached ORCID data (default: True)
 
     Returns:
-        Author dictionary enriched with affiliations from ORCID
+        Author dictionary enriched with affiliations from ORCID and normalized ORCID URL
 
     Examples:
         >>> author = {
         ...     "name": "Cyril Matthey-Doret",
-        ...     "orcidId": "https://orcid.org/0000-0002-1126-1535"
+        ...     "orcidId": "0000-0002-1126-1535"  # Can be ID or URL
         ... }
         >>> enriched = enrich_author_with_orcid(author)
+        >>> enriched['orcidId']  # Normalized to URL
+        'https://orcid.org/0000-0002-1126-1535'
         >>> enriched['affiliation']
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
@@ -334,14 +393,36 @@ def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
         return author
 
     # Support both plain 'orcidId' and Zod format 'md4i:orcidId'
-    orcid_url = author.get("md4i:orcidId") or author.get("orcidId")
-    if not orcid_url:
+    orcid_key = None
+    orcid_input = None
+
+    if "md4i:orcidId" in author:
+        orcid_key = "md4i:orcidId"
+        orcid_input = author.get("md4i:orcidId")
+    elif "orcidId" in author:
+        orcid_key = "orcidId"
+        orcid_input = author.get("orcidId")
+
+    if not orcid_input:
         return author
 
-    # Extract ORCID ID from URL
-    orcid_id = extract_orcid_id(orcid_url)
+    # Normalize ORCID to URL format and validate
+    normalized_orcid_url = normalize_orcid_to_url(orcid_input)
+    if not normalized_orcid_url:
+        logger.warning(
+            f"Invalid ORCID format for author {author.get('name') or author.get('schema:name')}: {orcid_input}",
+        )
+        return author
+
+    # Update the author object with the normalized URL
+    author[orcid_key] = normalized_orcid_url
+
+    # Extract ORCID ID from normalized URL for API calls
+    orcid_id = extract_orcid_id(normalized_orcid_url)
     if not orcid_id:
-        logger.warning(f"Invalid ORCID URL format: {orcid_url}")
+        logger.warning(
+            f"Could not extract ORCID ID from normalized URL: {normalized_orcid_url}",
+        )
         return author
 
     # Get affiliations from ORCID

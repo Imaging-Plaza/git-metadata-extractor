@@ -1,3 +1,5 @@
+.ruff_cache
+data
 api_cache.db
 
 # Byte-compiled / optimized / DLL files

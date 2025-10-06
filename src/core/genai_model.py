@@ -571,6 +571,7 @@ async def get_openai_response_async(
                 )
             elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
                 # O3/O4 reasoning models: use beta parse without temperature
+                # These models require max_completion_tokens instead of max_tokens
                 logger.info(f"Using reasoning model configuration for: {model}")
                 response = await client.beta.chat.completions.parse(
                     model=model,
@@ -579,7 +580,7 @@ async def get_openai_response_async(
                         {"role": "user", "content": prompt},
                     ],
                     response_format=convert_httpurl_to_str(schema),
-                    max_tokens=16000,
+                    max_completion_tokens=16000,
                 )
             else:
                 # Standard models (gpt-4o, etc.): use beta parse with temperature

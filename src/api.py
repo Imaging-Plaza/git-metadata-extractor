@@ -17,13 +17,18 @@ from .utils.utils import enrich_author_with_orcid, merge_jsonld
 logger = logging.getLogger(__name__)
 
 
-def enrich_authors_with_orcid(metadata_dict: dict, force_refresh: bool = False) -> dict:
+def enrich_authors_with_orcid(
+    metadata_dict: dict,
+    force_refresh: bool = False,
+    auto_enrich: bool = True,
+) -> dict:
     """
     Enrich author objects with ORCID affiliations if orcidId is present.
 
     Args:
         metadata_dict: Metadata dictionary containing 'schema:author' or 'author' field
         force_refresh: If True, bypass ORCID cache and fetch fresh data
+        auto_enrich: If True, automatically enrich authors who have ORCID IDs but no affiliations
 
     Returns:
         Metadata dictionary with enriched author affiliations
@@ -52,26 +57,53 @@ def enrich_authors_with_orcid(metadata_dict: dict, force_refresh: bool = False) 
             )
             orcid_id = author.get("orcidId") or author.get("md4i:orcidId", "")
 
-            logger.info(f"Enriching author {i+1}: {author_name} (ORCID: {orcid_id})")
+            # Check if auto_enrich should be applied
+            should_enrich = False
+            if orcid_id:
+                if auto_enrich:
+                    # Check if author already has affiliations
+                    existing_affiliations = author.get("affiliation") or author.get(
+                        "schema:affiliation",
+                        [],
+                    )
+                    if not existing_affiliations or len(existing_affiliations) == 0:
+                        should_enrich = True
+                        logger.info(
+                            f"Auto-enriching author {i+1}: {author_name} (ORCID: {orcid_id}) - no affiliations found",
+                        )
+                    else:
+                        logger.info(
+                            f"Skipping author {i+1}: {author_name} - already has {len(existing_affiliations)} affiliations",
+                        )
+                else:
+                    # Always enrich when auto_enrich is False
+                    should_enrich = True
 
-            try:
-                enriched_author = enrich_author_with_orcid(
-                    author,
-                    use_cache=not force_refresh,
-                )
-                enriched_authors.append(enriched_author)
-
-                # Log the result
-                affiliations = enriched_author.get(
-                    "affiliation",
-                ) or enriched_author.get("schema:affiliation", [])
                 logger.info(
-                    f"  Result: {len(affiliations)} affiliations: {affiliations}",
+                    f"Processing author {i+1}: {author_name} (ORCID: {orcid_id})",
                 )
 
-            except Exception as e:
-                logger.error(f"  Error enriching {author_name}: {e}")
-                enriched_authors.append(author)  # Keep original on error
+            if should_enrich:
+                try:
+                    enriched_author = enrich_author_with_orcid(
+                        author,
+                        use_cache=not force_refresh,
+                    )
+                    enriched_authors.append(enriched_author)
+
+                    # Log the result
+                    affiliations = enriched_author.get(
+                        "affiliation",
+                    ) or enriched_author.get("schema:affiliation", [])
+                    logger.info(
+                        f"  Result: {len(affiliations)} affiliations: {affiliations}",
+                    )
+
+                except Exception as e:
+                    logger.error(f"  Error enriching {author_name}: {e}")
+                    enriched_authors.append(author)  # Keep original on error
+            else:
+                enriched_authors.append(author)
         else:
             enriched_authors.append(author)
 
@@ -170,6 +202,10 @@ async def extract(
         False,
         description="Force refresh from external APIs, bypassing cache",
     ),
+    auto_enrich_orcid: bool = Query(
+        True,
+        description="Automatically enrich authors with ORCID affiliations if they have ORCID IDs but no affiliations",
+    ),
 ):
     """
     Extract and enrich repository metadata in JSON format.
@@ -183,6 +219,7 @@ async def extract(
     **Parameters**:
     - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)
     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    - **auto_enrich_orcid**: Set to `true` to automatically enrich authors with ORCID data if they have ORCID IDs but no affiliations (default: `true`)
 
     **Returns**:
     - Repository link
@@ -233,12 +270,16 @@ async def extract(
 
     # Enrich authors with ORCID affiliations
     logger.info(
-        f"Starting ORCID enrichment for {full_path} (force_refresh={force_refresh})",
+        f"Starting ORCID enrichment for {full_path} (force_refresh={force_refresh}, auto_enrich={auto_enrich_orcid})",
     )
     authors_before = len(zod_data.get("schema:author", []))
     logger.info(f"Found {authors_before} authors before enrichment")
 
-    zod_data = enrich_authors_with_orcid(zod_data, force_refresh=force_refresh)
+    zod_data = enrich_authors_with_orcid(
+        zod_data,
+        force_refresh=force_refresh,
+        auto_enrich=auto_enrich_orcid,
+    )
 
     authors_after = len(zod_data.get("schema:author", []))
     logger.info(f"ORCID enrichment completed. Authors after: {authors_after}")
