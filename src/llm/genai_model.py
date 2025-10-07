@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime
 
 import aiohttp
 import tiktoken
@@ -227,6 +226,12 @@ async def run_repo_to_text(temp_dir):
 
         process = await asyncio.create_subprocess_exec(
             "repo-to-text",
+            "--ignore-patterns",
+            "*.log",
+            "temp/",
+            "*.lock",
+            ".git",
+            ".github",
             cwd=temp_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -464,7 +469,6 @@ async def llm_request_repo_infos(
                 "@type": "SoftwareSourceCode",
                 "name": repo_name,
                 "codeRepository": repo_url,
-                "parseTimestamp": datetime.now().strftime("%Y-%m-%dT%H:%M"),
                 "description": "Repository appears to be empty or has no analyzable content",
             }
 

@@ -41,6 +41,7 @@ class CacheManager:
         self.cache = APICache(cache_db_path)
         self.config = CacheConfig()
 
+    # Deprecated: in future versions
     def get_cached_or_fetch(
         self,
         api_type: str,
@@ -94,6 +95,7 @@ class CacheManager:
 
         return fresh_data
 
+    # DEPRECATED announced for removal in future versions
     async def get_cached_or_fetch_async(
         self,
         api_type: str,
@@ -149,6 +151,28 @@ class CacheManager:
             logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
 
         return fresh_data
+
+    # NEW METHODS FOR DIRECT CACHE MANAGEMENT
+    def load_from_cache(self, api_type: str, params: Dict[str, Any]) -> Optional[Any]:
+        """Load data directly from cache without fetching."""
+        if not self.config.CACHE_ENABLED:
+            logger.info("Cache is disabled, cannot load from cache")
+            return None
+        return self.cache.get(api_type, params)
+
+    def store_in_cache(
+        self,
+        api_type: str,
+        params: Dict[str, Any],
+        data: Any,
+        custom_ttl: Optional[int] = None,
+    ) -> bool:
+        """Manually store data in cache."""
+        ttl = custom_ttl or self.config.API_TTL_OVERRIDES.get(
+            api_type,
+            self.config.DEFAULT_TTL_DAYS,
+        )
+        return self.cache.set(api_type, params, data, ttl)
 
     def invalidate_api_cache(self, api_type: str, params: Dict[str, Any]) -> bool:
         """Invalidate specific cache entry."""

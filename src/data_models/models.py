@@ -163,7 +163,6 @@ class GitAuthor(BaseModel):
 
 
 class SoftwareSourceCode(BaseModel):
-    parseTimestamp: str = None
     name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
     citation: List[HttpUrl] = None
@@ -225,7 +224,6 @@ class SoftwareSourceCode(BaseModel):
 
 
 class GitHubOrganization(BaseModel):
-    parseTimestamp: str = None
     name: Optional[str] = None
     organizationType: Optional[str] = None
     relatedToOrganizationsROR: Optional[List[Organization]] = None
@@ -241,7 +239,6 @@ class GitHubOrganization(BaseModel):
 
 
 class GitHubUser(BaseModel):
-    parseTimestamp: str = None
     name: Optional[str] = None
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
@@ -255,6 +252,19 @@ class GitHubUser(BaseModel):
     relatedToEPFL: bool = None
     relatedToEPFLJustification: str = None
     relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
+
+
+class ResourceType(str, Enum):
+    REPOSITORY = "repository"
+    USER = "user"
+    ORGANIZATION = "organization"
+
+
+class APIOutput(BaseModel):
+    link: HttpUrl = None
+    type: ResourceType = None
+    parseTimestamp: datetime = None
+    output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser] = None
 
 
 ############################################################

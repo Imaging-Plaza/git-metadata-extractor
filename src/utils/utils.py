@@ -10,6 +10,8 @@ import requests
 from pydantic import BaseModel, HttpUrl, create_model
 from pyld import jsonld
 
+from ..data_models import Person, SoftwareSourceCode
+
 logger = logging.getLogger(__name__)
 
 
@@ -366,56 +368,43 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
     return fetch_affiliations()
 
 
-def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
+def enrich_author_with_orcid(author: Person) -> Person:
     """
-    Enrich author object with ORCID affiliations if orcidId is present.
+    Enrich a Person object with ORCID affiliations if orcidId is present.
     Also validates and normalizes ORCID ID to URL format.
 
     Args:
-        author: Author dictionary with optional 'orcidId' field
-        use_cache: Whether to use cached ORCID data (default: True)
+        author: Person object with optional orcidId field
 
     Returns:
-        Author dictionary enriched with affiliations from ORCID and normalized ORCID URL
+        Person object enriched with affiliations from ORCID and normalized ORCID URL
 
     Examples:
-        >>> author = {
-        ...     "name": "Cyril Matthey-Doret",
-        ...     "orcidId": "0000-0002-1126-1535"  # Can be ID or URL
-        ... }
+        >>> author = Person(name="Cyril Matthey-Doret", orcidId="0000-0002-1126-1535")
         >>> enriched = enrich_author_with_orcid(author)
-        >>> enriched['orcidId']  # Normalized to URL
+        >>> enriched.orcidId
         'https://orcid.org/0000-0002-1126-1535'
-        >>> enriched['affiliation']
+        >>> enriched.affiliation
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
-    if not isinstance(author, dict):
+
+    # Skip if no ORCID ID
+    if not author.orcidId:
         return author
 
-    # Support both plain 'orcidId' and Zod format 'md4i:orcidId'
-    orcid_key = None
-    orcid_input = None
-
-    if "md4i:orcidId" in author:
-        orcid_key = "md4i:orcidId"
-        orcid_input = author.get("md4i:orcidId")
-    elif "orcidId" in author:
-        orcid_key = "orcidId"
-        orcid_input = author.get("orcidId")
-
+    # Convert HttpUrl to string if needed
+    orcid_input = str(author.orcidId) if author.orcidId else None
     if not orcid_input:
         return author
 
     # Normalize ORCID to URL format and validate
     normalized_orcid_url = normalize_orcid_to_url(orcid_input)
     if not normalized_orcid_url:
-        logger.warning(
-            f"Invalid ORCID format for author {author.get('name') or author.get('schema:name')}: {orcid_input}",
-        )
+        logger.warning(f"Invalid ORCID format for author {author.name}: {orcid_input}")
         return author
 
-    # Update the author object with the normalized URL
-    author[orcid_key] = normalized_orcid_url
+    # Update with normalized URL - convert string back to HttpUrl
+    author.orcidId = HttpUrl(normalized_orcid_url)
 
     # Extract ORCID ID from normalized URL for API calls
     orcid_id = extract_orcid_id(normalized_orcid_url)
@@ -425,40 +414,29 @@ def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
         )
         return author
 
-    # Get affiliations from ORCID
-    orcid_affiliations = get_orcid_affiliations(orcid_id, use_cache=use_cache)
+    # Get affiliations from ORCID (always uses cache)
+    orcid_affiliations = get_orcid_affiliations(orcid_id, use_cache=True)
 
     if not orcid_affiliations:
         logger.warning(
-            f"No ORCID affiliations found for {orcid_id} (author: {author.get('name') or author.get('schema:name')})",
+            f"No ORCID affiliations found for {orcid_id} (author: {author.name})",
         )
         return author
+
     logger.info(
         f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {orcid_affiliations}",
     )
 
-    # Detect which affiliation key is used (Zod format uses 'schema:affiliation', plain uses 'affiliation')
-    affiliation_key = None
-    if "schema:affiliation" in author:
-        affiliation_key = "schema:affiliation"
-    elif "affiliation" in author:
-        affiliation_key = "affiliation"
-    else:
-        # No existing affiliations, use plain 'affiliation' key
-        affiliation_key = "affiliation"
+    # Get existing affiliations
+    existing_affiliations = author.affiliation or []
 
-    # Merge with existing affiliations (if any)
-    existing_affiliations = author.get(affiliation_key, [])
-
-    # Ensure existing_affiliations is a list
+    # Ensure it's a list
     if not isinstance(existing_affiliations, list):
         existing_affiliations = [existing_affiliations] if existing_affiliations else []
 
     # Merge affiliations, removing duplicates while preserving order
-    merged_affiliations = list(existing_affiliations)  # Start with existing
-    seen = set(
-        aff.lower() for aff in existing_affiliations
-    )  # Track what we have (case-insensitive)
+    merged_affiliations = list(existing_affiliations)
+    seen = set(aff.lower() for aff in existing_affiliations)
 
     # Add ORCID affiliations that aren't already present
     added_count = 0
@@ -468,11 +446,68 @@ def enrich_author_with_orcid(author: dict, use_cache: bool = True) -> dict:
             seen.add(aff.lower())
             added_count += 1
 
-    author[affiliation_key] = merged_affiliations
+    author.affiliation = merged_affiliations
 
     if added_count > 0:
         logger.info(
-            f"Enriched author {author.get('name') or author.get('schema:name')} with {added_count} new affiliations from ORCID (total: {len(merged_affiliations)})",
+            f"Enriched author {author.name} with {added_count} new affiliations "
+            f"from ORCID (total: {len(merged_affiliations)})",
         )
 
     return author
+
+
+def enrich_authors_with_orcid(
+    repositoryObject: SoftwareSourceCode,
+) -> SoftwareSourceCode:
+    """
+    Enrich Person author objects with ORCID affiliations if orcidId is present.
+    Always enriches authors who have ORCID IDs, merging with existing affiliations.
+
+    Args:
+        repositoryObject: SoftwareSourceCode object with author list
+
+    Returns:
+        SoftwareSourceCode with enriched author affiliations
+    """
+    if not repositoryObject.author:
+        return repositoryObject
+
+    enriched_authors = []
+
+    for i, author in enumerate(repositoryObject.author):
+        # Only enrich Person objects (skip Organization objects)
+        if not isinstance(author, Person):
+            enriched_authors.append(author)
+            continue
+
+        # Skip if no ORCID ID
+        if not author.orcidId:
+            enriched_authors.append(author)
+            continue
+
+        logger.info(
+            f"Processing author {i + 1}: {author.name} (ORCID: {author.orcidId})",
+        )
+
+        try:
+            # Enrich directly - no dict conversion needed
+            enriched_person = enrich_author_with_orcid(author)
+            enriched_authors.append(enriched_person)
+
+            # Log affiliations count
+            affiliation_count = (
+                len(enriched_person.affiliation) if enriched_person.affiliation else 0
+            )
+            logger.info(f"  Result: {affiliation_count} affiliations")
+
+        except Exception as e:
+            logger.error(f"  Error enriching {author.name}: {e}")
+            enriched_authors.append(author)  # Keep original on error
+
+    repositoryObject.author = enriched_authors
+    logger.info(
+        f"ORCID enrichment completed. Processed {len(enriched_authors)} authors",
+    )
+
+    return repositoryObject

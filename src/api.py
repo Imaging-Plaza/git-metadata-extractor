@@ -9,12 +9,20 @@ from fastapi.responses import JSONResponse
 
 from .agents import enrich_organizations_from_dict, enrich_users_from_dict
 from .cache import get_cache_manager
-from .data_models import convert_jsonld_to_pydantic, convert_pydantic_to_zod_form_dict
-from .gimie import extract_gimie
+from .data_models import (
+    APIOutput,
+    ResourceType,
+    convert_jsonld_to_pydantic,
+    convert_pydantic_to_zod_form_dict,
+)
+from .gimie_utils import extract_gimie
 from .llm import llm_request_repo_infos, llm_request_userorg_infos
 from .parsers import parse_github_organization, parse_github_user
 from .utils.enhanced_logging import AsyncRequestContext, setup_logging
-from .utils.utils import enrich_author_with_orcid, merge_jsonld
+from .utils.utils import (
+    enrich_authors_with_orcid,
+    merge_jsonld,
+)
 
 # Setup enhanced logging with colors
 # Allow LOG_LEVEL environment variable to override (DEBUG, INFO, WARNING, ERROR)
@@ -22,102 +30,9 @@ log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
 log_level = getattr(logging, log_level_str, logging.INFO)
 setup_logging(level=log_level, use_colors=True)
 
+from .analysis import Repository
+
 logger = logging.getLogger(__name__)
-
-
-def enrich_authors_with_orcid(
-    metadata_dict: dict,
-    force_refresh: bool = False,
-    auto_enrich: bool = True,
-) -> dict:
-    """
-    Enrich author objects with ORCID affiliations if orcidId is present.
-
-    Args:
-        metadata_dict: Metadata dictionary containing 'schema:author' or 'author' field
-        force_refresh: If True, bypass ORCID cache and fetch fresh data
-        auto_enrich: If True, automatically enrich authors who have ORCID IDs but no affiliations
-
-    Returns:
-        Metadata dictionary with enriched author affiliations
-    """
-    # Handle both Zod format (schema:author) and plain format (author)
-    author_key = None
-    if "schema:author" in metadata_dict:
-        author_key = "schema:author"
-    elif "author" in metadata_dict:
-        author_key = "author"
-
-    if not author_key:
-        return metadata_dict
-
-    authors = metadata_dict.get(author_key)
-    if not authors or not isinstance(authors, list):
-        return metadata_dict
-
-    # Enrich each author with ORCID affiliations
-    enriched_authors = []
-    for i, author in enumerate(authors):
-        if isinstance(author, dict):
-            author_name = author.get("name") or author.get(
-                "schema:name",
-                f"Author {i + 1}",
-            )
-            orcid_id = author.get("orcidId") or author.get("md4i:orcidId", "")
-
-            # Check if auto_enrich should be applied
-            should_enrich = False
-            if orcid_id:
-                if auto_enrich:
-                    # Check if author already has affiliations
-                    existing_affiliations = author.get("affiliation") or author.get(
-                        "schema:affiliation",
-                        [],
-                    )
-                    if not existing_affiliations or len(existing_affiliations) == 0:
-                        should_enrich = True
-                        logger.info(
-                            f"Auto-enriching author {i + 1}: {author_name} (ORCID: {orcid_id}) - no affiliations found",
-                        )
-                    else:
-                        logger.info(
-                            f"Skipping author {i + 1}: {author_name} - already has {len(existing_affiliations)} affiliations",
-                        )
-                else:
-                    # Always enrich when auto_enrich is False
-                    should_enrich = True
-
-                logger.info(
-                    f"Processing author {i + 1}: {author_name} (ORCID: {orcid_id})",
-                )
-
-            if should_enrich:
-                try:
-                    enriched_author = enrich_author_with_orcid(
-                        author,
-                        use_cache=not force_refresh,
-                    )
-                    enriched_authors.append(enriched_author)
-
-                    # Log the result
-                    affiliations = enriched_author.get(
-                        "affiliation",
-                    ) or enriched_author.get("schema:affiliation", [])
-                    logger.info(
-                        f"  Result: {len(affiliations)} affiliations: {affiliations}",
-                    )
-
-                except Exception as e:
-                    logger.error(f"  Error enriching {author_name}: {e}")
-                    enriched_authors.append(author)  # Keep original on error
-            else:
-                enriched_authors.append(author)
-        else:
-            enriched_authors.append(author)
-
-    metadata_dict[author_key] = enriched_authors
-    logger.info(f"ORCID enrichment completed. Updated {len(enriched_authors)} authors")
-    return metadata_dict
 
 
 app = FastAPI(
@@ -1056,7 +971,7 @@ async def llm_json(
         False,
         description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
     ),
-):
+) -> APIOutput:
     """
     Extract repository metadata using LLM with GIMIE context.
 
@@ -1087,149 +1002,37 @@ async def llm_json(
 
     **Returns**:
     - Repository link
-    - LLM-generated metadata in JSON format with timestamp
-    - Organization enrichment results (if `enrich_orgs=true`)
-    - Cache status indicator
+    - Repository type
+    - Parsing timestamp
+    - Repository Object with enriched metadata
     """
 
-    cache_manager = get_cache_manager()
+    repository = Repository(full_path, force_refresh=force_refresh)
 
-    def fetch_gimie_data():
-        return extract_gimie(full_path, format="json-ld")
-
-    # Get GIMIE data (cached separately with 1-day TTL)
-    jsonld_gimie_data = cache_manager.get_cached_or_fetch(
-        api_type="gimie",
-        params={"full_path": full_path, "format": "json-ld"},
-        fetch_func=fetch_gimie_data,
-        force_refresh=force_refresh,
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=True,
+        run_user_enrichment=enrich_users,
+        run_organization_enrichment=enrich_orgs,
     )
 
-    # Define comprehensive fetch function that includes ALL enrichments
-    async def fetch_and_enrich_all():
-        """Fetch LLM data and perform all requested enrichments."""
-        # Get base LLM data
-        llm_data = await llm_request_repo_infos(
-            str(full_path),
-            gimie_output=jsonld_gimie_data,
-            output_format="json",
-            max_tokens=20000,
-        )
+    output = repository.dump_results(output_type="pydantic")
 
-        # Handle JSON parsing for cached data
-        if isinstance(llm_data, str):
-            try:
-                llm_result = json.loads(llm_data)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Failed to parse LLM result as JSON: {e}. Result: {llm_data[:100]}",
-                )
-                # Return minimal valid response for empty/invalid repositories
-                llm_result = {
-                    "@context": "https://schema.org/",
-                    "@type": "SoftwareSourceCode",
-                    "name": full_path.split("/")[-1] if "/" in full_path else full_path,
-                    "codeRepository": full_path,
-                    "parseTimestamp": datetime.now().strftime("%Y-%m-%dT%H:%M"),
-                    "description": "Repository appears to be empty or has no analyzable content",
-                }
-        elif isinstance(llm_data, dict):
-            llm_result = llm_data.copy()
-        else:
-            raise ValueError(
-                f"Expected dict or JSON string from LLM, got {type(llm_data).__name__}",
-            )
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=output,
+    )
 
-        # Add timestamp
-        llm_result["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
-
-        # ORCID enrichment (always performed)
-        logger.info(f"ORCID enrichment for {full_path}")
-        llm_result = enrich_authors_with_orcid(llm_result, force_refresh=force_refresh)
-
-        # Organization enrichment (conditional)
-        if enrich_orgs:
-            logger.info(f"Organization enrichment for {full_path}")
-            try:
-                organization_enrichment = await enrich_organizations_from_dict(
-                    llm_result,
-                    full_path,
-                )
-
-                enriched_orgs = organization_enrichment.get("organizations", [])
-                if enriched_orgs:
-                    llm_result["relatedToOrganizations"] = [
-                        org.get("legalName")
-                        for org in enriched_orgs
-                        if org.get("legalName")
-                    ]
-                    llm_result["relatedToOrganizationsROR"] = enriched_orgs
-
-                llm_result["relatedToEPFL"] = organization_enrichment.get(
-                    "relatedToEPFL",
-                    llm_result.get("relatedToEPFL"),
-                )
-                llm_result["relatedToEPFLJustification"] = organization_enrichment.get(
-                    "relatedToEPFLJustification",
-                    llm_result.get("relatedToEPFLJustification"),
-                )
-            except Exception as e:
-                logger.error(
-                    f"Error during organization enrichment: {e}",
-                    exc_info=True,
-                )
-
-        # User enrichment (conditional)
-        if enrich_users:
-            logger.info(f"User enrichment for {full_path}")
-            try:
-                git_authors_data = llm_result.get("gitAuthors", [])
-                existing_authors_data = llm_result.get("author", [])
-
-                user_enrichment = await enrich_users_from_dict(
-                    git_authors_data=git_authors_data,
-                    existing_authors_data=existing_authors_data,
-                    repository_url=full_path,
-                )
-
-                llm_result["enrichedAuthors"] = user_enrichment.get(
-                    "enrichedAuthors",
-                    [],
-                )
-                llm_result["authorEnrichmentSummary"] = user_enrichment.get(
-                    "summary",
-                    "",
-                )
-            except Exception as e:
-                logger.error(f"Error during user enrichment: {e}", exc_info=True)
-
-        return llm_result
-
-    try:
-        # Cache the FULLY ENRICHED result
-        # Include enrichment flags in cache key to maintain separate caches
-        cache_params = {
-            "full_path": full_path,
-            "output_format": "json",
-            "max_tokens": 20000,
-            "enrich_orgs": enrich_orgs,  # Different cache for org enrichment
-            "enrich_users": enrich_users,  # Different cache for user enrichment
-        }
-
-        llm_result = await cache_manager.get_cached_or_fetch_async(
-            api_type="llm",
-            params=cache_params,
-            fetch_func=fetch_and_enrich_all,
-            force_refresh=force_refresh,
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=424, detail=f"Error from LLM service: {e}")
-
-    return {"link": full_path, "output": llm_result}
+    return response
 
 
+###########################################################
 # Cache Management Endpoints
+###########################################################
+
+
 @app.get("/v1/cache/stats", tags=["Cache Management"])
 async def get_cache_stats():
     """
