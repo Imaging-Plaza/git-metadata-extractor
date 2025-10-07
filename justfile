@@ -41,6 +41,10 @@ serve:
 serve-dev:
     uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload
 
+# Serve in development mode with debug logging
+serve-dev-debug:
+    LOG_LEVEL=DEBUG uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --log-level debug
+
 # Serve with single worker (useful for debugging)
 serve-single:
     uvicorn src.api:app --host {{HOST}} --port {{PORT}} --workers 1

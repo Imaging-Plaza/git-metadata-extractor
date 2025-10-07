@@ -137,6 +137,13 @@ def combine_text_files(directory):
 
     logger.info(f"Found {len(txt_files)} text files in {directory}")
 
+    # Debug: List all files in directory to see what's actually there
+    if len(txt_files) == 0:
+        all_files = glob.glob(os.path.join(directory, "*"))
+        logger.debug(
+            f"No .txt files found. All files in directory: {[os.path.basename(f) for f in all_files[:20]]}",
+        )
+
     for file in txt_files:
         logger.debug(f"Reading file: {file}")
         with open(file, encoding="utf-8") as f:
@@ -175,11 +182,30 @@ async def clone_repo(repo_url, temp_dir):
 
         if process.returncode == 0:
             logger.info("Repository cloned successfully.")
+            # Check what was cloned
+            if os.path.exists(temp_dir):
+                contents = os.listdir(temp_dir)
+                logger.debug(f"Cloned repository contains {len(contents)} items")
+                logger.debug(f"First 10 items: {contents[:10]}")
+
+                # Check if .git directory exists
+                git_dir = os.path.join(temp_dir, ".git")
+                if os.path.exists(git_dir):
+                    logger.debug(".git directory exists")
+                else:
+                    logger.warning(f".git directory not found in {temp_dir}")
             return temp_dir
-        logger.error(f"Failed to clone repository: {stderr.decode()}")
+
+        stderr_text = stderr.decode()
+        logger.error(
+            f"Failed to clone repository with return code {process.returncode}",
+        )
+        logger.error(f"stderr: {stderr_text}")
+        if stdout:
+            logger.debug(f"stdout: {stdout.decode()[:500]}")
         return None
     except Exception as e:
-        logger.error(f"Failed to clone repository: {e}")
+        logger.error(f"Failed to clone repository with exception: {e}", exc_info=True)
         return None
 
 
@@ -188,6 +214,17 @@ async def run_repo_to_text(temp_dir):
     Run the repo-to-text command asynchronously.
     """
     try:
+        logger.debug(f"Running repo-to-text in directory: {temp_dir}")
+
+        # Check if directory exists and list its contents
+        if os.path.exists(temp_dir):
+            logger.debug(
+                f"Directory exists. Contents: {os.listdir(temp_dir)[:10]}",
+            )  # Show first 10 items
+        else:
+            logger.error(f"Directory does not exist: {temp_dir}")
+            return False
+
         process = await asyncio.create_subprocess_exec(
             "repo-to-text",
             cwd=temp_dir,
@@ -198,11 +235,23 @@ async def run_repo_to_text(temp_dir):
 
         if process.returncode == 0:
             logger.info("repo-to-text command completed successfully.")
+            logger.debug(f"repo-to-text stdout length: {len(stdout)} bytes")
             return True
-        logger.error(f"'repo-to-text' command failed: {stderr.decode()}")
+
+        stderr_text = stderr.decode()
+        stdout_text = stdout.decode() if stdout else ""
+        logger.error(
+            f"'repo-to-text' command failed with return code {process.returncode}",
+        )
+        logger.error(f"Full stderr output:\n{stderr_text}")
+        if stdout_text:
+            logger.error(f"Full stdout output:\n{stdout_text}")
         return False
     except Exception as e:
-        logger.error(f"'repo-to-text' command failed: {e}")
+        logger.error(
+            f"'repo-to-text' command failed with exception: {e}",
+            exc_info=True,
+        )
         return False
 
 
@@ -394,7 +443,10 @@ async def llm_request_repo_infos(
         # Run repo-to-text asynchronously to check if repository has content
         repo_to_text_success = await run_repo_to_text(temp_dir)
         if not repo_to_text_success:
-            return None
+            logger.warning(
+                f"repo-to-text failed for {repo_url}, but will attempt to continue with available .txt files",
+            )
+            # Don't return None immediately - check if there are any .txt files anyway
 
         # Check early if repository has any analyzable content
         input_text = combine_text_files(temp_dir)

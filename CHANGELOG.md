@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 
-## [2.0.0] - 2025-10-06
+## [2.0.0] - 2025-10-07
 
 ### Added
 - **SQLite-based caching system** for external API calls (GitHub, ORCID, GIMIE, LLM)
@@ -121,6 +121,16 @@ All notable changes to this project will be documented in this file.
   - Support for mounting `./data` directory to `/app/data` in container
   - Environment variable `CACHE_DB_PATH` for custom cache database location
   - Enables cache persistence across container restarts
+- **Environment-based log level configuration**:
+  - Added `LOG_LEVEL` environment variable support (DEBUG, INFO, WARNING, ERROR)
+  - Allows dynamic logging configuration without code changes
+  - New `serve-dev-debug` justfile recipe for easy debug mode startup
+  - Enhanced subprocess logging with full stderr/stdout output (no truncation)
+- **Enhanced debugging capabilities** for repository processing:
+  - Comprehensive debug logging for git clone operations with directory contents
+  - Full error output from repo-to-text subprocess (complete tracebacks)
+  - Directory existence checks and file listing for troubleshooting
+  - Detailed diagnostics when no .txt files are found after repo-to-text
 - **ORCID validation and normalization**:
   - Added `normalize_orcid_to_url()` function to convert ORCID IDs to standard URL format
   - ORCID validation now accepts both ID format (0000-0002-1234-5678) and URL format (https://orcid.org/0000-0002-1234-5678)
@@ -187,6 +197,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - API version updated to 2.0.0 across all endpoints
+- **Upgraded pydantic-ai to version 1.0.15**:
+  - Migrated from deprecated `result_type` parameter to new `output_type` parameter
+  - Updated both organization enrichment and user enrichment agents
+  - Ensures compatibility with latest pydantic-ai features and improvements
+- **Improved repo-to-text error handling** for more resilient repository processing:
+  - Changed from strict failure on non-zero exit codes to lenient handling
+  - Now continues processing if .txt files are created despite exit code 1
+  - Handles cases where repo-to-text writes warnings to stderr but still succeeds
+  - Prevents data loss from repositories that process successfully but return error codes
+  - Added warning logs instead of immediate failure for better observability
 - **Fixed token parameter handling** for OpenAI reasoning models:
   - o3-mini and o4-mini now correctly use `max_completion_tokens` instead of `max_tokens`
   - Standard models (gpt-4o-mini, gpt-5) continue to use `max_tokens`

@@ -105,7 +105,7 @@ class UserAnalysisContext(BaseModel):
 # Initialize the agent with OpenAI model
 agent = Agent(
     model=f"openai:{os.getenv('MODEL', 'gpt-4o-mini')}",
-    result_type=UserEnrichmentResult,
+    output_type=UserEnrichmentResult,
     system_prompt="""You are an expert at identifying and enriching author/user information from software repository metadata.
 
 Your task is to analyze:

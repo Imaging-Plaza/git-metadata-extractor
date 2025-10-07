@@ -19,7 +19,10 @@ from .utils.enhanced_logging import AsyncRequestContext, setup_logging
 from .utils.utils import enrich_author_with_orcid, merge_jsonld
 
 # Setup enhanced logging with colors
-setup_logging(level=logging.INFO, use_colors=True)
+# Allow LOG_LEVEL environment variable to override (DEBUG, INFO, WARNING, ERROR)
+log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+setup_logging(level=log_level, use_colors=True)
 
 logger = logging.getLogger(__name__)
 

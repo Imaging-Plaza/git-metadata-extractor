@@ -72,7 +72,7 @@ class OrganizationAnalysisContext(BaseModel):
 # The agent will analyze organization information and use tools as needed
 agent = Agent(
     model=f"openai:{os.getenv('MODEL', 'gpt-4o-mini')}",
-    result_type=OrganizationEnrichmentResult,
+    output_type=OrganizationEnrichmentResult,
     system_prompt="""You are an expert at identifying and standardizing organization information from software repository metadata.
 
 Your task is to analyze:
