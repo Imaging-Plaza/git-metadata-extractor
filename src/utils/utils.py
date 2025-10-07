@@ -313,12 +313,12 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
     try:
-        from ..core.cache_manager import get_cache_manager
-        from ..core.users_parser import GitHubUsersParser
+        from ..cache import get_cache_manager
+        from ..parsers.users_parser import GitHubUsersParser
     except ImportError:
         # Fallback for when called outside package context
-        from src.core.cache_manager import get_cache_manager
-        from src.core.users_parser import GitHubUsersParser
+        from src.cache import get_cache_manager
+        from src.parsers.users_parser import GitHubUsersParser
 
     if not orcid_id:
         return []

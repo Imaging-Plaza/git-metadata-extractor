@@ -11,19 +11,19 @@ import tiktoken
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
+from ..agents.prompts import (
+    system_prompt_json,
+    system_prompt_org_content,
+    system_prompt_user_content,
+)
+from ..data_models import GitHubOrganization, GitHubUser, SoftwareSourceCode
 from ..utils.utils import (
     clean_json_string,
     convert_httpurl_to_str,
     is_github_repo_public,
     json_to_jsonLD,
 )
-from .models import GitHubOrganization, GitHubUser, SoftwareSourceCode
-from .prompts import (
-    system_prompt_json,
-    system_prompt_org_content,
-    system_prompt_user_content,
-)
-from .verification import Verification
+from ..validation import Verification
 
 # Setup logger first, before anything else
 logger = logging.getLogger(__name__)
@@ -268,7 +268,7 @@ async def extract_git_authors(temp_dir):
     import re
     from datetime import datetime
 
-    from .models import Commits, GitAuthor
+    from ..data_models import Commits, GitAuthor
 
     try:
         # First, get the list of authors with commit counts

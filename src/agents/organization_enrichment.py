@@ -29,7 +29,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from .models import GitAuthor, Organization, Person, SoftwareSourceCode
+from ..data_models import GitAuthor, Organization, Person, SoftwareSourceCode
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -610,20 +610,20 @@ Please:
 
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(
-        f"📍 Identified {len(result.data.organizations)} organizations",
+        f"📍 Identified {len(result.output.organizations)} organizations",
     )
     logger.info(
-        f"🎯 EPFL relation: {result.data.relatedToEPFL} (confidence: {result.data.relatedToEPFLConfidence:.2f})",
+        f"🎯 EPFL relation: {result.output.relatedToEPFL} (confidence: {result.output.relatedToEPFLConfidence:.2f})",
     )
 
     # Log organization details
-    if result.data.organizations:
+    if result.output.organizations:
         logger.info("📋 Organizations found:")
-        for i, org in enumerate(result.data.organizations, 1):
+        for i, org in enumerate(result.output.organizations, 1):
             org_name = org.legalName if hasattr(org, "legalName") else str(org)
             logger.info(f"  {i}. {org_name}")
 
-    return result.data
+    return result.output
 
 
 async def enrich_organizations_from_dict(
@@ -665,7 +665,7 @@ async def enrich_organizations_from_dict(
                         if isinstance(last_date, str):
                             last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
 
-                        from .models import Commits
+                        from ..data_models import Commits
 
                         commits_obj = Commits(
                             total=commits_data.get("total"),
@@ -680,7 +680,7 @@ async def enrich_organizations_from_dict(
                         git_authors.append(GitAuthor(**ga_with_commits))
                     else:
                         # Legacy format where commits is just a number
-                        from .models import Commits
+                        from ..data_models import Commits
 
                         commits_obj = Commits(total=commits_data)
                         ga_with_commits = {
@@ -809,11 +809,11 @@ Please:
 
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(
-        f"📍 Identified {len(result.data.organizations)} organizations",
+        f"📍 Identified {len(result.output.organizations)} organizations",
     )
     logger.info(
-        f"🎯 EPFL relation: {result.data.relatedToEPFL} (confidence: {result.data.relatedToEPFLConfidence:.2f})",
+        f"🎯 EPFL relation: {result.output.relatedToEPFL} (confidence: {result.output.relatedToEPFLConfidence:.2f})",
     )
 
     # Return as dictionary
-    return result.data.model_dump()
+    return result.output.model_dump()

@@ -9,7 +9,7 @@ standardized ROR information.
 import asyncio
 import json
 
-from src.core.organization_enrichment import enrich_organizations_from_dict
+from src.agents import enrich_organizations_from_dict
 
 # Example output from the initial LLM analysis
 EXAMPLE_LLM_OUTPUT = {

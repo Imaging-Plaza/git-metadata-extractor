@@ -7,14 +7,12 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
-from .core.cache_manager import get_cache_manager
-from .core.genai_model import llm_request_repo_infos, llm_request_userorg_infos
-from .core.gimie_methods import extract_gimie
-from .core.models import convert_jsonld_to_pydantic, convert_pydantic_to_zod_form_dict
-from .core.organization_enrichment import enrich_organizations_from_dict
-from .core.orgs_parser import parse_github_organization
-from .core.user_enrichment import enrich_users_from_dict
-from .core.users_parser import parse_github_user
+from .agents import enrich_organizations_from_dict, enrich_users_from_dict
+from .cache import get_cache_manager
+from .data_models import convert_jsonld_to_pydantic, convert_pydantic_to_zod_form_dict
+from .gimie import extract_gimie
+from .llm import llm_request_repo_infos, llm_request_userorg_infos
+from .parsers import parse_github_organization, parse_github_user
 from .utils.enhanced_logging import AsyncRequestContext, setup_logging
 from .utils.utils import enrich_author_with_orcid, merge_jsonld
 
@@ -198,7 +196,7 @@ async def shutdown_event():
 
     # Cleanup OpenAI client
     try:
-        from .core.genai_model import cleanup_async_openai_client
+        from .llm import cleanup_async_openai_client
 
         await cleanup_async_openai_client()
         logger.info("✅ Cleaned up OpenAI client")

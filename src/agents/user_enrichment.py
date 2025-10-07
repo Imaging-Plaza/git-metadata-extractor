@@ -35,7 +35,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from .models import GitAuthor, Person
+from ..data_models import GitAuthor, Person
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -666,19 +666,19 @@ Focus on understanding:
 
     logger.info(f"✅ User enrichment completed for {repository_url}")
     logger.info(
-        f"👥 Enriched {len(result.data.enrichedAuthors)} authors",
+        f"👥 Enriched {len(result.output.enrichedAuthors)} authors",
     )
 
     # Log author details
-    if result.data.enrichedAuthors:
+    if result.output.enrichedAuthors:
         logger.info("📋 Enriched authors:")
-        for i, author in enumerate(result.data.enrichedAuthors, 1):
+        for i, author in enumerate(result.output.enrichedAuthors, 1):
             logger.info(
                 f"  {i}. {author.name} - {author.currentAffiliation or 'Unknown affiliation'} "
                 f"(confidence: {author.confidenceScore:.2f})",
             )
 
-    return result.data
+    return result.output
 
 
 async def enrich_users_from_dict(
@@ -699,7 +699,7 @@ async def enrich_users_from_dict(
     """
     from datetime import datetime
 
-    from .models import Commits
+    from ..data_models import Commits
 
     # Convert dictionaries to model objects
     git_authors = []

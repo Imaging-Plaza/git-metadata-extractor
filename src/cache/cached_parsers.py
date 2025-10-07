@@ -4,9 +4,9 @@ Cached versions of the GitHub parsers to reduce external API calls.
 
 import logging
 
+from ..parsers.orgs_parser import GitHubOrganizationMetadata, GitHubOrganizationsParser
+from ..parsers.users_parser import GitHubUserMetadata, GitHubUsersParser
 from .cache_manager import get_cache_manager
-from .orgs_parser import GitHubOrganizationMetadata, GitHubOrganizationsParser
-from .users_parser import GitHubUserMetadata, GitHubUsersParser
 
 logger = logging.getLogger(__name__)
 

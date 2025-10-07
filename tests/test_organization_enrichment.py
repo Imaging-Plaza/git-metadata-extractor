@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from src.core.organization_enrichment import (
+from src.agents import (
     OrganizationEnrichmentResult,
     enrich_organizations_from_dict,
 )
@@ -77,9 +77,8 @@ async def test_organization_enrichment_with_multiple_emails():
     )
 
     # Should identify multiple organizations from different email domains
-    assert len(result["organizations"]) >= 2
-
-    org_names = [org.get("legalName", "").lower() for org in result["organizations"]]
+    MIN_EXPECTED_ORGS = 2
+    assert len(result["organizations"]) >= MIN_EXPECTED_ORGS
 
     # Check that key institutions are identified (may vary based on ROR results)
     # At minimum, should recognize the domains

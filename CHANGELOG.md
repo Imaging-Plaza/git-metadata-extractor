@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 ## [2.0.0] - 2025-10-07
 
 ### Added
+- **Project restructuring** for improved maintainability and modularity:
+  - Reorganized `src/core/` monolithic directory into categorized subdirectories under `src/`:
+    - `src/agents/` - PydanticAI agents for organization and user enrichment
+    - `src/cache/` - Caching infrastructure and SQLite cache manager
+    - `src/data_models/` - Pydantic models and schemas (Person, Organization, SoftwareSourceCode, etc.)
+    - `src/gimie/` - GIMIE integration methods for repository metadata extraction
+    - `src/llm/` - LLM processing and GenAI model wrapper
+    - `src/parsers/` - Organization and user parsers for structured data extraction
+    - `src/validation/` - Verification and validation logic
+  - Created proper `__init__.py` files with explicit exports for all modules
+  - Improved import paths throughout the codebase (e.g., `from src.agents import...` instead of `from src.core.organization_enrichment import...`)
+  - Enhanced code organization and discoverability
 - **SQLite-based caching system** for external API calls (GitHub, ORCID, GIMIE, LLM)
   - Automatic TTL (Time To Live) expiration with configurable settings per API type
   - Default TTL: 30 days (LLM), 7 days (GitHub users/orgs), 14 days (ORCID), 1 day (GIMIE)
@@ -196,10 +208,15 @@ All notable changes to this project will be documented in this file.
   - All three main repository endpoints now have consistent, comprehensive enrichment capabilities
 
 ### Changed
+- **Project structure modernization**:
+  - Removed monolithic `src/core/` directory in favor of feature-based modules
+  - All imports updated from `.core.*` pattern to direct module imports (`.agents`, `.cache`, `.data_models`, etc.)
+  - Improved separation of concerns with dedicated modules for each functional area
 - API version updated to 2.0.0 across all endpoints
 - **Upgraded pydantic-ai to version 1.0.15**:
   - Migrated from deprecated `result_type` parameter to new `output_type` parameter
   - Updated both organization enrichment and user enrichment agents
+  - Changed all `result.data` references to `result.output` for compatibility with new API
   - Ensures compatibility with latest pydantic-ai features and improvements
 - **Improved repo-to-text error handling** for more resilient repository processing:
   - Changed from strict failure on non-zero exit codes to lenient handling
