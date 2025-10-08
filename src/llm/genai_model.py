@@ -1,435 +1,242 @@
 import asyncio
-import glob
-import json
 import logging
-import os
-import tempfile
+from typing import Any, Dict, List, Optional
 
-import aiohttp
-import tiktoken
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from pydantic_ai import Agent
 
 from ..agents.prompts import (
     system_prompt_json,
-    system_prompt_org_content,
-    system_prompt_user_content,
 )
-from ..data_models import GitHubOrganization, GitHubUser, SoftwareSourceCode
+from ..data_models import SoftwareSourceCode
+from ..utils.url_validation import (
+    validate_and_clean_urls,
+    validate_author_urls,
+    validate_organization_urls,
+    validate_software_image_urls,
+)
 from ..utils.utils import (
-    clean_json_string,
-    convert_httpurl_to_str,
     is_github_repo_public,
     json_to_jsonLD,
 )
 from ..validation import Verification
+from .model_config import (
+    create_pydantic_ai_model,
+    get_retry_delay,
+    load_model_config,
+    validate_config,
+)
+from .repo_context import prepare_repository_context, sanitize_special_tokens
 
 # Setup logger first, before anything else
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = os.environ.get("MODEL", "gpt-4o")  # Default fallback
-PROVIDER = os.environ.get("PROVIDER", "openai")  # Default fallback
+# Load model configurations
+llm_analysis_configs = load_model_config("run_llm_analysis")
+user_enrichment_configs = load_model_config("run_user_enrichment")
+org_enrichment_configs = load_model_config("run_organization_enrichment")
 
-# Validate required environment variables
-if not OPENROUTER_API_KEY and PROVIDER == "openrouter":
-    logger.error("OPENROUTER_API_KEY not found in environment variables")
-if not os.environ.get("OPENAI_API_KEY") and PROVIDER == "openai":
-    logger.error("OPENAI_API_KEY not found in environment variables")
+# Validate configurations
+for config in llm_analysis_configs:
+    if not validate_config(config):
+        logger.error(f"Invalid configuration for LLM analysis: {config}")
+        raise ValueError("Invalid model configuration")
 
-# Lazy-initialized async OpenAI client (created on first use)
-async_openai_client = None
+for config in user_enrichment_configs:
+    if not validate_config(config):
+        logger.error(f"Invalid configuration for user enrichment: {config}")
+        raise ValueError("Invalid model configuration")
 
+for config in org_enrichment_configs:
+    if not validate_config(config):
+        logger.error(f"Invalid configuration for organization enrichment: {config}")
+        raise ValueError("Invalid model configuration")
 
-def get_async_openai_client():
-    """Get or create the async OpenAI client with proper timeout configuration."""
-    global async_openai_client
-    if async_openai_client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            logger.error("OPENAI_API_KEY not found in environment variables")
-            return None
-        async_openai_client = AsyncOpenAI(
-            api_key=api_key,
-            timeout=600.0,  # 10 minute timeout for GPT-5 and other models
-            max_retries=2,  # Limit retries to reduce memory from retry buffers
-            # Connection pooling limits to prevent memory leaks
-            http_client=None,  # Use default httpx client with sensible limits
-        )
-    return async_openai_client
+# Agent cleanup tracking
+_active_agents = []
 
 
-async def cleanup_async_openai_client():
-    """Cleanup the async OpenAI client to free resources."""
-    global async_openai_client
-    if async_openai_client is not None:
+class RepositoryAnalysisContext:
+    """Context for repository analysis agent."""
+
+    def __init__(
+        self,
+        repo_url: str,
+        git_authors: List[Any],
+        gimie_output: Optional[Any] = None,
+    ):
+        self.repo_url = repo_url
+        self.git_authors = git_authors
+        self.gimie_output = gimie_output
+
+
+def create_agent_from_config(config: Dict[str, Any]) -> Agent:
+    """
+    Create a PydanticAI agent from configuration.
+
+    Args:
+        config: Model configuration dictionary
+
+    Returns:
+        Configured PydanticAI agent
+    """
+    model = create_pydantic_ai_model(config)
+
+    # Create agent with the model
+    agent = Agent(
+        model=model,
+        output_type=SoftwareSourceCode,
+        system_prompt=system_prompt_json,
+    )
+
+    # Track agent for cleanup
+    _active_agents.append(agent)
+
+    return agent
+
+
+async def cleanup_agents():
+    """
+    Cleanup all active agents to free memory.
+    This should be called periodically or on application shutdown.
+    """
+    global _active_agents
+
+    if not _active_agents:
+        logger.debug("No active agents to cleanup")
+        return
+
+    logger.info(f"Cleaning up {len(_active_agents)} active agents")
+
+    for agent in _active_agents.copy():
         try:
-            await async_openai_client.close()
+            # PydanticAI agents don't have explicit cleanup methods,
+            # but we can remove them from tracking and let GC handle them
+            _active_agents.remove(agent)
+            logger.debug("Agent removed from tracking")
         except Exception as e:
-            logger.warning(f"Error closing OpenAI client: {e}")
-        finally:
-            async_openai_client = None
+            logger.warning(f"Error during agent cleanup: {e}")
+
+    # Force garbage collection
+    import gc
+
+    gc.collect()
+
+    logger.info("Agent cleanup completed")
 
 
-def reduce_input_size(input_text, max_tokens=400000, repo_url=None):
+def get_active_agents_count() -> int:
+    """Get the number of currently active agents."""
+    return len(_active_agents)
+
+
+async def run_agent_with_retry(
+    agent: Agent,
+    prompt: str,
+    context: Any,
+    config: Dict[str, Any],
+) -> Any:
     """
-    Reduce the size of the input text to fit within the specified token limit.
-    Reduced from 800k to 400k to prevent excessive memory usage.
+    Run agent with retry logic and exponential backoff.
+
+    Args:
+        agent: PydanticAI agent
+        prompt: Input prompt
+        context: Agent context
+        config: Model configuration
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all retries fail
     """
-    limiter_encoding = tiktoken.get_encoding("cl100k_base")
-    tokens = limiter_encoding.encode(input_text)
+    max_retries = config.get("max_retries", 3)
+    last_exception = None
 
-    url_prefix = f"{repo_url} :: " if repo_url else ""
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Attempting agent run (attempt {attempt + 1}/{max_retries})")
+            result = await agent.run(prompt, deps=context)
+            logger.info(f"Agent run successful on attempt {attempt + 1}")
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.warning(f"Agent run failed on attempt {attempt + 1}: {e}")
 
-    logger.info(f"Original amount of tokens: {len(tokens)}")
-    if len(tokens) > max_tokens:
-        tokens = tokens[:max_tokens]
-        reduced_text = limiter_encoding.decode(tokens)
-        logger.warning(
-            f"{url_prefix}Token count exceeded limit, truncated to {max_tokens} tokens",
-        )
-        return reduced_text
-    return input_text
+            if attempt < max_retries - 1:
+                delay = get_retry_delay(attempt)
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"All {max_retries} attempts failed")
+
+    raise last_exception or Exception("Agent run failed")
 
 
-def sort_files_by_priority(file_paths):
+async def run_agent_with_fallback(
+    agent_configs: List[Dict[str, Any]],
+    prompt: str,
+    context: Any,
+) -> Any:
     """
-    Sorts a list of file paths based on a predefined extension priority.
+    Run agent with fallback to next model if current fails.
 
-    The order is:
-    1. Documentation files (.md, .txt, .html)
-    2. Code files (.py, .r)
-    3. All other files
+    Args:
+        agent_configs: List of agent configurations to try
+        prompt: Input prompt
+        context: Agent context
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all models fail
     """
-    priority_order = {
-        # Priority 0: Documentation
-        ".cff": 0,
-        ".md": 0,
-        ".txt": 0,
-        ".html": 0,
-        # Priority 1: Code
-        ".py": 1,
-        ".r": 1,
-    }
-    # Priority 2 will be the default for all other extensions
+    last_exception = None
 
-    def get_sort_key(filepath):
-        # Get the file extension
-        _, ext = os.path.splitext(filepath)
-        # Return a tuple: (priority, original_filepath)
-        # The priority is looked up from the map (defaulting to 2)
-        # The original filepath is used as a tie-breaker to maintain a stable sort
-        return (priority_order.get(ext.lower(), 2), filepath)
+    for i, config in enumerate(agent_configs):
+        try:
+            logger.info(
+                f"Trying model {i + 1}/{len(agent_configs)}: {config['provider']}/{config['model']}",
+            )
+            agent = create_agent_from_config(config)
+            result = await run_agent_with_retry(agent, prompt, context, config)
+            logger.info(f"Successfully completed with model {i + 1}")
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.error(f"Model {i + 1} failed: {e}")
+            if i < len(agent_configs) - 1:
+                logger.info("Falling back to next model...")
+            else:
+                logger.error("All models failed")
 
-    return sorted(file_paths, key=get_sort_key)
-
-
-def combine_text_files(directory):
-    """
-    Combine all text files in the specified directory into a single string.
-    """
-    combined_text = ""
-    txt_files = glob.glob(os.path.join(directory, "*.txt"))
-
-    logger.info(f"Found {len(txt_files)} text files in {directory}")
-
-    # Debug: List all files in directory to see what's actually there
-    if len(txt_files) == 0:
-        all_files = glob.glob(os.path.join(directory, "*"))
-        logger.debug(
-            f"No .txt files found. All files in directory: {[os.path.basename(f) for f in all_files[:20]]}",
-        )
-
-    for file in txt_files:
-        logger.debug(f"Reading file: {file}")
-        with open(file, encoding="utf-8") as f:
-            combined_text += f.read() + "\n"
-
-    return combined_text
+    raise last_exception or Exception("All models failed")
 
 
-def store_combined_text(input_text, output_file):
-    """
-    Store the combined text into a specified output file.
-    """
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(input_text)
-    logger.info(f"Combined text saved to {output_file}")
-    return output_file
-
-
-async def clone_repo(repo_url, temp_dir):
-    """
-    Clone a GitHub repository into a temporary directory asynchronously.
-    """
-    logger.info(f"Cloning {repo_url} into {temp_dir}...")
-    try:
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "-c",
-            "core.symlinks=false",
-            repo_url,
-            temp_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-
-        if process.returncode == 0:
-            logger.info("Repository cloned successfully.")
-            # Check what was cloned
-            if os.path.exists(temp_dir):
-                contents = os.listdir(temp_dir)
-                logger.debug(f"Cloned repository contains {len(contents)} items")
-                logger.debug(f"First 10 items: {contents[:10]}")
-
-                # Check if .git directory exists
-                git_dir = os.path.join(temp_dir, ".git")
-                if os.path.exists(git_dir):
-                    logger.debug(".git directory exists")
-                else:
-                    logger.warning(f".git directory not found in {temp_dir}")
-            return temp_dir
-
-        stderr_text = stderr.decode()
-        logger.error(
-            f"Failed to clone repository with return code {process.returncode}",
-        )
-        logger.error(f"stderr: {stderr_text}")
-        if stdout:
-            logger.debug(f"stdout: {stdout.decode()[:500]}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to clone repository with exception: {e}", exc_info=True)
-        return None
-
-
-async def run_repo_to_text(temp_dir):
-    """
-    Run the repo-to-text command asynchronously.
-    """
-    try:
-        logger.debug(f"Running repo-to-text in directory: {temp_dir}")
-
-        # Check if directory exists and list its contents
-        if os.path.exists(temp_dir):
-            logger.debug(
-                f"Directory exists. Contents: {os.listdir(temp_dir)[:10]}",
-            )  # Show first 10 items
-        else:
-            logger.error(f"Directory does not exist: {temp_dir}")
-            return False
-
-        process = await asyncio.create_subprocess_exec(
-            "repo-to-text",
-            "--ignore-patterns",
-            "*.log",
-            "temp/",
-            "*.lock",
-            ".git",
-            ".github",
-            cwd=temp_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-
-        if process.returncode == 0:
-            logger.info("repo-to-text command completed successfully.")
-            logger.debug(f"repo-to-text stdout length: {len(stdout)} bytes")
-            return True
-
-        stderr_text = stderr.decode()
-        stdout_text = stdout.decode() if stdout else ""
-        logger.error(
-            f"'repo-to-text' command failed with return code {process.returncode}",
-        )
-        logger.error(f"Full stderr output:\n{stderr_text}")
-        if stdout_text:
-            logger.error(f"Full stdout output:\n{stdout_text}")
-        return False
-    except Exception as e:
-        logger.error(
-            f"'repo-to-text' command failed with exception: {e}",
-            exc_info=True,
-        )
-        return False
-
-
-async def extract_git_authors(temp_dir):
-    """
-    Extract git authors from the cloned repository using git shortlog.
-    Returns a list of GitAuthor objects with commit counts and first/last commit dates.
-
-    Example output from git shortlog -sne:
-        120  Alice <alice@example.com>
-         95  Bob <bob@example.com>
-         10  Carlos <carlos@example.com>
-    """
-    import re
-    from datetime import datetime
-
-    from ..data_models import Commits, GitAuthor
-
-    try:
-        # First, get the list of authors with commit counts
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "shortlog",
-            "-sne",
-            "--all",
-            cwd=temp_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-
-        if process.returncode == 0:
-            git_authors = []
-            output = stdout.decode("utf-8").strip()
-
-            # Parse each line: "   120  Alice <alice@example.com>"
-            # Pattern: optional whitespace, number, whitespace, name, optional email in <>
-            pattern = r"^\s*(\d+)\s+(.+?)(?:\s+<([^>]+)>)?$"
-
-            for line in output.split("\n"):
-                if not line.strip():
-                    continue
-
-                match = re.match(pattern, line)
-                if match:
-                    total_commits = int(match.group(1))
-                    name = match.group(2).strip()
-                    email = match.group(3) if match.group(3) else None
-
-                    # Get first and last commit dates for this author
-                    # We'll use the email if available, otherwise the name
-                    author_identifier = email if email else name
-
-                    # Get first commit date (oldest)
-                    first_date_process = await asyncio.create_subprocess_exec(
-                        "git",
-                        "log",
-                        "--author=" + author_identifier,
-                        "--format=%ad",
-                        "--date=short",
-                        "--reverse",
-                        "--all",
-                        cwd=temp_dir,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    first_stdout, _ = await first_date_process.communicate()
-
-                    # Get last commit date (newest)
-                    last_date_process = await asyncio.create_subprocess_exec(
-                        "git",
-                        "log",
-                        "--author=" + author_identifier,
-                        "--format=%ad",
-                        "--date=short",
-                        "--all",
-                        "-1",
-                        cwd=temp_dir,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    last_stdout, _ = await last_date_process.communicate()
-
-                    # Parse dates
-                    first_commit_date = None
-                    last_commit_date = None
-
-                    if first_date_process.returncode == 0:
-                        first_date_str = (
-                            first_stdout.decode("utf-8").strip().split("\n")[0]
-                            if first_stdout.decode("utf-8").strip()
-                            else None
-                        )
-                        if first_date_str:
-                            try:
-                                first_commit_date = datetime.strptime(
-                                    first_date_str,
-                                    "%Y-%m-%d",
-                                ).date()
-                            except ValueError:
-                                logger.warning(
-                                    f"Failed to parse first commit date: {first_date_str}",
-                                )
-
-                    if last_date_process.returncode == 0:
-                        last_date_str = (
-                            last_stdout.decode("utf-8").strip().split("\n")[0]
-                            if last_stdout.decode("utf-8").strip()
-                            else None
-                        )
-                        if last_date_str:
-                            try:
-                                last_commit_date = datetime.strptime(
-                                    last_date_str,
-                                    "%Y-%m-%d",
-                                ).date()
-                            except ValueError:
-                                logger.warning(
-                                    f"Failed to parse last commit date: {last_date_str}",
-                                )
-
-                    # Create Commits object
-                    commits = Commits(
-                        total=total_commits,
-                        firstCommitDate=first_commit_date,
-                        lastCommitDate=last_commit_date,
-                    )
-
-                    git_authors.append(
-                        GitAuthor(name=name, email=email, commits=commits),
-                    )
-
-            logger.info(f"Extracted {len(git_authors)} git authors from repository.")
-            return git_authors
-        logger.error(f"Failed to extract git authors: {stderr.decode()}")
-        return []
-    except Exception as e:
-        logger.error(f"Failed to extract git authors: {e}")
-        return []
-
-
-def sanitize_special_tokens(text):
-    """
-    Remove special tokens by replacing them with safe placeholders.
-    This prevents encoding errors when sending to OpenAI API.
-    """
-    import re
-
-    # List of known special tokens that can cause issues
-    special_tokens_patterns = [
-        r"<\|endoftext\|>",
-        r"<\|startoftext\|>",
-        r"<\|fim_prefix\|>",
-        r"<\|fim_suffix\|>",
-        r"<\|fim_middle\|>",
-    ]
-
-    # Replace all special tokens with safe placeholders
-    clean_text = text
-    for pattern in special_tokens_patterns:
-        clean_text = re.sub(pattern, "[SPECIAL_TOKEN]", clean_text, flags=re.IGNORECASE)
-
-    return clean_text
+# These functions have been moved to repo_context.py
 
 
 async def llm_request_repo_infos(
-    repo_url,
-    output_format="json-ld",
-    gimie_output=None,
-    max_tokens=40000,
-):
+    repo_url: str,
+    output_format: str = "json-ld",
+    gimie_output: Optional[Any] = None,
+    max_tokens: int = 40000,
+) -> Optional[Dict[str, Any]]:
     """
-    Async version of llm_request_repo_infos
+    Analyze repository using PydanticAI with multi-provider support and retry/fallback logic.
+
+    Args:
+        repo_url: Repository URL to analyze
+        output_format: Output format ("json" or "json-ld")
+        gimie_output: Optional GIMIE output to include
+        max_tokens: Maximum tokens for input text
+
+    Returns:
+        Analysis result or None if failed
     """
     # Check if the repository is public before proceeding
     if not is_github_repo_public(repo_url):
@@ -438,30 +245,11 @@ async def llm_request_repo_infos(
         )
         return None
 
-    # Clone the GitHub repository into a temporary folder
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Clone repository asynchronously
-        clone_result = await clone_repo(repo_url, temp_dir)
-        if not clone_result:
-            return None
+    # Prepare repository context
+    context_result = await prepare_repository_context(repo_url, max_tokens)
 
-        # Run repo-to-text asynchronously to check if repository has content
-        repo_to_text_success = await run_repo_to_text(temp_dir)
-        if not repo_to_text_success:
-            logger.warning(
-                f"repo-to-text failed for {repo_url}, but will attempt to continue with available .txt files",
-            )
-            # Don't return None immediately - check if there are any .txt files anyway
-
-        # Check early if repository has any analyzable content
-        input_text = combine_text_files(temp_dir)
-        input_text = sanitize_special_tokens(input_text)
-
-        # Early exit for empty repositories - skip expensive operations
-        if not input_text or len(input_text.strip()) < 10:
-            logger.warning(
-                f"Repository {repo_url} has no analyzable content (empty or minimal). Skipping further analysis.",
-            )
+    if not context_result["success"]:
+        if context_result["error"] == "Repository has no analyzable content":
             # Return minimal valid metadata for empty repositories
             repo_name = repo_url.rstrip("/").split("/")[-1]
             return {
@@ -471,395 +259,153 @@ async def llm_request_repo_infos(
                 "codeRepository": repo_url,
                 "description": "Repository appears to be empty or has no analyzable content",
             }
-
-        # Continue with normal processing for non-empty repositories
-        # Extract git authors from the cloned repository
-        git_authors = await extract_git_authors(temp_dir)
-
-        input_text = reduce_input_size(
-            input_text,
-            max_tokens=max_tokens,
-            repo_url=repo_url,
-        )
-
-        if gimie_output:
-            # Sanitize GIMIE output to remove special tokens before adding
-            gimie_text = str(gimie_output)
-            gimie_text = sanitize_special_tokens(gimie_text)
-            input_text += "\n\n" + gimie_text
-
-        combined_file_path = os.path.join(temp_dir, "combined_repo.txt")
-        store_combined_text(input_text, combined_file_path)
-
-        if PROVIDER == "openrouter":
-            response = await get_openrouter_response_async(input_text, model=MODEL)
-        elif PROVIDER == "openai":
-            response = await get_openai_response_async(input_text, model=MODEL)
         else:
-            logger.error("No provider provided")
+            logger.error(
+                f"Failed to prepare repository context: {context_result['error']}",
+            )
             return None
 
-        try:
-            if PROVIDER == "openrouter":
-                raw_result = response["choices"][0]["message"]["content"]
-                parsed_result = clean_json_string(raw_result)
-                json_data = json.loads(parsed_result)
-            elif PROVIDER == "openai":
-                # All OpenAI models now use .parsed with beta.chat.completions.parse
-                json_data = response.choices[0].message.parsed
-                logger.info("Clean result from OpenAI response:")
-                json_data = json_data.model_dump(mode="json")
+    input_text = context_result["input_text"]
+    git_authors = context_result["git_authors"]
 
-            logger.info("Successfully JSON API response")
+    # Add GIMIE output if provided
+    if gimie_output:
+        gimie_text = str(gimie_output)
+        gimie_text = sanitize_special_tokens(gimie_text)
+        input_text += "\n\n" + gimie_text
 
-            # Add git authors to the JSON data
-            if git_authors:
-                json_data["gitAuthors"] = [
-                    {
-                        "name": author.name,
-                        "email": author.email,
-                        "commits": {
-                            "total": author.commits.total,
-                            "firstCommitDate": (
-                                author.commits.firstCommitDate.isoformat()
-                                if author.commits.firstCommitDate
-                                else None
-                            ),
-                            "lastCommitDate": (
-                                author.commits.lastCommitDate.isoformat()
-                                if author.commits.lastCommitDate
-                                else None
-                            ),
-                        }
-                        if author.commits
-                        else None,
+    # Create context for the agent
+    agent_context = RepositoryAnalysisContext(
+        repo_url=repo_url,
+        git_authors=git_authors,
+        gimie_output=gimie_output,
+    )
+
+    # Prepare the prompt
+    prompt = f"""Analyze the following software repository and extract comprehensive metadata.
+
+Repository URL: {repo_url}
+
+Repository Content:
+{input_text}
+
+Please provide a detailed analysis including:
+- Repository name, description, and purpose
+- Programming languages used
+- License information
+- Author information and affiliations
+- Related organizations
+- Keywords and topics
+- Any other relevant metadata
+
+Focus on accuracy and completeness in your analysis."""
+
+    try:
+        # Run agent with fallback across multiple models
+        result = await run_agent_with_fallback(
+            llm_analysis_configs,
+            prompt,
+            agent_context,
+        )
+
+        # Extract the output from PydanticAI result
+        if hasattr(result, "output"):
+            json_data = result.output
+        else:
+            json_data = result
+
+        # Ensure it's a dictionary
+        if hasattr(json_data, "model_dump"):
+            json_data = json_data.model_dump()
+
+        logger.info("Successfully received analysis from agent")
+
+        # Validate and clean URLs in the LLM output
+        logger.info("Validating URLs in LLM output...")
+        json_data = validate_and_clean_urls(json_data)
+
+        # Validate author URLs
+        if "author" in json_data and json_data["author"]:
+            validated_authors = []
+            for author in json_data["author"]:
+                if isinstance(author, dict):
+                    validated_authors.append(validate_author_urls(author))
+                else:
+                    validated_authors.append(author)
+            json_data["author"] = validated_authors
+
+        # Validate organization URLs in relatedToOrganizationsROR
+        if (
+            "relatedToOrganizationsROR" in json_data
+            and json_data["relatedToOrganizationsROR"]
+        ):
+            validated_orgs = []
+            for org in json_data["relatedToOrganizationsROR"]:
+                if isinstance(org, dict):
+                    validated_orgs.append(validate_organization_urls(org))
+                else:
+                    validated_orgs.append(org)
+            json_data["relatedToOrganizationsROR"] = validated_orgs
+
+        # Validate software image URLs
+        if "hasSoftwareImage" in json_data and json_data["hasSoftwareImage"]:
+            validated_images = []
+            for image in json_data["hasSoftwareImage"]:
+                if isinstance(image, dict):
+                    validated_images.append(validate_software_image_urls(image))
+                else:
+                    validated_images.append(image)
+            json_data["hasSoftwareImage"] = validated_images
+
+        # Cleanup agents after successful completion
+        await cleanup_agents()
+
+        # Add git authors to the JSON data
+        if git_authors:
+            json_data["gitAuthors"] = [
+                {
+                    "name": author.name,
+                    "email": author.email,
+                    "commits": {
+                        "total": author.commits.total,
+                        "firstCommitDate": (
+                            str(author.commits.firstCommitDate)
+                            if author.commits.firstCommitDate
+                            else None
+                        ),
+                        "lastCommitDate": (
+                            str(author.commits.lastCommitDate)
+                            if author.commits.lastCommitDate
+                            else None
+                        ),
                     }
-                    for author in git_authors
-                ]
+                    if author.commits
+                    else None,
+                }
+                for author in git_authors
+            ]
 
-            # Run verification before converting to JSON-LD
-            verifier = Verification(json_data, repo_url)
-            verifier.run()
-            verifier.summary()
+        # Run verification before converting to JSON-LD
+        verifier = Verification(json_data, repo_url)
+        verifier.run()
+        verifier.summary()
 
-            cleaned_json = verifier.sanitize_metadata()
+        cleaned_json = verifier.sanitize_metadata()
 
-            context_path = "src/files/json-ld-context.json"
-            if output_format == "json-ld":
-                return json_to_jsonLD(cleaned_json, context_path)
-            if output_format == "json":
-                return cleaned_json
+        context_path = "src/files/json-ld-context.json"
+        if output_format == "json-ld":
+            return json_to_jsonLD(cleaned_json, context_path)
+        elif output_format == "json":
+            return cleaned_json
+        else:
             logger.error(f"Unsupported output format: {output_format}")
             return None
 
-        except Exception as e:
-            logger.error(f"Error parsing response: {e}")
-            return None
-
-
-async def get_openrouter_response_async(
-    input_text,
-    system_prompt=system_prompt_json,
-    model="google/gemini-2.5-flash",
-    temperature=0.2,
-    schema=SoftwareSourceCode,
-):
-    """
-    Get structured response from openrouter asynchronously
-    """
-    # Sanitize the input to remove special tokens
-    input_text = sanitize_special_tokens(input_text)
-    system_prompt = sanitize_special_tokens(system_prompt)
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": input_text},
-        ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": schema.model_json_schema(),
-        },
-        "temperature": temperature,
-    }
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
-
-    for attempt in range(3):
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    OPENROUTER_ENDPOINT,
-                    headers=headers,
-                    json=payload,
-                ) as response:
-                    logger.info(f"API response status: {response.status}")
-                    if response.status == 200:
-                        return await response.json()
-                    logger.error(
-                        f"API request failed with status {response.status}",
-                    )
-                    if attempt == 2:  # Last attempt
-                        return None
-        except aiohttp.ClientError as e:
-            logger.error(f"Request failed (attempt {attempt + 1}): {e}")
-            if attempt == 2:  # Last attempt
-                return None
-        except asyncio.TimeoutError as e:
-            logger.error(f"Request timeout (attempt {attempt + 1}): {e}")
-            if attempt == 2:  # Last attempt
-                return None
-
-    return None
-
-
-async def get_openai_response_async(
-    prompt,
-    system_prompt=system_prompt_json,
-    model="gpt-4o",
-    temperature=0.2,
-    schema=SoftwareSourceCode,
-):
-    """
-    Get structured response from OpenAI API using SoftwareSourceCode schema asynchronously.
-    """
-    # Sanitize the prompt to remove special tokens
-    prompt = sanitize_special_tokens(prompt)
-    system_prompt = sanitize_special_tokens(system_prompt)
-
-    # Get or create the async OpenAI client
-    client = get_async_openai_client()
-    if not client:
-        logger.error("Failed to initialize OpenAI client")
-        return None
-
-    # Log the model being used
-    logger.info(f"Making OpenAI API call with model: {model}")
-
-    # Retry logic for connection errors
-    for attempt in range(3):
-        try:
-            # Use the async OpenAI client
-            # GPT-5 and reasoning models (o3, o4) have different requirements
-            if model.startswith("gpt-5"):
-                # GPT-5: use beta.parse like other models, it should work with structured outputs
-                logger.info(
-                    f"Using GPT-5 model configuration with structured outputs for: {model}",
-                )
-                response = await client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format=convert_httpurl_to_str(schema),
-                    max_tokens=16000,
-                )
-            elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
-                # O3/O4 reasoning models: use beta parse without temperature
-                # These models require max_completion_tokens instead of max_tokens
-                logger.info(f"Using reasoning model configuration for: {model}")
-                response = await client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format=convert_httpurl_to_str(schema),
-                    max_completion_tokens=16000,
-                )
-            else:
-                # Standard models (gpt-4o, etc.): use beta parse with temperature
-                logger.info(f"Using standard model configuration for: {model}")
-                response = await client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=temperature,
-                    response_format=convert_httpurl_to_str(schema),
-                    max_tokens=16000,
-                )
-
-            logger.info(f"Successfully received response from {model}")
-            return response
-
-        except Exception as e:
-            error_type = type(e).__name__
-            error_msg = str(e)
-            logger.error(
-                f"OpenAI API error (attempt {attempt + 1}/{3}): [{error_type}] {error_msg}",
-            )
-            logger.error(f"Model: {model}, Error details: {e!r}")
-            if attempt == 2:  # Last attempt
-                return None
-            # Wait before retry
-            await asyncio.sleep(2**attempt)  # Exponential backoff
-
-
-async def llm_request_userorg_infos(metadata, item_type="user"):
-    """
-    Async version of llm_request_userorg_infos
-    """
-    input_text = metadata.model_dump_json()
-
-    if item_type == "user":
-        schema = GitHubUser
-        system_prompt = system_prompt_user_content
-    elif item_type == "org":
-        schema = GitHubOrganization
-        system_prompt = system_prompt_org_content
-
-    if PROVIDER == "openrouter":
-        response = await get_openrouter_response_async(
-            input_text,
-            system_prompt=system_prompt,
-            model=MODEL,
-            schema=schema,
-        )
-    elif PROVIDER == "openai":
-        response = await get_openai_response_async(
-            input_text,
-            system_prompt=system_prompt,
-            model=MODEL,
-            schema=schema,
-        )
-    else:
-        logger.error("No provider provided")
-        return None
-
-    try:
-        if PROVIDER == "openrouter":
-            raw_result = response["choices"][0]["message"]["content"]
-            parsed_result = clean_json_string(raw_result)
-            json_data = json.loads(parsed_result)
-        elif PROVIDER == "openai":
-            # All OpenAI models now use .parsed with beta.chat.completions.parse
-            json_data = response.choices[0].message.parsed
-            json_data = json_data.model_dump(mode="json")
-        else:
-            logger.error("Unknown provider")
-            return None
-
-        logger.info("Successfully parsed API response")
-        return json_data
-
     except Exception as e:
-        logger.error(f"Error parsing response: {e}")
+        logger.error(f"Error in repository analysis: {e}")
+        # Cleanup agents even on error
+        await cleanup_agents()
         return None
 
 
-# Keep the synchronous versions for backward compatibility
-def get_openrouter_response(
-    input_text,
-    system_prompt=system_prompt_json,
-    model="google/gemini-2.5-flash",
-    temperature=0.2,
-    schema=SoftwareSourceCode,
-):
-    """
-    Synchronous wrapper for backward compatibility
-    """
-    import asyncio
-
-    return asyncio.run(
-        get_openrouter_response_async(
-            input_text,
-            system_prompt,
-            model,
-            temperature,
-            schema,
-        ),
-    )
-
-
-def get_openai_response(
-    prompt,
-    system_prompt=system_prompt_json,
-    model="gpt-4o",
-    temperature=0.2,
-    schema=SoftwareSourceCode,
-):
-    """
-    Synchronous wrapper for backward compatibility
-    """
-    import time
-
-    from openai import OpenAI
-
-    # Check API key first
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("OPENAI_API_KEY not found in environment variables")
-        return None
-
-    # Log the model being used
-    logger.info(f"Making sync OpenAI API call with model: {model}")
-
-    # Retry logic for connection errors
-    for attempt in range(3):
-        try:
-            sync_client = OpenAI(
-                api_key=api_key,
-                timeout=600.0,  # 10 minute timeout for GPT-5 and other models
-            )
-
-            # GPT-5 and reasoning models (o3, o4) have different requirements
-            if model.startswith("gpt-5"):
-                # GPT-5: use beta.parse like other models, it should work with structured outputs
-                logger.info(
-                    f"Using GPT-5 model configuration with structured outputs for: {model}",
-                )
-                response = sync_client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format=convert_httpurl_to_str(schema),
-                )
-            elif model.split("-")[0] == "o3" or model.split("-")[0] == "o4":
-                # O3/O4 reasoning models: use beta parse without temperature
-                logger.info(f"Using reasoning model configuration for: {model}")
-                response = sync_client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format=convert_httpurl_to_str(schema),
-                )
-            else:
-                # Standard models (gpt-4o, etc.): use beta parse with temperature
-                logger.info(f"Using standard model configuration for: {model}")
-                response = sync_client.beta.chat.completions.parse(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=temperature,
-                    response_format=convert_httpurl_to_str(schema),
-                )
-
-            logger.info(f"Successfully received response from {model}")
-            return response
-
-        except Exception as e:
-            error_type = type(e).__name__
-            error_msg = str(e)
-            logger.error(
-                f"OpenAI API error (attempt {attempt + 1}/{3}): [{error_type}] {error_msg}",
-            )
-            logger.error(f"Model: {model}, Error details: {e!r}")
-            if attempt == 2:  # Last attempt
-                return None
-            # Wait before retry
-            time.sleep(2**attempt)  # Exponential backoff
+# Old API functions removed - now using PydanticAI with multi-provider support

@@ -76,6 +76,15 @@ class Verification:
         url_fields = ["url", "readme", "hasDocumentation"]
         for field in url_fields:
             url_val = self.data.get(field)
+            logger.info(
+                f"Validating URL field '{field}': {url_val} (type: {type(url_val)})",
+            )
+
+            # Handle Pydantic HttpUrl objects
+            if hasattr(url_val, "__str__"):
+                url_val = str(url_val)
+                logger.info(f"Converted HttpUrl to string: {url_val}")
+
             if not isinstance(url_val, str) or not self._is_valid_url(url_val):
                 msg = f"Invalid or missing URL in {field}: {url_val}"
                 logger.error(f"{self.repo_url} :: {msg}")
@@ -93,9 +102,19 @@ class Verification:
                 self.invalid_fields[field] = msg
                 continue
 
-            bad_items = [
-                v for v in val if not isinstance(v, str) or not self._is_valid_url(v)
-            ]
+            bad_items = []
+            for v in val:
+                # Handle Pydantic HttpUrl objects
+                if hasattr(v, "__str__"):
+                    v_str = str(v)
+                elif not isinstance(v, str):
+                    bad_items.append(v)
+                    continue
+                else:
+                    v_str = v
+
+                if not self._is_valid_url(v_str):
+                    bad_items.append(v)
             if bad_items:
                 msg = f"{len(bad_items)} invalid URLs in {field}: {bad_items}"
                 logger.error(f"{self.repo_url} :: {msg}")
@@ -153,11 +172,15 @@ class Verification:
                 self.invalid_fields.setdefault("author", []).append("Missing name")
 
             orcid = author.get("orcidId")
-            if orcid and not self._is_valid_url(orcid):
-                msg = f"Invalid ORCID ID: {orcid}"
-                logger.error(f"{self.repo_url} :: {msg}")
-                self.issues.append(msg)
-                self.invalid_fields.setdefault("author", []).append("Invalid ORCID ID")
+            if orcid:
+                logger.info(f"Validating ORCID: '{orcid}' (type: {type(orcid)})")
+                if not self._is_valid_orcid(orcid):
+                    msg = f"Invalid ORCID ID: {orcid}"
+                    logger.error(f"{self.repo_url} :: {msg}")
+                    self.issues.append(msg)
+                    self.invalid_fields.setdefault("author", []).append(
+                        "Invalid ORCID ID",
+                    )
 
     def _check_software_images(self):
         logger.debug("Checking software image objects...")
@@ -195,7 +218,7 @@ class Verification:
                         )
                         img["softwareVersion"] = normalized
 
-            if "availableInRegistry" in img and not self._is_valid_url(
+            if "availableInRegistry" in img and not self._is_valid_registry_url(
                 img["availableInRegistry"],
             ):
                 msg = f"Invalid registry URL: {img['availableInRegistry']}"
@@ -308,7 +331,7 @@ class Verification:
                                 f"Removed invalid softwareVersion: {img.get('softwareVersion')}",
                             )
 
-                    if "availableInRegistry" in img and not self._is_valid_url(
+                    if "availableInRegistry" in img and not self._is_valid_registry_url(
                         img["availableInRegistry"],
                     ):
                         del img["availableInRegistry"]
@@ -341,10 +364,111 @@ class Verification:
 
     def _is_valid_url(self, url):
         try:
+            # Handle Pydantic HttpUrl objects
+            if hasattr(url, "__str__"):
+                url = str(url)
+            elif not isinstance(url, str):
+                return False
+
             result = urlparse(url)
             return result.scheme in ("http", "https") and bool(result.netloc)
         except Exception:
             return False
+
+    def _is_valid_orcid(self, orcid):
+        """
+        Validate ORCID ID format.
+        Accepts both full URLs (https://orcid.org/0000-0002-6441-8540)
+        and just the ID (0000-0002-6441-8540).
+        Also handles Pydantic HttpUrl objects.
+        """
+        if not orcid:
+            logger.debug(f"ORCID validation failed: empty value - {orcid}")
+            return False
+
+        # Handle Pydantic HttpUrl objects
+        if hasattr(orcid, "__str__"):
+            orcid = str(orcid)
+        elif not isinstance(orcid, str):
+            logger.debug(
+                f"ORCID validation failed: not a string or HttpUrl - {orcid} (type: {type(orcid)})",
+            )
+            return False
+
+        # Remove any whitespace
+        orcid = orcid.strip()
+
+        # If it's a full URL, extract the ID part
+        if orcid.startswith("https://orcid.org/"):
+            orcid_id = orcid.replace("https://orcid.org/", "")
+        elif orcid.startswith("http://orcid.org/"):
+            orcid_id = orcid.replace("http://orcid.org/", "")
+        else:
+            orcid_id = orcid
+
+        # Validate ORCID ID format: XXXX-XXXX-XXXX-XXXX where X is 0-9
+        import re
+
+        orcid_pattern = r"^\d{4}-\d{4}-\d{4}-\d{4}$"
+        is_valid = bool(re.match(orcid_pattern, orcid_id))
+
+        logger.info(f"ORCID validation: '{orcid}' -> '{orcid_id}' -> {is_valid}")
+        return is_valid
+
+    def _is_valid_registry_url(self, url):
+        """
+        Validate container registry URL format.
+        Supports common registries like Docker Hub, GHCR, Quay.io, etc.
+        Also handles Pydantic HttpUrl objects.
+        """
+        if not url:
+            return False
+
+        # Handle Pydantic HttpUrl objects
+        if hasattr(url, "__str__"):
+            url = str(url)
+        elif not isinstance(url, str):
+            return False
+
+        # Remove any whitespace
+        url = url.strip()
+
+        # Common container registry patterns
+        registry_patterns = [
+            # Docker Hub (docker.io) - supports tags with colons
+            r"^https?://(?:hub\.)?docker\.io/(?:r/)?[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # GitHub Container Registry (ghcr.io) - supports tags with colons
+            r"^https?://ghcr\.io/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Quay.io - supports tags with colons
+            r"^https?://quay\.io/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Amazon ECR - supports tags with colons
+            r"^https?://[0-9]+\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Google Container Registry - supports tags with colons
+            r"^https?://gcr\.io/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            r"^https?://[a-z0-9-]+\.gcr\.io/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Azure Container Registry - supports tags with colons
+            r"^https?://[a-zA-Z0-9-]+\.azurecr\.io/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Harbor registries - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+/harbor/projects/[0-9]+/repositories/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # JFrog Artifactory - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+/artifactory/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Nexus registries - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+/repository/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # GitLab Container Registry - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+/gitlab/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Custom registries with ports - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+:[0-9]+/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+            # Generic registry pattern (fallback) - supports tags with colons
+            r"^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$",
+        ]
+
+        import re
+
+        for pattern in registry_patterns:
+            if re.match(pattern, url):
+                return True
+
+        return False
 
     def _url_responds(self, url):
         try:
@@ -354,6 +478,9 @@ class Verification:
             return False
 
     def _is_date(self, date):
+        # Convert datetime.date objects to string for validation
+        if hasattr(date, "strftime"):
+            date = str(date)
         return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", date))
 
     def _is_version(self, version):

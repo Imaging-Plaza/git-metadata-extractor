@@ -37,12 +37,12 @@ class Organization(BaseModel):
     ] = None  # Name of parent organization if applicable
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
-    confidenceOfAttriution: Optional[float] = None  # Confidence score (0.0 to 1.0)
+    attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
 
 
 class FundingInformation(BaseModel):
-    identifier: str = None
-    fundingGrant: str = None
+    identifier: Optional[str] = None
+    fundingGrant: Optional[str] = None
     fundingSource: Organization
 
 
@@ -59,7 +59,7 @@ class FormalParameter(BaseModel):
 class ExecutableNotebook(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    url: HttpUrl = None
+    url: Optional[HttpUrl] = None
 
 
 class SoftwareImage(BaseModel):
@@ -69,7 +69,7 @@ class SoftwareImage(BaseModel):
         str,
         StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+"),
     ] = None
-    availableInRegistry: HttpUrl = None
+    availableInRegistry: Optional[HttpUrl] = None
 
 
 class DataFeed(BaseModel):
@@ -89,7 +89,7 @@ class ImageKeyword(str, Enum):
 
 
 class Image(BaseModel):
-    contentUrl: HttpUrl = None
+    contentUrl: Optional[HttpUrl] = None
     keywords: ImageKeyword = ImageKeyword.ILLUSTRATIVE_IMAGE
 
 
@@ -165,8 +165,8 @@ class GitAuthor(BaseModel):
 class SoftwareSourceCode(BaseModel):
     name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
-    citation: List[HttpUrl] = None
-    codeRepository: List[HttpUrl] = None
+    citation: Optional[List[HttpUrl]] = None
+    codeRepository: Optional[List[HttpUrl]] = None
     conditionsOfAccess: Optional[str] = None
     dateCreated: Optional[date] = None
     datePublished: Optional[date] = None
@@ -209,9 +209,9 @@ class SoftwareSourceCode(BaseModel):
     relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: RepositoryType = None
     repositoryTypeJustification: List[str] = None
-    relatedToEPFL: bool = None
-    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
-    relatedToEPFLJustification: str = None
+    relatedToEPFL: Optional[bool] = None
+    relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+    relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
     webpagesToCheck: Optional[List[HttpUrl]] = None
 
@@ -233,9 +233,9 @@ class GitHubOrganization(BaseModel):
     relatedToOrganizationJustification: Optional[List[str]] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
-    relatedToEPFL: bool = None
-    relatedToEPFLJustification: str = None
-    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
+    relatedToEPFL: Optional[bool] = None
+    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
 
 
 class GitHubUser(BaseModel):
@@ -249,9 +249,9 @@ class GitHubUser(BaseModel):
     disciplineJustification: Optional[List[str]] = None
     position: Optional[List[str]] = None
     positionJustification: Optional[List[str]] = None
-    relatedToEPFL: bool = None
-    relatedToEPFLJustification: str = None
-    relatedToEPFLConfidence: float = None  # Confidence score (0.0 to 1.0)
+    relatedToEPFL: Optional[bool] = None
+    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
 
 
 class ResourceType(str, Enum):
@@ -261,7 +261,7 @@ class ResourceType(str, Enum):
 
 
 class APIOutput(BaseModel):
-    link: HttpUrl = None
+    link: Optional[HttpUrl] = None
     type: ResourceType = None
     parseTimestamp: datetime = None
     output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser] = None
@@ -538,7 +538,7 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "parentOrganization": "schema:parentOrganization",
         "country": "schema:addressCountry",
         "website": "schema:url",
-        "confidenceOfAttriution": "imag:confidenceOfAttribution",
+        "attributionConfidence": "imag:attributionConfidence",
     },
     "Commits": {
         "total": "imag:totalCommits",

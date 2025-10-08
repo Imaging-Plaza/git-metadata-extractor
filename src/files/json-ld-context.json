@@ -85,7 +85,7 @@
     "totalCommits": "imag:totalCommits",
     "firstCommitDate": "imag:firstCommitDate",
     "lastCommitDate": "imag:lastCommitDate",
-    "confidenceOfAttribution": "imag:confidenceOfAttribution",
+    "attributionConfidence": "imag:attributionConfidence",
     "relatedToEPFLConfidence": "imag:relatedToEPFLConfidence"
   }
 }

@@ -157,8 +157,11 @@ class Repository:
 
         # Safely extend authors list
         authors_list = getattr(self.data, "author", [])
-        authors_list.extend(user_enrichment.get("enrichedAuthors", []))
-        self.data.author = authors_list
+        if user_enrichment is not None:
+            authors_list.extend(user_enrichment.get("enrichedAuthors", []))
+            self.data.author = authors_list
+        else:
+            logging.warning("User enrichment returned None, skipping author enrichment")
 
         # llm_result["authorEnrichmentSummary"] = user_enrichment.get(
         #     "summary",

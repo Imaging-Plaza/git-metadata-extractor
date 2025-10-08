@@ -35,6 +35,12 @@ from ..data_models import (
     Person,
     SoftwareSourceCode,
 )
+from ..llm.model_config import (
+    create_pydantic_ai_model,
+    get_retry_delay,
+    load_model_config,
+    validate_config,
+)
 from .organization_enrichment_prompts import (
     get_organization_enrichment_prompt,
     organization_enrichment_main_system_prompt,
@@ -50,12 +56,66 @@ _MAX_SELENIUM_SESSIONS = int(os.getenv("MAX_SELENIUM_SESSIONS", "1"))
 _selenium_semaphore = asyncio.Semaphore(_MAX_SELENIUM_SESSIONS)
 
 
-# Initialize the agent with OpenAI model
-# The agent will analyze organization information and use tools as needed
-agent = Agent(
-    model=f"openai:{os.getenv('MODEL', 'gpt-4o-mini')}",
-    output_type=OrganizationEnrichmentResult,
-    system_prompt=organization_enrichment_main_system_prompt,
+# Load model configuration
+org_enrichment_configs = load_model_config("run_organization_enrichment")
+
+# Validate configurations
+for config in org_enrichment_configs:
+    if not validate_config(config):
+        logger.error(f"Invalid configuration for organization enrichment: {config}")
+        raise ValueError("Invalid model configuration")
+
+# Agent cleanup tracking
+_active_org_agents = []
+
+
+# Create agent with first configuration
+def create_organization_enrichment_agent(config: dict) -> Agent:
+    """Create an organization enrichment agent from configuration."""
+    model = create_pydantic_ai_model(config)
+
+    agent = Agent(
+        model=model,
+        output_type=OrganizationEnrichmentResult,
+        system_prompt=organization_enrichment_main_system_prompt,
+    )
+
+    # Track agent for cleanup
+    _active_org_agents.append(agent)
+
+    return agent
+
+
+async def cleanup_org_agents():
+    """Cleanup organization enrichment agents to free memory."""
+    global _active_org_agents
+
+    if not _active_org_agents:
+        logger.debug("No active organization enrichment agents to cleanup")
+        return
+
+    logger.info(f"Cleaning up {len(_active_org_agents)} organization enrichment agents")
+
+    for agent in _active_org_agents.copy():
+        try:
+            _active_org_agents.remove(agent)
+            logger.debug("Organization enrichment agent removed from tracking")
+        except Exception as e:
+            logger.warning(f"Error during organization enrichment agent cleanup: {e}")
+
+    # Force garbage collection
+    import gc
+
+    gc.collect()
+
+    logger.info("Organization enrichment agent cleanup completed")
+
+
+# Create the primary agent
+agent = (
+    create_organization_enrichment_agent(org_enrichment_configs[0])
+    if org_enrichment_configs
+    else None
 )
 
 ########################################################################
@@ -433,6 +493,99 @@ async def extract_domain_from_email(
 ########################################################################
 
 
+async def run_agent_with_retry(
+    agent: Agent,
+    prompt: str,
+    context: OrganizationAnalysisContext,
+    config: dict,
+) -> Any:
+    """
+    Run agent with retry logic and exponential backoff.
+
+    Args:
+        agent: PydanticAI agent
+        prompt: Input prompt
+        context: Agent context
+        config: Model configuration
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all retries fail
+    """
+    max_retries = config.get("max_retries", 3)
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(
+                f"Attempting organization enrichment agent run (attempt {attempt + 1}/{max_retries})",
+            )
+            result = await agent.run(prompt, deps=context)
+            logger.info(
+                f"Organization enrichment agent run successful on attempt {attempt + 1}",
+            )
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.warning(
+                f"Organization enrichment agent run failed on attempt {attempt + 1}: {e}",
+            )
+
+            if attempt < max_retries - 1:
+                delay = get_retry_delay(attempt)
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"All {max_retries} attempts failed")
+
+    raise last_exception or Exception("Organization enrichment agent run failed")
+
+
+async def run_agent_with_fallback(
+    agent_configs: list[dict],
+    prompt: str,
+    context: OrganizationAnalysisContext,
+) -> Any:
+    """
+    Run agent with fallback to next model if current fails.
+
+    Args:
+        agent_configs: List of agent configurations to try
+        prompt: Input prompt
+        context: Agent context
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all models fail
+    """
+    last_exception = None
+
+    for i, config in enumerate(agent_configs):
+        try:
+            logger.info(
+                f"Trying organization enrichment model {i + 1}/{len(agent_configs)}: {config['provider']}/{config['model']}",
+            )
+            agent = create_organization_enrichment_agent(config)
+            result = await run_agent_with_retry(agent, prompt, context, config)
+            logger.info(
+                f"Successfully completed organization enrichment with model {i + 1}",
+            )
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.error(f"Organization enrichment model {i + 1} failed: {e}")
+            if i < len(agent_configs) - 1:
+                logger.info("Falling back to next organization enrichment model...")
+            else:
+                logger.error("All organization enrichment models failed")
+
+    raise last_exception or Exception("All organization enrichment models failed")
+
+
 async def enrich_organizations(
     repository_metadata: SoftwareSourceCode,
     repository_url: str,
@@ -474,9 +627,9 @@ async def enrich_organizations(
         f"📊 Input data: {len(context.git_authors)} git authors, {len(context.authors)} ORCID authors",
     )
 
-    # Run the agent
-    logger.info("🤖 Running PydanticAI agent...")
-    result = await agent.run(prompt, deps=context)
+    # Run the agent with fallback across multiple models
+    logger.info("🤖 Running PydanticAI agent with fallback...")
+    result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(
@@ -492,6 +645,9 @@ async def enrich_organizations(
         for i, org in enumerate(result.output.organizations, 1):
             org_name = org.legalName if hasattr(org, "legalName") else str(org)
             logger.info(f"  {i}. {org_name}")
+
+    # Cleanup agents after successful completion
+    await cleanup_org_agents()
 
     return result.output
 
@@ -601,9 +757,9 @@ async def enrich_organizations_from_dict(
         f"📊 Input data: {len(git_authors)} git authors, {len(authors)} ORCID authors",
     )
 
-    # Run the agent
-    logger.info("🤖 Running PydanticAI agent...")
-    result = await agent.run(prompt, deps=context)
+    # Run the agent with fallback across multiple models
+    logger.info("🤖 Running PydanticAI agent with fallback...")
+    result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(

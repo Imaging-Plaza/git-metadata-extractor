@@ -36,6 +36,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from ..data_models import GitAuthor, Person
+from ..llm.model_config import (
+    create_pydantic_ai_model,
+    get_retry_delay,
+    load_model_config,
+    validate_config,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -102,11 +108,28 @@ class UserAnalysisContext(BaseModel):
     existing_authors: list[Person]
 
 
-# Initialize the agent with OpenAI model
-agent = Agent(
-    model=f"openai:{os.getenv('MODEL', 'gpt-4o-mini')}",
-    output_type=UserEnrichmentResult,
-    system_prompt="""You are an expert at identifying and enriching author/user information from software repository metadata.
+# Load model configuration
+user_enrichment_configs = load_model_config("run_user_enrichment")
+
+# Validate configurations
+for config in user_enrichment_configs:
+    if not validate_config(config):
+        logger.error(f"Invalid configuration for user enrichment: {config}")
+        raise ValueError("Invalid model configuration")
+
+# Agent cleanup tracking
+_active_user_agents = []
+
+
+# Create agent with first configuration
+def create_user_enrichment_agent(config: dict) -> Agent:
+    """Create a user enrichment agent from configuration."""
+    model = create_pydantic_ai_model(config)
+
+    agent = Agent(
+        model=model,
+        output_type=UserEnrichmentResult,
+        system_prompt="""You are an expert at identifying and enriching author/user information from software repository metadata.
 
 Your task is to analyze:
 1. Git author information (name, email, commit history)
@@ -153,6 +176,44 @@ Provide a summary that:
 - Mentions any interesting collaboration patterns
 
 Be thorough and use the tools available to you to gather and verify author information.""",
+    )
+
+    # Track agent for cleanup
+    _active_user_agents.append(agent)
+
+    return agent
+
+
+async def cleanup_user_agents():
+    """Cleanup user enrichment agents to free memory."""
+    global _active_user_agents
+
+    if not _active_user_agents:
+        logger.debug("No active user enrichment agents to cleanup")
+        return
+
+    logger.info(f"Cleaning up {len(_active_user_agents)} user enrichment agents")
+
+    for agent in _active_user_agents.copy():
+        try:
+            _active_user_agents.remove(agent)
+            logger.debug("User enrichment agent removed from tracking")
+        except Exception as e:
+            logger.warning(f"Error during user enrichment agent cleanup: {e}")
+
+    # Force garbage collection
+    import gc
+
+    gc.collect()
+
+    logger.info("User enrichment agent cleanup completed")
+
+
+# Create the primary agent
+agent = (
+    create_user_enrichment_agent(user_enrichment_configs[0])
+    if user_enrichment_configs
+    else None
 )
 
 
@@ -567,6 +628,97 @@ async def extract_domain_from_email(
     return json.dumps(result, indent=2)
 
 
+async def run_agent_with_retry(
+    agent: Agent,
+    prompt: str,
+    context: UserAnalysisContext,
+    config: dict,
+) -> Any:
+    """
+    Run agent with retry logic and exponential backoff.
+
+    Args:
+        agent: PydanticAI agent
+        prompt: Input prompt
+        context: Agent context
+        config: Model configuration
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all retries fail
+    """
+    max_retries = config.get("max_retries", 3)
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(
+                f"Attempting user enrichment agent run (attempt {attempt + 1}/{max_retries})",
+            )
+            result = await agent.run(prompt, deps=context)
+            logger.info(
+                f"User enrichment agent run successful on attempt {attempt + 1}",
+            )
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.warning(
+                f"User enrichment agent run failed on attempt {attempt + 1}: {e}",
+            )
+
+            if attempt < max_retries - 1:
+                delay = get_retry_delay(attempt)
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"All {max_retries} attempts failed")
+
+    raise last_exception or Exception("User enrichment agent run failed")
+
+
+async def run_agent_with_fallback(
+    agent_configs: list[dict],
+    prompt: str,
+    context: UserAnalysisContext,
+) -> Any:
+    """
+    Run agent with fallback to next model if current fails.
+
+    Args:
+        agent_configs: List of agent configurations to try
+        prompt: Input prompt
+        context: Agent context
+
+    Returns:
+        Agent result
+
+    Raises:
+        Exception: If all models fail
+    """
+    last_exception = None
+
+    for i, config in enumerate(agent_configs):
+        try:
+            logger.info(
+                f"Trying user enrichment model {i + 1}/{len(agent_configs)}: {config['provider']}/{config['model']}",
+            )
+            agent = create_user_enrichment_agent(config)
+            result = await run_agent_with_retry(agent, prompt, context, config)
+            logger.info(f"Successfully completed user enrichment with model {i + 1}")
+            return result
+        except Exception as e:
+            last_exception = e
+            logger.error(f"User enrichment model {i + 1} failed: {e}")
+            if i < len(agent_configs) - 1:
+                logger.info("Falling back to next user enrichment model...")
+            else:
+                logger.error("All user enrichment models failed")
+
+    raise last_exception or Exception("All user enrichment models failed")
+
+
 async def enrich_users(
     git_authors: list[GitAuthor],
     existing_authors: list[Person],
@@ -660,14 +812,21 @@ Focus on understanding:
         f"📊 Input data: {len(context.git_authors)} git authors, {len(context.existing_authors)} existing author records",
     )
 
-    # Run the agent
-    logger.info("🤖 Running PydanticAI agent...")
-    result = await agent.run(prompt, deps=context)
+    # Run the agent with fallback across multiple models
+    logger.info("🤖 Running PydanticAI agent with fallback...")
+    result = await run_agent_with_fallback(user_enrichment_configs, prompt, context)
+
+    if result is None:
+        logger.error("❌ User enrichment failed - agent returned None")
+        return None
 
     logger.info(f"✅ User enrichment completed for {repository_url}")
     logger.info(
         f"👥 Enriched {len(result.output.enrichedAuthors)} authors",
     )
+
+    # Cleanup agents after successful completion
+    await cleanup_user_agents()
 
     # Log author details
     if result.output.enrichedAuthors:
@@ -703,53 +862,66 @@ async def enrich_users_from_dict(
 
     # Convert dictionaries to model objects
     git_authors = []
-    for ga_data in git_authors_data:
-        if isinstance(ga_data, dict):
-            # Handle Commits object conversion
-            commits_data = ga_data.get("commits")
-            if commits_data:
-                if isinstance(commits_data, dict):
-                    # Parse dates from strings if needed
-                    first_date = commits_data.get("firstCommitDate")
-                    last_date = commits_data.get("lastCommitDate")
+    if git_authors_data is not None:
+        for ga_data in git_authors_data:
+            if isinstance(ga_data, dict):
+                # Handle Commits object conversion
+                commits_data = ga_data.get("commits")
+                if commits_data:
+                    if isinstance(commits_data, dict):
+                        # Parse dates from strings if needed
+                        first_date = commits_data.get("firstCommitDate")
+                        last_date = commits_data.get("lastCommitDate")
 
-                    if isinstance(first_date, str):
-                        first_date = datetime.strptime(first_date, "%Y-%m-%d").date()
-                    if isinstance(last_date, str):
-                        last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
+                        if isinstance(first_date, str):
+                            first_date = datetime.strptime(
+                                first_date,
+                                "%Y-%m-%d",
+                            ).date()
+                        if isinstance(last_date, str):
+                            last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
 
-                    commits_obj = Commits(
-                        total=commits_data.get("total"),
-                        firstCommitDate=first_date,
-                        lastCommitDate=last_date,
-                    )
-                    ga_with_commits = {
-                        "name": ga_data.get("name"),
-                        "email": ga_data.get("email"),
-                        "commits": commits_obj,
-                    }
-                    git_authors.append(GitAuthor(**ga_with_commits))
+                        commits_obj = Commits(
+                            total=commits_data.get("total"),
+                            firstCommitDate=first_date,
+                            lastCommitDate=last_date,
+                        )
+                        ga_with_commits = {
+                            "name": ga_data.get("name"),
+                            "email": ga_data.get("email"),
+                            "commits": commits_obj,
+                        }
+                        git_authors.append(GitAuthor(**ga_with_commits))
+                    else:
+                        # Legacy format where commits is just a number
+                        commits_obj = Commits(total=commits_data)
+                        ga_with_commits = {
+                            "name": ga_data.get("name"),
+                            "email": ga_data.get("email"),
+                            "commits": commits_obj,
+                        }
+                        git_authors.append(GitAuthor(**ga_with_commits))
                 else:
-                    # Legacy format where commits is just a number
-                    commits_obj = Commits(total=commits_data)
-                    ga_with_commits = {
-                        "name": ga_data.get("name"),
-                        "email": ga_data.get("email"),
-                        "commits": commits_obj,
-                    }
-                    git_authors.append(GitAuthor(**ga_with_commits))
-            else:
-                git_authors.append(GitAuthor(**ga_data))
+                    git_authors.append(GitAuthor(**ga_data))
 
     # Convert existing authors
     existing_authors = []
-    for author_data in existing_authors_data:
-        if isinstance(author_data, dict):
-            # Handle empty orcidId strings
-            author_copy = author_data.copy()
-            if "orcidId" in author_copy and not author_copy["orcidId"]:
-                author_copy["orcidId"] = None
-            existing_authors.append(Person(**author_copy))
+    if existing_authors_data is not None:
+        for author_data in existing_authors_data:
+            if isinstance(author_data, dict):
+                # Handle empty orcidId strings and convert to full URL
+                author_copy = author_data.copy()
+                if "orcidId" in author_copy:
+                    if not author_copy["orcidId"]:
+                        author_copy["orcidId"] = None
+                    elif author_copy["orcidId"] and not author_copy[
+                        "orcidId"
+                    ].startswith("http"):
+                        # Convert ORCID ID to full URL if it's just the ID
+                        author_copy[
+                            "orcidId"
+                        ] = f"https://orcid.org/{author_copy['orcidId']}"
+                existing_authors.append(Person(**author_copy))
 
     # Call the main enrichment function
     result = await enrich_users(git_authors, existing_authors, repository_url)

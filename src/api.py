@@ -16,7 +16,7 @@ from .data_models import (
     convert_pydantic_to_zod_form_dict,
 )
 from .gimie_utils import extract_gimie
-from .llm import llm_request_repo_infos, llm_request_userorg_infos
+from .llm import llm_request_repo_infos
 from .parsers import parse_github_organization, parse_github_user
 from .utils.enhanced_logging import AsyncRequestContext, setup_logging
 from .utils.utils import (
@@ -109,14 +109,32 @@ async def shutdown_event():
     """Cleanup resources on application shutdown"""
     logger.info("🛑 Application shutdown - cleaning up resources")
 
-    # Cleanup OpenAI client
+    # Cleanup PydanticAI agents
     try:
-        from .llm import cleanup_async_openai_client
+        from .llm.genai_model import cleanup_agents
 
-        await cleanup_async_openai_client()
-        logger.info("✅ Cleaned up OpenAI client")
+        await cleanup_agents()
+        logger.info("✅ Cleaned up PydanticAI agents")
     except Exception as e:
-        logger.warning(f"Error cleaning up OpenAI client: {e}")
+        logger.warning(f"Error cleaning up PydanticAI agents: {e}")
+
+    # Cleanup user enrichment agents
+    try:
+        from .agents.user_enrichment import cleanup_user_agents
+
+        await cleanup_user_agents()
+        logger.info("✅ Cleaned up user enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up user enrichment agents: {e}")
+
+    # Cleanup organization enrichment agents
+    try:
+        from .agents.organization_enrichment import cleanup_org_agents
+
+        await cleanup_org_agents()
+        logger.info("✅ Cleaned up organization enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up organization enrichment agents: {e}")
 
     # Run garbage collection
     import gc
@@ -572,8 +590,9 @@ async def get_org_json(
         return parse_github_organization(org_name)
 
     def fetch_llm_metadata():
-        org_metadata = parse_github_organization(org_name)
-        return llm_request_userorg_infos(org_metadata, item_type="org")
+        # This endpoint is deprecated - use the new agent-based enrichment
+        # For now, return the basic organization metadata
+        return parse_github_organization(org_name)
 
     try:
         # Get GitHub organization metadata (cached)
@@ -708,8 +727,9 @@ async def get_user_json(
         return parse_github_user(username)
 
     def fetch_llm_metadata():
-        user_metadata = parse_github_user(username)
-        return llm_request_userorg_infos(user_metadata, item_type="user")
+        # This endpoint is deprecated - use the new agent-based enrichment
+        # For now, return the basic user metadata
+        return parse_github_user(username)
 
     try:
         # Get GitHub user metadata (cached)
