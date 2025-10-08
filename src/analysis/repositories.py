@@ -111,6 +111,10 @@ class Repository:
             self.data.relatedToEPFLJustification = (
                 organization_enrichment.relatedToEPFLJustification
             )
+        if organization_enrichment.relatedToEPFLConfidence is not None:
+            self.data.relatedToEPFLConfidence = (
+                organization_enrichment.relatedToEPFLConfidence
+            )
 
         # enriched_orgs = organization_enrichment.get("organizations", [])
 

@@ -46,6 +46,7 @@ async def test_organization_enrichment_basic():
     assert "organizations" in result
     assert "relatedToEPFL" in result
     assert "relatedToEPFLJustification" in result
+    assert "relatedToEPFLConfidence" in result
 
     # Should identify at least one organization
     assert len(result["organizations"]) > 0
@@ -111,6 +112,9 @@ async def test_organization_enrichment_epfl_detection():
     # Should detect EPFL relationship
     assert result["relatedToEPFL"] is True
     assert len(result["relatedToEPFLJustification"]) > 0
+    # Should have a confidence score between 0.0 and 1.0
+    assert "relatedToEPFLConfidence" in result
+    assert 0.0 <= result["relatedToEPFLConfidence"] <= 1.0
 
 
 @pytest.mark.asyncio()
@@ -135,6 +139,7 @@ async def test_organization_enrichment_no_institutional_emails():
     # Should still return a result, but may have fewer organizations
     assert "organizations" in result
     assert "relatedToEPFL" in result
+    assert "relatedToEPFLConfidence" in result
 
 
 @pytest.mark.asyncio()
@@ -170,6 +175,7 @@ def test_enrichment_result_model():
             },
         ],
         relatedToEPFL=True,
+        relatedToEPFLConfidence=0.85,
         relatedToEPFLJustification="Test justification",
         analysis_notes="Test notes",
     )

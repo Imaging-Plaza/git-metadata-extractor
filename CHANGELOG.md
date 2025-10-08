@@ -57,7 +57,6 @@ All notable changes to this project will be documented in this file.
   - Selenium-based scraping of ORCID profiles for employment and education history
   - Smart affiliation merging that preserves existing affiliations and adds ORCID data
   - Support for both Zod format (`schema:author`, `md4i:orcidId`) and plain format (`author`, `orcidId`)
-  - Cached ORCID data with 14-day TTL to avoid repeated scraping
   - Integration with both main extraction and LLM JSON endpoints
 - **Enhanced logging system**:
   - Comprehensive logging for ORCID enrichment process
