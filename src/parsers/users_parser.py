@@ -70,6 +70,7 @@ class ORCIDActivities(BaseModel):
     )
 
 
+# TODO: Modify
 class GitHubUserMetadata(BaseModel):
     """Pydantic model to store GitHub user metadata with validation"""
 

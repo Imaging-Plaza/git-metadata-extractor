@@ -42,7 +42,7 @@ MODEL_CONFIGS = {
         {
             "provider": "ollama",
             "model": "llama3.2",
-            "base_url": "http://localhost:11434/v1",
+            "base_url": "http://localhost:11434",
             "max_retries": 2,
             "temperature": 0.3,
             "timeout": 600.0,
@@ -146,25 +146,25 @@ For each model in the list:
 
 ### OpenAI
 
-- Use `OpenAIChatModel` with model name
+- Use `pydantic_ai` with model string: `openai:gpt-4o`
 - API key from `OPENAI_API_KEY` env var
 
 ### OpenRouter
 
-- Use `OpenAIChatModel` with `OpenRouterProvider`
+- Use `pydantic_ai` with custom HTTP client pointing to openrouter.ai
 - API key from `OPENROUTER_API_KEY` env var
 
 ### OpenAI-compatible
 
-- Use `OpenAIChatModel` with custom base_url
+- Use `pydantic_ai` with custom base_url
 - Config: `{"provider": "openai-compatible", "base_url": "...", "api_key_env": "..."}`
 
 ### Ollama
 
-- Support local: `http://localhost:11434/v1`
+- Support local: `http://localhost:11434`
 - Support remote: custom URL from config
-- Use `OpenAIChatModel` with `OllamaProvider`
-- Config: `{"provider": "ollama", "model": "llama3.2", "base_url": "http://localhost:11434/v1"}`
+- Use `pydantic_ai` with model string: `ollama:llama3.2`
+- Config: `{"provider": "ollama", "model": "llama3.2", "base_url": "http://localhost:11434"}`
 
 ## Clean Break from Old Approach
 

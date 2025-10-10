@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from datetime import datetime
@@ -17,7 +16,7 @@ from .data_models import (
 )
 from .gimie_utils import extract_gimie
 from .llm import llm_request_repo_infos
-from .parsers import parse_github_organization, parse_github_user
+from .parsers import parse_github_organization
 from .utils.enhanced_logging import AsyncRequestContext, setup_logging
 from .utils.utils import (
     enrich_authors_with_orcid,
@@ -30,7 +29,7 @@ log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
 log_level = getattr(logging, log_level_str, logging.INFO)
 setup_logging(level=log_level, use_colors=True)
 
-from .analysis import Repository
+from .analysis import Repository, User
 
 logger = logging.getLogger(__name__)
 
@@ -692,7 +691,7 @@ async def get_user_json(
         False,
         description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
     ),
-):
+) -> APIOutput:
     """
     Retrieve and enrich GitHub user profile metadata.
 
@@ -707,154 +706,47 @@ async def get_user_json(
     - Provide detailed EPFL relationship analysis with evidence
     - Enrich organization metadata with type, country, website, etc.
 
-    **Caching**: Results are cached with TTL of 7 days.
+    **User Enrichment** (optional):
+    When `enrich_users=true`, performs author/contributor enrichment to:
+    - Analyze git author information and affiliations
+    - Cross-reference with ORCID data
+    - Provide comprehensive author profiles
+
+    **Caching**: Results are cached with TTL of 30 days.
 
     **Parameters**:
     - **full_path**: GitHub user URL or path (e.g., `https://github.com/username`)
     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
     - **enrich_orgs**: Set to `true` to enable organization enrichment with PydanticAI agent
+    - **enrich_users**: Set to `true` to enable user/author enrichment with PydanticAI agent
 
     **Returns**:
     - User profile link
-    - Enriched user metadata
-    - Organization enrichment results (if `enrich_orgs=true`)
+    - User type
+    - Parsing timestamp
+    - User Object with enriched metadata
     """
-
-    cache_manager = get_cache_manager()
     username = full_path.split("/")[-1]
 
-    def fetch_user_metadata():
-        return parse_github_user(username)
+    # Ensure full_path is a valid URL
+    if not full_path.startswith(("http://", "https://")):
+        full_path = f"https://{full_path}"
 
-    def fetch_llm_metadata():
-        # This endpoint is deprecated - use the new agent-based enrichment
-        # For now, return the basic user metadata
-        return parse_github_user(username)
+    user = User(username, force_refresh=force_refresh)
 
-    try:
-        # Get GitHub user metadata (cached)
-        user_metadata = cache_manager.get_cached_or_fetch(
-            api_type="github_user",
-            params={"username": username},
-            fetch_func=fetch_user_metadata,
-            force_refresh=force_refresh,
-        )
+    await user.run_analysis(
+        run_organization_enrichment=enrich_orgs,
+        run_user_enrichment=enrich_users,
+    )
 
-        # Get LLM processed metadata (cached) - automatically handles coroutines
-        parsed_user_metadata = await cache_manager.get_cached_or_fetch_async(
-            api_type="llm_user",
-            params={"username": username, "item_type": "user"},
-            fetch_func=fetch_llm_metadata,
-            force_refresh=force_refresh,
-        )
+    output = user.dump_results(output_type="pydantic")
 
-        # Handle user_metadata - it might be a Pydantic model, dict, or JSON string from cache
-        if isinstance(user_metadata, str):
-            user_metadata_dict = json.loads(user_metadata)
-        elif hasattr(user_metadata, "model_dump"):
-            user_metadata_dict = user_metadata.model_dump()
-        else:
-            user_metadata_dict = dict(user_metadata)
-
-        user_metadata_dict["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
-
-        # Handle parsed_user_metadata - it might be a dict or JSON string from cache
-        if isinstance(parsed_user_metadata, str):
-            parsed_user_metadata = json.loads(parsed_user_metadata)
-
-        user_metadata_dict.update(parsed_user_metadata)
-
-    except Exception as e:
-        raise HTTPException(status_code=424, detail=f"Error from Get User service: {e}")
-
-    # Perform organization enrichment if requested
-    response = {"link": full_path, "output": user_metadata_dict}
-
-    if enrich_orgs:
-        logger.info(f"Starting organization enrichment for user {username}")
-        try:
-            organization_enrichment = await enrich_organizations_from_dict(
-                user_metadata_dict,
-                full_path,
-            )
-            logger.info(
-                f"Organization enrichment completed for user. Found {len(organization_enrichment.get('organizations', []))} organizations",
-            )
-
-            # Update the main output with enriched organization data
-            # Keep relatedToOrganizations as list of strings (backwards compatible)
-            # Add relatedToOrganizationsROR as list of Organization objects (new field)
-            enriched_orgs = organization_enrichment.get("organizations", [])
-            if enriched_orgs:
-                user_metadata_dict["relatedToOrganizations"] = [
-                    org.get("legalName")
-                    for org in enriched_orgs
-                    if org.get("legalName")
-                ]
-                user_metadata_dict["relatedToOrganizationsROR"] = enriched_orgs
-
-            # Update EPFL relationship with enriched analysis
-            user_metadata_dict["relatedToEPFL"] = organization_enrichment.get(
-                "relatedToEPFL",
-                user_metadata_dict.get("relatedToEPFL"),
-            )
-            user_metadata_dict[
-                "relatedToEPFLJustification"
-            ] = organization_enrichment.get(
-                "relatedToEPFLJustification",
-                user_metadata_dict.get("relatedToEPFLJustification"),
-            )
-
-        except Exception as e:
-            logger.error(
-                f"Error during organization enrichment for user: {e}",
-                exc_info=True,
-            )
-            # Don't fail the entire request or expose error in response, just log it
-
-    if enrich_users:
-        logger.info(f"Starting user enrichment for user {username}")
-        try:
-            # Extract git authors and existing authors from metadata
-            git_authors_data = user_metadata_dict.get("gitAuthors", [])
-
-            # Build existing author data using the new model structure
-            # fullname = real person name, name = GitHub name, githubHandle = GitHub username
-            existing_authors_data = []
-            if user_metadata_dict.get("fullname") or user_metadata_dict.get("name"):
-                author_data = {
-                    "name": user_metadata_dict.get("fullname")
-                    or user_metadata_dict.get("name"),
-                    "orcidId": user_metadata_dict.get("orcid"),
-                    "affiliation": user_metadata_dict.get("relatedToOrganization", []),
-                }
-                existing_authors_data = [author_data]
-
-            user_enrichment = await enrich_users_from_dict(
-                git_authors_data=git_authors_data,
-                existing_authors_data=existing_authors_data,
-                repository_url=full_path,
-            )
-            logger.info(
-                f"User enrichment completed. Enriched {len(user_enrichment.get('enrichedAuthors', []))} authors",
-            )
-
-            # Add enriched user data to response
-            user_metadata_dict["enrichedAuthors"] = user_enrichment.get(
-                "enrichedAuthors",
-                [],
-            )
-            user_metadata_dict["authorEnrichmentSummary"] = user_enrichment.get(
-                "summary",
-                "",
-            )
-
-        except Exception as e:
-            logger.error(
-                f"Error during user enrichment: {e}",
-                exc_info=True,
-            )
-            # Don't fail the entire request, just log it
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.USER,
+        parsedTimestamp=datetime.now(),
+        output=output,
+    )
 
     return response
 

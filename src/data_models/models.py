@@ -59,7 +59,7 @@ class FormalParameter(BaseModel):
 class ExecutableNotebook(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    url: Optional[HttpUrl] = None
+    url: HttpUrl = None
 
 
 class SoftwareImage(BaseModel):
@@ -69,7 +69,7 @@ class SoftwareImage(BaseModel):
         str,
         StringConstraints(pattern=r"[0-9]+\.[0-9]+\.[0-9]+"),
     ] = None
-    availableInRegistry: Optional[HttpUrl] = None
+    availableInRegistry: HttpUrl = None
 
 
 class DataFeed(BaseModel):
@@ -89,7 +89,7 @@ class ImageKeyword(str, Enum):
 
 
 class Image(BaseModel):
-    contentUrl: Optional[HttpUrl] = None
+    contentUrl: HttpUrl = None
     keywords: ImageKeyword = ImageKeyword.ILLUSTRATIVE_IMAGE
 
 
@@ -165,8 +165,8 @@ class GitAuthor(BaseModel):
 class SoftwareSourceCode(BaseModel):
     name: Optional[str] = None
     applicationCategory: Optional[List[str]] = None
-    citation: Optional[List[HttpUrl]] = None
-    codeRepository: Optional[List[HttpUrl]] = None
+    citation: List[HttpUrl] = None
+    codeRepository: List[HttpUrl] = None
     conditionsOfAccess: Optional[str] = None
     dateCreated: Optional[date] = None
     datePublished: Optional[date] = None
@@ -242,6 +242,7 @@ class GitHubUser(BaseModel):
     name: Optional[str] = None
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
+    githubUserMetadata: GitHubUserMetadata = None
     relatedToOrganization: Optional[List[str]] = None
     relatedToOrganizationsROR: Optional[List[Organization]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
@@ -261,7 +262,7 @@ class ResourceType(str, Enum):
 
 
 class APIOutput(BaseModel):
-    link: Optional[HttpUrl] = None
+    link: HttpUrl = None
     type: ResourceType = None
     parseTimestamp: datetime = None
     output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser] = None

@@ -3,12 +3,11 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
+from openai import BaseModel
 from pydantic_ai import Agent
 
-from ..agents.prompts import (
-    system_prompt_json,
-)
-from ..data_models import SoftwareSourceCode
+from ..agents.repository_enrichment_prompts import get_repo_general_prompt
+from ..agents.user_enrichment_prompts import get_general_user_agent_prompt
 from ..utils.url_validation import (
     validate_and_clean_urls,
     validate_author_urls,
@@ -72,7 +71,11 @@ class RepositoryAnalysisContext:
         self.gimie_output = gimie_output
 
 
-def create_agent_from_config(config: Dict[str, Any]) -> Agent:
+def create_agent_from_config(
+    config: Dict[str, Any],
+    output_type: BaseModel,
+    system_prompt: str,
+) -> Agent:
     """
     Create a PydanticAI agent from configuration.
 
@@ -87,8 +90,8 @@ def create_agent_from_config(config: Dict[str, Any]) -> Agent:
     # Create agent with the model
     agent = Agent(
         model=model,
-        output_type=SoftwareSourceCode,
-        system_prompt=system_prompt_json,
+        output_type=output_type,  # SoftwareSourceCode,
+        system_prompt=system_prompt,  # system_prompt_json,
     )
 
     # Track agent for cleanup
@@ -180,6 +183,8 @@ async def run_agent_with_fallback(
     agent_configs: List[Dict[str, Any]],
     prompt: str,
     context: Any,
+    output_type: BaseModel,
+    system_prompt: str,
 ) -> Any:
     """
     Run agent with fallback to next model if current fails.
@@ -202,7 +207,7 @@ async def run_agent_with_fallback(
             logger.info(
                 f"Trying model {i + 1}/{len(agent_configs)}: {config['provider']}/{config['model']}",
             )
-            agent = create_agent_from_config(config)
+            agent = create_agent_from_config(config, output_type, system_prompt)
             result = await run_agent_with_retry(agent, prompt, context, config)
             logger.info(f"Successfully completed with model {i + 1}")
             return result
@@ -282,23 +287,7 @@ async def llm_request_repo_infos(
     )
 
     # Prepare the prompt
-    prompt = f"""Analyze the following software repository and extract comprehensive metadata.
-
-Repository URL: {repo_url}
-
-Repository Content:
-{input_text}
-
-Please provide a detailed analysis including:
-- Repository name, description, and purpose
-- Programming languages used
-- License information
-- Author information and affiliations
-- Related organizations
-- Keywords and topics
-- Any other relevant metadata
-
-Focus on accuracy and completeness in your analysis."""
+    prompt = get_repo_general_prompt(repo_url, input_text)
 
     try:
         # Run agent with fallback across multiple models
@@ -409,3 +398,62 @@ Focus on accuracy and completeness in your analysis."""
 
 
 # Old API functions removed - now using PydanticAI with multi-provider support
+
+
+async def llm_request_user_infos(
+    username: str,
+    user_data: Dict[str, Any],
+    output_format: str = "json",
+    max_tokens: int = 20000,
+) -> Optional[Dict[str, Any]]:
+    """
+    Analyze GitHub user profile using PydanticAI with multi-provider support.
+
+    Args:
+        username: GitHub username to analyze
+        user_data: User profile data from GitHub API
+        output_format: Output format ("json" or "json-ld")
+        max_tokens: Maximum tokens for input text
+
+    Returns:
+        Analysis result or None if failed
+    """
+    # Create context for the agent
+    agent_context = {
+        "username": username,
+        "user_data": user_data,
+    }
+
+    # Prepare the prompt
+    prompt = get_general_user_agent_prompt(username, user_data)
+
+    try:
+        # Run agent with fallback across multiple models
+        result = await run_agent_with_fallback(
+            llm_analysis_configs,
+            prompt,
+            agent_context,
+        )
+
+        # Extract the output from PydanticAI result
+        if hasattr(result, "output"):
+            json_data = result.output
+        else:
+            json_data = result
+
+        # Ensure it's a dictionary
+        if hasattr(json_data, "model_dump"):
+            json_data = json_data.model_dump()
+
+        logger.info("Successfully received user analysis from agent")
+
+        # Cleanup agents after successful completion
+        await cleanup_agents()
+
+        return json_data
+
+    except Exception as e:
+        logger.error(f"Error in user analysis: {e}")
+        # Cleanup agents even on error
+        await cleanup_agents()
+        return None
