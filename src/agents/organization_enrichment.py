@@ -41,7 +41,7 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
-from .organization_enrichment_prompts import (
+from .organization_prompts import (
     get_organization_enrichment_prompt,
     organization_enrichment_main_system_prompt,
 )

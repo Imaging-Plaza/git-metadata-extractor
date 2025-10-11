@@ -41,7 +41,7 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
-from .user_enrichment_prompts import (
+from .user_prompts import (
     get_user_enrichment_agent_prompt,
     user_enrichment_agent_system_prompt,
 )

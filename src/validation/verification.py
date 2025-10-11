@@ -306,10 +306,16 @@ class Verification:
             elif field == "author":
                 authors = clean_data.get("author", [])
                 valid = [a for a in authors if a.get("name")]
-                clean_data["author"] = valid if valid else None
+
                 if not valid:
-                    del clean_data["author"]
-                    logger.warning("Removed invalid author entries.")
+                    # Instead of removing the entire field, set it to empty list
+                    clean_data["author"] = []
+                    logger.warning("No valid authors found, setting to empty list")
+                else:
+                    clean_data["author"] = valid
+                    logger.info(
+                        f"Kept {len(valid)} valid authors out of {len(authors)} total",
+                    )
 
             elif field == "hasSoftwareImage":
                 imgs = []

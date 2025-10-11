@@ -1,40 +1,92 @@
 """Data models and schemas for the application."""
 
+# __init__.py - Clean up exports
+from .api import APIOutput
+from .conversion import (
+    convert_jsonld_to_pydantic,
+    convert_pydantic_to_zod_form_dict,
+)
 from .models import (
-    APIOutput,
-    Commits,
     Discipline,
-    GitAuthor,
-    GitHubOrganization,
-    GitHubUser,
-    Image,
-    ImageKeyword,
     Organization,
     Person,
     RepositoryType,
     ResourceType,
-    SoftwareSourceCode,
-    convert_jsonld_to_pydantic,
-    convert_pydantic_to_zod_form_dict,
 )
-from .organization import OrganizationAnalysisContext, OrganizationEnrichmentResult
+from .organization import (
+    GitHubOrganization,
+    GitHubOrganizationMetadata,
+    OrganizationAnalysisContext,
+    OrganizationEnrichmentResult,
+)
+from .repository import (
+    Commits,
+    DataFeed,
+    ExecutableNotebook,
+    FormalParameter,
+    FundingInformation,
+    GitAuthor,
+    Image,
+    ImageKeyword,
+    SoftwareImage,
+    SoftwareSourceCode,
+    debug_field_values,
+    # Debugging utilities
+    debug_pydantic_validation,
+    log_validation_errors,
+    validate_repository_data_with_debugging,
+)
+from .user import (
+    EnrichedAuthor,
+    GitHubUser,
+    GitHubUserMetadata,
+    ORCIDActivities,
+    ORCIDEducation,
+    ORCIDEmployment,
+    UserAnalysisContext,
+    UserEnrichmentResult,
+)
 
 __all__ = [
-    "Commits",
+    # Core models
+    "Person",
+    "Organization",
     "Discipline",
+    "RepositoryType",
+    "ResourceType",
+    # Repository models
+    "SoftwareSourceCode",
     "GitAuthor",
-    "GitHubOrganization",
-    "GitHubUser",
+    "Commits",
     "Image",
     "ImageKeyword",
-    "Organization",
-    "Person",
-    "RepositoryType",
-    "SoftwareSourceCode",
-    "convert_jsonld_to_pydantic",
-    "convert_pydantic_to_zod_form_dict",
+    "FundingInformation",
+    "FormalParameter",
+    "ExecutableNotebook",
+    "SoftwareImage",
+    "DataFeed",
+    # User models
+    "GitHubUser",
+    "GitHubUserMetadata",
+    "EnrichedAuthor",
+    "UserEnrichmentResult",
+    "UserAnalysisContext",
+    "ORCIDEmployment",
+    "ORCIDEducation",
+    "ORCIDActivities",
+    # Organization models
+    "GitHubOrganization",
     "OrganizationEnrichmentResult",
     "OrganizationAnalysisContext",
+    "GitHubOrganizationMetadata",
+    # API models
     "APIOutput",
-    "ResourceType",
+    # Utilities
+    "convert_jsonld_to_pydantic",
+    "convert_pydantic_to_zod_form_dict",
+    # Debugging utilities
+    "debug_pydantic_validation",
+    "log_validation_errors",
+    "debug_field_values",
+    "validate_repository_data_with_debugging",
 ]

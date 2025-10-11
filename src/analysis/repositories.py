@@ -1,19 +1,28 @@
 import logging
 
 from ..agents.organization_enrichment import enrich_organizations_from_dict
+from ..agents.repository import llm_request_repo_infos
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..data_models import SoftwareSourceCode
 from ..gimie_utils.gimie_methods import extract_gimie
-from ..llm.genai_model import llm_request_repo_infos
 from ..utils.utils import enrich_authors_with_orcid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from ..utils.utils import is_github_repo_public
+
 
 class Repository:
     def __init__(self, full_path: str, force_refresh: bool = False):
+        # Check if the repository is public before proceeding
+        if not is_github_repo_public(full_path):
+            logger.error(
+                f"Cannot process repository: {full_path} is not public or not accessible",
+            )
+            return
+
         self.full_path: str = full_path
         self.data: SoftwareSourceCode = None
         self.gimie = None
@@ -21,13 +30,11 @@ class Repository:
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
 
-        # TODO: Check if a compatible URL was provided
-
     def run_gimie_analysis(self):
         def fetch_gimie_data():
             return extract_gimie(self.full_path, format="json-ld")
 
-        # Get GIMIE data (cached separately with 1-day TTL)
+        # Get GIMIE data
         jsonld_gimie_data = self.cache_manager.get_cached_or_fetch(
             api_type="gimie",
             params={"full_path": self.full_path, "format": "json-ld"},
@@ -42,13 +49,9 @@ class Repository:
             self.gimie = jsonld_gimie_data
 
     async def run_llm_analysis(self):
-        # Add parsing timestamp
-        # llm_result["parseTimestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
-
         llm_data = await llm_request_repo_infos(
             str(self.full_path),
             gimie_output=self.gimie,
-            output_format="json",
             max_tokens=20000,
         )
 
@@ -158,6 +161,8 @@ class Repository:
             repository_url=self.full_path,
         )
         # This method should validate and return a compatible object
+
+        logger.info(f"User enrichment: {user_enrichment}")
 
         # Safely extend authors list
         authors_list = getattr(self.data, "author", [])

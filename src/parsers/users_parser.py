@@ -1,14 +1,18 @@
+"""
+Users Parser
+"""
+
 import base64
 import json
 import os
 import re
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -16,130 +20,17 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from ..data_models import (
+    GitHubUserMetadata,
+    ORCIDActivities,
+    ORCIDEducation,
+    ORCIDEmployment,
+)
+
 load_dotenv()
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 SELENIUM_REMOTE_URL = os.environ.get("SELENIUM_REMOTE_URL", "http://localhost:4444")
-
-
-class ORCIDEmployment(BaseModel):
-    """ORCID employment entry"""
-
-    organization: str = Field(..., description="Organization name")
-    role: Optional[str] = Field(None, description="Job title/role")
-    start_date: Optional[str] = Field(None, description="Start date")
-    end_date: Optional[str] = Field(None, description="End date")
-    location: Optional[str] = Field(None, description="Location")
-    duration_years: Optional[float] = Field(None, description="Duration in years")
-
-
-class ORCIDEducation(BaseModel):
-    """ORCID education entry"""
-
-    organization: str = Field(..., description="Educational institution")
-    degree: Optional[str] = Field(None, description="Degree or qualification")
-    start_date: Optional[str] = Field(None, description="Start date")
-    end_date: Optional[str] = Field(None, description="End date")
-    location: Optional[str] = Field(None, description="Location")
-    duration_years: Optional[float] = Field(None, description="Duration in years")
-
-
-class ORCIDActivities(BaseModel):
-    """ORCID activities data"""
-
-    employment: List[ORCIDEmployment] = Field(
-        default_factory=list,
-        description="Employment history",
-    )
-    education: List[ORCIDEducation] = Field(
-        default_factory=list,
-        description="Education history",
-    )
-    works_count: Optional[int] = Field(None, description="Number of works/publications")
-    peer_reviews_count: Optional[int] = Field(
-        None,
-        description="Number of peer reviews",
-    )
-    orcid_content: Optional[str] = Field(
-        None,
-        description="Parsed ORCID Activities content as Markdown",
-    )
-    orcid_format: Optional[str] = Field(
-        default="markdown",
-        description="Format of orcid_content",
-    )
-
-
-# TODO: Modify
-class GitHubUserMetadata(BaseModel):
-    """Pydantic model to store GitHub user metadata with validation"""
-
-    login: str = Field(..., description="GitHub username")
-    name: Optional[str] = Field(None, description="User's display name")
-    bio: Optional[str] = Field(None, description="User's bio")
-    email: Optional[str] = Field(None, description="User's public email")
-    location: Optional[str] = Field(None, description="User's location")
-    company: Optional[str] = Field(None, description="User's company")
-    blog: Optional[str] = Field(None, description="User's blog URL")
-    twitter_username: Optional[str] = Field(None, description="Twitter username")
-    public_repos: int = Field(..., ge=0, description="Number of public repositories")
-    public_gists: int = Field(..., ge=0, description="Number of public gists")
-    followers: int = Field(..., ge=0, description="Number of followers")
-    following: int = Field(..., ge=0, description="Number of users following")
-    created_at: str = Field(..., description="Account creation date")
-    updated_at: str = Field(..., description="Last profile update date")
-    avatar_url: str = Field(..., description="Avatar image URL")
-    html_url: str = Field(..., description="GitHub profile URL")
-    orcid: Optional[str] = Field(None, description="ORCID identifier")
-    orcid_activities: Optional[ORCIDActivities] = Field(
-        None,
-        description="ORCID activities data",
-    )
-    organizations: List[str] = Field(
-        default_factory=list,
-        description="Public organizations",
-    )
-    social_accounts: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="Social media accounts",
-    )
-    readme_url: Optional[str] = Field(None, description="Profile README URL if exists")
-    readme_content: Optional[str] = Field(
-        None,
-        description="Profile README content if exists",
-    )
-
-    @validator("orcid")
-    def validate_orcid(cls, v):
-        """Validate ORCID format and convert ID to URL"""
-        if v is not None:
-            # If it's already a URL, validate and return
-            if v.startswith("http"):
-                orcid_url_pattern = r"^https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
-                if not re.match(orcid_url_pattern, v):
-                    raise ValueError(f"Invalid ORCID URL format: {v}")
-                return v
-
-            # If it's an ID, validate and convert to URL
-            orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
-            if re.match(orcid_id_pattern, v):
-                return f"https://orcid.org/{v}"
-
-            raise ValueError(f"Invalid ORCID format: {v}")
-        return v
-
-    @validator("email")
-    def validate_email(cls, v):
-        """Basic email validation"""
-        if v is not None and "@" not in v:
-            raise ValueError("Invalid email format")
-        return v
-
-    class Config:
-        """Pydantic configuration"""
-
-        validate_assignment = True
-        extra = "forbid"
 
 
 class GitHubUsersParser:
@@ -922,7 +813,6 @@ class GitHubUsersParser:
             # Parse dates - handle both "YYYY" and "YYYY-MM-DD" formats
             if "-" in start_date:
                 # Full date format YYYY-MM-DD
-                from datetime import datetime
 
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d")
 

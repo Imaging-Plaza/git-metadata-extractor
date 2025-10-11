@@ -1,10 +1,10 @@
 import logging
 
+from ..agents import llm_request_user_infos
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..data_models import GitHubUser
-from ..llm.genai_model import llm_request_user_infos
 from ..parsers import parse_github_user
 
 logging.basicConfig(level=logging.INFO)

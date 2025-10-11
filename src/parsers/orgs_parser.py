@@ -1,3 +1,7 @@
+"""
+Organizations Parser
+"""
+
 import base64
 import json
 import os
@@ -5,78 +9,12 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
+
+from ..data_models.organization import GitHubOrganizationMetadata
 
 load_dotenv()
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-
-
-class GitHubOrganizationMetadata(BaseModel):
-    """Pydantic model to store GitHub organization metadata with validation"""
-
-    login: str = Field(..., description="Organization username/login")
-    name: Optional[str] = Field(None, description="Organization's display name")
-    description: Optional[str] = Field(None, description="Organization's description")
-    email: Optional[str] = Field(None, description="Organization's public email")
-    location: Optional[str] = Field(None, description="Organization's location")
-    company: Optional[str] = Field(None, description="Organization's company")
-    blog: Optional[str] = Field(None, description="Organization's blog URL")
-    twitter_username: Optional[str] = Field(None, description="Twitter username")
-    public_repos: int = Field(..., ge=0, description="Number of public repositories")
-    public_gists: int = Field(..., ge=0, description="Number of public gists")
-    followers: int = Field(..., ge=0, description="Number of followers")
-    following: int = Field(..., ge=0, description="Number of users following")
-    created_at: str = Field(..., description="Organization creation date")
-    updated_at: str = Field(..., description="Last organization update date")
-    avatar_url: str = Field(..., description="Avatar image URL")
-    html_url: str = Field(..., description="GitHub organization URL")
-    gravatar_id: Optional[str] = Field(None, description="Gravatar ID")
-    type: str = Field(..., description="Type (should be 'Organization')")
-    node_id: str = Field(..., description="GraphQL node ID")
-    url: str = Field(..., description="API URL")
-    repos_url: str = Field(..., description="Repositories API URL")
-    events_url: str = Field(..., description="Events API URL")
-    hooks_url: str = Field(..., description="Hooks API URL")
-    issues_url: str = Field(..., description="Issues API URL")
-    members_url: str = Field(..., description="Members API URL")
-
-    # Additional metadata
-    public_members: List[str] = Field(
-        default_factory=list,
-        description="Public members",
-    )
-    repositories: List[str] = Field(
-        default_factory=list,
-        description="Repository names",
-    )
-    teams: List[str] = Field(default_factory=list, description="Team names")
-    readme_url: Optional[str] = Field(None, description="Profile README URL if exists")
-    readme_content: Optional[str] = Field(
-        None,
-        description="Profile README content if exists",
-    )
-    social_accounts: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="Social media accounts",
-    )
-    pinned_repositories: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="Pinned repositories",
-    )
-
-    @validator("email")
-    def validate_email(cls, v):
-        """Basic email validation"""
-        if v is not None and v != "" and "@" not in v:
-            raise ValueError("Invalid email format")
-        return v
-
-    class Config:
-        """Pydantic configuration"""
-
-        validate_assignment = True
-        extra = "forbid"
 
 
 class GitHubOrganizationsParser:

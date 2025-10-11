@@ -11,6 +11,7 @@ from pydantic import BaseModel, HttpUrl, create_model
 from pyld import jsonld
 
 from ..data_models import Person, SoftwareSourceCode
+from ..parsers.users_parser import GitHubUsersParser
 
 logger = logging.getLogger(__name__)
 
@@ -299,13 +300,12 @@ def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
     return None
 
 
-def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
+def get_orcid_affiliations(orcid_id: str) -> List[str]:
     """
     Fetch affiliations (organization names only) from ORCID.
 
     Args:
         orcid_id: ORCID identifier (e.g., "0000-0002-1126-1535")
-        use_cache: Whether to use cached data (default: True)
 
     Returns:
         List of organization names from ORCID employment history
@@ -314,13 +314,6 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
         >>> get_orcid_affiliations("0000-0002-1126-1535")
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
-    try:
-        from ..cache import get_cache_manager
-        from ..parsers.users_parser import GitHubUsersParser
-    except ImportError:
-        # Fallback for when called outside package context
-        from src.cache import get_cache_manager
-        from src.parsers.users_parser import GitHubUsersParser
 
     if not orcid_id:
         return []
@@ -355,16 +348,6 @@ def get_orcid_affiliations(orcid_id: str, use_cache: bool = True) -> List[str]:
 
         return affiliations
 
-    if use_cache:
-        # Use cache manager for ORCID affiliations
-        cache_manager = get_cache_manager()
-        affiliations = cache_manager.get_cached_or_fetch(
-            api_type="orcid",
-            params={"orcid_id": orcid_id, "data_type": "affiliations"},
-            fetch_func=fetch_affiliations,
-            force_refresh=not use_cache,
-        )
-        return affiliations
     return fetch_affiliations()
 
 
@@ -414,8 +397,8 @@ def enrich_author_with_orcid(author: Person) -> Person:
         )
         return author
 
-    # Get affiliations from ORCID (always uses cache)
-    orcid_affiliations = get_orcid_affiliations(orcid_id, use_cache=True)
+    # Get affiliations from ORCID
+    orcid_affiliations = get_orcid_affiliations(orcid_id)
 
     if not orcid_affiliations:
         logger.warning(
@@ -511,3 +494,33 @@ def enrich_authors_with_orcid(
     )
 
     return repositoryObject
+
+
+def sanitize_special_tokens(text: str) -> str:
+    """
+    Remove special tokens by replacing them with safe placeholders.
+    This prevents encoding errors when sending to OpenAI API.
+
+    Args:
+        text: Input text to sanitize
+
+    Returns:
+        Sanitized text
+    """
+    import re
+
+    # List of known special tokens that can cause issues
+    special_tokens_patterns = [
+        r"<\|endoftext\|>",
+        r"<\|startoftext\|>",
+        r"<\|fim_prefix\|>",
+        r"<\|fim_suffix\|>",
+        r"<\|fim_middle\|>",
+    ]
+
+    # Replace all special tokens with safe placeholders
+    clean_text = text
+    for pattern in special_tokens_patterns:
+        clean_text = re.sub(pattern, "[SPECIAL_TOKEN]", clean_text, flags=re.IGNORECASE)
+
+    return clean_text
