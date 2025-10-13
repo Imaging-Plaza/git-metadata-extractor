@@ -1,0 +1,112 @@
+---
+title: FastAPI API Patterns
+description: Conventions for FastAPI endpoints, routing, and API design
+tags: [fastapi, api, endpoints, routing]
+---
+
+# FastAPI API Patterns
+
+## API Structure
+
+### Main API File
+- Core API definition: `src/api.py`
+- Use FastAPI app instance with comprehensive metadata
+- Version: 2.0.0
+- Include detailed description with features and usage
+
+### Endpoint Organization
+- Use tags for grouping: Repository, User, Organization, Cache Management, System
+- Prefix all endpoints with `/v1/` for versioning
+- Follow RESTful conventions
+
+### OpenAPI Documentation
+- Provide detailed tag descriptions
+- Include contact and license information
+- Link to Imaging Plaza project: https://imaging-plaza.epfl.ch
+- Maintain comprehensive API documentation
+
+## Request/Response Patterns
+
+### Path Parameters
+- Use FastAPI `Path()` for validation
+- Example: `path: str = Path(..., description="Repository URL or path")`
+- Encode URLs properly when used in paths
+
+### Query Parameters
+- Use FastAPI `Query()` for validation
+- Common parameters:
+  - `force_refresh: bool = Query(False)` - bypass cache
+  - `include_*: bool` - optional data inclusion flags
+- Provide default values and descriptions
+
+### Response Models
+- Use Pydantic models for response validation
+- Return `JSONResponse` for custom status codes
+- Use `APIOutput` model for consistent responses
+
+### Error Handling
+- Use `try/except` blocks in endpoints
+- Return appropriate HTTP status codes
+- Log errors with context
+- Provide meaningful error messages to clients
+
+## Caching Integration
+
+### Cache Manager
+- Get cache manager: `cache_manager = get_cache_manager()`
+- Check cache before processing: `cache_manager.get(cache_key)`
+- Respect `force_refresh` parameter
+- Store results after processing: `cache_manager.set(cache_key, data, ttl)`
+
+### Cache Keys
+- Use descriptive, consistent cache key patterns
+- Include resource type and identifier
+- Example: `f"repository:{url_hash}"`, `f"user:{username}"`
+
+### TTL Management
+- Use appropriate TTL for different resource types
+- Repository data: longer TTL
+- User data: shorter TTL for freshness
+- Configurable via environment variables
+
+## Logging
+
+### Request Context
+- Use `AsyncRequestContext` for request tracking
+- Log request start/end with timing
+- Include relevant parameters in logs
+- Use structured logging
+
+### Log Levels
+- Use environment variable `LOG_LEVEL` (DEBUG, INFO, WARNING, ERROR)
+- Default: INFO
+- Enhanced logging with colors enabled
+
+### Log Messages
+- Include operation context
+- Log cache hits/misses
+- Log external API calls
+- Log processing steps for debugging
+
+## Background Tasks
+
+### Resource Management
+- Use `@app.on_event("startup")` for initialization
+- Use `@app.on_event("shutdown")` for cleanup
+- Initialize cache manager and other resources
+- Clean up connections properly
+
+## Server Configuration
+
+### Uvicorn Setup
+- Default host: 0.0.0.0
+- Default port: 1234
+- Use workers for production: `--workers 4`
+- Use `--reload` for development
+- Run via justfile: `just serve`, `just serve-dev`
+
+### Environment Variables
+- Load from `.env` file
+- Required: API keys (OPENAI_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN)
+- Optional: LOG_LEVEL, CACHE_DIR, CACHE_ENABLED
+- Model configurations: LLM_ANALYSIS_MODELS, USER_ENRICHMENT_MODELS, ORG_ENRICHMENT_MODELS

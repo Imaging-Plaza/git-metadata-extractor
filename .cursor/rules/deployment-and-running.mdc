@@ -1,0 +1,599 @@
+---
+title: Deployment and Running the Application
+description: How to run the application in different environments (Docker, local, development, production)
+tags: [deployment, docker, uv, running, production, development]
+---
+
+# Deployment and Running the Application
+
+## Package Management with UV
+
+### Why UV?
+This project uses **UV** (from Astral) as the package manager for fast, reliable Python dependency management.
+
+### Installation Commands
+```bash
+# Install dependencies from pyproject.toml
+uv pip install .
+
+# Install in development mode with dev dependencies
+uv pip install -e ".[dev]"
+
+# Install system-wide (in Docker)
+uv pip install --system .
+```
+
+### Benefits of UV
+- **Fast**: 10-100x faster than pip
+- **Reliable**: Consistent dependency resolution
+- **Modern**: Built with Rust for performance
+- **Compatible**: Drop-in replacement for pip
+
+### Just Commands (Recommended)
+```bash
+# Use just for common tasks
+just install         # Install dependencies
+just install-dev     # Install with dev dependencies
+just setup          # Full development setup
+```
+
+## Running Modes
+
+### 1. CLI Mode (Command Line)
+
+Extract metadata from a single repository:
+
+```bash
+# Basic usage
+python src/main.py --url https://github.com/user/repo --output_path output.json
+
+# Using just
+just extract https://github.com/user/repo output.json
+just extract-test  # Test with default repo
+```
+
+**When to use CLI:**
+- One-off repository analysis
+- Scripting and automation
+- Testing and development
+- Batch processing
+
+### 2. API Server Mode (FastAPI)
+
+Run as a web service with REST API:
+
+```bash
+# Development (with auto-reload)
+just serve-dev
+
+# Development with debug logging
+just serve-dev-debug
+
+# Production (4 workers)
+just serve
+
+# Production (single worker for debugging)
+just serve-single
+
+# Production with Gunicorn (recommended)
+just serve-gunicorn
+```
+
+**When to use API Server:**
+- Production deployments
+- Web integrations
+- Multiple concurrent requests
+- Imaging Plaza integration
+- Open Pulse project integration
+
+## Docker Deployment (Recommended for Production)
+
+### Docker Image
+
+**Base Image**: `ghcr.io/astral-sh/uv:python3.12-bookworm`
+
+The Docker image includes:
+- Python 3.12
+- UV package manager pre-installed
+- Just task runner
+- Non-root user (UID 1000)
+- Optimized for memory usage
+
+### Building the Image
+
+```bash
+# Build Docker image
+just docker-build
+
+# Or manually
+docker build -t git-metadata-extractor -f tools/image/Dockerfile .
+```
+
+### Running in Production
+
+```bash
+# Run with environment file
+just docker-run
+
+# Or manually
+docker run -it --rm \
+  --env-file .env \
+  -p 1234:1234 \
+  -v ./data:/app/data \
+  --name git-metadata-extractor \
+  --network dev \
+  git-metadata-extractor
+```
+
+**Important volumes:**
+- `-v ./data:/app/data`: Persist cache database
+
+**Important environment:**
+- `CACHE_DB_PATH=/app/data/api_cache.db`: Cache location
+- `WORKERS=2`: Number of Gunicorn workers (default: 2 for memory optimization)
+
+### Running in Development
+
+```bash
+# Interactive shell with volume mount
+just docker-dev
+
+# Or manually
+docker run -it \
+  --env-file .env \
+  -p 1234:1234 \
+  -v .:/app \
+  --entrypoint bash \
+  git-metadata-extractor
+```
+
+**Benefits of volume mount:**
+- Code changes reflect immediately
+- No need to rebuild image
+- Faster development cycle
+
+### Docker Network
+
+The application expects to run on a Docker network called `dev`:
+
+```bash
+# Create network if it doesn't exist
+docker network create dev
+
+# Run application on network
+docker run --network dev ...
+```
+
+**Why network is needed:**
+- Communicate with Selenium container (for ORCID scraping)
+- Microservices architecture
+- Service discovery
+
+## Selenium Integration (Optional)
+
+Required for ORCID profile scraping functionality.
+
+### Standalone Mode (Single Session)
+
+```bash
+just docker-selenium
+
+# Or manually
+docker run --rm -d \
+  -p 4444:4444 \
+  -p 7900:7900 \
+  --shm-size="2g" \
+  --name selenium-standalone-firefox \
+  --network dev \
+  selenium/standalone-firefox
+```
+
+### Multiple Sessions Mode (Recommended)
+
+```bash
+docker run --rm -d \
+  -p 4444:4444 \
+  -p 7900:7900 \
+  --shm-size="2g" \
+  -e SE_NODE_MAX_SESSIONS=5 \
+  -e SE_NODE_SESSION_TIMEOUT=300 \
+  --name selenium-standalone-firefox \
+  --network dev \
+  selenium/standalone-firefox
+```
+
+### Grid Mode (High Concurrency)
+
+```bash
+# Start hub
+docker run --rm -d \
+  -p 4444:4444 \
+  --name selenium-hub \
+  --network dev \
+  selenium/hub:latest
+
+# Start 3 Firefox nodes
+for i in {1..3}; do
+  docker run --rm -d \
+    --shm-size="2g" \
+    -e SE_EVENT_BUS_HOST=selenium-hub \
+    -e SE_EVENT_BUS_PUBLISH_PORT=4442 \
+    -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
+    --name selenium-node-firefox-$i \
+    --network dev \
+    selenium/node-firefox:latest
+done
+```
+
+**Environment variable:**
+```bash
+SELENIUM_REMOTE_URL=http://selenium-hub:4444
+```
+
+### Stopping Selenium
+
+```bash
+just docker-selenium-stop
+
+# Or manually
+docker stop selenium-standalone-firefox
+```
+
+## Environment Configuration
+
+### Required Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# API Keys (Required)
+OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-...
+GITHUB_TOKEN=ghp_...
+GITLAB_TOKEN=glpat-...
+
+# Model Configuration (Legacy - use JSON configs instead)
+MODEL=gpt-4o
+PROVIDER=openai
+
+# Cache Configuration
+CACHE_ENABLED=true
+CACHE_DIR=/app/data
+CACHE_DB_PATH=/app/data/api_cache.db
+
+# Logging
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+
+# Selenium (Optional - for ORCID scraping)
+SELENIUM_REMOTE_URL=http://selenium-standalone-firefox:4444
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=1234
+WORKERS=2
+BIND=0.0.0.0:1234
+TIMEOUT=600
+
+# Memory Optimization
+MAX_CACHE_ENTRIES=5000
+MAX_SELENIUM_SESSIONS=1
+MAX_REQUESTS=1000
+MAX_REQUESTS_JITTER=100
+```
+
+### Advanced Model Configuration (JSON)
+
+Override model configurations per analysis type:
+
+```bash
+# Repository analysis models (with fallback)
+LLM_ANALYSIS_MODELS='[
+  {
+    "provider": "openai",
+    "model": "o4-mini",
+    "max_retries": 3,
+    "temperature": 0.2,
+    "max_tokens": 16000,
+    "timeout": 600.0
+  },
+  {
+    "provider": "openrouter",
+    "model": "google/gemini-2.5-flash",
+    "max_retries": 3,
+    "temperature": 0.2,
+    "max_tokens": 16000,
+    "timeout": 300.0
+  }
+]'
+
+# User enrichment models
+USER_ENRICHMENT_MODELS='[...]'
+
+# Organization enrichment models
+ORG_ENRICHMENT_MODELS='[...]'
+```
+
+### Creating .env File
+
+```bash
+# Automated setup
+just setup  # Creates .env from template if it doesn't exist
+
+# Or manually copy and edit
+cp .env.dist .env  # If available
+nano .env
+```
+
+## Production Configuration
+
+### Gunicorn Configuration
+
+The application uses Gunicorn with UvicornWorker for production:
+
+**Config file**: `tools/config/gunicorn_conf.py`
+
+**Key settings:**
+- **Workers**: 2 (reduced from 4 for memory optimization)
+- **Worker class**: `uvicorn.workers.UvicornWorker`
+- **Timeout**: 600 seconds (long-running AI requests)
+- **Max requests**: 1000 (recycle workers to prevent memory leaks)
+- **Max requests jitter**: 100 (randomize recycling)
+- **Worker tmp dir**: `/dev/shm` (shared memory for performance)
+
+### Memory Optimization
+
+**Why memory optimization matters:**
+- Each worker can use 2-5GB RAM
+- AI model calls are memory-intensive
+- Selenium sessions consume memory
+- Cache can grow large
+
+**Optimization strategies:**
+1. **Reduced workers**: 2 instead of 4
+2. **Worker recycling**: Max 1000 requests per worker
+3. **Cache limits**: MAX_CACHE_ENTRIES=5000
+4. **Selenium limits**: MAX_SELENIUM_SESSIONS=1
+5. **Garbage collection**: Forced GC on worker abort
+
+### Monitoring Memory
+
+```bash
+# Monitor Docker container memory
+docker stats git-metadata-extractor
+
+# Inside container
+htop
+free -h
+```
+
+## Development Workflow
+
+### Local Development (Without Docker)
+
+```bash
+# 1. Setup environment
+just setup
+
+# 2. Install dependencies
+just install-dev
+
+# 3. Configure .env file
+nano .env
+
+# 4. Run development server
+just serve-dev
+
+# 5. Access API docs
+just docs  # Opens http://localhost:1234/docs
+```
+
+### Docker Development Workflow
+
+```bash
+# 1. Build image
+just docker-build
+
+# 2. Run with volume mount
+just docker-dev
+
+# 3. Inside container - run server
+uvicorn src.api:app --host 0.0.0.0 --port 1234 --reload
+
+# 4. Make changes locally - they reflect in container
+```
+
+### Testing Workflow
+
+```bash
+# Run tests
+just test
+
+# Run with coverage
+just test-coverage
+
+# Run specific test
+just test-file tests/test_api.py
+
+# Watch mode
+just test-watch
+```
+
+### Code Quality Workflow
+
+```bash
+# Format code
+just format-ruff
+
+# Lint code
+just lint
+
+# Fix linting issues
+just lint-fix
+
+# Type check
+just type-check
+
+# Full CI pipeline
+just ci
+```
+
+## API Endpoints
+
+Once the server is running (port 1234 by default):
+
+### Documentation
+- Swagger UI: http://localhost:1234/docs
+- ReDoc: http://localhost:1234/redoc
+- OpenAPI JSON: http://localhost:1234/openapi.json
+
+### Health Check
+```bash
+curl http://localhost:1234/health
+```
+
+### Extract Repository
+```bash
+# Basic extraction
+curl "http://localhost:1234/v1/extract/json/https://github.com/user/repo"
+
+# Force refresh (bypass cache)
+curl "http://localhost:1234/v1/extract/json/https://github.com/user/repo?force_refresh=true"
+
+# Using just
+just api-test-extract
+just api-test-extract-refresh
+```
+
+### Cache Management
+```bash
+# Get cache stats
+just cache-stats
+
+# Clean expired entries
+just cache-cleanup
+
+# Clear all cache
+just cache-clear
+
+# Enable/disable cache
+just cache-enable
+just cache-disable
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: Port already in use**
+```bash
+# Find process using port 1234
+lsof -i :1234
+sudo kill -9 <PID>
+
+# Or use different port
+PORT=8080 just serve-dev
+```
+
+**Issue: Out of memory errors**
+```bash
+# Reduce workers in .env
+WORKERS=1
+
+# Reduce max cache entries
+MAX_CACHE_ENTRIES=1000
+
+# Reduce Selenium sessions
+MAX_SELENIUM_SESSIONS=1
+```
+
+**Issue: Module not found**
+```bash
+# Ensure PYTHONPATH is set
+export PYTHONPATH=/app  # In Docker
+export PYTHONPATH=$(pwd)  # Locally
+
+# Reinstall dependencies
+uv pip install -e .
+```
+
+**Issue: Cache database locked**
+```bash
+# Stop all running instances
+docker stop git-metadata-extractor
+
+# Remove cache database
+rm data/api_cache.db
+
+# Restart
+just docker-run
+```
+
+**Issue: Selenium connection refused**
+```bash
+# Check Selenium is running
+docker ps | grep selenium
+
+# Start Selenium if not running
+just docker-selenium
+
+# Check network
+docker network inspect dev
+```
+
+## Performance Tuning
+
+### For High Traffic
+
+```bash
+# Increase workers (requires more memory)
+WORKERS=4
+
+# Increase max cache entries
+MAX_CACHE_ENTRIES=10000
+
+# Use Selenium Grid mode
+# (See Selenium Integration section)
+```
+
+### For Memory Constrained Environments
+
+```bash
+# Single worker
+WORKERS=1
+
+# Reduce cache
+MAX_CACHE_ENTRIES=1000
+
+# Disable cache if needed
+CACHE_ENABLED=false
+```
+
+### For Development Speed
+
+```bash
+# Use uvicorn directly (faster reload)
+just serve-dev
+
+# Enable debug logging
+just serve-dev-debug
+
+# Use local Ollama for faster iteration
+# (Configure in .env)
+```
+
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] Set strong API keys in `.env`
+- [ ] Configure appropriate `WORKERS` for available memory
+- [ ] Set `LOG_LEVEL=INFO` (not DEBUG)
+- [ ] Configure cache directory with persistent volume
+- [ ] Set up Selenium Grid if using ORCID scraping
+- [ ] Create Docker network: `docker network create dev`
+- [ ] Test with `force_refresh=true` to verify external API access
+- [ ] Monitor memory usage: `docker stats`
+- [ ] Set up log aggregation if needed
+- [ ] Configure backup for cache database
+- [ ] Test API endpoints with realistic load
+- [ ] Document any custom model configurations

@@ -2,21 +2,21 @@
 API data models
 """
 from datetime import datetime
+from typing import Union
+
 from pydantic import (
     BaseModel,
     HttpUrl,
 )
-from typing import Union
 
-from .repository import SoftwareSourceCode
-from .organization import GitHubOrganization
-from .user import GitHubUser
 from .models import ResourceType
+from .organization import GitHubOrganization
+from .repository import SoftwareSourceCode
+from .user import GitHubUser
+
 
 class APIOutput(BaseModel):
     link: HttpUrl = None
     type: ResourceType = None
-    parsdTimestamp: datetime = None
+    parsedTimestamp: datetime = None
     output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser] = None
-
-

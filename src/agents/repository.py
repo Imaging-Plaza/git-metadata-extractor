@@ -5,25 +5,21 @@ Repository analysis agent
 import logging
 from typing import Any, Optional
 
-from ..llm.model_config import load_model_config
-from ..data_models.repository import SoftwareSourceCode, RepositoryAnalysisContext
 from ..context import prepare_repository_context
-from ..utils.utils import sanitize_special_tokens
-from .repository_prompts import get_repo_general_prompt, system_prompt_repository
-from ..validation import Verification
+from ..data_models.repository import RepositoryAnalysisContext, SoftwareSourceCode
+from ..llm.model_config import (
+    load_model_config,
+    validate_config,
+)
 from ..utils.url_validation import (
     validate_and_clean_urls,
     validate_author_urls,
     validate_organization_urls,
     validate_software_image_urls,
 )
-from ..llm.model_config import (
-    load_model_config,
-    validate_config,
-)
-
-from .agents_management import run_agent_with_fallback, cleanup_agents
-
+from ..utils.utils import sanitize_special_tokens
+from .agents_management import cleanup_agents, run_agent_with_fallback
+from .repository_prompts import get_repo_general_prompt, system_prompt_repository
 
 ################################################################
 #
@@ -65,7 +61,6 @@ async def llm_request_repo_infos(
     Returns:
         Analysis result or None if failed
     """
-
 
     # Prepare repository context
     context_result = await prepare_repository_context(repo_url, max_tokens)
@@ -113,7 +108,7 @@ async def llm_request_repo_infos(
             prompt,
             agent_context,
             SoftwareSourceCode,
-            system_prompt_repository
+            system_prompt_repository,
         )
 
         # Extract the output from PydanticAI result
@@ -216,5 +211,3 @@ async def llm_request_repo_infos(
         # Cleanup agents even on error
         await cleanup_agents()
         return None
-
-

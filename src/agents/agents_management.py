@@ -5,6 +5,7 @@ Agents Management
 import asyncio
 import logging
 from typing import Any, Dict, List
+
 from dotenv import load_dotenv
 from openai import BaseModel
 from pydantic_ai import Agent
@@ -15,7 +16,6 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
-
 
 # Setup logger first, before anything else
 logger = logging.getLogger(__name__)
@@ -201,4 +201,3 @@ async def run_agent_with_fallback(
                 logger.error("All models failed")
 
     raise last_exception or Exception("All models failed")
-

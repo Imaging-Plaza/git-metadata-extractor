@@ -1,0 +1,445 @@
+---
+title: Dependencies and pyproject.toml Configuration
+description: Dependency management, pyproject.toml structure, and version constraints
+tags: [dependencies, pyproject, packaging, versions]
+---
+
+# Dependencies and pyproject.toml Configuration
+
+## Project Metadata
+
+### Basic Information
+- **Name**: `git-metadata-extractor`
+- **Version**: `2.0.0`
+- **Python**: `>=3.9` (supports 3.9, 3.10, 3.11)
+- **License**: MIT
+- **Status**: Alpha (Development Status :: 3 - Alpha)
+
+### Authors
+- Quentin Chappuis (EPFL Center for Imaging)
+- Robin Franken (Swiss Data Science Center)
+- Carlos Vivar Rios (SDSC / EPFL Center for Imaging)
+
+### Build System
+```toml
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+```
+
+## Core Dependencies
+
+### Web Framework
+```toml
+fastapi==0.115.13          # REST API framework
+uvicorn[standard]==0.34.3  # ASGI server
+uvicorn-worker==0.3.0      # Uvicorn worker for Gunicorn
+```
+
+**Usage:**
+- FastAPI for all API endpoints
+- Uvicorn for local development and single-worker deployments
+- Gunicorn + UvicornWorker for production (multi-worker)
+
+### Data Models and Validation
+```toml
+pydantic==2.11.7           # Data validation using Pydantic V2
+```
+
+**Important:**
+- Using Pydantic V2 (not V1)
+- All models should use V2 patterns
+- Field validators use `@field_validator` decorator
+
+### AI and LLM Integration
+```toml
+pydantic-ai>=1.0.15        # PydanticAI framework for agents
+openai==2.1.0              # OpenAI API client
+google-genai>=1.31.0       # Google Gemini API
+tiktoken==0.9.0            # Token counting for OpenAI models
+```
+
+**Usage:**
+- PydanticAI for agent-based workflows
+- Multiple LLM provider support (OpenAI, OpenRouter, Ollama)
+- Token counting for cost optimization
+
+### Repository Analysis
+```toml
+gimie==0.7.2               # Git metadata extraction
+repo-to-text>=0.7.0        # Repository content extraction
+```
+
+**Usage:**
+- GIMIE for basic repository metadata
+- repo-to-text for extracting repository contents as text
+
+### Semantic Web and JSON-LD
+```toml
+PyLD==2.0.4                # JSON-LD processing
+rdflib==6.2.0              # RDF graph library
+rdflib-jsonld==0.6.2       # JSON-LD plugin for rdflib
+```
+
+**Usage:**
+- Output in JSON-LD format
+- Schema.org alignment
+- Imaging Plaza schema compatibility
+
+### Web Scraping and APIs
+```toml
+requests==2.32.4           # HTTP client
+aiohttp==3.12.15           # Async HTTP client
+httpx                      # Modern HTTP client (for PydanticAI)
+selenium==4.34.2           # Browser automation (ORCID scraping)
+beautifulsoup4==4.13.4     # HTML parsing
+```
+
+**Usage:**
+- requests for synchronous API calls
+- aiohttp for async operations
+- httpx for PydanticAI integrations
+- Selenium for dynamic content (ORCID profiles)
+- BeautifulSoup for HTML parsing
+
+### Utilities
+```toml
+python-dotenv==0.21.1      # Environment variable management
+PyYAML==6.0.2              # YAML parsing
+```
+
+## Development Dependencies
+
+Install with: `uv pip install -e ".[dev]"`
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.0.0",   # Git hooks for code quality
+    "pytest>=7.0.0",       # Testing framework
+    "pytest-cov>=4.0.0",   # Code coverage
+    "black>=23.0.0",       # Code formatter (legacy)
+    "ruff>=0.1.0",         # Modern linter and formatter
+    "mypy>=1.0.0"          # Static type checker
+]
+```
+
+**Usage:**
+- Use Ruff instead of Black (Ruff includes formatting)
+- Run `just install-dev` to install all dev dependencies
+
+## Dependency Management Practices
+
+### Version Pinning Strategy
+
+**Exact Versions (==):**
+Used for critical dependencies where version changes could break functionality:
+- `fastapi==0.115.13`
+- `pydantic==2.11.7`
+- `openai==2.1.0`
+- `selenium==4.34.2`
+
+**Minimum Versions (>=):**
+Used for compatible dependencies:
+- `pydantic-ai>=1.0.15`
+- `google-genai>=1.31.0`
+- `repo-to-text>=0.7.0`
+
+**Why this matters:**
+- Exact pins ensure reproducible builds
+- Minimum versions allow security updates
+- Critical APIs (FastAPI, Pydantic) are pinned to avoid breaking changes
+
+### Adding New Dependencies
+
+When adding a dependency:
+
+1. **Add to pyproject.toml:**
+```toml
+[project]
+dependencies = [
+    "new-package==1.2.3",
+    # ... other dependencies
+]
+```
+
+2. **Install using UV:**
+```bash
+uv pip install -e .
+```
+
+3. **Test thoroughly:**
+```bash
+just test
+just lint
+```
+
+4. **Document usage:**
+- Add to relevant cursor rules if it's a major dependency
+- Update README if it affects installation
+- Update Dockerfile if needed for production
+
+### Updating Dependencies
+
+```bash
+# Update a specific package
+uv pip install --upgrade package-name
+
+# Update all dependencies (careful!)
+uv pip install --upgrade .
+
+# Check for outdated packages
+pip list --outdated
+
+# Update pyproject.toml with new version
+# Then reinstall
+uv pip install -e .
+```
+
+**Best practices:**
+- Update one dependency at a time
+- Test after each update
+- Check for breaking changes in changelogs
+- Update version in pyproject.toml
+- Run full test suite
+
+## CLI Entry Points
+
+### Defined Scripts
+```toml
+[project.scripts]
+llm-finder = "src.main:main"
+```
+
+**Usage:**
+After installation, you can run:
+```bash
+llm-finder --url https://github.com/user/repo --output_path output.json
+```
+
+**Note:** Currently not heavily used; most users prefer:
+- `python src/main.py` for CLI
+- `just extract` for convenience
+- API server for production
+
+## Ruff Configuration
+
+### Basic Settings
+```toml
+[tool.ruff]
+line-length = 88           # Black-compatible
+target-version = "py38"    # Target Python 3.8+ syntax
+```
+
+### Lint Rules
+
+**Selected rules (extensive):**
+The project enables a comprehensive set of linting rules including:
+- `E`, `F`, `W`: Pyflakes and pycodestyle errors/warnings
+- `I`: isort (import sorting)
+- `N`: PEP8 naming conventions
+- `S`: Security checks (bandit)
+- `B`: Bugbear (common bugs)
+- `C90`: McCabe complexity
+- `UP`: pyupgrade (modern Python syntax)
+- `SIM`: Code simplification
+- `PERF`: Performance anti-patterns
+- `RUF`: Ruff-specific rules
+- And many more...
+
+See `pyproject.toml` line 76 for the complete list.
+
+### Ignored Rules
+```toml
+ignore = ["S101", "T201", "G004", "E501", "FA100"]
+```
+
+- `S101`: Allow assert statements (needed for pytest)
+- `T201`: Allow print statements (CLI tool output)
+- `G004`: Allow f-strings in logging
+- `E501`: Line too long (handled by formatter)
+- `FA100`: Future annotations not required
+
+### Per-File Ignores
+```toml
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = ["E402"]   # Allow imports not at top
+"tests/*.py" = ["E402"]      # Allow imports not at top
+"src/test/*.py" = ["E402"]   # Allow imports not at top
+```
+
+**Why E402 ignored in tests:**
+Tests often need to set up environment before imports.
+
+## Managing pyproject.toml
+
+### When to Update
+
+**Update version:**
+- On every release
+- Follow semantic versioning (MAJOR.MINOR.PATCH)
+- Current: `2.0.0`
+
+**Update dependencies:**
+- Security vulnerabilities
+- New features needed
+- Bug fixes in dependencies
+- Performance improvements
+
+**Update classifiers:**
+- When moving from Alpha to Beta
+- When adding new Python version support
+- When changing license
+
+### Validation
+
+After editing `pyproject.toml`:
+
+```bash
+# Validate syntax
+python -c "import tomllib; tomllib.load(open('pyproject.toml', 'rb'))"
+
+# Reinstall to apply changes
+uv pip install -e .
+
+# Run tests
+just test
+
+# Check linting still passes
+just lint
+```
+
+## Dependency Conflicts
+
+### Common Issues
+
+**Pydantic version conflicts:**
+- Ensure all packages support Pydantic V2
+- Check for deprecated `pydantic.v1` imports
+- Some packages may require `pydantic>=2.0,<3.0`
+
+**FastAPI version compatibility:**
+- FastAPI version must be compatible with Pydantic version
+- Current: FastAPI 0.115.13 + Pydantic 2.11.7 ✓
+
+**OpenAI client conflicts:**
+- Old `openai<1.0` vs new `openai>=1.0` are incompatible
+- We use `openai==2.1.0` (modern version)
+- Ensure PydanticAI is compatible
+
+### Resolving Conflicts
+
+```bash
+# Check dependency tree
+pip show package-name
+
+# Check for conflicts
+pip check
+
+# Force reinstall if needed
+uv pip install --force-reinstall .
+
+# Clear cache and reinstall
+uv cache clean
+uv pip install -e .
+```
+
+## Production Considerations
+
+### Docker Installation
+
+In the Dockerfile:
+```dockerfile
+RUN uv pip install --system .
+```
+
+**Important flags:**
+- `--system`: Install in system Python (not virtualenv)
+- Required in Docker environments
+- Ensures packages are globally available
+
+### Security Updates
+
+Monitor for security issues:
+```bash
+# Check for security vulnerabilities (if using pip-audit)
+pip-audit
+
+# Update specific vulnerable package
+uv pip install --upgrade vulnerable-package==X.Y.Z
+```
+
+Update `pyproject.toml` with the new version and test thoroughly.
+
+## Best Practices
+
+### DO:
+- ✅ Pin critical dependencies with exact versions
+- ✅ Use UV for fast, reliable installations
+- ✅ Test after updating dependencies
+- ✅ Document breaking changes
+- ✅ Keep Python version requirement accurate
+- ✅ Use dev dependencies for development tools
+- ✅ Run `just lint` before committing
+
+### DON'T:
+- ❌ Update all dependencies at once
+- ❌ Use `*` or broad version ranges for critical packages
+- ❌ Add dependencies without testing
+- ❌ Ignore dependency conflict warnings
+- ❌ Mix Pydantic V1 and V2 patterns
+- ❌ Commit without running linter
+
+## Useful Commands
+
+```bash
+# View current dependencies
+just deps
+
+# View project version
+just version
+
+# View environment info
+just env-info
+
+# Install fresh
+uv pip install .
+
+# Install for development
+uv pip install -e ".[dev]"
+
+# Reinstall everything
+uv pip install --force-reinstall -e ".[dev]"
+
+# Show specific package info
+pip show pydantic
+
+# List all installed packages
+pip list
+
+# Export current environment
+pip freeze > requirements-frozen.txt
+```
+
+## Migration Notes
+
+### If migrating from requirements.txt
+
+This project uses `pyproject.toml` instead of `requirements.txt`:
+
+**Old way:**
+```bash
+pip install -r requirements.txt
+```
+
+**New way:**
+```bash
+uv pip install .
+```
+
+**Benefits:**
+- Single source of truth (pyproject.toml)
+- Standardized Python packaging
+- Better metadata management
+- Automatic script installation
+- Dev dependency separation

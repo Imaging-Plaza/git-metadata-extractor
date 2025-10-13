@@ -1,13 +1,14 @@
+"""
+General data models
+"""
+
 from enum import Enum
 from typing import (
     List,
     Optional,
 )
 
-from pydantic import (
-    BaseModel,
-    HttpUrl,
-)
+from pydantic import BaseModel, HttpUrl
 
 
 class Person(BaseModel):

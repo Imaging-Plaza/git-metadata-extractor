@@ -139,7 +139,6 @@ PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITI
 """
 
 
-
 def get_repo_general_prompt(repo_url: str, input_text: str) -> str:
     prompt = f"""Analyze the following software repository and extract comprehensive metadata.
 

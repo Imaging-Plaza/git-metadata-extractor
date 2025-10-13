@@ -1,6 +1,10 @@
-import json
+from __future__ import annotations
 
-from .user_enrichment import UserAnalysisContext
+import json
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .user_enrichment import UserAnalysisContext
 
 user_enrichment_agent_system_prompt = """
 You are an expert at identifying and enriching author/user information from software repository metadata.

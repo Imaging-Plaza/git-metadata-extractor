@@ -2,26 +2,27 @@
 Conversion functions for the data models
 """
 
-from typing import Any, Dict, List, Optional, Union, get_origin, get_args
-from typing_extensions import List as ListType
-from pydantic import BaseModel, HttpUrl
 from datetime import date, datetime
 from enum import Enum
+from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import List as ListType
+
+from pydantic import BaseModel, HttpUrl
 
 from .models import (
-    Person,
     Organization,
+    Person,
 )
 from .repository import (
-    SoftwareSourceCode,
+    DataFeed,
+    ExecutableNotebook,
+    FormalParameter,
+    FundingInformation,
     GitAuthor,
     Image,
     ImageKeyword,
-    FundingInformation,
-    FormalParameter,
-    ExecutableNotebook,
     SoftwareImage,
-    DataFeed,
+    SoftwareSourceCode,
 )
 
 ############################################################

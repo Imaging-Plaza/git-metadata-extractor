@@ -319,9 +319,6 @@ async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
         return []
 
 
-
-
-
 def reduce_input_size(
     input_text: str,
     max_tokens: int = 400000,

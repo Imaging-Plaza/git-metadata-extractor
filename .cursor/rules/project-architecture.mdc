@@ -1,0 +1,208 @@
+---
+title: Project Architecture and Module Organization
+description: Project structure, module organization, and architectural patterns
+tags: [architecture, structure, modules, organization]
+---
+
+# Project Architecture and Module Organization
+
+## Project Overview
+Git Metadata Extractor - Extract and enrich repository metadata using AI models for the Imaging Plaza project and Open Pulse initiative.
+
+**Key Collaborators:**
+- EPFL Center for Imaging
+- Swiss Data Science Center (SDSC)
+- EPFL Open Science Office
+
+## Directory Structure
+
+```
+src/
+├── __init__.py
+├── main.py                 # CLI entry point
+├── api.py                  # FastAPI application
+├── agents/                 # AI agents for enrichment
+│   ├── agents_management.py
+│   ├── repository.py
+│   ├── user_enrichment.py
+│   ├── organization_enrichment.py
+│   ├── *_prompts.py       # Prompt definitions
+│   └── tools.py           # Agent tools
+├── analysis/              # Analysis orchestration
+│   ├── repositories.py
+│   └── user.py
+├── cache/                 # Caching system
+├── context/              # Context management
+├── data_models/          # Pydantic models
+│   ├── __init__.py       # Centralized exports
+│   ├── models.py         # Core models
+│   ├── repository.py     # Repository models
+│   ├── user.py           # User models
+│   ├── organization.py   # Organization models
+│   ├── api.py            # API models
+│   └── conversion.py     # Model conversions
+├── files/                # Static files (JSON-LD context)
+├── gimie_utils/          # GIMIE integration
+├── llm/                  # LLM configuration
+│   ├── model_config.py   # Model configuration system
+│   ├── genai_model.py    # Model utilities
+│   └── repo_context.py   # Repository context
+├── parsers/              # Data parsers
+├── utils/                # Utilities
+└── validation/           # Validation logic
+```
+
+## Module Responsibilities
+
+### `data_models/`
+- **Purpose**: All Pydantic models and schemas
+- **Pattern**: Centralized exports via `__init__.py`
+- **Exports**: Models, conversions, debugging utilities
+- **Usage**: Import from `src.data_models` only
+
+### `agents/`
+- **Purpose**: AI-powered enrichment agents
+- **Pattern**: Separate files for each agent type
+- **Prompts**: Dedicated `*_prompts.py` files
+- **Tools**: Shared tools in `tools.py`
+
+### `llm/`
+- **Purpose**: LLM configuration and management
+- **Pattern**: Provider-agnostic model creation
+- **Config**: Centralized in `model_config.py`
+- **Support**: Multiple providers with fallback
+
+### `analysis/`
+- **Purpose**: High-level analysis orchestration
+- **Pattern**: Coordinate data fetching and enrichment
+- **Usage**: Called by API endpoints and CLI
+
+### `cache/`
+- **Purpose**: SQLite-based caching system
+- **Pattern**: Cache manager singleton
+- **Features**: TTL, force refresh, statistics
+
+### `api.py`
+- **Purpose**: FastAPI application
+- **Pattern**: RESTful endpoints with versioning
+- **Features**: Caching, logging, error handling
+
+### `main.py`
+- **Purpose**: CLI interface
+- **Pattern**: Argparse-based command line tool
+- **Usage**: `python src/main.py --url <url>`
+
+## Data Flow
+
+### Repository Analysis
+1. **Input**: Repository URL
+2. **GIMIE**: Fetch basic metadata
+3. **AI Agent**: Analyze and classify
+4. **Enrichment**: Add author/org data
+5. **Merge**: Combine all sources
+6. **Output**: JSON-LD format
+
+### User Enrichment
+1. **Input**: Git authors from commits
+2. **ORCID Search**: Find profiles
+3. **Web Search**: Additional context
+4. **Email Analysis**: Infer affiliations
+5. **AI Agent**: Merge and score
+6. **Output**: Enriched author list
+
+### Organization Enrichment
+1. **Input**: Organization identifier
+2. **GitHub API**: Fetch org data
+3. **Web Search**: Additional info
+4. **AI Agent**: Analyze and enrich
+5. **Output**: Enriched organization
+
+## Integration Points
+
+### External Services
+- **GIMIE**: Repository metadata extraction
+- **GitHub API**: Repository and user data
+- **GitLab API**: Repository data
+- **ORCID API**: Author credentials
+- **Web Search**: DuckDuckGo for context
+- **Selenium**: ORCID web scraping (when needed)
+
+### Schema Alignment
+- **Output Format**: JSON-LD
+- **Schema**: Imaging Plaza softwareSourceCode schema
+- **Context**: `src/files/json-ld-context.json`
+
+## Configuration Management
+
+### Environment Variables
+```bash
+# API Keys
+OPENAI_API_KEY=          # OpenAI API key
+OPENROUTER_API_KEY=      # OpenRouter API key
+GITHUB_TOKEN=            # GitHub API token
+GITLAB_TOKEN=            # GitLab API token
+
+# Model Configuration
+MODEL=                   # Default model (deprecated, use JSON configs)
+PROVIDER=                # Default provider (deprecated)
+
+# Advanced Model Configs (JSON format)
+LLM_ANALYSIS_MODELS=     # Override repository analysis models
+USER_ENRICHMENT_MODELS=  # Override user enrichment models
+ORG_ENRICHMENT_MODELS=   # Override org enrichment models
+
+# Cache
+CACHE_ENABLED=true       # Enable/disable caching
+CACHE_DIR=/app/data      # Cache directory
+
+# Logging
+LOG_LEVEL=INFO           # DEBUG, INFO, WARNING, ERROR
+
+# Selenium (for ORCID scraping)
+SELENIUM_REMOTE_URL=http://selenium-hub:4444
+```
+
+### Configuration Files
+- `pyproject.toml`: Project metadata, dependencies, ruff config
+- `.env`: Environment variables (not committed)
+- `justfile`: Task automation
+
+## Development Workflow
+
+### Task Runner (Just)
+- `just setup`: Initial setup
+- `just serve-dev`: Run API in dev mode
+- `just test`: Run tests
+- `just lint`: Check code quality
+- `just format-ruff`: Format code
+- `just docker-build`: Build Docker image
+
+### Code Quality
+- **Linter**: Ruff (configured in pyproject.toml)
+- **Formatter**: Ruff format
+- **Type Checker**: MyPy
+- **Pre-commit**: Hooks available
+
+### Testing
+- **Framework**: Pytest
+- **Location**: `tests/` and `src/test/`
+- **Coverage**: Available via `just test-coverage`
+
+## Deployment
+
+### Docker
+- **Dockerfile**: `tools/image/Dockerfile`
+- **Build**: `just docker-build`
+- **Run**: `just docker-run`
+- **Dev**: `just docker-dev` (with volume mount)
+
+### Production
+- **Server**: Uvicorn with multiple workers
+- **Port**: 1234 (configurable)
+- **Workers**: 4 (configurable)
+- **Network**: Docker network `dev` for services
+
+### Selenium Grid (Optional)
+- Required for ORCID web scraping
+- Standalone or grid mode
+- Multiple concurrent sessions supported

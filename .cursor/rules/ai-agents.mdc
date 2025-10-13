@@ -1,0 +1,172 @@
+---
+title: AI Agents and LLM Integration
+description: Patterns for AI agents, LLM integration, and prompt engineering
+tags: [ai, llm, agents, pydantic-ai, prompts]
+---
+
+# AI Agents and LLM Integration
+
+## PydanticAI Framework
+
+### Version
+- Using `pydantic-ai>=1.0.15`
+- Follow PydanticAI patterns and conventions
+- Use proper provider classes
+
+### Model Configuration
+
+#### Configuration System
+- Centralized in `src/llm/model_config.py`
+- Multiple model support with fallback
+- Environment variable overrides supported
+
+#### Model Types
+Three analysis types with separate configs:
+- `run_llm_analysis` - Repository analysis
+- `run_user_enrichment` - User metadata enrichment
+- `run_organization_enrichment` - Organization metadata enrichment
+
+#### Provider Support
+- **OpenAI**: Direct OpenAI API
+- **OpenRouter**: Multi-model routing
+- **Ollama**: Local and remote Ollama instances
+- **OpenAI-compatible**: Custom endpoints
+
+#### Configuration Pattern
+```python
+from src.llm.model_config import load_model_config, create_pydantic_ai_model
+
+# Load config for analysis type
+configs = load_model_config("run_llm_analysis")
+
+# Create model from config
+model = create_pydantic_ai_model(configs[0])
+```
+
+### Retry Logic
+- Use `max_retries` from config
+- Exponential backoff: `get_retry_delay(attempt)`
+- Handle API failures gracefully
+- Log retry attempts
+
+## Agent Organization
+
+### Directory Structure
+- Agent implementations: `src/agents/`
+- Agent management: `src/agents/agents_management.py`
+- Repository agent: `src/agents/repository.py`
+- User enrichment: `src/agents/user_enrichment.py`
+- Organization enrichment: `src/agents/organization_enrichment.py`
+
+### Prompt Files
+- Repository prompts: `src/agents/repository_prompts.py`
+- User prompts: `src/agents/user_prompts.py`
+- Organization prompts: `src/agents/organization_prompts.py`
+- Generic prompts: `src/agents/prompts.py`
+
+### Agent Tools
+- Tool definitions: `src/agents/tools.py`
+- Include: search_web, search_orcid, etc.
+- Use PydanticAI tool decorator
+- Provide clear tool descriptions
+
+## Prompt Engineering
+
+### System Prompts
+- Define expert roles clearly
+- Specify data sources to analyze
+- Include confidence scoring guidelines
+- Provide output format instructions
+
+### Confidence Scoring Guidelines
+Include in prompts:
+- 0.9-1.0: Strong evidence (multiple high-quality sources)
+- 0.7-0.89: Good evidence (verified sources)
+- 0.5-0.69: Moderate evidence (partial information)
+- 0.3-0.49: Weak evidence (limited information)
+- 0.0-0.29: Very weak/speculative evidence
+
+### User Prompts
+- Use structured data in prompts (JSON format)
+- Include context from multiple sources
+- Provide clear instructions
+- Request specific output fields
+
+### Example Pattern
+```python
+def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisContext):
+    prompt = f"""Analyze the following repository authors...
+    
+    Repository: {repository_url}
+    
+    Git Authors: {json.dumps([...], indent=2)}
+    
+    Please:
+    1. [Specific instruction]
+    2. [Specific instruction]
+    ...
+    """
+    return prompt
+```
+
+## Analysis Context
+
+### Context Objects
+- `UserAnalysisContext`: Git authors + existing ORCID data
+- `OrganizationAnalysisContext`: Organization metadata
+- Include temporal data (commit dates, affiliation periods)
+- Provide comprehensive context for AI analysis
+
+### Data Sources
+- **GIMIE**: Basic repository metadata
+- **GitHub/GitLab**: Repository and user data
+- **ORCID**: Author affiliations and credentials
+- **Web Search**: Supplementary information
+- **Email Domains**: Institutional affiliation inference
+
+## Model Parameters
+
+### Temperature Settings
+- Repository analysis: 0.2 (more deterministic)
+- User enrichment: 0.1 (very deterministic)
+- Organization enrichment: 0.1 (very deterministic)
+
+### Token Limits
+- Repository analysis: 16000 max_tokens
+- User enrichment: 8000 max_tokens
+- Organization enrichment: 8000 max_tokens
+
+### Special Cases
+- OpenAI reasoning models (o3, o4): Use `max_completion_tokens`, no temperature
+- Ollama: Use `num_predict` instead of `max_tokens`
+
+## Error Handling
+
+### Timeout Management
+- Set appropriate timeouts per analysis type
+- Repository analysis: 600s (long-running)
+- User/Org enrichment: 300s
+- Handle timeout errors gracefully
+
+### Validation
+- Validate configs before use: `validate_config(config)`
+- Check required API keys for providers
+- Log configuration issues
+- Fall back to alternative models on failure
+
+## Integration Patterns
+
+### Analysis Workflow
+1. Load model configuration
+2. Create PydanticAI model instance
+3. Prepare analysis context
+4. Generate appropriate prompt
+5. Execute agent with retry logic
+6. Validate and return results
+
+### Result Processing
+- Parse structured outputs (JSON)
+- Validate against Pydantic models
+- Merge with existing data
+- Include confidence scores
+- Log analysis outcomes

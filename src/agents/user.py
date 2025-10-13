@@ -5,14 +5,12 @@ User Analysis Agent
 import logging
 from typing import Any, Dict, Optional
 
-
-from ..llm.model_config import load_model_config
 from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
+from .agents_management import cleanup_agents, run_agent_with_fallback
 from .user_prompts import get_general_user_agent_prompt
-from .agents_management import run_agent_with_fallback, cleanup_agents
 
 # Setup logger first, before anything else
 logger = logging.getLogger(__name__)
@@ -31,7 +29,7 @@ async def llm_request_user_infos(
     username: str,
     user_data: Dict[str, Any],
     max_tokens: int = 20000,
-) -> Optional[Dict[str, Any]]: #TODO: Add here data class
+) -> Optional[Dict[str, Any]]:  # TODO: Add here data class
     """
     Analyze GitHub user profile using PydanticAI with multi-provider support.
 

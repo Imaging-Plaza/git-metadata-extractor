@@ -1,0 +1,97 @@
+---
+title: Pydantic Data Models
+description: Patterns and conventions for Pydantic models and data validation
+tags: [pydantic, models, validation, data-models]
+---
+
+# Pydantic Data Models
+
+## Pydantic Version
+- Using Pydantic v2.11.7
+- Follow Pydantic V2 patterns and conventions
+- Avoid deprecated V1 patterns
+
+## Model Organization
+
+### Directory Structure
+- Core models: `src/data_models/models.py`
+- Repository models: `src/data_models/repository.py`
+- User models: `src/data_models/user.py`
+- Organization models: `src/data_models/organization.py`
+- API models: `src/data_models/api.py`
+- Conversions: `src/data_models/conversion.py`
+
+### Export Pattern
+- All models must be exported in `src/data_models/__init__.py`
+- Update `__all__` list when adding new models
+- Use explicit imports in `__init__.py`
+
+## Model Conventions
+
+### Field Definitions
+- Use `Optional[T]` with `= None` for optional fields
+- Use `List[T]` for array fields (import from `typing`)
+- Use `HttpUrl` from pydantic for URL validation
+- Use proper default values when applicable
+
+### Example Pattern
+```python
+from pydantic import BaseModel, HttpUrl
+from typing import Optional, List
+
+class Person(BaseModel):
+    name: str
+    orcidId: Optional[HttpUrl] = None
+    affiliation: Optional[List[str]] = None
+```
+
+### Enums
+- Use `str, Enum` for string enums
+- Define in `src/data_models/models.py` for core enums
+- Use descriptive string values
+
+```python
+from enum import Enum
+
+class ResourceType(str, Enum):
+    REPOSITORY = "repository"
+    USER = "user"
+    ORGANIZATION = "organization"
+```
+
+### Field Naming
+- Use camelCase for field names to match JSON-LD schema
+- Examples: `orcidId`, `legalName`, `hasRorId`
+- This maintains compatibility with Imaging Plaza schema
+
+## Validation
+
+### Debugging Utilities
+- Use debugging functions from `data_models.repository`:
+  - `debug_pydantic_validation()`
+  - `log_validation_errors()`
+  - `debug_field_values()`
+  - `validate_repository_data_with_debugging()`
+
+### Custom Validation
+- Use Pydantic V2 validators (`@field_validator`, `@model_validator`)
+- Provide clear validation error messages
+- Log validation errors for debugging
+
+## Model Conversion
+
+### JSON-LD Conversion
+- Use `convert_jsonld_to_pydantic()` for JSON-LD → Pydantic
+- Use `convert_pydantic_to_zod_form_dict()` for form generation
+- Handle nested structures properly
+
+### API Output
+- Use `APIOutput` model for all API responses
+- Include metadata like timestamps and resource types
+- Maintain consistent response structure
+
+## Confidence Scores
+- Use `Optional[float]` for confidence scores
+- Range: 0.0 to 1.0
+- Include in enrichment results (users, organizations)
+- Document scoring criteria in related agent prompts
