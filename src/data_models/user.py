@@ -23,7 +23,7 @@ from .models import (
     Organization,
     Person,
 )
-from .repository import GitAuthor
+from .repository import GitAuthor, InfoscienceEntity
 
 
 class EnrichedAuthor(BaseModel):
@@ -57,6 +57,10 @@ class EnrichedAuthor(BaseModel):
     )
     additionalInfo: Optional[str] = Field(
         description="Additional biographical or professional information found",
+        default=None,
+    )
+    infoscienceEntity: Optional[InfoscienceEntity] = Field(
+        description="Infoscience entity found",
         default=None,
     )
 

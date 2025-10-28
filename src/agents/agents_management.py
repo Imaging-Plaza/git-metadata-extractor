@@ -56,23 +56,28 @@ def create_agent_from_config(
     config: Dict[str, Any],
     output_type: BaseModel,
     system_prompt: str,
+    tools: List[Any] = None,
 ) -> Agent:
     """
     Create a PydanticAI agent from configuration.
 
     Args:
         config: Model configuration dictionary
+        output_type: Pydantic model for output validation
+        system_prompt: System prompt for the agent
+        tools: Optional list of tool functions to register with the agent
 
     Returns:
         Configured PydanticAI agent
     """
     model = create_pydantic_ai_model(config)
 
-    # Create agent with the model
+    # Create agent with the model and optional tools
     agent = Agent(
         model=model,
         output_type=output_type,  # SoftwareSourceCode,
         system_prompt=system_prompt,  # system_prompt_json,
+        tools=tools or [],  # Register tools if provided
     )
 
     # Track agent for cleanup
@@ -166,6 +171,7 @@ async def run_agent_with_fallback(
     context: Any,
     output_type: BaseModel,
     system_prompt: str,
+    tools: List[Any] = None,
 ) -> Any:
     """
     Run agent with fallback to next model if current fails.
@@ -174,6 +180,9 @@ async def run_agent_with_fallback(
         agent_configs: List of agent configurations to try
         prompt: Input prompt
         context: Agent context
+        output_type: Pydantic model for output validation
+        system_prompt: System prompt for the agent
+        tools: Optional list of tool functions to register with the agent
 
     Returns:
         Agent result
@@ -188,7 +197,7 @@ async def run_agent_with_fallback(
             logger.info(
                 f"Trying model {i + 1}/{len(agent_configs)}: {config['provider']}/{config['model']}",
             )
-            agent = create_agent_from_config(config, output_type, system_prompt)
+            agent = create_agent_from_config(config, output_type, system_prompt, tools)
             result = await run_agent_with_retry(agent, prompt, context, config)
             logger.info(f"Successfully completed with model {i + 1}")
             return result

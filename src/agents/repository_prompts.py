@@ -17,6 +17,34 @@ The user will provide the full codebase of a software project. Your task is to e
 5. Validate internally that required fields are non-empty and formatting constraints are met.
 6. Provide full links. These files are coming from a github repository. If you find images, please attach the full link to we can embed it.
 
+🔧 **Available Tools - Infoscience EPFL Repository Search:**
+You have access to tools to search EPFL's Infoscience repository for additional context:
+- `search_infoscience_publications_tool`: Search for publications by title, DOI, or keywords to find related academic work
+- `get_author_publications_tool`: Get publications by a specific author name to verify author information and affiliations
+
+**⚠️ CRITICAL - Tool Usage Strategy:**
+- **Be strategic and efficient** - these tools query external APIs
+- **DO NOT repeat searches** - tools cache results automatically
+- **Use sparingly** - only call tools when they provide real value to metadata extraction
+- **One search per subject** - if information isn't found on first try, accept that and move on
+- **Priority: extract from repository content FIRST, use tools only to verify/enrich**
+
+**When to use these tools:**
+- **FIRST: Search for the repository/tool name itself** to find related publications
+- If you find author names and want to verify their EPFL affiliation
+- If the README mentions publications or DOIs - search to get proper citation information
+- If you need to verify whether a repository is related to EPFL or specific labs
+- To find additional publications related to the software that may not be explicitly mentioned
+
+**Example usage (ONE search per subject!):**
+- **Repository is "gimie"?** → Use `search_infoscience_publications_tool("gimie")` ONCE to find publications about the tool
+- **Repository URL is "github.com/user/my-tool"?** → Search for "my-tool" to find related papers
+- Found author "Jean Dupont"? → Use `get_author_publications_tool` ONCE to verify EPFL affiliation
+- Found DOI "10.1234/example"? → Use `search_infoscience_publications_tool` ONCE to get complete citation details
+- Repository mentions a lab name? → Search ONCE to verify the connection
+
+**IMPORTANT:** Extract the repository/tool name from the URL (e.g., "gimie" from "github.com/sdsc-ordes/gimie") and search for it in Infoscience to find related publications!
+
 ⚠️ **CRITICAL - DOI and Citation Rules:**
 - **NEVER use placeholder DOIs** like `https://doi.org/10.0000/unknown` or any DOI with `10.0000/` - these are invalid.
 - **DO NOT include Zenodo links in the `identifier` field** - Zenodo links should go in `relatedDatasets` instead.
@@ -140,9 +168,13 @@ PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITI
 
 
 def get_repo_general_prompt(repo_url: str, input_text: str) -> str:
+    # Extract repository name from URL for tool usage hints
+    repo_name = repo_url.rstrip("/").split("/")[-1]
+    
     prompt = f"""Analyze the following software repository and extract comprehensive metadata.
 
     Repository URL: {repo_url}
+    Repository Name: {repo_name}
 
     Repository Content:
     {input_text}
@@ -155,6 +187,12 @@ def get_repo_general_prompt(repo_url: str, input_text: str) -> str:
     - Related organizations
     - Keywords and topics
     - Any other relevant metadata
+
+    🔍 **IMPORTANT - Use Infoscience Tools Strategically:**
+    - Start by searching for publications about "{repo_name}" using search_infoscience_publications_tool
+    - This can help identify related papers, citations, and EPFL affiliations
+    - If the repository has EPFL-affiliated authors, verify them using the author tools
+    - Remember: ONE search per subject, results are cached automatically
 
     Focus on accuracy and completeness in your analysis."""
 

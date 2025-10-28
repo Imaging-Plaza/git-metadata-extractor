@@ -6,6 +6,12 @@ from .conversion import (
     convert_jsonld_to_pydantic,
     convert_pydantic_to_zod_form_dict,
 )
+from .infoscience import (
+    InfoscienceAuthor,
+    InfoscienceLab,
+    InfosciencePublication,
+    InfoscienceSearchResult,
+)
 from .models import (
     Discipline,
     Organization,
@@ -79,6 +85,11 @@ __all__ = [
     "OrganizationEnrichmentResult",
     "OrganizationAnalysisContext",
     "GitHubOrganizationMetadata",
+    # Infoscience models
+    "InfosciencePublication",
+    "InfoscienceAuthor",
+    "InfoscienceLab",
+    "InfoscienceSearchResult",
     # API models
     "APIOutput",
     # Utilities

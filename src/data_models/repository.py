@@ -220,6 +220,12 @@ class GitAuthor(BaseModel):
         logger.warning(f"commits has unexpected type: {type(v)}")
         return v
 
+class InfoscienceEntity(BaseModel):
+    name: str
+    url: HttpUrl
+    confidence: float
+    justification: str
+
 
 class SoftwareSourceCode(BaseModel):
     name: Optional[str] = None
@@ -273,6 +279,7 @@ class SoftwareSourceCode(BaseModel):
     relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
     webpagesToCheck: Optional[List[HttpUrl]] = None
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
 
     @field_validator("author", mode="before")
     @classmethod

@@ -14,6 +14,27 @@ Also, please add EPFL to relatedToOrganizations if the person is affiliated with
 
 On the other hand, always add related Disciplines and justify the response in a common field.
 
+🔧 **Available Tools - Infoscience EPFL Repository Search:**
+You have access to tools to search EPFL's Infoscience repository for additional context about the user:
+- `search_infoscience_authors_tool`: Search for the user by name to find their EPFL profile and publications
+- `get_author_publications_tool`: Get all publications by the user to verify their research area and affiliations
+
+**⚠️ CRITICAL - Tool Usage Strategy:**
+- **Be strategic and efficient** - these tools query external APIs
+- **DO NOT repeat searches** - tools cache results automatically
+- **Use sparingly** - only when they add real value
+- **One search per person** - if not found on first try, move on
+
+**When to use these tools:**
+- When you encounter a name that might be affiliated with EPFL
+- To verify author information, research interests, and affiliations
+- To find publications that indicate the person's discipline and position
+- To confirm whether a GitHub user is affiliated with EPFL or specific EPFL labs
+
+**Example usage (ONE search per person!):**
+- GitHub user is "jdupont"? → Use `search_infoscience_authors_tool("Jean Dupont")` ONCE
+- Found name in README? → Use `get_author_publications_tool` ONCE to get their research area
+
 Respect the schema provided and do not add new fields.
 """
 

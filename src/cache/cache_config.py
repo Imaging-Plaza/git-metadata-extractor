@@ -7,17 +7,18 @@ from typing import Any, Dict
 
 # Cache configuration
 CACHE_CONFIG = {
-    # Default TTL settings (in days)
-    "default_ttl_days": int(os.environ.get("CACHE_DEFAULT_TTL_DAYS", "30")),
+    # Default TTL settings (in days) - set to 1 year for essentially permanent storage
+    "default_ttl_days": int(os.environ.get("CACHE_DEFAULT_TTL_DAYS", "365")),
     # API-specific TTL overrides (in days)
+    # Note: Cache is only refreshed when force_refresh=true is used
     "api_ttl_overrides": {
-        "github_user": int(os.environ.get("CACHE_GITHUB_USER_TTL_DAYS", "7")),
-        "github_org": int(os.environ.get("CACHE_GITHUB_ORG_TTL_DAYS", "7")),
-        "orcid": int(os.environ.get("CACHE_ORCID_TTL_DAYS", "14")),
-        "gimie": int(os.environ.get("CACHE_GIMIE_TTL_DAYS", "1")),
-        "llm": int(os.environ.get("CACHE_LLM_TTL_DAYS", "30")),
-        "llm_user": int(os.environ.get("CACHE_LLM_USER_TTL_DAYS", "7")),
-        "llm_org": int(os.environ.get("CACHE_LLM_ORG_TTL_DAYS", "7")),
+        "github_user": int(os.environ.get("CACHE_GITHUB_USER_TTL_DAYS", "365")),
+        "github_org": int(os.environ.get("CACHE_GITHUB_ORG_TTL_DAYS", "365")),
+        "orcid": int(os.environ.get("CACHE_ORCID_TTL_DAYS", "365")),
+        "gimie": int(os.environ.get("CACHE_GIMIE_TTL_DAYS", "365")),  # Changed from 1 day
+        "llm": int(os.environ.get("CACHE_LLM_TTL_DAYS", "365")),  # Changed from 30 days
+        "llm_user": int(os.environ.get("CACHE_LLM_USER_TTL_DAYS", "365")),  # Changed from 7 days
+        "llm_org": int(os.environ.get("CACHE_LLM_ORG_TTL_DAYS", "365")),  # Changed from 7 days
     },
     # Cache database settings
     "cache_db_path": os.environ.get("CACHE_DB_PATH", "api_cache.db"),

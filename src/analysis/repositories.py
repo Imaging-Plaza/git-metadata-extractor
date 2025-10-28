@@ -173,14 +173,22 @@ class Repository:
         )
 
         existing_authors_raw = getattr(self.data, "author", [])
-        existing_authors_data = (
-            [
-                author.model_dump() if hasattr(author, "model_dump") else author
-                for author in existing_authors_raw
-            ]
-            if existing_authors_raw
-            else []
-        )
+        existing_authors_data = []
+        if existing_authors_raw:
+            for author in existing_authors_raw:
+                # Convert to dict first if it's a Pydantic model
+                author_dict = author.model_dump() if hasattr(author, "model_dump") else author
+                
+                # Only include Person/EnrichedAuthor objects, skip Organization objects
+                # Organizations have 'legalName', Person/EnrichedAuthor have 'name'
+                if isinstance(author_dict, dict):
+                    if "name" in author_dict:  # Person or EnrichedAuthor
+                        existing_authors_data.append(author_dict)
+                    elif "legalName" in author_dict:  # Organization - skip it
+                        logger.debug(f"Skipping Organization object in user enrichment: {author_dict.get('legalName')}")
+                        continue
+                else:
+                    existing_authors_data.append(author_dict)
 
         user_enrichment = await enrich_users_from_dict(
             git_authors_data=git_authors_data,

@@ -5,11 +5,16 @@ User Analysis Agent
 import logging
 from typing import Any, Dict, Optional
 
+from ..context.infoscience import (
+    get_author_publications_tool,
+    search_infoscience_authors_tool,
+)
 from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
 from .agents_management import cleanup_agents, run_agent_with_fallback
+from .prompts import system_prompt_user_content
 from .user_prompts import get_general_user_agent_prompt
 
 # Setup logger first, before anything else
@@ -52,11 +57,20 @@ async def llm_request_user_infos(
     prompt = get_general_user_agent_prompt(username, user_data)
 
     try:
+        # Define tools for the user agent
+        tools = [
+            search_infoscience_authors_tool,
+            get_author_publications_tool,
+        ]
+
         # Run agent with fallback across multiple models
         result = await run_agent_with_fallback(
             llm_analysis_configs,
             prompt,
             agent_context,
+            Dict,  # Output type
+            system_prompt_user_content,
+            tools,
         )
 
         # Extract the output from PydanticAI result

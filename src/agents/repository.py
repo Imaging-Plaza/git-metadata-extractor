@@ -6,6 +6,10 @@ import logging
 from typing import Any, Optional
 
 from ..context import prepare_repository_context
+from ..context.infoscience import (
+    get_author_publications_tool,
+    search_infoscience_publications_tool,
+)
 from ..data_models.repository import RepositoryAnalysisContext, SoftwareSourceCode
 from ..llm.model_config import (
     load_model_config,
@@ -102,6 +106,12 @@ async def llm_request_repo_infos(
     prompt = get_repo_general_prompt(repo_url, input_text)
 
     try:
+        # Define tools for the repository agent
+        tools = [
+            search_infoscience_publications_tool,
+            get_author_publications_tool,
+        ]
+
         # Run agent with fallback across multiple models
         result = await run_agent_with_fallback(
             llm_analysis_configs,
@@ -109,6 +119,7 @@ async def llm_request_repo_infos(
             agent_context,
             SoftwareSourceCode,
             system_prompt_repository,
+            tools,
         )
 
         # Extract the output from PydanticAI result

@@ -28,6 +28,11 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from ..context.infoscience import (
+    get_author_publications_tool,
+    search_infoscience_labs_tool,
+    search_infoscience_publications_tool,
+)
 from ..data_models import (
     GitAuthor,
     OrganizationAnalysisContext,
@@ -74,10 +79,18 @@ def create_organization_enrichment_agent(config: dict) -> Agent:
     """Create an organization enrichment agent from configuration."""
     model = create_pydantic_ai_model(config)
 
+    # Define Infoscience tools for the organization agent
+    infoscience_tools = [
+        search_infoscience_labs_tool,
+        search_infoscience_publications_tool,
+        get_author_publications_tool,
+    ]
+
     agent = Agent(
         model=model,
         output_type=OrganizationEnrichmentResult,
         system_prompt=organization_enrichment_main_system_prompt,
+        tools=infoscience_tools,
     )
 
     # Track agent for cleanup
