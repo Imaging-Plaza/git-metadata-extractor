@@ -6,176 +6,635 @@ Extracted from genai_model.py to improve modularity.
 """
 
 import asyncio
-import glob
+import json
 import logging
 import os
+import re
 import tempfile
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from bs4 import BeautifulSoup
 
 from ..data_models import Commits, GitAuthor
 from ..utils.utils import sanitize_special_tokens
 
 logger = logging.getLogger(__name__)
 
+# File size limit (1 MB)
+MAX_FILE_SIZE = 1024 * 1024  # 1 MB in bytes
 
-async def clone_repo(repo_url: str, temp_dir: str) -> Optional[str]:
+# Directories to skip during repository traversal
+SKIP_DIRECTORIES = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    ".eggs",
+    "*.egg-info",
+    ".tox",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "htmlcov",
+    ".coverage",
+}
+
+# File extensions and patterns to include
+DOCUMENTATION_EXTENSIONS = {".md", ".txt", ".rst", ".cff"}
+CODE_EXTENSIONS = {".py", ".r"}
+CONFIG_EXTENSIONS = {
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".env",
+}
+RICH_CONTENT_EXTENSIONS = {".html", ".ipynb"}
+CONFIG_FILENAMES = {
+    "requirements.txt",
+    "setup.py",
+    "pyproject.toml",
+    "Makefile",
+    "Dockerfile",
+    ".dockerignore",
+    ".gitignore",
+}
+
+# Additional important documentation and metadata files (without extensions)
+IMPORTANT_FILENAMES = {
+    "AUTHORS",
+    "CONTRIBUTORS",
+    "CHANGELOG",
+    "CHANGES",
+    "HISTORY",
+    "NOTICE",
+    "CODE_OF_CONDUCT",
+    "SECURITY",
+    "SUPPORT",
+    "ACKNOWLEDGMENTS",
+    "ACKNOWLEDGEMENTS",
+    "THANKS",
+}
+
+# All relevant extensions combined
+RELEVANT_EXTENSIONS = (
+    DOCUMENTATION_EXTENSIONS
+    | CODE_EXTENSIONS
+    | CONFIG_EXTENSIONS
+    | RICH_CONTENT_EXTENSIONS
+)
+
+
+async def clone_repo(
+    repo_url: str, temp_dir: str, max_retries: int = 3
+) -> Optional[str]:
     """
     Clone a GitHub repository into a temporary directory asynchronously.
+    Includes retry logic and optimizations for large repositories.
 
     Args:
         repo_url: Repository URL to clone
         temp_dir: Temporary directory path
+        max_retries: Maximum number of retry attempts
 
     Returns:
         Path to cloned repository or None if failed
     """
     logger.info(f"Cloning {repo_url} into {temp_dir}...")
-    try:
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "-c",
-            "core.symlinks=false",
-            repo_url,
-            temp_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
 
-        if process.returncode == 0:
-            logger.info("Repository cloned successfully.")
-            # Check what was cloned
-            if os.path.exists(temp_dir):
-                contents = os.listdir(temp_dir)
-                logger.debug(f"Cloned repository contains {len(contents)} items")
-                logger.debug(f"First 10 items: {contents[:10]}")
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Clone attempt {attempt}/{max_retries}")
 
-                # Check if .git directory exists
-                git_dir = os.path.join(temp_dir, ".git")
-                if os.path.exists(git_dir):
-                    logger.debug(".git directory exists")
-                else:
-                    logger.warning(f".git directory not found in {temp_dir}")
-            return temp_dir
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                # Configuration for large repositories and network reliability
+                "-c",
+                "core.symlinks=false",
+                "-c",
+                "http.postBuffer=524288000",  # 500 MB buffer
+                "-c",
+                "http.lowSpeedLimit=1000",  # 1KB/s minimum speed
+                "-c",
+                "http.lowSpeedTime=60",  # for 60 seconds
+                "--progress",  # Show progress
+                repo_url,
+                temp_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
-        stderr_text = stderr.decode()
-        logger.error(
-            f"Failed to clone repository with return code {process.returncode}",
-        )
-        logger.error(f"stderr: {stderr_text}")
-        if stdout:
-            logger.debug(f"stdout: {stdout.decode()[:500]}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to clone repository with exception: {e}", exc_info=True)
-        return None
+            # Use asyncio.wait_for to add timeout
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=600.0  # 10 minute timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Clone attempt {attempt} timed out after 10 minutes")
+                process.kill()
+                await process.wait()
+                if attempt < max_retries:
+                    logger.info(f"Retrying clone (attempt {attempt + 1}/{max_retries})...")
+                    await asyncio.sleep(2)  # Brief delay before retry
+                    continue
+                return None
+
+            if process.returncode == 0:
+                logger.info("Repository cloned successfully.")
+                # Check what was cloned
+                if os.path.exists(temp_dir):
+                    contents = os.listdir(temp_dir)
+                    logger.debug(f"Cloned repository contains {len(contents)} items")
+                    logger.debug(f"First 10 items: {contents[:10]}")
+
+                    # Check if .git directory exists
+                    git_dir = os.path.join(temp_dir, ".git")
+                    if os.path.exists(git_dir):
+                        logger.debug(".git directory exists")
+                    else:
+                        logger.warning(f".git directory not found in {temp_dir}")
+                return temp_dir
+
+            stderr_text = stderr.decode()
+            logger.error(
+                f"Failed to clone repository with return code {process.returncode}",
+            )
+            logger.error(f"stderr: {stderr_text}")
+            if stdout:
+                logger.debug(f"stdout: {stdout.decode()[:500]}")
+
+            # Check if error is retryable (network issues)
+            retryable_errors = [
+                "Connection reset by peer",
+                "RPC failed",
+                "early EOF",
+                "fetch-pack: invalid index-pack output",
+                "unexpected disconnect",
+                "Connection timed out",
+                "Failed to connect",
+            ]
+
+            if any(error in stderr_text for error in retryable_errors):
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Network error detected, retrying (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+
+            # Non-retryable error, return None
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"Failed to clone repository with exception: {e}", exc_info=True
+            )
+            if attempt < max_retries:
+                logger.info(f"Retrying clone (attempt {attempt + 1}/{max_retries})...")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            return None
+
+    logger.error(f"Failed to clone repository after {max_retries} attempts")
+    return None
 
 
-async def run_repo_to_text(temp_dir: str) -> bool:
+def is_binary_file(filepath: str) -> bool:
     """
-    Run the repo-to-text command asynchronously.
+    Check if a file is binary by reading the first 8192 bytes.
 
     Args:
-        temp_dir: Directory containing the cloned repository
+        filepath: Path to the file
 
     Returns:
-        True if successful, False otherwise
+        True if binary, False if text
     """
     try:
-        logger.debug(f"Running repo-to-text in directory: {temp_dir}")
+        with open(filepath, "rb") as f:
+            chunk = f.read(8192)
+            if b"\0" in chunk:  # Null bytes indicate binary
+                return True
+            # Check for high proportion of non-text bytes
+            text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)))
+            non_text = sum(1 for byte in chunk if byte not in text_chars)
+            return non_text / len(chunk) > 0.3 if chunk else False
+    except Exception:
+        return True
 
-        # Check if directory exists and list its contents
-        if os.path.exists(temp_dir):
-            logger.debug(
-                f"Directory exists. Contents: {os.listdir(temp_dir)[:10]}",
-            )  # Show first 10 items
-        else:
-            logger.error(f"Directory does not exist: {temp_dir}")
+
+def is_relevant_file(filepath: str, filename: str) -> bool:
+    """
+    Check if a file is relevant for extraction.
+
+    Args:
+        filepath: Full path to the file
+        filename: Name of the file
+
+    Returns:
+        True if relevant, False otherwise
+    """
+    # Check file size
+    try:
+        if os.path.getsize(filepath) > MAX_FILE_SIZE:
+            logger.debug(f"Skipping {filepath}: exceeds size limit")
             return False
+    except OSError:
+        return False
 
-        process = await asyncio.create_subprocess_exec(
-            "repo-to-text",
-            "--ignore-patterns",
-            "*.log",
-            "temp/",
-            "*.lock",
-            ".git",
-            ".github",
-            cwd=temp_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
+    # Check by filename (case-insensitive for special files)
+    lower_filename = filename.lower()
+    upper_filename = filename.upper()
+    
+    # Check for README, LICENSE, CITATION (with or without extensions)
+    if any(
+        lower_filename.startswith(name.lower()) or lower_filename == name.lower()
+        for name in ["readme", "license", "citation"]
+    ):
+        return True
 
-        if process.returncode == 0:
-            logger.info("repo-to-text command completed successfully.")
-            logger.debug(f"repo-to-text stdout length: {len(stdout)} bytes")
+    # Check for config files with specific names (case-sensitive)
+    if filename in CONFIG_FILENAMES:
+        return True
+
+    # Check for important documentation files (typically uppercase, no extension)
+    if upper_filename in IMPORTANT_FILENAMES:
+        return True
+    
+    # Also check with common extensions for these files
+    basename_upper = os.path.splitext(filename)[0].upper()
+    if basename_upper in IMPORTANT_FILENAMES:
+        return True
+
+    # Check by extension
+    _, ext = os.path.splitext(filename)
+    ext_lower = ext.lower()
+
+    if ext_lower in RELEVANT_EXTENSIONS:
+        # Additional check for binary files
+        if not is_binary_file(filepath):
             return True
 
-        stderr_text = stderr.decode()
-        stdout_text = stdout.decode() if stdout else ""
-        logger.error(
-            f"'repo-to-text' command failed with return code {process.returncode}",
-        )
-        logger.error(f"Full stderr output:\n{stderr_text}")
-        if stdout_text:
-            logger.error(f"Full stdout output:\n{stdout_text}")
-        return False
+    return False
+
+
+def walk_repository_tree(repo_dir: str) -> Tuple[List[str], str]:
+    """
+    Walk the repository directory tree and collect relevant files.
+
+    Args:
+        repo_dir: Root directory of the repository
+
+    Returns:
+        Tuple of (list of file paths, tree structure as string)
+    """
+    relevant_files = []
+    tree_lines = []
+
+    repo_path = Path(repo_dir)
+
+    def should_skip_directory(dir_name: str) -> bool:
+        """Check if directory should be skipped."""
+        return dir_name in SKIP_DIRECTORIES or dir_name.startswith(".")
+
+    def build_tree(directory: Path, prefix: str = "", is_last: bool = True):
+        """Recursively build tree structure."""
+        try:
+            items = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+        except PermissionError:
+            return
+
+        for index, item in enumerate(items):
+            is_last_item = index == len(items) - 1
+
+            # Skip hidden files and unwanted directories
+            if item.name.startswith(".") and item.name not in {
+                ".env",
+                ".gitignore",
+                ".dockerignore",
+            }:
+                continue
+
+            if item.is_dir() and should_skip_directory(item.name):
+                continue
+
+            # Tree formatting
+            connector = "└── " if is_last_item else "├── "
+            tree_lines.append(f"{prefix}{connector}{item.name}")
+
+            if item.is_dir():
+                extension = "    " if is_last_item else "│   "
+                build_tree(item, prefix + extension, is_last_item)
+            elif item.is_file():
+                # Check if file is relevant
+                if is_relevant_file(str(item), item.name):
+                    relevant_files.append(str(item))
+
+    # Build the tree
+    tree_lines.append(f"{repo_path.name}/")
+    build_tree(repo_path)
+
+    tree_structure = "\n".join(tree_lines)
+    logger.info(f"Found {len(relevant_files)} relevant files in repository")
+
+    return relevant_files, tree_structure
+
+
+def extract_plain_text(filepath: str) -> str:
+    """
+    Extract plain text from a file with encoding fallback.
+
+    Args:
+        filepath: Path to the file
+
+    Returns:
+        Text content
+    """
+    encodings = ["utf-8", "latin-1", "cp1252"]
+
+    for encoding in encodings:
+        try:
+            with open(filepath, encoding=encoding) as f:
+                return f.read()
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+    logger.warning(f"Could not decode {filepath} with common encodings")
+    return f"[Could not decode file: {filepath}]"
+
+
+def extract_html_text(filepath: str) -> str:
+    """
+    Extract text from HTML file using BeautifulSoup.
+
+    Args:
+        filepath: Path to HTML file
+
+    Returns:
+        Extracted text content
+    """
+    try:
+        content = extract_plain_text(filepath)
+        soup = BeautifulSoup(content, "html.parser")
+
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+
+        # Get text
+        text = soup.get_text()
+
+        # Clean up whitespace
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = "\n".join(chunk for chunk in chunks if chunk)
+
+        return text
     except Exception as e:
-        logger.error(
-            f"'repo-to-text' command failed with exception: {e}",
-            exc_info=True,
-        )
-        return False
+        logger.warning(f"Failed to extract HTML from {filepath}: {e}")
+        return extract_plain_text(filepath)
 
 
-def combine_text_files(directory: str) -> str:
+def extract_notebook_cells(filepath: str) -> str:
     """
-    Combine all text files in the specified directory into a single string.
+    Extract text and code from Jupyter notebook cells.
 
     Args:
-        directory: Directory containing .txt files
+        filepath: Path to .ipynb file
 
     Returns:
-        Combined text content
+        Extracted content with cell separators
     """
-    combined_text = ""
-    txt_files = glob.glob(os.path.join(directory, "*.txt"))
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            notebook = json.load(f)
 
-    logger.info(f"Found {len(txt_files)} text files in {directory}")
+        extracted = []
+        cells = notebook.get("cells", [])
 
-    # Debug: List all files in directory to see what's actually there
-    if len(txt_files) == 0:
-        all_files = glob.glob(os.path.join(directory, "*"))
-        logger.debug(
-            f"No .txt files found. All files in directory: {[os.path.basename(f) for f in all_files[:20]]}",
-        )
+        for idx, cell in enumerate(cells, 1):
+            cell_type = cell.get("cell_type", "unknown")
+            source = cell.get("source", [])
 
-    for file in txt_files:
-        logger.debug(f"Reading file: {file}")
-        with open(file, encoding="utf-8") as f:
-            combined_text += f.read() + "\n"
+            # Handle source as list or string
+            if isinstance(source, list):
+                content = "".join(source)
+            else:
+                content = source
 
-    return combined_text
+            if content.strip():
+                extracted.append(f"### Cell {idx} ({cell_type})")
+                extracted.append(content)
+                extracted.append("")  # Empty line for separation
+
+        return "\n".join(extracted)
+    except Exception as e:
+        logger.warning(f"Failed to extract notebook {filepath}: {e}")
+        return f"[Could not parse notebook: {filepath}]"
 
 
-def store_combined_text(input_text: str, output_file: str) -> str:
+def extract_file_content(filepath: str) -> str:
     """
-    Store the combined text into a specified output file.
+    Extract content from a file based on its type.
 
     Args:
-        input_text: Text content to store
-        output_file: Output file path
+        filepath: Path to the file
 
     Returns:
-        Path to the output file
+        Extracted content
     """
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(input_text)
-    logger.info(f"Combined text saved to {output_file}")
-    return output_file
+    _, ext = os.path.splitext(filepath)
+    ext_lower = ext.lower()
+
+    try:
+        if ext_lower == ".html":
+            return extract_html_text(filepath)
+        elif ext_lower == ".ipynb":
+            return extract_notebook_cells(filepath)
+        else:
+            return extract_plain_text(filepath)
+    except Exception as e:
+        logger.error(f"Error extracting content from {filepath}: {e}")
+        return f"[Error extracting content: {e}]"
+
+
+def extract_python_imports(content: str) -> Set[str]:
+    """
+    Extract Python imports from code content.
+
+    Args:
+        content: Python code content
+
+    Returns:
+        Set of imported modules
+    """
+    imports = set()
+
+    # Pattern for "import module" or "import module as alias"
+    import_pattern = r"^\s*import\s+([\w.]+)"
+
+    # Pattern for "from module import ..."
+    from_pattern = r"^\s*from\s+([\w.]+)\s+import"
+
+    for line in content.split("\n"):
+        # Match regular imports
+        match = re.match(import_pattern, line)
+        if match:
+            imports.add(match.group(1))
+            continue
+
+        # Match from imports
+        match = re.match(from_pattern, line)
+        if match:
+            imports.add(match.group(1))
+
+    return imports
+
+
+def extract_r_imports(content: str) -> Set[str]:
+    """
+    Extract R library/package imports from code content.
+
+    Args:
+        content: R code content
+
+    Returns:
+        Set of imported packages
+    """
+    imports = set()
+
+    # Patterns for library() and require()
+    patterns = [
+        r"library\s*\(\s*['\"]?(\w+)['\"]?\s*\)",
+        r"require\s*\(\s*['\"]?(\w+)['\"]?\s*\)",
+    ]
+
+    for line in content.split("\n"):
+        for pattern in patterns:
+            matches = re.findall(pattern, line)
+            imports.update(matches)
+
+    return imports
+
+
+def generate_repository_markdown(repo_dir: str) -> str:
+    """
+    Generate comprehensive markdown documentation of repository contents.
+
+    Args:
+        repo_dir: Root directory of the repository
+
+    Returns:
+        Markdown formatted string with repository information
+    """
+    logger.info(f"Generating repository markdown for {repo_dir}")
+
+    # Walk repository and collect files
+    file_paths, tree_structure = walk_repository_tree(repo_dir)
+
+    markdown_parts = []
+
+    # Section 1: Repository Tree Structure
+    markdown_parts.append("# Repository Structure\n")
+    markdown_parts.append("```")
+    markdown_parts.append(tree_structure)
+    markdown_parts.append("```\n")
+
+    # Section 2: Aggregate imports
+    python_imports = set()
+    r_imports = set()
+
+    # First pass: collect all imports
+    for filepath in file_paths:
+        _, ext = os.path.splitext(filepath)
+        ext_lower = ext.lower()
+
+        if ext_lower == ".py":
+            content = extract_plain_text(filepath)
+            python_imports.update(extract_python_imports(content))
+        elif ext_lower in {".r"}:
+            content = extract_plain_text(filepath)
+            r_imports.update(extract_r_imports(content))
+
+    # Add imports section
+    if python_imports or r_imports:
+        markdown_parts.append("# Imported Libraries\n")
+
+        if python_imports:
+            markdown_parts.append("## Python Imports\n")
+            for imp in sorted(python_imports):
+                markdown_parts.append(f"- {imp}")
+            markdown_parts.append("")
+
+        if r_imports:
+            markdown_parts.append("## R Packages\n")
+            for imp in sorted(r_imports):
+                markdown_parts.append(f"- {imp}")
+            markdown_parts.append("")
+
+    # Section 3: File Contents
+    markdown_parts.append("# File Contents\n")
+
+    repo_path = Path(repo_dir)
+
+    for filepath in file_paths:
+        relative_path = Path(filepath).relative_to(repo_path)
+        file_size = os.path.getsize(filepath)
+        file_size_kb = file_size / 1024
+
+        markdown_parts.append(f"## File: {relative_path}")
+        markdown_parts.append(f"**Size:** {file_size_kb:.2f} KB\n")
+
+        # Extract content
+        content = extract_file_content(filepath)
+
+        # Determine language for code blocks
+        _, ext = os.path.splitext(filepath)
+        ext_lower = ext.lower()
+
+        language_map = {
+            ".py": "python",
+            ".r": "r",
+            ".md": "markdown",
+            ".json": "json",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+            ".toml": "toml",
+            ".ini": "ini",
+            ".html": "html",
+            ".txt": "text",
+            ".rst": "rst",
+            ".cfg": "ini",
+            ".env": "bash",
+        }
+
+        # Special handling for specific filenames
+        filename = os.path.basename(filepath)
+        if filename in {"Makefile"}:
+            language = "makefile"
+        elif filename in {"Dockerfile"}:
+            language = "dockerfile"
+        else:
+            language = language_map.get(ext_lower, "text")
+
+        markdown_parts.append(f"```{language}")
+        markdown_parts.append(content)
+        markdown_parts.append("```\n")
+
+    result = "\n".join(markdown_parts)
+    logger.info(
+        f"Generated markdown document with {len(file_paths)} files, "
+        f"total size: {len(result)} characters"
+    )
+
+    return result
 
 
 async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
@@ -354,42 +813,6 @@ def reduce_input_size(
     return input_text
 
 
-def sort_files_by_priority(file_paths: List[str]) -> List[str]:
-    """
-    Sorts a list of file paths based on a predefined extension priority.
-
-    The order is:
-    1. Documentation files (.md, .txt, .html)
-    2. Code files (.py, .r)
-    3. All other files
-
-    Args:
-        file_paths: List of file paths to sort
-
-    Returns:
-        Sorted list of file paths
-    """
-    priority_order = {
-        # Priority 0: Documentation
-        ".cff": 0,
-        ".md": 0,
-        ".txt": 0,
-        ".html": 0,
-        # Priority 1: Code
-        ".py": 1,
-        ".r": 1,
-    }
-    # Priority 2 will be the default for all other extensions
-
-    def get_sort_key(filepath):
-        # Get the file extension
-        _, ext = os.path.splitext(filepath)
-        # Return a tuple: (priority, original_filepath)
-        # The priority is looked up from the map (defaulting to 2)
-        # The original filepath is used as a tie-breaker to maintain a stable sort
-        return (priority_order.get(ext.lower(), 2), filepath)
-
-    return sorted(file_paths, key=get_sort_key)
 
 
 async def prepare_repository_context(
@@ -405,7 +828,7 @@ async def prepare_repository_context(
 
     Returns:
         Dictionary containing:
-        - input_text: Combined text content
+        - input_text: Combined text content in markdown format
         - git_authors: List of GitAuthor objects
         - success: Boolean indicating success
         - error: Error message if failed
@@ -425,17 +848,14 @@ async def prepare_repository_context(
             result["error"] = "Failed to clone repository"
             return result
 
-        # Run repo-to-text asynchronously to check if repository has content
-        repo_to_text_success = await run_repo_to_text(temp_dir)
-        if not repo_to_text_success:
-            logger.warning(
-                f"repo-to-text failed for {repo_url}, but will attempt to continue with available .txt files",
-            )
-            # Don't return None immediately - check if there are any .txt files anyway
-
-        # Check early if repository has any analyzable content
-        input_text = combine_text_files(temp_dir)
-        input_text = sanitize_special_tokens(input_text)
+        # Generate comprehensive markdown documentation of repository
+        try:
+            input_text = generate_repository_markdown(temp_dir)
+            input_text = sanitize_special_tokens(input_text)
+        except Exception as e:
+            logger.error(f"Failed to generate repository markdown: {e}", exc_info=True)
+            result["error"] = f"Failed to extract repository content: {e}"
+            return result
 
         # Early exit for empty repositories - skip expensive operations
         if not input_text or len(input_text.strip()) < 10:

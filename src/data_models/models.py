@@ -8,13 +8,28 @@ from typing import (
     Optional,
 )
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 
 
 class Person(BaseModel):
     name: str
     orcidId: Optional[HttpUrl] = None
     affiliation: Optional[List[str]] = None
+
+    @field_validator("orcidId", mode="before")
+    @classmethod
+    def validate_orcid(cls, v):
+        """Convert plain ORCID identifier to full URL if needed."""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            # Check if it's a plain ORCID identifier (0000-0000-0000-0000 format)
+            if v.startswith("http://") or v.startswith("https://"):
+                return v
+            # Assume it's a plain identifier, convert to URL
+            if len(v) == 19 and v.count("-") == 3:  # ORCID format: 0000-0000-0000-0000
+                return f"https://orcid.org/{v}"
+        return v
 
 
 class Organization(BaseModel):
@@ -32,6 +47,38 @@ class Organization(BaseModel):
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
     attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+
+    @field_validator("hasRorId", mode="before")
+    @classmethod
+    def validate_ror(cls, v):
+        """Convert plain ROR identifier to full URL if needed."""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            # Check if it's already a URL
+            if v.startswith("http://") or v.startswith("https://"):
+                return v
+            # Assume it's a plain ROR identifier, convert to URL
+            # ROR IDs typically look like: 05gzmn429 or 0abcdef12
+            if len(v) == 9:  # ROR format is 9 characters
+                return f"https://ror.org/{v}"
+        return v
+
+    @field_validator("website", mode="before")
+    @classmethod
+    def validate_website(cls, v):
+        """Ensure website URL is valid, fix common issues."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            # If it doesn't start with http:// or https://, add https://
+            if not v.startswith(("http://", "https://")):
+                v = f"https://{v}"
+            # Basic validation - if it doesn't look like a URL, return None
+            if " " in v or not "." in v:
+                return None
+        return v
 
 
 class Discipline(str, Enum):

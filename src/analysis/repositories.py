@@ -89,37 +89,42 @@ class Repository:
             logging.warning(f"Cannot enrich organizations: no data available for {self.full_path}")
             return
 
-        organization_enrichment = await enrich_organizations_from_dict(
-            self.data.model_dump(),
-            self.full_path,
-        )
-
-        # organization_enrichment is an OrganizationEnrichmentResult, not a dict
-        enriched_orgs = organization_enrichment.organizations  # Direct attribute access
-
-        # Replace (not append) organization lists with enriched versions
-        # Build list of organization names for relatedToOrganizations
-        related_orgs = []
-        for org in enriched_orgs:
-            legal_name = org.legalName
-            if legal_name:
-                related_orgs.append(legal_name)
-        
-        # Replace the lists with enriched data only
-        self.data.relatedToOrganizations = related_orgs
-        self.data.relatedToOrganizationsROR = enriched_orgs
-
-        # These values are overwritten only if provided by the enrichment
-        if organization_enrichment.relatedToEPFL is not None:
-            self.data.relatedToEPFL = organization_enrichment.relatedToEPFL
-        if organization_enrichment.relatedToEPFLJustification is not None:
-            self.data.relatedToEPFLJustification = (
-                organization_enrichment.relatedToEPFLJustification
+        try:
+            organization_enrichment = await enrich_organizations_from_dict(
+                self.data.model_dump(),
+                self.full_path,
             )
-        if organization_enrichment.relatedToEPFLConfidence is not None:
-            self.data.relatedToEPFLConfidence = (
-                organization_enrichment.relatedToEPFLConfidence
-            )
+
+            # organization_enrichment is an OrganizationEnrichmentResult, not a dict
+            enriched_orgs = organization_enrichment.organizations  # Direct attribute access
+
+            # Replace (not append) organization lists with enriched versions
+            # Build list of organization names for relatedToOrganizations
+            related_orgs = []
+            for org in enriched_orgs:
+                legal_name = org.legalName
+                if legal_name:
+                    related_orgs.append(legal_name)
+            
+            # Replace the lists with enriched data only
+            self.data.relatedToOrganizations = related_orgs
+            self.data.relatedToOrganizationsROR = enriched_orgs
+
+            # These values are overwritten only if provided by the enrichment
+            if organization_enrichment.relatedToEPFL is not None:
+                self.data.relatedToEPFL = organization_enrichment.relatedToEPFL
+            if organization_enrichment.relatedToEPFLJustification is not None:
+                self.data.relatedToEPFLJustification = (
+                    organization_enrichment.relatedToEPFLJustification
+                )
+            if organization_enrichment.relatedToEPFLConfidence is not None:
+                self.data.relatedToEPFLConfidence = (
+                    organization_enrichment.relatedToEPFLConfidence
+                )
+        except Exception as e:
+            logger.error(f"Organization enrichment failed: {e}", exc_info=True)
+            # Don't fail the entire analysis, just skip organization enrichment
+            return
 
         # enriched_orgs = organization_enrichment.get("organizations", [])
 
