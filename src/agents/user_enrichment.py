@@ -696,7 +696,11 @@ async def enrich_users_from_dict(
     git_authors = []
     if git_authors_data is not None:
         for ga_data in git_authors_data:
-            if isinstance(ga_data, dict):
+            # Handle both Pydantic model instances and dictionaries
+            if isinstance(ga_data, GitAuthor):
+                # Already a GitAuthor instance
+                git_authors.append(ga_data)
+            elif isinstance(ga_data, dict):
                 # Handle Commits object conversion
                 commits_data = ga_data.get("commits")
                 if commits_data:
@@ -735,25 +739,33 @@ async def enrich_users_from_dict(
                         git_authors.append(GitAuthor(**ga_with_commits))
                 else:
                     git_authors.append(GitAuthor(**ga_data))
+            else:
+                logger.warning(f"Unexpected git author data type: {type(ga_data)}")
 
     # Convert existing authors
     existing_authors = []
     if existing_authors_data is not None:
         for author_data in existing_authors_data:
-            if isinstance(author_data, dict):
+            # Handle both Pydantic model instances and dictionaries
+            if isinstance(author_data, Person):
+                # Already a Person instance
+                existing_authors.append(author_data)
+            elif isinstance(author_data, dict):
                 # Handle empty orcidId strings and convert to full URL
                 author_copy = author_data.copy()
                 if "orcidId" in author_copy:
-                    if not author_copy["orcidId"]:
+                    orcid_value = author_copy["orcidId"]
+                    if not orcid_value:
                         author_copy["orcidId"] = None
-                    elif author_copy["orcidId"] and not author_copy[
-                        "orcidId"
-                    ].startswith("http"):
+                    elif orcid_value:
+                        # Convert to string if it's an HttpUrl object
+                        orcid_str = str(orcid_value) if not isinstance(orcid_value, str) else orcid_value
                         # Convert ORCID ID to full URL if it's just the ID
-                        author_copy[
-                            "orcidId"
-                        ] = f"https://orcid.org/{author_copy['orcidId']}"
+                        if not orcid_str.startswith("http"):
+                            author_copy["orcidId"] = f"https://orcid.org/{orcid_str}"
                 existing_authors.append(Person(**author_copy))
+            else:
+                logger.warning(f"Unexpected author data type: {type(author_data)}")
 
     # Call the main enrichment function
     result = await enrich_users(git_authors, existing_authors, repository_url)

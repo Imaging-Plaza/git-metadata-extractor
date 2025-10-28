@@ -104,7 +104,7 @@ async def shutdown_event():
 
     # Cleanup PydanticAI agents
     try:
-        from .llm.genai_model import cleanup_agents
+        from .agents.agents_management import cleanup_agents
 
         await cleanup_agents()
         logger.info("✅ Cleaned up PydanticAI agents")

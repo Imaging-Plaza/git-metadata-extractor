@@ -68,6 +68,12 @@ class Repository:
 
     def run_authors_enrichment(self):
         logger.info(f"ORCID enrichment for {self.full_path}")
+        
+        # Check if data exists before enrichment
+        if self.data is None:
+            logging.warning(f"Cannot enrich authors: no data available for {self.full_path}")
+            return
+        
         llm_result = enrich_authors_with_orcid(self.data)
 
         if isinstance(llm_result, SoftwareSourceCode):
@@ -77,6 +83,11 @@ class Repository:
 
     async def run_organization_enrichment(self):
         logger.info(f"Organization enrichment for {self.full_path}")
+        
+        # Check if data exists before enrichment
+        if self.data is None:
+            logging.warning(f"Cannot enrich organizations: no data available for {self.full_path}")
+            return
 
         organization_enrichment = await enrich_organizations_from_dict(
             self.data.model_dump(),
@@ -86,26 +97,17 @@ class Repository:
         # organization_enrichment is an OrganizationEnrichmentResult, not a dict
         enriched_orgs = organization_enrichment.organizations  # Direct attribute access
 
-        # Safely handle relatedToOrganizations list
-        related_orgs = getattr(self.data, "relatedToOrganizations", None)
-        if related_orgs is None:
-            related_orgs = []
-            self.data.relatedToOrganizations = related_orgs
+        # Replace (not append) organization lists with enriched versions
+        # Build list of organization names for relatedToOrganizations
+        related_orgs = []
         for org in enriched_orgs:
-            legal_name = (
-                org.legalName
-            )  # Direct attribute access, org is already Organization
+            legal_name = org.legalName
             if legal_name:
                 related_orgs.append(legal_name)
-
-        # Safely handle relatedToOrganizationsROR list
-        related_orgs_ror = getattr(self.data, "relatedToOrganizationsROR", None)
-        if related_orgs_ror is None:
-            related_orgs_ror = []
-            self.data.relatedToOrganizationsROR = related_orgs_ror
-        related_orgs_ror.extend(
-            enriched_orgs,
-        )  # enriched_orgs already contains Organization instances
+        
+        # Replace the lists with enriched data only
+        self.data.relatedToOrganizations = related_orgs
+        self.data.relatedToOrganizationsROR = enriched_orgs
 
         # These values are overwritten only if provided by the enrichment
         if organization_enrichment.relatedToEPFL is not None:
@@ -151,9 +153,29 @@ class Repository:
 
     async def run_user_enrichment(self):
         logger.info(f"User enrichment for {self.full_path}")
+        
+        # Check if data exists before enrichment
+        if self.data is None:
+            logging.warning(f"Cannot enrich users: no data available for {self.full_path}")
+            return
 
-        git_authors_data = getattr(self.data, "gitAuthors", [])
-        existing_authors_data = getattr(self.data, "author", [])
+        # Convert Pydantic models to dictionaries for the enrichment function
+        git_authors_raw = getattr(self.data, "gitAuthors", [])
+        git_authors_data = (
+            [ga.model_dump() if hasattr(ga, "model_dump") else ga for ga in git_authors_raw]
+            if git_authors_raw
+            else []
+        )
+
+        existing_authors_raw = getattr(self.data, "author", [])
+        existing_authors_data = (
+            [
+                author.model_dump() if hasattr(author, "model_dump") else author
+                for author in existing_authors_raw
+            ]
+            if existing_authors_raw
+            else []
+        )
 
         user_enrichment = await enrich_users_from_dict(
             git_authors_data=git_authors_data,
@@ -164,11 +186,24 @@ class Repository:
 
         logger.info(f"User enrichment: {user_enrichment}")
 
-        # Safely extend authors list
-        authors_list = getattr(self.data, "author", [])
+        # Replace (not extend) authors list with enriched versions
         if user_enrichment is not None:
-            authors_list.extend(user_enrichment.get("enrichedAuthors", []))
-            self.data.author = authors_list
+            # Import EnrichedAuthor to convert dictionaries to proper objects
+            from ..data_models.user import EnrichedAuthor
+            
+            # Build new list with only enriched authors
+            enriched_authors_list = []
+            enriched_authors_data = user_enrichment.get("enrichedAuthors", [])
+            for author_data in enriched_authors_data:
+                if isinstance(author_data, dict):
+                    # Convert dictionary to EnrichedAuthor object
+                    enriched_authors_list.append(EnrichedAuthor(**author_data))
+                else:
+                    # Already an EnrichedAuthor object
+                    enriched_authors_list.append(author_data)
+            
+            # Replace the entire author list with enriched versions only
+            self.data.author = enriched_authors_list
         else:
             logging.warning("User enrichment returned None, skipping author enrichment")
 
@@ -272,20 +307,30 @@ class Repository:
         if run_llm:
             logging.info(f"LLM analysis for {self.full_path}")
             await self.run_llm_analysis()
-            self.run_authors_enrichment()
+            
+            # Only run author enrichment if LLM analysis succeeded
+            if self.data is not None:
+                self.run_authors_enrichment()
+            else:
+                logging.warning(f"Skipping author enrichment: LLM analysis failed for {self.full_path}")
+            
             logging.info(f"LLM analysis completed for {self.full_path}")
 
         # Run user enrichment
-        if run_user_enrichment:
+        if run_user_enrichment and self.data is not None:
             logging.info(f"User enrichment for {self.full_path}")
             await self.run_user_enrichment()
             logging.info(f"User enrichment completed for {self.full_path}")
 
         # Run organization enrichment
-        if run_organization_enrichment:
+        if run_organization_enrichment and self.data is not None:
             logging.info(f"Organization enrichment for {self.full_path}")
             await self.run_organization_enrichment()
             logging.info(f"Organization enrichment completed for {self.full_path}")
 
-        self.run_validation()
-        self.save_in_cache()
+        # Only validate and cache if we have data
+        if self.data is not None:
+            self.run_validation()
+            self.save_in_cache()
+        else:
+            logging.error(f"Analysis failed for {self.full_path}: no data generated")

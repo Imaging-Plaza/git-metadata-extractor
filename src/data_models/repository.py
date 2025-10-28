@@ -2,10 +2,13 @@
 Repository data models
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import date
 from enum import Enum
 from typing import (
+    TYPE_CHECKING,
     Any,
     List,
     Optional,
@@ -32,6 +35,10 @@ from .models import (
     Person,
     RepositoryType,
 )
+
+if TYPE_CHECKING:
+    # Import EnrichedAuthor only for type checking to avoid circular import
+    from .user import EnrichedAuthor
 
 #####################################################################
 # Debugging Utilities
@@ -229,7 +236,7 @@ class SoftwareSourceCode(BaseModel):
     isBasedOn: Optional[HttpUrl] = None
     isPluginModuleOf: Optional[List[str]] = None
     license: Optional[Annotated[str, StringConstraints(pattern=r"spdx\.org.*")]] = None
-    author: Optional[List[Union[Person, Organization]]] = None
+    author: Optional[List[Union[Person, Organization, EnrichedAuthor]]] = None
     operatingSystem: Optional[List[str]] = None
     programmingLanguage: Optional[List[str]] = None
     softwareRequirements: Optional[List[str]] = None
@@ -285,13 +292,35 @@ class SoftwareSourceCode(BaseModel):
 
             for i, author in enumerate(v):
                 if isinstance(author, dict):
+                    # Check if it's a Person/EnrichedAuthor (has "name") or Organization (has "legalName")
                     name = author.get("name")
-                    if not name:
-                        missing_names.append(f"Author {i+1}")
-                        logger.warning(f"  ⚠️ Author {i+1} missing name: {author}")
-                    else:
+                    legal_name = author.get("legalName")
+                    
+                    if name:
+                        # Person or EnrichedAuthor object
+                        # Check if it has enrichment fields to distinguish
+                        has_enrichment = any(
+                            k in author for k in ["currentAffiliation", "affiliationHistory", "confidenceScore"]
+                        )
+                        author_type = "EnrichedAuthor" if has_enrichment else "Person"
                         valid_authors.append(name)
-                        logger.debug(f"  ✅ Author {i+1}: {name}")
+                        logger.debug(f"  ✅ Author {i+1} ({author_type}): {name}")
+                    elif legal_name:
+                        # Organization object
+                        valid_authors.append(legal_name)
+                        logger.debug(f"  ✅ Author {i+1} (Organization): {legal_name}")
+                    else:
+                        # Neither Person nor Organization - check if it's an empty/invalid entry
+                        # Check if the entire entry is empty (all None values)
+                        has_any_value = any(value is not None for value in author.values())
+                        
+                        if has_any_value:
+                            # Has some data but missing name/legalName - this is a problem
+                            missing_names.append(f"Author {i+1}")
+                            logger.warning(f"  ⚠️ Author {i+1} missing name/legalName: {author}")
+                        else:
+                            # Completely empty entry - will be filtered out later, no need to warn
+                            logger.debug(f"  🔕 Author {i+1} is completely empty (will be filtered)")
                 else:
                     logger.warning(f"  ⚠️ Author {i+1} is not a dict: {type(author)}")
 
@@ -302,6 +331,25 @@ class SoftwareSourceCode(BaseModel):
                 )
             else:
                 logger.debug(f"  ✅ All {len(valid_authors)} authors have names")
+            
+            # Filter out completely empty entries (all fields are None)
+            if v:
+                cleaned_authors = []
+                for author in v:
+                    if isinstance(author, dict):
+                        # Check if the entry has any non-None values
+                        has_any_value = any(value is not None for value in author.values())
+                        if has_any_value:
+                            cleaned_authors.append(author)
+                        else:
+                            logger.debug(f"  🗑️ Removing empty author entry (all None values)")
+                    else:
+                        # Keep non-dict entries (they'll be handled by Pydantic)
+                        cleaned_authors.append(author)
+                
+                if len(cleaned_authors) != len(v):
+                    logger.info(f"  ♻️ Filtered {len(v) - len(cleaned_authors)} empty author entries")
+                    v = cleaned_authors
 
         else:
             logger.warning(f"  ⚠️ Author field is not a list: {type(v)}")
@@ -497,3 +545,12 @@ class RepositoryAnalysisContext:
         self.repo_url = repo_url
         self.git_authors = git_authors
         self.gimie_output = gimie_output
+
+
+# Rebuild the model after all types are defined to resolve forward references
+# This is needed because EnrichedAuthor is imported conditionally
+if not TYPE_CHECKING:
+    from .user import EnrichedAuthor  # noqa: F401
+    
+    # Rebuild SoftwareSourceCode to resolve the EnrichedAuthor forward reference
+    SoftwareSourceCode.model_rebuild()
