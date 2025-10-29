@@ -65,10 +65,42 @@ model = create_pydantic_ai_model(configs[0])
 - Generic prompts: `src/agents/prompts.py`
 
 ### Agent Tools
-- Tool definitions: `src/agents/tools.py`
-- Include: search_web, search_orcid, etc.
+
+#### General Tools (`src/agents/tools.py`)
+- `search_web`: DuckDuckGo web search
+- `search_orcid`: ORCID author search
 - Use PydanticAI tool decorator
 - Provide clear tool descriptions
+
+#### Infoscience Tools (`src/context/infoscience.py`)
+EPFL's Infoscience repository integration for publications, authors, and labs:
+
+**Available Tool Functions:**
+- `search_infoscience_publications_tool(query: str, max_results: int)` - Search publications by title, DOI, keywords
+- `search_infoscience_authors_tool(name: str, max_results: int)` - Search for EPFL authors/researchers
+- `search_infoscience_labs_tool(name: str, max_results: int)` - Search for labs/organizational units
+- `get_author_publications_tool(author_name: str, max_results: int)` - Get all publications by specific author
+
+**Tool Features:**
+- Return markdown-formatted results for LLM consumption
+- Include structured Pydantic models (`InfosciencePublication`, `InfoscienceAuthor`, `InfoscienceLab`)
+- In-memory caching to prevent duplicate API calls within a session
+- Default max_results: 10, capped at 50
+- Graceful error handling with informative messages
+- Authentication support via `INFOSCIENCE_TOKEN` environment variable
+
+**Tool Integration:**
+- **Repository Agent**: Search for publications related to the repository/tool name
+- **User Agent**: Search for authors and their publications
+- **Organization Agent**: Search for labs, organizational units, and affiliated publications
+
+**Strategic Tool Usage Guidelines:**
+Tools should be used strategically (instructed in system prompts):
+- Search for repository/tool name FIRST to find related publications
+- ONE search per subject - avoid repetition
+- Cache automatically stores results (including empty results)
+- Maximum 2 attempts per subject
+- Accept when information is not found rather than keep searching
 
 ## Prompt Engineering
 
@@ -121,7 +153,8 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
 - **GIMIE**: Basic repository metadata
 - **GitHub/GitLab**: Repository and user data
 - **ORCID**: Author affiliations and credentials
-- **Web Search**: Supplementary information
+- **Infoscience**: EPFL's research repository (publications, authors, labs)
+- **Web Search**: Supplementary information (DuckDuckGo)
 - **Email Domains**: Institutional affiliation inference
 
 ## Model Parameters
@@ -154,19 +187,209 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
 - Log configuration issues
 - Fall back to alternative models on failure
 
+## Token Usage Tracking
+
+### Dual Token Tracking System
+The system tracks tokens using two methods:
+
+#### 1. Official API-Reported Usage
+- Extract from `result.usage.input_tokens` and `result.usage.output_tokens`
+- **Important**: For OpenAI reasoning models (o3, o4) and Anthropic models, tokens are in `result.usage.details` dict
+- See: [pydantic-ai issue #3223](https://github.com/pydantic/pydantic-ai/issues/3223)
+
+```python
+# Extract tokens from API response
+if hasattr(result, "usage"):
+    usage = result.usage
+    input_tokens = getattr(usage, "input_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", 0) or 0
+    
+    # Fallback to details field for certain models
+    if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+        details = usage.details
+        if isinstance(details, dict):
+            input_tokens = details.get("input_tokens", 0)
+            output_tokens = details.get("output_tokens", 0)
+```
+
+#### 2. Client-Side Token Estimation
+- Uses `tiktoken` with `cl100k_base` encoding (GPT-4/GPT-3.5-turbo compatible)
+- Provides fallback when API doesn't report usage
+- Useful for validation and cost estimation
+- Located in `src/utils/token_counter.py`
+
+```python
+from src.utils.token_counter import estimate_tokens_from_messages
+
+estimated = estimate_tokens_from_messages(
+    system_prompt=system_prompt,
+    user_prompt=user_prompt,
+    response=response_text,
+)
+```
+
+### Agent Return Format
+All agents should return dictionaries with both data and usage:
+
+```python
+return {
+    "data": result_object,  # The actual analysis result
+    "usage": {
+        "input_tokens": 1234,              # Official API count
+        "output_tokens": 567,              # Official API count
+        "estimated_input_tokens": 1250,    # Client-side estimate
+        "estimated_output_tokens": 575,    # Client-side estimate
+    }
+}
+```
+
+**Note**: If agents return only the result object (legacy pattern), the Repository class handles extraction gracefully with `isinstance(result, dict)` checks.
+
+### Repository-Level Aggregation
+The `Repository` class (`src/analysis/repositories.py`) accumulates tokens across all agents:
+
+```python
+# Initialize tracking variables in __init__
+self.total_input_tokens: int = 0
+self.total_output_tokens: int = 0
+self.estimated_input_tokens: int = 0
+self.estimated_output_tokens: int = 0
+
+# Track timing and status
+self.start_time: datetime = None  # Set in run_analysis()
+self.end_time: datetime = None    # Set at end of run_analysis()
+self.analysis_successful: bool = False  # Set to True on successful completion
+
+# Extract and accumulate from each agent call
+result = await llm_request_repo_infos(...)
+llm_data = result.get("data") if isinstance(result, dict) else result
+usage = result.get("usage") if isinstance(result, dict) else None
+
+if usage:
+    self.total_input_tokens += usage.get("input_tokens", 0)
+    self.total_output_tokens += usage.get("output_tokens", 0)
+    self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+    self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+    logger.info(f"Agent usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+```
+
+**Important Implementation Details**:
+1. **Timing**: `start_time` set at beginning of `run_analysis()`, `end_time` set at end (regardless of success/failure)
+2. **Success tracking**: `analysis_successful` set to `True` only after validation and caching succeed
+3. **Cache hits**: Still marked as successful with timing tracked
+4. **Error handling**: Organization enrichment wrapped in try-except to prevent cascading failures
+
+**Usage Stats Method**:
+```python
+def get_usage_stats(self) -> dict:
+    """
+    Get accumulated token usage and timing from all agents.
+    
+    Returns dict with:
+    - input_tokens, output_tokens, total_tokens (official API counts)
+    - estimated_input_tokens, estimated_output_tokens, estimated_total_tokens
+    - duration (seconds), start_time, end_time
+    - status_code (200 for success, 500 for failure)
+    """
+    duration = None
+    if self.start_time and self.end_time:
+        duration = (self.end_time - self.start_time).total_seconds()
+    
+    return {
+        "input_tokens": self.total_input_tokens,
+        "output_tokens": self.total_output_tokens,
+        "total_tokens": self.total_input_tokens + self.total_output_tokens,
+        "estimated_input_tokens": self.estimated_input_tokens,
+        "estimated_output_tokens": self.estimated_output_tokens,
+        "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+        "duration": duration,
+        "start_time": self.start_time,
+        "end_time": self.end_time,
+        "status_code": 200 if self.analysis_successful else 500,
+    }
+```
+
+**Integration Points**:
+- Called by `run_llm_analysis()` - extracts usage from LLM agent
+- Called by `run_user_enrichment()` - extracts usage from user agent  
+- Called by `run_organization_enrichment()` - extracts usage from org agent (with error handling)
+- `run_analysis()` sets start_time at beginning, end_time at end, and analysis_successful flag
+- API endpoint calls `get_usage_stats()` to populate response stats
+
+**Data Flow Example**:
+```python
+async def run_llm_analysis(self):
+    result = await llm_request_repo_infos(...)
+    
+    # Extract data and usage separately
+    llm_data = result.get("data") if isinstance(result, dict) else result
+    usage = result.get("usage") if isinstance(result, dict) else None
+    
+    # Accumulate official API tokens
+    if usage:
+        self.total_input_tokens += usage.get("input_tokens", 0)
+        self.total_output_tokens += usage.get("output_tokens", 0)
+        logger.info(f"LLM usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output")
+    
+    # Accumulate estimated tokens (if available)
+    if usage and "estimated_input_tokens" in usage:
+        self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+        self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+    
+    # Process llm_data normally...
+```
+
+### APIStats Response
+The API returns comprehensive statistics in the `stats` field:
+
+```json
+{
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "total_tokens": 1801,
+    "estimated_input_tokens": 1250,
+    "estimated_output_tokens": 575,
+    "estimated_total_tokens": 1825,
+    "duration": 45.23,
+    "start_time": "2025-10-29T07:35:00",
+    "end_time": "2025-10-29T07:35:45",
+    "status_code": 200
+  }
+}
+```
+
+### Best Practices
+1. **Always extract usage**: Check both direct attributes and `details` field
+2. **Provide estimates**: Use tiktoken for client-side token counting as fallback
+3. **Log token usage**: Help with debugging and cost monitoring at INFO level
+4. **Accumulate across agents**: Sum tokens from all agent runs (repo, user, org)
+5. **Track timing**: Record start/end times in `run_analysis()`, calculate duration in `get_usage_stats()`
+6. **Status codes**: 200 for success, 500 for failures
+7. **Graceful degradation**: Wrap enrichment calls in try-except to prevent cascading failures
+8. **Separate data from usage**: Use `result.get("data")` and `result.get("usage")` pattern consistently
+9. **Handle legacy returns**: Support both dict format `{"data": ..., "usage": ...}` and direct object returns
+10. **Filter input data**: Remove inappropriate objects (e.g., Organization from user enrichment author list)
+
 ## Integration Patterns
 
 ### Analysis Workflow
 1. Load model configuration
 2. Create PydanticAI model instance
-3. Prepare analysis context
+3. Prepare analysis context (filter inappropriate objects)
 4. Generate appropriate prompt
 5. Execute agent with retry logic
-6. Validate and return results
+6. **Extract token usage (official + estimated)**
+7. **Accumulate tokens at Repository level**
+8. Validate and return results with usage data
 
 ### Result Processing
 - Parse structured outputs (JSON)
 - Validate against Pydantic models
-- Merge with existing data
+- **Extract and log token usage** (INFO level)
+- **Accumulate token counts across agents** (repo → user → org)
+- **Replace (not append) enriched data** to avoid duplicates
+- Merge with existing data appropriately
 - Include confidence scores
-- Log analysis outcomes
+- Log analysis outcomes and timing
+- Handle errors gracefully (don't let one enrichment failure break the chain)

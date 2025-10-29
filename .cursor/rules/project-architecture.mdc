@@ -31,8 +31,9 @@ src/
 ├── analysis/              # Analysis orchestration
 │   ├── repositories.py
 │   └── user.py
-├── cache/                 # Caching system
+├── cache/                 # Caching system (SQLite)
 ├── context/              # Context management
+│   └── infoscience.py    # Infoscience API integration
 ├── data_models/          # Pydantic models
 │   ├── __init__.py       # Centralized exports
 │   ├── models.py         # Core models
@@ -40,6 +41,7 @@ src/
 │   ├── user.py           # User models
 │   ├── organization.py   # Organization models
 │   ├── api.py            # API models
+│   ├── infoscience.py    # Infoscience models
 │   └── conversion.py     # Model conversions
 ├── files/                # Static files (JSON-LD context)
 ├── gimie_utils/          # GIMIE integration
@@ -76,11 +78,42 @@ src/
 - **Purpose**: High-level analysis orchestration
 - **Pattern**: Coordinate data fetching and enrichment
 - **Usage**: Called by API endpoints and CLI
+- **Token Tracking**: Repository class accumulates usage across all agents
+  - **Official API tokens**: `total_input_tokens`, `total_output_tokens` (from API responses)
+  - **Estimated tokens**: `estimated_input_tokens`, `estimated_output_tokens` (client-side counts)
+  - **Timing**: `start_time`, `end_time` tracked in `run_analysis()` method
+  - **Status**: `analysis_successful` flag (True after validation/caching)
+  - **Method**: `get_usage_stats()` returns comprehensive metrics dict
+- **Data Replacement Pattern**: Enriched data replaces (not appends) original data
+  - Organizations: Replace `relatedToOrganizations` and `relatedToOrganizationsROR`
+  - Authors: Replace entire `author` list with enriched versions
+  - Filters: Remove Organization objects before user enrichment
+- **Error Handling**: Organization enrichment wrapped in try-except for resilience
+
+### `context/`
+- **Purpose**: External context providers and API integrations
+- **Pattern**: Async HTTP clients with Pydantic models
+- **Repository Context** (`repository.py`): Custom repository content extraction
+  - Clones repositories with retry logic for large repos
+  - Intelligently filters relevant files (docs, code, configs, notebooks)
+  - Extracts content from multiple formats (HTML, Jupyter notebooks, plain text)
+  - Parses Python/R imports and aggregates them
+  - Generates comprehensive markdown with tree structure, imports, and file contents
+  - Skips binary files, large files (>1MB), and irrelevant directories
+  - Handles encoding fallbacks (UTF-8, latin-1, cp1252)
+- **Infoscience**: EPFL research repository integration
+  - API client functions for searching publications, authors, labs
+  - PydanticAI tool functions for agent use
+  - In-memory caching to prevent duplicate API calls
+  - Markdown formatting for LLM consumption
 
 ### `cache/`
 - **Purpose**: SQLite-based caching system
 - **Pattern**: Cache manager singleton
-- **Features**: TTL, force refresh, statistics
+- **Features**: TTL (365 days default), force refresh, statistics
+- **TTL Configuration**: All caches set to 365 days for essentially permanent storage
+- **Refresh**: Only refreshes when `force_refresh=true` is explicitly used
+- **Cache Types**: GitHub, ORCID, GIMIE, LLM results (repo, user, org enrichment)
 
 ### `api.py`
 - **Purpose**: FastAPI application
@@ -96,26 +129,61 @@ src/
 
 ### Repository Analysis
 1. **Input**: Repository URL
-2. **GIMIE**: Fetch basic metadata
-3. **AI Agent**: Analyze and classify
-4. **Enrichment**: Add author/org data
-5. **Merge**: Combine all sources
-6. **Output**: JSON-LD format
+2. **Timing Start**: Record `start_time` in Repository instance
+3. **Cache Check**: Check if complete analysis exists in cache
+   - If cached: Load data, mark as successful, record `end_time`, return
+4. **Clone & Extract**: Clone repository with retry logic, extract relevant content
+   - Filter files by relevance (docs, code, configs, notebooks)
+   - Parse Python/R imports
+   - Generate markdown with tree structure and file contents
+   - Handle large repositories (up to 3 retry attempts with exponential backoff)
+5. **GIMIE**: Fetch basic metadata
+6. **LLM Analysis**: AI agent analyzes and classifies
+   - Extracts `llm_data` and `usage` from result
+   - Accumulates official and estimated tokens
+   - Logs usage at INFO level
+7. **Author Enrichment**: ORCID data enrichment (if data exists)
+8. **User Enrichment**: (if requested and data exists)
+   - Filters out Organization objects from existing authors
+   - Converts Pydantic models to dicts
+   - Extracts usage from result
+   - **Replaces** author list with enriched versions (no duplicates)
+9. **Organization Enrichment**: (if requested and data exists)
+   - Wrapped in try-except for error resilience
+   - Extracts usage from result
+   - **Replaces** organization lists with enriched versions (no duplicates)
+10. **Validation & Caching**: Validate against Pydantic model and cache
+11. **Success & Timing**: Set `analysis_successful=True`, record `end_time`
+12. **Output**: JSON-LD format + comprehensive usage statistics via `get_usage_stats()`
 
 ### User Enrichment
-1. **Input**: Git authors from commits
-2. **ORCID Search**: Find profiles
-3. **Web Search**: Additional context
-4. **Email Analysis**: Infer affiliations
-5. **AI Agent**: Merge and score
-6. **Output**: Enriched author list
+1. **Input Preparation**:
+   - Git authors from commits (converted to dicts)
+   - Existing authors from LLM/ORCID (Person/EnrichedAuthor only - Organizations filtered out)
+2. **AI Agent Analysis**:
+   - ORCID Search: Find profiles via tool
+   - Web Search: Additional context via tool
+   - Email Analysis: Infer affiliations from domains
+   - Merge and score: Create EnrichedAuthor objects
+3. **Usage Extraction**: Extract official and estimated tokens from result
+4. **Conversion**: Convert dict responses to EnrichedAuthor Pydantic objects
+5. **Replacement**: **Replace** (not append) entire author list
+6. **Output**: List of EnrichedAuthor objects with comprehensive metadata
 
 ### Organization Enrichment
-1. **Input**: Organization identifier
-2. **GitHub API**: Fetch org data
-3. **Web Search**: Additional info
-4. **AI Agent**: Analyze and enrich
-5. **Output**: Enriched organization
+1. **Input**: Repository metadata (model_dump() of entire SoftwareSourceCode)
+2. **Error Handling**: Wrapped in try-except to prevent cascading failures
+3. **AI Agent Analysis**:
+   - Analyzes git author emails for institutional affiliations
+   - ROR API queries: Find standardized organization data
+   - Hierarchical relationships: Departments, labs within universities
+   - EPFL relationship analysis with evidence
+4. **Usage Extraction**: Extract official and estimated tokens from result
+5. **Replacement**: **Replace** (not append) organization lists
+   - `relatedToOrganizations`: List of organization names
+   - `relatedToOrganizationsROR`: List of Organization objects with full ROR data
+6. **EPFL Fields**: Update relatedToEPFL, relatedToEPFLJustification, relatedToEPFLConfidence
+7. **Output**: Enriched organization list with ROR IDs, types, countries, websites, confidence scores
 
 ## Integration Points
 
@@ -124,6 +192,10 @@ src/
 - **GitHub API**: Repository and user data
 - **GitLab API**: Repository data
 - **ORCID API**: Author credentials
+- **Infoscience API**: EPFL research repository (DSpace 7.6)
+  - Base URL: `https://infoscience.epfl.ch/server/api`
+  - Endpoints: `/discover/search/objects`, `/eperson/profiles`, `/core/items/{uuid}`
+  - Authentication: Optional via `INFOSCIENCE_TOKEN` environment variable
 - **Web Search**: DuckDuckGo for context
 - **Selenium**: ORCID web scraping (when needed)
 
@@ -141,6 +213,7 @@ OPENAI_API_KEY=          # OpenAI API key
 OPENROUTER_API_KEY=      # OpenRouter API key
 GITHUB_TOKEN=            # GitHub API token
 GITLAB_TOKEN=            # GitLab API token
+INFOSCIENCE_TOKEN=       # Infoscience API token (optional)
 
 # Model Configuration
 MODEL=                   # Default model (deprecated, use JSON configs)
@@ -151,9 +224,18 @@ LLM_ANALYSIS_MODELS=     # Override repository analysis models
 USER_ENRICHMENT_MODELS=  # Override user enrichment models
 ORG_ENRICHMENT_MODELS=   # Override org enrichment models
 
-# Cache
+# Cache Configuration
 CACHE_ENABLED=true       # Enable/disable caching
 CACHE_DIR=/app/data      # Cache directory
+CACHE_DEFAULT_TTL_DAYS=365        # Default TTL (365 days = essentially permanent)
+CACHE_GIMIE_TTL_DAYS=365          # GIMIE results cache TTL
+CACHE_LLM_TTL_DAYS=365            # LLM analysis cache TTL
+CACHE_GITHUB_USER_TTL_DAYS=365    # GitHub user cache TTL
+CACHE_GITHUB_ORG_TTL_DAYS=365     # GitHub org cache TTL
+CACHE_ORCID_TTL_DAYS=365          # ORCID cache TTL
+CACHE_LLM_USER_TTL_DAYS=365       # User enrichment cache TTL
+CACHE_LLM_ORG_TTL_DAYS=365        # Org enrichment cache TTL
+# Note: Cache only refreshes when force_refresh=true is explicitly used
 
 # Logging
 LOG_LEVEL=INFO           # DEBUG, INFO, WARNING, ERROR
@@ -206,3 +288,47 @@ SELENIUM_REMOTE_URL=http://selenium-hub:4444
 - Required for ORCID web scraping
 - Standalone or grid mode
 - Multiple concurrent sessions supported
+
+## Repository Content Extraction
+
+### Custom Extraction System
+Replaced `repo-to-text` tool with custom extraction in `src/context/repository.py`:
+
+#### File Discovery & Filtering
+- **Relevant file types**:
+  - Documentation: `.md`, `.txt`, `.rst`, `.cff`, `README*`, `LICENSE*`, `CITATION*`
+  - Code: `.py`, `.r`
+  - Config: `.json`, `.yaml`, `.yml`, `.toml`, `.ini`, `.cfg`, `.env`
+  - Special files: `Makefile`, `Dockerfile`, `requirements.txt`, `setup.py`, `pyproject.toml`
+  - Important docs: `AUTHORS`, `CONTRIBUTORS`, `CHANGELOG`, `NOTICE`, `CODE_OF_CONDUCT`, `SECURITY`
+  - Rich content: `.html`, `.ipynb`
+- **Skipped**:
+  - Directories: `.git/`, `node_modules/`, `__pycache__/`, `.venv/`, `venv/`, `dist/`, `build/`
+  - Files > 1 MB
+  - Binary files (detected via null bytes and non-text character ratio)
+
+#### Content Extraction
+- **Plain text**: UTF-8 with fallback to latin-1, cp1252
+- **HTML files**: BeautifulSoup4 strips tags, cleans whitespace
+- **Jupyter notebooks**: Extracts markdown and code cells with separators
+- **Encoding detection**: Automatic fallback handling
+
+#### Import Analysis
+- **Python**: Detects `import module` and `from module import ...` statements
+- **R**: Detects `library(package)` and `require(package)` calls
+- **Aggregation**: Collects unique imports across all files per language
+
+#### Output Format
+Generated markdown structure:
+1. **Repository tree**: Visual directory structure
+2. **Aggregated imports**: Python and R sections with sorted imports
+3. **File contents**: Each file with:
+   - Relative path
+   - File size in KB
+   - Content in language-appropriate code blocks
+
+#### Clone Optimization
+- **Retry logic**: Up to 3 attempts with exponential backoff (2s, 4s, 8s delays)
+- **Large repo support**: 500 MB buffer, 10-minute timeout per attempt
+- **Network resilience**: Detects and retries on network errors
+- **Full history preserved**: No shallow clone (needed for git author extraction)

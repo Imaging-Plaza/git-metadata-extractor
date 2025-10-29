@@ -62,7 +62,12 @@ tiktoken==0.9.0            # Token counting for OpenAI models
 **Usage:**
 - PydanticAI for agent-based workflows
 - Multiple LLM provider support (OpenAI, OpenRouter, Ollama)
-- Token counting for cost optimization
+- **tiktoken** for client-side token estimation:
+  - Uses `cl100k_base` encoding (GPT-4/GPT-3.5-turbo compatible)
+  - Provides fallback when APIs don't report usage (e.g., OpenAI reasoning models)
+  - Validates API-reported token counts
+  - Located in `src/utils/token_counter.py`
+  - Gracefully handles cases where tiktoken isn't installed
 
 ### Repository Analysis
 ```toml

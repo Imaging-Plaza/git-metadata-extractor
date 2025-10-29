@@ -78,6 +78,54 @@ class ResourceType(str, Enum):
 - Provide clear validation error messages
 - Log validation errors for debugging
 
+### Built-in Field Validators
+
+#### Person Model (`src/data_models/models.py`)
+**ORCID ID Validator**:
+```python
+@field_validator("orcidId", mode="before")
+@classmethod
+def validate_orcid(cls, v):
+    """Convert plain ORCID identifier to full URL if needed."""
+    # Accepts: "0000-0002-1234-5678" → "https://orcid.org/0000-0002-1234-5678"
+    # Also accepts: "https://orcid.org/0000-0002-1234-5678" (already URL)
+```
+- Converts plain ORCID identifiers (19 chars, 3 dashes) to full URLs
+- LLM agents can return either format
+- Validation passes for both formats
+
+#### Organization Model (`src/data_models/models.py`)
+**ROR ID Validator**:
+```python
+@field_validator("hasRorId", mode="before")
+@classmethod
+def validate_ror(cls, v):
+    """Convert plain ROR identifier to full URL if needed."""
+    # Accepts: "05gzmn429" → "https://ror.org/05gzmn429"
+```
+- Converts plain ROR identifiers (9 chars) to full URLs
+- Handles both plain and URL formats
+
+**Website URL Validator**:
+```python
+@field_validator("website", mode="before")
+@classmethod
+def validate_website(cls, v):
+    """Ensure website URL is valid, fix common issues."""
+    # Fixes: "epfl.ch" → "https://epfl.ch"
+    # Rejects: URLs with spaces or no dots
+```
+- Adds `https://` prefix if missing
+- Returns `None` for invalid URLs (spaces, no dots)
+- Prevents validation errors from malformed URLs
+
+### Validator Best Practices
+1. **Use `mode="before"`**: Process raw input before type coercion
+2. **Handle None gracefully**: Check for `None` early and return it
+3. **Auto-fix when possible**: Convert plain IDs to URLs automatically
+4. **Fail gracefully**: Return `None` for invalid data rather than raising
+5. **Log warnings**: Help debug validation issues
+
 ## Model Conversion
 
 ### JSON-LD Conversion
@@ -89,6 +137,44 @@ class ResourceType(str, Enum):
 - Use `APIOutput` model for all API responses
 - Include metadata like timestamps and resource types
 - Maintain consistent response structure
+
+### APIStats Model
+Located in `src/data_models/api.py`, tracks comprehensive usage and timing metrics:
+
+```python
+class APIStats(BaseModel):
+    # Official API-reported token counts
+    agent_input_tokens: int = None
+    agent_output_tokens: int = None
+    total_tokens: int = None
+    
+    # Tokenizer-based estimates (complementary/fallback)
+    estimated_input_tokens: int = None
+    estimated_output_tokens: int = None
+    estimated_total_tokens: int = None
+    
+    # Timing and status
+    duration: float = None  # Total duration in seconds
+    start_time: datetime = None
+    end_time: datetime = None
+    status_code: int = None  # HTTP status (200, 500, etc.)
+    
+    def calculate_total_tokens(self):
+        """Calculate total tokens from input and output tokens."""
+        # Calculates both official and estimated totals
+        ...
+```
+
+**Usage:**
+- **Dual token tracking**: Official API counts + client-side estimates
+- **Timing**: Full request lifecycle (start, end, duration)
+- **Status**: Success/failure indication
+- **Call `calculate_total_tokens()`** before returning to populate totals
+
+**Why dual tracking:**
+- Some models (OpenAI o3/o4, Anthropic) don't report usage reliably
+- Estimates provide fallback and validation
+- Useful for cost monitoring and optimization
 
 ## Confidence Scores
 - Use `Optional[float]` for confidence scores
