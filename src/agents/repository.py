@@ -15,6 +15,7 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
+from ..utils.token_counter import estimate_tokens_from_messages
 from ..utils.url_validation import (
     validate_and_clean_urls,
     validate_author_urls,
@@ -52,7 +53,7 @@ async def llm_request_repo_infos(
     repo_url: str,
     gimie_output: Optional[Any] = None,
     max_tokens: int = 40000,
-) -> SoftwareSourceCode:
+) -> dict:
     """
     Analyze repository using PydanticAI with multi-provider support and retry/fallback logic.
 
@@ -63,7 +64,8 @@ async def llm_request_repo_infos(
         max_tokens: Maximum tokens for input text
 
     Returns:
-        Analysis result or None if failed
+        Dictionary with 'data' (SoftwareSourceCode) and 'usage' (dict with token info) keys,
+        or {'data': None, 'usage': None} if failed
     """
 
     # Prepare repository context
@@ -74,17 +76,20 @@ async def llm_request_repo_infos(
             # Return minimal valid metadata for empty repositories
             repo_name = repo_url.rstrip("/").split("/")[-1]
             return {
-                "@context": "https://schema.org/",
-                "@type": "SoftwareSourceCode",
-                "name": repo_name,
-                "codeRepository": repo_url,
-                "description": "Repository appears to be empty or has no analyzable content",
+                "data": {
+                    "@context": "https://schema.org/",
+                    "@type": "SoftwareSourceCode",
+                    "name": repo_name,
+                    "codeRepository": repo_url,
+                    "description": "Repository appears to be empty or has no analyzable content",
+                },
+                "usage": None,
             }
         else:
             logger.error(
                 f"Failed to prepare repository context: {context_result['error']}",
             )
-            return None
+            return {"data": None, "usage": None}
 
     input_text = context_result["input_text"]
     git_authors = context_result["git_authors"]
@@ -127,6 +132,59 @@ async def llm_request_repo_infos(
             json_data = result.output
         else:
             json_data = result
+
+        # Estimate tokens from prompt and response (client-side count)
+        response_text = ""
+        if hasattr(json_data, "model_dump_json"):
+            response_text = json_data.model_dump_json()
+        elif isinstance(json_data, dict):
+            import json as json_module
+            response_text = json_module.dumps(json_data)
+        elif isinstance(json_data, str):
+            response_text = json_data
+        
+        estimated = estimate_tokens_from_messages(
+            system_prompt=system_prompt_repository,
+            user_prompt=prompt,
+            response=response_text,
+        )
+        
+        # Extract usage information from the result
+        usage_data = None
+        
+        if hasattr(result, "usage"):
+            usage = result.usage
+            
+            # First try to get tokens from direct attributes
+            input_tokens = getattr(usage, "input_tokens", 0) or 0
+            output_tokens = getattr(usage, "output_tokens", 0) or 0
+            
+            # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
+            # See: https://github.com/pydantic/pydantic-ai/issues/3223
+            if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+                details = usage.details
+                if isinstance(details, dict):
+                    input_tokens = details.get("input_tokens", 0) or 0
+                    output_tokens = details.get("output_tokens", 0) or 0
+                    logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
+            
+            usage_data = {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "estimated_input_tokens": estimated.get("input_tokens", 0),
+                "estimated_output_tokens": estimated.get("output_tokens", 0),
+            }
+            logger.info(f"Repository agent token usage - Input: {input_tokens}, Output: {output_tokens}")
+            logger.info(f"Repository agent estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+        else:
+            logger.warning("Result object has no 'usage' attribute")
+            # Use estimates as fallback
+            usage_data = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "estimated_input_tokens": estimated.get("input_tokens", 0),
+                "estimated_output_tokens": estimated.get("output_tokens", 0),
+            }
 
         # Ensure it's a dictionary
         if hasattr(json_data, "model_dump"):
@@ -215,10 +273,13 @@ async def llm_request_repo_infos(
         #     logger.error(f"Unsupported output format: {output_format}")
         #     return None
 
-        return SoftwareSourceCode.model_validate(json_data)
+        return {
+            "data": SoftwareSourceCode.model_validate(json_data),
+            "usage": usage_data,
+        }
 
     except Exception as e:
         logger.error(f"Error in repository analysis: {e}")
         # Cleanup agents even on error
         await cleanup_agents()
-        return None
+        return {"data": None, "usage": None}

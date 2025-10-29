@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.repository import llm_request_repo_infos
@@ -29,6 +30,19 @@ class Repository:
         self.log: list[str] = []
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
+        
+        # Track official API-reported token usage across all agents
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+        
+        # Track estimated token usage (client-side counts)
+        self.estimated_input_tokens: int = 0
+        self.estimated_output_tokens: int = 0
+        
+        # Track timing and status
+        self.start_time: datetime = None
+        self.end_time: datetime = None
+        self.analysis_successful: bool = False
 
     def run_gimie_analysis(self):
         def fetch_gimie_data():
@@ -49,11 +63,27 @@ class Repository:
             self.gimie = jsonld_gimie_data
 
     async def run_llm_analysis(self):
-        llm_data = await llm_request_repo_infos(
+        result = await llm_request_repo_infos(
             str(self.full_path),
             gimie_output=self.gimie,
             max_tokens=20000,
         )
+
+        # Extract data and usage
+        llm_data = result.get("data") if isinstance(result, dict) else result
+        usage = result.get("usage") if isinstance(result, dict) else None
+        
+        # Accumulate official API-reported usage data
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+        
+        # Accumulate estimated tokens
+        if usage and "estimated_input_tokens" in usage:
+            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+            logger.info(f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens")
 
         # Output Validation
         if isinstance(llm_data, str):
@@ -90,10 +120,25 @@ class Repository:
             return
 
         try:
-            organization_enrichment = await enrich_organizations_from_dict(
+            result = await enrich_organizations_from_dict(
                 self.data.model_dump(),
                 self.full_path,
             )
+
+            # Extract data and usage
+            organization_enrichment = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate official API-reported usage data
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Accumulate estimated tokens
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
             # organization_enrichment is an OrganizationEnrichmentResult, not a dict
             enriched_orgs = organization_enrichment.organizations  # Direct attribute access
@@ -190,12 +235,27 @@ class Repository:
                 else:
                     existing_authors_data.append(author_dict)
 
-        user_enrichment = await enrich_users_from_dict(
+        result = await enrich_users_from_dict(
             git_authors_data=git_authors_data,
             existing_authors_data=existing_authors_data,
             repository_url=self.full_path,
         )
         # This method should validate and return a compatible object
+        
+        # Extract usage data
+        usage = result.get("usage") if isinstance(result, dict) else None
+        user_enrichment = result if not isinstance(result, dict) or "usage" not in result else result
+        
+        # Accumulate official API-reported usage data
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            logger.info(f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+        
+        # Accumulate estimated tokens
+        if usage and "estimated_input_tokens" in usage:
+            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
         logger.info(f"User enrichment: {user_enrichment}")
 
@@ -269,6 +329,31 @@ class Repository:
 
         logging.info(f"Loaded data from cache for {self.full_path}")
 
+    def get_usage_stats(self) -> dict:
+        """
+        Get accumulated token usage statistics and timing from all agents.
+        
+        Returns:
+            Dictionary with official API-reported tokens, estimated tokens, and timing info
+        """
+        # Calculate duration if we have start and end times
+        duration = None
+        if self.start_time and self.end_time:
+            duration = (self.end_time - self.start_time).total_seconds()
+        
+        return {
+            "input_tokens": self.total_input_tokens,
+            "output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "estimated_input_tokens": self.estimated_input_tokens,
+            "estimated_output_tokens": self.estimated_output_tokens,
+            "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+            "duration": duration,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "status_code": 200 if self.analysis_successful else 500,
+        }
+    
     def dump_results(self, output_type="json") -> str | dict | None:
         """
         Dump results in specified format: json, dict, or json-ld
@@ -303,11 +388,17 @@ class Repository:
         Run the full analysis pipeline with optional steps.
         Checks cache before running each step unless force_refresh is True.
         """
+        # Track start time
+        self.start_time = datetime.now()
+        
         # Check if complete repository analysis exists in cache
         cache_params = {"full_path": self.full_path}
         if not self.force_refresh and self.check_in_cache("repository", cache_params):
             self.load_from_cache("repository", cache_params)
             logging.info(f"Loaded complete analysis from cache for {self.full_path}")
+            # Mark as successful since we loaded from cache
+            self.analysis_successful = True
+            self.end_time = datetime.now()
             return
 
         # Run GIMIE analysis
@@ -345,5 +436,15 @@ class Repository:
         if self.data is not None:
             self.run_validation()
             self.save_in_cache()
+            self.analysis_successful = True
         else:
             logging.error(f"Analysis failed for {self.full_path}: no data generated")
+            self.analysis_successful = False
+        
+        # Track end time
+        self.end_time = datetime.now()
+        
+        # Log duration
+        if self.start_time and self.end_time:
+            duration = (self.end_time - self.start_time).total_seconds()
+            logging.info(f"Analysis completed in {duration:.2f} seconds")

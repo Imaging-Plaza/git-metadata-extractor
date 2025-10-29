@@ -923,12 +923,31 @@ async def llm_json(
     )
 
     output = repository.dump_results(output_type="pydantic")
+    
+    # Get usage statistics from the repository
+    usage_stats = repository.get_usage_stats()
+    
+    # Create APIStats with token usage data, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens (both official and estimated)
+    stats.calculate_total_tokens()
 
     response = APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
         parsedTimestamp=datetime.now(),
         output=output,
+        stats=stats,
     )
 
     return response

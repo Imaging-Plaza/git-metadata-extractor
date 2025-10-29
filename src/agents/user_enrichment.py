@@ -41,6 +41,7 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
+from ..utils.token_counter import estimate_tokens_from_messages
 from .user_prompts import (
     get_user_enrichment_agent_prompt,
     user_enrichment_agent_system_prompt,
@@ -620,7 +621,7 @@ async def enrich_users(
     git_authors: list[GitAuthor],
     existing_authors: list[Person],
     repository_url: str,
-) -> UserEnrichmentResult:
+) -> dict:
     """
     Enrich user/author information from repository metadata using PydanticAI agent.
 
@@ -630,7 +631,7 @@ async def enrich_users(
         repository_url: The repository URL
 
     Returns:
-        Enriched user information
+        Dictionary with 'data' (UserEnrichmentResult) and 'usage' (dict with token info) keys
     """
     # Prepare context for the agent
     context = UserAnalysisContext(
@@ -653,7 +654,50 @@ async def enrich_users(
 
     if result is None:
         logger.error("❌ User enrichment failed - agent returned None")
-        return None
+        return {"data": None, "usage": None}
+
+    # Estimate tokens from prompt and response
+    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    estimated = estimate_tokens_from_messages(
+        system_prompt=user_enrichment_agent_system_prompt,
+        user_prompt=prompt,
+        response=response_text,
+    )
+    
+    # Extract usage information from the result
+    usage_data = None
+    if hasattr(result, "usage"):
+        usage = result.usage
+        
+        # First try to get tokens from direct attributes
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        
+        # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
+        # See: https://github.com/pydantic/pydantic-ai/issues/3223
+        if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+            details = usage.details
+            if isinstance(details, dict):
+                input_tokens = details.get("input_tokens", 0) or 0
+                output_tokens = details.get("output_tokens", 0) or 0
+                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
+        
+        usage_data = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+        logger.info(f"User enrichment token usage - Input: {input_tokens}, Output: {output_tokens}")
+        logger.info(f"User enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+    else:
+        logger.warning("Result object has no 'usage' attribute")
+        usage_data = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
 
     logger.info(f"✅ User enrichment completed for {repository_url}")
     logger.info(
@@ -672,7 +716,7 @@ async def enrich_users(
                 f"(confidence: {author.confidenceScore:.2f})",
             )
 
-    return result.output
+    return {"data": result.output, "usage": usage_data}
 
 
 async def enrich_users_from_dict(
@@ -770,5 +814,11 @@ async def enrich_users_from_dict(
     # Call the main enrichment function
     result = await enrich_users(git_authors, existing_authors, repository_url)
 
-    # Return as dictionary
-    return result.model_dump()
+    # Extract data and usage from result
+    if result.get("data") is None:
+        return {"enrichedAuthors": [], "usage": None}
+    
+    # Return as dictionary with usage info
+    enriched_data = result["data"].model_dump()
+    enriched_data["usage"] = result.get("usage")
+    return enriched_data

@@ -46,6 +46,7 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
+from ..utils.token_counter import estimate_tokens_from_messages
 from .organization_prompts import (
     get_organization_enrichment_prompt,
     organization_enrichment_main_system_prompt,
@@ -602,7 +603,7 @@ async def run_agent_with_fallback(
 async def enrich_organizations(
     repository_metadata: SoftwareSourceCode,
     repository_url: str,
-) -> OrganizationEnrichmentResult:
+) -> dict:
     """
     Enrich organization information from repository metadata using PydanticAI agent.
 
@@ -611,7 +612,7 @@ async def enrich_organizations(
         repository_url: The repository URL
 
     Returns:
-        Enriched organization information
+        Dictionary with 'data' (OrganizationEnrichmentResult) and 'usage' (dict with token info) keys
     """
     # Prepare context for the agent
     context = OrganizationAnalysisContext(
@@ -644,6 +645,49 @@ async def enrich_organizations(
     logger.info("🤖 Running PydanticAI agent with fallback...")
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
+    # Estimate tokens from prompt and response
+    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    estimated = estimate_tokens_from_messages(
+        system_prompt=organization_enrichment_main_system_prompt,
+        user_prompt=prompt,
+        response=response_text,
+    )
+
+    # Extract usage information from the result
+    usage_data = None
+    if hasattr(result, "usage"):
+        usage = result.usage
+        
+        # First try to get tokens from direct attributes
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        
+        # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
+        # See: https://github.com/pydantic/pydantic-ai/issues/3223
+        if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+            details = usage.details
+            if isinstance(details, dict):
+                input_tokens = details.get("input_tokens", 0) or 0
+                output_tokens = details.get("output_tokens", 0) or 0
+                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
+        
+        usage_data = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+        logger.info(f"Organization enrichment token usage - Input: {input_tokens}, Output: {output_tokens}")
+        logger.info(f"Organization enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+    else:
+        logger.warning("Result object has no 'usage' attribute")
+        usage_data = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(
         f"📍 Identified {len(result.output.organizations)} organizations",
@@ -662,7 +706,7 @@ async def enrich_organizations(
     # Cleanup agents after successful completion
     await cleanup_org_agents()
 
-    return result.output
+    return {"data": result.output, "usage": usage_data}
 
 
 from ..data_models import GitAuthor
@@ -671,7 +715,7 @@ from ..data_models import GitAuthor
 async def enrich_organizations_from_dict(
     llm_output: Dict[str, Any],
     repository_url: str,
-) -> OrganizationEnrichmentResult:
+) -> dict:
     """
     Convenience function to enrich organizations from a dictionary (e.g., from API response).
 
@@ -680,7 +724,7 @@ async def enrich_organizations_from_dict(
         repository_url: The repository URL
 
     Returns:
-        Dictionary with enriched organization information
+        Dictionary with enriched organization information and usage data
     """
     # Extract relevant data without converting to SoftwareSourceCode
     # (since relatedToOrganizations is a list of strings, not Organization objects)
@@ -774,6 +818,49 @@ async def enrich_organizations_from_dict(
     logger.info("🤖 Running PydanticAI agent with fallback...")
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
+    # Estimate tokens from prompt and response
+    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    estimated = estimate_tokens_from_messages(
+        system_prompt=organization_enrichment_main_system_prompt,
+        user_prompt=prompt,
+        response=response_text,
+    )
+
+    # Extract usage information from the result (before accessing result.output)
+    usage_data = None
+    if hasattr(result, "usage"):
+        usage = result.usage
+        
+        # First try to get tokens from direct attributes
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        
+        # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
+        # See: https://github.com/pydantic/pydantic-ai/issues/3223
+        if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+            details = usage.details
+            if isinstance(details, dict):
+                input_tokens = details.get("input_tokens", 0) or 0
+                output_tokens = details.get("output_tokens", 0) or 0
+                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
+        
+        usage_data = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+        logger.info(f"Organization enrichment (from_dict) token usage - Input: {input_tokens}, Output: {output_tokens}")
+        logger.info(f"Organization enrichment (from_dict) estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+    else:
+        logger.warning("Result object has no 'usage' attribute")
+        usage_data = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+
     logger.info(f"✅ Organization enrichment completed for {repository_url}")
     logger.info(
         f"📍 Identified {len(result.output.organizations)} organizations",
@@ -790,4 +877,9 @@ async def enrich_organizations_from_dict(
             "✗ Output validation failed against OrganizationEnrichmentResult model",
         )
 
-    return OrganizationEnrichmentResult(**result.output.model_dump())
+    # Return dictionary with usage info
+    enriched_result = OrganizationEnrichmentResult(**result.output.model_dump())
+    return {
+        "data": enriched_result,
+        "usage": usage_data,
+    }
