@@ -83,6 +83,9 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
     
     # Create Person object with mapped fields
     return Person(
+        # Type discriminator
+        type="Person",
+        
         # Core identity fields
         name=enriched.name,
         email=enriched.email,  # Primary email for backward compatibility

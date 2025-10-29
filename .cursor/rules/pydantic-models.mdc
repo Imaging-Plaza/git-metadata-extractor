@@ -36,13 +36,64 @@ tags: [pydantic, models, validation, data-models]
 
 ### Example Pattern
 ```python
-from pydantic import BaseModel, HttpUrl
-from typing import Optional, List
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List, Literal
 
 class Person(BaseModel):
-    name: str
-    orcidId: Optional[HttpUrl] = None
-    affiliation: Optional[List[str]] = None
+    """Person model representing an individual author or contributor"""
+    
+    # Type discriminator
+    type: Literal["Person"] = Field(
+        default="Person",
+        description="Type discriminator for Person/Organization unions"
+    )
+    
+    # Core identity fields
+    name: str = Field(description="Person's name")
+    email: Optional[str] = Field(
+        description="Primary email address",
+        default=None,
+    )
+    emails: List[str] = Field(
+        description="List of all email addresses",
+        default_factory=list,
+    )
+    orcidId: Optional[HttpUrl] = Field(
+        description="ORCID identifier URL",
+        default=None,
+    )
+    gitAuthorIds: Optional[List[str]] = Field(
+        description="List of git author identifiers mapping to this person",
+        default_factory=list,
+    )
+    
+    # Affiliation fields
+    affiliation: Optional[List[str]] = Field(
+        description="List of affiliations (deprecated, use affiliations)",
+        default=None,
+    )
+    affiliations: List[str] = Field(
+        description="List of all identified affiliations",
+        default_factory=list,
+    )
+    currentAffiliation: Optional[str] = Field(
+        description="Most recent or current affiliation",
+        default=None,
+    )
+    affiliationHistory: List[dict] = Field(
+        description="Temporal affiliation information with dates",
+        default_factory=list,
+    )
+    
+    # Additional metadata
+    contributionSummary: Optional[str] = Field(
+        description="Summary of contributions to the repository",
+        default=None,
+    )
+    biography: Optional[str] = Field(
+        description="Biographical or professional information",
+        default=None,
+    )
 ```
 
 ### Enums
@@ -175,6 +226,99 @@ class APIStats(BaseModel):
 - Some models (OpenAI o3/o4, Anthropic) don't report usage reliably
 - Estimates provide fallback and validation
 - Useful for cost monitoring and optimization
+
+## Type Discrimination Pattern
+
+### Person and Organization Unions
+Both `Person` and `Organization` models include a `type` field for discrimination in mixed lists:
+
+```python
+from typing import Literal, Union, List
+
+class Person(BaseModel):
+    type: Literal["Person"] = Field(default="Person", ...)
+    # ... other fields
+
+class Organization(BaseModel):
+    type: Literal["Organization"] = Field(default="Organization", ...)
+    # ... other fields
+
+# Usage in unions
+author: Optional[List[Union[Person, Organization]]] = None
+```
+
+**Key Features:**
+- **Automatic defaults**: Type field automatically set even when not provided
+- **LLM-safe**: Works even if LLM doesn't include type in output
+- **Discrimination**: Use `author.type` to determine Person vs Organization
+- **JSON serialization**: Type field included in JSON output
+- **Filtering**: Easy to filter mixed lists by type
+
+**Example Usage:**
+```python
+# Filter by type
+people = [a for a in authors if a.type == "Person"]
+orgs = [a for a in authors if a.type == "Organization"]
+
+# Type checking still works
+if isinstance(author, Person):
+    print(author.name)
+elif isinstance(author, Organization):
+    print(author.legalName)
+```
+
+## Semantic Model: Authors vs Organizations
+
+### Author Field
+The `author` field contains **direct contributors** only:
+- People who committed code
+- Organizational GitHub accounts that committed code
+
+### Related Organizations Fields
+Separate fields for **broader organizational relationships**:
+- `relatedToOrganizations`: List of organization names
+- `relatedToOrganizationsROR`: List of Organization objects with ROR data
+
+These include:
+- Hosting institutions
+- Funding organizations
+- Affiliated institutions
+- Organizations mentioned in documentation
+
+**Organizations do NOT automatically migrate** from `relatedToOrganizationsROR` to `author` - they stay in their appropriate fields based on their relationship to the repository.
+
+## EnrichedAuthor → Person Conversion
+
+### Working Model vs Data Model
+- **EnrichedAuthor**: Internal working model used by AI agents during enrichment
+- **Person**: Canonical data model for storage and output
+
+### Conversion Function
+Location: `src/data_models/user.py`
+
+```python
+def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
+    """Convert EnrichedAuthor to Person"""
+    return Person(
+        type="Person",  # Explicit type
+        name=enriched.name,
+        email=enriched.email,
+        emails=[enriched.email] if enriched.email else [],
+        orcidId=enriched.orcidId,
+        affiliations=enriched.affiliations,
+        currentAffiliation=enriched.currentAffiliation,
+        affiliationHistory=enriched.affiliationHistory,
+        contributionSummary=enriched.contributionSummary,
+        biography=enriched.additionalInfo,  # Map to biography
+        infoscienceEntity=enriched.infoscienceEntity,
+    )
+```
+
+**Process:**
+1. Agent outputs `EnrichedAuthor` objects
+2. Conversion function transforms to `Person` objects
+3. `Person` objects stored in repository `author` field
+4. Type field automatically set to "Person"
 
 ## Confidence Scores
 - Use `Optional[float]` for confidence scores

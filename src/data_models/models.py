@@ -7,6 +7,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     List,
+    Literal,
     Optional,
 )
 
@@ -18,6 +19,12 @@ if TYPE_CHECKING:
 
 class Person(BaseModel):
     """Person model representing an individual author or contributor"""
+    
+    # Type discriminator
+    type: Literal["Person"] = Field(
+        default="Person",
+        description="Type discriminator for Person/Organization unions"
+    )
     
     # Core identity fields
     name: str = Field(description="Person's name")
@@ -87,6 +94,14 @@ class Person(BaseModel):
 
 
 class Organization(BaseModel):
+    """Organization model representing an institution or company"""
+    
+    # Type discriminator
+    type: Literal["Organization"] = Field(
+        default="Organization",
+        description="Type discriminator for Person/Organization unions"
+    )
+    
     legalName: Optional[str] = None
     hasRorId: Optional[HttpUrl] = None
     alternateNames: Optional[

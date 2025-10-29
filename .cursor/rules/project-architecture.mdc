@@ -62,6 +62,32 @@ src/
 - **Exports**: Models, conversions, debugging utilities
 - **Usage**: Import from `src.data_models` only
 
+#### Core Models (`models.py`)
+**Person Model** - Individual authors and contributors:
+- Type discriminator: `type: Literal["Person"]` (auto-defaults)
+- Identity: `name`, `email`, `emails`, `orcidId`, `gitAuthorIds`
+- Affiliations: `affiliations`, `currentAffiliation`, `affiliationHistory`
+- Metadata: `contributionSummary`, `biography`, `infoscienceEntity`
+- Backward compatibility: `affiliation` field deprecated but kept
+
+**Organization Model** - Institutions and companies:
+- Type discriminator: `type: Literal["Organization"]` (auto-defaults)
+- Identity: `legalName`, `hasRorId`, `alternateNames`
+- Details: `organizationType`, `parentOrganization`, `country`, `website`
+- Metadata: `attributionConfidence`
+
+**Type Discrimination**:
+- Both models support mixed lists via `type` field
+- LLM-safe: defaults to correct type even when not provided
+- Enables filtering: `[a for a in authors if a.type == "Person"]`
+
+#### Working Models (`user.py`)
+**EnrichedAuthor** - Internal model for AI agents:
+- Used during user enrichment process
+- Contains enrichment-specific fields like `confidenceScore`
+- Converted to `Person` before storage via `convert_enriched_to_person()`
+- Not stored in final output
+
 ### `agents/`
 - **Purpose**: AI-powered enrichment agents
 - **Pattern**: Separate files for each agent type
@@ -159,16 +185,21 @@ src/
 ### User Enrichment
 1. **Input Preparation**:
    - Git authors from commits (converted to dicts)
-   - Existing authors from LLM/ORCID (Person/EnrichedAuthor only - Organizations filtered out)
+   - Existing authors from LLM/ORCID (Person only - Organizations filtered out)
 2. **AI Agent Analysis**:
    - ORCID Search: Find profiles via tool
    - Web Search: Additional context via tool
    - Email Analysis: Infer affiliations from domains
-   - Merge and score: Create EnrichedAuthor objects
+   - Merge and score: Create EnrichedAuthor objects (internal working model)
 3. **Usage Extraction**: Extract official and estimated tokens from result
-4. **Conversion**: Convert dict responses to EnrichedAuthor Pydantic objects
-5. **Replacement**: **Replace** (not append) entire author list
-6. **Output**: List of EnrichedAuthor objects with comprehensive metadata
+4. **Conversion to EnrichedAuthor**: Convert dict responses to EnrichedAuthor Pydantic objects
+5. **Conversion to Person**: Transform EnrichedAuthor → Person using `convert_enriched_to_person()`
+   - Maps all enrichment fields to Person structure
+   - Sets type="Person" explicitly
+   - Converts single email to emails list
+   - Maps additionalInfo → biography
+6. **Replacement**: **Replace** (not append) entire author list with Person objects
+7. **Output**: List of Person objects with comprehensive metadata, type discrimination enabled
 
 ### Organization Enrichment
 1. **Input**: Repository metadata (model_dump() of entire SoftwareSourceCode)
@@ -179,11 +210,19 @@ src/
    - Hierarchical relationships: Departments, labs within universities
    - EPFL relationship analysis with evidence
 4. **Usage Extraction**: Extract official and estimated tokens from result
-5. **Replacement**: **Replace** (not append) organization lists
+5. **Type Setting**: Ensure all Organization objects have type="Organization"
+6. **Replacement**: **Replace** (not append) organization lists
    - `relatedToOrganizations`: List of organization names
    - `relatedToOrganizationsROR`: List of Organization objects with full ROR data
-6. **EPFL Fields**: Update relatedToEPFL, relatedToEPFLJustification, relatedToEPFLConfidence
-7. **Output**: Enriched organization list with ROR IDs, types, countries, websites, confidence scores
+   - **Note**: Organizations stay in these fields, NOT migrated to `author` field
+7. **EPFL Fields**: Update relatedToEPFL, relatedToEPFLJustification, relatedToEPFLConfidence
+8. **Output**: Enriched organization list with ROR IDs, types, countries, websites, confidence scores
+
+### Author vs Related Organizations Semantic Model
+- **`author` field**: Direct contributors only (people + org accounts that committed code)
+- **`relatedToOrganizations*` fields**: Broader relationships (hosting, funding, affiliation)
+- Organizations do NOT automatically migrate between these fields
+- Both Person and Organization use `type` field for discrimination when mixed
 
 ## Integration Points
 

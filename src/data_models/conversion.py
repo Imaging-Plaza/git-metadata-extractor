@@ -118,6 +118,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
     if "http://schema.org/Person" in entity_types:
         # Extract core fields that are commonly in JSON-LD
         person_data = {
+            "type": "Person",  # Explicit type discriminator
             "name": _get_value(entity.get("http://schema.org/name")),
             "orcidId": _get_value(
                 entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId"),
@@ -143,6 +144,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         return Person(**person_data)
     if "http://schema.org/Organization" in entity_types:
         return Organization(
+            type="Organization",  # Explicit type discriminator
             legalName=_get_value(entity.get("http://schema.org/legalName")),
             hasRorId=_get_value(
                 entity.get("http://w3id.org/nfdi4ing/metadata4ing#hasRorId"),
