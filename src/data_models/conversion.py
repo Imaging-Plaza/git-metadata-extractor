@@ -116,17 +116,31 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
     entity_types = _get_list(entity, "@type")
 
     if "http://schema.org/Person" in entity_types:
-        return Person(
-            name=_get_value(entity.get("http://schema.org/name")),
-            orcidId=_get_value(
+        # Extract core fields that are commonly in JSON-LD
+        person_data = {
+            "name": _get_value(entity.get("http://schema.org/name")),
+            "orcidId": _get_value(
                 entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId"),
             ),
-            affiliation=[
+            "affiliation": [
                 _get_value(v)
                 for v in _get_list(entity, "http://schema.org/affiliation")
             ]
             or None,
-        )
+        }
+        
+        # Extract email if present (support both single and list)
+        email_value = entity.get("http://schema.org/email")
+        if email_value:
+            email_extracted = _get_value(email_value)
+            if email_extracted:
+                person_data["email"] = email_extracted
+        
+        # All other fields (emails, gitAuthorIds, affiliations, currentAffiliation,
+        # affiliationHistory, contributionSummary, biography, infoscienceEntity)
+        # will use their default values as defined in the Person model
+        
+        return Person(**person_data)
     if "http://schema.org/Organization" in entity_types:
         return Organization(
             legalName=_get_value(entity.get("http://schema.org/legalName")),

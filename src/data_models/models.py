@@ -4,17 +4,71 @@ General data models
 
 from enum import Enum
 from typing import (
+    TYPE_CHECKING,
+    Any,
     List,
     Optional,
 )
 
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
+
+if TYPE_CHECKING:
+    from .repository import InfoscienceEntity
 
 
 class Person(BaseModel):
-    name: str
-    orcidId: Optional[HttpUrl] = None
-    affiliation: Optional[List[str]] = None
+    """Person model representing an individual author or contributor"""
+    
+    # Core identity fields
+    name: str = Field(description="Person's name")
+    email: Optional[str] = Field(
+        description="Primary email address (for backward compatibility)",
+        default=None,
+    )
+    emails: List[str] = Field(
+        description="List of all email addresses associated with this person",
+        default_factory=list,
+    )
+    orcidId: Optional[HttpUrl] = Field(
+        description="ORCID identifier URL",
+        default=None,
+    )
+    gitAuthorIds: Optional[List[str]] = Field(
+        description="List of git author identifiers mapping to this person",
+        default_factory=list,
+    )
+    
+    # Affiliation fields
+    affiliation: Optional[List[str]] = Field(
+        description="List of affiliations (deprecated, use affiliations)",
+        default=None,
+    )
+    affiliations: List[str] = Field(
+        description="List of all identified affiliations (current and historical)",
+        default_factory=list,
+    )
+    currentAffiliation: Optional[str] = Field(
+        description="Most recent or current affiliation",
+        default=None,
+    )
+    affiliationHistory: List[dict[str, Any]] = Field(
+        description="Temporal affiliation information with start/end dates when available",
+        default_factory=list,
+    )
+    
+    # Additional metadata
+    contributionSummary: Optional[str] = Field(
+        description="Summary of the person's contributions to the repository",
+        default=None,
+    )
+    biography: Optional[str] = Field(
+        description="Additional biographical or professional information",
+        default=None,
+    )
+    infoscienceEntity: Optional[Any] = Field(
+        description="Infoscience entity data (EPFL)",
+        default=None,
+    )
 
     @field_validator("orcidId", mode="before")
     @classmethod

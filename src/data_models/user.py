@@ -65,6 +65,44 @@ class EnrichedAuthor(BaseModel):
     )
 
 
+def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
+    """
+    Convert an EnrichedAuthor object to a Person object.
+    
+    This function transforms the agent's working model (EnrichedAuthor) into
+    the canonical data model (Person) for storage and output.
+    
+    Args:
+        enriched: EnrichedAuthor object from the agent
+        
+    Returns:
+        Person object with all fields mapped appropriately
+    """
+    # Prepare emails list
+    emails = [enriched.email] if enriched.email else []
+    
+    # Create Person object with mapped fields
+    return Person(
+        # Core identity fields
+        name=enriched.name,
+        email=enriched.email,  # Primary email for backward compatibility
+        emails=emails,
+        orcidId=enriched.orcidId,
+        gitAuthorIds=[],  # Will be set separately based on git author matching
+        
+        # Affiliation fields
+        affiliation=enriched.affiliations or None,  # Deprecated field for backward compatibility
+        affiliations=enriched.affiliations,
+        currentAffiliation=enriched.currentAffiliation,
+        affiliationHistory=enriched.affiliationHistory,
+        
+        # Additional metadata
+        contributionSummary=enriched.contributionSummary,
+        biography=enriched.additionalInfo,  # Map additionalInfo to biography
+        infoscienceEntity=enriched.infoscienceEntity,
+    )
+
+
 class UserEnrichmentResult(BaseModel):
     """Result of user enrichment analysis"""
 

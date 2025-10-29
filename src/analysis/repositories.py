@@ -261,22 +261,25 @@ class Repository:
 
         # Replace (not extend) authors list with enriched versions
         if user_enrichment is not None:
-            # Import EnrichedAuthor to convert dictionaries to proper objects
-            from ..data_models.user import EnrichedAuthor
+            # Import conversion utilities
+            from ..data_models.user import EnrichedAuthor, convert_enriched_to_person
             
-            # Build new list with only enriched authors
-            enriched_authors_list = []
+            # Build new list with only enriched authors (as Person objects)
+            person_authors_list = []
             enriched_authors_data = user_enrichment.get("enrichedAuthors", [])
             for author_data in enriched_authors_data:
+                # Convert to EnrichedAuthor first if it's a dict
                 if isinstance(author_data, dict):
-                    # Convert dictionary to EnrichedAuthor object
-                    enriched_authors_list.append(EnrichedAuthor(**author_data))
+                    enriched_author = EnrichedAuthor(**author_data)
                 else:
-                    # Already an EnrichedAuthor object
-                    enriched_authors_list.append(author_data)
+                    enriched_author = author_data
+                
+                # Convert EnrichedAuthor to Person
+                person = convert_enriched_to_person(enriched_author)
+                person_authors_list.append(person)
             
-            # Replace the entire author list with enriched versions only
-            self.data.author = enriched_authors_list
+            # Replace the entire author list with Person objects
+            self.data.author = person_authors_list
         else:
             logging.warning("User enrichment returned None, skipping author enrichment")
 

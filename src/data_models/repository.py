@@ -8,7 +8,6 @@ import logging
 from datetime import date
 from enum import Enum
 from typing import (
-    TYPE_CHECKING,
     Any,
     List,
     Optional,
@@ -35,10 +34,6 @@ from .models import (
     Person,
     RepositoryType,
 )
-
-if TYPE_CHECKING:
-    # Import EnrichedAuthor only for type checking to avoid circular import
-    from .user import EnrichedAuthor
 
 #####################################################################
 # Debugging Utilities
@@ -242,7 +237,7 @@ class SoftwareSourceCode(BaseModel):
     isBasedOn: Optional[HttpUrl] = None
     isPluginModuleOf: Optional[List[str]] = None
     license: Optional[Annotated[str, StringConstraints(pattern=r"spdx\.org.*")]] = None
-    author: Optional[List[Union[Person, Organization, EnrichedAuthor]]] = None
+    author: Optional[List[Union[Person, Organization]]] = None
     operatingSystem: Optional[List[str]] = None
     programmingLanguage: Optional[List[str]] = None
     softwareRequirements: Optional[List[str]] = None
@@ -555,9 +550,4 @@ class RepositoryAnalysisContext:
 
 
 # Rebuild the model after all types are defined to resolve forward references
-# This is needed because EnrichedAuthor is imported conditionally
-if not TYPE_CHECKING:
-    from .user import EnrichedAuthor  # noqa: F401
-    
-    # Rebuild SoftwareSourceCode to resolve the EnrichedAuthor forward reference
-    SoftwareSourceCode.model_rebuild()
+SoftwareSourceCode.model_rebuild()
