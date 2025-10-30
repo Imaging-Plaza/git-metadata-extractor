@@ -270,3 +270,4 @@ class GitHubUser(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = None

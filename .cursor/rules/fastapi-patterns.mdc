@@ -43,6 +43,7 @@ tags: [fastapi, api, endpoints, routing]
 - Use Pydantic models for response validation
 - Return `JSONResponse` for custom status codes
 - Use `APIOutput` model for consistent responses
+- Include `APIStats` for token usage and timing metrics
 
 ### Error Handling
 - Use `try/except` blocks in endpoints
@@ -110,3 +111,158 @@ tags: [fastapi, api, endpoints, routing]
 - Required: API keys (OPENAI_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN)
 - Optional: LOG_LEVEL, CACHE_DIR, CACHE_ENABLED
 - Model configurations: LLM_ANALYSIS_MODELS, USER_ENRICHMENT_MODELS, ORG_ENRICHMENT_MODELS
+
+## Endpoint Statistics Pattern
+
+### Token Usage and Timing Tracking
+All LLM-powered endpoints should include comprehensive statistics in their responses.
+
+**Pattern Overview:**
+1. Analysis class (Repository, User) tracks token usage and timing
+2. Endpoint calls `get_usage_stats()` to retrieve metrics
+3. Create `APIStats` object with collected data
+4. Include stats in `APIOutput` response
+
+### Repository Endpoint Example
+```python
+@app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"])
+async def llm_json(
+    full_path: str = Path(..., description="Full repository URL"),
+    force_refresh: bool = Query(False, description="Force refresh from APIs"),
+    enrich_orgs: bool = Query(False, description="Enable organization enrichment"),
+    enrich_users: bool = Query(False, description="Enable user enrichment"),
+) -> APIOutput:
+    """Extract repository metadata using LLM with GIMIE context."""
+    
+    # Initialize analysis class
+    repository = Repository(full_path, force_refresh=force_refresh)
+    
+    # Run analysis (tracks tokens and timing internally)
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=True,
+        run_user_enrichment=enrich_users,
+        run_organization_enrichment=enrich_orgs,
+    )
+    
+    # Get results
+    output = repository.dump_results(output_type="pydantic")
+    
+    # Get accumulated statistics
+    usage_stats = repository.get_usage_stats()
+    
+    # Create APIStats with token usage, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens
+    stats.calculate_total_tokens()
+    
+    # Return response with stats
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include statistics
+    )
+    
+    return response
+```
+
+### User Endpoint Example
+```python
+@app.get("/v1/user/llm/json/{full_path:path}", tags=["User"])
+async def get_user_json(
+    full_path: str = Path(..., description="GitHub user URL or path"),
+    force_refresh: bool = Query(False, description="Force refresh from APIs"),
+    enrich_orgs: bool = Query(False, description="Enable organization enrichment"),
+    enrich_users: bool = Query(False, description="Enable user enrichment"),
+) -> APIOutput:
+    """Retrieve and enrich GitHub user profile metadata."""
+    
+    username = full_path.split("/")[-1]
+    
+    # Initialize user analysis
+    user = User(username, force_refresh=force_refresh)
+    
+    # Run analysis (tracks tokens and timing)
+    await user.run_analysis(
+        run_organization_enrichment=enrich_orgs,
+        run_user_enrichment=enrich_users,
+    )
+    
+    output = user.dump_results(output_type="pydantic")
+    
+    # Get usage statistics (same pattern as Repository)
+    usage_stats = user.get_usage_stats()
+    
+    # Create APIStats
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    stats.calculate_total_tokens()
+    
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.USER,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include statistics
+    )
+    
+    return response
+```
+
+### Response Format
+```json
+{
+  "link": "https://github.com/user/repo",
+  "type": "repository",
+  "parsedTimestamp": "2025-10-30T07:35:00",
+  "output": { /* analysis results */ },
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "total_tokens": 1801,
+    "estimated_input_tokens": 1250,
+    "estimated_output_tokens": 575,
+    "estimated_total_tokens": 1825,
+    "duration": 45.23,
+    "start_time": "2025-10-30T07:35:00",
+    "end_time": "2025-10-30T07:35:45",
+    "status_code": 200
+  }
+}
+```
+
+### Key Implementation Points
+1. **Consistency**: Use identical pattern for Repository and User endpoints
+2. **Accumulation**: Stats include tokens from ALL agents (LLM + enrichment)
+3. **Dual tracking**: Both official API tokens and estimated tokens
+4. **Timing**: Full request lifecycle (start, end, duration)
+5. **Status codes**: 200 for success, 500 for failures
+6. **Calculate totals**: Always call `stats.calculate_total_tokens()` before returning
+
+### Benefits
+- **Observability**: Track token usage for cost monitoring
+- **Performance**: Measure request durations
+- **Debugging**: Identify slow or expensive operations
+- **Analytics**: Aggregate usage across requests
+- **Transparency**: Users see what resources their requests consume

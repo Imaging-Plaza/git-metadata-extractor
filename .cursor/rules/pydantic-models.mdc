@@ -320,6 +320,138 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
 3. `Person` objects stored in repository `author` field
 4. Type field automatically set to "Person"
 
+## User Models
+
+### GitHubUser Model
+Location: `src/data_models/user.py`
+
+The `GitHubUser` model represents a GitHub user profile with enrichment capabilities:
+
+```python
+class GitHubUser(BaseModel):
+    """GitHub user profile with enrichment data"""
+    
+    # Core identity
+    name: Optional[str] = None
+    fullname: Optional[str] = None
+    githubHandle: Optional[str] = None
+    
+    # GitHub metadata
+    githubUserMetadata: Optional[GitHubUserMetadata] = None
+    
+    # Organization relationships
+    relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganizationsROR: Optional[List[Organization]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
+    
+    # Discipline and position (from LLM analysis)
+    discipline: Optional[List[Discipline]] = None
+    disciplineJustification: Optional[List[str]] = None
+    position: Optional[List[str]] = None
+    positionJustification: Optional[List[str]] = None
+    
+    # EPFL relationship
+    relatedToEPFL: Optional[bool] = None
+    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLConfidence: Optional[float] = None
+    
+    # Infoscience integration
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
+```
+
+**Key Fields:**
+- **githubUserMetadata**: Full GitHub API response with ORCID and README data
+- **discipline/position**: Extracted by LLM from bio, README, ORCID
+- **relatedToOrganizationsROR**: Enriched organization data with ROR IDs
+- **infoscienceEntities**: EPFL publications and author records found via Infoscience API
+
+### GitHubUserMetadata Model
+Nested model containing raw GitHub API data:
+
+```python
+class GitHubUserMetadata(BaseModel):
+    """Raw GitHub user data from API"""
+    
+    # Core GitHub fields
+    login: str
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    email: Optional[str] = None
+    location: Optional[str] = None
+    company: Optional[str] = None
+    blog: Optional[str] = None
+    
+    # Social and stats
+    twitter_username: Optional[str] = None
+    public_repos: int
+    followers: int
+    following: int
+    
+    # ORCID integration
+    orcid: Optional[str] = None  # Auto-validated to URL format
+    orcid_activities: Optional[ORCIDActivities] = None
+    
+    # GitHub data
+    organizations: List[str] = Field(default_factory=list)
+    social_accounts: List[Dict[str, str]] = Field(default_factory=list)
+    
+    # Profile README
+    readme_url: Optional[str] = None
+    readme_content: Optional[str] = None
+```
+
+**Data Access Pattern:**
+```python
+# In User class methods, always access via githubUserMetadata
+github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+
+# Then safely access fields
+name = github_metadata.get("name")
+bio = github_metadata.get("bio")
+orcid = github_metadata.get("orcid")
+```
+
+### InfoscienceEntity Model
+Location: `src/data_models/repository.py` (shared with repositories)
+
+Records publications and author profiles found in EPFL's Infoscience repository:
+
+```python
+class InfoscienceEntity(BaseModel):
+    """Infoscience publication or author record"""
+    
+    name: str = Field(description="Publication title or author name")
+    url: HttpUrl = Field(description="Infoscience URL")
+    confidence: float = Field(
+        description="Confidence score (0.0-1.0) for relevance",
+        ge=0.0,
+        le=1.0,
+    )
+    justification: str = Field(
+        description="Why this entity is relevant",
+    )
+```
+
+**Usage in GitHubUser:**
+- Populated by user LLM agent when analyzing GitHub profiles
+- Agent has access to Infoscience search tools
+- Can find author profiles and publications by name
+- Helps establish EPFL relationships
+
+**Example:**
+```json
+{
+  "infoscienceEntities": [
+    {
+      "name": "John Doe - EPFL Profile",
+      "url": "https://infoscience.epfl.ch/authors/john-doe",
+      "confidence": 0.85,
+      "justification": "Author profile matches GitHub username and bio mentions EPFL"
+    }
+  ]
+}
+```
+
 ## Confidence Scores
 - Use `Optional[float]` for confidence scores
 - Range: 0.0 to 1.0

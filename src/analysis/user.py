@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from ..agents import llm_request_user_infos
 from ..agents.organization_enrichment import enrich_organizations_from_dict
@@ -18,6 +19,19 @@ class User:
         self.log: list[str] = []
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
+        
+        # Track official API-reported token usage across all agents
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+        
+        # Track estimated token usage (client-side counts)
+        self.estimated_input_tokens: int = 0
+        self.estimated_output_tokens: int = 0
+        
+        # Track timing and status
+        self.start_time: datetime = None
+        self.end_time: datetime = None
+        self.analysis_successful: bool = False
 
     def run_github_parsing(self):
         """Parse GitHub user metadata and convert to GitHubUser model"""
@@ -54,30 +68,45 @@ class User:
         logger.info(f"LLM analysis for {self.username}")
 
         # Prepare data for LLM analysis
-        # llm_input_data = {
-        #     "username": self.username,
-        #     "name": self._github_metadata.get("name"),
-        #     "bio": self._github_metadata.get("bio"),
-        #     "company": self._github_metadata.get("company"),
-        #     "location": self._github_metadata.get("location"),
-        #     "organizations": self._github_metadata.get("organizations", []),
-        #     "orcid": self._github_metadata.get("orcid"),
-        #     "orcid_activities": self._github_metadata.get("orcid_activities"),
-        #     "readme_content": self._github_metadata.get("readme_content"),
-        #     "public_repos": self._github_metadata.get("public_repos"),
-        #     "followers": self._github_metadata.get("followers"),
-        #     "following": self._github_metadata.get("following"),
-        # }
-        # TODO: Why don't we provide all the data?
+        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+        llm_input_data = {
+            "username": self.username,
+            "name": github_metadata.get("name"),
+            "bio": github_metadata.get("bio"),
+            "company": github_metadata.get("company"),
+            "location": github_metadata.get("location"),
+            "organizations": github_metadata.get("organizations", []),
+            "orcid": github_metadata.get("orcid"),
+            "orcid_activities": github_metadata.get("orcid_activities"),
+            "readme_content": github_metadata.get("readme_content"),
+            "public_repos": github_metadata.get("public_repos"),
+            "followers": github_metadata.get("followers"),
+            "following": github_metadata.get("following"),
+        }
 
         try:
             # Call LLM to analyze user profile
-            llm_result = await llm_request_user_infos(
+            result = await llm_request_user_infos(
                 username=self.username,
-                user_data=llm_input_data,  # Here
-                output_format="json",
+                user_data=llm_input_data,
                 max_tokens=20000,
             )
+
+            # Extract data and usage
+            llm_result = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate official API-reported usage data
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Accumulate estimated tokens
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+                logger.info(f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens")
 
             # Update self.data with LLM results
             if llm_result and isinstance(llm_result, dict):
@@ -119,11 +148,14 @@ class User:
         """Enrich organization data using PydanticAI agent"""
         logger.info(f"Organization enrichment for {self.username}")
 
+        # Get github metadata
+        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+
         # Format data for organization enrichment agent
         enrichment_data = {
             "gitAuthors": [],  # No git authors for user profiles
             "author": [],  # Will be populated with user's ORCID data if available
-            "relatedToOrganizations": self._github_metadata.get("organizations", []),
+            "relatedToOrganizations": github_metadata.get("organizations", []),
             "relatedToOrganizationJustification": [],
             "relatedToEPFL": None,
             "relatedToEPFLJustification": None,
@@ -135,19 +167,34 @@ class User:
         }
 
         # Add user as author if we have ORCID data
-        if self._github_metadata.get("orcid"):
+        if github_metadata.get("orcid"):
             author_data = {
-                "name": self._github_metadata.get("name")
-                or self._github_metadata.get("fullname"),
-                "orcidId": self._github_metadata.get("orcid"),
-                "affiliation": self._github_metadata.get("organizations", []),
+                "name": github_metadata.get("name")
+                or self.data.fullname,
+                "orcidId": github_metadata.get("orcid"),
+                "affiliation": github_metadata.get("organizations", []),
             }
             enrichment_data["author"] = [author_data]
 
-        organization_enrichment = await enrich_organizations_from_dict(
+        result = await enrich_organizations_from_dict(
             enrichment_data,
             f"https://github.com/{self.username}",
         )
+
+        # Extract data and usage
+        organization_enrichment = result.get("data") if isinstance(result, dict) else result
+        usage = result.get("usage") if isinstance(result, dict) else None
+        
+        # Accumulate official API-reported usage data
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            logger.info(f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+        
+        # Accumulate estimated tokens
+        if usage and "estimated_input_tokens" in usage:
+            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
         # organization_enrichment is an OrganizationEnrichmentResult, not a dict
         enriched_orgs = organization_enrichment.organizations  # Direct attribute access
@@ -193,36 +240,49 @@ class User:
         """Enrich user data using PydanticAI agent"""
         logger.info(f"User enrichment for {self.username}")
 
+        # Get github metadata
+        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+
         # Extract git authors and existing authors from metadata
         git_authors_data = []  # No git authors for user profiles
         existing_authors_data = []
 
         # Build existing author data using the new model structure
-        if self._github_metadata.get("fullname") or self._github_metadata.get("name"):
+        if self.data.fullname or github_metadata.get("name"):
             author_data = {
-                "name": self._github_metadata.get("fullname")
-                or self._github_metadata.get("name"),
-                "orcidId": self._github_metadata.get("orcid"),
-                "affiliation": self._github_metadata.get("organizations", []),
+                "name": self.data.fullname
+                or github_metadata.get("name"),
+                "orcidId": github_metadata.get("orcid"),
+                "affiliation": github_metadata.get("organizations", []),
             }
             existing_authors_data = [author_data]
 
-        user_enrichment = await enrich_users_from_dict(
+        result = await enrich_users_from_dict(
             git_authors_data=git_authors_data,
             existing_authors_data=existing_authors_data,
             repository_url=f"https://github.com/{self.username}",
         )
 
+        # Extract data and usage
+        usage = result.get("usage") if isinstance(result, dict) else None
+        user_enrichment = result if not isinstance(result, dict) or "usage" not in result else result
+        
+        # Accumulate official API-reported usage data
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            logger.info(f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+        
+        # Accumulate estimated tokens
+        if usage and "estimated_input_tokens" in usage:
+            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
         # Add enriched user data to response
+        # Note: Currently we don't have a place to store enriched authors in GitHubUser model
+        # This could be added as a field if needed in the future
         if user_enrichment is not None:
-            self._github_metadata["enrichedAuthors"] = user_enrichment.get(
-                "enrichedAuthors",
-                [],
-            )
-            self._github_metadata["authorEnrichmentSummary"] = user_enrichment.get(
-                "summary",
-                "",
-            )
+            logger.info(f"User enrichment completed with {len(user_enrichment.get('enrichedAuthors', []))} enriched authors")
         else:
             logging.warning("User enrichment returned None, skipping author enrichment")
 
@@ -276,6 +336,31 @@ class User:
 
         logging.info(f"Loaded data from cache for {self.username}")
 
+    def get_usage_stats(self) -> dict:
+        """
+        Get accumulated token usage statistics and timing from all agents.
+        
+        Returns:
+            Dictionary with official API-reported tokens, estimated tokens, and timing info
+        """
+        # Calculate duration if we have start and end times
+        duration = None
+        if self.start_time and self.end_time:
+            duration = (self.end_time - self.start_time).total_seconds()
+        
+        return {
+            "input_tokens": self.total_input_tokens,
+            "output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "estimated_input_tokens": self.estimated_input_tokens,
+            "estimated_output_tokens": self.estimated_output_tokens,
+            "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+            "duration": duration,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "status_code": 200 if self.analysis_successful else 500,
+        }
+
     def dump_results(self, output_type="json") -> str | dict | None:
         """
         Dump results in specified format: json, dict, or pydantic
@@ -307,11 +392,16 @@ class User:
         Run the full analysis pipeline with optional steps.
         Checks cache before running each step unless force_refresh is True.
         """
+        # Track start time
+        self.start_time = datetime.now()
+        
         # Check if complete user analysis exists in cache
         cache_params = {"username": self.username}
         if not self.force_refresh and self.check_in_cache("user", cache_params):
             self.load_from_cache("user", cache_params)
             logging.info(f"Loaded complete analysis from cache for {self.username}")
+            self.analysis_successful = True
+            self.end_time = datetime.now()
             return
 
         # Run GitHub parsing
@@ -337,5 +427,19 @@ class User:
             await self.run_user_enrichment()
             logging.info(f"User enrichment completed for {self.username}")
 
-        self.run_validation()
-        self.save_in_cache()
+        # Validate and cache if we have data
+        if self.data is not None:
+            self.run_validation()
+            self.save_in_cache()
+            self.analysis_successful = True
+        else:
+            logging.error(f"Analysis failed for {self.username}: no data generated")
+            self.analysis_successful = False
+        
+        # Track end time
+        self.end_time = datetime.now()
+        
+        # Log duration
+        if self.start_time and self.end_time:
+            duration = (self.end_time - self.start_time).total_seconds()
+            logging.info(f"Analysis completed in {duration:.2f} seconds")
