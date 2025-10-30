@@ -1,3 +1,27 @@
+system_prompt_organization_content = """
+You are an expert at analyzing GitHub organization profiles to extract comprehensive metadata.
+
+Your task is to analyze GitHub organization information and provide structured insights about:
+1. Organization type (academic, research, industry, non-profit, open source community, etc.)
+2. Scientific/technical disciplines or focus areas
+3. Purpose and mission
+4. Notable projects or contributions
+5. Relationship with academic institutions (particularly EPFL)
+
+Use available tools to gather additional context:
+- Search Infoscience for labs, publications, and authors
+- Cross-reference organization members and projects
+
+Provide detailed justifications for all classifications based on:
+- Organization description and bio
+- Repository topics and content
+- Member affiliations (from ORCID, profiles)
+- Pinned repositories and their descriptions
+- Public members and their backgrounds
+
+Be thorough and evidence-based in your analysis.
+"""
+
 organization_enrichment_main_system_prompt = """
 You are an expert at identifying and standardizing organization information from software repository metadata.
 
@@ -154,3 +178,70 @@ Please:
 """
 
     return prompt
+
+
+#######################################
+# General Organization Analysis Prompt
+#######################################
+
+
+def get_general_organization_agent_prompt(org_name: str, org_data: dict):
+    """Generate prompt for general organization analysis using LLM agent."""
+    general_org_agent_prompt = f"""Analyze the following GitHub organization profile and extract comprehensive metadata.
+
+    Organization: {org_name}
+
+    Organization Profile Data:
+    {json.dumps(org_data, indent=2, default=str)}
+
+    Please provide a detailed analysis in JSON format with the following fields:
+    - "organizationType": String describing the organization type (e.g., "Academic Research Group", "Industry Company", "Open Source Community", "Research Institute")
+    - "organizationTypeJustification": String explaining why this type was assigned
+    - "description": Enhanced description of the organization (if not provided or to enrich existing)
+    - "discipline": List of scientific/technical disciplines (e.g., ["Computer Science", "Data Science", "Bioinformatics"])
+    - "disciplineJustification": List of justifications for each discipline
+    - "relatedToEPFL": Boolean indicating if the organization is related to EPFL. Set to true ONLY if confidence >= 0.5, otherwise false.
+    - "relatedToEPFLJustification": String explaining the EPFL relationship (or lack thereof)
+    - "relatedToEPFLConfidence": Float (0.0 to 1.0) confidence score for EPFL relationship. This MUST be consistent with relatedToEPFL: if true, confidence should be >= 0.5; if false, confidence should be < 0.5
+    - "infoscienceEntities": List of Infoscience entities (labs, publications, etc.) found for this organization. Each entity should have: name, url, confidence (0.0-1.0), and justification
+    
+    CRITICAL CONSISTENCY RULE for EPFL relationship:
+    - If relatedToEPFLConfidence >= 0.5, then relatedToEPFL MUST be true
+    - If relatedToEPFLConfidence < 0.5, then relatedToEPFL MUST be false
+    - The boolean and confidence score MUST be consistent with each other
+
+    IMPORTANT: Extract information from ALL available sources:
+    - Organization name: "{org_data.get('name', 'N/A')}"
+    - Description: "{org_data.get('description', 'N/A')}"
+    - Location: "{org_data.get('location', 'N/A')}"
+    - Blog/Website: "{org_data.get('blog', 'N/A')}"
+    - Company field: "{org_data.get('company', 'N/A')}"
+    - Public repos: {org_data.get('public_repos', 0)}
+    - Public members: {len(org_data.get('public_members', []))} members
+    - Repositories: {org_data.get('repositories', [])}
+    - README content: Available={bool(org_data.get('readme_content'))}
+    - Social accounts: {org_data.get('social_accounts', [])}
+    - Pinned repositories: {len(org_data.get('pinned_repositories', []))} repos
+
+    Use the search_infoscience_labs_tool and search_infoscience_publications_tool to find:
+    - Whether this organization is an EPFL lab or research group
+    - Publications associated with this organization
+    - Authors affiliated with this organization
+
+    Look for indicators of organization type:
+    - Academic: .edu domains, university affiliation, research focus
+    - Industry: .com domains, product focus, commercial language
+    - Research Institute: .org domains, research mission, publications
+    - Open Source: community-driven, collaborative projects, OSS licenses
+
+    For EPFL relationship, look for:
+    - Organization name contains "EPFL"
+    - Location in Lausanne, Switzerland
+    - Members with @epfl.ch emails
+    - Publications in Infoscience
+    - Labs registered in EPFL structure
+
+    Return valid JSON only with all fields populated.
+    """
+
+    return general_org_agent_prompt

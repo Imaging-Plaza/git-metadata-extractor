@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import FastAPI, Path, Query, Request
 from fastapi.responses import JSONResponse
 
-from .analysis import Repository, User
+from .analysis import Organization, Repository, User
 from .cache import get_cache_manager
 from .data_models import (
     APIOutput,
@@ -550,12 +550,18 @@ async def get_org_json(
         False,
         description="Enable organization enrichment using PydanticAI agent to analyze and standardize organization information using ROR API",
     ),
-):
+) -> APIOutput:
     """
     Retrieve and enrich GitHub organization metadata.
 
     Fetches organization profile from GitHub API and enriches it using LLM
     to extract additional insights and structured information.
+
+    **LLM Analysis**:
+    Uses PydanticAI to analyze the organization profile and extract:
+    - Organization type (academic, research, industry, non-profit, etc.)
+    - Scientific/technical disciplines
+    - EPFL relationship analysis
 
     **Organization Enrichment** (optional):
     When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
@@ -564,7 +570,7 @@ async def get_org_json(
     - Provide detailed EPFL relationship analysis with evidence
     - Enrich organization metadata with type, country, website, etc.
 
-    **Caching**: Results are cached with TTL of 7 days.
+    **Caching**: Results are cached with TTL of 365 days.
 
     **Parameters**:
     - **full_path**: GitHub organization URL or path (e.g., `https://github.com/organization`)
@@ -573,93 +579,50 @@ async def get_org_json(
 
     **Returns**:
     - Organization link
-    - Enriched organization metadata
-    - Organization enrichment results (if `enrich_orgs=true`)
+    - Organization type
+    - Parsing timestamp
+    - Organization Object with enriched metadata
     """
-    cache_manager = get_cache_manager()
     org_name = full_path.split("/")[-1]
 
-    def fetch_org_metadata():
-        return parse_github_organization(org_name)
+    # Ensure full_path is a valid URL
+    if not full_path.startswith(("http://", "https://")):
+        full_path = f"https://{full_path}"
 
-    def fetch_llm_metadata():
-        # This endpoint is deprecated - use the new agent-based enrichment
-        # For now, return the basic organization metadata
-        return parse_github_organization(org_name)
+    organization = Organization(org_name, force_refresh=force_refresh)
 
-    try:
-        # Get GitHub organization metadata (cached)
-        org_metadata = cache_manager.get_cached_or_fetch(
-            api_type="github_org",
-            params={"org_name": org_name},
-            fetch_func=fetch_org_metadata,
-            force_refresh=force_refresh,
-        )
+    await organization.run_analysis(
+        run_llm=True,
+        run_organization_enrichment=enrich_orgs,
+    )
 
-        # Get LLM processed metadata (cached) - automatically handles coroutines
-        parsed_org_metadata = await cache_manager.get_cached_or_fetch_async(
-            api_type="llm_org",
-            params={"org_name": org_name, "item_type": "org"},
-            fetch_func=fetch_llm_metadata,
-            force_refresh=force_refresh,
-        )
+    output = organization.dump_results(output_type="pydantic")
+    
+    # Get usage statistics from the organization analysis
+    usage_stats = organization.get_usage_stats()
+    
+    # Create APIStats with token usage data, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens (both official and estimated)
+    stats.calculate_total_tokens()
 
-        org_metadata_dict = org_metadata.model_dump()
-        org_metadata_dict["parseTimestamp"] = datetime.now().strftime(
-            "%Y-%m-%dT%H:%M",
-        )
-        org_metadata_dict.update(parsed_org_metadata)
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=424,
-            detail=f"Error from Organization JSON service: {e}",
-        )
-
-    # Perform organization enrichment if requested
-    response = {"link": full_path, "output": org_metadata_dict}
-
-    if enrich_orgs:
-        logger.info(f"Starting organization enrichment for org {org_name}")
-        try:
-            organization_enrichment = await enrich_organizations_from_dict(
-                org_metadata_dict,
-                full_path,
-            )
-            logger.info(
-                f"Organization enrichment completed for org. Found {len(organization_enrichment.get('organizations', []))} organizations",
-            )
-
-            # Update the main output with enriched organization data
-            # Keep relatedToOrganizations as list of strings (backwards compatible)
-            # Add relatedToOrganizationsROR as list of Organization objects (new field)
-            enriched_orgs = organization_enrichment.get("organizations", [])
-            if enriched_orgs:
-                org_metadata_dict["relatedToOrganizations"] = [
-                    org.get("legalName")
-                    for org in enriched_orgs
-                    if org.get("legalName")
-                ]
-                org_metadata_dict["relatedToOrganizationsROR"] = enriched_orgs
-
-            # Update EPFL relationship with enriched analysis
-            org_metadata_dict["relatedToEPFL"] = organization_enrichment.get(
-                "relatedToEPFL",
-                org_metadata_dict.get("relatedToEPFL"),
-            )
-            org_metadata_dict[
-                "relatedToEPFLJustification"
-            ] = organization_enrichment.get(
-                "relatedToEPFLJustification",
-                org_metadata_dict.get("relatedToEPFLJustification"),
-            )
-
-        except Exception as e:
-            logger.error(
-                f"Error during organization enrichment for org: {e}",
-                exc_info=True,
-            )
-            # Don't fail the entire request or expose error in response, just log it
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.ORGANIZATION,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,
+    )
 
     return response
 
@@ -706,7 +669,7 @@ async def get_user_json(
     - Cross-reference with ORCID data
     - Provide comprehensive author profiles
 
-    **Caching**: Results are cached with TTL of 30 days.
+    **Caching**: Results are cached with TTL of 365 days.
 
     **Parameters**:
     - **full_path**: GitHub user URL or path (e.g., `https://github.com/username`)
@@ -917,7 +880,7 @@ async def llm_json(
     - Cross-reference with ORCID data
     - Provide comprehensive author profiles
 
-    **Caching**: Results are cached with default TTL of 30 days (LLM) and 1 day (GIMIE).
+    **Caching**: Results are cached with default TTL of 365 days (LLM) and 1 day (GIMIE).
 
     **Parameters**:
     - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)

@@ -34,6 +34,7 @@ from .repository import (
     GitAuthor,
     Image,
     ImageKeyword,
+    InfoscienceEntity,
     SoftwareImage,
     SoftwareSourceCode,
     debug_field_values,
@@ -66,6 +67,7 @@ __all__ = [
     "Commits",
     "Image",
     "ImageKeyword",
+    "InfoscienceEntity",
     "FundingInformation",
     "FormalParameter",
     "ExecutableNotebook",
@@ -101,3 +103,14 @@ __all__ = [
     "debug_field_values",
     "validate_repository_data_with_debugging",
 ]
+
+# Rebuild models after all imports to resolve forward references
+# This must happen after InfoscienceEntity is imported from repository
+# We need to pass InfoscienceEntity in the namespace for the forward reference to resolve
+import sys
+_module = sys.modules[Person.__module__]
+_module.InfoscienceEntity = InfoscienceEntity
+Person.model_rebuild()
+Organization.model_rebuild()
+# Clean up namespace
+delattr(_module, 'InfoscienceEntity')

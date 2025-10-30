@@ -313,7 +313,7 @@ class Repository:
                 api_type="repository",
                 params={"full_path": self.full_path},
                 response_data=self.data.model_dump_json(),
-                ttl_days=30,  # Cache for 30 days
+                ttl_days=365,  # Cache for 365 days
             )
             logging.info(f"Cached results for {self.full_path}")
         else:

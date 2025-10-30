@@ -72,8 +72,8 @@ class Person(BaseModel):
         description="Additional biographical or professional information",
         default=None,
     )
-    infoscienceEntity: Optional[Any] = Field(
-        description="Infoscience entity data (EPFL)",
+    infoscienceEntity: Optional["InfoscienceEntity"] = Field(
+        description="Infoscience entity data (EPFL) with name, url, confidence, and justification",
         default=None,
     )
 
@@ -116,6 +116,11 @@ class Organization(BaseModel):
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
     attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+    infoscienceEntity: Optional["InfoscienceEntity"] = Field(
+        description="Infoscience entity data (EPFL labs, research groups) with name, url, confidence, and justification",
+        default=None,
+    )
+    
 
     @field_validator("hasRorId", mode="before")
     @classmethod

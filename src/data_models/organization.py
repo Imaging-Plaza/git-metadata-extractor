@@ -16,7 +16,7 @@ from pydantic import (
 )
 
 from .models import Discipline, Organization, Person
-from .repository import GitAuthor
+from .repository import GitAuthor, InfoscienceEntity
 
 
 class OrganizationEnrichmentResult(BaseModel):
@@ -132,3 +132,4 @@ class GitHubOrganization(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
