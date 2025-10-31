@@ -1,5 +1,164 @@
 # Recent Updates Summary
 
+## Date: October 31, 2025
+
+### JSON-LD Conversion System ✅
+
+**New Files:**
+- `docs/JSONLD_CONVERSION.md` - Comprehensive guide for JSON-LD conversion and extension
+
+**Updated Files:**
+- `.cursor/rules/fastapi-patterns.mdc` - Added JSON-LD endpoint patterns
+- `.cursor/rules/pydantic-models.mdc` - Added JSON-LD conversion documentation
+- `src/data_models/api.py` - Fixed Union type ordering for JSON-LD support
+- `src/data_models/conversion.py` - Extended field mappings for SoftwareSourceCode
+- `src/data_models/repository.py` - Added `convert_pydantic_to_jsonld()` method
+- `src/api.py` - Implemented `/v1/repository/llm/json-ld/` and `/v1/repository/gimie/json-ld/` endpoints
+
+#### Key Features Implemented
+
+✅ **Generic Conversion System**
+- `convert_pydantic_to_jsonld()` function works with any Pydantic model
+- Recursive conversion of nested models and lists
+- Automatic `@id` and `@type` generation
+- Special handling for URLs, dates, and enums
+
+✅ **Field Mapping System**
+- `PYDANTIC_TO_ZOD_MAPPING` dictionary maps Pydantic fields to semantic URIs
+- Support for multiple namespaces: `schema:`, `sd:`, `imag:`, `md4i:`
+- Complete mappings for `SoftwareSourceCode`, `Person`, `Organization`, `InfoscienceEntity`
+
+✅ **API Integration**
+- Two JSON-LD endpoints: `/v1/repository/gimie/json-ld/` (GIMIE-only) and `/v1/repository/llm/json-ld/` (full LLM enrichment)
+- Fixed Pydantic Union type coercion issue by reordering `APIOutput.output` Union
+- Added field validator and model serializer to preserve raw JSON-LD dicts
+- Comprehensive error handling and validation
+- OpenAPI examples showing realistic JSON-LD output
+
+✅ **Documentation**
+- Complete guide covering architecture, how it works, and extension process
+- Step-by-step examples for adding JSON-LD to new models
+- Field mapping reference with all current mappings
+- Troubleshooting guide for common issues
+- Best practices for semantic web integration
+
+#### Critical Implementation Detail: Union Type Ordering
+
+**Problem:** Pydantic's `Union` validation goes left-to-right. If Pydantic models come before `dict` in a Union, Pydantic tries to coerce JSON-LD dictionaries into models, corrupting the structure.
+
+**Solution:** Order Union types with `dict` and `list` FIRST:
+
+```python
+# ✅ CORRECT
+output: Union[dict, list, SoftwareSourceCode, GitHubOrganization, GitHubUser, Any]
+
+# ❌ WRONG - Causes JSON-LD to be coerced to GitHubOrganization
+output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser, dict, list, Any]
+```
+
+**Additional Safeguards:**
+```python
+@field_validator("output", mode="before")
+@classmethod
+def preserve_dict_output(cls, v):
+    """Preserve dict/list output without converting to models."""
+    if isinstance(v, (dict, list)):
+        return v
+    return v
+
+@model_serializer(mode='wrap')
+def serialize_model(self, serializer):
+    """Custom serializer to preserve dict/list in output field."""
+    data = serializer(self)
+    if isinstance(self.output, (dict, list)):
+        data['output'] = self.output
+    return data
+```
+
+#### JSON-LD Output Structure
+
+```json
+{
+  "@context": {
+    "schema": "http://schema.org/",
+    "sd": "https://w3id.org/okn/o/sd#",
+    "imag": "https://imaging-plaza.epfl.ch/ontology/",
+    "md4i": "https://w3id.org/md4i/"
+  },
+  "@graph": [
+    {
+      "@id": "https://github.com/user/repo",
+      "@type": "http://schema.org/SoftwareSourceCode",
+      "schema:name": {"@value": "Repository Name"},
+      "schema:author": [
+        {
+          "@type": "http://schema.org/Person",
+          "schema:name": {"@value": "Jane Doe"},
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+        }
+      ],
+      "imag:relatedToEPFL": true,
+      "imag:relatedToOrganizationsROR": [
+        {
+          "@type": "http://schema.org/Organization",
+          "schema:legalName": {"@value": "EPFL"},
+          "md4i:hasRorId": {"@id": "https://ror.org/03yrm5c26"}
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Extension Process
+
+To add JSON-LD support to a new model (e.g., `GitHubUser`):
+
+1. **Add field mappings** in `src/data_models/conversion.py`:
+   ```python
+   PYDANTIC_TO_ZOD_MAPPING["GitHubUser"] = {
+       "name": "schema:name",
+       "githubHandle": "schema:identifier",
+       # ... more fields
+   }
+   ```
+
+2. **Add type mapping** in `convert_pydantic_to_jsonld()`:
+   ```python
+   type_mapping = {
+       GitHubUser: "http://schema.org/Person",
+   }
+   ```
+
+3. **Add model method** in model file:
+   ```python
+   def convert_pydantic_to_jsonld(self) -> dict:
+       from src.data_models.conversion import convert_pydantic_to_jsonld
+       base_url = f"https://github.com/{self.githubHandle}"
+       return convert_pydantic_to_jsonld(self, base_url=base_url)
+   ```
+
+4. **Update `dump_results()`** in analysis class:
+   ```python
+   def dump_results(self, output_type: str = "pydantic"):
+       if output_type == "json-ld":
+           return self.data.convert_pydantic_to_jsonld()
+       # ... other formats
+   ```
+
+5. **Create API endpoint** following the pattern in `src/api.py`
+
+#### Benefits
+
+✅ **Semantic Web Compatibility**: Standard JSON-LD format works with RDF tools  
+✅ **Extensible Design**: Easy to add JSON-LD to any Pydantic model  
+✅ **Imaging Plaza Integration**: Uses Imaging Plaza ontology and schema.org  
+✅ **Comprehensive Documentation**: Clear guide for future development  
+✅ **Type Safety**: Pydantic validation + custom serializers preserve structure  
+✅ **Namespace Support**: Multiple ontologies (schema.org, custom EPFL ontologies)  
+
+---
+
 ## Date: October 29, 2025
 
 ### 1. Cache Configuration Changes ✅

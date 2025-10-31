@@ -658,3 +658,297 @@ result = await run_agent_with_fallback(..., UserLLMAnalysisResult, ...)
 - Include in enrichment results (users, organizations)
 - Use `ge=0.0, le=1.0` constraints
 - Document scoring criteria in related agent prompts
+
+## JSON-LD Conversion
+
+### Overview
+The system converts Pydantic models to JSON-LD format for semantic web compatibility. This is achieved through:
+1. A generic conversion function in `src/data_models/conversion.py`
+2. Field mappings from Pydantic field names to semantic URIs
+3. Model-specific methods (e.g., `SoftwareSourceCode.convert_pydantic_to_jsonld()`)
+
+### Generic Conversion Function
+Location: `src/data_models/conversion.py`
+
+```python
+def convert_pydantic_to_jsonld(
+    pydantic_obj: Any,
+    base_url: Optional[str] = None
+) -> Union[Dict, List]:
+    """
+    Convert any Pydantic model to JSON-LD format.
+    
+    Returns a dict with @context and @graph structure:
+    {
+        "@context": {...namespaces...},
+        "@graph": [{...entity...}]
+    }
+    """
+```
+
+**Features:**
+- Supports nested Pydantic models
+- Handles lists of models
+- Recursively converts complex structures
+- Maps fields to semantic URIs using `PYDANTIC_TO_ZOD_MAPPING`
+- Generates `@id` and `@type` fields automatically
+- Handles special types: `HttpUrl`, `date`, `Enum`
+
+### Field Mapping System
+
+Field mappings define how Pydantic field names map to semantic URIs:
+
+```python
+PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
+    "SoftwareSourceCode": {
+        "name": "schema:name",
+        "description": "schema:description",
+        "codeRepository": "schema:codeRepository",
+        "author": "schema:author",
+        "license": "schema:license",
+        "programmingLanguage": "schema:programmingLanguage",
+        "discipline": "imag:discipline",
+        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToEPFL": "imag:relatedToEPFL",
+        # ... more fields
+    },
+    "Person": {
+        "name": "schema:name",
+        "email": "schema:email",
+        "affiliation": "schema:affiliation",
+        "orcidId": "md4i:orcidId",
+        # ... more fields
+    },
+    "Organization": {
+        "legalName": "schema:legalName",
+        "hasRorId": "md4i:hasRorId",
+        "alternateNames": "schema:alternateName",
+        "organizationType": "schema:additionalType",
+        "country": "schema:addressCountry",
+        "website": "schema:url",
+        # ... more fields
+    },
+}
+```
+
+**Key Points:**
+- Each model has its own mapping dictionary
+- Maps camelCase field names to prefixed URIs
+- Namespaces: `schema:`, `sd:`, `imag:`, `md4i:`
+- Unmapped fields are included with original names (for debugging)
+
+### Type Mapping
+
+Maps Pydantic model classes to semantic types:
+
+```python
+type_mapping = {
+    SoftwareSourceCode: "http://schema.org/SoftwareSourceCode",
+    Person: "http://schema.org/Person",
+    Organization: "http://schema.org/Organization",
+    InfoscienceEntity: "http://schema.org/Thing",
+    # ... more types
+}
+```
+
+### Model-Specific Methods
+
+Each model that needs JSON-LD conversion should implement:
+
+```python
+class SoftwareSourceCode(BaseModel):
+    # ... fields ...
+    
+    def convert_pydantic_to_jsonld(self) -> dict:
+        """Convert this SoftwareSourceCode instance to JSON-LD format."""
+        from src.data_models.conversion import convert_pydantic_to_jsonld
+        
+        # Derive base URL from codeRepository or url
+        base_url = None
+        if self.codeRepository:
+            base_url = str(self.codeRepository[0]) if self.codeRepository else None
+        elif self.url:
+            base_url = str(self.url)
+        
+        return convert_pydantic_to_jsonld(self, base_url=base_url)
+```
+
+**Pattern:**
+1. Import the generic converter
+2. Determine appropriate `base_url` for `@id` generation
+3. Call converter with `self` and `base_url`
+4. Return result (dict with `@context` and `@graph`)
+
+### Adding JSON-LD Support to a New Model
+
+To add JSON-LD conversion to a model (e.g., `GitHubUser`):
+
+#### Step 1: Add Field Mappings
+In `src/data_models/conversion.py`:
+
+```python
+PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
+    # ... existing mappings ...
+    "GitHubUser": {
+        "name": "schema:name",
+        "fullname": "schema:givenName",
+        "githubHandle": "schema:identifier",
+        "discipline": "imag:discipline",
+        "position": "schema:jobTitle",
+        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToEPFL": "imag:relatedToEPFL",
+        # ... all fields you want to map
+    },
+}
+```
+
+#### Step 2: Add Type Mapping
+In the `convert_pydantic_to_jsonld()` function's `type_mapping` dict:
+
+```python
+type_mapping = {
+    # ... existing types ...
+    GitHubUser: "http://schema.org/Person",  # Or appropriate type
+}
+```
+
+#### Step 3: Add Model Method
+In `src/data_models/user.py`:
+
+```python
+class GitHubUser(BaseModel):
+    # ... fields ...
+    
+    def convert_pydantic_to_jsonld(self) -> dict:
+        """Convert this GitHubUser instance to JSON-LD format."""
+        from src.data_models.conversion import convert_pydantic_to_jsonld
+        
+        # Determine base URL
+        base_url = f"https://github.com/{self.githubHandle}" if self.githubHandle else None
+        
+        return convert_pydantic_to_jsonld(self, base_url=base_url)
+```
+
+#### Step 4: Update dump_results()
+In the corresponding analysis class (e.g., `User`):
+
+```python
+def dump_results(self, output_type: str = "pydantic"):
+    """Dump results in specified format."""
+    if output_type == "json-ld":
+        if self.data:
+            return self.data.convert_pydantic_to_jsonld()
+        return None
+    elif output_type == "pydantic":
+        return self.data
+    # ... other formats
+```
+
+### JSON-LD Output Structure
+
+```json
+{
+  "@context": {
+    "schema": "http://schema.org/",
+    "sd": "https://w3id.org/okn/o/sd#",
+    "imag": "https://imaging-plaza.epfl.ch/ontology/",
+    "md4i": "https://w3id.org/md4i/"
+  },
+  "@graph": [
+    {
+      "@id": "https://github.com/user/repo",
+      "@type": "http://schema.org/SoftwareSourceCode",
+      "schema:name": "Repository Name",
+      "schema:author": [
+        {
+          "@type": "http://schema.org/Person",
+          "schema:name": "John Doe",
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+        }
+      ],
+      "imag:discipline": [{"@value": "Computer Science"}],
+      "imag:relatedToEPFL": true
+    }
+  ]
+}
+```
+
+**Structure:**
+- **@context**: Namespace prefixes for semantic URIs
+- **@graph**: Array of entities (usually one main entity)
+- **@id**: Unique identifier (usually a URL)
+- **@type**: Semantic type from schema.org or custom ontology
+- **Nested objects**: Recursively converted with their own `@type`
+- **Simple values**: Wrapped in `{"@value": ...}` for consistency
+- **URLs**: Wrapped in `{"@id": ...}` to indicate they are references
+
+### Special Field Handling
+
+#### HttpUrl Fields
+```python
+# Pydantic: codeRepository: List[HttpUrl]
+# JSON-LD: "schema:codeRepository": [{"@id": "https://github.com/..."}]
+```
+
+#### Date Fields
+```python
+# Pydantic: datePublished: date
+# JSON-LD: "schema:datePublished": {"@value": "2024-01-15"}
+```
+
+#### Enum Fields
+```python
+# Pydantic: discipline: List[Discipline] (Enum)
+# JSON-LD: "imag:discipline": [{"@value": "Computer Science"}]
+```
+
+#### Nested Models
+```python
+# Pydantic: author: List[Person]
+# JSON-LD: "schema:author": [
+#   {
+#     "@type": "http://schema.org/Person",
+#     "schema:name": "...",
+#     ...
+#   }
+# ]
+```
+
+### Best Practices
+
+1. **Complete mappings**: Map all important fields in `PYDANTIC_TO_ZOD_MAPPING`
+2. **Semantic URIs**: Use schema.org when available, custom ontologies for domain-specific fields
+3. **Consistent namespaces**: Stick to established prefixes (schema, imag, md4i, sd)
+4. **Base URLs**: Choose appropriate base URLs for `@id` generation
+5. **Testing**: Validate JSON-LD output with RDF tools
+6. **Documentation**: Document custom ontology terms in Imaging Plaza docs
+
+### Debugging
+
+Add logging to track conversion:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+# In endpoint or conversion function
+logger.debug(f"Converting {type(pydantic_obj).__name__} to JSON-LD")
+logger.debug(f"Base URL: {base_url}")
+logger.debug(f"Fields to convert: {pydantic_obj.model_fields_set}")
+```
+
+### Common Issues
+
+**Issue**: Fields missing from JSON-LD output
+**Solution**: Add field mappings to `PYDANTIC_TO_ZOD_MAPPING`
+
+**Issue**: Wrong `@type` in output
+**Solution**: Add type mapping in `type_mapping` dict
+
+**Issue**: Pydantic coerces JSON-LD dict to model in API response
+**Solution**: Ensure `APIOutput.output` Union has `dict, list` FIRST
+
+**Issue**: Nested models not converting
+**Solution**: Ensure nested model has type mapping, conversion is recursive
+
+For more details, see `docs/JSONLD_CONVERSION.md`.

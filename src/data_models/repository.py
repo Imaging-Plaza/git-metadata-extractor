@@ -503,6 +503,27 @@ class SoftwareSourceCode(BaseModel):
 
         return v
 
+    def convert_pydantic_to_jsonld(self) -> dict:
+        """
+        Convert this SoftwareSourceCode instance to JSON-LD format.
+        
+        Returns a JSON-LD graph structure with proper @context, @type,
+        and semantic URIs for all fields and nested models.
+        
+        Returns:
+            Dictionary containing JSON-LD representation
+        """
+        from .conversion import convert_pydantic_to_jsonld
+        
+        # Use codeRepository as base URL if available
+        base_url = None
+        if self.codeRepository and len(self.codeRepository) > 0:
+            base_url = str(self.codeRepository[0])
+        elif self.url:
+            base_url = str(self.url)
+        
+        return convert_pydantic_to_jsonld(self, base_url=base_url)
+
 
 #####################################################################
 # Usage Examples

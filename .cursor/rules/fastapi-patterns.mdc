@@ -266,3 +266,204 @@ async def get_user_json(
 - **Debugging**: Identify slow or expensive operations
 - **Analytics**: Aggregate usage across requests
 - **Transparency**: Users see what resources their requests consume
+
+## JSON-LD Endpoint Pattern
+
+### Overview
+JSON-LD endpoints return semantic web compatible data with `@context` and `@graph` structures. The system converts Pydantic models to JSON-LD using an extensible mapping system.
+
+### Endpoint Structure
+```python
+@app.get(
+    "/v1/repository/llm/json-ld/{full_path:path}",
+    tags=["Repository"],
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "link": "https://github.com/user/repo",
+                        "type": "repository",
+                        "parsedTimestamp": "2024-01-15T10:30:00.000Z",
+                        "output": {
+                            "@context": {
+                                "schema": "http://schema.org/",
+                                "sd": "https://w3id.org/okn/o/sd#",
+                                "imag": "https://imaging-plaza.epfl.ch/ontology/",
+                                "md4i": "https://w3id.org/md4i/",
+                            },
+                            "@graph": [{
+                                "@id": "https://github.com/user/repo",
+                                "@type": "http://schema.org/SoftwareSourceCode",
+                                "schema:name": "Repository Name",
+                                ...
+                            }]
+                        },
+                        "stats": { /* token usage and timing */ }
+                    }
+                }
+            }
+        }
+    }
+)
+async def llm_jsonld(...) -> APIOutput:
+    """Extract repository metadata in JSON-LD format."""
+    
+    # Run analysis
+    repository = Repository(full_path, force_refresh=force_refresh)
+    await repository.run_analysis(...)
+    
+    # Convert to JSON-LD
+    jsonld_output = repository.dump_results(output_type="json-ld")
+    
+    # Get stats and return
+    usage_stats = repository.get_usage_stats()
+    stats = APIStats(...)
+    
+    return APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=jsonld_output,  # Raw JSON-LD dict
+        stats=stats,
+    )
+```
+
+### Key Implementation Details
+
+#### 1. Union Type Ordering (CRITICAL!)
+The `APIOutput.output` field MUST have `dict` and `list` FIRST in the Union:
+
+```python
+# ✅ CORRECT - dict/list first
+output: Union[dict, list, SoftwareSourceCode, GitHubOrganization, GitHubUser, Any] = None
+
+# ❌ WRONG - Pydantic will try to coerce dict to models
+output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser, dict, list, Any] = None
+```
+
+**Why:** Pydantic's Union validation goes left-to-right. If models come first, Pydantic will try to match dict keys to model fields and coerce the dict into a model, corrupting the JSON-LD structure.
+
+#### 2. Field Validator
+Preserve dict/list inputs without conversion:
+
+```python
+@field_validator("output", mode="before")
+@classmethod
+def preserve_dict_output(cls, v):
+    """Preserve dict/list output as-is without converting to Pydantic models."""
+    if isinstance(v, (dict, list)):
+        return v
+    return v
+```
+
+#### 3. Model Serializer
+Keep dict/list during serialization:
+
+```python
+@model_serializer(mode='wrap')
+def serialize_model(self, serializer):
+    """Custom serializer to preserve dict/list in output field."""
+    data = serializer(self)
+    if isinstance(self.output, (dict, list)):
+        data['output'] = self.output
+    return data
+```
+
+#### 4. OpenAPI Examples
+Provide realistic JSON-LD examples in the `responses` parameter to show users the actual structure.
+
+### JSON-LD Conversion Flow
+
+1. **Pydantic Model** → `repository.data` (SoftwareSourceCode)
+2. **Conversion Call** → `repository.dump_results(output_type="json-ld")`
+3. **Model Method** → `SoftwareSourceCode.convert_pydantic_to_jsonld()`
+4. **Generic Converter** → `convert_pydantic_to_jsonld()` in `conversion.py`
+5. **JSON-LD Output** → Dict with `@context` and `@graph`
+6. **API Response** → Wrapped in `APIOutput` with stats
+
+### Validation & Error Handling
+
+```python
+# Check if analysis succeeded
+if repository.data is None:
+    raise HTTPException(
+        status_code=500,
+        detail=f"Repository analysis failed: no data generated"
+    )
+
+# Validate JSON-LD structure
+try:
+    jsonld_output = repository.dump_results(output_type="json-ld")
+    if jsonld_output is None:
+        raise ValueError("JSON-LD conversion returned None")
+    
+    # Verify it has JSON-LD structure
+    if "@context" not in jsonld_output or "@graph" not in jsonld_output:
+        raise ValueError("Missing @context or @graph in JSON-LD output")
+        
+except Exception as e:
+    logger.error(f"Failed to convert to JSON-LD: {e}", exc_info=True)
+    raise HTTPException(
+        status_code=500,
+        detail=f"Failed to convert data to JSON-LD: {str(e)}"
+    )
+```
+
+### Response Format
+
+```json
+{
+  "link": "https://github.com/user/repo",
+  "type": "repository",
+  "parsedTimestamp": "2025-10-31T18:06:24.938227",
+  "output": {
+    "@context": {
+      "schema": "http://schema.org/",
+      "sd": "https://w3id.org/okn/o/sd#",
+      "imag": "https://imaging-plaza.epfl.ch/ontology/",
+      "md4i": "https://w3id.org/md4i/"
+    },
+    "@graph": [{
+      "@id": "https://github.com/user/repo",
+      "@type": "http://schema.org/SoftwareSourceCode",
+      "schema:name": "Repository Name",
+      "schema:author": [
+        {
+          "@type": "http://schema.org/Person",
+          "schema:name": "John Doe",
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+        }
+      ],
+      "imag:relatedToEPFL": true,
+      "imag:relatedToOrganizationsROR": [
+        {
+          "@type": "http://schema.org/Organization",
+          "schema:legalName": "EPFL",
+          "md4i:hasRorId": {"@id": "https://ror.org/03yrm5c26"}
+        }
+      ]
+    }]
+  },
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "duration": 45.23,
+    "status_code": 200
+  }
+}
+```
+
+### Extending to Other Resources
+
+To add JSON-LD support for User or Organization:
+
+1. **Add method to model** (e.g., `GitHubUser.convert_pydantic_to_jsonld()`)
+2. **Update `dump_results()`** to support `output_type="json-ld"`
+3. **Add field mappings** to `PYDANTIC_TO_ZOD_MAPPING` in `conversion.py`
+4. **Add type mapping** to `convert_pydantic_to_jsonld()` type_mapping dict
+5. **Create endpoint** following the pattern above
+6. **Add OpenAPI example** with realistic JSON-LD structure
+
+See `docs/JSONLD_CONVERSION.md` for detailed extension guide.

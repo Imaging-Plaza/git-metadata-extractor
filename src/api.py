@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Path, Query, Request
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
 from .analysis import Organization, Repository, User
@@ -727,112 +727,332 @@ async def get_user_json(
     return response
 
 
-# @app.get("/v1/repository/gimie/json-ld/{full_path:path}", tags=["Repository"])
-# async def gimie(
-#     full_path: str = Path(
-#         ...,
-#         description="Full repository URL",
-#         openapi_examples={
-#             "gimie": {
-#                 "summary": "GIMIE Repository",
-#                 "value": "https://github.com/sdsc-ordes/gimie",
-#             },
-#         },
-#     ),
-#     force_refresh: bool = Query(
-#         False,
-#         description="Force refresh from external APIs, bypassing cache",
-#     ),
-# ):
-#     """
-#     Extract repository metadata using GIMIE only.
+@app.get(
+    "/v1/repository/gimie/json-ld/{full_path:path}",
+    tags=["Repository"],
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "link": "https://github.com/sdsc-ordes/gimie",
+                        "type": "repository",
+                        "parsedTimestamp": "2024-01-15T10:30:00.000Z",
+                        "output": {
+                            "@context": {
+                                "schema": "http://schema.org/",
+                                "codemeta": "https://codemeta.github.io/terms/",
+                            },
+                            "@graph": [
+                                {
+                                    "@id": "https://github.com/sdsc-ordes/gimie",
+                                    "@type": "schema:SoftwareSourceCode",
+                                    "schema:name": "GIMIE",
+                                    "schema:description": "Graph-based metadata extraction",
+                                    "schema:codeRepository": "https://github.com/sdsc-ordes/gimie",
+                                    "codemeta:dateCreated": "2023-01-15",
+                                }
+                            ],
+                        },
+                        "stats": {
+                            "agent_input_tokens": 0,
+                            "agent_output_tokens": 0,
+                            "total_tokens": 0,
+                            "estimated_input_tokens": 0,
+                            "estimated_output_tokens": 0,
+                            "estimated_total_tokens": 0,
+                            "duration": 1.23,
+                            "start_time": "2024-01-15T10:29:58.770Z",
+                            "end_time": "2024-01-15T10:30:00.000Z",
+                            "status_code": 200,
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def gimie(
+    full_path: str = Path(
+        ...,
+        description="Full repository URL",
+        openapi_examples={
+            "gimie": {
+                "summary": "GIMIE Repository",
+                "value": "https://github.com/sdsc-ordes/gimie",
+            },
+        },
+    ),
+    force_refresh: bool = Query(
+        False,
+        description="Force refresh from external APIs, bypassing cache",
+    ),
+) -> APIOutput:
+    """
+    Extract repository metadata using GIMIE only.
 
-#     Returns raw GIMIE analysis without LLM enrichment. GIMIE provides
-#     basic repository metadata extracted from Git platforms.
+    Returns raw GIMIE analysis without LLM enrichment. GIMIE provides
+    basic repository metadata extracted from Git platforms in JSON-LD format.
 
-#     **Caching**: Results are cached with TTL of 1 day.
+    **Caching**: Results are cached with TTL of 1 day.
 
-#     **Parameters**:
-#     - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)
-#     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    **Parameters**:
+    - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)
+    - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
 
-#     **Returns**:
-#     - Repository link
-#     - GIMIE metadata in JSON-LD format
-#     - Cache status indicator
-#     """
+    **Returns**:
+    - Repository link
+    - Repository type
+    - Parsing timestamp
+    - GIMIE metadata in JSON-LD format
+    - Statistics (timing and status)
+    """
 
-#     cache_manager = get_cache_manager()
+    repository = Repository(full_path, force_refresh=force_refresh)
 
-#     def fetch_gimie_data():
-#         return extract_gimie(full_path, format="json-ld")
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=False,
+        run_user_enrichment=False,
+        run_organization_enrichment=False,
+    )
 
-#     try:
-#         gimie_output = cache_manager.get_cached_or_fetch(
-#             api_type="gimie",
-#             params={"full_path": full_path, "format": "json-ld"},
-#             fetch_func=fetch_gimie_data,
-#             force_refresh=force_refresh,
-#         )
-#     except Exception as e:
-#         raise HTTPException(status_code=424, detail=f"Error from Gimie service: {e}")
+    # Get raw gimie JSON-LD output (not the Pydantic model)
+    gimie_output = repository.gimie
+    
+    # Get usage statistics from the repository (no tokens for gimie-only)
+    usage_stats = repository.get_usage_stats()
+    
+    # Create APIStats with timing information (no token usage since no LLM)
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=0,
+        agent_output_tokens=0,
+        estimated_input_tokens=0,
+        estimated_output_tokens=0,
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens (will be 0 for gimie-only)
+    stats.calculate_total_tokens()
 
-#     return {"link": full_path, "output": gimie_output, "cached": not force_refresh}
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=gimie_output,
+        stats=stats,
+    )
+
+    return response
 
 
-# @app.get("/v1/repository/llm/json-ld/{full_path:path}", tags=["Repository"])
-# async def llm_jsonld(
-#     full_path: str = Path(
-#         ...,
-#         description="Full repository URL",
-#         openapi_examples={
-#             "gimie": {
-#                 "summary": "GIMIE Repository",
-#                 "value": "https://github.com/sdsc-ordes/gimie",
-#             },
-#         },
-#     ),
-#     force_refresh: bool = Query(
-#         False,
-#         description="Force refresh from external APIs, bypassing cache",
-#     ),
-# ):
-#     """
-#     Extract repository metadata using LLM only.
+@app.get(
+    "/v1/repository/llm/json-ld/{full_path:path}",
+    tags=["Repository"],
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "link": "https://github.com/sdsc-ordes/gimie",
+                        "type": "repository",
+                        "parsedTimestamp": "2024-01-15T10:30:00.000Z",
+                        "output": {
+                            "@context": {
+                                "schema": "http://schema.org/",
+                                "sd": "https://w3id.org/okn/o/sd#",
+                                "imag": "https://imaging-plaza.epfl.ch/ontology/",
+                                "md4i": "https://w3id.org/md4i/",
+                            },
+                            "@graph": [
+                                {
+                                    "@id": "https://github.com/sdsc-ordes/gimie",
+                                    "@type": "http://schema.org/SoftwareSourceCode",
+                                    "schema:name": "GIMIE",
+                                    "schema:description": "Graph-based metadata extraction tool",
+                                    "schema:codeRepository": [{"@id": "https://github.com/sdsc-ordes/gimie"}],
+                                    "schema:programmingLanguage": ["Python"],
+                                    "schema:author": [
+                                        {
+                                            "@type": "http://schema.org/Person",
+                                            "schema:name": "John Doe",
+                                            "md4i:orcidId": "0000-0001-2345-6789",
+                                        }
+                                    ],
+                                }
+                            ],
+                        },
+                        "stats": {
+                            "agent_input_tokens": 1500,
+                            "agent_output_tokens": 800,
+                            "total_tokens": 2300,
+                            "estimated_input_tokens": 1520,
+                            "estimated_output_tokens": 810,
+                            "estimated_total_tokens": 2330,
+                            "duration": 3.45,
+                            "start_time": "2024-01-15T10:29:56.555Z",
+                            "end_time": "2024-01-15T10:30:00.000Z",
+                            "status_code": 200,
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def llm_jsonld(
+    full_path: str = Path(
+        ...,
+        description="Full repository URL",
+        openapi_examples={
+            "gimie": {
+                "summary": "GIMIE Repository",
+                "value": "https://github.com/sdsc-ordes/gimie",
+            },
+        },
+    ),
+    force_refresh: bool = Query(
+        False,
+        description="Force refresh from external APIs, bypassing cache",
+    ),
+    enrich_orgs: bool = Query(
+        False,
+        description="Enable organization enrichment using PydanticAI agent to analyze and standardize organization information from git author emails, ORCID affiliations, and ROR API",
+    ),
+    enrich_users: bool = Query(
+        False,
+        description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
+    ),
+) -> APIOutput:
+    """
+    Extract repository metadata using LLM with GIMIE context in JSON-LD format.
 
-#     Returns LLM-based analysis without GIMIE data. This provides AI-generated
-#     insights and structured metadata about the repository.
+    Returns LLM-based analysis informed by GIMIE data in JSON-LD format.
+    The Pydantic model is converted to JSON-LD with proper semantic URIs
+    and JSON-LD structure (@context, @type, etc.).
 
-#     **Caching**: Results are cached with default TTL of 30 days.
+    **Organization Enrichment** (optional):
+    When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
+    - Analyze git author emails to identify institutional affiliations
+    - Query ROR (Research Organization Registry) for standardized organization names and IDs
+    - Identify hierarchical relationships (departments, labs within universities)
+    - Provide detailed EPFL relationship analysis with evidence
+    - Enrich organization metadata with type, country, website, etc.
 
-#     **Parameters**:
-#     - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)
-#     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    **User Enrichment** (optional):
+    When `enrich_users=true`, performs author/contributor enrichment to:
+    - Analyze git author information and affiliations
+    - Cross-reference with ORCID data
+    - Provide comprehensive author profiles
 
-#     **Returns**:
-#     - Repository link
-#     - LLM-generated metadata in JSON-LD format
-#     - Cache status indicator
-#     """
+    **Caching**: Results are cached with default TTL of 365 days (LLM) and 1 day (GIMIE).
 
-#     cache_manager = get_cache_manager()
+    **Parameters**:
+    - **full_path**: Full repository URL (e.g., `https://github.com/user/repo`)
+    - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
+    - **enrich_orgs**: Set to `true` to enable organization enrichment with PydanticAI agent
+    - **enrich_users**: Set to `true` to enable user/author enrichment with PydanticAI agent
 
-#     async def fetch_llm_data():
-#         return await llm_request_repo_infos(str(full_path), max_tokens=20000)
+    **Returns**:
+    - Repository link
+    - Repository type
+    - Parsing timestamp
+    - Repository metadata in JSON-LD format
+    - Statistics (token usage, timing, and status)
+    """
 
-#     try:
-#         # Get LLM data (cached or fetched) - automatically handles coroutines
-#         cache_params = {"full_path": full_path, "max_tokens": 20000}
-#         llm_result = await cache_manager.get_cached_or_fetch_async(
-#             api_type="llm",
-#             params=cache_params,
-#             fetch_func=fetch_llm_data,
-#             force_refresh=force_refresh,
-#         )
-#     except Exception as e:
-#         raise HTTPException(status_code=424, detail=f"Error from LLM service: {e}")
+    repository = Repository(full_path, force_refresh=force_refresh)
 
-#     return {"link": full_path, "output": llm_result, "cached": not force_refresh}
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=True,
+        run_user_enrichment=enrich_users,
+        run_organization_enrichment=enrich_orgs,
+    )
+
+    # Check if analysis succeeded
+    if repository.data is None:
+        logger.error(f"Repository analysis failed for {full_path}: no data available")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Repository analysis failed: no data generated for {full_path}"
+        )
+
+    # Debug: Check what type repository.data is
+    logger.info(f"Repository data type: {type(repository.data).__name__}")
+    logger.info(f"Repository data model: {repository.data.__class__.__name__ if hasattr(repository.data, '__class__') else 'N/A'}")
+
+    # Get JSON-LD output using the new conversion method
+    try:
+        jsonld_output = repository.dump_results(output_type="json-ld")
+        logger.info(f"JSON-LD output type: {type(jsonld_output)}")
+        logger.info(f"JSON-LD output keys: {jsonld_output.keys() if isinstance(jsonld_output, dict) else 'Not a dict'}")
+        
+        if jsonld_output is None:
+            raise ValueError("JSON-LD conversion returned None")
+        
+        if not isinstance(jsonld_output, dict):
+            raise ValueError(f"JSON-LD conversion returned unexpected type: {type(jsonld_output)}")
+        
+        # Verify it has JSON-LD structure
+        if "@context" not in jsonld_output or "@graph" not in jsonld_output:
+            logger.error(f"Invalid JSON-LD structure. Output: {jsonld_output}")
+            raise ValueError(f"Missing @context or @graph in JSON-LD output")
+        
+        # Debug: Check @graph content
+        graph = jsonld_output.get("@graph", [])
+        logger.info(f"JSON-LD @graph length: {len(graph)}")
+        if len(graph) > 0:
+            first_entity = graph[0]
+            logger.info(f"First entity @type: {first_entity.get('@type', 'N/A')}")
+            logger.info(f"First entity keys (first 10): {list(first_entity.keys())[:10]}")
+        else:
+            logger.error("JSON-LD @graph is empty!")
+            
+    except Exception as e:
+        logger.error(f"Failed to convert to JSON-LD: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to convert repository data to JSON-LD: {str(e)}"
+        )
+    
+    # Get usage statistics from the repository
+    usage_stats = repository.get_usage_stats()
+    
+    # Create APIStats with token usage data, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens (both official and estimated)
+    stats.calculate_total_tokens()
+
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=jsonld_output,
+        stats=stats,
+    )
+    
+    # Debug: Log what we're about to return
+    logger.info(f"Response output type before return: {type(response.output)}")
+    if isinstance(response.output, dict):
+        logger.info(f"Response output has keys: {list(response.output.keys())[:5]}")
+
+    return response
 
 
 @app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"])
