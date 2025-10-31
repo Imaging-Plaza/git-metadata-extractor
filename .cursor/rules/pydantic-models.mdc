@@ -18,6 +18,7 @@ tags: [pydantic, models, validation, data-models]
 - Repository models: `src/data_models/repository.py`
 - User models: `src/data_models/user.py`
 - Organization models: `src/data_models/organization.py`
+- EPFL assessment models: `src/data_models/epfl_assessment.py`
 - API models: `src/data_models/api.py`
 - Conversions: `src/data_models/conversion.py`
 
@@ -452,8 +453,208 @@ class InfoscienceEntity(BaseModel):
 }
 ```
 
+## LLM Analysis Result Models
+
+### CRITICAL: Schema Enforcement for LLM Agents
+
+**Always define a Pydantic schema for LLM agent output.** Do NOT use generic `Dict`.
+
+### UserLLMAnalysisResult
+Location: `src/data_models/user.py`
+
+**Purpose**: Schema for user LLM agent output (not enrichment - that's different!)
+
+```python
+class UserLLMAnalysisResult(BaseModel):
+    """Result of user LLM analysis - the structured output from the main user agent"""
+    
+    relatedToOrganization: Optional[List[str]] = Field(
+        description="List of organizations the user is affiliated with",
+        default_factory=list,
+    )
+    relatedToOrganizationJustification: Optional[List[str]] = Field(
+        description="Justification for each organization affiliation",
+        default_factory=list,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific disciplines or fields the user works in",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline classification",
+        default_factory=list,
+    )
+    position: Optional[List[str]] = Field(
+        description="Professional positions or roles",
+        default_factory=list,
+    )
+    positionJustification: Optional[List[str]] = Field(
+        description="Justification for each position",
+        default_factory=list,
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/user.py
+result = await run_agent_with_fallback(
+    llm_analysis_configs,
+    prompt,
+    agent_context,
+    UserLLMAnalysisResult,  # ✅ Schema enforced!
+    system_prompt_user_content,
+    tools,
+)
+```
+
+### OrganizationLLMAnalysisResult
+Location: `src/data_models/organization.py`
+
+**Purpose**: Schema for organization LLM agent output
+
+```python
+class OrganizationLLMAnalysisResult(BaseModel):
+    """Result of organization LLM analysis"""
+    
+    organizationType: Optional[str] = Field(
+        description="Type of organization (e.g., 'Academic Research Group')",
+        default=None,
+    )
+    organizationTypeJustification: Optional[str] = Field(
+        description="Justification for the organization type classification",
+        default=None,
+    )
+    description: Optional[str] = Field(
+        description="Enhanced description of the organization",
+        default=None,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific/technical disciplines",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline",
+        default_factory=list,
+    )
+    relatedToEPFL: Optional[bool] = Field(
+        description="Whether the organization is related to EPFL",
+        default=None,
+    )
+    relatedToEPFLJustification: Optional[str] = Field(
+        description="Justification for EPFL relationship",
+        default=None,
+    )
+    relatedToEPFLConfidence: Optional[float] = Field(
+        description="Confidence score (0.0-1.0) for EPFL relationship",
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = Field(
+        description="Infoscience entities found for this organization",
+        default_factory=list,
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/organization.py
+result = await run_agent_with_fallback(
+    llm_analysis_configs,
+    prompt,
+    agent_context,
+    OrganizationLLMAnalysisResult,  # ✅ Schema enforced!
+    system_prompt_organization_content,
+    tools,
+)
+```
+
+### EPFLAssessmentResult
+Location: `src/data_models/epfl_assessment.py`
+
+**Purpose**: Final holistic EPFL relationship assessment
+
+```python
+class EPFLAssessmentResult(BaseModel):
+    """Result of final EPFL relationship assessment"""
+    
+    relatedToEPFL: bool = Field(
+        description="Boolean indicating if related to EPFL (true if confidence >= 0.5)"
+    )
+    relatedToEPFLConfidence: float = Field(
+        description="Confidence score (0.0 to 1.0) for EPFL relationship",
+        ge=0.0,
+        le=1.0,
+    )
+    relatedToEPFLJustification: str = Field(
+        description="Comprehensive justification listing all evidence found"
+    )
+    evidenceItems: List[EvidenceItem] = Field(
+        description="List of all evidence items found and analyzed",
+        default_factory=list,
+    )
+
+
+class EvidenceItem(BaseModel):
+    """Individual piece of evidence for EPFL relationship"""
+    
+    type: str = Field(
+        description="Type of evidence (e.g., 'ORCID_EMPLOYMENT', 'EMAIL_DOMAIN')"
+    )
+    description: str = Field(
+        description="Human-readable description of this evidence"
+    )
+    confidence_contribution: float = Field(
+        description="How much this evidence contributes to confidence (0.0-1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    source: str = Field(
+        description="Where this evidence came from (e.g., 'ORCID', 'GitHub bio')"
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/epfl_assessment.py
+result = await run_agent_with_fallback(
+    epfl_assessment_configs,
+    prompt,
+    agent_context,
+    EPFLAssessmentResult,  # ✅ Schema enforced!
+    epfl_assessment_system_prompt,
+    tools,
+)
+```
+
+### Why Schema Enforcement Matters
+
+**Without schema (❌):**
+```python
+# Using Dict - NO enforcement
+result = await run_agent_with_fallback(..., Dict, ...)
+# LLM can return anything, fields might be missing
+```
+
+**With schema (✅):**
+```python
+# Using Pydantic model - ENFORCED
+result = await run_agent_with_fallback(..., UserLLMAnalysisResult, ...)
+# LLM MUST return all fields with correct types
+# Missing fields get default values
+# Invalid types cause validation errors
+```
+
+**Benefits:**
+1. **Field enforcement**: LLM must return all specified fields
+2. **Type validation**: Fields validated against Pydantic types
+3. **Default values**: Missing fields get proper defaults
+4. **Documentation**: Schema serves as LLM instruction
+5. **Type safety**: End-to-end type checking
+
 ## Confidence Scores
 - Use `Optional[float]` for confidence scores
 - Range: 0.0 to 1.0
 - Include in enrichment results (users, organizations)
+- Use `ge=0.0, le=1.0` constraints
 - Document scoring criteria in related agent prompts

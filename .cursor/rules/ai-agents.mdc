@@ -54,14 +54,21 @@ model = create_pydantic_ai_model(configs[0])
 ### Directory Structure
 - Agent implementations: `src/agents/`
 - Agent management: `src/agents/agents_management.py`
-- Repository agent: `src/agents/repository.py`
-- User enrichment: `src/agents/user_enrichment.py`
-- Organization enrichment: `src/agents/organization_enrichment.py`
+- **Main LLM Analysis Agents:**
+  - Repository agent: `src/agents/repository.py` (uses `SoftwareSourceCode` schema)
+  - User agent: `src/agents/user.py` (uses `UserLLMAnalysisResult` schema)
+  - Organization agent: `src/agents/organization.py` (uses `OrganizationLLMAnalysisResult` schema)
+- **Enrichment Agents:**
+  - User enrichment: `src/agents/user_enrichment.py` (uses `UserEnrichmentResult` schema)
+  - Organization enrichment: `src/agents/organization_enrichment.py` (uses `OrganizationEnrichmentResult` schema)
+- **Final Assessment Agent:**
+  - EPFL assessment: `src/agents/epfl_assessment.py` (uses `EPFLAssessmentResult` schema)
 
 ### Prompt Files
 - Repository prompts: `src/agents/repository_prompts.py`
 - User prompts: `src/agents/user_prompts.py`
 - Organization prompts: `src/agents/organization_prompts.py`
+- EPFL assessment prompts: `src/agents/epfl_assessment_prompts.py`
 - Generic prompts: `src/agents/prompts.py`
 
 ### Agent Tools
@@ -140,6 +147,49 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
     """
     return prompt
 ```
+
+## Pydantic Schema Enforcement
+
+### CRITICAL: Always Use Pydantic Schemas for LLM Output
+
+**DO NOT** use generic `Dict` as output type - this bypasses schema enforcement:
+
+```python
+# ❌ WRONG - No schema enforcement, LLM can return anything
+result = await run_agent_with_fallback(
+    configs,
+    prompt,
+    context,
+    Dict,  # Generic dict - BAD!
+    system_prompt,
+    tools,
+)
+
+# ✅ CORRECT - Schema enforced by PydanticAI
+result = await run_agent_with_fallback(
+    configs,
+    prompt,
+    context,
+    UserLLMAnalysisResult,  # Pydantic model - GOOD!
+    system_prompt,
+    tools,
+)
+```
+
+### Schema Benefits
+1. **Field Enforcement**: LLM must return all specified fields
+2. **Type Validation**: Fields validated against Pydantic types
+3. **Default Values**: Missing fields get proper defaults
+4. **Documentation**: Schema serves as LLM instruction
+5. **Type Safety**: End-to-end type checking
+
+### Agent-Specific Schemas
+- **Repository Agent**: `SoftwareSourceCode` (from `data_models/repository.py`)
+- **User Agent**: `UserLLMAnalysisResult` (from `data_models/user.py`)
+- **Organization Agent**: `OrganizationLLMAnalysisResult` (from `data_models/organization.py`)
+- **User Enrichment**: `UserEnrichmentResult`
+- **Organization Enrichment**: `OrganizationEnrichmentResult`
+- **EPFL Assessment**: `EPFLAssessmentResult` (from `data_models/epfl_assessment.py`)
 
 ## Analysis Context
 
@@ -229,7 +279,7 @@ estimated = estimate_tokens_from_messages(
 ```
 
 ### Agent Return Format
-All agents should return dictionaries with both data and usage:
+**CRITICAL**: All agents MUST return dictionaries with both data and usage:
 
 ```python
 return {
@@ -243,7 +293,16 @@ return {
 }
 ```
 
-**Note**: If agents return only the result object (legacy pattern), the Repository class handles extraction gracefully with `isinstance(result, dict)` checks.
+**Common Mistake**: Returning just `json_data` directly causes `result.get("data")` to fail:
+```python
+# ❌ WRONG - Analysis code will get None
+return json_data
+
+# ✅ CORRECT - Wrap in standard format
+return {"data": json_data, "usage": usage_data}
+```
+
+This affects all main LLM analysis agents (repository, user, organization) and enrichment agents.
 
 ### Repository-Level Aggregation
 The `Repository` class (`src/analysis/repositories.py`) accumulates tokens across all agents:

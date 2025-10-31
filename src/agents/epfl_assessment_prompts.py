@@ -22,6 +22,8 @@ Your task is to perform a **final holistic assessment** of EPFL relationship bas
 **Your Analysis Must**:
 1. **Systematically review ALL evidence** - Don't miss any clues
 2. **Assign appropriate weights** based on evidence quality:
+   
+   **For Users/Repositories**:
    - @epfl.ch email address: HIGHEST confidence (0.4)
    - ORCID employment at EPFL: HIGH confidence (0.3)
    - Infoscience entities found: HIGHEST confidence (0.4)
@@ -31,6 +33,18 @@ Your task is to perform a **final holistic assessment** of EPFL relationship bas
    - Related organization is EPFL: HIGH confidence (0.25)
    - Location in Lausanne, Switzerland: MEDIUM confidence (0.15)
    - Git commits from EPFL authors: VARIABLE (based on percentage and recency)
+   
+   **For Organizations** (organizations don't have emails/ORCID, so higher weights for institutional links):
+   - Parent organization is EPFL: HIGHEST confidence (0.6)
+   - Parent organization jointly includes EPFL (e.g., SDSC = EPFL+ETH): HIGH confidence (0.5)
+   - Organization name contains "EPFL": HIGH confidence (0.5)
+   - Website is *.epfl.ch domain: HIGH confidence (0.5)
+   - ROR entry links to EPFL: GOOD confidence (0.4)
+   - Infoscience entities found: GOOD confidence (0.4)
+   - Description explicitly mentions EPFL: GOOD confidence (0.3)
+   - README mentions EPFL/SDSC: GOOD confidence (0.3)
+   - GitHub membership in EPFL organizations: GOOD confidence (0.3)
+   - Location is Lausanne: MEDIUM confidence (0.2)
 
 3. **Calculate cumulative confidence**: Sum all applicable evidence weights, cap at 1.0
 
@@ -59,17 +73,31 @@ Your task is to perform a **final holistic assessment** of EPFL relationship bas
 - COMPANY_FIELD: Company field mentions EPFL/SDSC
 - LOCATION: Location is Lausanne, Switzerland
 - ORGANIZATION_MEMBERSHIP: Member of EPFL GitHub organizations
+- PARENT_ORGANIZATION: Organization's parent is EPFL or jointly includes EPFL (HIGH weight for orgs)
 - RELATED_ORGANIZATION: Related organization is EPFL (from ROR)
 - INFOSCIENCE_ENTITY: Found in Infoscience database
 - GIT_AUTHOR_EMAIL: Git commits with @epfl.ch email
 - GIT_COMMIT_PERCENTAGE: Percentage of commits from EPFL authors
+- ORGANIZATION_NAME: Organization name contains "EPFL"
+- WEBSITE_DOMAIN: Website is *.epfl.ch domain
 
 **Important Notes**:
 - Swiss Data Science Center (SDSC) is a joint initiative by EPFL and ETH Zürich
+  - For organizations: if parent org is "Swiss Data Science Center" or includes "EPFL and ETH", use 0.5 weight
+  - For users: SDSC employment is STRONG evidence of EPFL relationship (use high weights)
 - References to "SDSC" or "Swiss Data Science Center" are STRONG evidence of EPFL relationship
 - Look for variations: "EPFL", "École Polytechnique Fédérale de Lausanne", "Ecole Polytechnique Federale"
+- Organizations typically lack individual markers (emails, ORCID) so institutional relationships carry more weight
 - Consider temporal patterns: recent activity vs historical
 - Multiple weak pieces of evidence can compound to strong confidence
+
+**Special Handling for Organizations**:
+When assessing GitHub organizations (not individuals), recognize that:
+1. They won't have @epfl.ch emails or ORCID records
+2. Parent organization relationships are the PRIMARY indicator (0.5-0.6 weight)
+3. ROR data showing EPFL parentage is highly reliable (0.4 weight)
+4. Organization name, description, and website are key signals
+5. A single strong institutional link (parent = EPFL+ETH) can reach the 0.5 threshold
 
 Be thorough, transparent, and accurate in your assessment.
 """
@@ -110,14 +138,32 @@ Complete Data Available:
 """
     elif item_type == "organization":
         prompt += """
-- Organization name contains EPFL
-- Description mentions EPFL
+- Organization name contains EPFL or EPFL-related terms
+- Description mentions EPFL/SDSC/Swiss Data Science Center
 - README content about EPFL
 - Location in Lausanne, Switzerland
-- Parent organization is EPFL
-- ROR ID matches EPFL entities
+- Parent organization is EPFL or joint with EPFL (e.g., SDSC is EPFL+ETH)
+- ROR ID matches EPFL entities or has EPFL as parent
 - Infoscience entities found
 - Website/blog is epfl.ch domain
+- Members are EPFL-affiliated
+- Repositories mention EPFL in topics/descriptions
+
+**IMPORTANT - Organization-Specific Confidence Weights**:
+Organizations typically don't have emails or ORCID data, so use these weights:
+- Parent organization is EPFL: **0.6** (HIGH - strong institutional link)
+- Parent organization jointly includes EPFL (e.g., "EPFL and ETH Zürich"): **0.5** (HIGH - clear partnership)
+- Organization name contains "EPFL": **0.5** (HIGH)
+- ROR entry links to EPFL: **0.4** (GOOD)
+- Description explicitly mentions EPFL: **0.3** (GOOD)
+- README mentions EPFL/SDSC: **0.3** (GOOD)
+- Location is Lausanne: **0.2** (MEDIUM)
+- Website is *.epfl.ch: **0.5** (HIGH)
+- Infoscience entities found: **0.4** (GOOD)
+- GitHub organization membership in EPFL orgs: **0.3** (GOOD)
+
+Note: "Swiss Data Science Center" or "SDSC" references should trigger the joint parent weight (0.5) 
+since SDSC is explicitly a joint EPFL+ETH initiative.
 """
     elif item_type == "repository":
         prompt += """
