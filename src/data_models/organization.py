@@ -19,6 +19,49 @@ from .models import Discipline, Organization, Person
 from .repository import GitAuthor, InfoscienceEntity
 
 
+class OrganizationLLMAnalysisResult(BaseModel):
+    """Result of organization LLM analysis - the structured output from the main organization agent"""
+    
+    organizationType: Optional[str] = Field(
+        description="Type of organization (e.g., 'Academic Research Group', 'Industry Company')",
+        default=None,
+    )
+    organizationTypeJustification: Optional[str] = Field(
+        description="Justification for the organization type classification",
+        default=None,
+    )
+    description: Optional[str] = Field(
+        description="Enhanced description of the organization",
+        default=None,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific/technical disciplines",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline",
+        default_factory=list,
+    )
+    relatedToEPFL: Optional[bool] = Field(
+        description="Whether the organization is related to EPFL",
+        default=None,
+    )
+    relatedToEPFLJustification: Optional[str] = Field(
+        description="Justification for EPFL relationship",
+        default=None,
+    )
+    relatedToEPFLConfidence: Optional[float] = Field(
+        description="Confidence score (0.0-1.0) for EPFL relationship",
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = Field(
+        description="Infoscience entities found for this organization",
+        default_factory=list,
+    )
+
+
 class OrganizationEnrichmentResult(BaseModel):
     """Result of organization enrichment analysis"""
 

@@ -10,6 +10,7 @@ from ..context.infoscience import (
     search_infoscience_labs_tool,
     search_infoscience_publications_tool,
 )
+from ..data_models import OrganizationLLMAnalysisResult
 from ..llm.model_config import (
     load_model_config,
     validate_config,
@@ -37,7 +38,7 @@ async def llm_request_org_infos(
     org_name: str,
     org_data: Dict[str, Any],
     max_tokens: int = 20000,
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     Analyze GitHub organization profile using PydanticAI with multi-provider support.
 
@@ -47,7 +48,8 @@ async def llm_request_org_infos(
         max_tokens: Maximum tokens for input text
 
     Returns:
-        Analysis result or None if failed
+        Dictionary with 'data' (dict) and 'usage' (dict with token info) keys,
+        or {'data': None, 'usage': None} if failed
     """
     # Create context for the agent
     agent_context = {
@@ -71,7 +73,7 @@ async def llm_request_org_infos(
             llm_analysis_configs,
             prompt,
             agent_context,
-            Dict,  # Output type
+            OrganizationLLMAnalysisResult,  # Output type - enforces schema!
             system_prompt_organization_content,
             tools,
         )
@@ -82,20 +84,27 @@ async def llm_request_org_infos(
         else:
             json_data = result
 
-        # Ensure it's a dictionary
+        # Convert to dictionary for compatibility
         if hasattr(json_data, "model_dump"):
+            json_data = json_data.model_dump()
+        elif isinstance(json_data, OrganizationLLMAnalysisResult):
             json_data = json_data.model_dump()
 
         logger.info("Successfully received organization analysis from agent")
+        logger.info(f"Organization analysis fields populated: {list(json_data.keys())}")
 
         # Cleanup agents after successful completion
         await cleanup_agents()
 
-        return json_data
+        # Return in the same format as repository agent
+        return {
+            "data": json_data,
+            "usage": None,  # TODO: Add token usage tracking like repository agent
+        }
 
     except Exception as e:
         logger.error(f"Error in organization analysis: {e}")
         # Cleanup agents even on error
         await cleanup_agents()
-        return None
+        return {"data": None, "usage": None}
 

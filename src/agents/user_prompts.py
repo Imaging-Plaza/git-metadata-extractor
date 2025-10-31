@@ -136,12 +136,14 @@ def get_general_user_agent_prompt(username: str, user_data: str):
     "Currently, I am working as a **Data Engineer** at the **Swiss Data Science Center** at **EPFL**."
 
     Please provide a detailed analysis in JSON format with the following fields:
+    - "relatedToOrganization": List of organizations the user is affiliated with (e.g., ["EPFL", "Swiss Data Science Center", "ETH Zürich"])
+    - "relatedToOrganizationJustification": List of justifications for each organization (e.g., ["Works at SDSC which is jointly established by EPFL and ETH Zürich", "Profile shows @epfl.ch email"])
     - "discipline": List of scientific disciplines (e.g., ["Biology", "Computer Science", "Data Science"])
     - "disciplineJustification": List of justifications for each discipline
     - "position": List of professional positions/roles (e.g., ["Data Engineer", "Research Scientist", "Software Developer"])
     - "positionJustification": List of justifications for each position
 
-    IMPORTANT: Extract position information from ALL available sources:
+    IMPORTANT: Extract organization and position information from ALL available sources:
     - Company field: "{user_data.get('company', 'N/A')}"
     - Bio content: "{user_data.get('bio', 'N/A')}"
     - README content: "{user_data.get('readme_content', 'N/A')[:500]}..." (truncated)
@@ -156,8 +158,15 @@ def get_general_user_agent_prompt(username: str, user_data: str):
     - Current employment status
 
     The README explicitly states: "Currently, I am working as a **Data Engineer**" - this should be extracted as position: ["Data Engineer"]
+    
+    ORGANIZATION EXTRACTION RULES:
+    - Look for company/employer information in the bio, company field, and README
+    - Check GitHub organizations the user is a member of (institutions, universities, companies)
+    - Include both primary organizations (e.g., "EPFL") and sub-units (e.g., "Swiss Data Science Center")
+    - For each organization, provide a clear justification explaining the evidence
+    - Add EPFL to the list if the user is affiliated with any EPFL lab, center, or has @epfl.ch email
 
-    Return valid JSON only with all four fields populated.
+    Return valid JSON only with all SIX fields populated (relatedToOrganization, relatedToOrganizationJustification, discipline, disciplineJustification, position, positionJustification).
     """
 
     return general_user_agent_prompt

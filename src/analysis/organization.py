@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_org_infos
+from ..agents.epfl_assessment import assess_epfl_relationship
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..data_models import GitHubOrganization
@@ -322,6 +323,48 @@ class Organization:
 
         logger.info(f"Organization enrichment completed for {self.org_name}")
 
+    async def run_epfl_final_assessment(self):
+        """Run final EPFL relationship assessment after all enrichments complete"""
+        logger.info(f"Final EPFL assessment for {self.org_name}")
+        
+        # Check if data exists
+        if self.data is None:
+            logging.warning(f"Cannot run EPFL assessment: no data available for {self.org_name}")
+            return
+        
+        try:
+            # Convert data to dict for assessment
+            data_dict = self.data.model_dump()
+            
+            # Call the EPFL assessment agent
+            result = await assess_epfl_relationship(
+                data=data_dict,
+                item_type="organization",
+            )
+            
+            # Extract assessment and usage
+            assessment = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate token usage
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Update data with final assessment (overwrite previous values)
+            self.data.relatedToEPFL = assessment.relatedToEPFL
+            self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
+            self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
+            
+            logger.info(f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
+                       f"confidence={assessment.relatedToEPFLConfidence:.2f}")
+            logger.info(f"Justification: {assessment.relatedToEPFLJustification[:200]}...")
+            
+        except Exception as e:
+            logger.error(f"EPFL final assessment failed for {self.org_name}: {e}", exc_info=True)
+            # Don't fail the entire analysis, just log the error
+
     def run_validation(self) -> bool:
         """Validate the organization data"""
         if self.data is None:
@@ -453,6 +496,12 @@ class Organization:
             logging.info(f"Organization enrichment for {self.org_name}")
             await self.run_organization_enrichment()
             logging.info(f"Organization enrichment completed for {self.org_name}")
+
+        # Run final EPFL assessment after all enrichments complete
+        if self.data is not None:
+            logging.info(f"Final EPFL assessment for {self.org_name}")
+            await self.run_epfl_final_assessment()
+            logging.info(f"Final EPFL assessment completed for {self.org_name}")
 
         # Validate and cache if we have data
         if self.data is not None:

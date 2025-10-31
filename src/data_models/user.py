@@ -106,6 +106,35 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
     )
 
 
+class UserLLMAnalysisResult(BaseModel):
+    """Result of user LLM analysis - the structured output from the main user agent"""
+    
+    relatedToOrganization: Optional[List[str]] = Field(
+        description="List of organizations the user is affiliated with",
+        default_factory=list,
+    )
+    relatedToOrganizationJustification: Optional[List[str]] = Field(
+        description="Justification for each organization affiliation",
+        default_factory=list,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific disciplines or fields the user works in",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline classification",
+        default_factory=list,
+    )
+    position: Optional[List[str]] = Field(
+        description="Professional positions or roles",
+        default_factory=list,
+    )
+    positionJustification: Optional[List[str]] = Field(
+        description="Justification for each position",
+        default_factory=list,
+    )
+
+
 class UserEnrichmentResult(BaseModel):
     """Result of user enrichment analysis"""
 

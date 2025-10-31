@@ -1,5 +1,6 @@
 """PydanticAI agents for enriching metadata with external data sources."""
 
+from .epfl_assessment import assess_epfl_relationship
 from .organization import (
     llm_request_org_infos,
 )
@@ -16,6 +17,7 @@ from .user import (
 from .user_enrichment import enrich_users, enrich_users_from_dict
 
 __all__ = [
+    "assess_epfl_relationship",
     "enrich_organizations",
     "enrich_organizations_from_dict",
     "enrich_users",

@@ -6,6 +6,7 @@ from .conversion import (
     convert_jsonld_to_pydantic,
     convert_pydantic_to_zod_form_dict,
 )
+from .epfl_assessment import EPFLAssessmentResult, EvidenceItem
 from .infoscience import (
     InfoscienceAuthor,
     InfoscienceLab,
@@ -24,6 +25,7 @@ from .organization import (
     GitHubOrganizationMetadata,
     OrganizationAnalysisContext,
     OrganizationEnrichmentResult,
+    OrganizationLLMAnalysisResult,
 )
 from .repository import (
     Commits,
@@ -52,6 +54,7 @@ from .user import (
     ORCIDEmployment,
     UserAnalysisContext,
     UserEnrichmentResult,
+    UserLLMAnalysisResult,
 )
 
 __all__ = [
@@ -77,6 +80,7 @@ __all__ = [
     "GitHubUser",
     "GitHubUserMetadata",
     "EnrichedAuthor",
+    "UserLLMAnalysisResult",
     "UserEnrichmentResult",
     "UserAnalysisContext",
     "ORCIDEmployment",
@@ -84,6 +88,7 @@ __all__ = [
     "ORCIDActivities",
     # Organization models
     "GitHubOrganization",
+    "OrganizationLLMAnalysisResult",
     "OrganizationEnrichmentResult",
     "OrganizationAnalysisContext",
     "GitHubOrganizationMetadata",
@@ -94,6 +99,9 @@ __all__ = [
     "InfoscienceSearchResult",
     # API models
     "APIOutput",
+    # EPFL Assessment models
+    "EPFLAssessmentResult",
+    "EvidenceItem",
     # Utilities
     "convert_jsonld_to_pydantic",
     "convert_pydantic_to_zod_form_dict",

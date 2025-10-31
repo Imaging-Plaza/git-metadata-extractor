@@ -9,6 +9,7 @@ from ..context.infoscience import (
     get_author_publications_tool,
     search_infoscience_authors_tool,
 )
+from ..data_models import UserLLMAnalysisResult
 from ..llm.model_config import (
     load_model_config,
     validate_config,
@@ -34,18 +35,18 @@ async def llm_request_user_infos(
     username: str,
     user_data: Dict[str, Any],
     max_tokens: int = 20000,
-) -> Optional[Dict[str, Any]]:  # TODO: Add here data class
+) -> Dict[str, Any]:
     """
     Analyze GitHub user profile using PydanticAI with multi-provider support.
 
     Args:
         username: GitHub username to analyze
         user_data: User profile data from GitHub API
-        output_format: Output format ("json" or "json-ld")
         max_tokens: Maximum tokens for input text
 
     Returns:
-        Analysis result or None if failed
+        Dictionary with 'data' (dict) and 'usage' (dict with token info) keys,
+        or {'data': None, 'usage': None} if failed
     """
     # Create context for the agent
     agent_context = {
@@ -68,7 +69,7 @@ async def llm_request_user_infos(
             llm_analysis_configs,
             prompt,
             agent_context,
-            Dict,  # Output type
+            UserLLMAnalysisResult,  # Output type - enforces schema!
             system_prompt_user_content,
             tools,
         )
@@ -79,19 +80,26 @@ async def llm_request_user_infos(
         else:
             json_data = result
 
-        # Ensure it's a dictionary
+        # Convert to dictionary for compatibility
         if hasattr(json_data, "model_dump"):
+            json_data = json_data.model_dump()
+        elif isinstance(json_data, UserLLMAnalysisResult):
             json_data = json_data.model_dump()
 
         logger.info("Successfully received user analysis from agent")
+        logger.info(f"User analysis fields populated: {list(json_data.keys())}")
 
         # Cleanup agents after successful completion
         await cleanup_agents()
 
-        return json_data
+        # Return in the same format as repository agent
+        return {
+            "data": json_data,
+            "usage": None,  # TODO: Add token usage tracking like repository agent
+        }
 
     except Exception as e:
         logger.error(f"Error in user analysis: {e}")
         # Cleanup agents even on error
         await cleanup_agents()
-        return None
+        return {"data": None, "usage": None}
