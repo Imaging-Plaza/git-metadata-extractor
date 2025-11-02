@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_user_infos
+from ..agents.academic_catalog_enrichment import enrich_user_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.user_enrichment import enrich_users_from_dict
@@ -318,6 +319,59 @@ class User:
 
         logger.info(f"User enrichment completed for {self.username}")
 
+    async def run_academic_catalog_enrichment(self):
+        """Enrich user with academic catalog relations (Infoscience, etc.)"""
+        logger.info(f"Academic catalog enrichment for {self.username}")
+        
+        # Check if data exists before enrichment
+        if self.data is None:
+            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.username}")
+            return
+            
+        try:
+            # Extract user information for the enrichment
+            github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+            
+            full_name = self.data.fullname or github_metadata.get("name", "")
+            bio = github_metadata.get("bio", "")
+            organizations = github_metadata.get("organizations", [])
+            
+            result = await enrich_user_academic_catalog(
+                username=self.username,
+                full_name=full_name,
+                bio=bio,
+                organizations=organizations,
+            )
+            
+            # Extract data and usage
+            enrichment_data = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate token usage
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(
+                    f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
+                    f"{usage.get('output_tokens', 0)} output tokens"
+                )
+                
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+                
+            # Store the academic catalog relations
+            if enrichment_data and hasattr(enrichment_data, "relations"):
+                self.data.academicCatalogRelations = enrichment_data.relations
+                logger.info(
+                    f"Stored {len(enrichment_data.relations)} academic catalog relations"
+                )
+                
+        except Exception as e:
+            logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
+            # Don't fail the entire analysis, just skip academic catalog enrichment
+            return
+
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
         logger.info(f"Final EPFL assessment for {self.username}")
@@ -346,6 +400,11 @@ class User:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Accumulate estimated tokens
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
             
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
@@ -498,6 +557,12 @@ class User:
             logging.info(f"User enrichment for {self.username}")
             await self.run_user_enrichment()
             logging.info(f"User enrichment completed for {self.username}")
+
+        # Run academic catalog enrichment
+        if self.data is not None:
+            logging.info(f"Academic catalog enrichment for {self.username}")
+            await self.run_academic_catalog_enrichment()
+            logging.info(f"Academic catalog enrichment completed for {self.username}")
 
         # Run final EPFL assessment after all enrichments complete
         if self.data is not None:

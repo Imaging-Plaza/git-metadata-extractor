@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from ..agents.academic_catalog_enrichment import enrich_repository_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.repository import llm_request_repo_infos
@@ -260,34 +261,154 @@ class Repository:
 
         logger.info(f"User enrichment: {user_enrichment}")
 
-        # Replace (not extend) authors list with enriched versions
-        if user_enrichment is not None:
-            # Import conversion utilities
-            from ..data_models.user import EnrichedAuthor, convert_enriched_to_person
-            
-            # Build new list with only enriched authors (as Person objects)
-            person_authors_list = []
-            enriched_authors_data = user_enrichment.get("enrichedAuthors", [])
-            for author_data in enriched_authors_data:
-                # Convert to EnrichedAuthor first if it's a dict
-                if isinstance(author_data, dict):
-                    enriched_author = EnrichedAuthor(**author_data)
-                else:
-                    enriched_author = author_data
-                
-                # Convert EnrichedAuthor to Person
-                person = convert_enriched_to_person(enriched_author)
-                person_authors_list.append(person)
-            
-            # Replace the entire author list with Person objects
-            self.data.author = person_authors_list
+    def _names_match(self, name1: str, name2: str) -> bool:
+        """
+        Check if two names match, handling variations like:
+        - "Mackenzie Mathis" vs "Mackenzie Weygandt Mathis"
+        - "Alexander Mathis" vs "Mathis, Alexander" (last, first format)
+        - Different punctuation and formatting
+        
+        Returns True if the names likely refer to the same person.
+        """
+        if not name1 or not name2:
+            return False
+        
+        import re
+        
+        # Normalize: lowercase, remove punctuation, split into words
+        def normalize_name(name):
+            # Remove punctuation and extra whitespace
+            cleaned = re.sub(r'[^\w\s]', ' ', name.lower())
+            # Split and filter empty strings
+            return set(word for word in cleaned.split() if word)
+        
+        n1_parts = normalize_name(name1)
+        n2_parts = normalize_name(name2)
+        
+        # If all parts of the shorter name are in the longer name, it's a match
+        # e.g., {"mackenzie", "mathis"} ⊆ {"mackenzie", "weygandt", "mathis"}
+        # Also matches {"alexander", "mathis"} with {"mathis", "alexander"}
+        if len(n1_parts) <= len(n2_parts):
+            return n1_parts.issubset(n2_parts)
         else:
-            logging.warning("User enrichment returned None, skipping author enrichment")
+            return n2_parts.issubset(n1_parts)
 
-        # llm_result["authorEnrichmentSummary"] = user_enrichment.get(
-        #     "summary",
-        #     "",
-        # )
+    async def run_academic_catalog_enrichment(self):
+        """Enrich repository with academic catalog relations (Infoscience, etc.)"""
+        logger.info(f"Academic catalog enrichment for {self.full_path}")
+
+        # Check if data exists before enrichment
+        if self.data is None:
+            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.full_path}")
+            return
+            
+        try:
+            # Extract repository information for the enrichment
+            repository_name = self.data.name or self.full_path.split("/")[-1]
+            description = self.data.description or ""
+            
+            # Get README excerpt (first 1000 chars from readme content if available)
+            readme_excerpt = ""
+            if hasattr(self.data, "readme") and self.data.readme:
+                # The readme field is a URL, we'd need to fetch it
+                # For now, use description or other text
+                pass
+                
+            # Try to get some text from description or other fields
+            if self.data.description:
+                readme_excerpt = self.data.description[:1000]
+            elif hasattr(self.data, "hasExecutableInstructions") and self.data.hasExecutableInstructions:
+                readme_excerpt = self.data.hasExecutableInstructions[:1000]
+            
+            # Extract author names and organization names from existing data
+            author_names = []
+            organization_names = []
+            
+            if hasattr(self.data, "author") and self.data.author:
+                for author in self.data.author:
+                    if hasattr(author, "name") and author.name:
+                        author_names.append(author.name)
+                    elif hasattr(author, "legalName") and author.legalName:
+                        organization_names.append(author.legalName)
+            
+            # Also check relatedToOrganizationsROR
+            if hasattr(self.data, "relatedToOrganizationsROR") and self.data.relatedToOrganizationsROR:
+                for org in self.data.relatedToOrganizationsROR:
+                    if hasattr(org, "legalName") and org.legalName:
+                        if org.legalName not in organization_names:
+                            organization_names.append(org.legalName)
+                
+            result = await enrich_repository_academic_catalog(
+                repository_url=self.full_path,
+                repository_name=repository_name,
+                description=description,
+                readme_excerpt=readme_excerpt,
+                authors=author_names,
+                organizations=organization_names,
+            )
+            
+            # Extract data and usage
+            enrichment_data = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate token usage
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(
+                    f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
+                    f"{usage.get('output_tokens', 0)} output tokens"
+                )
+                
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+                
+            # Store the academic catalog relations at repository level
+            if enrichment_data:
+                # Repository-level relations (publications about the repository itself)
+                if hasattr(enrichment_data, "repository_relations"):
+                    self.data.academicCatalogRelations = enrichment_data.repository_relations
+                    logger.info(
+                        f"Stored {len(enrichment_data.repository_relations)} repository-level academic catalog relations"
+                    )
+                # Fallback for backward compatibility
+                elif hasattr(enrichment_data, "relations"):
+                    self.data.academicCatalogRelations = enrichment_data.relations
+                    logger.info(
+                        f"Stored {len(enrichment_data.relations)} academic catalog relations at repository level"
+                    )
+                
+                # Directly assign relations to authors and organizations using the structured output
+                if hasattr(self.data, "author") and self.data.author:
+                    # For Person objects - match by author name
+                    if hasattr(enrichment_data, "author_relations"):
+                        for author in self.data.author:
+                            if hasattr(author, "name") and author.name:
+                                # Direct lookup using the exact author name as key
+                                if author.name in enrichment_data.author_relations:
+                                    author_rels = enrichment_data.author_relations[author.name]
+                                    author.academicCatalogRelations = author_rels
+                                    logger.info(f"✓ Directly assigned {len(author_rels)} relations to author: {author.name}")
+                                else:
+                                    # Author had no results
+                                    author.academicCatalogRelations = []
+                                    logger.info(f"ℹ No relations found for author: {author.name}")
+                            
+                            # For Organization objects in the author list - match by legalName
+                            elif hasattr(author, "legalName") and author.legalName:
+                                if hasattr(enrichment_data, "organization_relations") and author.legalName in enrichment_data.organization_relations:
+                                    org_rels = enrichment_data.organization_relations[author.legalName]
+                                    author.academicCatalogRelations = org_rels
+                                    logger.info(f"✓ Directly assigned {len(org_rels)} relations to organization: {author.legalName}")
+                                else:
+                                    author.academicCatalogRelations = []
+                                    logger.info(f"ℹ No relations found for organization: {author.legalName}")
+                
+        except Exception as e:
+            logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
+            # Don't fail the entire analysis, just skip academic catalog enrichment
+            return
 
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
@@ -317,6 +438,11 @@ class Repository:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Accumulate estimated tokens
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
             
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
@@ -477,6 +603,12 @@ class Repository:
             logging.info(f"Organization enrichment for {self.full_path}")
             await self.run_organization_enrichment()
             logging.info(f"Organization enrichment completed for {self.full_path}")
+
+        # Run academic catalog enrichment
+        if self.data is not None:
+            logging.info(f"Academic catalog enrichment for {self.full_path}")
+            await self.run_academic_catalog_enrichment()
+            logging.info(f"Academic catalog enrichment completed for {self.full_path}")
 
         # Run final EPFL assessment after all enrichments complete
         if self.data is not None:

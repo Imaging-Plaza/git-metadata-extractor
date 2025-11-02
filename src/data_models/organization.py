@@ -3,6 +3,7 @@ Organization data models
 """
 
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -16,7 +17,10 @@ from pydantic import (
 )
 
 from .models import Discipline, Organization, Person
-from .repository import GitAuthor, InfoscienceEntity
+from .repository import GitAuthor
+
+if TYPE_CHECKING:
+    from .academic_catalog import AcademicCatalogRelation
 
 
 class OrganizationLLMAnalysisResult(BaseModel):
@@ -56,8 +60,8 @@ class OrganizationLLMAnalysisResult(BaseModel):
         ge=0.0,
         le=1.0,
     )
-    infoscienceEntities: Optional[List[InfoscienceEntity]] = Field(
-        description="Infoscience entities found for this organization",
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
 
@@ -175,4 +179,7 @@ class GitHubOrganization(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
+        default_factory=list,
+    )

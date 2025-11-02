@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -23,7 +24,10 @@ from .models import (
     Organization,
     Person,
 )
-from .repository import GitAuthor, InfoscienceEntity
+from .repository import GitAuthor
+
+if TYPE_CHECKING:
+    from .academic_catalog import AcademicCatalogRelation
 
 
 class EnrichedAuthor(BaseModel):
@@ -59,9 +63,9 @@ class EnrichedAuthor(BaseModel):
         description="Additional biographical or professional information found",
         default=None,
     )
-    infoscienceEntity: Optional[InfoscienceEntity] = Field(
-        description="Infoscience entity found",
-        default=None,
+    academicCatalogRelations: list["AcademicCatalogRelation"] = Field(
+        description="Relations to entities in academic catalogs",
+        default_factory=list,
     )
 
 
@@ -102,7 +106,7 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
         # Additional metadata
         contributionSummary=enriched.contributionSummary,
         biography=enriched.additionalInfo,  # Map additionalInfo to biography
-        infoscienceEntity=enriched.infoscienceEntity,
+        academicCatalogRelations=enriched.academicCatalogRelations,
     )
 
 
@@ -299,4 +303,7 @@ class GitHubUser(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
+        default_factory=list,
+    )

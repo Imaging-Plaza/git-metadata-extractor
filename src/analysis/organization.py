@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_org_infos
+from ..agents.academic_catalog_enrichment import enrich_organization_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
@@ -323,6 +324,59 @@ class Organization:
 
         logger.info(f"Organization enrichment completed for {self.org_name}")
 
+    async def run_academic_catalog_enrichment(self):
+        """Enrich organization with academic catalog relations (Infoscience, etc.)"""
+        logger.info(f"Academic catalog enrichment for {self.org_name}")
+        
+        # Check if data exists before enrichment
+        if self.data is None:
+            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.org_name}")
+            return
+            
+        try:
+            # Extract organization information for the enrichment
+            github_metadata = self.data.githubOrganizationMetadata.model_dump() if self.data.githubOrganizationMetadata else {}
+            
+            description = github_metadata.get("description", "") or self.data.description or ""
+            website = github_metadata.get("blog", "")
+            members = github_metadata.get("public_members", [])
+            
+            result = await enrich_organization_academic_catalog(
+                org_name=self.org_name,
+                description=description,
+                website=website,
+                members=members,
+            )
+            
+            # Extract data and usage
+            enrichment_data = result.get("data") if isinstance(result, dict) else result
+            usage = result.get("usage") if isinstance(result, dict) else None
+            
+            # Accumulate token usage
+            if usage:
+                self.total_input_tokens += usage.get("input_tokens", 0)
+                self.total_output_tokens += usage.get("output_tokens", 0)
+                logger.info(
+                    f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
+                    f"{usage.get('output_tokens', 0)} output tokens"
+                )
+                
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+                
+            # Store the academic catalog relations
+            if enrichment_data and hasattr(enrichment_data, "relations"):
+                self.data.academicCatalogRelations = enrichment_data.relations
+                logger.info(
+                    f"Stored {len(enrichment_data.relations)} academic catalog relations"
+                )
+                
+        except Exception as e:
+            logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
+            # Don't fail the entire analysis, just skip academic catalog enrichment
+            return
+
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
         logger.info(f"Final EPFL assessment for {self.org_name}")
@@ -351,6 +405,11 @@ class Organization:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+            
+            # Accumulate estimated tokens
+            if usage and "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
             
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
@@ -496,6 +555,12 @@ class Organization:
             logging.info(f"Organization enrichment for {self.org_name}")
             await self.run_organization_enrichment()
             logging.info(f"Organization enrichment completed for {self.org_name}")
+
+        # Run academic catalog enrichment
+        if self.data is not None:
+            logging.info(f"Academic catalog enrichment for {self.org_name}")
+            await self.run_academic_catalog_enrichment()
+            logging.info(f"Academic catalog enrichment completed for {self.org_name}")
 
         # Run final EPFL assessment after all enrichments complete
         if self.data is not None:

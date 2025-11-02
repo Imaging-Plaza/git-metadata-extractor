@@ -8,6 +8,7 @@ import logging
 from datetime import date
 from enum import Enum
 from typing import (
+    TYPE_CHECKING,
     Any,
     List,
     Optional,
@@ -16,6 +17,7 @@ from typing import (
 
 from pydantic import (
     BaseModel,
+    Field,
     HttpUrl,
     StringConstraints,
     ValidationError,
@@ -34,6 +36,9 @@ from .models import (
     Person,
     RepositoryType,
 )
+
+if TYPE_CHECKING:
+    from .academic_catalog import AcademicCatalogRelation
 
 #####################################################################
 # Debugging Utilities
@@ -216,6 +221,12 @@ class GitAuthor(BaseModel):
         return v
 
 class InfoscienceEntity(BaseModel):
+    """
+    DEPRECATED: Use AcademicCatalogRelation instead.
+    
+    Kept temporarily for backward compatibility during migration.
+    """
+
     name: str
     url: HttpUrl
     confidence: float
@@ -274,7 +285,10 @@ class SoftwareSourceCode(BaseModel):
     relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
     webpagesToCheck: Optional[List[HttpUrl]] = None
-    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
+        default_factory=list,
+    )
 
     @field_validator("author", mode="before")
     @classmethod
@@ -568,7 +582,3 @@ class RepositoryAnalysisContext:
         self.repo_url = repo_url
         self.git_authors = git_authors
         self.gimie_output = gimie_output
-
-
-# Rebuild the model after all types are defined to resolve forward references
-SoftwareSourceCode.model_rebuild()
