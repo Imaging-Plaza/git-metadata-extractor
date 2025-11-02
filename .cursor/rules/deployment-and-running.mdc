@@ -311,6 +311,30 @@ USER_ENRICHMENT_MODELS='[...]'
 
 # Organization enrichment models
 ORG_ENRICHMENT_MODELS='[...]'
+
+# Academic catalog enrichment models (NEW)
+ACADEMIC_CATALOG_ENRICHMENT_MODELS='[
+  {
+    "provider": "openai",
+    "model": "o4-mini",
+    "max_retries": 3,
+    "temperature": 0.1,
+    "max_tokens": 12000,
+    "timeout": 300.0
+  }
+]'
+
+# EPFL assessment models (NEW)
+EPFL_ASSESSMENT_MODELS='[
+  {
+    "provider": "openai",
+    "model": "o4-mini",
+    "max_retries": 2,
+    "temperature": 0.1,
+    "max_tokens": 8000,
+    "timeout": 300.0
+  }
+]'
 ```
 
 ### Creating .env File

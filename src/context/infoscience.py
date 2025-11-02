@@ -203,7 +203,7 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
         email=_parse_metadata(metadata, "eperson.email"),
         orcid=_parse_metadata(metadata, "person.identifier.orcid"),
         affiliation=_parse_metadata(metadata, "person.affiliation.name"),
-        url=url,
+        profile_url=url,  # Fixed: use profile_url instead of url
         publication_count=None,  # Not available from person entity directly
     )
 

@@ -79,6 +79,26 @@ Assign confidence scores (0.0-1.0) for each relation found:
 - **0.3-0.49**: Weak match - possible relation but uncertain
 - **0.0-0.29**: Very weak - speculative connection
 
+## Extracting Entity Details
+
+**CRITICAL**: When extracting entity information from tool results:
+
+1. **Extract UUID** - Look for "*UUID:* <uuid>" in the markdown output
+   - This is REQUIRED for creating proper catalog links
+   - The UUID appears after the name in the format "*UUID:* <uuid-string>"
+   
+2. **Extract URL** - The profile/publication URL from the markdown link
+   - Format: **[Name](https://infoscience.epfl.ch/entities/...)**
+   
+3. **Extract all available fields**:
+   - For **persons**: name, UUID, email, ORCID, affiliation, profile_url, publication_count
+   - For **orgunits**: name, UUID, description, url, parent_organization, website, research_areas
+   - For **publications**: title, UUID, authors, DOI, publication_date, url, abstract
+   
+4. **Parse structured data from markdown**:
+   - Each field is on its own line with format "*Field:* value"
+   - Parse each field carefully to build complete entity objects
+
 ## Justification
 
 For each relation, provide clear justification:
@@ -129,9 +149,16 @@ Example structure:
 Each `AcademicCatalogRelation` should have:
 - **catalogType**: "infoscience" (more catalogs will be added in the future)
 - **entityType**: "publication", "person", or "orgunit"
-- **entity**: The full entity object (InfosciencePublication, InfoscienceAuthor, or InfoscienceLab)
+- **uuid**: Extract from markdown ("*UUID:* <uuid>") - REQUIRED!
+- **url**: Extract from markdown link ([Name](url))
+- **name**: Entity name/title
+- **entity**: The full entity object with ALL available fields from the markdown:
+  - For **person**: {uuid, name, email, orcid, affiliation, profile_url, publication_count, research_interests}
+  - For **orgunit**: {uuid, name, description, url, parent_organization, website, publication_count, research_areas}
+  - For **publication**: {uuid, title, authors, abstract, doi, publication_date, publication_type, url, lab, subjects}
 - **confidence**: Your confidence score (0.0-1.0)
 - **justification**: Clear explanation of the match
+- **externalId**: DOI for publications, ORCID for persons, null for orgunits
 - **matchedOn**: List of fields used for matching (e.g., ["name", "email"], ["doi"])
 
 ## Important Notes

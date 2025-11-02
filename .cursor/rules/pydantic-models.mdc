@@ -1,9 +1,6 @@
 ---
-title: Pydantic Data Models
-description: Patterns and conventions for Pydantic models and data validation
-tags: [pydantic, models, validation, data-models]
+alwaysApply: true
 ---
-
 # Pydantic Data Models
 
 ## Pydantic Version
@@ -95,6 +92,100 @@ class Person(BaseModel):
         description="Biographical or professional information",
         default=None,
     )
+```
+
+### Common Pitfalls and Best Practices
+
+#### 1. Field Name Matching (Critical!)
+
+**Problem**: Pydantic silently ignores unknown field names, causing data loss.
+
+```python
+# ❌ WRONG - Field name mismatch
+class InfoscienceAuthor(BaseModel):
+    profile_url: Optional[str] = None  # Model expects 'profile_url'
+
+# Parser passes wrong field name
+return InfoscienceAuthor(
+    name="John Doe",
+    url="https://..."  # ❌ Should be 'profile_url'!
+)
+# Result: profile_url is None (data silently lost)
+```
+
+```python
+# ✅ CORRECT - Field names match
+return InfoscienceAuthor(
+    name="John Doe",
+    profile_url="https://..."  # ✅ Correct field name
+)
+# Result: profile_url is properly set
+```
+
+**Solution**:
+- Always verify parser field names match model definition exactly
+- Review linter warnings about unexpected keyword arguments
+- Use type hints in parser functions for IDE validation
+- Test parser output to ensure all fields are populated
+
+#### 2. UUID and Identifier Preservation
+
+**Critical identifiers must be preserved through the entire data pipeline**:
+
+```python
+# ✅ CORRECT pattern for identifiers
+class AcademicEntity(BaseModel):
+    uuid: Optional[str] = Field(
+        description="Unique identifier from source system",
+        default=None,
+    )
+    url: Optional[HttpUrl] = Field(
+        description="Direct link to entity",
+        default=None,
+    )
+    externalId: Optional[str] = Field(
+        description="External identifier (DOI, ORCID, etc.)",
+        default=None,
+    )
+```
+
+**Chain of custody for identifiers**:
+1. Extract from API: `uuid = item.get("uuid")`
+2. Pass to model: `Model(uuid=uuid, ...)`
+3. Include in markdown: `md_parts.append(f"*UUID:* {self.uuid}")`
+4. Agent extracts: Parse from markdown for relation building
+
+#### 3. Default Factory for Mutable Defaults
+
+```python
+# ❌ WRONG - Mutable default
+class MyModel(BaseModel):
+    items: List[str] = []  # Shared across instances!
+
+# ✅ CORRECT - Use default_factory
+class MyModel(BaseModel):
+    items: List[str] = Field(default_factory=list)
+```
+
+#### 4. Forward References and TYPE_CHECKING
+
+When models reference each other, use proper forward references:
+
+```python
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional, List
+
+if TYPE_CHECKING:
+    from .academic_catalog import AcademicCatalogRelation
+
+class Person(BaseModel):
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        default_factory=list
+    )
+
+# Then in __init__.py, rebuild models:
+from .academic_catalog import AcademicCatalogRelation
+Person.model_rebuild(_types_namespace={"AcademicCatalogRelation": AcademicCatalogRelation})
 ```
 
 ### Enums

@@ -33,8 +33,7 @@ from .academic_catalog_prompts import (
 logger = logging.getLogger(__name__)
 
 # Load model configuration for academic catalog enrichment
-# For now, use organization enrichment config (can be split later if needed)
-academic_catalog_configs = load_model_config("run_organization_enrichment")
+academic_catalog_configs = load_model_config("run_academic_catalog_enrichment")
 
 # Validate configurations
 for config in academic_catalog_configs:

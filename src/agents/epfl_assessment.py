@@ -23,7 +23,7 @@ from .epfl_assessment_prompts import (
 logger = logging.getLogger(__name__)
 
 # Load model configuration
-epfl_assessment_configs = load_model_config("run_llm_analysis")
+epfl_assessment_configs = load_model_config("run_epfl_assessment")
 
 # Validate configurations
 for config in epfl_assessment_configs:
