@@ -1,9 +1,6 @@
 ---
-title: AI Agents and LLM Integration
-description: Patterns for AI agents, LLM integration, and prompt engineering
-tags: [ai, llm, agents, pydantic-ai, prompts]
+alwaysApply: true
 ---
-
 # AI Agents and LLM Integration
 
 ## PydanticAI Framework
@@ -21,10 +18,12 @@ tags: [ai, llm, agents, pydantic-ai, prompts]
 - Environment variable overrides supported
 
 #### Model Types
-Three analysis types with separate configs:
+Five analysis types with separate configs:
 - `run_llm_analysis` - Repository analysis
 - `run_user_enrichment` - User metadata enrichment
 - `run_organization_enrichment` - Organization metadata enrichment
+- `run_academic_catalog_enrichment` - Academic catalog searches (Infoscience, etc.)
+- `run_epfl_assessment` - Final EPFL relationship assessment
 
 #### Provider Support
 - **OpenAI**: Direct OpenAI API
@@ -663,17 +662,91 @@ async def get_user_json(full_path: str, force_refresh: bool = False,
     return response
 ```
 
+### Structured Agent Output Pattern (Option B)
+
+For agents that search for multiple entities (e.g., academic catalog enrichment), use **structured dictionaries** keyed by exact input names instead of flat lists requiring post-processing.
+
+#### Pattern: Organized Results
+```python
+class AcademicCatalogEnrichmentResult(BaseModel):
+    """Results organized by what was searched for."""
+    
+    # Repository-level results
+    repository_relations: List[AcademicCatalogRelation] = []
+    
+    # Author-level results (keyed by exact name provided)
+    author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    
+    # Organization-level results (keyed by exact name provided)
+    organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+```
+
+#### Agent Responsibilities
+- Search for each entity **individually** using the exact names provided
+- Handle name variations internally (e.g., "Alexander Mathis" finds "Mathis, Alexander")
+- Return results **keyed by the exact input names**
+- Include full entity details (not just references)
+
+#### Python Code Responsibilities  
+- Extract names to pass to agent
+- Perform **direct dictionary lookup** (no matching logic needed)
+- Assign results to appropriate objects
+- Handle missing keys (entities with no results)
+
+#### Example Implementation
+```python
+# Call agent with exact names
+result = await enrich_repository_academic_catalog(
+    repository_name="DeepLabCut",
+    authors=["Alexander Mathis", "Mackenzie Weygandt Mathis"],
+    organizations=["DeepLabCut"],
+)
+
+# Direct assignment (no name matching!)
+enrichment_data = result.get("data")
+
+# Repository level
+self.data.academicCatalogRelations = enrichment_data.repository_relations
+
+# Author level (direct lookup)
+for author in self.data.author:
+    if author.name in enrichment_data.author_relations:
+        author.academicCatalogRelations = enrichment_data.author_relations[author.name]
+    else:
+        author.academicCatalogRelations = []
+```
+
+**Benefits**:
+- ✅ No complex name matching in Python code
+- ✅ Explicit 1:1 relationship between search and result
+- ✅ Agent handles all name variations
+- ✅ Simple, debuggable, maintainable
+
+**When to Use**:
+- Searching for multiple entities of the same type
+- Need to assign results back to specific source objects
+- Name variations exist in the target system
+
 ### Best Practices
 1. **Always extract usage**: Check both direct attributes and `details` field
-2. **Provide estimates**: Use tiktoken for client-side token counting as fallback
+2. **Provide estimates**: Use `estimate_tokens_from_messages()` for client-side token counting as fallback
+   - ⚠️ Use correct keys: `estimated.get("input_tokens")` NOT `estimated.get("prompt_tokens")`
+   - ⚠️ Use correct keys: `estimated.get("output_tokens")` NOT `estimated.get("completion_tokens")`
 3. **Log token usage**: Help with debugging and cost monitoring at INFO level
-4. **Accumulate across agents**: Sum tokens from all agent runs (repo, user, org)
+4. **Accumulate across ALL agents**: Sum tokens from all agent runs
+   - ✅ `run_llm_analysis()` - Repository analysis
+   - ✅ `run_organization_enrichment()` - ROR matching
+   - ✅ `run_user_enrichment()` - Author enrichment
+   - ✅ `run_academic_catalog_enrichment()` - Infoscience searches
+   - ✅ `run_epfl_final_assessment()` - Final assessment
+   - Each must accumulate both `self.total_*_tokens` AND `self.estimated_*_tokens`
 5. **Track timing**: Record start/end times in `run_analysis()`, calculate duration in `get_usage_stats()`
 6. **Status codes**: 200 for success, 500 for failures
 7. **Graceful degradation**: Wrap enrichment calls in try-except to prevent cascading failures
 8. **Separate data from usage**: Use `result.get("data")` and `result.get("usage")` pattern consistently
 9. **Handle legacy returns**: Support both dict format `{"data": ..., "usage": ...}` and direct object returns
 10. **Filter input data**: Remove inappropriate objects (e.g., Organization from user enrichment author list)
+11. **Never hardcode estimated tokens to 0**: Always calculate them using `estimate_tokens_from_messages()`
 
 ## Integration Patterns
 

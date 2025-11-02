@@ -158,6 +158,98 @@ def _parse_publication(item: Dict[str, Any]) -> InfosciencePublication:
     )
 
 
+def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
+    """
+    Parse a DSpace person entity into an InfoscienceAuthor model.
+
+    Args:
+        item: DSpace person item dictionary
+
+    Returns:
+        InfoscienceAuthor instance or None if parsing fails
+    """
+    metadata = item.get("metadata", {})
+    uuid = item.get("uuid")
+    handle = item.get("handle")
+
+    # Get name - person entities typically use eperson.firstname + eperson.lastname
+    # or dc.title for the full name
+    name = _parse_metadata(metadata, "dc.title")
+    if not name:
+        # Try combining first and last name
+        first_name = _parse_metadata(metadata, "eperson.firstname")
+        last_name = _parse_metadata(metadata, "eperson.lastname")
+        if first_name and last_name:
+            name = f"{first_name} {last_name}"
+        elif first_name:
+            name = first_name
+        elif last_name:
+            name = last_name
+    
+    if not name:
+        logger.warning(f"Could not extract name from person item with UUID {uuid}")
+        return None
+
+    # Build URL
+    url = None
+    if uuid:
+        url = f"https://infoscience.epfl.ch/entities/person/{uuid}"
+    elif handle:
+        url = f"https://infoscience.epfl.ch/record/{handle}"
+
+    return InfoscienceAuthor(
+        uuid=uuid,
+        name=name,
+        email=_parse_metadata(metadata, "eperson.email"),
+        orcid=_parse_metadata(metadata, "person.identifier.orcid"),
+        affiliation=_parse_metadata(metadata, "person.affiliation.name"),
+        profile_url=url,  # Fixed: use profile_url instead of url
+        publication_count=None,  # Not available from person entity directly
+    )
+
+
+def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
+    """
+    Parse a DSpace organizational unit entity into an InfoscienceLab model.
+
+    Args:
+        item: DSpace orgunit item dictionary
+
+    Returns:
+        InfoscienceLab instance or None if parsing fails
+    """
+    metadata = item.get("metadata", {})
+    uuid = item.get("uuid")
+    handle = item.get("handle")
+
+    # Get name - orgunit entities typically use dc.title or organization.legalName
+    name = _parse_metadata(metadata, "dc.title")
+    if not name:
+        name = _parse_metadata(metadata, "organization.legalName")
+    if not name:
+        name = _parse_metadata(metadata, "organization.name")
+    
+    if not name:
+        logger.warning(f"Could not extract name from orgunit item with UUID {uuid}")
+        return None
+
+    # Build URL
+    url = None
+    if uuid:
+        url = f"https://infoscience.epfl.ch/entities/orgunit/{uuid}"
+    elif handle:
+        url = f"https://infoscience.epfl.ch/record/{handle}"
+
+    return InfoscienceLab(
+        uuid=uuid,
+        name=name,
+        description=_parse_metadata(metadata, "dc.description") or _parse_metadata(metadata, "dc.description.abstract"),
+        url=url,
+        parent_organization=_parse_metadata(metadata, "organization.parentOrganization"),
+        publication_count=None,  # Not available from orgunit entity directly
+    )
+
+
 async def search_publications(
     query: str,
     max_results: int = DEFAULT_MAX_RESULTS,
@@ -233,6 +325,9 @@ async def search_authors(
 ) -> InfoscienceSearchResult:
     """
     Search for authors/researchers in Infoscience.
+    
+    Uses the /discover/search/objects endpoint with configuration=person
+    to search the person index directly, just like the web UI.
 
     Args:
         name: Author name to search for
@@ -241,90 +336,86 @@ async def search_authors(
     Returns:
         InfoscienceSearchResult with authors
     """
-    # Try searching in profiles first
-    params = {
-        "query": name,
-        "size": max_results,
-    }
-
-    # First try the profiles endpoint
-    response = await _make_api_request("/eperson/profiles/search/byName", params=params)
-
     authors = []
     total_results = 0
 
-    if response:
-        # Parse profiles response
-        page_info = response.get("page", {})
+    # First, try searching the person configuration (like the web UI)
+    logger.info(f"Searching for person profiles: {name}")
+    person_params = {
+        "query": name,
+        "size": max_results,
+        "configuration": "person",
+    }
+    
+    person_response = await _make_api_request("/discover/search/objects", params=person_params)
+    
+    if person_response:
+        search_result = person_response.get("_embedded", {}).get("searchResult", {})
+        page_info = search_result.get("page", {})
         total_results = page_info.get("totalElements", 0)
-
-        profiles = response.get("_embedded", {}).get("profiles", [])
-
-        for profile in profiles:
-            try:
-                uuid = profile.get("id")
-                full_name = profile.get("fullName") or profile.get("name", "Unknown")
-                email = profile.get("email")
-                orcid = profile.get("orcid")
-
-                # Get profile URL
-                profile_url = None
-                self_link = profile.get("_links", {}).get("self", {}).get("href")
-                if self_link:
-                    profile_url = self_link.replace("/server/api/", "/")
-
-                author = InfoscienceAuthor(
-                    uuid=uuid,
-                    name=full_name,
-                    email=email,
-                    orcid=orcid,
-                    profile_url=profile_url,
-                )
-                authors.append(author)
-            except Exception as e:
-                logger.warning(f"Error parsing author profile: {e}")
-                continue
-
-    # If no results, try searching in publications by author name
-    if not authors:
-        logger.info(f"No profiles found, searching publications by author: {name}")
-        pub_params = {
-            "query": f"dc.contributor.author:{name}",
-            "size": max_results,
-            "configuration": "researchoutputs",
-        }
-
-        pub_response = await _make_api_request("/discover/search/objects", params=pub_params)
-
-        if pub_response:
-            search_result = pub_response.get("_embedded", {}).get("searchResult", {})
-            page_info = search_result.get("page", {})
-            total_results = page_info.get("totalElements", 0)
-
-            # Extract unique authors from publications
-            author_names = set()
+        
+        if total_results > 0:
+            logger.info(f"Found {total_results} person profiles for: {name}")
             objects = search_result.get("_embedded", {}).get("objects", [])
-
+            
             for obj in objects:
                 try:
                     item = obj.get("_embedded", {}).get("indexableObject", {})
-                    metadata = item.get("metadata", {})
-                    pub_authors = _parse_metadata_list(metadata, "dc.contributor.author")
-
-                    # Find authors matching the search name
-                    for author_name in pub_authors:
-                        if name.lower() in author_name.lower():
-                            if author_name not in author_names:
-                                author_names.add(author_name)
-                                authors.append(
-                                    InfoscienceAuthor(
-                                        name=author_name,
-                                        publication_count=1,  # Approximate
-                                    )
-                                )
+                    if item:
+                        author = _parse_author(item)
+                        if author:
+                            authors.append(author)
                 except Exception as e:
-                    logger.warning(f"Error extracting authors from publication: {e}")
+                    logger.warning(f"Error parsing person item: {e}")
                     continue
+            
+            logger.info(f"Found {len(authors)} authors for name: {name}")
+            return InfoscienceSearchResult(
+                total_results=total_results,
+                page=1,
+                results_per_page=max_results,
+                authors=authors,
+            )
+    
+    # Fallback: Search publications by author name and extract authors
+    logger.info(f"No person profiles found, searching publications by author: {name}")
+    pub_params = {
+        "query": f"dc.contributor.author:{name}",
+        "size": max_results,
+        "configuration": "researchoutputs",
+    }
+    
+    pub_response = await _make_api_request("/discover/search/objects", params=pub_params)
+    
+    if pub_response:
+        search_result = pub_response.get("_embedded", {}).get("searchResult", {})
+        page_info = search_result.get("page", {})
+        total_results = page_info.get("totalElements", 0)
+
+        # Extract unique authors from publications
+        author_names = set()
+        objects = search_result.get("_embedded", {}).get("objects", [])
+
+        for obj in objects:
+            try:
+                item = obj.get("_embedded", {}).get("indexableObject", {})
+                metadata = item.get("metadata", {})
+                pub_authors = _parse_metadata_list(metadata, "dc.contributor.author")
+
+                # Find authors matching the search name
+                for author_name in pub_authors:
+                    if name.lower() in author_name.lower():
+                        if author_name not in author_names:
+                            author_names.add(author_name)
+                            authors.append(
+                                InfoscienceAuthor(
+                                    name=author_name,
+                                    publication_count=1,  # Approximate
+                                )
+                            )
+            except Exception as e:
+                logger.warning(f"Error extracting authors from publication: {e}")
+                continue
 
     logger.info(f"Found {len(authors)} authors for name: {name}")
 
@@ -343,9 +434,8 @@ async def search_labs(
     """
     Search for labs and organizational units in Infoscience.
     
-    Note: Lab/community search uses the general discover endpoint since
-    specific community/collection search endpoints may not be available
-    or may require authentication.
+    First tries searching with configuration=orgunit (like the web UI for organizational units),
+    then falls back to searching publications and extracting lab information from metadata.
 
     Args:
         name: Lab or organization name to search for
@@ -354,18 +444,58 @@ async def search_labs(
     Returns:
         InfoscienceSearchResult with labs
     """
-    # Use the general discover search endpoint with a query for organizational units
-    # This searches across all content types
+    labs = []
+    lab_names_seen = set()
+    total_results = 0
+    
+    # First, try searching the orgunit configuration (like the web UI)
+    logger.info(f"Searching for organizational units: {name}")
+    orgunit_params = {
+        "query": name,
+        "size": max_results,
+        "configuration": "orgunit",
+    }
+    
+    orgunit_response = await _make_api_request("/discover/search/objects", params=orgunit_params)
+    
+    if orgunit_response:
+        search_result = orgunit_response.get("_embedded", {}).get("searchResult", {})
+        page_info = search_result.get("page", {})
+        total_results = page_info.get("totalElements", 0)
+        
+        if total_results > 0:
+            logger.info(f"Found {total_results} organizational units for: {name}")
+            objects = search_result.get("_embedded", {}).get("objects", [])
+            
+            for obj in objects:
+                try:
+                    item = obj.get("_embedded", {}).get("indexableObject", {})
+                    if item:
+                        lab = _parse_lab(item)
+                        if lab:
+                            labs.append(lab)
+                            lab_names_seen.add(lab.name)
+                except Exception as e:
+                    logger.warning(f"Error parsing orgunit item: {e}")
+                    continue
+            
+            logger.info(f"Found {len(labs)} labs for name: {name}")
+            return InfoscienceSearchResult(
+                total_results=total_results,
+                page=1,
+                results_per_page=max_results,
+                labs=labs,
+            )
+    
+    # Fallback: Search publications and extract lab information from metadata
+    logger.info(f"No organizational units found, searching publications for lab info: {name}")
     params = {
         "query": name,
         "size": max_results,
-        "dsoType": "community",  # Filter for communities (often represent labs/orgs)
+        "configuration": "researchoutputs",
     }
 
-    response = await _make_api_request("/discover/search/objects", params=params, use_auth=True)
-
-    labs = []
-    total_results = 0
+    response = await _make_api_request("/discover/search/objects", params=params)
 
     if response:
         search_result = response.get("_embedded", {}).get("searchResult", {})
@@ -374,72 +504,41 @@ async def search_labs(
 
         objects = search_result.get("_embedded", {}).get("objects", [])
 
+        # Extract labs from publications
         for obj in objects:
             try:
                 item = obj.get("_embedded", {}).get("indexableObject", {})
-                uuid = item.get("uuid")
                 metadata = item.get("metadata", {})
                 
-                lab_name = _parse_metadata(metadata, "dc.title") or item.get("name", "Unknown")
-                description = _parse_metadata(metadata, "dc.description")
-
-                # Build URL
-                url = None
-                handle = item.get("handle")
-                if handle:
-                    url = f"https://infoscience.epfl.ch/handle/{handle}"
-
-                lab = InfoscienceLab(
-                    uuid=uuid,
-                    name=lab_name,
-                    description=description,
-                    url=url,
-                )
-                labs.append(lab)
+                # Try to find lab information in various metadata fields
+                lab_info = _parse_metadata(metadata, "dc.contributor.lab")
+                if not lab_info:
+                    lab_info = _parse_metadata(metadata, "dc.contributor.unit")
+                if not lab_info:
+                    lab_info = _parse_metadata(metadata, "dc.contributor.affiliation")
+                
+                # If we found lab info and it matches the search query
+                if lab_info and name.lower() in lab_info.lower():
+                    if lab_info not in lab_names_seen:
+                        lab_names_seen.add(lab_info)
+                        
+                        # Get publication title for context
+                        pub_title = _parse_metadata(metadata, "dc.title")
+                        description = f"Lab identified from publication: {pub_title[:100] if pub_title else 'N/A'}..."
+                        
+                        lab = InfoscienceLab(
+                            name=lab_info,
+                            description=description,
+                            publication_count=1,  # At least one publication
+                        )
+                        labs.append(lab)
+                        
+                        if len(labs) >= max_results:
+                            break
+                            
             except Exception as e:
-                logger.warning(f"Error parsing lab/community: {e}")
+                logger.warning(f"Error extracting lab from publication: {e}")
                 continue
-
-    # If no communities found, try searching collections
-    if len(labs) == 0:
-        logger.debug("No communities found, trying collections")
-        params["dsoType"] = "collection"
-        
-        coll_response = await _make_api_request("/discover/search/objects", params=params, use_auth=True)
-
-        if coll_response:
-            search_result = coll_response.get("_embedded", {}).get("searchResult", {})
-            if total_results == 0:
-                page_info = search_result.get("page", {})
-                total_results = page_info.get("totalElements", 0)
-            
-            objects = search_result.get("_embedded", {}).get("objects", [])
-
-            for obj in objects[:max_results]:
-                try:
-                    item = obj.get("_embedded", {}).get("indexableObject", {})
-                    uuid = item.get("uuid")
-                    metadata = item.get("metadata", {})
-
-                    lab_name = _parse_metadata(metadata, "dc.title") or item.get("name", "Unknown")
-                    description = _parse_metadata(metadata, "dc.description")
-
-                    # Build URL
-                    url = None
-                    handle = item.get("handle")
-                    if handle:
-                        url = f"https://infoscience.epfl.ch/handle/{handle}"
-
-                    lab = InfoscienceLab(
-                        uuid=uuid,
-                        name=lab_name,
-                        description=description,
-                        url=url,
-                    )
-                    labs.append(lab)
-                except Exception as e:
-                    logger.warning(f"Error parsing collection: {e}")
-                    continue
 
     logger.info(f"Found {len(labs)} labs/organizations for name: {name}")
 
@@ -473,6 +572,47 @@ async def get_author_publications(
         max_results=max_results,
         search_field="dc.contributor.author",
     )
+
+
+async def get_entity_by_uuid(
+    uuid: str,
+    entity_type: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Get an entity directly by its UUID.
+    
+    This function supports direct access to entities using their UUID.
+    Useful for accessing specific publications, persons, or organizational units
+    when you already know the UUID (e.g., from user-provided URLs).
+    
+    Args:
+        uuid: The UUID of the entity
+        entity_type: Optional hint about entity type ("publication", "person", "orgunit")
+                    If not provided, will try /core/items/{uuid}
+    
+    Returns:
+        Raw entity data as dictionary, or None if not found
+        
+    Example URLs:
+        - https://infoscience.epfl.ch/entities/publication/{uuid}
+        - https://infoscience.epfl.ch/entities/person/{uuid}
+        - https://infoscience.epfl.ch/entities/orgunit/{uuid}
+    """
+    logger.info(f"Fetching entity by UUID: {uuid} (type: {entity_type or 'auto'})")
+    
+    # Try entity-specific endpoint if type is known
+    if entity_type:
+        response = await _make_api_request(f"/entities/{entity_type}/{uuid}")
+        if response:
+            return response
+            
+    # Fallback to generic items endpoint
+    response = await _make_api_request(f"/core/items/{uuid}")
+    if response:
+        return response
+        
+    logger.warning(f"Entity not found for UUID: {uuid}")
+    return None
 
 
 ##########################################################

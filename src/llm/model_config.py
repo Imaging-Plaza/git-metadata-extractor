@@ -76,6 +76,42 @@ MODEL_CONFIGS = {
             "timeout": 300.0,
         },
     ],
+    "run_academic_catalog_enrichment": [
+        {
+            "provider": "openai",
+            "model": "o4-mini",
+            "max_retries": 3,
+            "temperature": 0.1,
+            "max_tokens": 12000,
+            "timeout": 300.0,
+        },
+        {
+            "provider": "openrouter",
+            "model": "google/gemini-2.5-flash",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 300.0,
+        },
+    ],
+    "run_epfl_assessment": [
+        {
+            "provider": "openai",
+            "model": "o4-mini",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+        },
+        {
+            "provider": "openrouter",
+            "model": "google/gemini-2.5-flash",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+        },
+    ],
 }
 
 # Environment variable mappings
@@ -83,6 +119,8 @@ ENV_VAR_MAPPINGS = {
     "run_llm_analysis": "LLM_ANALYSIS_MODELS",
     "run_user_enrichment": "USER_ENRICHMENT_MODELS",
     "run_organization_enrichment": "ORG_ENRICHMENT_MODELS",
+    "run_academic_catalog_enrichment": "ACADEMIC_CATALOG_ENRICHMENT_MODELS",
+    "run_epfl_assessment": "EPFL_ASSESSMENT_MODELS",
 }
 
 

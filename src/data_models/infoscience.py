@@ -63,6 +63,10 @@ class InfosciencePublication(BaseModel):
         else:
             md_parts.append(f"**{self.title}**")
 
+        # UUID (important for creating relations)
+        if self.uuid:
+            md_parts.append(f"*UUID:* {self.uuid}")
+
         # Authors
         if self.authors:
             authors_str = ", ".join(self.authors)
@@ -146,6 +150,10 @@ class InfoscienceAuthor(BaseModel):
         else:
             md_parts.append(f"**{self.name}**")
 
+        # UUID (important for creating relations)
+        if self.uuid:
+            md_parts.append(f"*UUID:* {self.uuid}")
+
         # Affiliation
         if self.affiliation:
             md_parts.append(f"*Affiliation:* {self.affiliation}")
@@ -212,6 +220,10 @@ class InfoscienceLab(BaseModel):
             md_parts.append(f"**[{self.name}]({self.url})**")
         else:
             md_parts.append(f"**{self.name}**")
+
+        # UUID (important for creating relations)
+        if self.uuid:
+            md_parts.append(f"*UUID:* {self.uuid}")
 
         # Parent organization
         if self.parent_organization:

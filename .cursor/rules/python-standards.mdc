@@ -1,9 +1,6 @@
 ---
-title: Python Standards and Code Quality
-description: Python coding standards, formatting, and linting rules for the project
-tags: [python, standards, formatting, linting]
+alwaysApply: true
 ---
-
 # Python Standards and Code Quality
 
 ## ⚠️ CRITICAL REQUIREMENT

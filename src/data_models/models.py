@@ -14,7 +14,7 @@ from typing import (
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 if TYPE_CHECKING:
-    from .repository import InfoscienceEntity
+    from .academic_catalog import AcademicCatalogRelation
 
 
 class Person(BaseModel):
@@ -72,9 +72,9 @@ class Person(BaseModel):
         description="Additional biographical or professional information",
         default=None,
     )
-    infoscienceEntity: Optional["InfoscienceEntity"] = Field(
-        description="Infoscience entity data (EPFL) with name, url, confidence, and justification",
-        default=None,
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
+        default_factory=list,
     )
 
     @field_validator("orcidId", mode="before")
@@ -116,9 +116,9 @@ class Organization(BaseModel):
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
     attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    infoscienceEntity: Optional["InfoscienceEntity"] = Field(
-        description="Infoscience entity data (EPFL labs, research groups) with name, url, confidence, and justification",
-        default=None,
+    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+        description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
+        default_factory=list,
     )
     
 

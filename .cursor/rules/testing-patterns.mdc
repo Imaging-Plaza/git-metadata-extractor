@@ -1,9 +1,6 @@
 ---
-title: Testing Patterns and Best Practices
-description: Testing conventions, patterns, and best practices for the project
-tags: [testing, pytest, quality-assurance]
+alwaysApply: true
 ---
-
 # Testing Patterns and Best Practices
 
 ## Testing Framework

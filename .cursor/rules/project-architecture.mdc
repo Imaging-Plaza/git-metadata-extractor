@@ -1,9 +1,6 @@
 ---
-title: Project Architecture and Module Organization
-description: Project structure, module organization, and architectural patterns
-tags: [architecture, structure, modules, organization]
+alwaysApply: true
 ---
-
 # Project Architecture and Module Organization
 
 ## Project Overview
@@ -67,14 +64,29 @@ src/
 - Type discriminator: `type: Literal["Person"]` (auto-defaults)
 - Identity: `name`, `email`, `emails`, `orcidId`, `gitAuthorIds`
 - Affiliations: `affiliations`, `currentAffiliation`, `affiliationHistory`
-- Metadata: `contributionSummary`, `biography`, `infoscienceEntity`
+- Metadata: `contributionSummary`, `biography`, `academicCatalogRelations`
 - Backward compatibility: `affiliation` field deprecated but kept
 
 **Organization Model** - Institutions and companies:
 - Type discriminator: `type: Literal["Organization"]` (auto-defaults)
 - Identity: `legalName`, `hasRorId`, `alternateNames`
 - Details: `organizationType`, `parentOrganization`, `country`, `website`
-- Metadata: `attributionConfidence`
+- Metadata: `attributionConfidence`, `academicCatalogRelations`
+
+#### Academic Catalog Models (`academic_catalog.py`)
+**AcademicCatalogRelation** - Relation to an academic catalog entity:
+- Catalog: `catalogType` (infoscience, openalex, epfl_graph)
+- Entity: `entityType` (publication, person, orgunit), full `entity` object
+- Matching: `confidence`, `justification`, `matchedOn` fields
+- Identifiers: `uuid`, `url`, `externalId` (DOI, ORCID, etc.)
+
+**AcademicCatalogEnrichmentResult** - Structured agent output:
+- `repository_relations`: Publications about the repository itself
+- `author_relations`: Dict[author_name, List[relations]] for each author
+- `organization_relations`: Dict[org_name, List[relations]] for each org
+- Metadata: `searchStrategy`, `catalogsSearched`, `totalSearches`
+- Token tracking: `inputTokens`, `outputTokens`
+- Backward compatibility: `.relations` property aggregates all
 
 **Type Discrimination**:
 - Both models support mixed lists via `type` field
@@ -93,6 +105,13 @@ src/
 - **Pattern**: Separate files for each agent type
 - **Prompts**: Dedicated `*_prompts.py` files
 - **Tools**: Shared tools in `tools.py`
+- **Current Agents**:
+  - `repository_enrichment.py` - Main repository analysis
+  - `user_enrichment.py` - Author/person enrichment with ORCID
+  - `organization_enrichment.py` - ROR matching for organizations
+  - `academic_catalog_enrichment.py` - Infoscience/academic catalog searches
+  - `epfl_assessment.py` - Final holistic EPFL relationship assessment
+- **Structured Output Pattern**: Agents return organized dicts keyed by input names for direct assignment
 
 ### `llm/`
 - **Purpose**: LLM configuration and management
@@ -127,10 +146,13 @@ src/
   - Generates comprehensive markdown with tree structure, imports, and file contents
   - Skips binary files, large files (>1MB), and irrelevant directories
   - Handles encoding fallbacks (UTF-8, latin-1, cp1252)
-- **Infoscience**: EPFL research repository integration
-  - API client functions for searching publications, authors, labs
+- **Infoscience** (`infoscience.py`): EPFL research repository integration (DSpace 7.6)
+  - Search functions using `configuration=person|orgunit|researchoutputs` (like web UI)
+  - Parser functions: `_parse_publication()`, `_parse_author()`, `_parse_lab()`
   - PydanticAI tool functions for agent use
   - In-memory caching to prevent duplicate API calls
+  - Direct UUID access via `get_entity_by_uuid()` for publications, persons, orgunits
+  - Handles name variations (e.g., "Mathis, Alexander" vs "Alexander Mathis")
   - Markdown formatting for LLM consumption
 
 ### `cache/`
@@ -178,9 +200,19 @@ src/
    - Wrapped in try-except for error resilience
    - Extracts usage from result
    - **Replaces** organization lists with enriched versions (no duplicates)
-10. **Validation & Caching**: Validate against Pydantic model and cache
-11. **Success & Timing**: Set `analysis_successful=True`, record `end_time`
-12. **Output**: JSON-LD format + comprehensive usage statistics via `get_usage_stats()`
+10. **Academic Catalog Enrichment**: (NEW - integrated into main flow)
+   - Extracts author names and organization names from existing data
+   - Agent searches Infoscience individually for each entity
+   - Returns structured results: `repository_relations`, `author_relations`, `organization_relations`
+   - **Direct assignment** to repository, authors, and organizations via dict lookup
+   - Accumulates tokens (official + estimated)
+11. **EPFL Assessment**: Final holistic assessment of EPFL relationship
+   - Reviews all collected data (authors, orgs, catalog relations)
+   - Provides confidence score and detailed justification
+   - Accumulates tokens (official + estimated)
+12. **Validation & Caching**: Validate against Pydantic model and cache
+13. **Success & Timing**: Set `analysis_successful=True`, record `end_time`
+14. **Output**: JSON-LD format + comprehensive usage statistics via `get_usage_stats()`
 
 ### User Enrichment
 1. **Input Preparation**:

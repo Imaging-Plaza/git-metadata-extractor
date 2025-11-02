@@ -1,6 +1,12 @@
 """Data models and schemas for the application."""
 
 # __init__.py - Clean up exports
+from .academic_catalog import (
+    AcademicCatalogEnrichmentResult,
+    AcademicCatalogRelation,
+    CatalogType,
+    EntityType,
+)
 from .api import APIOutput
 from .conversion import (
     convert_jsonld_to_pydantic,
@@ -70,7 +76,7 @@ __all__ = [
     "Commits",
     "Image",
     "ImageKeyword",
-    "InfoscienceEntity",
+    "InfoscienceEntity",  # Deprecated - use AcademicCatalogRelation
     "FundingInformation",
     "FormalParameter",
     "ExecutableNotebook",
@@ -92,6 +98,11 @@ __all__ = [
     "OrganizationEnrichmentResult",
     "OrganizationAnalysisContext",
     "GitHubOrganizationMetadata",
+    # Academic Catalog models
+    "AcademicCatalogRelation",
+    "AcademicCatalogEnrichmentResult",
+    "CatalogType",
+    "EntityType",
     # Infoscience models
     "InfosciencePublication",
     "InfoscienceAuthor",
@@ -113,12 +124,44 @@ __all__ = [
 ]
 
 # Rebuild models after all imports to resolve forward references
-# This must happen after InfoscienceEntity is imported from repository
-# We need to pass InfoscienceEntity in the namespace for the forward reference to resolve
+# This must happen after AcademicCatalogRelation is imported
 import sys
+
 _module = sys.modules[Person.__module__]
-_module.InfoscienceEntity = InfoscienceEntity
+_module.AcademicCatalogRelation = AcademicCatalogRelation
+_module.InfoscienceEntity = InfoscienceEntity  # Keep for backward compatibility during migration
 Person.model_rebuild()
 Organization.model_rebuild()
 # Clean up namespace
-delattr(_module, 'InfoscienceEntity')
+delattr(_module, "AcademicCatalogRelation")
+delattr(_module, "InfoscienceEntity")
+
+# Rebuild SoftwareSourceCode to resolve AcademicCatalogRelation forward reference
+_repo_module = sys.modules[SoftwareSourceCode.__module__]
+_repo_module.AcademicCatalogRelation = AcademicCatalogRelation
+SoftwareSourceCode.model_rebuild()
+delattr(_repo_module, "AcademicCatalogRelation")
+
+# Rebuild EnrichedAuthor to resolve AcademicCatalogRelation forward reference
+_user_module = sys.modules[EnrichedAuthor.__module__]
+_user_module.AcademicCatalogRelation = AcademicCatalogRelation
+EnrichedAuthor.model_rebuild()
+delattr(_user_module, "AcademicCatalogRelation")
+
+# Rebuild GitHubUser to resolve AcademicCatalogRelation forward reference
+_githubuser_module = sys.modules[GitHubUser.__module__]
+_githubuser_module.AcademicCatalogRelation = AcademicCatalogRelation
+GitHubUser.model_rebuild()
+delattr(_githubuser_module, "AcademicCatalogRelation")
+
+# Rebuild GitHubOrganization to resolve AcademicCatalogRelation forward reference
+_org_module = sys.modules[GitHubOrganization.__module__]
+_org_module.AcademicCatalogRelation = AcademicCatalogRelation
+GitHubOrganization.model_rebuild()
+delattr(_org_module, "AcademicCatalogRelation")
+
+# Rebuild OrganizationLLMAnalysisResult to resolve AcademicCatalogRelation forward reference
+_orgllm_module = sys.modules[OrganizationLLMAnalysisResult.__module__]
+_orgllm_module.AcademicCatalogRelation = AcademicCatalogRelation
+OrganizationLLMAnalysisResult.model_rebuild()
+delattr(_orgllm_module, "AcademicCatalogRelation")

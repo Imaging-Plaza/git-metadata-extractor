@@ -1,9 +1,6 @@
 ---
-title: Dependencies and pyproject.toml Configuration
-description: Dependency management, pyproject.toml structure, and version constraints
-tags: [dependencies, pyproject, packaging, versions]
+alwaysApply: true
 ---
-
 # Dependencies and pyproject.toml Configuration
 
 ## Project Metadata
