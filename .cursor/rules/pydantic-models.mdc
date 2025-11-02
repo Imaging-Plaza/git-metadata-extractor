@@ -1,0 +1,954 @@
+---
+title: Pydantic Data Models
+description: Patterns and conventions for Pydantic models and data validation
+tags: [pydantic, models, validation, data-models]
+---
+
+# Pydantic Data Models
+
+## Pydantic Version
+- Using Pydantic v2.11.7
+- Follow Pydantic V2 patterns and conventions
+- Avoid deprecated V1 patterns
+
+## Model Organization
+
+### Directory Structure
+- Core models: `src/data_models/models.py`
+- Repository models: `src/data_models/repository.py`
+- User models: `src/data_models/user.py`
+- Organization models: `src/data_models/organization.py`
+- EPFL assessment models: `src/data_models/epfl_assessment.py`
+- API models: `src/data_models/api.py`
+- Conversions: `src/data_models/conversion.py`
+
+### Export Pattern
+- All models must be exported in `src/data_models/__init__.py`
+- Update `__all__` list when adding new models
+- Use explicit imports in `__init__.py`
+
+## Model Conventions
+
+### Field Definitions
+- Use `Optional[T]` with `= None` for optional fields
+- Use `List[T]` for array fields (import from `typing`)
+- Use `HttpUrl` from pydantic for URL validation
+- Use proper default values when applicable
+
+### Example Pattern
+```python
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List, Literal
+
+class Person(BaseModel):
+    """Person model representing an individual author or contributor"""
+    
+    # Type discriminator
+    type: Literal["Person"] = Field(
+        default="Person",
+        description="Type discriminator for Person/Organization unions"
+    )
+    
+    # Core identity fields
+    name: str = Field(description="Person's name")
+    email: Optional[str] = Field(
+        description="Primary email address",
+        default=None,
+    )
+    emails: List[str] = Field(
+        description="List of all email addresses",
+        default_factory=list,
+    )
+    orcidId: Optional[HttpUrl] = Field(
+        description="ORCID identifier URL",
+        default=None,
+    )
+    gitAuthorIds: Optional[List[str]] = Field(
+        description="List of git author identifiers mapping to this person",
+        default_factory=list,
+    )
+    
+    # Affiliation fields
+    affiliation: Optional[List[str]] = Field(
+        description="List of affiliations (deprecated, use affiliations)",
+        default=None,
+    )
+    affiliations: List[str] = Field(
+        description="List of all identified affiliations",
+        default_factory=list,
+    )
+    currentAffiliation: Optional[str] = Field(
+        description="Most recent or current affiliation",
+        default=None,
+    )
+    affiliationHistory: List[dict] = Field(
+        description="Temporal affiliation information with dates",
+        default_factory=list,
+    )
+    
+    # Additional metadata
+    contributionSummary: Optional[str] = Field(
+        description="Summary of contributions to the repository",
+        default=None,
+    )
+    biography: Optional[str] = Field(
+        description="Biographical or professional information",
+        default=None,
+    )
+```
+
+### Enums
+- Use `str, Enum` for string enums
+- Define in `src/data_models/models.py` for core enums
+- Use descriptive string values
+
+```python
+from enum import Enum
+
+class ResourceType(str, Enum):
+    REPOSITORY = "repository"
+    USER = "user"
+    ORGANIZATION = "organization"
+```
+
+### Field Naming
+- Use camelCase for field names to match JSON-LD schema
+- Examples: `orcidId`, `legalName`, `hasRorId`
+- This maintains compatibility with Imaging Plaza schema
+
+## Validation
+
+### Debugging Utilities
+- Use debugging functions from `data_models.repository`:
+  - `debug_pydantic_validation()`
+  - `log_validation_errors()`
+  - `debug_field_values()`
+  - `validate_repository_data_with_debugging()`
+
+### Custom Validation
+- Use Pydantic V2 validators (`@field_validator`, `@model_validator`)
+- Provide clear validation error messages
+- Log validation errors for debugging
+
+### Built-in Field Validators
+
+#### Person Model (`src/data_models/models.py`)
+**ORCID ID Validator**:
+```python
+@field_validator("orcidId", mode="before")
+@classmethod
+def validate_orcid(cls, v):
+    """Convert plain ORCID identifier to full URL if needed."""
+    # Accepts: "0000-0002-1234-5678" → "https://orcid.org/0000-0002-1234-5678"
+    # Also accepts: "https://orcid.org/0000-0002-1234-5678" (already URL)
+```
+- Converts plain ORCID identifiers (19 chars, 3 dashes) to full URLs
+- LLM agents can return either format
+- Validation passes for both formats
+
+#### Organization Model (`src/data_models/models.py`)
+**ROR ID Validator**:
+```python
+@field_validator("hasRorId", mode="before")
+@classmethod
+def validate_ror(cls, v):
+    """Convert plain ROR identifier to full URL if needed."""
+    # Accepts: "05gzmn429" → "https://ror.org/05gzmn429"
+```
+- Converts plain ROR identifiers (9 chars) to full URLs
+- Handles both plain and URL formats
+
+**Website URL Validator**:
+```python
+@field_validator("website", mode="before")
+@classmethod
+def validate_website(cls, v):
+    """Ensure website URL is valid, fix common issues."""
+    # Fixes: "epfl.ch" → "https://epfl.ch"
+    # Rejects: URLs with spaces or no dots
+```
+- Adds `https://` prefix if missing
+- Returns `None` for invalid URLs (spaces, no dots)
+- Prevents validation errors from malformed URLs
+
+### Validator Best Practices
+1. **Use `mode="before"`**: Process raw input before type coercion
+2. **Handle None gracefully**: Check for `None` early and return it
+3. **Auto-fix when possible**: Convert plain IDs to URLs automatically
+4. **Fail gracefully**: Return `None` for invalid data rather than raising
+5. **Log warnings**: Help debug validation issues
+
+## Model Conversion
+
+### JSON-LD Conversion
+- Use `convert_jsonld_to_pydantic()` for JSON-LD → Pydantic
+- Use `convert_pydantic_to_zod_form_dict()` for form generation
+- Handle nested structures properly
+
+### API Output
+- Use `APIOutput` model for all API responses
+- Include metadata like timestamps and resource types
+- Maintain consistent response structure
+
+### APIStats Model
+Located in `src/data_models/api.py`, tracks comprehensive usage and timing metrics:
+
+```python
+class APIStats(BaseModel):
+    # Official API-reported token counts
+    agent_input_tokens: int = None
+    agent_output_tokens: int = None
+    total_tokens: int = None
+    
+    # Tokenizer-based estimates (complementary/fallback)
+    estimated_input_tokens: int = None
+    estimated_output_tokens: int = None
+    estimated_total_tokens: int = None
+    
+    # Timing and status
+    duration: float = None  # Total duration in seconds
+    start_time: datetime = None
+    end_time: datetime = None
+    status_code: int = None  # HTTP status (200, 500, etc.)
+    
+    def calculate_total_tokens(self):
+        """Calculate total tokens from input and output tokens."""
+        # Calculates both official and estimated totals
+        ...
+```
+
+**Usage:**
+- **Dual token tracking**: Official API counts + client-side estimates
+- **Timing**: Full request lifecycle (start, end, duration)
+- **Status**: Success/failure indication
+- **Call `calculate_total_tokens()`** before returning to populate totals
+
+**Why dual tracking:**
+- Some models (OpenAI o3/o4, Anthropic) don't report usage reliably
+- Estimates provide fallback and validation
+- Useful for cost monitoring and optimization
+
+## Type Discrimination Pattern
+
+### Person and Organization Unions
+Both `Person` and `Organization` models include a `type` field for discrimination in mixed lists:
+
+```python
+from typing import Literal, Union, List
+
+class Person(BaseModel):
+    type: Literal["Person"] = Field(default="Person", ...)
+    # ... other fields
+
+class Organization(BaseModel):
+    type: Literal["Organization"] = Field(default="Organization", ...)
+    # ... other fields
+
+# Usage in unions
+author: Optional[List[Union[Person, Organization]]] = None
+```
+
+**Key Features:**
+- **Automatic defaults**: Type field automatically set even when not provided
+- **LLM-safe**: Works even if LLM doesn't include type in output
+- **Discrimination**: Use `author.type` to determine Person vs Organization
+- **JSON serialization**: Type field included in JSON output
+- **Filtering**: Easy to filter mixed lists by type
+
+**Example Usage:**
+```python
+# Filter by type
+people = [a for a in authors if a.type == "Person"]
+orgs = [a for a in authors if a.type == "Organization"]
+
+# Type checking still works
+if isinstance(author, Person):
+    print(author.name)
+elif isinstance(author, Organization):
+    print(author.legalName)
+```
+
+## Semantic Model: Authors vs Organizations
+
+### Author Field
+The `author` field contains **direct contributors** only:
+- People who committed code
+- Organizational GitHub accounts that committed code
+
+### Related Organizations Fields
+Separate fields for **broader organizational relationships**:
+- `relatedToOrganizations`: List of organization names
+- `relatedToOrganizationsROR`: List of Organization objects with ROR data
+
+These include:
+- Hosting institutions
+- Funding organizations
+- Affiliated institutions
+- Organizations mentioned in documentation
+
+**Organizations do NOT automatically migrate** from `relatedToOrganizationsROR` to `author` - they stay in their appropriate fields based on their relationship to the repository.
+
+## EnrichedAuthor → Person Conversion
+
+### Working Model vs Data Model
+- **EnrichedAuthor**: Internal working model used by AI agents during enrichment
+- **Person**: Canonical data model for storage and output
+
+### Conversion Function
+Location: `src/data_models/user.py`
+
+```python
+def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
+    """Convert EnrichedAuthor to Person"""
+    return Person(
+        type="Person",  # Explicit type
+        name=enriched.name,
+        email=enriched.email,
+        emails=[enriched.email] if enriched.email else [],
+        orcidId=enriched.orcidId,
+        affiliations=enriched.affiliations,
+        currentAffiliation=enriched.currentAffiliation,
+        affiliationHistory=enriched.affiliationHistory,
+        contributionSummary=enriched.contributionSummary,
+        biography=enriched.additionalInfo,  # Map to biography
+        infoscienceEntity=enriched.infoscienceEntity,
+    )
+```
+
+**Process:**
+1. Agent outputs `EnrichedAuthor` objects
+2. Conversion function transforms to `Person` objects
+3. `Person` objects stored in repository `author` field
+4. Type field automatically set to "Person"
+
+## User Models
+
+### GitHubUser Model
+Location: `src/data_models/user.py`
+
+The `GitHubUser` model represents a GitHub user profile with enrichment capabilities:
+
+```python
+class GitHubUser(BaseModel):
+    """GitHub user profile with enrichment data"""
+    
+    # Core identity
+    name: Optional[str] = None
+    fullname: Optional[str] = None
+    githubHandle: Optional[str] = None
+    
+    # GitHub metadata
+    githubUserMetadata: Optional[GitHubUserMetadata] = None
+    
+    # Organization relationships
+    relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganizationsROR: Optional[List[Organization]] = None
+    relatedToOrganizationJustification: Optional[List[str]] = None
+    
+    # Discipline and position (from LLM analysis)
+    discipline: Optional[List[Discipline]] = None
+    disciplineJustification: Optional[List[str]] = None
+    position: Optional[List[str]] = None
+    positionJustification: Optional[List[str]] = None
+    
+    # EPFL relationship
+    relatedToEPFL: Optional[bool] = None
+    relatedToEPFLJustification: Optional[str] = None
+    relatedToEPFLConfidence: Optional[float] = None
+    
+    # Infoscience integration
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = None
+```
+
+**Key Fields:**
+- **githubUserMetadata**: Full GitHub API response with ORCID and README data
+- **discipline/position**: Extracted by LLM from bio, README, ORCID
+- **relatedToOrganizationsROR**: Enriched organization data with ROR IDs
+- **infoscienceEntities**: EPFL publications and author records found via Infoscience API
+
+### GitHubUserMetadata Model
+Nested model containing raw GitHub API data:
+
+```python
+class GitHubUserMetadata(BaseModel):
+    """Raw GitHub user data from API"""
+    
+    # Core GitHub fields
+    login: str
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    email: Optional[str] = None
+    location: Optional[str] = None
+    company: Optional[str] = None
+    blog: Optional[str] = None
+    
+    # Social and stats
+    twitter_username: Optional[str] = None
+    public_repos: int
+    followers: int
+    following: int
+    
+    # ORCID integration
+    orcid: Optional[str] = None  # Auto-validated to URL format
+    orcid_activities: Optional[ORCIDActivities] = None
+    
+    # GitHub data
+    organizations: List[str] = Field(default_factory=list)
+    social_accounts: List[Dict[str, str]] = Field(default_factory=list)
+    
+    # Profile README
+    readme_url: Optional[str] = None
+    readme_content: Optional[str] = None
+```
+
+**Data Access Pattern:**
+```python
+# In User class methods, always access via githubUserMetadata
+github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+
+# Then safely access fields
+name = github_metadata.get("name")
+bio = github_metadata.get("bio")
+orcid = github_metadata.get("orcid")
+```
+
+### InfoscienceEntity Model
+Location: `src/data_models/repository.py` (shared with repositories)
+
+Records publications and author profiles found in EPFL's Infoscience repository:
+
+```python
+class InfoscienceEntity(BaseModel):
+    """Infoscience publication or author record"""
+    
+    name: str = Field(description="Publication title or author name")
+    url: HttpUrl = Field(description="Infoscience URL")
+    confidence: float = Field(
+        description="Confidence score (0.0-1.0) for relevance",
+        ge=0.0,
+        le=1.0,
+    )
+    justification: str = Field(
+        description="Why this entity is relevant",
+    )
+```
+
+**Usage in GitHubUser:**
+- Populated by user LLM agent when analyzing GitHub profiles
+- Agent has access to Infoscience search tools
+- Can find author profiles and publications by name
+- Helps establish EPFL relationships
+
+**Example:**
+```json
+{
+  "infoscienceEntities": [
+    {
+      "name": "John Doe - EPFL Profile",
+      "url": "https://infoscience.epfl.ch/authors/john-doe",
+      "confidence": 0.85,
+      "justification": "Author profile matches GitHub username and bio mentions EPFL"
+    }
+  ]
+}
+```
+
+## LLM Analysis Result Models
+
+### CRITICAL: Schema Enforcement for LLM Agents
+
+**Always define a Pydantic schema for LLM agent output.** Do NOT use generic `Dict`.
+
+### UserLLMAnalysisResult
+Location: `src/data_models/user.py`
+
+**Purpose**: Schema for user LLM agent output (not enrichment - that's different!)
+
+```python
+class UserLLMAnalysisResult(BaseModel):
+    """Result of user LLM analysis - the structured output from the main user agent"""
+    
+    relatedToOrganization: Optional[List[str]] = Field(
+        description="List of organizations the user is affiliated with",
+        default_factory=list,
+    )
+    relatedToOrganizationJustification: Optional[List[str]] = Field(
+        description="Justification for each organization affiliation",
+        default_factory=list,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific disciplines or fields the user works in",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline classification",
+        default_factory=list,
+    )
+    position: Optional[List[str]] = Field(
+        description="Professional positions or roles",
+        default_factory=list,
+    )
+    positionJustification: Optional[List[str]] = Field(
+        description="Justification for each position",
+        default_factory=list,
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/user.py
+result = await run_agent_with_fallback(
+    llm_analysis_configs,
+    prompt,
+    agent_context,
+    UserLLMAnalysisResult,  # ✅ Schema enforced!
+    system_prompt_user_content,
+    tools,
+)
+```
+
+### OrganizationLLMAnalysisResult
+Location: `src/data_models/organization.py`
+
+**Purpose**: Schema for organization LLM agent output
+
+```python
+class OrganizationLLMAnalysisResult(BaseModel):
+    """Result of organization LLM analysis"""
+    
+    organizationType: Optional[str] = Field(
+        description="Type of organization (e.g., 'Academic Research Group')",
+        default=None,
+    )
+    organizationTypeJustification: Optional[str] = Field(
+        description="Justification for the organization type classification",
+        default=None,
+    )
+    description: Optional[str] = Field(
+        description="Enhanced description of the organization",
+        default=None,
+    )
+    discipline: Optional[List[Discipline]] = Field(
+        description="Scientific/technical disciplines",
+        default_factory=list,
+    )
+    disciplineJustification: Optional[List[str]] = Field(
+        description="Justification for each discipline",
+        default_factory=list,
+    )
+    relatedToEPFL: Optional[bool] = Field(
+        description="Whether the organization is related to EPFL",
+        default=None,
+    )
+    relatedToEPFLJustification: Optional[str] = Field(
+        description="Justification for EPFL relationship",
+        default=None,
+    )
+    relatedToEPFLConfidence: Optional[float] = Field(
+        description="Confidence score (0.0-1.0) for EPFL relationship",
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
+    infoscienceEntities: Optional[List[InfoscienceEntity]] = Field(
+        description="Infoscience entities found for this organization",
+        default_factory=list,
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/organization.py
+result = await run_agent_with_fallback(
+    llm_analysis_configs,
+    prompt,
+    agent_context,
+    OrganizationLLMAnalysisResult,  # ✅ Schema enforced!
+    system_prompt_organization_content,
+    tools,
+)
+```
+
+### EPFLAssessmentResult
+Location: `src/data_models/epfl_assessment.py`
+
+**Purpose**: Final holistic EPFL relationship assessment
+
+```python
+class EPFLAssessmentResult(BaseModel):
+    """Result of final EPFL relationship assessment"""
+    
+    relatedToEPFL: bool = Field(
+        description="Boolean indicating if related to EPFL (true if confidence >= 0.5)"
+    )
+    relatedToEPFLConfidence: float = Field(
+        description="Confidence score (0.0 to 1.0) for EPFL relationship",
+        ge=0.0,
+        le=1.0,
+    )
+    relatedToEPFLJustification: str = Field(
+        description="Comprehensive justification listing all evidence found"
+    )
+    evidenceItems: List[EvidenceItem] = Field(
+        description="List of all evidence items found and analyzed",
+        default_factory=list,
+    )
+
+
+class EvidenceItem(BaseModel):
+    """Individual piece of evidence for EPFL relationship"""
+    
+    type: str = Field(
+        description="Type of evidence (e.g., 'ORCID_EMPLOYMENT', 'EMAIL_DOMAIN')"
+    )
+    description: str = Field(
+        description="Human-readable description of this evidence"
+    )
+    confidence_contribution: float = Field(
+        description="How much this evidence contributes to confidence (0.0-1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    source: str = Field(
+        description="Where this evidence came from (e.g., 'ORCID', 'GitHub bio')"
+    )
+```
+
+**Usage in agent:**
+```python
+# In src/agents/epfl_assessment.py
+result = await run_agent_with_fallback(
+    epfl_assessment_configs,
+    prompt,
+    agent_context,
+    EPFLAssessmentResult,  # ✅ Schema enforced!
+    epfl_assessment_system_prompt,
+    tools,
+)
+```
+
+### Why Schema Enforcement Matters
+
+**Without schema (❌):**
+```python
+# Using Dict - NO enforcement
+result = await run_agent_with_fallback(..., Dict, ...)
+# LLM can return anything, fields might be missing
+```
+
+**With schema (✅):**
+```python
+# Using Pydantic model - ENFORCED
+result = await run_agent_with_fallback(..., UserLLMAnalysisResult, ...)
+# LLM MUST return all fields with correct types
+# Missing fields get default values
+# Invalid types cause validation errors
+```
+
+**Benefits:**
+1. **Field enforcement**: LLM must return all specified fields
+2. **Type validation**: Fields validated against Pydantic types
+3. **Default values**: Missing fields get proper defaults
+4. **Documentation**: Schema serves as LLM instruction
+5. **Type safety**: End-to-end type checking
+
+## Confidence Scores
+- Use `Optional[float]` for confidence scores
+- Range: 0.0 to 1.0
+- Include in enrichment results (users, organizations)
+- Use `ge=0.0, le=1.0` constraints
+- Document scoring criteria in related agent prompts
+
+## JSON-LD Conversion
+
+### Overview
+The system converts Pydantic models to JSON-LD format for semantic web compatibility. This is achieved through:
+1. A generic conversion function in `src/data_models/conversion.py`
+2. Field mappings from Pydantic field names to semantic URIs
+3. Model-specific methods (e.g., `SoftwareSourceCode.convert_pydantic_to_jsonld()`)
+
+### Generic Conversion Function
+Location: `src/data_models/conversion.py`
+
+```python
+def convert_pydantic_to_jsonld(
+    pydantic_obj: Any,
+    base_url: Optional[str] = None
+) -> Union[Dict, List]:
+    """
+    Convert any Pydantic model to JSON-LD format.
+    
+    Returns a dict with @context and @graph structure:
+    {
+        "@context": {...namespaces...},
+        "@graph": [{...entity...}]
+    }
+    """
+```
+
+**Features:**
+- Supports nested Pydantic models
+- Handles lists of models
+- Recursively converts complex structures
+- Maps fields to semantic URIs using `PYDANTIC_TO_ZOD_MAPPING`
+- Generates `@id` and `@type` fields automatically
+- Handles special types: `HttpUrl`, `date`, `Enum`
+
+### Field Mapping System
+
+Field mappings define how Pydantic field names map to semantic URIs:
+
+```python
+PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
+    "SoftwareSourceCode": {
+        "name": "schema:name",
+        "description": "schema:description",
+        "codeRepository": "schema:codeRepository",
+        "author": "schema:author",
+        "license": "schema:license",
+        "programmingLanguage": "schema:programmingLanguage",
+        "discipline": "imag:discipline",
+        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToEPFL": "imag:relatedToEPFL",
+        # ... more fields
+    },
+    "Person": {
+        "name": "schema:name",
+        "email": "schema:email",
+        "affiliation": "schema:affiliation",
+        "orcidId": "md4i:orcidId",
+        # ... more fields
+    },
+    "Organization": {
+        "legalName": "schema:legalName",
+        "hasRorId": "md4i:hasRorId",
+        "alternateNames": "schema:alternateName",
+        "organizationType": "schema:additionalType",
+        "country": "schema:addressCountry",
+        "website": "schema:url",
+        # ... more fields
+    },
+}
+```
+
+**Key Points:**
+- Each model has its own mapping dictionary
+- Maps camelCase field names to prefixed URIs
+- Namespaces: `schema:`, `sd:`, `imag:`, `md4i:`
+- Unmapped fields are included with original names (for debugging)
+
+### Type Mapping
+
+Maps Pydantic model classes to semantic types:
+
+```python
+type_mapping = {
+    SoftwareSourceCode: "http://schema.org/SoftwareSourceCode",
+    Person: "http://schema.org/Person",
+    Organization: "http://schema.org/Organization",
+    InfoscienceEntity: "http://schema.org/Thing",
+    # ... more types
+}
+```
+
+### Model-Specific Methods
+
+Each model that needs JSON-LD conversion should implement:
+
+```python
+class SoftwareSourceCode(BaseModel):
+    # ... fields ...
+    
+    def convert_pydantic_to_jsonld(self) -> dict:
+        """Convert this SoftwareSourceCode instance to JSON-LD format."""
+        from src.data_models.conversion import convert_pydantic_to_jsonld
+        
+        # Derive base URL from codeRepository or url
+        base_url = None
+        if self.codeRepository:
+            base_url = str(self.codeRepository[0]) if self.codeRepository else None
+        elif self.url:
+            base_url = str(self.url)
+        
+        return convert_pydantic_to_jsonld(self, base_url=base_url)
+```
+
+**Pattern:**
+1. Import the generic converter
+2. Determine appropriate `base_url` for `@id` generation
+3. Call converter with `self` and `base_url`
+4. Return result (dict with `@context` and `@graph`)
+
+### Adding JSON-LD Support to a New Model
+
+To add JSON-LD conversion to a model (e.g., `GitHubUser`):
+
+#### Step 1: Add Field Mappings
+In `src/data_models/conversion.py`:
+
+```python
+PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
+    # ... existing mappings ...
+    "GitHubUser": {
+        "name": "schema:name",
+        "fullname": "schema:givenName",
+        "githubHandle": "schema:identifier",
+        "discipline": "imag:discipline",
+        "position": "schema:jobTitle",
+        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToEPFL": "imag:relatedToEPFL",
+        # ... all fields you want to map
+    },
+}
+```
+
+#### Step 2: Add Type Mapping
+In the `convert_pydantic_to_jsonld()` function's `type_mapping` dict:
+
+```python
+type_mapping = {
+    # ... existing types ...
+    GitHubUser: "http://schema.org/Person",  # Or appropriate type
+}
+```
+
+#### Step 3: Add Model Method
+In `src/data_models/user.py`:
+
+```python
+class GitHubUser(BaseModel):
+    # ... fields ...
+    
+    def convert_pydantic_to_jsonld(self) -> dict:
+        """Convert this GitHubUser instance to JSON-LD format."""
+        from src.data_models.conversion import convert_pydantic_to_jsonld
+        
+        # Determine base URL
+        base_url = f"https://github.com/{self.githubHandle}" if self.githubHandle else None
+        
+        return convert_pydantic_to_jsonld(self, base_url=base_url)
+```
+
+#### Step 4: Update dump_results()
+In the corresponding analysis class (e.g., `User`):
+
+```python
+def dump_results(self, output_type: str = "pydantic"):
+    """Dump results in specified format."""
+    if output_type == "json-ld":
+        if self.data:
+            return self.data.convert_pydantic_to_jsonld()
+        return None
+    elif output_type == "pydantic":
+        return self.data
+    # ... other formats
+```
+
+### JSON-LD Output Structure
+
+```json
+{
+  "@context": {
+    "schema": "http://schema.org/",
+    "sd": "https://w3id.org/okn/o/sd#",
+    "imag": "https://imaging-plaza.epfl.ch/ontology/",
+    "md4i": "https://w3id.org/md4i/"
+  },
+  "@graph": [
+    {
+      "@id": "https://github.com/user/repo",
+      "@type": "http://schema.org/SoftwareSourceCode",
+      "schema:name": "Repository Name",
+      "schema:author": [
+        {
+          "@type": "http://schema.org/Person",
+          "schema:name": "John Doe",
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+        }
+      ],
+      "imag:discipline": [{"@value": "Computer Science"}],
+      "imag:relatedToEPFL": true
+    }
+  ]
+}
+```
+
+**Structure:**
+- **@context**: Namespace prefixes for semantic URIs
+- **@graph**: Array of entities (usually one main entity)
+- **@id**: Unique identifier (usually a URL)
+- **@type**: Semantic type from schema.org or custom ontology
+- **Nested objects**: Recursively converted with their own `@type`
+- **Simple values**: Wrapped in `{"@value": ...}` for consistency
+- **URLs**: Wrapped in `{"@id": ...}` to indicate they are references
+
+### Special Field Handling
+
+#### HttpUrl Fields
+```python
+# Pydantic: codeRepository: List[HttpUrl]
+# JSON-LD: "schema:codeRepository": [{"@id": "https://github.com/..."}]
+```
+
+#### Date Fields
+```python
+# Pydantic: datePublished: date
+# JSON-LD: "schema:datePublished": {"@value": "2024-01-15"}
+```
+
+#### Enum Fields
+```python
+# Pydantic: discipline: List[Discipline] (Enum)
+# JSON-LD: "imag:discipline": [{"@value": "Computer Science"}]
+```
+
+#### Nested Models
+```python
+# Pydantic: author: List[Person]
+# JSON-LD: "schema:author": [
+#   {
+#     "@type": "http://schema.org/Person",
+#     "schema:name": "...",
+#     ...
+#   }
+# ]
+```
+
+### Best Practices
+
+1. **Complete mappings**: Map all important fields in `PYDANTIC_TO_ZOD_MAPPING`
+2. **Semantic URIs**: Use schema.org when available, custom ontologies for domain-specific fields
+3. **Consistent namespaces**: Stick to established prefixes (schema, imag, md4i, sd)
+4. **Base URLs**: Choose appropriate base URLs for `@id` generation
+5. **Testing**: Validate JSON-LD output with RDF tools
+6. **Documentation**: Document custom ontology terms in Imaging Plaza docs
+
+### Debugging
+
+Add logging to track conversion:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+# In endpoint or conversion function
+logger.debug(f"Converting {type(pydantic_obj).__name__} to JSON-LD")
+logger.debug(f"Base URL: {base_url}")
+logger.debug(f"Fields to convert: {pydantic_obj.model_fields_set}")
+```
+
+### Common Issues
+
+**Issue**: Fields missing from JSON-LD output
+**Solution**: Add field mappings to `PYDANTIC_TO_ZOD_MAPPING`
+
+**Issue**: Wrong `@type` in output
+**Solution**: Add type mapping in `type_mapping` dict
+
+**Issue**: Pydantic coerces JSON-LD dict to model in API response
+**Solution**: Ensure `APIOutput.output` Union has `dict, list` FIRST
+
+**Issue**: Nested models not converting
+**Solution**: Ensure nested model has type mapping, conversion is recursive
+
+For more details, see `docs/JSONLD_CONVERSION.md`.

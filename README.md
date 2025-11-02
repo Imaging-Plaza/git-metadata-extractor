@@ -122,6 +122,9 @@ If no arguments are provided, it will use the default repository and output path
       selenium/standalone-firefox
     ```
 
+
+
+
     **Option C: Grid mode with hub and multiple nodes (best for high concurrency):**
     ``` bash
     # Start the hub

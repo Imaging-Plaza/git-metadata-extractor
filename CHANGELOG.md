@@ -3,9 +3,21 @@
 All notable changes to this project will be documented in this file.
 
 
-## [2.0.0] - 2025-10-06
+## [2.0.0] - 2025-10-07
 
 ### Added
+- **Project restructuring** for improved maintainability and modularity:
+  - Reorganized `src/core/` monolithic directory into categorized subdirectories under `src/`:
+    - `src/agents/` - PydanticAI agents for organization and user enrichment
+    - `src/cache/` - Caching infrastructure and SQLite cache manager
+    - `src/data_models/` - Pydantic models and schemas (Person, Organization, SoftwareSourceCode, etc.)
+    - `src/gimie/` - GIMIE integration methods for repository metadata extraction
+    - `src/llm/` - LLM processing and GenAI model wrapper
+    - `src/parsers/` - Organization and user parsers for structured data extraction
+    - `src/validation/` - Verification and validation logic
+  - Created proper `__init__.py` files with explicit exports for all modules
+  - Improved import paths throughout the codebase (e.g., `from src.agents import...` instead of `from src.core.organization_enrichment import...`)
+  - Enhanced code organization and discoverability
 - **SQLite-based caching system** for external API calls (GitHub, ORCID, GIMIE, LLM)
   - Automatic TTL (Time To Live) expiration with configurable settings per API type
   - Default TTL: 30 days (LLM), 7 days (GitHub users/orgs), 14 days (ORCID), 1 day (GIMIE)
@@ -45,7 +57,6 @@ All notable changes to this project will be documented in this file.
   - Selenium-based scraping of ORCID profiles for employment and education history
   - Smart affiliation merging that preserves existing affiliations and adds ORCID data
   - Support for both Zod format (`schema:author`, `md4i:orcidId`) and plain format (`author`, `orcidId`)
-  - Cached ORCID data with 14-day TTL to avoid repeated scraping
   - Integration with both main extraction and LLM JSON endpoints
 - **Enhanced logging system**:
   - Comprehensive logging for ORCID enrichment process
@@ -121,6 +132,16 @@ All notable changes to this project will be documented in this file.
   - Support for mounting `./data` directory to `/app/data` in container
   - Environment variable `CACHE_DB_PATH` for custom cache database location
   - Enables cache persistence across container restarts
+- **Environment-based log level configuration**:
+  - Added `LOG_LEVEL` environment variable support (DEBUG, INFO, WARNING, ERROR)
+  - Allows dynamic logging configuration without code changes
+  - New `serve-dev-debug` justfile recipe for easy debug mode startup
+  - Enhanced subprocess logging with full stderr/stdout output (no truncation)
+- **Enhanced debugging capabilities** for repository processing:
+  - Comprehensive debug logging for git clone operations with directory contents
+  - Full error output from repo-to-text subprocess (complete tracebacks)
+  - Directory existence checks and file listing for troubleshooting
+  - Detailed diagnostics when no .txt files are found after repo-to-text
 - **ORCID validation and normalization**:
   - Added `normalize_orcid_to_url()` function to convert ORCID IDs to standard URL format
   - ORCID validation now accepts both ID format (0000-0002-1234-5678) and URL format (https://orcid.org/0000-0002-1234-5678)
@@ -186,7 +207,22 @@ All notable changes to this project will be documented in this file.
   - All three main repository endpoints now have consistent, comprehensive enrichment capabilities
 
 ### Changed
+- **Project structure modernization**:
+  - Removed monolithic `src/core/` directory in favor of feature-based modules
+  - All imports updated from `.core.*` pattern to direct module imports (`.agents`, `.cache`, `.data_models`, etc.)
+  - Improved separation of concerns with dedicated modules for each functional area
 - API version updated to 2.0.0 across all endpoints
+- **Upgraded pydantic-ai to version 1.0.15**:
+  - Migrated from deprecated `result_type` parameter to new `output_type` parameter
+  - Updated both organization enrichment and user enrichment agents
+  - Changed all `result.data` references to `result.output` for compatibility with new API
+  - Ensures compatibility with latest pydantic-ai features and improvements
+- **Improved repo-to-text error handling** for more resilient repository processing:
+  - Changed from strict failure on non-zero exit codes to lenient handling
+  - Now continues processing if .txt files are created despite exit code 1
+  - Handles cases where repo-to-text writes warnings to stderr but still succeeds
+  - Prevents data loss from repositories that process successfully but return error codes
+  - Added warning logs instead of immediate failure for better observability
 - **Fixed token parameter handling** for OpenAI reasoning models:
   - o3-mini and o4-mini now correctly use `max_completion_tokens` instead of `max_tokens`
   - Standard models (gpt-4o-mini, gpt-5) continue to use `max_tokens`

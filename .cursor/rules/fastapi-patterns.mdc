@@ -1,0 +1,469 @@
+---
+title: FastAPI API Patterns
+description: Conventions for FastAPI endpoints, routing, and API design
+tags: [fastapi, api, endpoints, routing]
+---
+
+# FastAPI API Patterns
+
+## API Structure
+
+### Main API File
+- Core API definition: `src/api.py`
+- Use FastAPI app instance with comprehensive metadata
+- Version: 2.0.0
+- Include detailed description with features and usage
+
+### Endpoint Organization
+- Use tags for grouping: Repository, User, Organization, Cache Management, System
+- Prefix all endpoints with `/v1/` for versioning
+- Follow RESTful conventions
+
+### OpenAPI Documentation
+- Provide detailed tag descriptions
+- Include contact and license information
+- Link to Imaging Plaza project: https://imaging-plaza.epfl.ch
+- Maintain comprehensive API documentation
+
+## Request/Response Patterns
+
+### Path Parameters
+- Use FastAPI `Path()` for validation
+- Example: `path: str = Path(..., description="Repository URL or path")`
+- Encode URLs properly when used in paths
+
+### Query Parameters
+- Use FastAPI `Query()` for validation
+- Common parameters:
+  - `force_refresh: bool = Query(False)` - bypass cache
+  - `include_*: bool` - optional data inclusion flags
+- Provide default values and descriptions
+
+### Response Models
+- Use Pydantic models for response validation
+- Return `JSONResponse` for custom status codes
+- Use `APIOutput` model for consistent responses
+- Include `APIStats` for token usage and timing metrics
+
+### Error Handling
+- Use `try/except` blocks in endpoints
+- Return appropriate HTTP status codes
+- Log errors with context
+- Provide meaningful error messages to clients
+
+## Caching Integration
+
+### Cache Manager
+- Get cache manager: `cache_manager = get_cache_manager()`
+- Check cache before processing: `cache_manager.get(cache_key)`
+- Respect `force_refresh` parameter
+- Store results after processing: `cache_manager.set(cache_key, data, ttl)`
+
+### Cache Keys
+- Use descriptive, consistent cache key patterns
+- Include resource type and identifier
+- Example: `f"repository:{url_hash}"`, `f"user:{username}"`
+
+### TTL Management
+- Use appropriate TTL for different resource types
+- Repository data: longer TTL
+- User data: shorter TTL for freshness
+- Configurable via environment variables
+
+## Logging
+
+### Request Context
+- Use `AsyncRequestContext` for request tracking
+- Log request start/end with timing
+- Include relevant parameters in logs
+- Use structured logging
+
+### Log Levels
+- Use environment variable `LOG_LEVEL` (DEBUG, INFO, WARNING, ERROR)
+- Default: INFO
+- Enhanced logging with colors enabled
+
+### Log Messages
+- Include operation context
+- Log cache hits/misses
+- Log external API calls
+- Log processing steps for debugging
+
+## Background Tasks
+
+### Resource Management
+- Use `@app.on_event("startup")` for initialization
+- Use `@app.on_event("shutdown")` for cleanup
+- Initialize cache manager and other resources
+- Clean up connections properly
+
+## Server Configuration
+
+### Uvicorn Setup
+- Default host: 0.0.0.0
+- Default port: 1234
+- Use workers for production: `--workers 4`
+- Use `--reload` for development
+- Run via justfile: `just serve`, `just serve-dev`
+
+### Environment Variables
+- Load from `.env` file
+- Required: API keys (OPENAI_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN)
+- Optional: LOG_LEVEL, CACHE_DIR, CACHE_ENABLED
+- Model configurations: LLM_ANALYSIS_MODELS, USER_ENRICHMENT_MODELS, ORG_ENRICHMENT_MODELS
+
+## Endpoint Statistics Pattern
+
+### Token Usage and Timing Tracking
+All LLM-powered endpoints should include comprehensive statistics in their responses.
+
+**Pattern Overview:**
+1. Analysis class (Repository, User) tracks token usage and timing
+2. Endpoint calls `get_usage_stats()` to retrieve metrics
+3. Create `APIStats` object with collected data
+4. Include stats in `APIOutput` response
+
+### Repository Endpoint Example
+```python
+@app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"])
+async def llm_json(
+    full_path: str = Path(..., description="Full repository URL"),
+    force_refresh: bool = Query(False, description="Force refresh from APIs"),
+    enrich_orgs: bool = Query(False, description="Enable organization enrichment"),
+    enrich_users: bool = Query(False, description="Enable user enrichment"),
+) -> APIOutput:
+    """Extract repository metadata using LLM with GIMIE context."""
+    
+    # Initialize analysis class
+    repository = Repository(full_path, force_refresh=force_refresh)
+    
+    # Run analysis (tracks tokens and timing internally)
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=True,
+        run_user_enrichment=enrich_users,
+        run_organization_enrichment=enrich_orgs,
+    )
+    
+    # Get results
+    output = repository.dump_results(output_type="pydantic")
+    
+    # Get accumulated statistics
+    usage_stats = repository.get_usage_stats()
+    
+    # Create APIStats with token usage, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    # Calculate total tokens
+    stats.calculate_total_tokens()
+    
+    # Return response with stats
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include statistics
+    )
+    
+    return response
+```
+
+### User Endpoint Example
+```python
+@app.get("/v1/user/llm/json/{full_path:path}", tags=["User"])
+async def get_user_json(
+    full_path: str = Path(..., description="GitHub user URL or path"),
+    force_refresh: bool = Query(False, description="Force refresh from APIs"),
+    enrich_orgs: bool = Query(False, description="Enable organization enrichment"),
+    enrich_users: bool = Query(False, description="Enable user enrichment"),
+) -> APIOutput:
+    """Retrieve and enrich GitHub user profile metadata."""
+    
+    username = full_path.split("/")[-1]
+    
+    # Initialize user analysis
+    user = User(username, force_refresh=force_refresh)
+    
+    # Run analysis (tracks tokens and timing)
+    await user.run_analysis(
+        run_organization_enrichment=enrich_orgs,
+        run_user_enrichment=enrich_users,
+    )
+    
+    output = user.dump_results(output_type="pydantic")
+    
+    # Get usage statistics (same pattern as Repository)
+    usage_stats = user.get_usage_stats()
+    
+    # Create APIStats
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    stats.calculate_total_tokens()
+    
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.USER,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include statistics
+    )
+    
+    return response
+```
+
+### Response Format
+```json
+{
+  "link": "https://github.com/user/repo",
+  "type": "repository",
+  "parsedTimestamp": "2025-10-30T07:35:00",
+  "output": { /* analysis results */ },
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "total_tokens": 1801,
+    "estimated_input_tokens": 1250,
+    "estimated_output_tokens": 575,
+    "estimated_total_tokens": 1825,
+    "duration": 45.23,
+    "start_time": "2025-10-30T07:35:00",
+    "end_time": "2025-10-30T07:35:45",
+    "status_code": 200
+  }
+}
+```
+
+### Key Implementation Points
+1. **Consistency**: Use identical pattern for Repository and User endpoints
+2. **Accumulation**: Stats include tokens from ALL agents (LLM + enrichment)
+3. **Dual tracking**: Both official API tokens and estimated tokens
+4. **Timing**: Full request lifecycle (start, end, duration)
+5. **Status codes**: 200 for success, 500 for failures
+6. **Calculate totals**: Always call `stats.calculate_total_tokens()` before returning
+
+### Benefits
+- **Observability**: Track token usage for cost monitoring
+- **Performance**: Measure request durations
+- **Debugging**: Identify slow or expensive operations
+- **Analytics**: Aggregate usage across requests
+- **Transparency**: Users see what resources their requests consume
+
+## JSON-LD Endpoint Pattern
+
+### Overview
+JSON-LD endpoints return semantic web compatible data with `@context` and `@graph` structures. The system converts Pydantic models to JSON-LD using an extensible mapping system.
+
+### Endpoint Structure
+```python
+@app.get(
+    "/v1/repository/llm/json-ld/{full_path:path}",
+    tags=["Repository"],
+    responses={
+        200: {
+            "description": "Successful Response",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "link": "https://github.com/user/repo",
+                        "type": "repository",
+                        "parsedTimestamp": "2024-01-15T10:30:00.000Z",
+                        "output": {
+                            "@context": {
+                                "schema": "http://schema.org/",
+                                "sd": "https://w3id.org/okn/o/sd#",
+                                "imag": "https://imaging-plaza.epfl.ch/ontology/",
+                                "md4i": "https://w3id.org/md4i/",
+                            },
+                            "@graph": [{
+                                "@id": "https://github.com/user/repo",
+                                "@type": "http://schema.org/SoftwareSourceCode",
+                                "schema:name": "Repository Name",
+                                ...
+                            }]
+                        },
+                        "stats": { /* token usage and timing */ }
+                    }
+                }
+            }
+        }
+    }
+)
+async def llm_jsonld(...) -> APIOutput:
+    """Extract repository metadata in JSON-LD format."""
+    
+    # Run analysis
+    repository = Repository(full_path, force_refresh=force_refresh)
+    await repository.run_analysis(...)
+    
+    # Convert to JSON-LD
+    jsonld_output = repository.dump_results(output_type="json-ld")
+    
+    # Get stats and return
+    usage_stats = repository.get_usage_stats()
+    stats = APIStats(...)
+    
+    return APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=jsonld_output,  # Raw JSON-LD dict
+        stats=stats,
+    )
+```
+
+### Key Implementation Details
+
+#### 1. Union Type Ordering (CRITICAL!)
+The `APIOutput.output` field MUST have `dict` and `list` FIRST in the Union:
+
+```python
+# ✅ CORRECT - dict/list first
+output: Union[dict, list, SoftwareSourceCode, GitHubOrganization, GitHubUser, Any] = None
+
+# ❌ WRONG - Pydantic will try to coerce dict to models
+output: Union[SoftwareSourceCode, GitHubOrganization, GitHubUser, dict, list, Any] = None
+```
+
+**Why:** Pydantic's Union validation goes left-to-right. If models come first, Pydantic will try to match dict keys to model fields and coerce the dict into a model, corrupting the JSON-LD structure.
+
+#### 2. Field Validator
+Preserve dict/list inputs without conversion:
+
+```python
+@field_validator("output", mode="before")
+@classmethod
+def preserve_dict_output(cls, v):
+    """Preserve dict/list output as-is without converting to Pydantic models."""
+    if isinstance(v, (dict, list)):
+        return v
+    return v
+```
+
+#### 3. Model Serializer
+Keep dict/list during serialization:
+
+```python
+@model_serializer(mode='wrap')
+def serialize_model(self, serializer):
+    """Custom serializer to preserve dict/list in output field."""
+    data = serializer(self)
+    if isinstance(self.output, (dict, list)):
+        data['output'] = self.output
+    return data
+```
+
+#### 4. OpenAPI Examples
+Provide realistic JSON-LD examples in the `responses` parameter to show users the actual structure.
+
+### JSON-LD Conversion Flow
+
+1. **Pydantic Model** → `repository.data` (SoftwareSourceCode)
+2. **Conversion Call** → `repository.dump_results(output_type="json-ld")`
+3. **Model Method** → `SoftwareSourceCode.convert_pydantic_to_jsonld()`
+4. **Generic Converter** → `convert_pydantic_to_jsonld()` in `conversion.py`
+5. **JSON-LD Output** → Dict with `@context` and `@graph`
+6. **API Response** → Wrapped in `APIOutput` with stats
+
+### Validation & Error Handling
+
+```python
+# Check if analysis succeeded
+if repository.data is None:
+    raise HTTPException(
+        status_code=500,
+        detail=f"Repository analysis failed: no data generated"
+    )
+
+# Validate JSON-LD structure
+try:
+    jsonld_output = repository.dump_results(output_type="json-ld")
+    if jsonld_output is None:
+        raise ValueError("JSON-LD conversion returned None")
+    
+    # Verify it has JSON-LD structure
+    if "@context" not in jsonld_output or "@graph" not in jsonld_output:
+        raise ValueError("Missing @context or @graph in JSON-LD output")
+        
+except Exception as e:
+    logger.error(f"Failed to convert to JSON-LD: {e}", exc_info=True)
+    raise HTTPException(
+        status_code=500,
+        detail=f"Failed to convert data to JSON-LD: {str(e)}"
+    )
+```
+
+### Response Format
+
+```json
+{
+  "link": "https://github.com/user/repo",
+  "type": "repository",
+  "parsedTimestamp": "2025-10-31T18:06:24.938227",
+  "output": {
+    "@context": {
+      "schema": "http://schema.org/",
+      "sd": "https://w3id.org/okn/o/sd#",
+      "imag": "https://imaging-plaza.epfl.ch/ontology/",
+      "md4i": "https://w3id.org/md4i/"
+    },
+    "@graph": [{
+      "@id": "https://github.com/user/repo",
+      "@type": "http://schema.org/SoftwareSourceCode",
+      "schema:name": "Repository Name",
+      "schema:author": [
+        {
+          "@type": "http://schema.org/Person",
+          "schema:name": "John Doe",
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+        }
+      ],
+      "imag:relatedToEPFL": true,
+      "imag:relatedToOrganizationsROR": [
+        {
+          "@type": "http://schema.org/Organization",
+          "schema:legalName": "EPFL",
+          "md4i:hasRorId": {"@id": "https://ror.org/03yrm5c26"}
+        }
+      ]
+    }]
+  },
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "duration": 45.23,
+    "status_code": 200
+  }
+}
+```
+
+### Extending to Other Resources
+
+To add JSON-LD support for User or Organization:
+
+1. **Add method to model** (e.g., `GitHubUser.convert_pydantic_to_jsonld()`)
+2. **Update `dump_results()`** to support `output_type="json-ld"`
+3. **Add field mappings** to `PYDANTIC_TO_ZOD_MAPPING` in `conversion.py`
+4. **Add type mapping** to `convert_pydantic_to_jsonld()` type_mapping dict
+5. **Create endpoint** following the pattern above
+6. **Add OpenAPI example** with realistic JSON-LD structure
+
+See `docs/JSONLD_CONVERSION.md` for detailed extension guide.

@@ -9,8 +9,8 @@ import asyncio
 import json
 from datetime import date
 
-from src.core.models import Commits, GitAuthor, Person
-from src.core.user_enrichment import enrich_users, enrich_users_from_dict
+from src.agents import enrich_users, enrich_users_from_dict
+from src.data_models import Commits, GitAuthor, Person
 
 
 async def example_basic_enrichment():

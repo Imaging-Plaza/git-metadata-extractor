@@ -1,0 +1,408 @@
+---
+title: EPFL Final Assessment Round
+description: Pattern for the final holistic EPFL relationship assessment
+tags: [ai, assessment, epfl, confidence, agents]
+---
+
+# EPFL Final Assessment Round
+
+## Overview
+
+The EPFL Assessment is a **final holistic analysis** that runs **after all enrichments complete** to make a definitive determination about EPFL relationship with proper confidence scoring.
+
+## Why Final Assessment?
+
+### Problem Solved
+Before the final assessment:
+- Different agents (LLM, enrichment) might set conflicting `relatedToEPFL` values
+- Confidence scores weren't calculated systematically
+- Evidence wasn't transparently documented
+- Organization enrichment could overwrite better LLM analysis
+
+### Solution
+A dedicated assessment agent that:
+1. **Reviews ALL collected data** from all previous steps
+2. **Systematically weighs evidence** using predefined weights
+3. **Calculates cumulative confidence** (sum of weights, capped at 1.0)
+4. **Ensures consistency** (boolean matches confidence threshold)
+5. **Provides transparent justification** with all evidence listed
+
+## Architecture
+
+### Location
+- Agent: `src/agents/epfl_assessment.py`
+- Prompts: `src/agents/epfl_assessment_prompts.py`
+- Data Models: `src/data_models/epfl_assessment.py`
+
+### Data Models
+
+#### EPFLAssessmentResult
+```python
+class EPFLAssessmentResult(BaseModel):
+    """Result of final EPFL relationship assessment"""
+    
+    relatedToEPFL: bool = Field(
+        description="Boolean indicating if related to EPFL (true if confidence >= 0.5)"
+    )
+    relatedToEPFLConfidence: float = Field(
+        description="Confidence score (0.0 to 1.0) for EPFL relationship",
+        ge=0.0,
+        le=1.0,
+    )
+    relatedToEPFLJustification: str = Field(
+        description="Comprehensive justification listing all evidence found"
+    )
+    evidenceItems: List[EvidenceItem] = Field(
+        description="List of all evidence items found and analyzed",
+        default_factory=list,
+    )
+```
+
+#### EvidenceItem
+```python
+class EvidenceItem(BaseModel):
+    """Individual piece of evidence for EPFL relationship"""
+    
+    type: str = Field(
+        description="Type of evidence (e.g., 'ORCID_EMPLOYMENT', 'EMAIL_DOMAIN')"
+    )
+    description: str = Field(
+        description="Human-readable description of this evidence"
+    )
+    confidence_contribution: float = Field(
+        description="How much this evidence contributes to confidence (0.0-1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    source: str = Field(
+        description="Where this evidence came from (e.g., 'ORCID', 'GitHub bio')"
+    )
+```
+
+## Evidence Types and Weights
+
+### For Users and Repositories
+```python
+EMAIL_DOMAIN          # @epfl.ch email addresses         → 0.4
+ORCID_EMPLOYMENT      # ORCID employment record at EPFL  → 0.3
+INFOSCIENCE_ENTITY    # Found in Infoscience database    → 0.4
+BIO_MENTION           # Bio mentions EPFL/SDSC           → 0.25
+README_MENTION        # README mentions EPFL/SDSC        → 0.25
+COMPANY_FIELD         # Company field mentions EPFL      → 0.25
+ORGANIZATION_MEMBERSHIP # Member of EPFL GitHub orgs     → 0.25
+RELATED_ORGANIZATION  # Related org is EPFL (from ROR)   → 0.25
+LOCATION              # Location is Lausanne             → 0.15
+GIT_AUTHOR_EMAIL      # Git commits with @epfl.ch        → Variable
+GIT_COMMIT_PERCENTAGE # % of commits from EPFL authors   → Variable
+```
+
+### For Organizations (Different Weights!)
+**Organizations don't have emails or ORCID records, so institutional links are weighted higher:**
+
+```python
+PARENT_ORGANIZATION     # Parent is EPFL                   → 0.6  (HIGHEST)
+PARENT_ORGANIZATION     # Parent jointly includes EPFL     → 0.5  (HIGH)
+                        # (e.g., "SDSC = EPFL + ETH")
+ORGANIZATION_NAME       # Name contains "EPFL"             → 0.5  (HIGH)
+WEBSITE_DOMAIN          # Website is *.epfl.ch             → 0.5  (HIGH)
+RELATED_ORGANIZATION    # ROR entry links to EPFL          → 0.4  (GOOD)
+INFOSCIENCE_ENTITY      # Found in Infoscience             → 0.4  (GOOD)
+README_MENTION          # README mentions EPFL/SDSC        → 0.3  (GOOD)
+BIO_MENTION             # Description mentions EPFL        → 0.3  (GOOD)
+ORGANIZATION_MEMBERSHIP # Member of EPFL orgs             → 0.3  (GOOD)
+LOCATION                # Location is Lausanne             → 0.2  (MEDIUM)
+```
+
+### Key Differences
+- **Organizations**: Parent organization relationship is PRIMARY (0.5-0.6 weight)
+- **Organizations**: A single strong institutional link can reach 0.5 threshold
+- **Users/Repos**: Multiple pieces of evidence typically needed
+
+## Confidence Calculation
+
+### Formula
+```
+confidence = sum(all_evidence_weights)
+confidence = min(confidence, 1.0)  # Cap at 1.0
+```
+
+### Threshold Rules
+```python
+if confidence >= 0.5:
+    relatedToEPFL = True
+else:
+    relatedToEPFL = False
+```
+
+### Example Calculation (User)
+```
+Evidence found:
+1. GitHub bio mentions "Data Engineer at SDSC (EPFL)"     → +0.25
+2. Company field: "@SwissDataScienceCenter"               → +0.25
+3. README: "working as Data Engineer at SDSC at EPFL"     → +0.25
+4. ORCID employment at EPFL (2023-2025)                   → +0.30
+5. Location: "Lausanne"                                   → +0.15
+6. Member of "EPFL-Open-Science" GitHub org               → +0.25
+7. Related organization: École Polytechnique (ROR)        → +0.25
+
+Total: 0.25 + 0.25 + 0.25 + 0.30 + 0.15 + 0.25 + 0.25 = 1.70
+Capped: min(1.70, 1.0) = 1.0
+
+Result: relatedToEPFL = true, confidence = 1.0
+```
+
+### Example Calculation (Organization)
+```
+Evidence found:
+1. Parent organization: "Swiss Data Science Center"
+   (jointly established by EPFL and ETH Zürich)          → +0.5
+
+Total: 0.5
+
+Result: relatedToEPFL = true, confidence = 0.5
+```
+
+## Integration Pattern
+
+### Analysis Flow Order
+```
+1. GitHub/GitLab Parsing      # Raw data collection
+2. LLM Analysis                # Initial extraction
+3. User Enrichment (optional)  # ORCID enrichment
+4. Organization Enrichment (optional)  # ROR enrichment
+5. **EPFL Final Assessment**   # ← Runs here, after all enrichments
+6. Validation & Caching
+```
+
+### Implementation in Analysis Classes
+
+#### Repository Class
+```python
+async def run_analysis(
+    self,
+    run_gimie: bool = True,
+    run_llm: bool = True,
+    run_user_enrichment: bool = False,
+    run_organization_enrichment: bool = False,
+):
+    # ... existing analysis steps ...
+    
+    # Run organization enrichment
+    if run_organization_enrichment and self.data is not None:
+        await self.run_organization_enrichment()
+    
+    # Run final EPFL assessment after all enrichments complete
+    if self.data is not None:
+        logging.info(f"Final EPFL assessment for {self.full_path}")
+        await self.run_epfl_final_assessment()
+        logging.info(f"Final EPFL assessment completed for {self.full_path}")
+    
+    # Validation and caching
+    if self.data is not None:
+        self.run_validation()
+        self.save_in_cache()
+
+async def run_epfl_final_assessment(self):
+    """Run final EPFL relationship assessment after all enrichments complete"""
+    if self.data is None:
+        return
+    
+    try:
+        # Convert data to dict for assessment
+        data_dict = self.data.model_dump()
+        
+        # Call the EPFL assessment agent
+        result = await assess_epfl_relationship(
+            data=data_dict,
+            item_type="repository",
+        )
+        
+        # Extract assessment and usage
+        assessment = result.get("data") if isinstance(result, dict) else result
+        usage = result.get("usage") if isinstance(result, dict) else None
+        
+        # Accumulate token usage
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+        
+        # Update data with final assessment (overwrite previous values)
+        self.data.relatedToEPFL = assessment.relatedToEPFL
+        self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
+        self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
+        
+    except Exception as e:
+        logger.error(f"EPFL final assessment failed: {e}", exc_info=True)
+        # Don't fail the entire analysis
+```
+
+#### User Class
+Same pattern as Repository - add `run_epfl_final_assessment()` method and call it in `run_analysis()` after all enrichments.
+
+#### Organization Class
+Same pattern as Repository - add `run_epfl_final_assessment()` method and call it in `run_analysis()` after all enrichments.
+
+## Agent Implementation
+
+### assess_epfl_relationship Function
+```python
+async def assess_epfl_relationship(
+    data: Dict[str, Any],
+    item_type: str,
+) -> Dict[str, Any]:
+    """
+    Perform final holistic EPFL relationship assessment.
+    
+    Args:
+        data: Complete data object (dict) containing all metadata
+        item_type: Type of item ("user", "organization", or "repository")
+        
+    Returns:
+        Dictionary with:
+        - data: EPFLAssessmentResult with final assessment
+        - usage: Token usage statistics
+    """
+    # Create context for the agent
+    agent_context = {
+        "item_type": item_type,
+        "data": data,
+    }
+    
+    # Prepare the prompt (item-type specific)
+    prompt = get_user_epfl_assessment_prompt(item_type, data)
+    
+    # No tools needed - it's analyzing existing data
+    tools = []
+    
+    # Run agent with schema enforcement
+    result = await run_agent_with_fallback(
+        epfl_assessment_configs,
+        prompt,
+        agent_context,
+        EPFLAssessmentResult,  # Schema enforcement!
+        epfl_assessment_system_prompt,
+        tools,
+    )
+    
+    # Return with usage statistics
+    return {
+        "data": assessment_data,
+        "usage": {
+            "input_tokens": getattr(result, "input_tokens", 0),
+            "output_tokens": getattr(result, "output_tokens", 0),
+        }
+    }
+```
+
+## Prompts
+
+### System Prompt Structure
+The system prompt (`epfl_assessment_system_prompt`) defines:
+1. Agent's role as an EPFL affiliation expert
+2. Data sources to review (GitHub, ORCID, ROR, Infoscience, etc.)
+3. **Evidence types and their weights** (different for users/repos vs orgs)
+4. Confidence calculation methodology
+5. Consistency rules (boolean must match confidence threshold)
+6. Output format requirements
+
+### User Prompt Generation
+```python
+def get_user_epfl_assessment_prompt(item_type: str, data: Dict[str, Any]) -> str:
+    """Generate prompt for EPFL assessment based on item type and collected data."""
+    
+    prompt = f"""Perform a comprehensive EPFL relationship assessment for this {item_type}.
+
+Item Type: {item_type}
+
+Complete Data Available:
+{json.dumps(data, indent=2, default=str)}
+
+**Your Task**:
+1. Systematically examine ALL available data
+2. Identify EVERY piece of evidence related to EPFL
+3. Calculate cumulative confidence score (sum of evidence weights, max 1.0)
+4. Determine boolean based on confidence threshold (>= 0.5 = true, < 0.5 = false)
+5. Write comprehensive justification listing all evidence with confidence contributions
+6. Return structured assessment with evidence items
+
+**Evidence to Look For**:
+"""
+    
+    # Add item-type specific evidence list and weights
+    if item_type == "user":
+        prompt += """[User-specific evidence and weights]"""
+    elif item_type == "organization":
+        prompt += """[Organization-specific evidence and weights with higher institutional weights]"""
+    elif item_type == "repository":
+        prompt += """[Repository-specific evidence including commit analysis]"""
+    
+    return prompt
+```
+
+## Special Cases
+
+### Swiss Data Science Center (SDSC)
+- **SDSC is a joint EPFL + ETH Zürich initiative**
+- For organizations: Parent org mention of SDSC → 0.5 weight (reaches threshold!)
+- For users: SDSC employment is STRONG EPFL evidence (multiple high-weight indicators)
+- Prompt explicitly instructs LLM about this relationship
+
+### Organization vs Individual Assessment
+Organizations require different handling:
+- No @epfl.ch emails expected
+- No ORCID records
+- Parent organization relationship is PRIMARY indicator
+- Single strong institutional link can reach threshold
+- Prompt adjusts weights accordingly
+
+### Overwriting Previous Values
+The final assessment **intentionally overwrites** any EPFL values set by previous agents:
+```python
+# Update data with final assessment (overwrite previous values)
+self.data.relatedToEPFL = assessment.relatedToEPFL
+self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
+self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
+```
+
+This is by design - the final assessment has the complete picture and makes the authoritative determination.
+
+## Benefits
+
+1. **Single Source of Truth**: One agent makes final EPFL determination
+2. **Transparent**: Justification lists all evidence with weights
+3. **Consistent**: Boolean always matches confidence threshold
+4. **Fair**: Different weights for different entity types
+5. **Comprehensive**: Reviews ALL collected data from all agents
+6. **Documented**: Evidence items provide structured audit trail
+
+## Testing
+
+When testing EPFL assessment:
+1. Use `force_refresh=true` to bypass cache
+2. Check that `relatedToEPFL` matches confidence threshold
+3. Review `relatedToEPFLJustification` for evidence listing
+4. Verify `evidenceItems` structure if populated
+5. Test different entity types (user, organization, repository)
+
+## Common Issues
+
+### Issue: Organization gets low confidence despite clear EPFL link
+**Solution**: Check if prompt uses organization-specific weights (0.5-0.6 for parent org)
+
+### Issue: Boolean doesn't match confidence
+**Solution**: Verify prompt includes consistency rule and schema validation
+
+### Issue: Assessment overwrites good LLM analysis
+**This is intentional** - final assessment is authoritative. If initial LLM analysis is better, improve final assessment prompt.
+
+### Issue: No evidence items in output
+**Check**: `evidenceItems` field is optional. LLM might not populate it if not explicitly required in prompt.
+
+## Future Improvements
+
+Potential enhancements:
+- [ ] Machine learning model for confidence calculation
+- [ ] Historical accuracy tracking
+- [ ] Context-aware weight adjustment
+- [ ] Multi-institution assessment (not just EPFL)
+- [ ] Temporal analysis (affiliation changes over time)

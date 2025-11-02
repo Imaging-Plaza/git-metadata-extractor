@@ -35,8 +35,8 @@ dependencies = [
     "requests==2.32.4",
     "openai==2.1.0",
     "tiktoken==0.9.0",
-    "google-genai==0.1.0",
-    "repo-to-text==0.7.0",
+    "google-genai>=1.31.0",
+    "repo-to-text>=0.7.0",
     "PyLD==2.0.4",
     "rdflib==6.2.0",
     "rdflib-jsonld==0.6.2",
@@ -45,7 +45,7 @@ dependencies = [
     "beautifulsoup4==4.13.4",
     "aiohttp==3.12.15",
     "uvicorn-worker==0.3.0",
-    "pydantic-ai==0.2.4",
+    "pydantic-ai>=1.0.15",
     "httpx",
 ]
 
@@ -74,7 +74,7 @@ target-version = "py38"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "TD", "FIX", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
-ignore = []
+ignore = ["S101","T201", "G004", "E501", "FA100"]
 
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]
