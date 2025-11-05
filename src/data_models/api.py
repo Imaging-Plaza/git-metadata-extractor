@@ -32,6 +32,11 @@ class APIStats(BaseModel):
     end_time: datetime = None
     status_code: int = None
     
+    # GitHub API rate limit information
+    github_rate_limit: int = None
+    github_rate_remaining: int = None
+    github_rate_reset: datetime = None
+    
     def calculate_total_tokens(self):
         """Calculate total tokens from input and output tokens."""
         if self.agent_input_tokens is not None and self.agent_output_tokens is not None:
