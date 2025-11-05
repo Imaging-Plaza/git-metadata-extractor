@@ -233,8 +233,14 @@ def validate_and_clean_urls(data: Dict[str, Any]) -> Dict[str, Any]:
     # Validate single URL fields
     for field in url_fields:
         if field in cleaned_data and cleaned_data[field] is not None:
-            if not is_valid_url(cleaned_data[field]):
-                logger.warning(f"Invalid URL in {field}: {cleaned_data[field]}")
+            url_value = cleaned_data[field]
+            # Skip empty strings - they're valid "no URL" values
+            if isinstance(url_value, str) and url_value.strip() == "":
+                cleaned_data[field] = None
+                continue
+                
+            if not is_valid_url(url_value):
+                logger.warning(f"Invalid URL in {field}: {url_value!r}")
                 cleaned_data[field] = None
 
     # Validate URL list fields
@@ -243,10 +249,13 @@ def validate_and_clean_urls(data: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(cleaned_data[field], list):
                 valid_urls = []
                 for url in cleaned_data[field]:
+                    # Skip empty strings - they're valid "no URL" values
+                    if isinstance(url, str) and url.strip() == "":
+                        continue
                     if url is not None and is_valid_url(url):
                         valid_urls.append(url)
                     elif url is not None:
-                        logger.warning(f"Invalid URL in {field}: {url}")
+                        logger.warning(f"Invalid URL in {field}: {url!r}")
                 cleaned_data[field] = valid_urls if valid_urls else None
             else:
                 logger.warning(

@@ -128,12 +128,13 @@ def _parse_publication(item: Dict[str, Any]) -> InfosciencePublication:
     uuid = item.get("uuid")
     handle = item.get("handle")
 
-    # Build URL
+    # Build URL - use normalized format
     url = None
-    if handle:
+    if uuid:
+        # Use normalized entity URL format
+        url = f"https://infoscience.epfl.ch/entities/publication/{uuid}"
+    elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
-    elif uuid:
-        url = f"https://infoscience.epfl.ch/server/api/core/items/{uuid}"
 
     # Extract repository URL from relations or identifiers
     repository_url = None
@@ -190,9 +191,10 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
         logger.warning(f"Could not extract name from person item with UUID {uuid}")
         return None
 
-    # Build URL
+    # Build URL - use normalized format
     url = None
     if uuid:
+        # Use normalized entity URL format
         url = f"https://infoscience.epfl.ch/entities/person/{uuid}"
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
@@ -233,9 +235,10 @@ def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
         logger.warning(f"Could not extract name from orgunit item with UUID {uuid}")
         return None
 
-    # Build URL
+    # Build URL - use normalized format
     url = None
     if uuid:
+        # Use normalized entity URL format
         url = f"https://infoscience.epfl.ch/entities/orgunit/{uuid}"
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
@@ -785,4 +788,54 @@ async def get_author_publications_tool(author_name: str, max_results: int = 10) 
     except Exception as e:
         logger.error(f"✗ Error in get_author_publications_tool: {e}", exc_info=True)
         return f"Error fetching author publications: {e}"
+
+
+##########################################################
+# URL Normalization Helpers
+##########################################################
+
+
+def normalize_infoscience_publication_url(url_or_uuid: str) -> Optional[str]:
+    """
+    Normalize an Infoscience publication URL or UUID to proper format.
+
+    Args:
+        url_or_uuid: URL or UUID string
+
+    Returns:
+        Normalized URL or None if invalid
+    """
+    from ..agents.validation_utils import normalize_infoscience_url
+
+    return normalize_infoscience_url(url_or_uuid, "publication")
+
+
+def normalize_infoscience_author_url(url_or_uuid: str) -> Optional[str]:
+    """
+    Normalize an Infoscience author/person URL or UUID to proper format.
+
+    Args:
+        url_or_uuid: URL or UUID string
+
+    Returns:
+        Normalized URL or None if invalid
+    """
+    from ..agents.validation_utils import normalize_infoscience_url
+
+    return normalize_infoscience_url(url_or_uuid, "person")
+
+
+def normalize_infoscience_lab_url(url_or_uuid: str) -> Optional[str]:
+    """
+    Normalize an Infoscience lab/orgunit URL or UUID to proper format.
+
+    Args:
+        url_or_uuid: URL or UUID string
+
+    Returns:
+        Normalized URL or None if invalid
+    """
+    from ..agents.validation_utils import normalize_infoscience_url
+
+    return normalize_infoscience_url(url_or_uuid, "orgunit")
 

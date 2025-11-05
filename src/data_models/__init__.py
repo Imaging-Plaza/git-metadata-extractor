@@ -62,6 +62,7 @@ from .user import (
     UserEnrichmentResult,
     UserLLMAnalysisResult,
 )
+from .validation import ValidationResult
 
 __all__ = [
     # Core models
@@ -113,6 +114,8 @@ __all__ = [
     # EPFL Assessment models
     "EPFLAssessmentResult",
     "EvidenceItem",
+    # Validation models
+    "ValidationResult",
     # Utilities
     "convert_jsonld_to_pydantic",
     "convert_pydantic_to_zod_form_dict",

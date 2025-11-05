@@ -112,6 +112,24 @@ MODEL_CONFIGS = {
             "timeout": 300.0,
         },
     ],
+    "run_url_validation": [
+        {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 4000,
+            "timeout": 60.0,
+        },
+        {
+            "provider": "openrouter",
+            "model": "google/gemini-2.0-flash",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 4000,
+            "timeout": 60.0,
+        },
+    ],
 }
 
 # Environment variable mappings
@@ -121,6 +139,7 @@ ENV_VAR_MAPPINGS = {
     "run_organization_enrichment": "ORG_ENRICHMENT_MODELS",
     "run_academic_catalog_enrichment": "ACADEMIC_CATALOG_ENRICHMENT_MODELS",
     "run_epfl_assessment": "EPFL_ASSESSMENT_MODELS",
+    "run_url_validation": "URL_VALIDATION_MODELS",
 }
 
 
