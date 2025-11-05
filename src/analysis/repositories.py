@@ -19,13 +19,7 @@ from ..utils.utils import is_github_repo_public
 
 class Repository:
     def __init__(self, full_path: str, force_refresh: bool = False):
-        # Check if the repository is public before proceeding
-        if not is_github_repo_public(full_path):
-            logger.error(
-                f"Cannot process repository: {full_path} is not public or not accessible",
-            )
-            return
-
+        # Initialize all attributes first
         self.full_path: str = full_path
         self.data: SoftwareSourceCode = None
         self.gimie = None
@@ -45,6 +39,13 @@ class Repository:
         self.start_time: datetime = None
         self.end_time: datetime = None
         self.analysis_successful: bool = False
+        
+        # Check if the repository is public before proceeding
+        self.is_public: bool = is_github_repo_public(full_path)
+        if not self.is_public:
+            logger.error(
+                f"Cannot process repository: {full_path} is not public or not accessible",
+            )
 
     def run_gimie_analysis(self):
         def fetch_gimie_data():
@@ -560,6 +561,12 @@ class Repository:
         Run the full analysis pipeline with optional steps.
         Checks cache before running each step unless force_refresh is True.
         """
+        # Check if repository is public
+        if not self.is_public:
+            logger.error(f"Cannot run analysis: repository {self.full_path} is not public")
+            self.analysis_successful = False
+            return
+        
         # Track start time
         self.start_time = datetime.now()
         

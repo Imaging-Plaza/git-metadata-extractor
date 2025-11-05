@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from .analysis import Organization, Repository, User
@@ -17,6 +17,7 @@ from .data_models import (
     ResourceType,
 )
 from .utils.enhanced_logging import AsyncRequestContext, setup_logging
+from .utils.github_dependency import validate_github_token
 
 # Setup enhanced logging with colors
 # Allow LOG_LEVEL environment variable to override (DEBUG, INFO, WARNING, ERROR)
@@ -535,6 +536,7 @@ def index():
 
 @app.get("/v1/org/llm/json/{full_path:path}", tags=["Organization"])
 async def get_org_json(
+    response: Response,
     full_path: str = Path(
         ...,
         description="GitHub organization URL or path",
@@ -550,6 +552,7 @@ async def get_org_json(
         False,
         description="Enable organization enrichment using PydanticAI agent to analyze and standardize organization information using ROR API",
     ),
+    github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
     Retrieve and enrich GitHub organization metadata.
@@ -612,11 +615,19 @@ async def get_org_json(
         start_time=usage_stats["start_time"],
         end_time=usage_stats["end_time"],
         status_code=usage_stats["status_code"],
+        github_rate_limit=github_info["rate_limit_limit"],
+        github_rate_remaining=github_info["rate_limit_remaining"],
+        github_rate_reset=github_info["rate_limit_reset"],
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
+    
+    # Set rate limit response headers
+    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
+    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
 
-    response = APIOutput(
+    api_response = APIOutput(
         link=full_path,
         type=ResourceType.ORGANIZATION,
         parsedTimestamp=datetime.now(),
@@ -624,11 +635,12 @@ async def get_org_json(
         stats=stats,
     )
 
-    return response
+    return api_response
 
 
 @app.get("/v1/user/llm/json/{full_path:path}", tags=["User"])
 async def get_user_json(
+    response: Response,
     full_path: str = Path(
         ...,
         description="GitHub user URL or path",
@@ -648,6 +660,7 @@ async def get_user_json(
         False,
         description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
     ),
+    github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
     Retrieve and enrich GitHub user profile metadata.
@@ -712,11 +725,19 @@ async def get_user_json(
         start_time=usage_stats["start_time"],
         end_time=usage_stats["end_time"],
         status_code=usage_stats["status_code"],
+        github_rate_limit=github_info["rate_limit_limit"],
+        github_rate_remaining=github_info["rate_limit_remaining"],
+        github_rate_reset=github_info["rate_limit_reset"],
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
+    
+    # Set rate limit response headers
+    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
+    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
 
-    response = APIOutput(
+    api_response = APIOutput(
         link=full_path,
         type=ResourceType.USER,
         parsedTimestamp=datetime.now(),
@@ -724,7 +745,7 @@ async def get_user_json(
         stats=stats,
     )
 
-    return response
+    return api_response
 
 
 @app.get(
@@ -774,6 +795,7 @@ async def get_user_json(
     },
 )
 async def gimie(
+    response: Response,
     full_path: str = Path(
         ...,
         description="Full repository URL",
@@ -788,6 +810,7 @@ async def gimie(
         False,
         description="Force refresh from external APIs, bypassing cache",
     ),
+    github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
     Extract repository metadata using GIMIE only.
@@ -835,11 +858,19 @@ async def gimie(
         start_time=usage_stats["start_time"],
         end_time=usage_stats["end_time"],
         status_code=usage_stats["status_code"],
+        github_rate_limit=github_info["rate_limit_limit"],
+        github_rate_remaining=github_info["rate_limit_remaining"],
+        github_rate_reset=github_info["rate_limit_reset"],
     )
     # Calculate total tokens (will be 0 for gimie-only)
     stats.calculate_total_tokens()
+    
+    # Set rate limit response headers
+    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
+    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
 
-    response = APIOutput(
+    api_response = APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
         parsedTimestamp=datetime.now(),
@@ -847,7 +878,7 @@ async def gimie(
         stats=stats,
     )
 
-    return response
+    return api_response
 
 
 @app.get(
@@ -906,6 +937,7 @@ async def gimie(
     },
 )
 async def llm_jsonld(
+    response: Response,
     full_path: str = Path(
         ...,
         description="Full repository URL",
@@ -928,6 +960,7 @@ async def llm_jsonld(
         False,
         description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
     ),
+    github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
     Extract repository metadata using LLM with GIMIE context in JSON-LD format.
@@ -1035,11 +1068,19 @@ async def llm_jsonld(
         start_time=usage_stats["start_time"],
         end_time=usage_stats["end_time"],
         status_code=usage_stats["status_code"],
+        github_rate_limit=github_info["rate_limit_limit"],
+        github_rate_remaining=github_info["rate_limit_remaining"],
+        github_rate_reset=github_info["rate_limit_reset"],
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
+    
+    # Set rate limit response headers
+    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
+    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
 
-    response = APIOutput(
+    api_response = APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
         parsedTimestamp=datetime.now(),
@@ -1048,15 +1089,16 @@ async def llm_jsonld(
     )
     
     # Debug: Log what we're about to return
-    logger.info(f"Response output type before return: {type(response.output)}")
-    if isinstance(response.output, dict):
-        logger.info(f"Response output has keys: {list(response.output.keys())[:5]}")
+    logger.info(f"Response output type before return: {type(api_response.output)}")
+    if isinstance(api_response.output, dict):
+        logger.info(f"Response output has keys: {list(api_response.output.keys())[:5]}")
 
-    return response
+    return api_response
 
 
 @app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"])
 async def llm_json(
+    response: Response,
     full_path: str = Path(
         ...,
         description="Full repository URL",
@@ -1079,6 +1121,7 @@ async def llm_json(
         False,
         description="Enable user/author enrichment using PydanticAI agent to analyze affiliations, ORCID data, and provide detailed author information",
     ),
+    github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
     Extract repository metadata using LLM with GIMIE context.
@@ -1140,11 +1183,19 @@ async def llm_json(
         start_time=usage_stats["start_time"],
         end_time=usage_stats["end_time"],
         status_code=usage_stats["status_code"],
+        github_rate_limit=github_info["rate_limit_limit"],
+        github_rate_remaining=github_info["rate_limit_remaining"],
+        github_rate_reset=github_info["rate_limit_reset"],
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
+    
+    # Set rate limit response headers
+    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
+    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
 
-    response = APIOutput(
+    api_response = APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
         parsedTimestamp=datetime.now(),
@@ -1152,7 +1203,7 @@ async def llm_json(
         stats=stats,
     )
 
-    return response
+    return api_response
 
 
 ###########################################################
