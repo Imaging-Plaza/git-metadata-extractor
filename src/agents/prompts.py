@@ -24,6 +24,7 @@ You have access to tools to search EPFL's Infoscience repository for additional 
 - **DO NOT repeat searches** - tools cache results automatically
 - **Use sparingly** - only when they add real value
 - **One search per person** - if not found on first try, move on
+- **If a search returns 0 results (results were 0), STOP searching - do not search again because there were no results.**
 
 **When to use these tools:**
 - When you encounter a name that might be affiliated with EPFL

@@ -62,7 +62,7 @@ src/
 #### Core Models (`models.py`)
 **Person Model** - Individual authors and contributors:
 - Type discriminator: `type: Literal["Person"]` (auto-defaults)
-- Identity: `name`, `email`, `emails`, `orcidId`, `gitAuthorIds`
+- Identity: `name`, `email` (Union[str, List[str]]), `orcid` (string), `gitAuthorIds`
 - Affiliations: `affiliations`, `currentAffiliation`, `affiliationHistory`
 - Metadata: `contributionSummary`, `biography`, `academicCatalogRelations`
 - Backward compatibility: `affiliation` field deprecated but kept
@@ -78,7 +78,7 @@ src/
 - Catalog: `catalogType` (infoscience, openalex, epfl_graph)
 - Entity: `entityType` (publication, person, orgunit), full `entity` object
 - Matching: `confidence`, `justification`, `matchedOn` fields
-- Identifiers: `uuid`, `url`, `externalId` (DOI, ORCID, etc.)
+- Identifiers: `uuid`, `url` (Note: `externalId` removed from AcademicCatalogRelation)
 
 **AcademicCatalogEnrichmentResult** - Structured agent output:
 - `repository_relations`: Publications about the repository itself
@@ -130,7 +130,7 @@ src/
   - **Status**: `analysis_successful` flag (True after validation/caching)
   - **Method**: `get_usage_stats()` returns comprehensive metrics dict
 - **Data Replacement Pattern**: Enriched data replaces (not appends) original data
-  - Organizations: Replace `relatedToOrganizations` and `relatedToOrganizationsROR`
+  - Organizations: Replace `relatedToOrganizations` (now accepts Union[str, Organization])
   - Authors: Replace entire `author` list with enriched versions
   - Filters: Remove Organization objects before user enrichment
 - **Error Handling**: Organization enrichment wrapped in try-except for resilience
@@ -228,7 +228,7 @@ src/
 5. **Conversion to Person**: Transform EnrichedAuthor → Person using `convert_enriched_to_person()`
    - Maps all enrichment fields to Person structure
    - Sets type="Person" explicitly
-   - Converts single email to emails list
+   - Email field accepts Union[str, List[str]] (no conversion needed)
    - Maps additionalInfo → biography
 6. **Replacement**: **Replace** (not append) entire author list with Person objects
 7. **Output**: List of Person objects with comprehensive metadata, type discrimination enabled
@@ -244,8 +244,7 @@ src/
 4. **Usage Extraction**: Extract official and estimated tokens from result
 5. **Type Setting**: Ensure all Organization objects have type="Organization"
 6. **Replacement**: **Replace** (not append) organization lists
-   - `relatedToOrganizations`: List of organization names
-   - `relatedToOrganizationsROR`: List of Organization objects with full ROR data
+   - `relatedToOrganizations`: List of Union[str, Organization] - can contain organization names (strings) or full Organization objects with ROR data
    - **Note**: Organizations stay in these fields, NOT migrated to `author` field
 7. **EPFL Fields**: Update relatedToEPFL, relatedToEPFLJustification, relatedToEPFLConfidence
 8. **Output**: Enriched organization list with ROR IDs, types, countries, websites, confidence scores

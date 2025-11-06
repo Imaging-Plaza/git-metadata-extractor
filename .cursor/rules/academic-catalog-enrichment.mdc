@@ -50,8 +50,8 @@ class AcademicCatalogRelation(BaseModel):
     entity: Union[dict, BaseModel]  # Full entity details
     confidence: float         # 0.0-1.0
     justification: str        # Why this relation exists
-    externalId: Optional[str] # DOI, ORCID, UUID, etc.
     matchedOn: Optional[List[str]]  # Fields used for matching
+    # Note: externalId field has been removed
 ```
 
 #### 2. AcademicCatalogEnrichmentResult (Structured Output)

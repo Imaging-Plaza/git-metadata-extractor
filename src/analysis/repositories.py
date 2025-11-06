@@ -7,7 +7,7 @@ from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.repository import llm_request_repo_infos
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
-from ..data_models import SoftwareSourceCode
+from ..data_models import Organization, SoftwareSourceCode
 from ..gimie_utils.gimie_methods import extract_gimie
 from ..utils.utils import enrich_authors_with_orcid
 
@@ -154,9 +154,14 @@ class Repository:
                 if legal_name:
                     related_orgs.append(legal_name)
             
-            # Replace the lists with enriched data only
-            self.data.relatedToOrganizations = related_orgs
-            self.data.relatedToOrganizationsROR = enriched_orgs
+            # Merge enriched organizations into relatedToOrganizations
+            # Combine string names and Organization objects
+            combined_orgs = []
+            if related_orgs:
+                combined_orgs.extend(related_orgs)
+            if enriched_orgs:
+                combined_orgs.extend(enriched_orgs)
+            self.data.relatedToOrganizations = combined_orgs if combined_orgs else None
 
             # These values are overwritten only if provided by the enrichment
             if organization_enrichment.relatedToEPFL is not None:
@@ -260,7 +265,6 @@ class Repository:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
             self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
-        logger.info(f"User enrichment: {user_enrichment}")
 
     def _names_match(self, name1: str, name2: str) -> bool:
         """
@@ -332,10 +336,10 @@ class Repository:
                     elif hasattr(author, "legalName") and author.legalName:
                         organization_names.append(author.legalName)
             
-            # Also check relatedToOrganizationsROR
-            if hasattr(self.data, "relatedToOrganizationsROR") and self.data.relatedToOrganizationsROR:
-                for org in self.data.relatedToOrganizationsROR:
-                    if hasattr(org, "legalName") and org.legalName:
+            # Also check relatedToOrganizations for Organization objects
+            if self.data.relatedToOrganizations:
+                for org in self.data.relatedToOrganizations:
+                    if isinstance(org, Organization) and hasattr(org, "legalName") and org.legalName:
                         if org.legalName not in organization_names:
                             organization_names.append(org.legalName)
                 

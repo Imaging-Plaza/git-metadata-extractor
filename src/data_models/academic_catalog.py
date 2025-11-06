@@ -63,12 +63,6 @@ class AcademicCatalogRelation(BaseModel):
         description="Explanation of why this entity is related and how it was found"
     )
 
-    # Optional fields for cross-catalog entity matching
-    externalId: Optional[str] = Field(
-        description="External identifier (UUID, DOI, ORCID, etc.)",
-        default=None,
-    )
-
     matchedOn: Optional[List[str]] = Field(
         description="Fields used to match this entity (e.g., ['name', 'email'], ['doi'])",
         default_factory=list,

@@ -38,29 +38,17 @@ for config in validation_configs:
 # Agent cleanup tracking
 _active_validation_agents = []
 
-# Validation agent system prompt
+# Validation agent system prompt (generic - specific instructions in user prompts)
 validation_system_prompt = """
 You are an expert at validating URLs by analyzing content to verify they match expected entities.
 
 Your task is to:
-1. Analyze the content retrieved from a URL (HTML or JSON/API data)
-2. Compare it with the expected entity information provided
+1. Analyze the content retrieved from a URL (HTML, JSON, or other data formats)
+2. Compare it with the expected entity information provided in the user prompt
 3. Determine if the URL actually points to the correct entity
 4. Provide a confidence score (0.0-1.0) and clear justification
 
-For ROR (Research Organization Registry) validation:
-- Check if the organization name matches (exact or partial matches are acceptable)
-- Verify country matches expectations
-- Verify website matches (if provided)
-- Look for aliases and alternate names
-- Consider partial matches (e.g., "EPFL" vs "École Polytechnique Fédérale de Lausanne")
-
-For Infoscience (EPFL repository) validation:
-- For publications: Verify title, authors, publication date, and abstract match
-- For persons: Verify name, affiliation, and research interests match
-- For orgunits: Verify name, parent organization, and description match
-- Consider that URLs may have been normalized from UUIDs or handles
-
+Follow the specific validation instructions provided in the user prompt for this validation type.
 Be conservative - if there's any doubt, set is_valid to false and provide clear justification.
 High confidence (>= 0.8) should only be used when there's clear, unambiguous match.
 """
@@ -232,16 +220,26 @@ async def validate_ror_url(
 - Full JSON (for reference): {json.dumps(ror_data, indent=2)[:3000]}  # Limit to first 3000 chars
 """
 
-        # Prepare validation prompt
+        # Prepare validation prompt with ROR-specific instructions
         prompt = f"""Validate if this ROR ID matches the expected organization.
+
+**Validation Type:** ROR (Research Organization Registry) - JSON API validation
+
+**ROR Validation Instructions:**
+- Check if the organization name matches (exact or partial matches are acceptable)
+- Verify country matches expectations
+- Verify website matches (if provided)
+- Look for aliases and alternate names in the names array
+- Consider partial matches (e.g., "EPFL" vs "École Polytechnique Fédérale de Lausanne")
+- Analyze the JSON structure from the ROR API v2 endpoint
 
 ROR ID: {ror_id_clean}
 ROR API URL: {ror_api_url}
 
 Expected Organization:
-- Name: {expected_org.get('name', 'N/A')}
-- Country: {expected_org.get('country', 'N/A')}
-- Website: {expected_org.get('website', 'N/A')}
+- Name: {expected_org.get('name') or 'N/A'}
+- Country: {expected_org.get('country') or 'N/A'}
+- Website: {expected_org.get('website') or 'N/A'}
 - Aliases: {', '.join(expected_org.get('aliases', []))}
 
 {ror_data_summary}
@@ -330,21 +328,32 @@ async def validate_infoscience_url(
         # Fetch HTML content
         html_content = await fetch_html_content(normalized_url)
 
-        # Prepare validation prompt based on entity type
+        # Prepare validation prompt based on entity type with Infoscience-specific instructions
         if entity_type == "publication":
             prompt = f"""Validate if this Infoscience publication URL matches the expected publication.
+
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for publications
+
+**Infoscience Publication Validation Instructions:**
+- Verify title matches (exact or close match acceptable)
+- Verify expected authors are present in the author list
+- Verify DOI matches (if provided)
+- Verify publication date matches (if provided)
+- Verify lab/affiliation matches (if provided)
+- Analyze the markdown content extracted from the HTML page
+- Consider that URLs may have been normalized from UUIDs or handles
 
 Infoscience URL: {normalized_url}
 
 Expected Publication:
-- Title: {expected_entity.get('title', 'N/A')}
-- Authors: {', '.join(expected_entity.get('authors', []))}
-- DOI: {expected_entity.get('doi', 'N/A')}
-- Publication Date: {expected_entity.get('publication_date', 'N/A')}
-- Lab: {expected_entity.get('lab', 'N/A')}
+- Title: {expected_entity.get('title') or 'N/A'}
+- Authors: {', '.join(expected_entity.get('authors') or [])}
+- DOI: {expected_entity.get('doi') or 'N/A'}
+- Publication Date: {expected_entity.get('publication_date') or 'N/A'}
+- Lab: {expected_entity.get('lab') or 'N/A'}
 
 Markdown Content Retrieved from Infoscience URL (HTML converted to markdown):
-{html_content[:5000]}  # Limit to first 5000 chars
+{html_content[:5000]}
 
 Analyze the markdown content and determine:
 1. Does the publication title match?
@@ -358,16 +367,26 @@ Provide a clear validation result with confidence score and justification.
         elif entity_type == "person":
             prompt = f"""Validate if this Infoscience person URL matches the expected person.
 
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for persons
+
+**Infoscience Person Validation Instructions:**
+- Verify name matches (exact or close match acceptable)
+- Verify affiliation matches (if provided)
+- Verify ORCID matches (if provided)
+- Verify email matches (if provided)
+- Analyze the markdown content extracted from the HTML page
+- Consider that URLs may have been normalized from UUIDs or handles
+
 Infoscience URL: {normalized_url}
 
 Expected Person:
-- Name: {expected_entity.get('name', 'N/A')}
-- Affiliation: {expected_entity.get('affiliation', 'N/A')}
-- ORCID: {expected_entity.get('orcid', 'N/A')}
-- Email: {expected_entity.get('email', 'N/A')}
+- Name: {expected_entity.get('name') or 'N/A'}
+- Affiliation: {expected_entity.get('affiliation') or 'N/A'}
+- ORCID: {expected_entity.get('orcid') or 'N/A'}
+- Email: {expected_entity.get('email') or 'N/A'}
 
 Markdown Content Retrieved from Infoscience URL (HTML converted to markdown):
-{html_content[:5000]}  # Limit to first 5000 chars
+{html_content[:5000]}
 
 Analyze the markdown content and determine:
 1. Does the person name match?
@@ -380,15 +399,24 @@ Provide a clear validation result with confidence score and justification.
         elif entity_type == "orgunit":
             prompt = f"""Validate if this Infoscience organizational unit URL matches the expected orgunit.
 
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for organizational units
+
+**Infoscience Organizational Unit Validation Instructions:**
+- Verify name matches (exact or close match acceptable)
+- Verify parent organization matches (if provided)
+- Verify description matches (if provided)
+- Analyze the markdown content extracted from the HTML page
+- Consider that URLs may have been normalized from UUIDs or handles
+
 Infoscience URL: {normalized_url}
 
 Expected Organizational Unit:
-- Name: {expected_entity.get('name', 'N/A')}
-- Parent Organization: {expected_entity.get('parent_organization', 'N/A')}
-- Description: {expected_entity.get('description', 'N/A')[:200]}...
+- Name: {expected_entity.get('name') or 'N/A'}
+- Parent Organization: {expected_entity.get('parent_organization') or 'N/A'}
+- Description: {str(expected_entity.get('description') or 'N/A')[:200]}...
 
 Markdown Content Retrieved from Infoscience URL (HTML converted to markdown):
-{html_content[:5000]}  # Limit to first 5000 chars
+{html_content[:5000]}
 
 Analyze the markdown content and determine:
 1. Does the organizational unit name match?

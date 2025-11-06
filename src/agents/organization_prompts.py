@@ -63,7 +63,7 @@ In addition to the ROR and web search tools, you have access to Infoscience tool
 - **Be strategic and efficient** - these tools query external APIs
 - **DO NOT search for the same thing multiple times** - tools cache results automatically
 - **Maximum 2 attempts per subject** - if a lab/author isn't found on first try, move on
-- **If a search returns 0 results**, the entity may not be in Infoscience or has a different name - DON'T keep searching with variations
+- **If a search returns 0 results, STOP searching immediately because the results were 0. The entity is NOT in Infoscience - do not try variations or search again.**
 - **Prioritize quality over quantity** - use these tools only when they add real value
 
 **When to use Infoscience tools:**
@@ -176,8 +176,8 @@ Authors with ORCID affiliations:
             [
                 {
                     "name": a.name,
-                    "orcidId": str(a.orcidId) if a.orcidId else None,
-                    "affiliation": a.affiliation,
+                    "orcid": str(a.orcid) if a.orcid else None,
+                    "affiliations": a.affiliations,
                 }
                 for a in context.authors
             ],
@@ -233,7 +233,7 @@ Existing EPFL justification: {context.existing_epfl_justification}
         [
             {
                 "name": a.name,
-                "orcidId": str(a.orcidId) if a.orcidId else None,
+                "orcid": str(a.orcid) if a.orcid else None,
                 "affiliation": a.affiliation,
             }
             for a in context.authors

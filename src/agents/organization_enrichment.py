@@ -719,8 +719,8 @@ async def _pre_search_ror_for_organizations(
     
     # Extract from ORCID affiliations
     for author in context.authors:
-        if author.affiliation:
-            for aff in author.affiliation:
+        if author.affiliations:
+            for aff in author.affiliations:
                 if aff and aff.strip():
                     organizations_to_search.add(aff.strip())
     
@@ -1092,12 +1092,12 @@ async def enrich_organizations_from_dict(
     if llm_output.get("author"):
         for author in llm_output["author"]:
             if isinstance(author, dict):
-                # Check if it's a Person (has name, orcidId, or affiliation)
-                if "name" in author or "orcidId" in author or "affiliation" in author:
-                    # Handle empty orcidId strings
+                # Check if it's a Person (has name, orcid, or affiliation)
+                if "name" in author or "orcid" in author or "affiliation" in author:
+                    # Handle empty orcid strings
                     author_data = author.copy()
-                    if "orcidId" in author_data and not author_data["orcidId"]:
-                        author_data["orcidId"] = None
+                    if "orcid" in author_data and not author_data["orcid"]:
+                        author_data["orcid"] = None
                     authors.append(Person(**author_data))
 
     # Extract existing organizations - handle both string and dict formats

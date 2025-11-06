@@ -227,7 +227,6 @@ def validate_and_clean_urls(data: Dict[str, Any]) -> Dict[str, Any]:
     url_list_fields = [
         "codeRepository",
         "citation",
-        "webpagesToCheck",
     ]
 
     # Validate single URL fields
@@ -278,25 +277,24 @@ def validate_author_urls(author: Dict[str, Any]) -> Dict[str, Any]:
     """
     cleaned_author = author.copy()
 
-    # Validate ORCID ID
-    if "orcidId" in cleaned_author and cleaned_author["orcidId"] is not None:
-        orcid = cleaned_author["orcidId"]
+    # Validate ORCID (validator in Person model handles format conversion)
+    if "orcid" in cleaned_author and cleaned_author["orcid"] is not None:
+        orcid = cleaned_author["orcid"]
 
-        # Convert ORCID ID to full URL if needed
+        # Convert to string if needed
         if hasattr(orcid, "__str__"):
             orcid = str(orcid)
 
         if isinstance(orcid, str) and orcid.strip():
             orcid = orcid.strip()
-
-            # If it's just the ID, convert to full URL
-            if re.match(r"^\d{4}-\d{4}-\d{4}-\d{4}$", orcid):
-                cleaned_author["orcidId"] = f"https://orcid.org/{orcid}"
-            elif not is_valid_orcid_url(orcid):
+            # Basic validation - Person model validator will handle format conversion
+            if not (re.match(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$", orcid) or is_valid_orcid_url(orcid)):
                 logger.warning(f"Invalid ORCID format: {orcid}")
-                cleaned_author["orcidId"] = None
+                cleaned_author["orcid"] = None
+            else:
+                cleaned_author["orcid"] = orcid
         else:
-            cleaned_author["orcidId"] = None
+            cleaned_author["orcid"] = None
 
     return cleaned_author
 

@@ -91,7 +91,7 @@ Assign confidence scores (0.0-1.0) for each relation found:
    - Format: **[Name](https://infoscience.epfl.ch/entities/...)**
    
 3. **Extract all available fields**:
-   - For **persons**: name, UUID, email, ORCID, affiliation, profile_url, publication_count
+   - For **persons**: name, UUID, email, ORCID, affiliation, profile_url
    - For **orgunits**: name, UUID, description, url, parent_organization, website, research_areas
    - For **publications**: title, UUID, authors, DOI, publication_date, url, abstract
    
@@ -153,12 +153,11 @@ Each `AcademicCatalogRelation` should have:
 - **url**: Extract from markdown link ([Name](url))
 - **name**: Entity name/title
 - **entity**: The full entity object with ALL available fields from the markdown:
-  - For **person**: {uuid, name, email, orcid, affiliation, profile_url, publication_count, research_interests}
-  - For **orgunit**: {uuid, name, description, url, parent_organization, website, publication_count, research_areas}
+  - For **person**: {uuid, name, email, orcid, affiliation, profile_url}
+  - For **orgunit**: {uuid, name, description, url, parent_organization, website, research_areas}
   - For **publication**: {uuid, title, authors, abstract, doi, publication_date, publication_type, url, lab, subjects}
 - **confidence**: Your confidence score (0.0-1.0)
 - **justification**: Clear explanation of the match
-- **externalId**: DOI for publications, ORCID for persons, null for orgunits
 - **matchedOn**: List of fields used for matching (e.g., ["name", "email"], ["doi"])
 
 ## Important Notes

@@ -154,6 +154,62 @@ Tools should be used strategically (instructed in system prompts):
 - Maximum 2 attempts per subject
 - Accept when information is not found rather than keep searching
 
+#### URL Validation Agents (`src/agents/url_validation.py`)
+Specialized agents for validating URLs by fetching and analyzing content:
+
+**Available Validation Functions:**
+- `validate_ror_url(ror_id: str, expected_org: Dict[str, Any])` - Validate ROR IDs by fetching JSON from ROR API
+- `validate_infoscience_url(url: str, expected_entity: Dict[str, Any], entity_type: str)` - Validate Infoscience URLs by fetching HTML
+
+**Validation Agent Architecture:**
+- **Generic System Prompt**: Contains only general validation instructions
+- **Specific User Prompts**: Each validation function includes validation-type-specific instructions in the user prompt
+- **Shared Agent Infrastructure**: Single reusable agent with context-specific prompts
+
+**Pattern: Generic System + Specific User Prompts**
+```python
+# Generic system prompt (reusable)
+validation_system_prompt = """
+You are an expert at validating URLs by analyzing content...
+Follow the specific validation instructions provided in the user prompt for this validation type.
+"""
+
+# ROR-specific validation (in validate_ror_url function)
+prompt = f"""Validate if this ROR ID matches the expected organization.
+
+**Validation Type:** ROR (Research Organization Registry) - JSON API validation
+
+**ROR Validation Instructions:**
+- Check if the organization name matches (exact or partial matches are acceptable)
+- Verify country matches expectations
+- Verify website matches (if provided)
+- Look for aliases and alternate names in the names array
+...
+"""
+
+# Infoscience-specific validation (in validate_infoscience_url function)
+prompt = f"""Validate if this Infoscience publication URL matches the expected publication.
+
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for publications
+
+**Infoscience Publication Validation Instructions:**
+- Verify title matches (exact or close match acceptable)
+- Verify expected authors are present in the author list
+...
+"""
+```
+
+**Benefits of This Pattern:**
+- ✅ Clear separation: Each validation type has its own instructions
+- ✅ No mixing: ROR logic won't apply to Infoscience and vice versa
+- ✅ Single reusable agent: One agent infrastructure, context-specific prompts
+- ✅ Easier maintenance: Update validation logic in one place per type
+- ✅ Better clarity: Instructions are explicit and contextual
+
+**Validation Results:**
+- Returns `ValidationResult` with `is_valid`, `confidence`, `justification`, and `validation_errors`
+- For Infoscience: Also includes `normalized_url` if URL was normalized from UUID or handle
+
 ## Prompt Engineering
 
 ### System Prompts

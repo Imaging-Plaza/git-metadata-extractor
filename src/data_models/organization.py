@@ -8,6 +8,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Union,
 )
 
 from pydantic import (
@@ -169,10 +170,9 @@ class GitHubOrganization(BaseModel):
     name: Optional[str] = None
     organizationType: Optional[str] = None
     githubOrganizationMetadata: Optional[GitHubOrganizationMetadata] = None
-    relatedToOrganizationsROR: Optional[List[Organization]] = None
     organizationTypeJustification: Optional[str] = None
     description: Optional[str] = None
-    relatedToOrganization: Optional[List[str]] = None
+    relatedToOrganization: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None

@@ -795,18 +795,13 @@ async def enrich_users_from_dict(
                 # Already a Person instance
                 existing_authors.append(author_data)
             elif isinstance(author_data, dict):
-                # Handle empty orcidId strings and convert to full URL
+                # Handle empty orcid strings (validator handles format conversion)
                 author_copy = author_data.copy()
-                if "orcidId" in author_copy:
-                    orcid_value = author_copy["orcidId"]
+                if "orcid" in author_copy:
+                    orcid_value = author_copy["orcid"]
                     if not orcid_value:
-                        author_copy["orcidId"] = None
-                    elif orcid_value:
-                        # Convert to string if it's an HttpUrl object
-                        orcid_str = str(orcid_value) if not isinstance(orcid_value, str) else orcid_value
-                        # Convert ORCID ID to full URL if it's just the ID
-                        if not orcid_str.startswith("http"):
-                            author_copy["orcidId"] = f"https://orcid.org/{orcid_str}"
+                        author_copy["orcid"] = None
+                    # Validator will handle format validation and normalization
                 existing_authors.append(Person(**author_copy))
             else:
                 logger.warning(f"Unexpected author data type: {type(author_data)}")

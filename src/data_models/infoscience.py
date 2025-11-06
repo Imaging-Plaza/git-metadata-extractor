@@ -2,15 +2,20 @@
 Infoscience data models for EPFL's Infoscience repository integration
 """
 
+import re
 from datetime import date
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class InfosciencePublication(BaseModel):
     """Publication metadata from Infoscience repository"""
 
+    type: Literal["InfosciencePublication"] = Field(
+        default="InfosciencePublication",
+        description="Type discriminator for Infoscience entities",
+    )
     uuid: Optional[str] = Field(
         description="DSpace UUID of the publication",
         default=None,
@@ -36,11 +41,11 @@ class InfosciencePublication(BaseModel):
         description="Type of publication (article, thesis, conference paper, etc.)",
         default=None,
     )
-    url: Optional[str] = Field(
-        description="URL to the publication in Infoscience",
+    url: Optional[HttpUrl] = Field(
+        description="URL to the publication in Infoscience (format: https://infoscience.epfl.ch/entities/publication/{uuid})",
         default=None,
     )
-    repository_url: Optional[str] = Field(
+    repository_url: Optional[HttpUrl] = Field(
         description="Code repository URL if available",
         default=None,
     )
@@ -52,6 +57,18 @@ class InfosciencePublication(BaseModel):
         description="Subject keywords/tags",
         default_factory=list,
     )
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_publication_url(cls, v):
+        """Validate Infoscience publication URL format"""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            pattern = r"^https://infoscience\.epfl\.ch/entities/publication/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            if not re.match(pattern, v):
+                raise ValueError(f"Invalid Infoscience publication URL format: {v}. Expected: https://infoscience.epfl.ch/entities/publication/{{uuid}}")
+        return v
 
     def to_markdown(self) -> str:
         """Convert publication to markdown format"""
@@ -110,6 +127,10 @@ class InfosciencePublication(BaseModel):
 class InfoscienceAuthor(BaseModel):
     """Author/researcher metadata from Infoscience"""
 
+    type: Literal["InfoscienceAuthor"] = Field(
+        default="InfoscienceAuthor",
+        description="Type discriminator for Infoscience entities",
+    )
     uuid: Optional[str] = Field(
         description="DSpace UUID of the author profile",
         default=None,
@@ -120,25 +141,53 @@ class InfoscienceAuthor(BaseModel):
         default=None,
     )
     orcid: Optional[str] = Field(
-        description="ORCID identifier",
+        description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
         default=None,
     )
     affiliation: Optional[str] = Field(
         description="Primary affiliation (lab, department, etc.)",
         default=None,
     )
-    profile_url: Optional[str] = Field(
-        description="URL to the author's Infoscience profile",
+    profile_url: Optional[HttpUrl] = Field(
+        description="URL to the author's Infoscience profile (format: https://infoscience.epfl.ch/entities/person/{uuid})",
         default=None,
     )
-    publication_count: Optional[int] = Field(
-        description="Number of publications in Infoscience",
-        default=None,
-    )
-    research_interests: List[str] = Field(
-        description="Research interests or topics",
-        default_factory=list,
-    )
+
+    @field_validator("orcid", mode="before")
+    @classmethod
+    def validate_orcid(cls, v):
+        """Validate ORCID format and convert ID to URL if needed."""
+        if v is None:
+            return v
+        
+        if isinstance(v, str):
+            # If it's already a URL, validate and return as-is (store as string)
+            if v.startswith("http"):
+                orcid_url_pattern = r"^https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+                if not re.match(orcid_url_pattern, v):
+                    raise ValueError(f"Invalid ORCID URL format: {v}")
+                return v
+
+            # If it's an ID, validate and return as-is (store as plain ID string)
+            orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+            if re.match(orcid_id_pattern, v):
+                return v
+
+            raise ValueError(f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000")
+        
+        return v
+
+    @field_validator("profile_url", mode="before")
+    @classmethod
+    def validate_profile_url(cls, v):
+        """Validate Infoscience person profile URL format"""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            pattern = r"^https://infoscience\.epfl\.ch/entities/person/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            if not re.match(pattern, v):
+                raise ValueError(f"Invalid Infoscience person profile URL format: {v}. Expected: https://infoscience.epfl.ch/entities/person/{{uuid}}")
+        return v
 
     def to_markdown(self) -> str:
         """Convert author to markdown format"""
@@ -166,21 +215,16 @@ class InfoscienceAuthor(BaseModel):
         if self.email:
             md_parts.append(f"*Email:* {self.email}")
 
-        # Publication count
-        if self.publication_count:
-            md_parts.append(f"*Publications:* {self.publication_count}")
-
-        # Research interests
-        if self.research_interests:
-            interests_str = ", ".join(self.research_interests[:5])
-            md_parts.append(f"*Research Interests:* {interests_str}")
-
         return "\n".join(md_parts)
 
 
 class InfoscienceLab(BaseModel):
     """Laboratory or organizational unit metadata from Infoscience"""
 
+    type: Literal["InfoscienceLab"] = Field(
+        default="InfoscienceLab",
+        description="Type discriminator for Infoscience entities",
+    )
     uuid: Optional[str] = Field(
         description="DSpace UUID of the organizational unit",
         default=None,
@@ -190,20 +234,29 @@ class InfoscienceLab(BaseModel):
         description="Description of the lab",
         default=None,
     )
-    url: Optional[str] = Field(
-        description="URL to the lab's Infoscience page",
+    url: Optional[HttpUrl] = Field(
+        description="URL to the lab's Infoscience page (format: https://infoscience.epfl.ch/entities/orgunit/{uuid})",
         default=None,
     )
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_lab_url(cls, v):
+        """Validate Infoscience orgunit URL format"""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            pattern = r"^https://infoscience\.epfl\.ch/entities/orgunit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            if not re.match(pattern, v):
+                raise ValueError(f"Invalid Infoscience orgunit URL format: {v}. Expected: https://infoscience.epfl.ch/entities/orgunit/{{uuid}}")
+        return v
+
     parent_organization: Optional[str] = Field(
         description="Parent organization or department",
         default=None,
     )
     website: Optional[str] = Field(
         description="External website URL",
-        default=None,
-    )
-    publication_count: Optional[int] = Field(
-        description="Number of publications from this lab",
         default=None,
     )
     research_areas: List[str] = Field(
@@ -239,10 +292,6 @@ class InfoscienceLab(BaseModel):
         # Website
         if self.website:
             md_parts.append(f"*Website:* {self.website}")
-
-        # Publication count
-        if self.publication_count:
-            md_parts.append(f"*Publications:* {self.publication_count}")
 
         # Research areas
         if self.research_areas:
@@ -307,8 +356,8 @@ class InfoscienceSearchResult(BaseModel):
                 md_parts.append("")
 
         else:
-            md_parts.append("## No Results Found\n")
-            md_parts.append("The search did not return any results.")
+            md_parts.append("## ⚠️ STOP SEARCHING - No Results Found\n")
+            md_parts.append("**This search returned 0 results. The entity is NOT in Infoscience. Do NOT search again for this query because the results were 0.**")
 
         # Footer
         if md_parts and self.total_results > 0:

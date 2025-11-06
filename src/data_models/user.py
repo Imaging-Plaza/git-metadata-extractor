@@ -11,6 +11,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Union,
 )
 
 from pydantic import (
@@ -35,8 +36,8 @@ class EnrichedAuthor(BaseModel):
 
     name: str = Field(description="Author's name")
     email: Optional[str] = Field(description="Author's email address", default=None)
-    orcidId: Optional[str] = Field(
-        description="Author's ORCID identifier",
+    orcid: Optional[str] = Field(
+        description="Author's ORCID identifier (format: 0000-0000-0000-0000 or URL)",
         default=None,
     )
     affiliations: list[str] = Field(
@@ -82,9 +83,6 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
     Returns:
         Person object with all fields mapped appropriately
     """
-    # Prepare emails list
-    emails = [enriched.email] if enriched.email else []
-    
     # Create Person object with mapped fields
     return Person(
         # Type discriminator
@@ -92,9 +90,8 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
         
         # Core identity fields
         name=enriched.name,
-        email=enriched.email,  # Primary email for backward compatibility
-        emails=emails,
-        orcidId=enriched.orcidId,
+        email=enriched.email,  # Can be single string or list
+        orcid=enriched.orcid,
         gitAuthorIds=[],  # Will be set separately based on git author matching
         
         # Affiliation fields
@@ -293,8 +290,7 @@ class GitHubUser(BaseModel):
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
     githubUserMetadata: Optional[GitHubUserMetadata] = None
-    relatedToOrganization: Optional[List[str]] = None
-    relatedToOrganizationsROR: Optional[List[Organization]] = None
+    relatedToOrganization: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None

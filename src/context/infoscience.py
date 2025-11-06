@@ -206,7 +206,6 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
         orcid=_parse_metadata(metadata, "person.identifier.orcid"),
         affiliation=_parse_metadata(metadata, "person.affiliation.name"),
         profile_url=url,  # Fixed: use profile_url instead of url
-        publication_count=None,  # Not available from person entity directly
     )
 
 
@@ -249,7 +248,6 @@ def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
         description=_parse_metadata(metadata, "dc.description") or _parse_metadata(metadata, "dc.description.abstract"),
         url=url,
         parent_organization=_parse_metadata(metadata, "organization.parentOrganization"),
-        publication_count=None,  # Not available from orgunit entity directly
     )
 
 
@@ -413,7 +411,6 @@ async def search_authors(
                             authors.append(
                                 InfoscienceAuthor(
                                     name=author_name,
-                                    publication_count=1,  # Approximate
                                 )
                             )
             except Exception as e:
@@ -532,7 +529,6 @@ async def search_labs(
                         lab = InfoscienceLab(
                             name=lab_info,
                             description=description,
-                            publication_count=1,  # At least one publication
                         )
                         labs.append(lab)
                         
@@ -632,6 +628,8 @@ async def search_infoscience_publications_tool(query: str, max_results: int = 10
     
     IMPORTANT: This tool caches results - don't search for the same thing multiple times!
     Be strategic and avoid redundant searches.
+    
+    **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
         query: Search query (title, DOI, keywords, or general search terms)
@@ -673,6 +671,8 @@ async def search_infoscience_authors_tool(name: str, max_results: int = 10) -> s
     
     IMPORTANT: This tool caches results - don't search for the same person multiple times!
     Be strategic and avoid redundant searches.
+    
+    **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
         name: Author name to search for (can be partial name)
@@ -714,6 +714,8 @@ async def search_infoscience_labs_tool(name: str, max_results: int = 10) -> str:
     
     IMPORTANT: This tool caches results - don't search for the same lab multiple times!
     If a lab isn't found, it may not be in Infoscience or has a different name - don't keep trying!
+    
+    **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
         name: Lab or organization name to search for (can be partial name)

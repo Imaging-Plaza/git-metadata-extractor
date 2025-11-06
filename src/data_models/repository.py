@@ -262,21 +262,17 @@ class SoftwareSourceCode(BaseModel):
     hasDocumentation: Optional[HttpUrl] = None
     hasExecutableInstructions: Optional[str] = None
     hasExecutableNotebook: Optional[List[ExecutableNotebook]] = []
-    hasParameter: Optional[List[FormalParameter]] = []
     readme: Optional[HttpUrl] = None
     hasFunding: Optional[List[FundingInformation]] = None
     hasSoftwareImage: Optional[List[SoftwareImage]] = []
     imagingModality: Optional[List[str]] = None
-    fairLevel: Optional[str] = None
-    graph: Optional[str] = None
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
     relatedDatasets: Optional[List[str]] = None
     relatedPublications: Optional[List[str]] = None
     relatedModels: Optional[List[str]] = None
     relatedAPIs: Optional[List[str]] = None
-    relatedToOrganizations: Optional[List[str]] = None
-    relatedToOrganizationsROR: Optional[List[Organization]] = None
+    relatedToOrganizations: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: RepositoryType
     repositoryTypeJustification: List[str]
@@ -284,7 +280,6 @@ class SoftwareSourceCode(BaseModel):
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
     relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
-    webpagesToCheck: Optional[List[HttpUrl]] = None
     academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
@@ -417,55 +412,6 @@ class SoftwareSourceCode(BaseModel):
 
         return v
 
-    @field_validator("hasParameter", mode="before")
-    @classmethod
-    def validate_has_parameter_with_logging(cls, v):
-        logger.debug("🔍 Validating hasParameter field")
-
-        if v is None:
-            logger.debug("  📝 hasParameter field is None")
-            return []
-
-        if isinstance(v, list):
-            logger.debug(f"  📊 hasParameter list has {len(v)} items")
-
-            # Check for dimensionality issues
-            dim_issues = []
-            valid_params = []
-
-            for i, param in enumerate(v):
-                if isinstance(param, dict):
-                    name = param.get("name", f"Parameter {i+1}")
-                    has_dim = param.get("hasDimensionality")
-
-                    if has_dim is not None:
-                        if isinstance(has_dim, int) and has_dim > 0:
-                            valid_params.append(f"{name} (dim: {has_dim})")
-                            logger.debug(f"  ✅ {name}: dimensionality = {has_dim}")
-                        else:
-                            dim_issues.append(f"{name} (invalid dim: {has_dim})")
-                            logger.warning(
-                                f"  ⚠️ {name}: invalid dimensionality = {has_dim} (type: {type(has_dim)})",
-                            )
-                    else:
-                        logger.debug(f"  📝 {name}: no dimensionality specified")
-                else:
-                    logger.warning(f"  ⚠️ Parameter {i+1} is not a dict: {type(param)}")
-
-            # Summary
-            if dim_issues:
-                logger.warning(
-                    f"  🚨 {len(dim_issues)} parameters with dimensionality issues: {', '.join(dim_issues)}",
-                )
-            else:
-                logger.debug(
-                    f"  ✅ All {len(valid_params)} parameters have valid dimensionality",
-                )
-        else:
-            logger.warning(f"  ⚠️ hasParameter field is not a list: {type(v)}")
-
-        return v
-
     @model_validator(mode="after")
     def validate_model_with_logging(self):
         repo_name = getattr(self, "name", "unnamed")
@@ -476,9 +422,6 @@ class SoftwareSourceCode(BaseModel):
         logger.debug(f"  👥 Authors: {len(self.author) if self.author else 0}")
         logger.debug(
             f"  🔧 Git Authors: {len(self.gitAuthors) if self.gitAuthors else 0}",
-        )
-        logger.debug(
-            f"  ⚙️ Parameters: {len(self.hasParameter) if self.hasParameter else 0}",
         )
         logger.debug(
             f"  🏷️ Repository Type: {getattr(self, 'repositoryType', 'Not set')}",
@@ -500,16 +443,43 @@ class SoftwareSourceCode(BaseModel):
 
             for org in v:
                 if org:
-                    org_lower = (
-                        org.lower().strip()
-                    )  # Convert to lowercase for comparison
+                    # Handle both string and Organization objects
+                    if isinstance(org, str):
+                        org_lower = org.lower().strip()
+                        org_key = org_lower
+                        org_value = org  # Keep original case
+                    elif isinstance(org, Organization):
+                        # Use legalName for Organization objects
+                        org_name = org.legalName or ""
+                        org_lower = org_name.lower().strip()
+                        org_key = org_lower
+                        org_value = org
+                    elif isinstance(org, dict):
+                        # Handle dict representation (could be string or Organization)
+                        if "legalName" in org:
+                            org_name = org.get("legalName", "")
+                            org_lower = org_name.lower().strip()
+                            org_key = org_lower
+                            org_value = Organization(**org) if org else None
+                        else:
+                            # Treat as string
+                            org_str = str(org)
+                            org_lower = org_str.lower().strip()
+                            org_key = org_lower
+                            org_value = org_str
+                    else:
+                        # Convert to string for comparison
+                        org_str = str(org)
+                        org_lower = org_str.lower().strip()
+                        org_key = org_lower
+                        org_value = org_str
 
-                    if org_lower not in seen_lower:
-                        unique_orgs.append(org)  # Keep original case
-                        seen_lower.add(org_lower)  # Store lowercase version
+                    if org_value and org_key not in seen_lower:
+                        unique_orgs.append(org_value)  # Keep original format
+                        seen_lower.add(org_key)  # Store lowercase version
                     else:
                         logger.debug(
-                            f"  🔄 Removed case-insensitive duplicate: '{org}' (matches existing)",
+                            f"  🔄 Removed case-insensitive duplicate: '{org_key}' (matches existing)",
                         )
 
             logger.debug(f"  📊 Organizations: {len(v)} → {len(unique_orgs)}")

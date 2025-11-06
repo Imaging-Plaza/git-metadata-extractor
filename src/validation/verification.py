@@ -171,7 +171,7 @@ class Verification:
                 self.issues.append(msg)
                 self.invalid_fields.setdefault("author", []).append("Missing name")
 
-            orcid = author.get("orcidId")
+            orcid = author.get("orcid")
             if orcid:
                 logger.info(f"Validating ORCID: '{orcid}' (type: {type(orcid)})")
                 if not self._is_valid_orcid(orcid):

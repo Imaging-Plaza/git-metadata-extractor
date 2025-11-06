@@ -90,8 +90,8 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
             [
                 {
                     "name": a.name,
-                    "orcidId": str(a.orcidId) if a.orcidId else None,
-                    "affiliation": a.affiliation,
+                    "orcid": str(a.orcid) if a.orcid else None,
+                    "affiliations": a.affiliations,
                 }
                 for a in context.existing_authors
             ],
