@@ -15,10 +15,16 @@ CACHE_CONFIG = {
         "github_user": int(os.environ.get("CACHE_GITHUB_USER_TTL_DAYS", "365")),
         "github_org": int(os.environ.get("CACHE_GITHUB_ORG_TTL_DAYS", "365")),
         "orcid": int(os.environ.get("CACHE_ORCID_TTL_DAYS", "365")),
-        "gimie": int(os.environ.get("CACHE_GIMIE_TTL_DAYS", "365")),  # Changed from 1 day
+        "gimie": int(
+            os.environ.get("CACHE_GIMIE_TTL_DAYS", "365"),
+        ),  # Changed from 1 day
         "llm": int(os.environ.get("CACHE_LLM_TTL_DAYS", "365")),  # Changed from 30 days
-        "llm_user": int(os.environ.get("CACHE_LLM_USER_TTL_DAYS", "365")),  # Changed from 7 days
-        "llm_org": int(os.environ.get("CACHE_LLM_ORG_TTL_DAYS", "365")),  # Changed from 7 days
+        "llm_user": int(
+            os.environ.get("CACHE_LLM_USER_TTL_DAYS", "365"),
+        ),  # Changed from 7 days
+        "llm_org": int(
+            os.environ.get("CACHE_LLM_ORG_TTL_DAYS", "365"),
+        ),  # Changed from 7 days
     },
     # Cache database settings
     "cache_db_path": os.environ.get("CACHE_DB_PATH", "api_cache.db"),

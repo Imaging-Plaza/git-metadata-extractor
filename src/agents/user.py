@@ -3,7 +3,7 @@ User Analysis Agent
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..context.infoscience import (
     get_author_publications_tool,

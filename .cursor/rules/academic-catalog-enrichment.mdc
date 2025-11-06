@@ -44,7 +44,7 @@ The Academic Catalog Enrichment system provides integration with academic reposi
 ```python
 class AcademicCatalogRelation(BaseModel):
     """A single relation to an academic catalog entity."""
-    
+
     catalogType: CatalogType  # "infoscience", "openalex", "epfl_graph"
     entityType: EntityType    # "publication", "person", "orgunit"
     entity: Union[dict, BaseModel]  # Full entity details
@@ -58,16 +58,16 @@ class AcademicCatalogRelation(BaseModel):
 ```python
 class AcademicCatalogEnrichmentResult(BaseModel):
     """Organized results by what was searched for."""
-    
+
     # Publications about the repository/project itself
     repository_relations: List[AcademicCatalogRelation] = []
-    
+
     # Keyed by exact author name provided
     author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
-    
-    # Keyed by exact organization name provided  
+
+    # Keyed by exact organization name provided
     organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
-    
+
     # Metadata
     searchStrategy: Optional[str] = None
     catalogsSearched: List[CatalogType] = []
@@ -135,7 +135,7 @@ async def enrich_repository_academic_catalog(
 ) -> dict:
     """
     Enrich repository with academic catalog relations.
-    
+
     Returns organized results:
     - repository_relations: About the repository
     - author_relations: Dict keyed by author name
@@ -154,7 +154,7 @@ async def enrich_repository_academic_catalog(
 #    → Add to author_relations["Alexander Mathis"]
 #
 # 3. Each org individually:
-#    search_infoscience_labs_tool("DeepLabCut")  
+#    search_infoscience_labs_tool("DeepLabCut")
 #    → Add to organization_relations["DeepLabCut"]
 ```
 
@@ -169,19 +169,19 @@ async def run_academic_catalog_enrichment(self):
         authors=author_names,           # ["Alexander Mathis", ...]
         organizations=organization_names  # ["DeepLabCut", ...]
     )
-    
+
     enrichment_data = result.get("data")
-    
+
     # 1. Repository-level
     self.data.academicCatalogRelations = enrichment_data.repository_relations
-    
+
     # 2. Author-level (direct lookup by name)
     for author in self.data.author:
         if author.name in enrichment_data.author_relations:
             author.academicCatalogRelations = enrichment_data.author_relations[author.name]
         else:
             author.academicCatalogRelations = []
-    
+
     # 3. Organization-level (direct lookup by name)
     for org in self.data.author:
         if org.legalName in enrichment_data.organization_relations:
@@ -213,7 +213,7 @@ params = {
 }
 ```
 
-#### Person Search  
+#### Person Search
 ```python
 # Use configuration=person (like web UI)
 params = {
@@ -321,19 +321,19 @@ Since tools return markdown (not structured data), markdown must include ALL cri
 def to_markdown(self) -> str:
     """Convert to markdown - include ALL fields agent needs to extract."""
     md_parts = []
-    
+
     # Name with clickable link
     if self.profile_url:
         md_parts.append(f"**[{self.name}]({self.profile_url})**")
-    
+
     # UUID - CRITICAL for catalog relations
     if self.uuid:
         md_parts.append(f"*UUID:* {self.uuid}")
-    
+
     # All other fields agent might need
     if self.orcid:
         md_parts.append(f"*ORCID:* {self.orcid}")
-    
+
     return "\n".join(md_parts)
 ```
 
@@ -364,7 +364,7 @@ if hasattr(result, "usage"):
     usage = result.usage
     input_tokens = getattr(usage, "input_tokens", 0) or 0
     output_tokens = getattr(usage, "output_tokens", 0) or 0
-    
+
     # Fallback to details if needed
     if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
         details = usage.details
@@ -422,7 +422,7 @@ usage_data["estimated_output_tokens"] = estimated.get("output_tokens", 0)  # ✅
 ```python
 MODEL_CONFIGS = {
     # ... existing configs ...
-    
+
     "run_your_new_agent": [
         {
             "provider": "openai",
@@ -478,22 +478,22 @@ ENV_VAR_MAPPINGS = {
 async def run_analysis(self):
     # 1. Extract metadata with GIMIE
     await self.run_gimie()
-    
+
     # 2. LLM analysis (main agent)
     await self.run_llm_analysis()
-    
+
     # 3. ORCID enrichment (no LLM)
     self.run_authors_enrichment()
-    
+
     # 4. Organization enrichment (ROR agent)
     await self.run_organization_enrichment()
-    
+
     # 5. User enrichment (author agent)
     await self.run_user_enrichment()
-    
+
     # 6. Academic catalog enrichment (NEW!)
     await self.run_academic_catalog_enrichment()
-    
+
     # 7. Final EPFL assessment (holistic)
     await self.run_epfl_final_assessment()
 ```
@@ -543,7 +543,7 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 - [ ] Each author has `academicCatalogRelations` (may be empty)
 - [ ] Relations include full entity objects (not just UUIDs)
 - [ ] **UUIDs are populated** (not null) for all matched entities
-- [ ] **URLs/profile_urls are populated** for all matched entities  
+- [ ] **URLs/profile_urls are populated** for all matched entities
 - [ ] Confidence scores between 0.0-1.0
 - [ ] Justifications are clear
 - [ ] External IDs (DOI, ORCID) extracted when available

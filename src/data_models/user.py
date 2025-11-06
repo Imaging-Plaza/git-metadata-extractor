@@ -8,8 +8,6 @@ import re
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    List,
     Optional,
 )
 
@@ -63,7 +61,7 @@ class EnrichedAuthor(BaseModel):
         description="Additional biographical or professional information found",
         default=None,
     )
-    academicCatalogRelations: list["AcademicCatalogRelation"] = Field(
+    academicCatalogRelations: list[AcademicCatalogRelation] = Field(
         description="Relations to entities in academic catalogs",
         default_factory=list,
     )
@@ -72,37 +70,35 @@ class EnrichedAuthor(BaseModel):
 def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
     """
     Convert an EnrichedAuthor object to a Person object.
-    
+
     This function transforms the agent's working model (EnrichedAuthor) into
     the canonical data model (Person) for storage and output.
-    
+
     Args:
         enriched: EnrichedAuthor object from the agent
-        
+
     Returns:
         Person object with all fields mapped appropriately
     """
     # Prepare emails list
     emails = [enriched.email] if enriched.email else []
-    
+
     # Create Person object with mapped fields
     return Person(
         # Type discriminator
         type="Person",
-        
         # Core identity fields
         name=enriched.name,
         email=enriched.email,  # Primary email for backward compatibility
         emails=emails,
         orcidId=enriched.orcidId,
         gitAuthorIds=[],  # Will be set separately based on git author matching
-        
         # Affiliation fields
-        affiliation=enriched.affiliations or None,  # Deprecated field for backward compatibility
+        affiliation=enriched.affiliations
+        or None,  # Deprecated field for backward compatibility
         affiliations=enriched.affiliations,
         currentAffiliation=enriched.currentAffiliation,
         affiliationHistory=enriched.affiliationHistory,
-        
         # Additional metadata
         contributionSummary=enriched.contributionSummary,
         biography=enriched.additionalInfo,  # Map additionalInfo to biography
@@ -112,28 +108,28 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
 
 class UserLLMAnalysisResult(BaseModel):
     """Result of user LLM analysis - the structured output from the main user agent"""
-    
-    relatedToOrganization: Optional[List[str]] = Field(
+
+    relatedToOrganization: Optional[list[str]] = Field(
         description="List of organizations the user is affiliated with",
         default_factory=list,
     )
-    relatedToOrganizationJustification: Optional[List[str]] = Field(
+    relatedToOrganizationJustification: Optional[list[str]] = Field(
         description="Justification for each organization affiliation",
         default_factory=list,
     )
-    discipline: Optional[List[Discipline]] = Field(
+    discipline: Optional[list[Discipline]] = Field(
         description="Scientific disciplines or fields the user works in",
         default_factory=list,
     )
-    disciplineJustification: Optional[List[str]] = Field(
+    disciplineJustification: Optional[list[str]] = Field(
         description="Justification for each discipline classification",
         default_factory=list,
     )
-    position: Optional[List[str]] = Field(
+    position: Optional[list[str]] = Field(
         description="Professional positions or roles",
         default_factory=list,
     )
-    positionJustification: Optional[List[str]] = Field(
+    positionJustification: Optional[list[str]] = Field(
         description="Justification for each position",
         default_factory=list,
     )
@@ -189,11 +185,11 @@ class ORCIDEducation(BaseModel):
 class ORCIDActivities(BaseModel):
     """ORCID activities data"""
 
-    employment: List[ORCIDEmployment] = Field(
+    employment: list[ORCIDEmployment] = Field(
         default_factory=list,
         description="Employment history",
     )
-    education: List[ORCIDEducation] = Field(
+    education: list[ORCIDEducation] = Field(
         default_factory=list,
         description="Education history",
     )
@@ -236,11 +232,11 @@ class GitHubUserMetadata(BaseModel):
         None,
         description="ORCID activities data",
     )
-    organizations: List[str] = Field(
+    organizations: list[str] = Field(
         default_factory=list,
         description="Public organizations",
     )
-    social_accounts: List[Dict[str, str]] = Field(
+    social_accounts: list[dict[str, str]] = Field(
         default_factory=list,
         description="Social media accounts",
     )
@@ -293,17 +289,17 @@ class GitHubUser(BaseModel):
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
     githubUserMetadata: Optional[GitHubUserMetadata] = None
-    relatedToOrganization: Optional[List[str]] = None
-    relatedToOrganizationsROR: Optional[List[Organization]] = None
-    relatedToOrganizationJustification: Optional[List[str]] = None
-    discipline: Optional[List[Discipline]] = None
-    disciplineJustification: Optional[List[str]] = None
-    position: Optional[List[str]] = None
-    positionJustification: Optional[List[str]] = None
+    relatedToOrganization: Optional[list[str]] = None
+    relatedToOrganizationsROR: Optional[list[Organization]] = None
+    relatedToOrganizationJustification: Optional[list[str]] = None
+    discipline: Optional[list[Discipline]] = None
+    disciplineJustification: Optional[list[str]] = None
+    position: Optional[list[str]] = None
+    positionJustification: Optional[list[str]] = None
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    academicCatalogRelations: Optional[list[AcademicCatalogRelation]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )

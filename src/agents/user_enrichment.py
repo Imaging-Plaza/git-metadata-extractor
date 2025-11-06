@@ -657,22 +657,26 @@ async def enrich_users(
         return {"data": None, "usage": None}
 
     # Estimate tokens from prompt and response
-    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    response_text = (
+        result.output.model_dump_json()
+        if hasattr(result.output, "model_dump_json")
+        else ""
+    )
     estimated = estimate_tokens_from_messages(
         system_prompt=user_enrichment_agent_system_prompt,
         user_prompt=prompt,
         response=response_text,
     )
-    
+
     # Extract usage information from the result
     usage_data = None
     if hasattr(result, "usage"):
         usage = result.usage
-        
+
         # First try to get tokens from direct attributes
         input_tokens = getattr(usage, "input_tokens", 0) or 0
         output_tokens = getattr(usage, "output_tokens", 0) or 0
-        
+
         # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
         # See: https://github.com/pydantic/pydantic-ai/issues/3223
         if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
@@ -680,16 +684,22 @@ async def enrich_users(
             if isinstance(details, dict):
                 input_tokens = details.get("input_tokens", 0) or 0
                 output_tokens = details.get("output_tokens", 0) or 0
-                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
-        
+                logger.debug(
+                    f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}",
+                )
+
         usage_data = {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "estimated_input_tokens": estimated.get("input_tokens", 0),
             "estimated_output_tokens": estimated.get("output_tokens", 0),
         }
-        logger.info(f"User enrichment token usage - Input: {input_tokens}, Output: {output_tokens}")
-        logger.info(f"User enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+        logger.info(
+            f"User enrichment token usage - Input: {input_tokens}, Output: {output_tokens}",
+        )
+        logger.info(
+            f"User enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
+        )
     else:
         logger.warning("Result object has no 'usage' attribute")
         usage_data = {
@@ -803,7 +813,11 @@ async def enrich_users_from_dict(
                         author_copy["orcidId"] = None
                     elif orcid_value:
                         # Convert to string if it's an HttpUrl object
-                        orcid_str = str(orcid_value) if not isinstance(orcid_value, str) else orcid_value
+                        orcid_str = (
+                            str(orcid_value)
+                            if not isinstance(orcid_value, str)
+                            else orcid_value
+                        )
                         # Convert ORCID ID to full URL if it's just the ID
                         if not orcid_str.startswith("http"):
                             author_copy["orcidId"] = f"https://orcid.org/{orcid_str}"
@@ -817,7 +831,7 @@ async def enrich_users_from_dict(
     # Extract data and usage from result
     if result.get("data") is None:
         return {"enrichedAuthors": [], "usage": None}
-    
+
     # Return as dictionary with usage info
     enriched_data = result["data"].model_dump()
     enriched_data["usage"] = result.get("usage")

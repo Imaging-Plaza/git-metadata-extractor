@@ -99,7 +99,7 @@ JSON-LD (JSON for Linking Data) is a lightweight syntax for encoding Linked Data
   - `convert_pydantic_to_jsonld()` function
   - `PYDANTIC_TO_ZOD_MAPPING` dictionary
   - Type mappings
-  
+
 - **Model-Specific Methods**: In respective model files
   - `src/data_models/repository.py` → `SoftwareSourceCode.convert_pydantic_to_jsonld()`
   - `src/data_models/user.py` → `GitHubUser.convert_pydantic_to_jsonld()` (if implemented)
@@ -123,13 +123,13 @@ class SoftwareSourceCode(BaseModel):
     name: str
     author: List[Person]
     # ... more fields
-    
+
     def convert_pydantic_to_jsonld(self) -> dict:
         from src.data_models.conversion import convert_pydantic_to_jsonld
-        
+
         # Determine base URL for @id
         base_url = str(self.codeRepository[0]) if self.codeRepository else None
-        
+
         return convert_pydantic_to_jsonld(self, base_url=base_url)
 ```
 
@@ -143,31 +143,31 @@ def convert_pydantic_to_jsonld(
     base_url: Optional[str] = None
 ) -> Union[Dict, List]:
     """Convert any Pydantic model to JSON-LD format."""
-    
+
     # 1. Get model class name
     model_name = type(pydantic_obj).__name__
-    
+
     # 2. Look up field mappings
     field_mapping = PYDANTIC_TO_ZOD_MAPPING.get(model_name, {})
-    
+
     # 3. Create entity dict
     entity = {}
-    
+
     # 4. Add @id and @type
     entity["@id"] = base_url or f"urn:{model_name}:{id(pydantic_obj)}"
     entity["@type"] = type_mapping.get(type(pydantic_obj), "http://schema.org/Thing")
-    
+
     # 5. Convert fields
     for field_name, field_value in pydantic_obj.model_dump().items():
         if field_value is None:
             continue
-            
+
         # Look up semantic URI for this field
         semantic_key = field_mapping.get(field_name, field_name)
-        
+
         # Convert field value based on type
         entity[semantic_key] = convert_field_value(field_value)
-    
+
     # 6. Wrap in @context and @graph
     return {
         "@context": {...},
@@ -255,32 +255,32 @@ In `src/data_models/conversion.py`, add to `PYDANTIC_TO_ZOD_MAPPING`:
 ```python
 PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
     # ... existing mappings ...
-    
+
     "GitHubUser": {
         # Core identity
         "name": "schema:name",
         "fullname": "schema:givenName",
         "githubHandle": "schema:identifier",
-        
+
         # GitHub metadata
         "githubUserMetadata": "imag:githubUserMetadata",
-        
+
         # Organization relationships
         "relatedToOrganization": "imag:relatedToOrganizations",
         "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
         "relatedToOrganizationJustification": "imag:relatedToOrganizationJustification",
-        
+
         # Discipline and position
         "discipline": "imag:discipline",
         "disciplineJustification": "imag:disciplineJustification",
         "position": "schema:jobTitle",
         "positionJustification": "imag:positionJustification",
-        
+
         # EPFL relationship
         "relatedToEPFL": "imag:relatedToEPFL",
         "relatedToEPFLJustification": "imag:relatedToEPFLJustification",
         "relatedToEPFLConfidence": "imag:relatedToEPFLConfidence",
-        
+
         # Infoscience
         "infoscienceEntities": "imag:infoscienceEntities",
     },
@@ -303,9 +303,9 @@ def convert_pydantic_to_jsonld(
     base_url: Optional[str] = None
 ) -> Union[Dict, List]:
     """Convert any Pydantic model to JSON-LD format."""
-    
+
     # ... existing code ...
-    
+
     # Type mappings - maps Pydantic classes to semantic types
     type_mapping = {
         SoftwareSourceCode: "http://schema.org/SoftwareSourceCode",
@@ -315,7 +315,7 @@ def convert_pydantic_to_jsonld(
         GitHubUser: "http://schema.org/Person",  # ← Add this
         # ... more types
     }
-    
+
     # ... rest of function ...
 ```
 
@@ -333,27 +333,27 @@ from typing import Optional
 
 class GitHubUser(BaseModel):
     """GitHub user profile with enrichment data"""
-    
+
     name: Optional[str] = None
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
     # ... more fields ...
-    
+
     def convert_pydantic_to_jsonld(self) -> dict:
         """
         Convert this GitHubUser instance to JSON-LD format.
-        
+
         Returns:
             dict: JSON-LD formatted data with @context and @graph
         """
         from src.data_models.conversion import convert_pydantic_to_jsonld
-        
+
         # Determine base URL for @id generation
         # Priority: GitHub profile URL > fallback to URN
         base_url = None
         if self.githubHandle:
             base_url = f"https://github.com/{self.githubHandle}"
-        
+
         return convert_pydantic_to_jsonld(self, base_url=base_url)
 ```
 
@@ -369,25 +369,25 @@ In `src/analysis/user.py`, update `dump_results()`:
 ```python
 class User:
     """User analysis class"""
-    
+
     def __init__(self, username: str, force_refresh: bool = False):
         self.username = username
         self.force_refresh = force_refresh
         self.data: Optional[GitHubUser] = None
         # ... other initialization
-    
+
     async def run_analysis(self, ...):
         """Run user analysis"""
         # ... analysis logic ...
         pass
-    
+
     def dump_results(self, output_type: str = "pydantic"):
         """
         Dump results in specified format.
-        
+
         Args:
             output_type: "pydantic" (default), "json-ld", "dict"
-            
+
         Returns:
             Pydantic model, JSON-LD dict, or plain dict depending on output_type
         """
@@ -460,7 +460,7 @@ async def get_user_jsonld(
 ) -> APIOutput:
     """
     Retrieve GitHub user profile metadata in JSON-LD format.
-    
+
     This endpoint returns semantic web compatible data with @context and @graph structures.
     """
     with AsyncRequestContext(
@@ -470,44 +470,44 @@ async def get_user_jsonld(
         try:
             # Extract username from path
             username = full_path.split("/")[-1]
-            
+
             # Initialize user analysis
             user = User(username, force_refresh=force_refresh)
-            
+
             # Run analysis
             await user.run_analysis(
                 run_organization_enrichment=enrich_orgs,
                 run_user_enrichment=enrich_users,
             )
-            
+
             # Check if analysis succeeded
             if user.data is None:
                 raise HTTPException(
                     status_code=500,
                     detail=f"User analysis failed: no data generated for {username}"
                 )
-            
+
             # Convert to JSON-LD
             try:
                 jsonld_output = user.dump_results(output_type="json-ld")
-                
+
                 if jsonld_output is None:
                     raise ValueError("JSON-LD conversion returned None")
-                
+
                 # Verify JSON-LD structure
                 if "@context" not in jsonld_output or "@graph" not in jsonld_output:
                     raise ValueError("Missing @context or @graph in JSON-LD output")
-                    
+
             except Exception as e:
                 logger.error(f"Failed to convert user to JSON-LD: {e}", exc_info=True)
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to convert user data to JSON-LD: {str(e)}"
                 )
-            
+
             # Get usage statistics
             usage_stats = user.get_usage_stats()
-            
+
             # Create API stats
             stats = APIStats(
                 agent_input_tokens=usage_stats["input_tokens"],
@@ -520,7 +520,7 @@ async def get_user_jsonld(
                 status_code=usage_stats["status_code"],
             )
             stats.calculate_total_tokens()
-            
+
             # Return response
             response = APIOutput(
                 link=full_path,
@@ -529,9 +529,9 @@ async def get_user_jsonld(
                 output=jsonld_output,  # Raw JSON-LD dict
                 stats=stats,
             )
-            
+
             return response
-            
+
         except HTTPException:
             raise
         except Exception as e:
@@ -578,12 +578,12 @@ async def get_user_jsonld(
     "applicationCategory": "schema:applicationCategory",
     "programmingLanguage": "schema:programmingLanguage",
     "softwareRequirements": "schema:softwareRequirements",
-    
+
     # Software Description Ontology (sd:)
     "readme": "sd:readme",
     "hasExecutableInstructions": "sd:hasExecutableInstructions",
     "hasDocumentation": "sd:hasDocumentation",
-    
+
     # Imaging Plaza custom fields (imag:)
     "repositoryType": "imag:repositoryType",
     "repositoryTypeJustification": "imag:repositoryTypeJustification",
@@ -679,16 +679,16 @@ The `APIOutput` model wraps all API responses. For JSON-LD endpoints, special ha
 ```python
 class APIOutput(BaseModel):
     """API output model for all endpoints"""
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     link: HttpUrl = None
     type: ResourceType = None
     parsedTimestamp: datetime = None
-    
+
     # ✅ CORRECT - dict/list FIRST in Union
     output: Union[dict, list, SoftwareSourceCode, GitHubOrganization, GitHubUser, Any] = None
-    
+
     stats: APIStats = None
 ```
 
@@ -913,12 +913,12 @@ def validate_jsonld(data: dict) -> bool:
     if len(data["@graph"]) == 0:
         print("@graph is empty")
         return False
-    
+
     first_entity = data["@graph"][0]
     if "@type" not in first_entity:
         print("First entity missing @type")
         return False
-    
+
     return True
 
 # Use in endpoint
@@ -1086,7 +1086,7 @@ type_mapping = {
 class NewModel(BaseModel):
     field1: str
     field2: Optional[str] = None
-    
+
     def convert_pydantic_to_jsonld(self) -> dict:
         from src.data_models.conversion import convert_pydantic_to_jsonld
         return convert_pydantic_to_jsonld(self, base_url="https://example.com/entity")
@@ -1147,4 +1147,3 @@ If you encounter issues not covered in this guide:
 5. Consult schema.org for standard property names
 
 For Imaging Plaza ontology questions, contact the EPFL Center for Imaging team.
-
