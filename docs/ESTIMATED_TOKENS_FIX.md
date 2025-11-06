@@ -78,7 +78,7 @@ if hasattr(result, "usage"):
     usage = result.usage
     input_tokens = getattr(usage, "input_tokens", 0) or 0
     output_tokens = getattr(usage, "output_tokens", 0) or 0
-    
+
     # Fallback to details if needed
     if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
         details = usage.details
@@ -196,4 +196,3 @@ The estimated token counts will now:
 4. Better reflect the actual LLM usage in the system
 
 The user's suspicion was **100% correct** - estimated tokens were not fully added! 🎯
-

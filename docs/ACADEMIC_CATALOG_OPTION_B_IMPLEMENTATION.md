@@ -36,13 +36,13 @@ Implemented **Option B**: Academic catalog agent searches for repository, author
 class AcademicCatalogEnrichmentResult(BaseModel):
     repository_relations: List[AcademicCatalogRelation] = []
     # Publications about the repository/project itself
-    
+
     author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
     # Keyed by author name as provided: {"Alexander Mathis": [...relations...]}
-    
+
     organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
     # Keyed by org name as provided: {"DeepLabCut": [...relations...]}
-    
+
     # Metadata fields...
     searchStrategy: Optional[str] = None
     catalogsSearched: List[CatalogType] = []
@@ -91,7 +91,7 @@ enrich_repository_academic_catalog(
    - `get_author_publications_tool("Alexander Mathis")`
    - Finds their publications
    - → Adds ALL to `author_relations["Alexander Mathis"]`
-   
+
    - `search_infoscience_authors_tool("Mackenzie Weygandt Mathis")`
    - → Adds to `author_relations["Mackenzie Weygandt Mathis"]`
 
@@ -198,8 +198,8 @@ Organizations: ["DeepLabCut"]
 2. search_infoscience_authors_tool("Alexander Mathis")
    → Found person profile (UUID: xxx, name: "Mathis, Alexander")
    → Add to author_relations["Alexander Mathis"]
-   
-3. get_author_publications_tool("Alexander Mathis")  
+
+3. get_author_publications_tool("Alexander Mathis")
    → Found 10 publications
    → Add to author_relations["Alexander Mathis"]
 
@@ -316,4 +316,3 @@ The academic catalog enrichment now:
 6. No complex name matching needed!
 
 **Result:** Clean, explicit, debuggable, and reliable academic catalog enrichment! 🎉
-

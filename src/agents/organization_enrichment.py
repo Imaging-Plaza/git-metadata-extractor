@@ -646,7 +646,11 @@ async def enrich_organizations(
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
     # Estimate tokens from prompt and response
-    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    response_text = (
+        result.output.model_dump_json()
+        if hasattr(result.output, "model_dump_json")
+        else ""
+    )
     estimated = estimate_tokens_from_messages(
         system_prompt=organization_enrichment_main_system_prompt,
         user_prompt=prompt,
@@ -657,11 +661,11 @@ async def enrich_organizations(
     usage_data = None
     if hasattr(result, "usage"):
         usage = result.usage
-        
+
         # First try to get tokens from direct attributes
         input_tokens = getattr(usage, "input_tokens", 0) or 0
         output_tokens = getattr(usage, "output_tokens", 0) or 0
-        
+
         # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
         # See: https://github.com/pydantic/pydantic-ai/issues/3223
         if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
@@ -669,16 +673,22 @@ async def enrich_organizations(
             if isinstance(details, dict):
                 input_tokens = details.get("input_tokens", 0) or 0
                 output_tokens = details.get("output_tokens", 0) or 0
-                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
-        
+                logger.debug(
+                    f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}",
+                )
+
         usage_data = {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "estimated_input_tokens": estimated.get("input_tokens", 0),
             "estimated_output_tokens": estimated.get("output_tokens", 0),
         }
-        logger.info(f"Organization enrichment token usage - Input: {input_tokens}, Output: {output_tokens}")
-        logger.info(f"Organization enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+        logger.info(
+            f"Organization enrichment token usage - Input: {input_tokens}, Output: {output_tokens}",
+        )
+        logger.info(
+            f"Organization enrichment estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
+        )
     else:
         logger.warning("Result object has no 'usage' attribute")
         usage_data = {
@@ -819,7 +829,11 @@ async def enrich_organizations_from_dict(
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
 
     # Estimate tokens from prompt and response
-    response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+    response_text = (
+        result.output.model_dump_json()
+        if hasattr(result.output, "model_dump_json")
+        else ""
+    )
     estimated = estimate_tokens_from_messages(
         system_prompt=organization_enrichment_main_system_prompt,
         user_prompt=prompt,
@@ -830,11 +844,11 @@ async def enrich_organizations_from_dict(
     usage_data = None
     if hasattr(result, "usage"):
         usage = result.usage
-        
+
         # First try to get tokens from direct attributes
         input_tokens = getattr(usage, "input_tokens", 0) or 0
         output_tokens = getattr(usage, "output_tokens", 0) or 0
-        
+
         # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
         # See: https://github.com/pydantic/pydantic-ai/issues/3223
         if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
@@ -842,16 +856,22 @@ async def enrich_organizations_from_dict(
             if isinstance(details, dict):
                 input_tokens = details.get("input_tokens", 0) or 0
                 output_tokens = details.get("output_tokens", 0) or 0
-                logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
-        
+                logger.debug(
+                    f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}",
+                )
+
         usage_data = {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "estimated_input_tokens": estimated.get("input_tokens", 0),
             "estimated_output_tokens": estimated.get("output_tokens", 0),
         }
-        logger.info(f"Organization enrichment (from_dict) token usage - Input: {input_tokens}, Output: {output_tokens}")
-        logger.info(f"Organization enrichment (from_dict) estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+        logger.info(
+            f"Organization enrichment (from_dict) token usage - Input: {input_tokens}, Output: {output_tokens}",
+        )
+        logger.info(
+            f"Organization enrichment (from_dict) estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
+        )
     else:
         logger.warning("Result object has no 'usage' attribute")
         usage_data = {

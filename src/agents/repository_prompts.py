@@ -170,7 +170,7 @@ PLEASE PROVIDE THE OUTPUT IN JSON FORMAT ONLY, WITHOUT ANY EXPLANATION OR ADDITI
 def get_repo_general_prompt(repo_url: str, input_text: str) -> str:
     # Extract repository name from URL for tool usage hints
     repo_name = repo_url.rstrip("/").split("/")[-1]
-    
+
     prompt = f"""Analyze the following software repository and extract comprehensive metadata.
 
     Repository URL: {repo_url}

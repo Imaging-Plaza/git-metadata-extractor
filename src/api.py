@@ -600,12 +600,13 @@ async def get_org_json(
     )
 
     output = organization.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics from the organization analysis
     usage_stats = organization.get_usage_stats()
-    
+
     # Create APIStats with token usage data, timing, and status
     from .data_models.api import APIStats
+
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
         agent_output_tokens=usage_stats["output_tokens"],
@@ -621,7 +622,7 @@ async def get_org_json(
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
-    
+
     # Set rate limit response headers
     response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
     response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
@@ -710,12 +711,13 @@ async def get_user_json(
     )
 
     output = user.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics from the user analysis
     usage_stats = user.get_usage_stats()
-    
+
     # Create APIStats with token usage data, timing, and status
     from .data_models.api import APIStats
+
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
         agent_output_tokens=usage_stats["output_tokens"],
@@ -731,7 +733,7 @@ async def get_user_json(
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
-    
+
     # Set rate limit response headers
     response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
     response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
@@ -773,7 +775,7 @@ async def get_user_json(
                                     "schema:description": "Graph-based metadata extraction",
                                     "schema:codeRepository": "https://github.com/sdsc-ordes/gimie",
                                     "codemeta:dateCreated": "2023-01-15",
-                                }
+                                },
                             ],
                         },
                         "stats": {
@@ -788,10 +790,10 @@ async def get_user_json(
                             "end_time": "2024-01-15T10:30:00.000Z",
                             "status_code": 200,
                         },
-                    }
-                }
+                    },
+                },
             },
-        }
+        },
     },
 )
 async def gimie(
@@ -843,12 +845,13 @@ async def gimie(
 
     # Get raw gimie JSON-LD output (not the Pydantic model)
     gimie_output = repository.gimie
-    
+
     # Get usage statistics from the repository (no tokens for gimie-only)
     usage_stats = repository.get_usage_stats()
-    
+
     # Create APIStats with timing information (no token usage since no LLM)
     from .data_models.api import APIStats
+
     stats = APIStats(
         agent_input_tokens=0,
         agent_output_tokens=0,
@@ -864,7 +867,7 @@ async def gimie(
     )
     # Calculate total tokens (will be 0 for gimie-only)
     stats.calculate_total_tokens()
-    
+
     # Set rate limit response headers
     response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
     response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
@@ -906,16 +909,18 @@ async def gimie(
                                     "@type": "http://schema.org/SoftwareSourceCode",
                                     "schema:name": "GIMIE",
                                     "schema:description": "Graph-based metadata extraction tool",
-                                    "schema:codeRepository": [{"@id": "https://github.com/sdsc-ordes/gimie"}],
+                                    "schema:codeRepository": [
+                                        {"@id": "https://github.com/sdsc-ordes/gimie"},
+                                    ],
                                     "schema:programmingLanguage": ["Python"],
                                     "schema:author": [
                                         {
                                             "@type": "http://schema.org/Person",
                                             "schema:name": "John Doe",
                                             "md4i:orcidId": "0000-0001-2345-6789",
-                                        }
+                                        },
                                     ],
-                                }
+                                },
                             ],
                         },
                         "stats": {
@@ -930,10 +935,10 @@ async def gimie(
                             "end_time": "2024-01-15T10:30:00.000Z",
                             "status_code": 200,
                         },
-                    }
-                }
+                    },
+                },
             },
-        }
+        },
     },
 )
 async def llm_jsonld(
@@ -1013,52 +1018,61 @@ async def llm_jsonld(
         logger.error(f"Repository analysis failed for {full_path}: no data available")
         raise HTTPException(
             status_code=500,
-            detail=f"Repository analysis failed: no data generated for {full_path}"
+            detail=f"Repository analysis failed: no data generated for {full_path}",
         )
 
     # Debug: Check what type repository.data is
     logger.info(f"Repository data type: {type(repository.data).__name__}")
-    logger.info(f"Repository data model: {repository.data.__class__.__name__ if hasattr(repository.data, '__class__') else 'N/A'}")
+    logger.info(
+        f"Repository data model: {repository.data.__class__.__name__ if hasattr(repository.data, '__class__') else 'N/A'}",
+    )
 
     # Get JSON-LD output using the new conversion method
     try:
         jsonld_output = repository.dump_results(output_type="json-ld")
         logger.info(f"JSON-LD output type: {type(jsonld_output)}")
-        logger.info(f"JSON-LD output keys: {jsonld_output.keys() if isinstance(jsonld_output, dict) else 'Not a dict'}")
-        
+        logger.info(
+            f"JSON-LD output keys: {jsonld_output.keys() if isinstance(jsonld_output, dict) else 'Not a dict'}",
+        )
+
         if jsonld_output is None:
             raise ValueError("JSON-LD conversion returned None")
-        
+
         if not isinstance(jsonld_output, dict):
-            raise ValueError(f"JSON-LD conversion returned unexpected type: {type(jsonld_output)}")
-        
+            raise ValueError(
+                f"JSON-LD conversion returned unexpected type: {type(jsonld_output)}",
+            )
+
         # Verify it has JSON-LD structure
         if "@context" not in jsonld_output or "@graph" not in jsonld_output:
             logger.error(f"Invalid JSON-LD structure. Output: {jsonld_output}")
-            raise ValueError(f"Missing @context or @graph in JSON-LD output")
-        
+            raise ValueError("Missing @context or @graph in JSON-LD output")
+
         # Debug: Check @graph content
         graph = jsonld_output.get("@graph", [])
         logger.info(f"JSON-LD @graph length: {len(graph)}")
         if len(graph) > 0:
             first_entity = graph[0]
             logger.info(f"First entity @type: {first_entity.get('@type', 'N/A')}")
-            logger.info(f"First entity keys (first 10): {list(first_entity.keys())[:10]}")
+            logger.info(
+                f"First entity keys (first 10): {list(first_entity.keys())[:10]}",
+            )
         else:
             logger.error("JSON-LD @graph is empty!")
-            
+
     except Exception as e:
         logger.error(f"Failed to convert to JSON-LD: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to convert repository data to JSON-LD: {str(e)}"
+            detail=f"Failed to convert repository data to JSON-LD: {e!s}",
         )
-    
+
     # Get usage statistics from the repository
     usage_stats = repository.get_usage_stats()
-    
+
     # Create APIStats with token usage data, timing, and status
     from .data_models.api import APIStats
+
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
         agent_output_tokens=usage_stats["output_tokens"],
@@ -1074,7 +1088,7 @@ async def llm_jsonld(
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
-    
+
     # Set rate limit response headers
     response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
     response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
@@ -1087,7 +1101,7 @@ async def llm_jsonld(
         output=jsonld_output,
         stats=stats,
     )
-    
+
     # Debug: Log what we're about to return
     logger.info(f"Response output type before return: {type(api_response.output)}")
     if isinstance(api_response.output, dict):
@@ -1168,12 +1182,13 @@ async def llm_json(
     )
 
     output = repository.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics from the repository
     usage_stats = repository.get_usage_stats()
-    
+
     # Create APIStats with token usage data, timing, and status
     from .data_models.api import APIStats
+
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
         agent_output_tokens=usage_stats["output_tokens"],
@@ -1189,7 +1204,7 @@ async def llm_json(
     )
     # Calculate total tokens (both official and estimated)
     stats.calculate_total_tokens()
-    
+
     # Set rate limit response headers
     response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
     response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])

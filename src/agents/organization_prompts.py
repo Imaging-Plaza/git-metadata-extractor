@@ -204,7 +204,7 @@ def get_general_organization_agent_prompt(org_name: str, org_data: dict):
     - "relatedToEPFLJustification": String explaining the EPFL relationship (or lack thereof)
     - "relatedToEPFLConfidence": Float (0.0 to 1.0) confidence score for EPFL relationship. This MUST be consistent with relatedToEPFL: if true, confidence should be >= 0.5; if false, confidence should be < 0.5
     - "infoscienceEntities": List of Infoscience entities (labs, publications, etc.) found for this organization. Each entity should have: name, url, confidence (0.0-1.0), and justification
-    
+
     CRITICAL CONSISTENCY RULE for EPFL relationship:
     - If relatedToEPFLConfidence >= 0.5, then relatedToEPFL MUST be true
     - If relatedToEPFLConfidence < 0.5, then relatedToEPFL MUST be false

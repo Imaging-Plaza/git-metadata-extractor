@@ -129,7 +129,9 @@ import sys
 
 _module = sys.modules[Person.__module__]
 _module.AcademicCatalogRelation = AcademicCatalogRelation
-_module.InfoscienceEntity = InfoscienceEntity  # Keep for backward compatibility during migration
+_module.InfoscienceEntity = (
+    InfoscienceEntity  # Keep for backward compatibility during migration
+)
 Person.model_rebuild()
 Organization.model_rebuild()
 # Clean up namespace

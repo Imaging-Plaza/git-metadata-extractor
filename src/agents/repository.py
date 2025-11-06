@@ -139,26 +139,27 @@ async def llm_request_repo_infos(
             response_text = json_data.model_dump_json()
         elif isinstance(json_data, dict):
             import json as json_module
+
             response_text = json_module.dumps(json_data)
         elif isinstance(json_data, str):
             response_text = json_data
-        
+
         estimated = estimate_tokens_from_messages(
             system_prompt=system_prompt_repository,
             user_prompt=prompt,
             response=response_text,
         )
-        
+
         # Extract usage information from the result
         usage_data = None
-        
+
         if hasattr(result, "usage"):
             usage = result.usage
-            
+
             # First try to get tokens from direct attributes
             input_tokens = getattr(usage, "input_tokens", 0) or 0
             output_tokens = getattr(usage, "output_tokens", 0) or 0
-            
+
             # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
             # See: https://github.com/pydantic/pydantic-ai/issues/3223
             if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
@@ -166,16 +167,22 @@ async def llm_request_repo_infos(
                 if isinstance(details, dict):
                     input_tokens = details.get("input_tokens", 0) or 0
                     output_tokens = details.get("output_tokens", 0) or 0
-                    logger.debug(f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}")
-            
+                    logger.debug(
+                        f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}",
+                    )
+
             usage_data = {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "estimated_input_tokens": estimated.get("input_tokens", 0),
                 "estimated_output_tokens": estimated.get("output_tokens", 0),
             }
-            logger.info(f"Repository agent token usage - Input: {input_tokens}, Output: {output_tokens}")
-            logger.info(f"Repository agent estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}")
+            logger.info(
+                f"Repository agent token usage - Input: {input_tokens}, Output: {output_tokens}",
+            )
+            logger.info(
+                f"Repository agent estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
+            )
         else:
             logger.warning("Result object has no 'usage' attribute")
             # Use estimates as fallback
