@@ -234,7 +234,7 @@ Existing EPFL justification: {context.existing_epfl_justification}
             {
                 "name": a.name,
                 "orcid": str(a.orcid) if a.orcid else None,
-                "affiliation": a.affiliation,
+                "affiliations": a.affiliations,
             }
             for a in context.authors
         ],

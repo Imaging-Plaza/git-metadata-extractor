@@ -367,7 +367,7 @@ def enrich_author_with_orcid(author: Person) -> Person:
         >>> enriched = enrich_author_with_orcid(author)
         >>> enriched.orcid
         'https://orcid.org/0000-0002-1126-1535'
-        >>> enriched.affiliation
+        >>> enriched.affiliations
         ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
     """
 

@@ -95,7 +95,6 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
         gitAuthorIds=[],  # Will be set separately based on git author matching
         
         # Affiliation fields
-        affiliation=enriched.affiliations or None,  # Deprecated field for backward compatibility
         affiliations=enriched.affiliations,
         currentAffiliation=enriched.currentAffiliation,
         affiliationHistory=enriched.affiliationHistory,
