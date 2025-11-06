@@ -6,7 +6,7 @@ related publications, persons, and organizational units.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from pydantic_ai import Agent
 
@@ -45,7 +45,7 @@ academic_catalog_configs = load_model_config("run_academic_catalog_enrichment")
 for config in academic_catalog_configs:
     if not validate_config(config):
         logger.error(
-            f"Invalid configuration for academic catalog enrichment: {config}"
+            f"Invalid configuration for academic catalog enrichment: {config}",
         )
         raise ValueError("Invalid model configuration")
 
@@ -110,7 +110,7 @@ async def run_agent_with_fallback(
     for idx, config in enumerate(agent_configs):
         try:
             logger.info(
-                f"Attempting academic catalog enrichment with model {idx + 1}/{len(agent_configs)}: {config.get('model')}"
+                f"Attempting academic catalog enrichment with model {idx + 1}/{len(agent_configs)}: {config.get('model')}",
             )
 
             # Create agent
@@ -146,11 +146,13 @@ async def run_agent_with_fallback(
                 }
 
                 logger.info(
-                    f"✓ Academic catalog enrichment succeeded with {input_tokens} input, {output_tokens} output tokens"
+                    f"✓ Academic catalog enrichment succeeded with {input_tokens} input, {output_tokens} output tokens",
                 )
 
             # Estimate tokens as fallback
-            response_text = output.model_dump_json() if hasattr(output, "model_dump_json") else ""
+            response_text = (
+                output.model_dump_json() if hasattr(output, "model_dump_json") else ""
+            )
             estimated = estimate_tokens_from_messages(
                 system_prompt=academic_catalog_system_prompt,
                 user_prompt=prompt,
@@ -164,18 +166,15 @@ async def run_agent_with_fallback(
 
         except Exception as e:
             logger.warning(
-                f"Academic catalog enrichment failed with model {config.get('model')}: {e}"
+                f"Academic catalog enrichment failed with model {config.get('model')}: {e}",
             )
             last_exception = e
             continue
 
     logger.error(
-        f"All academic catalog enrichment models failed. Last error: {last_exception}"
+        f"All academic catalog enrichment models failed. Last error: {last_exception}",
     )
-    raise (
-        last_exception
-        or Exception("All academic catalog enrichment models failed")
-    )
+    raise (last_exception or Exception("All academic catalog enrichment models failed"))
 
 
 async def _validate_infoscience_relations(
@@ -348,11 +347,13 @@ async def enrich_repository_academic_catalog(
         organizations=organizations or [],
     )
 
-    logger.info(f"🔍 Starting academic catalog enrichment for repository: {repository_name}")
+    logger.info(
+        f"🔍 Starting academic catalog enrichment for repository: {repository_name}",
+    )
 
     try:
         result = await run_agent_with_fallback(academic_catalog_configs, prompt)
-        
+
         if result and result.get("data"):
             enrichment_data = result["data"]
             
@@ -431,7 +432,7 @@ async def enrich_user_academic_catalog(
 
     try:
         result = await run_agent_with_fallback(academic_catalog_configs, prompt)
-        
+
         if result and result.get("data"):
             enrichment_data = result["data"]
             
@@ -445,7 +446,7 @@ async def enrich_user_academic_catalog(
             logger.info(
                 f"✓ Found academic catalog relations for {len(enrichment_data.author_relations)} authors"
             )
-            
+
         return result
     except Exception as e:
         logger.error(f"Academic catalog enrichment failed: {e}")
@@ -489,7 +490,7 @@ async def enrich_organization_academic_catalog(
 
     try:
         result = await run_agent_with_fallback(academic_catalog_configs, prompt)
-        
+
         if result and result.get("data"):
             enrichment_data = result["data"]
             
@@ -503,7 +504,7 @@ async def enrich_organization_academic_catalog(
             logger.info(
                 f"✓ Found academic catalog relations for {len(enrichment_data.organization_relations)} organizations"
             )
-            
+
         return result
     except Exception as e:
         logger.error(f"Academic catalog enrichment failed: {e}")
@@ -516,4 +517,3 @@ async def enrich_organization_academic_catalog(
             ),
             "usage": {"input_tokens": 0, "output_tokens": 0},
         }
-

@@ -21,7 +21,6 @@ from .repository import (
     GitAuthor,
     Image,
     ImageKeyword,
-    InfoscienceEntity,
     SoftwareImage,
     SoftwareSourceCode,
 )
@@ -127,7 +126,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             ]
             or None,
         }
-        
+
         # Extract email if present (support both single and list)
         email_value = entity.get("http://schema.org/email")
         if email_value:
@@ -138,7 +137,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         # All other fields (gitAuthorIds, affiliations, currentAffiliation,
         # affiliationHistory, contributionSummary, biography, infoscienceEntity)
         # will use their default values as defined in the Person model
-        
+
         return Person(**person_data)
     if "http://schema.org/Organization" in entity_types:
         return Organization(
@@ -464,22 +463,25 @@ def convert_pydantic_to_zod_form_dict(pydantic_obj: Any) -> Any:
 ############################################################
 
 
-def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None) -> Union[Dict, ListType]:
+def convert_pydantic_to_jsonld(
+    pydantic_obj: Any,
+    base_url: Optional[str] = None,
+) -> Union[Dict, ListType]:
     """
     Converts a Pydantic model instance into JSON-LD format.
-    
+
     This function creates a JSON-LD graph structure with proper @context, @type,
-    and semantic URIs. It's extensible and works with SoftwareSourceCode, 
+    and semantic URIs. It's extensible and works with SoftwareSourceCode,
     GitHubUser, GitHubOrganization, and nested models.
-    
+
     Args:
         pydantic_obj: A Pydantic model instance to convert
         base_url: Optional base URL for generating @id values
-        
+
     Returns:
         A dictionary or list representing the JSON-LD graph
     """
-    
+
     # Define namespace prefixes for the @context
     context = {
         "schema": "http://schema.org/",
@@ -487,12 +489,15 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
         "imag": "https://imaging-plaza.epfl.ch/ontology/",
         "md4i": "https://w3id.org/md4i/",
     }
-    
+
     # Helper function to convert a single entity
-    def _convert_entity_to_jsonld(obj: Any, entity_id: Optional[str] = None) -> Optional[Dict]:
+    def _convert_entity_to_jsonld(
+        obj: Any,
+        entity_id: Optional[str] = None,
+    ) -> Optional[Dict]:
         if obj is None:
             return None
-            
+
         # Handle primitive types
         if not isinstance(obj, BaseModel):
             if isinstance(obj, HttpUrl):
@@ -503,24 +508,24 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
                 return {"@value": obj.value}
             # Return primitives as-is (strings, numbers, booleans)
             return obj
-        
+
         # Get the model name and mapping
         model_name = obj.__class__.__name__
         if model_name not in PYDANTIC_TO_ZOD_MAPPING:
             # Fallback: return simple dump for unmapped models
             return obj.model_dump(exclude_unset=True, exclude_none=True)
-        
+
         key_map = PYDANTIC_TO_ZOD_MAPPING[model_name]
-        
+
         # Build the JSON-LD entity
         jsonld_entity = {}
-        
+
         # Add @id if provided or generate one
         if entity_id:
             jsonld_entity["@id"] = entity_id
         elif base_url and model_name == "SoftwareSourceCode":
             jsonld_entity["@id"] = base_url
-        
+
         # Add @type based on model name
         type_mapping = {
             "SoftwareSourceCode": "http://schema.org/SoftwareSourceCode",
@@ -537,20 +542,20 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
             "GitAuthor": "http://schema.org/Person",
             "InfoscienceEntity": "http://schema.org/Thing",
         }
-        
+
         if model_name in type_mapping:
             jsonld_entity["@type"] = type_mapping[model_name]
-        
+
         # Convert each field
         for pydantic_key, value in obj:
             if value is None:
                 continue
-                
+
             if pydantic_key not in key_map:
                 continue
-            
+
             jsonld_key = key_map[pydantic_key]
-            
+
             # Handle lists
             if isinstance(value, list):
                 jsonld_values = []
@@ -565,16 +570,16 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
                         converted = _convert_entity_to_jsonld(item)
                         if converted is not None:
                             jsonld_values.append(converted)
-                
+
                 if jsonld_values:
                     jsonld_entity[jsonld_key] = jsonld_values
-            
+
             # Handle nested models
             elif isinstance(value, BaseModel):
                 converted = _convert_entity_to_jsonld(value)
                 if converted:
                     jsonld_entity[jsonld_key] = converted
-            
+
             # Handle other types
             else:
                 # Special handling for ORCID field - always output as @id format
@@ -590,17 +595,17 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
                         jsonld_entity[jsonld_key] = converted
         
         return jsonld_entity
-    
+
     # Convert the main object
     main_entity = _convert_entity_to_jsonld(pydantic_obj, base_url)
-    
+
     if not main_entity:
         return {}
-    
+
     # Return as JSON-LD graph structure
     result = {
         "@context": context,
-        "@graph": [main_entity]
+        "@graph": [main_entity],
     }
-    
+
     return result

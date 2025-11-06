@@ -16,7 +16,7 @@ Investigation of EPFL's Infoscience API (DSpace 7.6) to understand endpoint beha
 
 ### 2. Search with dsoType=item
 - **Endpoint**: `/discover/search/objects?dsoType=item`
-- **Status**: ✅ WORKS  
+- **Status**: ✅ WORKS
 - **Query**: `?query=DeepLabCut&size=3&dsoType=item`
 - **Results**: 273 results found
 - **Use for**: Publications, items
@@ -40,7 +40,7 @@ Investigation of EPFL's Infoscience API (DSpace 7.6) to understand endpoint beha
 - **Uses**: `/discover/search/objects` with `configuration=researchoutputs`
 - **Results**: 273 results for "DeepLabCut"
 
-### 6. Search Authors  
+### 6. Search Authors
 - **Function**: `search_authors()`
 - **Status**: ✅ FIXED
 - **Endpoint Tried**: `/eperson/profiles/search/byName` (404 Not Found - doesn't exist)
@@ -88,11 +88,11 @@ Created `get_entity_by_uuid()` function:
 async def get_entity_by_uuid(uuid: str, entity_type: Optional[str] = None):
     """
     Get entity directly by UUID using /core/items/{uuid}
-    
+
     Args:
         uuid: Entity UUID
         entity_type: Optional hint ("publication", "person", "orgunit")
-        
+
     Returns:
         Entity data parsed based on type
     """
@@ -117,7 +117,7 @@ The `configuration` parameter works and maps to the web UI search configurations
 
 Original problems:
 1. **Author search endpoint doesn't exist** - ✅ FIXED: Use `configuration=person`
-2. **dsoType=community/collection returns empty** - ✅ FIXED: Use `configuration=orgunit`  
+2. **dsoType=community/collection returns empty** - ✅ FIXED: Use `configuration=orgunit`
 3. **Direct entity access** - ✅ IMPLEMENTED: `get_entity_by_uuid()` function added
 
 The API now works excellently for:
@@ -135,4 +135,3 @@ The key was understanding that Infoscience uses **configuration-based search** (
 - **Configurations available**: `researchoutputs`, `person`, `orgunit`
 
 This matches how the web UI works and provides direct access to typed entity searches!
-

@@ -20,15 +20,15 @@ class Organization:
         self.log: list[str] = []
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
-        
+
         # Track official API-reported token usage across all agents
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
-        
+
         # Track estimated token usage (client-side counts)
         self.estimated_input_tokens: int = 0
         self.estimated_output_tokens: int = 0
-        
+
         # Track timing and status
         self.start_time: datetime = None
         self.end_time: datetime = None
@@ -68,7 +68,11 @@ class Organization:
         logger.info(f"LLM analysis for {self.org_name}")
 
         # Prepare data for LLM analysis
-        github_metadata = self.data.githubOrganizationMetadata.model_dump() if self.data.githubOrganizationMetadata else {}
+        github_metadata = (
+            self.data.githubOrganizationMetadata.model_dump()
+            if self.data.githubOrganizationMetadata
+            else {}
+        )
         llm_input_data = {
             "login": github_metadata.get("login"),
             "name": github_metadata.get("name"),
@@ -98,27 +102,31 @@ class Organization:
             # Extract data and usage
             llm_result = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate official API-reported usage data
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-                logger.info(f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens")
+                logger.info(
+                    f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens",
+                )
 
             # Update self.data with LLM results
             if llm_result and isinstance(llm_result, dict):
                 logger.info(f"LLM result keys: {list(llm_result.keys())}")
-                
+
                 if llm_result.get("organizationType"):
                     self.data.organizationType = llm_result.get("organizationType")
                     logger.info(f"Set organizationType: {self.data.organizationType}")
-                
+
                 if llm_result.get("organizationTypeJustification"):
                     self.data.organizationTypeJustification = llm_result.get(
                         "organizationTypeJustification",
@@ -126,16 +134,18 @@ class Organization:
                     logger.info(
                         f"Set organizationTypeJustification: {self.data.organizationTypeJustification}",
                     )
-                
+
                 # Update description if LLM provided an enhanced one
                 if llm_result.get("description") and not self.data.description:
                     self.data.description = llm_result.get("description")
-                    logger.info(f"Set enhanced description: {self.data.description[:100]}...")
-                
+                    logger.info(
+                        f"Set enhanced description: {self.data.description[:100]}...",
+                    )
+
                 if llm_result.get("discipline"):
                     self.data.discipline = llm_result.get("discipline", [])
                     logger.info(f"Set discipline: {self.data.discipline}")
-                
+
                 if llm_result.get("disciplineJustification"):
                     self.data.disciplineJustification = llm_result.get(
                         "disciplineJustification",
@@ -144,12 +154,12 @@ class Organization:
                     logger.info(
                         f"Set disciplineJustification: {self.data.disciplineJustification}",
                     )
-                
+
                 # Set EPFL relationship from LLM analysis
                 if "relatedToEPFL" in llm_result:
                     self.data.relatedToEPFL = llm_result.get("relatedToEPFL")
                     logger.info(f"Set relatedToEPFL: {self.data.relatedToEPFL}")
-                
+
                 if llm_result.get("relatedToEPFLJustification"):
                     self.data.relatedToEPFLJustification = llm_result.get(
                         "relatedToEPFLJustification",
@@ -157,7 +167,7 @@ class Organization:
                     logger.info(
                         f"Set relatedToEPFLJustification: {self.data.relatedToEPFLJustification}",
                     )
-                
+
                 if llm_result.get("relatedToEPFLConfidence") is not None:
                     self.data.relatedToEPFLConfidence = llm_result.get(
                         "relatedToEPFLConfidence",
@@ -165,10 +175,11 @@ class Organization:
                     logger.info(
                         f"Set relatedToEPFLConfidence: {self.data.relatedToEPFLConfidence}",
                     )
-                
+
                 # Set Infoscience entities if found
                 if llm_result.get("infoscienceEntities"):
                     from ..data_models.repository import InfoscienceEntity
+
                     entities = llm_result.get("infoscienceEntities", [])
                     # Convert to InfoscienceEntity objects if they're dicts
                     entity_objects = []
@@ -197,7 +208,11 @@ class Organization:
         logger.info(f"Organization enrichment for {self.org_name}")
 
         # Get github metadata
-        github_metadata = self.data.githubOrganizationMetadata.model_dump() if self.data.githubOrganizationMetadata else {}
+        github_metadata = (
+            self.data.githubOrganizationMetadata.model_dump()
+            if self.data.githubOrganizationMetadata
+            else {}
+        )
 
         # For organization profiles, we need to provide the org's OWN information as context
         # Create a pseudo-author entry with the organization's information so the enrichment
@@ -206,26 +221,40 @@ class Organization:
             "name": github_metadata.get("name") or self.org_name,
             "affiliation": [github_metadata.get("name") or self.org_name],
         }
-        
+
         # Add ALL available context for accurate ROR matching
         if github_metadata.get("location"):
-            org_as_author["affiliation"].append(f"Location: {github_metadata.get('location')}")
+            org_as_author["affiliation"].append(
+                f"Location: {github_metadata.get('location')}",
+            )
         if github_metadata.get("description"):
-            org_as_author["affiliation"].append(f"Description: {github_metadata.get('description')}")
+            org_as_author["affiliation"].append(
+                f"Description: {github_metadata.get('description')}",
+            )
         if github_metadata.get("blog"):
-            org_as_author["affiliation"].append(f"Website: {github_metadata.get('blog')}")
+            org_as_author["affiliation"].append(
+                f"Website: {github_metadata.get('blog')}",
+            )
         if github_metadata.get("email"):
-            org_as_author["affiliation"].append(f"Email: {github_metadata.get('email')}")
+            org_as_author["affiliation"].append(
+                f"Email: {github_metadata.get('email')}",
+            )
         if github_metadata.get("twitter_username"):
-            org_as_author["affiliation"].append(f"Twitter: @{github_metadata.get('twitter_username')}")
+            org_as_author["affiliation"].append(
+                f"Twitter: @{github_metadata.get('twitter_username')}",
+            )
         if github_metadata.get("readme_content"):
             # Include FULL README content for maximum context
-            org_as_author["affiliation"].append(f"README: {github_metadata.get('readme_content')}")
+            org_as_author["affiliation"].append(
+                f"README: {github_metadata.get('readme_content')}",
+            )
         if github_metadata.get("public_members"):
             # Include member information
             members = github_metadata.get("public_members", [])
             if members:
-                org_as_author["affiliation"].append(f"Public Members: {', '.join(members)}")
+                org_as_author["affiliation"].append(
+                    f"Public Members: {', '.join(members)}",
+                )
         if github_metadata.get("repositories"):
             # Include repository list (important for understanding org's work)
             repos = github_metadata.get("repositories", [])
@@ -236,14 +265,21 @@ class Organization:
             # Include pinned repos as they're the most important
             pinned = github_metadata.get("pinned_repositories", [])
             if pinned:
-                pinned_info = [f"{r.get('name')}: {r.get('description', 'No description')}" for r in pinned]
-                org_as_author["affiliation"].append(f"Pinned Repositories: {'; '.join(pinned_info)}")
+                pinned_info = [
+                    f"{r.get('name')}: {r.get('description', 'No description')}"
+                    for r in pinned
+                ]
+                org_as_author["affiliation"].append(
+                    f"Pinned Repositories: {'; '.join(pinned_info)}",
+                )
 
         # Format data for organization enrichment agent
         enrichment_data = {
             "gitAuthors": [],  # No git authors for organization profiles
             "author": [org_as_author],  # Pass org info as "author" for context
-            "relatedToOrganizations": [github_metadata.get("name") or self.org_name],  # The org itself
+            "relatedToOrganizations": [
+                github_metadata.get("name") or self.org_name,
+            ],  # The org itself
             "relatedToOrganizationJustification": [],
             "relatedToEPFL": self.data.relatedToEPFL,
             "relatedToEPFLJustification": self.data.relatedToEPFLJustification,
@@ -258,15 +294,19 @@ class Organization:
         )
 
         # Extract data and usage
-        organization_enrichment = result.get("data") if isinstance(result, dict) else result
+        organization_enrichment = (
+            result.get("data") if isinstance(result, dict) else result
+        )
         usage = result.get("usage") if isinstance(result, dict) else None
-        
+
         # Accumulate official API-reported usage data
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+            logger.info(
+                f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            )
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
@@ -301,78 +341,99 @@ class Organization:
         # For organization profiles, preserve LLM's EPFL assessment (which has full context)
         # Only update EPFL values if they weren't set by LLM analysis
         # The enrichment agent is designed for repository analysis, not org profiles
-        if self.data.relatedToEPFL is None and organization_enrichment.relatedToEPFL is not None:
+        if (
+            self.data.relatedToEPFL is None
+            and organization_enrichment.relatedToEPFL is not None
+        ):
             self.data.relatedToEPFL = organization_enrichment.relatedToEPFL
             logger.info(f"Set relatedToEPFL from enrichment: {self.data.relatedToEPFL}")
         else:
             logger.info(f"Preserving LLM's relatedToEPFL: {self.data.relatedToEPFL}")
-            
-        if self.data.relatedToEPFLJustification is None and organization_enrichment.relatedToEPFLJustification is not None:
+
+        if (
+            self.data.relatedToEPFLJustification is None
+            and organization_enrichment.relatedToEPFLJustification is not None
+        ):
             self.data.relatedToEPFLJustification = (
                 organization_enrichment.relatedToEPFLJustification
             )
-            logger.info(f"Set relatedToEPFLJustification from enrichment")
+            logger.info("Set relatedToEPFLJustification from enrichment")
         else:
-            logger.info(f"Preserving LLM's relatedToEPFLJustification")
-            
-        if self.data.relatedToEPFLConfidence is None and organization_enrichment.relatedToEPFLConfidence is not None:
+            logger.info("Preserving LLM's relatedToEPFLJustification")
+
+        if (
+            self.data.relatedToEPFLConfidence is None
+            and organization_enrichment.relatedToEPFLConfidence is not None
+        ):
             self.data.relatedToEPFLConfidence = (
                 organization_enrichment.relatedToEPFLConfidence
             )
-            logger.info(f"Set relatedToEPFLConfidence from enrichment: {self.data.relatedToEPFLConfidence}")
+            logger.info(
+                f"Set relatedToEPFLConfidence from enrichment: {self.data.relatedToEPFLConfidence}",
+            )
         else:
-            logger.info(f"Preserving LLM's relatedToEPFLConfidence: {self.data.relatedToEPFLConfidence}")
+            logger.info(
+                f"Preserving LLM's relatedToEPFLConfidence: {self.data.relatedToEPFLConfidence}",
+            )
 
         logger.info(f"Organization enrichment completed for {self.org_name}")
 
     async def run_academic_catalog_enrichment(self):
         """Enrich organization with academic catalog relations (Infoscience, etc.)"""
         logger.info(f"Academic catalog enrichment for {self.org_name}")
-        
+
         # Check if data exists before enrichment
         if self.data is None:
-            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.org_name}")
+            logger.warning(
+                f"Cannot enrich academic catalogs: no data available for {self.org_name}",
+            )
             return
-            
+
         try:
             # Extract organization information for the enrichment
-            github_metadata = self.data.githubOrganizationMetadata.model_dump() if self.data.githubOrganizationMetadata else {}
-            
-            description = github_metadata.get("description", "") or self.data.description or ""
+            github_metadata = (
+                self.data.githubOrganizationMetadata.model_dump()
+                if self.data.githubOrganizationMetadata
+                else {}
+            )
+
+            description = (
+                github_metadata.get("description", "") or self.data.description or ""
+            )
             website = github_metadata.get("blog", "")
             members = github_metadata.get("public_members", [])
-            
+
             result = await enrich_organization_academic_catalog(
                 org_name=self.org_name,
                 description=description,
                 website=website,
                 members=members,
             )
-            
+
             # Extract data and usage
             enrichment_data = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(
                     f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
-                    f"{usage.get('output_tokens', 0)} output tokens"
+                    f"{usage.get('output_tokens', 0)} output tokens",
                 )
-                
+
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-                
+
             # Store the academic catalog relations
             if enrichment_data and hasattr(enrichment_data, "relations"):
                 self.data.academicCatalogRelations = enrichment_data.relations
                 logger.info(
-                    f"Stored {len(enrichment_data.relations)} academic catalog relations"
+                    f"Stored {len(enrichment_data.relations)} academic catalog relations",
                 )
-                
+
         except Exception as e:
             logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
             # Don't fail the entire analysis, just skip academic catalog enrichment
@@ -381,48 +442,59 @@ class Organization:
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
         logger.info(f"Final EPFL assessment for {self.org_name}")
-        
+
         # Check if data exists
         if self.data is None:
-            logging.warning(f"Cannot run EPFL assessment: no data available for {self.org_name}")
+            logging.warning(
+                f"Cannot run EPFL assessment: no data available for {self.org_name}",
+            )
             return
-        
+
         try:
             # Convert data to dict for assessment
             data_dict = self.data.model_dump()
-            
+
             # Call the EPFL assessment agent
             result = await assess_epfl_relationship(
                 data=data_dict,
                 item_type="organization",
             )
-            
+
             # Extract assessment and usage
             assessment = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-            
+
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
             self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
             self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
-            
-            logger.info(f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
-                       f"confidence={assessment.relatedToEPFLConfidence:.2f}")
-            logger.info(f"Justification: {assessment.relatedToEPFLJustification[:200]}...")
-            
+
+            logger.info(
+                f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
+                f"confidence={assessment.relatedToEPFLConfidence:.2f}",
+            )
+            logger.info(
+                f"Justification: {assessment.relatedToEPFLJustification[:200]}...",
+            )
+
         except Exception as e:
-            logger.error(f"EPFL final assessment failed for {self.org_name}: {e}", exc_info=True)
+            logger.error(
+                f"EPFL final assessment failed for {self.org_name}: {e}",
+                exc_info=True,
+            )
             # Don't fail the entire analysis, just log the error
 
     def run_validation(self) -> bool:
@@ -476,7 +548,7 @@ class Organization:
     def get_usage_stats(self) -> dict:
         """
         Get accumulated token usage statistics and timing from all agents.
-        
+
         Returns:
             Dictionary with official API-reported tokens, estimated tokens, and timing info
         """
@@ -484,14 +556,15 @@ class Organization:
         duration = None
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()
-        
+
         return {
             "input_tokens": self.total_input_tokens,
             "output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
             "estimated_input_tokens": self.estimated_input_tokens,
             "estimated_output_tokens": self.estimated_output_tokens,
-            "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+            "estimated_total_tokens": self.estimated_input_tokens
+            + self.estimated_output_tokens,
             "duration": duration,
             "start_time": self.start_time,
             "end_time": self.end_time,
@@ -530,7 +603,7 @@ class Organization:
         """
         # Track start time
         self.start_time = datetime.now()
-        
+
         # Check if complete organization analysis exists in cache
         cache_params = {"org_name": self.org_name}
         if not self.force_refresh and self.check_in_cache("organization", cache_params):
@@ -577,12 +650,11 @@ class Organization:
         else:
             logging.error(f"Analysis failed for {self.org_name}: no data generated")
             self.analysis_successful = False
-        
+
         # Track end time
         self.end_time = datetime.now()
-        
+
         # Log duration
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()
             logging.info(f"Analysis completed in {duration:.2f} seconds")
-

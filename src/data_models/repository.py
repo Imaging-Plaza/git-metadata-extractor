@@ -10,7 +10,6 @@ from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    List,
     Optional,
     Union,
 )
@@ -220,10 +219,11 @@ class GitAuthor(BaseModel):
         logger.warning(f"commits has unexpected type: {type(v)}")
         return v
 
+
 class InfoscienceEntity(BaseModel):
     """
     DEPRECATED: Use AcademicCatalogRelation instead.
-    
+
     Kept temporarily for backward compatibility during migration.
     """
 
@@ -235,27 +235,27 @@ class InfoscienceEntity(BaseModel):
 
 class SoftwareSourceCode(BaseModel):
     name: Optional[str] = None
-    applicationCategory: Optional[List[str]] = None
-    citation: Optional[List[HttpUrl]] = []
-    codeRepository: Optional[List[HttpUrl]] = []
+    applicationCategory: Optional[list[str]] = None
+    citation: Optional[list[HttpUrl]] = []
+    codeRepository: Optional[list[HttpUrl]] = []
     conditionsOfAccess: Optional[str] = None
     dateCreated: Optional[date] = None
     datePublished: Optional[date] = None
     description: Optional[str] = None
-    featureList: Optional[List[str]] = None
-    image: Optional[List[Image]] = None
+    featureList: Optional[list[str]] = None
+    image: Optional[list[Image]] = None
     isAccessibleForFree: Optional[bool] = None
     isBasedOn: Optional[HttpUrl] = None
-    isPluginModuleOf: Optional[List[str]] = None
+    isPluginModuleOf: Optional[list[str]] = None
     license: Optional[Annotated[str, StringConstraints(pattern=r"spdx\.org.*")]] = None
-    author: Optional[List[Union[Person, Organization]]] = None
-    operatingSystem: Optional[List[str]] = None
-    programmingLanguage: Optional[List[str]] = None
-    softwareRequirements: Optional[List[str]] = None
-    processorRequirements: Optional[List[str]] = None
+    author: Optional[list[Union[Person, Organization]]] = None
+    operatingSystem: Optional[list[str]] = None
+    programmingLanguage: Optional[list[str]] = None
+    softwareRequirements: Optional[list[str]] = None
+    processorRequirements: Optional[list[str]] = None
     memoryRequirements: Optional[int] = None
     requiresGPU: Optional[bool] = None
-    supportingData: Optional[List[DataFeed]] = []
+    supportingData: Optional[list[DataFeed]] = []
     url: Optional[HttpUrl] = None
     identifier: Optional[str] = None
     hasAcknowledgements: Optional[str] = None
@@ -275,7 +275,7 @@ class SoftwareSourceCode(BaseModel):
     relatedToOrganizations: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
     repositoryType: RepositoryType
-    repositoryTypeJustification: List[str]
+    repositoryTypeJustification: list[str]
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
     relatedToEPFLJustification: Optional[str] = None
@@ -306,12 +306,17 @@ class SoftwareSourceCode(BaseModel):
                     # Check if it's a Person/EnrichedAuthor (has "name") or Organization (has "legalName")
                     name = author.get("name")
                     legal_name = author.get("legalName")
-                    
+
                     if name:
                         # Person or EnrichedAuthor object
                         # Check if it has enrichment fields to distinguish
                         has_enrichment = any(
-                            k in author for k in ["currentAffiliation", "affiliationHistory", "confidenceScore"]
+                            k in author
+                            for k in [
+                                "currentAffiliation",
+                                "affiliationHistory",
+                                "confidenceScore",
+                            ]
                         )
                         author_type = "EnrichedAuthor" if has_enrichment else "Person"
                         valid_authors.append(name)
@@ -323,15 +328,21 @@ class SoftwareSourceCode(BaseModel):
                     else:
                         # Neither Person nor Organization - check if it's an empty/invalid entry
                         # Check if the entire entry is empty (all None values)
-                        has_any_value = any(value is not None for value in author.values())
-                        
+                        has_any_value = any(
+                            value is not None for value in author.values()
+                        )
+
                         if has_any_value:
                             # Has some data but missing name/legalName - this is a problem
                             missing_names.append(f"Author {i+1}")
-                            logger.warning(f"  ⚠️ Author {i+1} missing name/legalName: {author}")
+                            logger.warning(
+                                f"  ⚠️ Author {i+1} missing name/legalName: {author}",
+                            )
                         else:
                             # Completely empty entry - will be filtered out later, no need to warn
-                            logger.debug(f"  🔕 Author {i+1} is completely empty (will be filtered)")
+                            logger.debug(
+                                f"  🔕 Author {i+1} is completely empty (will be filtered)",
+                            )
                 else:
                     logger.warning(f"  ⚠️ Author {i+1} is not a dict: {type(author)}")
 
@@ -342,24 +353,30 @@ class SoftwareSourceCode(BaseModel):
                 )
             else:
                 logger.debug(f"  ✅ All {len(valid_authors)} authors have names")
-            
+
             # Filter out completely empty entries (all fields are None)
             if v:
                 cleaned_authors = []
                 for author in v:
                     if isinstance(author, dict):
                         # Check if the entry has any non-None values
-                        has_any_value = any(value is not None for value in author.values())
+                        has_any_value = any(
+                            value is not None for value in author.values()
+                        )
                         if has_any_value:
                             cleaned_authors.append(author)
                         else:
-                            logger.debug(f"  🗑️ Removing empty author entry (all None values)")
+                            logger.debug(
+                                "  🗑️ Removing empty author entry (all None values)",
+                            )
                     else:
                         # Keep non-dict entries (they'll be handled by Pydantic)
                         cleaned_authors.append(author)
-                
+
                 if len(cleaned_authors) != len(v):
-                    logger.info(f"  ♻️ Filtered {len(v) - len(cleaned_authors)} empty author entries")
+                    logger.info(
+                        f"  ♻️ Filtered {len(v) - len(cleaned_authors)} empty author entries",
+                    )
                     v = cleaned_authors
 
         else:
@@ -490,22 +507,22 @@ class SoftwareSourceCode(BaseModel):
     def convert_pydantic_to_jsonld(self) -> dict:
         """
         Convert this SoftwareSourceCode instance to JSON-LD format.
-        
+
         Returns a JSON-LD graph structure with proper @context, @type,
         and semantic URIs for all fields and nested models.
-        
+
         Returns:
             Dictionary containing JSON-LD representation
         """
         from .conversion import convert_pydantic_to_jsonld
-        
+
         # Use codeRepository as base URL if available
         base_url = None
         if self.codeRepository and len(self.codeRepository) > 0:
             base_url = str(self.codeRepository[0])
         elif self.url:
             base_url = str(self.url)
-        
+
         return convert_pydantic_to_jsonld(self, base_url=base_url)
 
 
@@ -546,7 +563,7 @@ class RepositoryAnalysisContext:
     def __init__(
         self,
         repo_url: str,
-        git_authors: List[Any],
+        git_authors: list[Any],
         gimie_output: Optional[Any] = None,
     ):
         self.repo_url = repo_url

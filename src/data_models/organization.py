@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 class OrganizationLLMAnalysisResult(BaseModel):
     """Result of organization LLM analysis - the structured output from the main organization agent"""
-    
+
     organizationType: Optional[str] = Field(
         description="Type of organization (e.g., 'Academic Research Group', 'Industry Company')",
         default=None,

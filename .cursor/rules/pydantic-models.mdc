@@ -39,13 +39,13 @@ from typing import Optional, List, Literal, Union
 
 class Person(BaseModel):
     """Person model representing an individual author or contributor"""
-    
+
     # Type discriminator
     type: Literal["Person"] = Field(
         default="Person",
         description="Type discriminator for Person/Organization unions"
     )
-    
+
     # Core identity fields
     name: str = Field(description="Person's name")
     email: Optional[Union[str, List[str]]] = Field(
@@ -60,7 +60,7 @@ class Person(BaseModel):
         description="List of git author identifiers mapping to this person",
         default_factory=list,
     )
-    
+
     # Affiliation fields
     affiliation: Optional[List[str]] = Field(
         description="List of affiliations (deprecated, use affiliations)",
@@ -78,7 +78,7 @@ class Person(BaseModel):
         description="Temporal affiliation information with dates",
         default_factory=list,
     )
-    
+
     # Additional metadata
     contributionSummary: Optional[str] = Field(
         description="Summary of contributions to the repository",
@@ -288,18 +288,18 @@ class APIStats(BaseModel):
     agent_input_tokens: int = None
     agent_output_tokens: int = None
     total_tokens: int = None
-    
+
     # Tokenizer-based estimates (complementary/fallback)
     estimated_input_tokens: int = None
     estimated_output_tokens: int = None
     estimated_total_tokens: int = None
-    
+
     # Timing and status
     duration: float = None  # Total duration in seconds
     start_time: datetime = None
     end_time: datetime = None
     status_code: int = None  # HTTP status (200, 500, etc.)
-    
+
     def calculate_total_tokens(self):
         """Calculate total tokens from input and output tokens."""
         # Calculates both official and estimated totals
@@ -421,30 +421,30 @@ The `GitHubUser` model represents a GitHub user profile with enrichment capabili
 ```python
 class GitHubUser(BaseModel):
     """GitHub user profile with enrichment data"""
-    
+
     # Core identity
     name: Optional[str] = None
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
-    
+
     # GitHub metadata
     githubUserMetadata: Optional[GitHubUserMetadata] = None
-    
+
     # Organization relationships
     relatedToOrganization: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
-    
+
     # Discipline and position (from LLM analysis)
     discipline: Optional[List[Discipline]] = None
     disciplineJustification: Optional[List[str]] = None
     position: Optional[List[str]] = None
     positionJustification: Optional[List[str]] = None
-    
+
     # EPFL relationship
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None
-    
+
     # Infoscience integration
     infoscienceEntities: Optional[List[InfoscienceEntity]] = None
 ```
@@ -461,7 +461,7 @@ Nested model containing raw GitHub API data:
 ```python
 class GitHubUserMetadata(BaseModel):
     """Raw GitHub user data from API"""
-    
+
     # Core GitHub fields
     login: str
     name: Optional[str] = None
@@ -470,21 +470,21 @@ class GitHubUserMetadata(BaseModel):
     location: Optional[str] = None
     company: Optional[str] = None
     blog: Optional[str] = None
-    
+
     # Social and stats
     twitter_username: Optional[str] = None
     public_repos: int
     followers: int
     following: int
-    
+
     # ORCID integration
     orcid: Optional[str] = None  # Auto-validated to URL format
     orcid_activities: Optional[ORCIDActivities] = None
-    
+
     # GitHub data
     organizations: List[str] = Field(default_factory=list)
     social_accounts: List[Dict[str, str]] = Field(default_factory=list)
-    
+
     # Profile README
     readme_url: Optional[str] = None
     readme_content: Optional[str] = None
@@ -509,7 +509,7 @@ Records publications and author profiles found in EPFL's Infoscience repository:
 ```python
 class InfoscienceEntity(BaseModel):
     """Infoscience publication or author record"""
-    
+
     name: str = Field(description="Publication title or author name")
     url: HttpUrl = Field(description="Infoscience URL")
     confidence: float = Field(
@@ -556,7 +556,7 @@ Location: `src/data_models/user.py`
 ```python
 class UserLLMAnalysisResult(BaseModel):
     """Result of user LLM analysis - the structured output from the main user agent"""
-    
+
     relatedToOrganization: Optional[List[str]] = Field(
         description="List of organizations the user is affiliated with",
         default_factory=list,
@@ -604,7 +604,7 @@ Location: `src/data_models/organization.py`
 ```python
 class OrganizationLLMAnalysisResult(BaseModel):
     """Result of organization LLM analysis"""
-    
+
     organizationType: Optional[str] = Field(
         description="Type of organization (e.g., 'Academic Research Group')",
         default=None,
@@ -666,7 +666,7 @@ Location: `src/data_models/epfl_assessment.py`
 ```python
 class EPFLAssessmentResult(BaseModel):
     """Result of final EPFL relationship assessment"""
-    
+
     relatedToEPFL: bool = Field(
         description="Boolean indicating if related to EPFL (true if confidence >= 0.5)"
     )
@@ -686,7 +686,7 @@ class EPFLAssessmentResult(BaseModel):
 
 class EvidenceItem(BaseModel):
     """Individual piece of evidence for EPFL relationship"""
-    
+
     type: str = Field(
         description="Type of evidence (e.g., 'ORCID_EMPLOYMENT', 'EMAIL_DOMAIN')"
     )
@@ -766,7 +766,7 @@ def convert_pydantic_to_jsonld(
 ) -> Union[Dict, List]:
     """
     Convert any Pydantic model to JSON-LD format.
-    
+
     Returns a dict with @context and @graph structure:
     {
         "@context": {...namespaces...},
@@ -847,18 +847,18 @@ Each model that needs JSON-LD conversion should implement:
 ```python
 class SoftwareSourceCode(BaseModel):
     # ... fields ...
-    
+
     def convert_pydantic_to_jsonld(self) -> dict:
         """Convert this SoftwareSourceCode instance to JSON-LD format."""
         from src.data_models.conversion import convert_pydantic_to_jsonld
-        
+
         # Derive base URL from codeRepository or url
         base_url = None
         if self.codeRepository:
             base_url = str(self.codeRepository[0]) if self.codeRepository else None
         elif self.url:
             base_url = str(self.url)
-        
+
         return convert_pydantic_to_jsonld(self, base_url=base_url)
 ```
 
@@ -907,14 +907,14 @@ In `src/data_models/user.py`:
 ```python
 class GitHubUser(BaseModel):
     # ... fields ...
-    
+
     def convert_pydantic_to_jsonld(self) -> dict:
         """Convert this GitHubUser instance to JSON-LD format."""
         from src.data_models.conversion import convert_pydantic_to_jsonld
-        
+
         # Determine base URL
         base_url = f"https://github.com/{self.githubHandle}" if self.githubHandle else None
-        
+
         return convert_pydantic_to_jsonld(self, base_url=base_url)
 ```
 

@@ -7,7 +7,6 @@ Prompts for the final EPFL relationship assessment agent that runs after all enr
 import json
 from typing import Any, Dict
 
-
 epfl_assessment_system_prompt = """
 You are an expert analyst specializing in determining institutional affiliations, particularly with EPFL (École Polytechnique Fédérale de Lausanne).
 
@@ -22,7 +21,7 @@ Your task is to perform a **final holistic assessment** of EPFL relationship bas
 **Your Analysis Must**:
 1. **Systematically review ALL evidence** - Don't miss any clues
 2. **Assign appropriate weights** based on evidence quality:
-   
+
    **For Users/Repositories**:
    - @epfl.ch email address: HIGHEST confidence (0.4)
    - ORCID employment at EPFL: HIGH confidence (0.3)
@@ -33,7 +32,7 @@ Your task is to perform a **final holistic assessment** of EPFL relationship bas
    - Related organization is EPFL: HIGH confidence (0.25)
    - Location in Lausanne, Switzerland: MEDIUM confidence (0.15)
    - Git commits from EPFL authors: VARIABLE (based on percentage and recency)
-   
+
    **For Organizations** (organizations don't have emails/ORCID, so higher weights for institutional links):
    - Parent organization is EPFL: HIGHEST confidence (0.6)
    - Parent organization jointly includes EPFL (e.g., SDSC = EPFL+ETH): HIGH confidence (0.5)
@@ -105,7 +104,7 @@ Be thorough, transparent, and accurate in your assessment.
 
 def get_user_epfl_assessment_prompt(item_type: str, data: Dict[str, Any]) -> str:
     """Generate prompt for EPFL assessment based on item type and collected data."""
-    
+
     prompt = f"""Perform a comprehensive EPFL relationship assessment for this {item_type}.
 
 Item Type: {item_type}
@@ -123,7 +122,7 @@ Complete Data Available:
 
 **Evidence to Look For**:
 """
-    
+
     if item_type == "user":
         prompt += """
 - GitHub bio mentions of EPFL/SDSC
@@ -162,7 +161,7 @@ Organizations typically don't have emails or ORCID data, so use these weights:
 - Infoscience entities found: **0.4** (GOOD)
 - GitHub organization membership in EPFL orgs: **0.3** (GOOD)
 
-Note: "Swiss Data Science Center" or "SDSC" references should trigger the joint parent weight (0.5) 
+Note: "Swiss Data Science Center" or "SDSC" references should trigger the joint parent weight (0.5)
 since SDSC is explicitly a joint EPFL+ETH initiative.
 """
     elif item_type == "repository":
@@ -175,7 +174,7 @@ since SDSC is explicitly a joint EPFL+ETH initiative.
 - Related organizations that are EPFL or EPFL-affiliated
 - README mentions of EPFL/SDSC
 """
-    
+
     prompt += """
 
 **Critical Requirements**:
@@ -187,6 +186,5 @@ since SDSC is explicitly a joint EPFL+ETH initiative.
 
 Return a complete EPFLAssessmentResult with all fields properly populated.
 """
-    
-    return prompt
 
+    return prompt

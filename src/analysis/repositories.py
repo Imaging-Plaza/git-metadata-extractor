@@ -26,20 +26,20 @@ class Repository:
         self.log: list[str] = []
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
-        
+
         # Track official API-reported token usage across all agents
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
-        
+
         # Track estimated token usage (client-side counts)
         self.estimated_input_tokens: int = 0
         self.estimated_output_tokens: int = 0
-        
+
         # Track timing and status
         self.start_time: datetime = None
         self.end_time: datetime = None
         self.analysis_successful: bool = False
-        
+
         # Check if the repository is public before proceeding
         self.is_public: bool = is_github_repo_public(full_path)
         if not self.is_public:
@@ -75,18 +75,22 @@ class Repository:
         # Extract data and usage
         llm_data = result.get("data") if isinstance(result, dict) else result
         usage = result.get("usage") if isinstance(result, dict) else None
-        
+
         # Accumulate official API-reported usage data
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+            logger.info(
+                f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            )
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
             self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-            logger.info(f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens")
+            logger.info(
+                f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens",
+            )
 
         # Output Validation
         if isinstance(llm_data, str):
@@ -101,12 +105,14 @@ class Repository:
 
     def run_authors_enrichment(self):
         logger.info(f"ORCID enrichment for {self.full_path}")
-        
+
         # Check if data exists before enrichment
         if self.data is None:
-            logging.warning(f"Cannot enrich authors: no data available for {self.full_path}")
+            logging.warning(
+                f"Cannot enrich authors: no data available for {self.full_path}",
+            )
             return
-        
+
         llm_result = enrich_authors_with_orcid(self.data)
 
         if isinstance(llm_result, SoftwareSourceCode):
@@ -116,10 +122,12 @@ class Repository:
 
     async def run_organization_enrichment(self):
         logger.info(f"Organization enrichment for {self.full_path}")
-        
+
         # Check if data exists before enrichment
         if self.data is None:
-            logging.warning(f"Cannot enrich organizations: no data available for {self.full_path}")
+            logging.warning(
+                f"Cannot enrich organizations: no data available for {self.full_path}",
+            )
             return
 
         try:
@@ -129,22 +137,28 @@ class Repository:
             )
 
             # Extract data and usage
-            organization_enrichment = result.get("data") if isinstance(result, dict) else result
+            organization_enrichment = (
+                result.get("data") if isinstance(result, dict) else result
+            )
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate official API-reported usage data
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
             # organization_enrichment is an OrganizationEnrichmentResult, not a dict
-            enriched_orgs = organization_enrichment.organizations  # Direct attribute access
+            enriched_orgs = (
+                organization_enrichment.organizations
+            )  # Direct attribute access
 
             # Replace (not append) organization lists with enriched versions
             # Build list of organization names for relatedToOrganizations
@@ -211,16 +225,21 @@ class Repository:
 
     async def run_user_enrichment(self):
         logger.info(f"User enrichment for {self.full_path}")
-        
+
         # Check if data exists before enrichment
         if self.data is None:
-            logging.warning(f"Cannot enrich users: no data available for {self.full_path}")
+            logging.warning(
+                f"Cannot enrich users: no data available for {self.full_path}",
+            )
             return
 
         # Convert Pydantic models to dictionaries for the enrichment function
         git_authors_raw = getattr(self.data, "gitAuthors", [])
         git_authors_data = (
-            [ga.model_dump() if hasattr(ga, "model_dump") else ga for ga in git_authors_raw]
+            [
+                ga.model_dump() if hasattr(ga, "model_dump") else ga
+                for ga in git_authors_raw
+            ]
             if git_authors_raw
             else []
         )
@@ -230,15 +249,19 @@ class Repository:
         if existing_authors_raw:
             for author in existing_authors_raw:
                 # Convert to dict first if it's a Pydantic model
-                author_dict = author.model_dump() if hasattr(author, "model_dump") else author
-                
+                author_dict = (
+                    author.model_dump() if hasattr(author, "model_dump") else author
+                )
+
                 # Only include Person/EnrichedAuthor objects, skip Organization objects
                 # Organizations have 'legalName', Person/EnrichedAuthor have 'name'
                 if isinstance(author_dict, dict):
                     if "name" in author_dict:  # Person or EnrichedAuthor
                         existing_authors_data.append(author_dict)
                     elif "legalName" in author_dict:  # Organization - skip it
-                        logger.debug(f"Skipping Organization object in user enrichment: {author_dict.get('legalName')}")
+                        logger.debug(
+                            f"Skipping Organization object in user enrichment: {author_dict.get('legalName')}",
+                        )
                         continue
                 else:
                     existing_authors_data.append(author_dict)
@@ -249,17 +272,21 @@ class Repository:
             repository_url=self.full_path,
         )
         # This method should validate and return a compatible object
-        
+
         # Extract usage data
         usage = result.get("usage") if isinstance(result, dict) else None
-        user_enrichment = result if not isinstance(result, dict) or "usage" not in result else result
-        
+        user_enrichment = (
+            result if not isinstance(result, dict) or "usage" not in result else result
+        )
+
         # Accumulate official API-reported usage data
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+            logger.info(
+                f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            )
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
@@ -272,24 +299,24 @@ class Repository:
         - "Mackenzie Mathis" vs "Mackenzie Weygandt Mathis"
         - "Alexander Mathis" vs "Mathis, Alexander" (last, first format)
         - Different punctuation and formatting
-        
+
         Returns True if the names likely refer to the same person.
         """
         if not name1 or not name2:
             return False
-        
+
         import re
-        
+
         # Normalize: lowercase, remove punctuation, split into words
         def normalize_name(name):
             # Remove punctuation and extra whitespace
-            cleaned = re.sub(r'[^\w\s]', ' ', name.lower())
+            cleaned = re.sub(r"[^\w\s]", " ", name.lower())
             # Split and filter empty strings
             return set(word for word in cleaned.split() if word)
-        
+
         n1_parts = normalize_name(name1)
         n2_parts = normalize_name(name2)
-        
+
         # If all parts of the shorter name are in the longer name, it's a match
         # e.g., {"mackenzie", "mathis"} ⊆ {"mackenzie", "weygandt", "mathis"}
         # Also matches {"alexander", "mathis"} with {"mathis", "alexander"}
@@ -304,31 +331,36 @@ class Repository:
 
         # Check if data exists before enrichment
         if self.data is None:
-            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.full_path}")
+            logger.warning(
+                f"Cannot enrich academic catalogs: no data available for {self.full_path}",
+            )
             return
-            
+
         try:
             # Extract repository information for the enrichment
             repository_name = self.data.name or self.full_path.split("/")[-1]
             description = self.data.description or ""
-            
+
             # Get README excerpt (first 1000 chars from readme content if available)
             readme_excerpt = ""
             if hasattr(self.data, "readme") and self.data.readme:
                 # The readme field is a URL, we'd need to fetch it
                 # For now, use description or other text
                 pass
-                
+
             # Try to get some text from description or other fields
             if self.data.description:
                 readme_excerpt = self.data.description[:1000]
-            elif hasattr(self.data, "hasExecutableInstructions") and self.data.hasExecutableInstructions:
+            elif (
+                hasattr(self.data, "hasExecutableInstructions")
+                and self.data.hasExecutableInstructions
+            ):
                 readme_excerpt = self.data.hasExecutableInstructions[:1000]
-            
+
             # Extract author names and organization names from existing data
             author_names = []
             organization_names = []
-            
+
             if hasattr(self.data, "author") and self.data.author:
                 for author in self.data.author:
                     if hasattr(author, "name") and author.name:
@@ -342,7 +374,7 @@ class Repository:
                     if isinstance(org, Organization) and hasattr(org, "legalName") and org.legalName:
                         if org.legalName not in organization_names:
                             organization_names.append(org.legalName)
-                
+
             result = await enrich_repository_academic_catalog(
                 repository_url=self.full_path,
                 repository_name=repository_name,
@@ -351,39 +383,41 @@ class Repository:
                 authors=author_names,
                 organizations=organization_names,
             )
-            
+
             # Extract data and usage
             enrichment_data = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(
                     f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
-                    f"{usage.get('output_tokens', 0)} output tokens"
+                    f"{usage.get('output_tokens', 0)} output tokens",
                 )
-                
+
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-                
+
             # Store the academic catalog relations at repository level
             if enrichment_data:
                 # Repository-level relations (publications about the repository itself)
                 if hasattr(enrichment_data, "repository_relations"):
-                    self.data.academicCatalogRelations = enrichment_data.repository_relations
+                    self.data.academicCatalogRelations = (
+                        enrichment_data.repository_relations
+                    )
                     logger.info(
-                        f"Stored {len(enrichment_data.repository_relations)} repository-level academic catalog relations"
+                        f"Stored {len(enrichment_data.repository_relations)} repository-level academic catalog relations",
                     )
                 # Fallback for backward compatibility
                 elif hasattr(enrichment_data, "relations"):
                     self.data.academicCatalogRelations = enrichment_data.relations
                     logger.info(
-                        f"Stored {len(enrichment_data.relations)} academic catalog relations at repository level"
+                        f"Stored {len(enrichment_data.relations)} academic catalog relations at repository level",
                     )
-                
+
                 # Directly assign relations to authors and organizations using the structured output
                 if hasattr(self.data, "author") and self.data.author:
                     # For Person objects - match by author name
@@ -392,24 +426,40 @@ class Repository:
                             if hasattr(author, "name") and author.name:
                                 # Direct lookup using the exact author name as key
                                 if author.name in enrichment_data.author_relations:
-                                    author_rels = enrichment_data.author_relations[author.name]
+                                    author_rels = enrichment_data.author_relations[
+                                        author.name
+                                    ]
                                     author.academicCatalogRelations = author_rels
-                                    logger.info(f"✓ Directly assigned {len(author_rels)} relations to author: {author.name}")
+                                    logger.info(
+                                        f"✓ Directly assigned {len(author_rels)} relations to author: {author.name}",
+                                    )
                                 else:
                                     # Author had no results
                                     author.academicCatalogRelations = []
-                                    logger.info(f"ℹ No relations found for author: {author.name}")
-                            
+                                    logger.info(
+                                        f"ℹ No relations found for author: {author.name}",
+                                    )
+
                             # For Organization objects in the author list - match by legalName
                             elif hasattr(author, "legalName") and author.legalName:
-                                if hasattr(enrichment_data, "organization_relations") and author.legalName in enrichment_data.organization_relations:
-                                    org_rels = enrichment_data.organization_relations[author.legalName]
+                                if (
+                                    hasattr(enrichment_data, "organization_relations")
+                                    and author.legalName
+                                    in enrichment_data.organization_relations
+                                ):
+                                    org_rels = enrichment_data.organization_relations[
+                                        author.legalName
+                                    ]
                                     author.academicCatalogRelations = org_rels
-                                    logger.info(f"✓ Directly assigned {len(org_rels)} relations to organization: {author.legalName}")
+                                    logger.info(
+                                        f"✓ Directly assigned {len(org_rels)} relations to organization: {author.legalName}",
+                                    )
                                 else:
                                     author.academicCatalogRelations = []
-                                    logger.info(f"ℹ No relations found for organization: {author.legalName}")
-                
+                                    logger.info(
+                                        f"ℹ No relations found for organization: {author.legalName}",
+                                    )
+
         except Exception as e:
             logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
             # Don't fail the entire analysis, just skip academic catalog enrichment
@@ -418,48 +468,59 @@ class Repository:
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
         logger.info(f"Final EPFL assessment for {self.full_path}")
-        
+
         # Check if data exists
         if self.data is None:
-            logging.warning(f"Cannot run EPFL assessment: no data available for {self.full_path}")
+            logging.warning(
+                f"Cannot run EPFL assessment: no data available for {self.full_path}",
+            )
             return
-        
+
         try:
             # Convert data to dict for assessment
             data_dict = self.data.model_dump()
-            
+
             # Call the EPFL assessment agent
             result = await assess_epfl_relationship(
                 data=data_dict,
                 item_type="repository",
             )
-            
+
             # Extract assessment and usage
             assessment = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-            
+
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
             self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
             self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
-            
-            logger.info(f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
-                       f"confidence={assessment.relatedToEPFLConfidence:.2f}")
-            logger.info(f"Justification: {assessment.relatedToEPFLJustification[:200]}...")
-            
+
+            logger.info(
+                f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
+                f"confidence={assessment.relatedToEPFLConfidence:.2f}",
+            )
+            logger.info(
+                f"Justification: {assessment.relatedToEPFLJustification[:200]}...",
+            )
+
         except Exception as e:
-            logger.error(f"EPFL final assessment failed for {self.full_path}: {e}", exc_info=True)
+            logger.error(
+                f"EPFL final assessment failed for {self.full_path}: {e}",
+                exc_info=True,
+            )
             # Don't fail the entire analysis, just log the error
 
     def run_validation(self) -> bool:
@@ -509,7 +570,7 @@ class Repository:
     def get_usage_stats(self) -> dict:
         """
         Get accumulated token usage statistics and timing from all agents.
-        
+
         Returns:
             Dictionary with official API-reported tokens, estimated tokens, and timing info
         """
@@ -517,20 +578,21 @@ class Repository:
         duration = None
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()
-        
+
         return {
             "input_tokens": self.total_input_tokens,
             "output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
             "estimated_input_tokens": self.estimated_input_tokens,
             "estimated_output_tokens": self.estimated_output_tokens,
-            "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+            "estimated_total_tokens": self.estimated_input_tokens
+            + self.estimated_output_tokens,
             "duration": duration,
             "start_time": self.start_time,
             "end_time": self.end_time,
             "status_code": 200 if self.analysis_successful else 500,
         }
-    
+
     def dump_results(self, output_type="json") -> str | dict | None:
         """
         Dump results in specified format: json, dict, or json-ld
@@ -567,13 +629,15 @@ class Repository:
         """
         # Check if repository is public
         if not self.is_public:
-            logger.error(f"Cannot run analysis: repository {self.full_path} is not public")
+            logger.error(
+                f"Cannot run analysis: repository {self.full_path} is not public",
+            )
             self.analysis_successful = False
             return
-        
+
         # Track start time
         self.start_time = datetime.now()
-        
+
         # Check if complete repository analysis exists in cache
         cache_params = {"full_path": self.full_path}
         if not self.force_refresh and self.check_in_cache("repository", cache_params):
@@ -594,13 +658,15 @@ class Repository:
         if run_llm:
             logging.info(f"LLM analysis for {self.full_path}")
             await self.run_llm_analysis()
-            
+
             # Only run author enrichment if LLM analysis succeeded
             if self.data is not None:
                 self.run_authors_enrichment()
             else:
-                logging.warning(f"Skipping author enrichment: LLM analysis failed for {self.full_path}")
-            
+                logging.warning(
+                    f"Skipping author enrichment: LLM analysis failed for {self.full_path}",
+                )
+
             logging.info(f"LLM analysis completed for {self.full_path}")
 
         # Run user enrichment
@@ -635,10 +701,10 @@ class Repository:
         else:
             logging.error(f"Analysis failed for {self.full_path}: no data generated")
             self.analysis_successful = False
-        
+
         # Track end time
         self.end_time = datetime.now()
-        
+
         # Log duration
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()

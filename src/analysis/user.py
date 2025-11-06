@@ -21,15 +21,15 @@ class User:
         self.log: list[str] = []
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
-        
+
         # Track official API-reported token usage across all agents
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
-        
+
         # Track estimated token usage (client-side counts)
         self.estimated_input_tokens: int = 0
         self.estimated_output_tokens: int = 0
-        
+
         # Track timing and status
         self.start_time: datetime = None
         self.end_time: datetime = None
@@ -69,7 +69,11 @@ class User:
         logger.info(f"LLM analysis for {self.username}")
 
         # Prepare data for LLM analysis
-        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+        github_metadata = (
+            self.data.githubUserMetadata.model_dump()
+            if self.data.githubUserMetadata
+            else {}
+        )
         llm_input_data = {
             "username": self.username,
             "name": github_metadata.get("name"),
@@ -96,27 +100,36 @@ class User:
             # Extract data and usage
             llm_result = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate official API-reported usage data
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-                logger.info(f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens")
+                logger.info(
+                    f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens",
+                )
 
             # Update self.data with LLM results
             if llm_result and isinstance(llm_result, dict):
                 logger.info(f"LLM result keys: {list(llm_result.keys())}")
-                
+
                 # Extract organization information
                 if llm_result.get("relatedToOrganization"):
-                    self.data.relatedToOrganization = llm_result.get("relatedToOrganization", [])
-                    logger.info(f"Set relatedToOrganization: {self.data.relatedToOrganization}")
+                    self.data.relatedToOrganization = llm_result.get(
+                        "relatedToOrganization",
+                        [],
+                    )
+                    logger.info(
+                        f"Set relatedToOrganization: {self.data.relatedToOrganization}",
+                    )
                 if llm_result.get("relatedToOrganizationJustification"):
                     self.data.relatedToOrganizationJustification = llm_result.get(
                         "relatedToOrganizationJustification",
@@ -125,7 +138,7 @@ class User:
                     logger.info(
                         f"Set relatedToOrganizationJustification: {self.data.relatedToOrganizationJustification}",
                     )
-                
+
                 # Extract discipline information
                 if llm_result.get("discipline"):
                     self.data.discipline = llm_result.get("discipline", [])
@@ -138,7 +151,7 @@ class User:
                     logger.info(
                         f"Set disciplineJustification: {self.data.disciplineJustification}",
                     )
-                
+
                 # Extract position information
                 if llm_result.get("position"):
                     self.data.position = llm_result.get("position", [])
@@ -167,7 +180,11 @@ class User:
         logger.info(f"Organization enrichment for {self.username}")
 
         # Get github metadata
-        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+        github_metadata = (
+            self.data.githubUserMetadata.model_dump()
+            if self.data.githubUserMetadata
+            else {}
+        )
 
         # Format data for organization enrichment agent
         enrichment_data = {
@@ -200,15 +217,19 @@ class User:
         )
 
         # Extract data and usage
-        organization_enrichment = result.get("data") if isinstance(result, dict) else result
+        organization_enrichment = (
+            result.get("data") if isinstance(result, dict) else result
+        )
         usage = result.get("usage") if isinstance(result, dict) else None
-        
+
         # Accumulate official API-reported usage data
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+            logger.info(
+                f"Organization enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            )
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
@@ -243,27 +264,40 @@ class User:
 
         # For user profiles, preserve any existing EPFL assessment
         # Only update EPFL values if they weren't already set
-        if self.data.relatedToEPFL is None and organization_enrichment.relatedToEPFL is not None:
+        if (
+            self.data.relatedToEPFL is None
+            and organization_enrichment.relatedToEPFL is not None
+        ):
             self.data.relatedToEPFL = organization_enrichment.relatedToEPFL
             logger.info(f"Set relatedToEPFL from enrichment: {self.data.relatedToEPFL}")
         else:
             logger.info(f"Preserving existing relatedToEPFL: {self.data.relatedToEPFL}")
-            
-        if self.data.relatedToEPFLJustification is None and organization_enrichment.relatedToEPFLJustification is not None:
+
+        if (
+            self.data.relatedToEPFLJustification is None
+            and organization_enrichment.relatedToEPFLJustification is not None
+        ):
             self.data.relatedToEPFLJustification = (
                 organization_enrichment.relatedToEPFLJustification
             )
-            logger.info(f"Set relatedToEPFLJustification from enrichment")
+            logger.info("Set relatedToEPFLJustification from enrichment")
         else:
-            logger.info(f"Preserving existing relatedToEPFLJustification")
-            
-        if self.data.relatedToEPFLConfidence is None and organization_enrichment.relatedToEPFLConfidence is not None:
+            logger.info("Preserving existing relatedToEPFLJustification")
+
+        if (
+            self.data.relatedToEPFLConfidence is None
+            and organization_enrichment.relatedToEPFLConfidence is not None
+        ):
             self.data.relatedToEPFLConfidence = (
                 organization_enrichment.relatedToEPFLConfidence
             )
-            logger.info(f"Set relatedToEPFLConfidence from enrichment: {self.data.relatedToEPFLConfidence}")
+            logger.info(
+                f"Set relatedToEPFLConfidence from enrichment: {self.data.relatedToEPFLConfidence}",
+            )
         else:
-            logger.info(f"Preserving existing relatedToEPFLConfidence: {self.data.relatedToEPFLConfidence}")
+            logger.info(
+                f"Preserving existing relatedToEPFLConfidence: {self.data.relatedToEPFLConfidence}",
+            )
 
         # Note: Organization enrichment does NOT return discipline/position fields
         # so we preserve the LLM analysis results
@@ -274,7 +308,11 @@ class User:
         logger.info(f"User enrichment for {self.username}")
 
         # Get github metadata
-        github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+        github_metadata = (
+            self.data.githubUserMetadata.model_dump()
+            if self.data.githubUserMetadata
+            else {}
+        )
 
         # Extract git authors and existing authors from metadata
         git_authors_data = []  # No git authors for user profiles
@@ -298,14 +336,18 @@ class User:
 
         # Extract data and usage
         usage = result.get("usage") if isinstance(result, dict) else None
-        user_enrichment = result if not isinstance(result, dict) or "usage" not in result else result
-        
+        user_enrichment = (
+            result if not isinstance(result, dict) or "usage" not in result else result
+        )
+
         # Accumulate official API-reported usage data
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+            logger.info(
+                f"User enrichment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            )
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
@@ -315,7 +357,9 @@ class User:
         # Note: Currently we don't have a place to store enriched authors in GitHubUser model
         # This could be added as a field if needed in the future
         if user_enrichment is not None:
-            logger.info(f"User enrichment completed with {len(user_enrichment.get('enrichedAuthors', []))} enriched authors")
+            logger.info(
+                f"User enrichment completed with {len(user_enrichment.get('enrichedAuthors', []))} enriched authors",
+            )
         else:
             logging.warning("User enrichment returned None, skipping author enrichment")
 
@@ -324,51 +368,57 @@ class User:
     async def run_academic_catalog_enrichment(self):
         """Enrich user with academic catalog relations (Infoscience, etc.)"""
         logger.info(f"Academic catalog enrichment for {self.username}")
-        
+
         # Check if data exists before enrichment
         if self.data is None:
-            logger.warning(f"Cannot enrich academic catalogs: no data available for {self.username}")
+            logger.warning(
+                f"Cannot enrich academic catalogs: no data available for {self.username}",
+            )
             return
-            
+
         try:
             # Extract user information for the enrichment
-            github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
-            
+            github_metadata = (
+                self.data.githubUserMetadata.model_dump()
+                if self.data.githubUserMetadata
+                else {}
+            )
+
             full_name = self.data.fullname or github_metadata.get("name", "")
             bio = github_metadata.get("bio", "")
             organizations = github_metadata.get("organizations", [])
-            
+
             result = await enrich_user_academic_catalog(
                 username=self.username,
                 full_name=full_name,
                 bio=bio,
                 organizations=organizations,
             )
-            
+
             # Extract data and usage
             enrichment_data = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(
                     f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
-                    f"{usage.get('output_tokens', 0)} output tokens"
+                    f"{usage.get('output_tokens', 0)} output tokens",
                 )
-                
+
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-                
+
             # Store the academic catalog relations
             if enrichment_data and hasattr(enrichment_data, "relations"):
                 self.data.academicCatalogRelations = enrichment_data.relations
                 logger.info(
-                    f"Stored {len(enrichment_data.relations)} academic catalog relations"
+                    f"Stored {len(enrichment_data.relations)} academic catalog relations",
                 )
-                
+
         except Exception as e:
             logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
             # Don't fail the entire analysis, just skip academic catalog enrichment
@@ -377,48 +427,59 @@ class User:
     async def run_epfl_final_assessment(self):
         """Run final EPFL relationship assessment after all enrichments complete"""
         logger.info(f"Final EPFL assessment for {self.username}")
-        
+
         # Check if data exists
         if self.data is None:
-            logging.warning(f"Cannot run EPFL assessment: no data available for {self.username}")
+            logging.warning(
+                f"Cannot run EPFL assessment: no data available for {self.username}",
+            )
             return
-        
+
         try:
             # Convert data to dict for assessment
             data_dict = self.data.model_dump()
-            
+
             # Call the EPFL assessment agent
             result = await assess_epfl_relationship(
                 data=data_dict,
                 item_type="user",
             )
-            
+
             # Extract assessment and usage
             assessment = result.get("data") if isinstance(result, dict) else result
             usage = result.get("usage") if isinstance(result, dict) else None
-            
+
             # Accumulate token usage
             if usage:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
-                logger.info(f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-            
+                logger.info(
+                    f"EPFL assessment usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+                )
+
             # Accumulate estimated tokens
             if usage and "estimated_input_tokens" in usage:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-            
+
             # Update data with final assessment (overwrite previous values)
             self.data.relatedToEPFL = assessment.relatedToEPFL
             self.data.relatedToEPFLConfidence = assessment.relatedToEPFLConfidence
             self.data.relatedToEPFLJustification = assessment.relatedToEPFLJustification
-            
-            logger.info(f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
-                       f"confidence={assessment.relatedToEPFLConfidence:.2f}")
-            logger.info(f"Justification: {assessment.relatedToEPFLJustification[:200]}...")
-            
+
+            logger.info(
+                f"Final EPFL assessment: relatedToEPFL={assessment.relatedToEPFL}, "
+                f"confidence={assessment.relatedToEPFLConfidence:.2f}",
+            )
+            logger.info(
+                f"Justification: {assessment.relatedToEPFLJustification[:200]}...",
+            )
+
         except Exception as e:
-            logger.error(f"EPFL final assessment failed for {self.username}: {e}", exc_info=True)
+            logger.error(
+                f"EPFL final assessment failed for {self.username}: {e}",
+                exc_info=True,
+            )
             # Don't fail the entire analysis, just log the error
 
     def run_validation(self) -> bool:
@@ -472,7 +533,7 @@ class User:
     def get_usage_stats(self) -> dict:
         """
         Get accumulated token usage statistics and timing from all agents.
-        
+
         Returns:
             Dictionary with official API-reported tokens, estimated tokens, and timing info
         """
@@ -480,14 +541,15 @@ class User:
         duration = None
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()
-        
+
         return {
             "input_tokens": self.total_input_tokens,
             "output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
             "estimated_input_tokens": self.estimated_input_tokens,
             "estimated_output_tokens": self.estimated_output_tokens,
-            "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+            "estimated_total_tokens": self.estimated_input_tokens
+            + self.estimated_output_tokens,
             "duration": duration,
             "start_time": self.start_time,
             "end_time": self.end_time,
@@ -527,7 +589,7 @@ class User:
         """
         # Track start time
         self.start_time = datetime.now()
-        
+
         # Check if complete user analysis exists in cache
         cache_params = {"username": self.username}
         if not self.force_refresh and self.check_in_cache("user", cache_params):
@@ -580,10 +642,10 @@ class User:
         else:
             logging.error(f"Analysis failed for {self.username}: no data generated")
             self.analysis_successful = False
-        
+
         # Track end time
         self.end_time = datetime.now()
-        
+
         # Log duration
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()

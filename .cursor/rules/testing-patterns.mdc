@@ -118,7 +118,7 @@ def test_user_enrichment_with_orcid(mock_search):
         "orcid": "0000-0000-0000-0000",
         "name": "John Doe"
     }
-    
+
     result = enrich_users(["john.doe@epfl.ch"])
     assert result[0].orcidId is not None
     mock_search.assert_called_once()
@@ -135,7 +135,7 @@ def test_jsonld_to_pydantic_conversion():
         "@type": "Person",
         "name": "John Doe"
     }
-    
+
     person = convert_jsonld_to_pydantic(jsonld)
     assert person.name == "John Doe"
 ```
@@ -284,10 +284,10 @@ All pull requests must pass:
 def test_example():
     # Arrange - set up test data
     user = create_test_user()
-    
+
     # Act - perform the action
     result = enrich_user(user)
-    
+
     # Assert - verify the outcome
     assert result.confidence > 0.5
     assert result.affiliation is not None

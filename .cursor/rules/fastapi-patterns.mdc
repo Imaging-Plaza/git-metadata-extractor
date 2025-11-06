@@ -133,10 +133,10 @@ async def llm_json(
     enrich_users: bool = Query(False, description="Enable user enrichment"),
 ) -> APIOutput:
     """Extract repository metadata using LLM with GIMIE context."""
-    
+
     # Initialize analysis class
     repository = Repository(full_path, force_refresh=force_refresh)
-    
+
     # Run analysis (tracks tokens and timing internally)
     await repository.run_analysis(
         run_gimie=True,
@@ -144,13 +144,13 @@ async def llm_json(
         run_user_enrichment=enrich_users,
         run_organization_enrichment=enrich_orgs,
     )
-    
+
     # Get results
     output = repository.dump_results(output_type="pydantic")
-    
+
     # Get accumulated statistics
     usage_stats = repository.get_usage_stats()
-    
+
     # Create APIStats with token usage, timing, and status
     from .data_models.api import APIStats
     stats = APIStats(
@@ -165,7 +165,7 @@ async def llm_json(
     )
     # Calculate total tokens
     stats.calculate_total_tokens()
-    
+
     # Return response with stats
     response = APIOutput(
         link=full_path,
@@ -174,7 +174,7 @@ async def llm_json(
         output=output,
         stats=stats,  # Include statistics
     )
-    
+
     return response
 ```
 
@@ -188,23 +188,23 @@ async def get_user_json(
     enrich_users: bool = Query(False, description="Enable user enrichment"),
 ) -> APIOutput:
     """Retrieve and enrich GitHub user profile metadata."""
-    
+
     username = full_path.split("/")[-1]
-    
+
     # Initialize user analysis
     user = User(username, force_refresh=force_refresh)
-    
+
     # Run analysis (tracks tokens and timing)
     await user.run_analysis(
         run_organization_enrichment=enrich_orgs,
         run_user_enrichment=enrich_users,
     )
-    
+
     output = user.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics (same pattern as Repository)
     usage_stats = user.get_usage_stats()
-    
+
     # Create APIStats
     from .data_models.api import APIStats
     stats = APIStats(
@@ -218,7 +218,7 @@ async def get_user_json(
         status_code=usage_stats["status_code"],
     )
     stats.calculate_total_tokens()
-    
+
     response = APIOutput(
         link=full_path,
         type=ResourceType.USER,
@@ -226,7 +226,7 @@ async def get_user_json(
         output=output,
         stats=stats,  # Include statistics
     )
-    
+
     return response
 ```
 
@@ -309,18 +309,18 @@ JSON-LD endpoints return semantic web compatible data with `@context` and `@grap
 )
 async def llm_jsonld(...) -> APIOutput:
     """Extract repository metadata in JSON-LD format."""
-    
+
     # Run analysis
     repository = Repository(full_path, force_refresh=force_refresh)
     await repository.run_analysis(...)
-    
+
     # Convert to JSON-LD
     jsonld_output = repository.dump_results(output_type="json-ld")
-    
+
     # Get stats and return
     usage_stats = repository.get_usage_stats()
     stats = APIStats(...)
-    
+
     return APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
@@ -398,11 +398,11 @@ try:
     jsonld_output = repository.dump_results(output_type="json-ld")
     if jsonld_output is None:
         raise ValueError("JSON-LD conversion returned None")
-    
+
     # Verify it has JSON-LD structure
     if "@context" not in jsonld_output or "@graph" not in jsonld_output:
         raise ValueError("Missing @context or @graph in JSON-LD output")
-        
+
 except Exception as e:
     logger.error(f"Failed to convert to JSON-LD: {e}", exc_info=True)
     raise HTTPException(

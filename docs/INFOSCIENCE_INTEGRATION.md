@@ -359,4 +359,3 @@ The Infoscience API integration is complete and functional. All three agents now
 - Laboratory and organizational information
 
 The implementation follows the project's existing patterns and provides type-safe, well-documented tools that agents can use to enrich their analysis with EPFL-specific information.
-

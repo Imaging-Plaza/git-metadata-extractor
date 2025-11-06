@@ -158,7 +158,7 @@ def get_general_user_agent_prompt(username: str, user_data: str):
     - Current employment status
 
     The README explicitly states: "Currently, I am working as a **Data Engineer**" - this should be extracted as position: ["Data Engineer"]
-    
+
     ORGANIZATION EXTRACTION RULES:
     - Look for company/employer information in the bio, company field, and README
     - Check GitHub organizations the user is a member of (institutions, universities, companies)
