@@ -211,6 +211,20 @@ async def _validate_infoscience_relations(
             logger.warning(f"Skipping relation without URL: {relation.get_display_name()}")
             continue
 
+        # Extract UUID from entity (handles both Pydantic models and dicts)
+        entity_uuid = None
+        if hasattr(relation.entity, "uuid"):
+            entity_uuid = relation.entity.uuid
+        elif isinstance(relation.entity, dict):
+            entity_uuid = relation.entity.get("uuid")
+
+        # For Infoscience, UUID is mandatory
+        if not entity_uuid:
+            logger.warning(
+                f"Skipping Infoscience relation without UUID: {relation.get_display_name()}"
+            )
+            continue
+
         try:
             # Prepare expected entity data based on entity type
             expected_entity = {}
@@ -342,7 +356,7 @@ async def enrich_repository_academic_catalog(
         if result and result.get("data"):
             enrichment_data = result["data"]
             
-            # Validate Infoscience URLs
+            # Validate Infoscience URLs in repository relations
             logger.info("🔍 Validating Infoscience URLs in repository relations...")
             enrichment_data.repository_relations = await _validate_infoscience_relations(
                 enrichment_data.repository_relations
@@ -351,6 +365,28 @@ async def enrich_repository_academic_catalog(
             logger.info(
                 f"✓ Found {len(enrichment_data.repository_relations)} validated repository relations"
             )
+            
+            # Validate Infoscience URLs in author relations
+            if hasattr(enrichment_data, "author_relations"):
+                logger.info("🔍 Validating Infoscience URLs in author relations...")
+                for author_name, relations in enrichment_data.author_relations.items():
+                    enrichment_data.author_relations[author_name] = await _validate_infoscience_relations(
+                        relations
+                    )
+                logger.info(
+                    f"✓ Validated author relations for {len(enrichment_data.author_relations)} authors"
+                )
+            
+            # Validate Infoscience URLs in organization relations
+            if hasattr(enrichment_data, "organization_relations"):
+                logger.info("🔍 Validating Infoscience URLs in organization relations...")
+                for org_name, relations in enrichment_data.organization_relations.items():
+                    enrichment_data.organization_relations[org_name] = await _validate_infoscience_relations(
+                        relations
+                    )
+                logger.info(
+                    f"✓ Validated organization relations for {len(enrichment_data.organization_relations)} organizations"
+                )
             
         return result
     except Exception as e:
