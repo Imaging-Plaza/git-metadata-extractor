@@ -9,6 +9,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Union,
 )
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -28,16 +29,12 @@ class Person(BaseModel):
 
     # Core identity fields
     name: str = Field(description="Person's name")
-    email: Optional[str] = Field(
-        description="Primary email address (for backward compatibility)",
+    email: Optional[Union[str, List[str]]] = Field(
+        description="Email address(es) - can be a single string or a list of strings",
         default=None,
     )
-    emails: List[str] = Field(
-        description="List of all email addresses associated with this person",
-        default_factory=list,
-    )
-    orcidId: Optional[HttpUrl] = Field(
-        description="ORCID identifier URL",
+    orcid: Optional[str] = Field(
+        description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
         default=None,
     )
     gitAuthorIds: Optional[List[str]] = Field(
@@ -46,10 +43,6 @@ class Person(BaseModel):
     )
 
     # Affiliation fields
-    affiliation: Optional[List[str]] = Field(
-        description="List of affiliations (deprecated, use affiliations)",
-        default=None,
-    )
     affiliations: List[str] = Field(
         description="List of all identified affiliations (current and historical)",
         default_factory=list,
@@ -77,19 +70,30 @@ class Person(BaseModel):
         default_factory=list,
     )
 
-    @field_validator("orcidId", mode="before")
+    @field_validator("orcid", mode="before")
     @classmethod
     def validate_orcid(cls, v):
-        """Convert plain ORCID identifier to full URL if needed."""
+        """Validate ORCID format and convert ID to URL if needed."""
+        import re
+        
         if v is None:
             return v
+        
         if isinstance(v, str):
-            # Check if it's a plain ORCID identifier (0000-0000-0000-0000 format)
-            if v.startswith("http://") or v.startswith("https://"):
+            # If it's already a URL, validate and return as-is (store as string)
+            if v.startswith("http"):
+                orcid_url_pattern = r"^https://orcid\.org/\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+                if not re.match(orcid_url_pattern, v):
+                    raise ValueError(f"Invalid ORCID URL format: {v}")
                 return v
-            # Assume it's a plain identifier, convert to URL
-            if len(v) == 19 and v.count("-") == 3:  # ORCID format: 0000-0000-0000-0000
-                return f"https://orcid.org/{v}"
+
+            # If it's an ID, validate and return as-is (store as plain ID string)
+            orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
+            if re.match(orcid_id_pattern, v):
+                return v
+
+            raise ValueError(f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000")
+        
         return v
 
 

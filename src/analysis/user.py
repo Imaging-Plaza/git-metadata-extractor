@@ -52,9 +52,8 @@ class User:
             fullname=user_data_dict.get("name"),  # Use name as fullname by now
             githubHandle=user_data_dict.get("login"),
             githubUserMetadata=github_metadata,
-            relatedToOrganization=user_data_dict.get("organizations", []),
             # Enrichment fields (will be populated by analysis steps)
-            relatedToOrganizationsROR=[],
+            relatedToOrganization=user_data_dict.get("organizations", []) or [],
             relatedToOrganizationJustification=[],
             discipline=[],
             disciplineJustification=[],
@@ -205,8 +204,9 @@ class User:
         # Add user as author if we have ORCID data
         if github_metadata.get("orcid"):
             author_data = {
-                "name": github_metadata.get("name") or self.data.fullname,
-                "orcidId": github_metadata.get("orcid"),
+                "name": github_metadata.get("name")
+                or self.data.fullname,
+                "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }
             enrichment_data["author"] = [author_data]
@@ -251,13 +251,16 @@ class User:
                 related_orgs.append(legal_name)
 
         # Safely handle relatedToOrganizationsROR list
-        related_orgs_ror = getattr(self.data, "relatedToOrganizationsROR", None)
-        if related_orgs_ror is None:
-            related_orgs_ror = []
-            self.data.relatedToOrganizationsROR = related_orgs_ror
-        related_orgs_ror.extend(
-            enriched_orgs,
-        )  # enriched_orgs already contains Organization instances
+        # Merge enriched organizations into relatedToOrganization
+        # Combine string names and Organization objects
+        current_orgs = getattr(self.data, "relatedToOrganization", None) or []
+        if not isinstance(current_orgs, list):
+            current_orgs = []
+        
+        # Add enriched Organization objects
+        combined_orgs = list(current_orgs)  # Copy existing
+        combined_orgs.extend(enriched_orgs)  # Add Organization objects
+        self.data.relatedToOrganization = combined_orgs
 
         # For user profiles, preserve any existing EPFL assessment
         # Only update EPFL values if they weren't already set
@@ -318,8 +321,9 @@ class User:
         # Build existing author data using the new model structure
         if self.data.fullname or github_metadata.get("name"):
             author_data = {
-                "name": self.data.fullname or github_metadata.get("name"),
-                "orcidId": github_metadata.get("orcid"),
+                "name": self.data.fullname
+                or github_metadata.get("name"),
+                "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }
             existing_authors_data = [author_data]

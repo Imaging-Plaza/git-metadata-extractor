@@ -27,6 +27,7 @@ You have access to tools to search EPFL's Infoscience repository for additional 
 - **DO NOT repeat searches** - tools cache results automatically
 - **Use sparingly** - only call tools when they provide real value to metadata extraction
 - **One search per subject** - if information isn't found on first try, accept that and move on
+- **If a search returns 0 results (results were 0), STOP - the entity is not in Infoscience. Do not search again.**
 - **Priority: extract from repository content FIRST, use tools only to verify/enrich**
 
 **When to use these tools:**
@@ -73,7 +74,7 @@ You have access to tools to search EPFL's Infoscience repository for additional 
 - `applicationCategory`: Scientific disciplines or categories that the software belongs to.
 - `author`: Each author must be an object containing:
   - `name`
-  - `orcidId`
+  - `orcid`
   - `affiliation` (list of strings, **optional**): Institutions the author is affiliated with. Do not mention Imaging Plaza unless is explicity mentioned.
   - **IMPORTANT**: Check the README file for any "Contributors", "Authors", "Team", "Maintainers", or "Acknowledgments" sections and add those people to the author list.
   - Look for GitHub usernames, email addresses, or names mentioned in these sections.
@@ -109,14 +110,6 @@ You have access to tools to search EPFL's Infoscience repository for additional 
   - `name` (string, **optional**)
   - `description` (string, **optional**)
   - `url` (valid URL, **required**)
-- `hasParameter` (list of objects, **required**): Each object must contain:
-  - `name` (string of max 60 characters, **optional**)
-  - `description` (string of max 2000 characters, **optional**)
-  - `encodingFormat` (valid URL, **optional**)
-  - `hasDimensionality` (integer > 0, **optional**)
-  - `hasFormat` (string, **optional**)
-  - `defaultValue` (string, **optional**)
-  - `valueRequired` (boolean, **optional**)
 - `hasFunding` (list of objects, **required**): Each object must contain:
   - `identifier` (string, **optional**)
   - `fundingGrant` (string, **optional**)
@@ -131,8 +124,6 @@ You have access to tools to search EPFL's Infoscience repository for additional 
 - `processorRequirements` (list of strings, **optional**): Minimum processor requirements.
 - `memoryRequirements` (integer, **optional**): Minimum memory required (in MB).
 - `requiresGPU` (boolean, **optional**): Whether the software requires a GPU.
-- `fairLevel` (string, **optional**): FAIR (Findable, Accessible, Interoperable, Reusable) level.
-- `graph` (string, **optional**): Graph data representation.
 - `conditionsOfAccess` (string, **optional**): Conditions of access to the software (free to access or not for example).
 - `featureList` (list of strings, **optional**): List of features representing the Software.
 - `isBasedOn` (valid URL, **optional**): The software, website or app the software is based on.
@@ -149,7 +140,6 @@ You have access to tools to search EPFL's Infoscience repository for additional 
 - `relatedPublications`: Any related publication mentioned in the readme or at any part of the documentation.
 - `relatedModels`: A list with any link to models stored in HuggingFace or any other machine learning model repository
 - `relatedAPI`: A list with any link to APIs related to the software.
-- `webpagesToCheck`: A list of webpages to check for more information about the software.
 
 When assigning an attribution evaluate from 0.0 to 1.0 the confidence of your attribution.
 

@@ -16,7 +16,13 @@ from ..context.infoscience import (
     search_infoscience_labs_tool,
     search_infoscience_publications_tool,
 )
-from ..data_models.academic_catalog import AcademicCatalogEnrichmentResult
+from ..data_models.academic_catalog import (
+    AcademicCatalogEnrichmentResult,
+    AcademicCatalogRelation,
+    CatalogType,
+    EntityType,
+)
+from .url_validation import validate_infoscience_url
 from ..llm.model_config import (
     create_pydantic_ai_model,
     load_model_config,
@@ -171,6 +177,145 @@ async def run_agent_with_fallback(
     raise (last_exception or Exception("All academic catalog enrichment models failed"))
 
 
+async def _validate_infoscience_relations(
+    relations: list[AcademicCatalogRelation],
+) -> list[AcademicCatalogRelation]:
+    """
+    Validate and normalize Infoscience URLs in academic catalog relations.
+
+    Args:
+        relations: List of AcademicCatalogRelation objects
+
+    Returns:
+        Filtered list with validated relations (invalid ones removed)
+    """
+    validated_relations = []
+
+    for relation in relations:
+        # Only validate Infoscience relations
+        if relation.catalogType != CatalogType.INFOSCIENCE:
+            validated_relations.append(relation)
+            continue
+
+        # Get entity URL
+        entity_url = None
+        if hasattr(relation.entity, "url"):
+            entity_url = relation.entity.url
+        elif hasattr(relation.entity, "profile_url"):
+            entity_url = relation.entity.profile_url
+        elif isinstance(relation.entity, dict):
+            entity_url = relation.entity.get("url") or relation.entity.get("profile_url")
+
+        if not entity_url:
+            logger.warning(f"Skipping relation without URL: {relation.get_display_name()}")
+            continue
+
+        # Extract UUID from entity (handles both Pydantic models and dicts)
+        entity_uuid = None
+        if hasattr(relation.entity, "uuid"):
+            entity_uuid = relation.entity.uuid
+        elif isinstance(relation.entity, dict):
+            entity_uuid = relation.entity.get("uuid")
+
+        # For Infoscience, UUID is mandatory
+        if not entity_uuid:
+            logger.warning(
+                f"Skipping Infoscience relation without UUID: {relation.get_display_name()}"
+            )
+            continue
+
+        try:
+            # Prepare expected entity data based on entity type
+            expected_entity = {}
+            if relation.entityType == EntityType.PUBLICATION:
+                if hasattr(relation.entity, "title"):
+                    expected_entity["title"] = relation.entity.title
+                    expected_entity["authors"] = getattr(relation.entity, "authors", [])
+                    expected_entity["doi"] = getattr(relation.entity, "doi", None)
+                    expected_entity["publication_date"] = getattr(
+                        relation.entity, "publication_date", None
+                    )
+                    expected_entity["lab"] = getattr(relation.entity, "lab", None)
+                elif isinstance(relation.entity, dict):
+                    expected_entity = relation.entity
+            elif relation.entityType == EntityType.PERSON:
+                if hasattr(relation.entity, "name"):
+                    expected_entity["name"] = relation.entity.name
+                    expected_entity["affiliation"] = getattr(
+                        relation.entity, "affiliation", None
+                    )
+                    expected_entity["orcid"] = getattr(relation.entity, "orcid", None)
+                    expected_entity["email"] = getattr(relation.entity, "email", None)
+                elif isinstance(relation.entity, dict):
+                    expected_entity = relation.entity
+            elif relation.entityType == EntityType.ORGUNIT:
+                if hasattr(relation.entity, "name"):
+                    expected_entity["name"] = relation.entity.name
+                    expected_entity["parent_organization"] = getattr(
+                        relation.entity, "parent_organization", None
+                    )
+                    expected_entity["description"] = getattr(
+                        relation.entity, "description", None
+                    )
+                elif isinstance(relation.entity, dict):
+                    expected_entity = relation.entity
+
+            # Validate Infoscience URL
+            validation_result = await validate_infoscience_url(
+                url=str(entity_url),
+                expected_entity=expected_entity,
+                entity_type=relation.entityType.value,
+                ctx=None,
+            )
+
+            if not validation_result.is_valid:
+                logger.warning(
+                    f"⚠ Infoscience validation failed for {relation.get_display_name()}: "
+                    f"{validation_result.justification}"
+                )
+                # Skip invalid relation
+                continue
+
+            # Update URL if normalized
+            if validation_result.normalized_url and validation_result.normalized_url != entity_url:
+                logger.info(
+                    f"✓ Normalized Infoscience URL: {entity_url} -> {validation_result.normalized_url}"
+                )
+                # Update entity URL
+                if hasattr(relation.entity, "url"):
+                    relation.entity.url = validation_result.normalized_url
+                elif hasattr(relation.entity, "profile_url"):
+                    relation.entity.profile_url = validation_result.normalized_url
+                elif isinstance(relation.entity, dict):
+                    relation.entity["url"] = validation_result.normalized_url
+
+            # Update confidence based on validation
+            if validation_result.confidence < 0.6:
+                logger.info(
+                    f"⚠ Low confidence Infoscience match for {relation.get_display_name()}: "
+                    f"confidence={validation_result.confidence:.2f}"
+                )
+                # Reduce relation confidence
+                relation.confidence = min(relation.confidence, validation_result.confidence)
+            else:
+                logger.info(
+                    f"✓ Infoscience validation passed for {relation.get_display_name()}: "
+                    f"confidence={validation_result.confidence:.2f}"
+                )
+
+            validated_relations.append(relation)
+
+        except Exception as e:
+            logger.error(
+                f"Error validating Infoscience URL for {relation.get_display_name()}: {e}",
+                exc_info=True,
+            )
+            # Skip relation on error
+            continue
+
+    return validated_relations
+
+
 async def enrich_repository_academic_catalog(
     repository_url: str,
     repository_name: str,
@@ -211,17 +356,46 @@ async def enrich_repository_academic_catalog(
 
         if result and result.get("data"):
             enrichment_data = result["data"]
-            logger.info(
-                f"✓ Found {len(enrichment_data.relations)} academic catalog relations",
+            
+            # Validate Infoscience URLs in repository relations
+            logger.info("🔍 Validating Infoscience URLs in repository relations...")
+            enrichment_data.repository_relations = await _validate_infoscience_relations(
+                enrichment_data.repository_relations
             )
-
+            
+            logger.info(
+                f"✓ Found {len(enrichment_data.repository_relations)} validated repository relations"
+            )
+            
+            # Validate Infoscience URLs in author relations
+            if hasattr(enrichment_data, "author_relations"):
+                logger.info("🔍 Validating Infoscience URLs in author relations...")
+                for author_name, relations in enrichment_data.author_relations.items():
+                    enrichment_data.author_relations[author_name] = await _validate_infoscience_relations(
+                        relations
+                    )
+                logger.info(
+                    f"✓ Validated author relations for {len(enrichment_data.author_relations)} authors"
+                )
+            
+            # Validate Infoscience URLs in organization relations
+            if hasattr(enrichment_data, "organization_relations"):
+                logger.info("🔍 Validating Infoscience URLs in organization relations...")
+                for org_name, relations in enrichment_data.organization_relations.items():
+                    enrichment_data.organization_relations[org_name] = await _validate_infoscience_relations(
+                        relations
+                    )
+                logger.info(
+                    f"✓ Validated organization relations for {len(enrichment_data.organization_relations)} organizations"
+                )
+            
         return result
     except Exception as e:
         logger.error(f"Academic catalog enrichment failed: {e}")
         # Return empty result instead of failing
         return {
             "data": AcademicCatalogEnrichmentResult(
-                relations=[],
+                repository_relations=[],
                 searchStrategy="Enrichment failed",
                 totalSearches=0,
             ),
@@ -261,8 +435,16 @@ async def enrich_user_academic_catalog(
 
         if result and result.get("data"):
             enrichment_data = result["data"]
+            
+            # Validate Infoscience URLs in author relations
+            logger.info("🔍 Validating Infoscience URLs in author relations...")
+            for author_name, relations in enrichment_data.author_relations.items():
+                enrichment_data.author_relations[author_name] = await _validate_infoscience_relations(
+                    relations
+                )
+            
             logger.info(
-                f"✓ Found {len(enrichment_data.relations)} academic catalog relations",
+                f"✓ Found academic catalog relations for {len(enrichment_data.author_relations)} authors"
             )
 
         return result
@@ -271,7 +453,7 @@ async def enrich_user_academic_catalog(
         # Return empty result instead of failing
         return {
             "data": AcademicCatalogEnrichmentResult(
-                relations=[],
+                author_relations={},
                 searchStrategy="Enrichment failed",
                 totalSearches=0,
             ),
@@ -311,8 +493,16 @@ async def enrich_organization_academic_catalog(
 
         if result and result.get("data"):
             enrichment_data = result["data"]
+            
+            # Validate Infoscience URLs in organization relations
+            logger.info("🔍 Validating Infoscience URLs in organization relations...")
+            for org_name, relations in enrichment_data.organization_relations.items():
+                enrichment_data.organization_relations[org_name] = await _validate_infoscience_relations(
+                    relations
+                )
+            
             logger.info(
-                f"✓ Found {len(enrichment_data.relations)} academic catalog relations",
+                f"✓ Found academic catalog relations for {len(enrichment_data.organization_relations)} organizations"
             )
 
         return result
@@ -321,7 +511,7 @@ async def enrich_organization_academic_catalog(
         # Return empty result instead of failing
         return {
             "data": AcademicCatalogEnrichmentResult(
-                relations=[],
+                organization_relations={},
                 searchStrategy="Enrichment failed",
                 totalSearches=0,
             ),

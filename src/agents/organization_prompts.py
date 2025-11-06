@@ -32,12 +32,18 @@ Your task is to analyze:
 4. Any other contextual information
 5. Git commit dates per author to assess temporal affiliation patterns
 6. ORCID affiliation start/end dates when available
+7. ROR identifiers
 
 For each organization you identify:
+- **CRITICAL**: You MUST use the search_ror tool to find ROR IDs. DO NOT make up or guess ROR IDs.
 - Use the extract_domain_from_email tool first to check if the email domain is known
-- **If the domain is unknown**, use the search_ror tool (PREFERRED) to find the organization
-- The search_web tool (DuckDuckGo) is available for additional context and includes retry logic for reliability
-- Use the search_ror tool to find the official ROR entry and get standardized naming
+- **For email domains (e.g., @epfl.ch, @ethz.ch)**: ALWAYS use the search_ror tool to find the organization
+- **For ORCID affiliations and existing mentions**: Check the PRE-SEARCHED ROR DATA provided in the prompt - use those results when available
+- **If pre-searched data is not available**: Use the search_ror tool to find the official ROR entry
+- The search_web tool (DuckDuckGo) is available for additional context but should NOT be used to find ROR IDs
+- **NEVER assign a ROR ID without either:**
+  1. Finding it in the PRE-SEARCHED ROR DATA, OR
+  2. Calling the search_ror tool and selecting from the results
 - Identify the organization type (university, research institute, department, lab, company, etc.)
 - For departments/labs, identify the parent organization
 - Extract country and website information when available
@@ -57,7 +63,7 @@ In addition to the ROR and web search tools, you have access to Infoscience tool
 - **Be strategic and efficient** - these tools query external APIs
 - **DO NOT search for the same thing multiple times** - tools cache results automatically
 - **Maximum 2 attempts per subject** - if a lab/author isn't found on first try, move on
-- **If a search returns 0 results**, the entity may not be in Infoscience or has a different name - DON'T keep searching with variations
+- **If a search returns 0 results, STOP searching immediately because the results were 0. The entity is NOT in Infoscience - do not try variations or search again.**
 - **Prioritize quality over quantity** - use these tools only when they add real value
 
 **When to use Infoscience tools:**
@@ -104,13 +110,39 @@ Be thorough and use the tools available to you to verify and standardize organiz
 """
 
 import json
+from typing import Optional, Dict, Any
 
 #######################################
 # Organization Enrichment Prompt General
 #######################################
 
 
-def get_organization_enrichment_prompt(repository_url: str, context) -> str:
+def get_organization_enrichment_prompt(
+    repository_url: str, 
+    context, 
+    pre_searched_ror: Optional[Dict[str, Any]] = None
+) -> str:
+    # Format pre-searched ROR results
+    pre_searched_ror_section = ""
+    if pre_searched_ror:
+        pre_searched_ror_section = f"""
+**PRE-SEARCHED ROR DATA (from ORCID affiliations and existing mentions):**
+The following ROR searches have been pre-calculated for you. USE THESE RESULTS when matching organizations.
+You can still use the search_ror tool for email domains or other organizations not listed here.
+
+{json.dumps(pre_searched_ror, indent=2)}
+
+**IMPORTANT**: 
+- For organizations listed above, select the BEST matching ROR entry from the pre-searched results
+- For email domains (e.g., @epfl.ch, @ethz.ch), use the search_ror tool to find the organization
+- For any other organizations you identify, use the search_ror tool if needed
+"""
+    else:
+        pre_searched_ror_section = """
+**PRE-SEARCHED ROR DATA:**
+No organizations were pre-searched. Use the search_ror tool for all organizations you identify.
+"""
+    
     prompt = f"""Analyze the following repository metadata and identify all related organizations.
 
 Repository: {repository_url}
@@ -144,8 +176,8 @@ Authors with ORCID affiliations:
             [
                 {
                     "name": a.name,
-                    "orcidId": str(a.orcidId) if a.orcidId else None,
-                    "affiliation": a.affiliation,
+                    "orcid": str(a.orcid) if a.orcid else None,
+                    "affiliations": a.affiliations,
                 }
                 for a in context.authors
             ],
@@ -158,25 +190,113 @@ Existing justification: {context.existing_justification}
 Existing EPFL relation: {context.existing_epfl_relation}
 Existing EPFL justification: {context.existing_epfl_justification}
 
-Please:
-1. Analyze all email domains from git authors
-2. Review all affiliations from ORCID records
-3. Examine commit patterns: look at the first and last commit dates per author to understand temporal affiliation
-4. For each organization identified, use the search_ror tool to find standardized information
-5. Identify all levels of organizations (universities, departments, labs, research centers, etc.)
-6. Determine hierarchical relationships where applicable
-7. Provide a comprehensive assessment of EPFL relationship with detailed evidence
-8. Return a complete list of organizations with standardized ROR information where available
-9. For each organization, provide a confidence score (0.0 to 1.0) based on:
-   - Strength of evidence (institutional email vs. ORCID vs. inference)
-   - Number and percentage of commits from affiliated authors
-   - Temporal alignment between commit dates and affiliation periods
-10. Provide an EPFL affiliation confidence score (0.0 to 1.0) considering:
-    - Percentage of commits from EPFL-affiliated authors
-    - Whether EPFL authors are still active (recent commits)
-    - Strength of affiliation evidence across multiple authors
+{pre_searched_ror_section}
+
+**TASK:**
+1. Email domains: Use search_ror tool for email domains (e.g., @epfl.ch, @ethz.ch)
+2. ORCID affiliations: Use PRE-SEARCHED ROR DATA above - select best matching ROR entry
+3. Existing mentions: Use PRE-SEARCHED ROR DATA above - select best matching ROR entry
+4. For each organization: Provide ROR ID, name, country, website, confidence score
+5. EPFL relationship: Assess and provide confidence score (0.0-1.0) with justification
+
+**ROR Tool Usage:**
+- Email domains → use search_ror tool
+- ORCID/existing mentions → use PRE-SEARCHED ROR DATA
+- Other organizations → use search_ror tool if needed
 """
 
+    # Log token breakdown for debugging
+    from ..utils.token_counter import estimate_tokens_from_messages
+    
+    # Estimate tokens for each section
+    git_authors_json = json.dumps(
+        [
+            {
+                "name": a.name,
+                "email": a.email,
+                "commits": {
+                    "total": a.commits.total if a.commits else 0,
+                    "firstCommitDate": str(a.commits.firstCommitDate)
+                    if a.commits and a.commits.firstCommitDate
+                    else None,
+                    "lastCommitDate": str(a.commits.lastCommitDate)
+                    if a.commits and a.commits.lastCommitDate
+                    else None,
+                },
+            }
+            for a in context.git_authors
+        ],
+        indent=2,
+    )
+    
+    orcid_authors_json = json.dumps(
+        [
+            {
+                "name": a.name,
+                "orcid": str(a.orcid) if a.orcid else None,
+                "affiliations": a.affiliations,
+            }
+            for a in context.authors
+        ],
+        indent=2,
+    )
+    
+    pre_searched_ror_json = json.dumps(pre_searched_ror, indent=2) if pre_searched_ror else ""
+    
+    # Estimate tokens for each section
+    system_tokens = estimate_tokens_from_messages(
+        system_prompt=organization_enrichment_main_system_prompt,
+        user_prompt="",
+    ).get("input_tokens", 0)
+    
+    git_authors_tokens = estimate_tokens_from_messages(
+        user_prompt=git_authors_json,
+    ).get("input_tokens", 0)
+    
+    orcid_authors_tokens = estimate_tokens_from_messages(
+        user_prompt=orcid_authors_json,
+    ).get("input_tokens", 0)
+    
+    pre_searched_ror_tokens = estimate_tokens_from_messages(
+        user_prompt=pre_searched_ror_json,
+    ).get("input_tokens", 0) if pre_searched_ror_json else 0
+    
+    rest_of_prompt = f"""Analyze the following repository metadata and identify all related organizations.
+
+Repository: {repository_url}
+
+Git Authors (with emails and commit history):
+[Git Authors JSON]
+
+Authors with ORCID affiliations:
+[ORCID Authors JSON]
+
+Existing organization mentions: {context.existing_organizations}
+Existing justification: {context.existing_justification}
+Existing EPFL relation: {context.existing_epfl_relation}
+Existing EPFL justification: {context.existing_epfl_justification}
+
+{pre_searched_ror_section}
+
+[Instructions section...]
+"""
+    
+    rest_tokens = estimate_tokens_from_messages(
+        user_prompt=rest_of_prompt,
+    ).get("input_tokens", 0)
+    
+    total_estimated = system_tokens + git_authors_tokens + orcid_authors_tokens + pre_searched_ror_tokens + rest_tokens
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔍 PROMPT TOKEN BREAKDOWN (estimated):")
+    logger.info(f"  System prompt: ~{system_tokens:,} tokens")
+    logger.info(f"  Git authors JSON: ~{git_authors_tokens:,} tokens ({len(context.git_authors)} authors)")
+    logger.info(f"  ORCID authors JSON: ~{orcid_authors_tokens:,} tokens ({len(context.authors)} authors)")
+    logger.info(f"  Pre-searched ROR data: ~{pre_searched_ror_tokens:,} tokens ({len(pre_searched_ror) if pre_searched_ror else 0} organizations)")
+    logger.info(f"  Rest of prompt: ~{rest_tokens:,} tokens")
+    logger.info(f"  TOTAL ESTIMATED: ~{total_estimated:,} tokens")
+    
     return prompt
 
 

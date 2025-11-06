@@ -54,7 +54,6 @@ class Organization:
             organizationTypeJustification=None,
             description=org_data_dict.get("description"),
             relatedToOrganization=[],
-            relatedToOrganizationsROR=[],
             relatedToOrganizationJustification=[],
             discipline=[],
             disciplineJustification=[],
@@ -328,14 +327,16 @@ class Organization:
             if legal_name:
                 related_orgs.append(legal_name)
 
-        # Safely handle relatedToOrganizationsROR list
-        related_orgs_ror = getattr(self.data, "relatedToOrganizationsROR", None)
-        if related_orgs_ror is None:
-            related_orgs_ror = []
-            self.data.relatedToOrganizationsROR = related_orgs_ror
-        related_orgs_ror.extend(
-            enriched_orgs,
-        )  # enriched_orgs already contains Organization instances
+        # Merge enriched organizations into relatedToOrganization
+        # Combine string names and Organization objects
+        current_orgs = getattr(self.data, "relatedToOrganization", None) or []
+        if not isinstance(current_orgs, list):
+            current_orgs = []
+        
+        # Add enriched Organization objects
+        combined_orgs = list(current_orgs)  # Copy existing
+        combined_orgs.extend(enriched_orgs)  # Add Organization objects
+        self.data.relatedToOrganization = combined_orgs
 
         # For organization profiles, preserve LLM's EPFL assessment (which has full context)
         # Only update EPFL values if they weren't set by LLM analysis

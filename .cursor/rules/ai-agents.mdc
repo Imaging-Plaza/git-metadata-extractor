@@ -100,6 +100,52 @@ EPFL's Infoscience repository integration for publications, authors, and labs:
 - **User Agent**: Search for authors and their publications
 - **Organization Agent**: Search for labs, organizational units, and affiliated publications
 
+#### Organization Enrichment Optimizations
+
+**Pre-Searched ROR Data** (`_pre_search_ror_for_organizations`):
+- Proactively searches ROR for organizations from ORCID affiliations and existing mentions
+- **Optimized Data Structure**: Only includes essential fields to reduce token usage:
+  - `name`: Organization display name
+  - `ror_id`: ROR identifier
+  - `country`: Country location
+  - `website`: Official website (extracted from links)
+  - `aliases`: Limited to 3 most important aliases
+  - `parent_organizations`: Only parent relationships (max 2), excludes child/sibling relationships
+- **Removed Fields**: `types`, `acronyms`, `links` array, `names` array, `locations` array, all non-parent relationships
+- **Token Reduction**: ~80% reduction in pre-searched ROR data size (from ~32K tokens to ~5-8K tokens)
+
+**Simplified Prompt Instructions**:
+- Reduced from 11 verbose numbered points to 5 concise tasks
+- Removed redundant explanations and verbose instructions
+- **Token Reduction**: ~70% reduction in prompt instruction size (from ~32K tokens to ~8-10K tokens)
+
+**Token Breakdown Logging**:
+- Added detailed token breakdown in `get_organization_enrichment_prompt()`:
+  - System prompt tokens
+  - Git authors JSON tokens (with author count)
+  - ORCID authors JSON tokens (with author count)
+  - Pre-searched ROR data tokens (with organization count)
+  - Rest of prompt tokens
+  - Total estimated tokens
+- Logged at INFO level for debugging and monitoring
+
+#### URL Validation (`src/agents/url_validation.py`)
+
+**ROR URL Validation**:
+- Uses ROR API v2 endpoint (`https://api.ror.org/v2/organizations/{ror_id}`) instead of HTML scraping
+- Fetches structured JSON data directly from API
+- Extracts essential fields: name, country, website, aliases, parent relationships
+- **Organization Type**: NOT considered in validation - accepts organizations with ANY type
+  - Type is not a validation criterion
+  - Only validates: name, country, website, aliases
+- Handles 404 errors explicitly when ROR IDs don't exist
+- Provides structured JSON data to validation agent instead of HTML/markdown
+
+**Infoscience URL Validation**:
+- Normalizes incomplete URLs (UUIDs, partial URLs) to full format
+- Validates content matches expected entity (publication, person, orgunit)
+- Uses HTML content fetching with markdown conversion for LLM analysis
+
 **Strategic Tool Usage Guidelines:**
 Tools should be used strategically (instructed in system prompts):
 - Search for repository/tool name FIRST to find related publications
@@ -107,6 +153,62 @@ Tools should be used strategically (instructed in system prompts):
 - Cache automatically stores results (including empty results)
 - Maximum 2 attempts per subject
 - Accept when information is not found rather than keep searching
+
+#### URL Validation Agents (`src/agents/url_validation.py`)
+Specialized agents for validating URLs by fetching and analyzing content:
+
+**Available Validation Functions:**
+- `validate_ror_url(ror_id: str, expected_org: Dict[str, Any])` - Validate ROR IDs by fetching JSON from ROR API
+- `validate_infoscience_url(url: str, expected_entity: Dict[str, Any], entity_type: str)` - Validate Infoscience URLs by fetching HTML
+
+**Validation Agent Architecture:**
+- **Generic System Prompt**: Contains only general validation instructions
+- **Specific User Prompts**: Each validation function includes validation-type-specific instructions in the user prompt
+- **Shared Agent Infrastructure**: Single reusable agent with context-specific prompts
+
+**Pattern: Generic System + Specific User Prompts**
+```python
+# Generic system prompt (reusable)
+validation_system_prompt = """
+You are an expert at validating URLs by analyzing content...
+Follow the specific validation instructions provided in the user prompt for this validation type.
+"""
+
+# ROR-specific validation (in validate_ror_url function)
+prompt = f"""Validate if this ROR ID matches the expected organization.
+
+**Validation Type:** ROR (Research Organization Registry) - JSON API validation
+
+**ROR Validation Instructions:**
+- Check if the organization name matches (exact or partial matches are acceptable)
+- Verify country matches expectations
+- Verify website matches (if provided)
+- Look for aliases and alternate names in the names array
+...
+"""
+
+# Infoscience-specific validation (in validate_infoscience_url function)
+prompt = f"""Validate if this Infoscience publication URL matches the expected publication.
+
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for publications
+
+**Infoscience Publication Validation Instructions:**
+- Verify title matches (exact or close match acceptable)
+- Verify expected authors are present in the author list
+...
+"""
+```
+
+**Benefits of This Pattern:**
+- ✅ Clear separation: Each validation type has its own instructions
+- ✅ No mixing: ROR logic won't apply to Infoscience and vice versa
+- ✅ Single reusable agent: One agent infrastructure, context-specific prompts
+- ✅ Easier maintenance: Update validation logic in one place per type
+- ✅ Better clarity: Instructions are explicit and contextual
+
+**Validation Results:**
+- Returns `ValidationResult` with `is_valid`, `confidence`, `justification`, and `validation_errors`
+- For Infoscience: Also includes `normalized_url` if URL was normalized from UUID or handle
 
 ## Prompt Engineering
 
@@ -747,6 +849,16 @@ for author in self.data.author:
 9. **Handle legacy returns**: Support both dict format `{"data": ..., "usage": ...}` and direct object returns
 10. **Filter input data**: Remove inappropriate objects (e.g., Organization from user enrichment author list)
 11. **Never hardcode estimated tokens to 0**: Always calculate them using `estimate_tokens_from_messages()`
+12. **Optimize prompt size**: Reduce token usage by including only essential data:
+    - Pre-searched ROR data: Only essential fields (name, ror_id, country, website, 3 aliases, parent orgs)
+    - Prompt instructions: Concise and focused, avoid verbose explanations
+    - Token breakdown logging: Helps identify which sections consume most tokens
+13. **Token accumulation verification**: 
+    - All agents accumulate tokens in `Repository` class instance variables
+    - `get_usage_stats()` returns accumulated totals from all agents
+    - `APIStats.calculate_total_tokens()` calculates both official and estimated totals
+    - If official API tokens are 0 (models don't report usage), estimated tokens provide fallback
+    - Both `total_tokens` and `estimated_total_tokens` are calculated and included in API response
 
 ## Integration Patterns
 

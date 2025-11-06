@@ -70,7 +70,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "https://w3id.org/okn/o/sd#hasDocumentation": "hasDocumentation",
     "https://w3id.org/okn/o/sd#hasExecutableInstructions": "hasExecutableInstructions",
     "https://w3id.org/okn/o/sd#hasAcknowledgements": "hasAcknowledgements",
-    "https://w3id.org/okn/o/sd#hasParameter": "hasParameter",
     "https://w3id.org/okn/o/sd#readme": "readme",
     "https://w3id.org/okn/o/sd#hasFunding": "hasFunding",
     "https://w3id.org/okn/o/sd#hasSoftwareImage": "hasSoftwareImage",
@@ -85,10 +84,8 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "https://imaging-plaza.epfl.ch/ontology#relatedToOrganization": "relatedToOrganization",
     "https://imaging-plaza.epfl.ch/ontology#requiresGPU": "requiresGPU",
     "https://imaging-plaza.epfl.ch/ontology#hasExecutableNotebook": "hasExecutableNotebook",
-    "https://imaging-plaza.epfl.ch/ontology#fairLevel": "fairLevel",
-    "https://imaging-plaza.epfl.ch/ontology#graph": "graph",
     # MD4I properties
-    "http://w3id.org/nfdi4ing/metadata4ing#orcidId": "orcidId",
+    "http://w3id.org/nfdi4ing/metadata4ing#orcid": "orcid",
     "http://w3id.org/nfdi4ing/metadata4ing#hasRorId": "hasRorId",
     # Git metadata
     "https://imaging-plaza.epfl.ch/ontology#gitAuthors": "gitAuthors",
@@ -120,8 +117,8 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         person_data = {
             "type": "Person",  # Explicit type discriminator
             "name": _get_value(entity.get("http://schema.org/name")),
-            "orcidId": _get_value(
-                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId"),
+            "orcid": _get_value(
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcid"),
             ),
             "affiliation": [
                 _get_value(v)
@@ -136,8 +133,8 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             email_extracted = _get_value(email_value)
             if email_extracted:
                 person_data["email"] = email_extracted
-
-        # All other fields (emails, gitAuthorIds, affiliations, currentAffiliation,
+        
+        # All other fields (gitAuthorIds, affiliations, currentAffiliation,
         # affiliationHistory, contributionSummary, biography, infoscienceEntity)
         # will use their default values as defined in the Person model
 
@@ -219,7 +216,6 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
                     "author",
                     "supportingData",
                     "hasExecutableNotebook",
-                    "hasParameter",
                     "hasFunding",
                     "hasSoftwareImage",
                     "gitAuthors",
@@ -301,7 +297,7 @@ def convert_jsonld_to_pydantic(
 PYDANTIC_TO_ZOD_MAPPING = {
     "Person": {
         "name": "schema:name",
-        "orcidId": "md4i:orcidId",
+        "orcid": "md4i:orcid",
         "affiliation": "schema:affiliation",
     },
     "Organization": {
@@ -396,23 +392,18 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "hasDocumentation": "sd:hasDocumentation",
         "hasExecutableInstructions": "sd:hasExecutableInstructions",
         "hasExecutableNotebook": "imag:hasExecutableNotebook",
-        "hasParameter": "sd:hasParameter",
         "readme": "sd:readme",
         "hasFunding": "sd:hasFunding",
         "hasSoftwareImage": "sd:hasSoftwareImage",
         "imagingModality": "imag:imagingModality",
-        "fairLevel": "imag:fairLevel",
-        "graph": "imag:graph",
         "gitAuthors": "imag:gitAuthors",
         "relatedToOrganizations": "imag:relatedToOrganizations",
-        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
         "relatedToOrganizationJustification": "imag:relatedToOrganizationJustification",
         "repositoryType": "imag:repositoryType",
         "repositoryTypeJustification": "imag:repositoryTypeJustification",
         "relatedToEPFL": "imag:relatedToEPFL",
         "relatedToEPFLConfidence": "imag:relatedToEPFLConfidence",
         "relatedToEPFLJustification": "imag:relatedToEPFLJustification",
-        "webpagesToCheck": "imag:webpagesToCheck",
         "infoscienceEntities": "imag:infoscienceEntities",
         "relatedDatasets": "imag:relatedDatasets",
         "relatedPublications": "imag:relatedPublications",
@@ -591,10 +582,18 @@ def convert_pydantic_to_jsonld(
 
             # Handle other types
             else:
-                converted = _convert_entity_to_jsonld(value)
-                if converted is not None:
-                    jsonld_entity[jsonld_key] = converted
-
+                # Special handling for ORCID field - always output as @id format
+                if pydantic_key == "orcid" and value:
+                    # Convert ORCID to URL format if it's just an ID
+                    orcid_value = str(value)
+                    if not orcid_value.startswith("http"):
+                        orcid_value = f"https://orcid.org/{orcid_value}"
+                    jsonld_entity[jsonld_key] = {"@id": orcid_value}
+                else:
+                    converted = _convert_entity_to_jsonld(value)
+                    if converted is not None:
+                        jsonld_entity[jsonld_key] = converted
+        
         return jsonld_entity
 
     # Convert the main object

@@ -213,18 +213,20 @@ async def llm_request_repo_infos(
                     validated_authors.append(author)
             json_data["author"] = validated_authors
 
-        # Validate organization URLs in relatedToOrganizationsROR
+        # Validate organization URLs in relatedToOrganizations
         if (
-            "relatedToOrganizationsROR" in json_data
-            and json_data["relatedToOrganizationsROR"]
+            "relatedToOrganizations" in json_data
+            and json_data["relatedToOrganizations"]
         ):
             validated_orgs = []
-            for org in json_data["relatedToOrganizationsROR"]:
+            for org in json_data["relatedToOrganizations"]:
                 if isinstance(org, dict):
                     validated_orgs.append(validate_organization_urls(org))
+                elif isinstance(org, str):
+                    validated_orgs.append(org)
                 else:
                     validated_orgs.append(org)
-            json_data["relatedToOrganizationsROR"] = validated_orgs
+            json_data["relatedToOrganizations"] = validated_orgs
 
         # Validate software image URLs
         if "hasSoftwareImage" in json_data and json_data["hasSoftwareImage"]:

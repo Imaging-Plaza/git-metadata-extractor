@@ -35,7 +35,7 @@ alwaysApply: true
 ### Example Pattern
 ```python
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Union
 
 class Person(BaseModel):
     """Person model representing an individual author or contributor"""
@@ -48,16 +48,12 @@ class Person(BaseModel):
 
     # Core identity fields
     name: str = Field(description="Person's name")
-    email: Optional[str] = Field(
-        description="Primary email address",
+    email: Optional[Union[str, List[str]]] = Field(
+        description="Email address(es) - can be a single string or a list of strings",
         default=None,
     )
-    emails: List[str] = Field(
-        description="List of all email addresses",
-        default_factory=list,
-    )
-    orcidId: Optional[HttpUrl] = Field(
-        description="ORCID identifier URL",
+    orcid: Optional[str] = Field(
+        description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
         default=None,
     )
     gitAuthorIds: Optional[List[str]] = Field(
@@ -143,10 +139,7 @@ class AcademicEntity(BaseModel):
         description="Direct link to entity",
         default=None,
     )
-    externalId: Optional[str] = Field(
-        description="External identifier (DOI, ORCID, etc.)",
-        default=None,
-    )
+    # Note: externalId field has been removed from AcademicCatalogRelation
 ```
 
 **Chain of custody for identifiers**:
@@ -204,8 +197,9 @@ class ResourceType(str, Enum):
 
 ### Field Naming
 - Use camelCase for field names to match JSON-LD schema
-- Examples: `orcidId`, `legalName`, `hasRorId`
+- Examples: `orcid`, `legalName`, `hasRorId`
 - This maintains compatibility with Imaging Plaza schema
+- **Note**: ORCID field is named `orcid` (not `orcidId`) throughout the codebase
 
 ## Validation
 
@@ -224,18 +218,22 @@ class ResourceType(str, Enum):
 ### Built-in Field Validators
 
 #### Person Model (`src/data_models/models.py`)
-**ORCID ID Validator**:
+**ORCID Validator**:
 ```python
-@field_validator("orcidId", mode="before")
+@field_validator("orcid", mode="before")
 @classmethod
 def validate_orcid(cls, v):
-    """Convert plain ORCID identifier to full URL if needed."""
-    # Accepts: "0000-0002-1234-5678" → "https://orcid.org/0000-0002-1234-5678"
-    # Also accepts: "https://orcid.org/0000-0002-1234-5678" (already URL)
+    """Validate and normalize ORCID identifier."""
+    # Accepts: "0000-0002-1234-5678" → stores as string (validated format)
+    # Accepts: "https://orcid.org/0000-0002-1234-5678" → stores as URL string
+    # Validates 4-number format (19 chars, 3 dashes)
+    # Always named 'orcid' (not 'orcidId')
 ```
-- Converts plain ORCID identifiers (19 chars, 3 dashes) to full URLs
-- LLM agents can return either format
-- Validation passes for both formats
+- Field name is always `orcid` (not `orcidId`)
+- Type is `Optional[str]` (not `HttpUrl`)
+- Validates 4-number format (0000-0000-0000-0000) or full URL
+- Stores as string (normalized in JSON-LD conversion to `{"@id": "https://orcid.org/..."}`)
+- LLM agents can return either format (ID or URL)
 
 #### Organization Model (`src/data_models/models.py`)
 **ROR ID Validator**:
@@ -367,17 +365,19 @@ The `author` field contains **direct contributors** only:
 - Organizational GitHub accounts that committed code
 
 ### Related Organizations Fields
-Separate fields for **broader organizational relationships**:
-- `relatedToOrganizations`: List of organization names
-- `relatedToOrganizationsROR`: List of Organization objects with ROR data
+Single field for **broader organizational relationships**:
+- `relatedToOrganizations`: List of `Union[str, Organization]` - can contain organization names (strings) or full Organization objects with ROR data
 
 These include:
 - Hosting institutions
 - Funding organizations
 - Affiliated institutions
 - Organizations mentioned in documentation
+- Organizations with ROR IDs and full metadata
 
-**Organizations do NOT automatically migrate** from `relatedToOrganizationsROR` to `author` - they stay in their appropriate fields based on their relationship to the repository.
+**Note**: The `relatedToOrganizationsROR` field has been removed and merged into `relatedToOrganizations` to simplify the data model. Organization objects with ROR data are stored directly in `relatedToOrganizations` alongside organization name strings.
+
+**Organizations do NOT automatically migrate** from `relatedToOrganizations` to `author` - they stay in their appropriate fields based on their relationship to the repository.
 
 ## EnrichedAuthor → Person Conversion
 
@@ -394,9 +394,8 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
     return Person(
         type="Person",  # Explicit type
         name=enriched.name,
-        email=enriched.email,
-        emails=[enriched.email] if enriched.email else [],
-        orcidId=enriched.orcidId,
+        email=enriched.email,  # Can be single string or list
+        orcid=enriched.orcid,  # Field name is 'orcid', type is string
         affiliations=enriched.affiliations,
         currentAffiliation=enriched.currentAffiliation,
         affiliationHistory=enriched.affiliationHistory,
@@ -432,8 +431,7 @@ class GitHubUser(BaseModel):
     githubUserMetadata: Optional[GitHubUserMetadata] = None
 
     # Organization relationships
-    relatedToOrganization: Optional[List[str]] = None
-    relatedToOrganizationsROR: Optional[List[Organization]] = None
+    relatedToOrganization: Optional[List[Union[str, Organization]]] = None
     relatedToOrganizationJustification: Optional[List[str]] = None
 
     # Discipline and position (from LLM analysis)
@@ -454,7 +452,7 @@ class GitHubUser(BaseModel):
 **Key Fields:**
 - **githubUserMetadata**: Full GitHub API response with ORCID and README data
 - **discipline/position**: Extracted by LLM from bio, README, ORCID
-- **relatedToOrganizationsROR**: Enriched organization data with ROR IDs
+- **relatedToOrganization**: Can contain organization names (strings) or full Organization objects with ROR IDs
 - **infoscienceEntities**: EPFL publications and author records found via Infoscience API
 
 ### GitHubUserMetadata Model
@@ -799,7 +797,7 @@ PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
         "license": "schema:license",
         "programmingLanguage": "schema:programmingLanguage",
         "discipline": "imag:discipline",
-        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToOrganizations": "imag:relatedToOrganizations",
         "relatedToEPFL": "imag:relatedToEPFL",
         # ... more fields
     },
@@ -807,7 +805,7 @@ PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
         "name": "schema:name",
         "email": "schema:email",
         "affiliation": "schema:affiliation",
-        "orcidId": "md4i:orcidId",
+        "orcid": "md4i:orcidId",  # Field is 'orcid' in Pydantic, mapped to md4i:orcidId in JSON-LD
         # ... more fields
     },
     "Organization": {
@@ -886,7 +884,7 @@ PYDANTIC_TO_ZOD_MAPPING: Dict[str, Dict[str, str]] = {
         "githubHandle": "schema:identifier",
         "discipline": "imag:discipline",
         "position": "schema:jobTitle",
-        "relatedToOrganizationsROR": "imag:relatedToOrganizationsROR",
+        "relatedToOrganization": "imag:relatedToOrganizations",
         "relatedToEPFL": "imag:relatedToEPFL",
         # ... all fields you want to map
     },
@@ -954,7 +952,7 @@ def dump_results(self, output_type: str = "pydantic"):
         {
           "@type": "http://schema.org/Person",
           "schema:name": "John Doe",
-          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}
+          "md4i:orcidId": {"@id": "https://orcid.org/0000-0001-2345-6789"}  # Field 'orcid' in Pydantic converts to this
         }
       ],
       "imag:discipline": [{"@value": "Computer Science"}],
