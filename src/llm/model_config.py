@@ -15,16 +15,16 @@ logger = logging.getLogger(__name__)
 # Default model configurations
 MODEL_CONFIGS = {
     "run_llm_analysis": [
-        {
-            "provider": "openai-compatible",
-            "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
-            "api_key_env": "RCP_TOKEN",
-            "max_retries": 3,
-            "temperature": 0.2,
-            "max_tokens": 16000,
-            "timeout": 600.0,
-        },
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 600.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -51,16 +51,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_user_enrichment": [
-        {
-            "provider": "openai-compatible",
-            "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
-            "api_key_env": "RCP_TOKEN",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 8000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -79,16 +79,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_organization_enrichment": [
-        {
-            "provider": "openai-compatible",
-            "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
-            "api_key_env": "RCP_TOKEN",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 8000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -107,16 +107,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_academic_catalog_enrichment": [
-        {
-            "provider": "openai-compatible",
-            "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
-            "api_key_env": "RCP_TOKEN",
-            "max_retries": 3,
-            "temperature": 0.1,
-            "max_tokens": 12000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 3,
+        #     "temperature": 0.1,
+        #     "max_tokens": 12000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -135,16 +135,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_epfl_assessment": [
-        {
-            "provider": "openai-compatible",
-            "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
-            "api_key_env": "RCP_TOKEN",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 8000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
