@@ -34,63 +34,161 @@ from .repository import (
 
 # A dictionary to map JSON-LD property URIs to functions that can convert them.
 # This provides a clean, declarative way to define the conversion process.
+# Updated to align with PULSE ontology
 JSONLD_TO_PYDANTIC_MAPPING = {
     # Schema.org properties
     "http://schema.org/name": "name",
+    "schema:name": "name",
     "http://schema.org/description": "description",
+    "schema:description": "description",
     "http://schema.org/url": "url",
+    "schema:url": "url",
     "http://schema.org/identifier": "identifier",
+    "schema:identifier": "identifier",
     "http://schema.org/dateCreated": "dateCreated",
+    "schema:dateCreated": "dateCreated",
     "http://schema.org/datePublished": "datePublished",
+    "schema:datePublished": "datePublished",
     "http://schema.org/license": "license",
+    "schema:license": "license",
     "http://schema.org/author": "author",
+    "schema:author": "author",
     "http://schema.org/codeRepository": "codeRepository",
+    "schema:codeRepository": "codeRepository",
     "http://schema.org/programmingLanguage": "programmingLanguage",
+    "schema:programmingLanguage": "programmingLanguage",
     "http://schema.org/applicationCategory": "applicationCategory",
+    "schema:applicationCategory": "applicationCategory",
     "http://schema.org/featureList": "featureList",
+    "schema:featureList": "featureList",
     "http://schema.org/image": "image",
+    "schema:image": "image",
     "http://schema.org/isAccessibleForFree": "isAccessibleForFree",
+    "schema:isAccessibleForFree": "isAccessibleForFree",
     "http://schema.org/isBasedOn": "isBasedOn",
+    "schema:isBasedOn": "isBasedOn",
     "http://schema.org/operatingSystem": "operatingSystem",
+    "schema:operatingSystem": "operatingSystem",
     "http://schema.org/softwareRequirements": "softwareRequirements",
+    "schema:softwareRequirements": "softwareRequirements",
     "http://schema.org/processorRequirements": "processorRequirements",
+    "schema:processorRequirements": "processorRequirements",
     "http://schema.org/memoryRequirements": "memoryRequirements",
+    "schema:memoryRequirements": "memoryRequirements",
     "http://schema.org/supportingData": "supportingData",
+    "schema:supportingData": "supportingData",
     "http://schema.org/conditionsOfAccess": "conditionsOfAccess",
+    "schema:conditionsOfAccess": "conditionsOfAccess",
     "http://schema.org/citation": "citation",
+    "schema:citation": "citation",
     "http://schema.org/affiliation": "affiliation",
+    "schema:affiliation": "affiliation",
     "http://schema.org/legalName": "legalName",
+    "schema:legalName": "legalName",
     "http://schema.org/encodingFormat": "encodingFormat",
+    "schema:encodingFormat": "encodingFormat",
     "http://schema.org/defaultValue": "defaultValue",
+    "schema:defaultValue": "defaultValue",
     "http://schema.org/valueRequired": "valueRequired",
+    "schema:valueRequired": "valueRequired",
     "http://schema.org/measurementTechnique": "measurementTechnique",
+    "schema:measurementTechnique": "measurementTechnique",
     "http://schema.org/variableMeasured": "variableMeasured",
+    "schema:variableMeasured": "variableMeasured",
     "http://schema.org/contentUrl": "contentUrl",
+    "schema:contentUrl": "contentUrl",
     "http://schema.org/softwareVersion": "softwareVersion",
+    "schema:softwareVersion": "softwareVersion",
+    "http://schema.org/email": "email",
+    "schema:email": "email",
+    "http://schema.org/username": "username",
+    "schema:username": "username",
+    "http://schema.org/memberOf": "memberOf",
+    "schema:memberOf": "memberOf",
+    "http://schema.org/keywords": "keywords",
+    "schema:keywords": "keywords",
+    "http://schema.org/abstract": "abstract",
+    "schema:abstract": "abstract",
+    "http://schema.org/parentOrganization": "parentOrganization",
+    "schema:parentOrganization": "parentOrganization",
+    "http://schema.org/knowsAbout": "knowsAbout",
+    "schema:knowsAbout": "knowsAbout",
+    
     # SD ontology properties
     "https://w3id.org/okn/o/sd#hasDocumentation": "hasDocumentation",
+    "sd:hasDocumentation": "hasDocumentation",
     "https://w3id.org/okn/o/sd#hasExecutableInstructions": "hasExecutableInstructions",
+    "sd:hasExecutableInstructions": "hasExecutableInstructions",
     "https://w3id.org/okn/o/sd#hasAcknowledgements": "hasAcknowledgements",
+    "sd:hasAcknowledgements": "hasAcknowledgements",
     "https://w3id.org/okn/o/sd#readme": "readme",
+    "sd:readme": "readme",
     "https://w3id.org/okn/o/sd#hasFunding": "hasFunding",
+    "sd:hasFunding": "hasFunding",
     "https://w3id.org/okn/o/sd#hasSoftwareImage": "hasSoftwareImage",
+    "sd:hasSoftwareImage": "hasSoftwareImage",
     "https://w3id.org/okn/o/sd#hasFormat": "hasFormat",
+    "sd:hasFormat": "hasFormat",
     "https://w3id.org/okn/o/sd#hasDimensionality": "hasDimensionality",
+    "sd:hasDimensionality": "hasDimensionality",
     "https://w3id.org/okn/o/sd#availableInRegistry": "availableInRegistry",
+    "sd:availableInRegistry": "availableInRegistry",
     "https://w3id.org/okn/o/sd#fundingGrant": "fundingGrant",
+    "sd:fundingGrant": "fundingGrant",
     "https://w3id.org/okn/o/sd#fundingSource": "fundingSource",
-    # Imaging Plaza specific properties
-    "https://imaging-plaza.epfl.ch/ontology#imagingModality": "imagingModality",
-    "https://imaging-plaza.epfl.ch/ontology#isPluginModuleOf": "isPluginModuleOf",
-    "https://imaging-plaza.epfl.ch/ontology#relatedToOrganization": "relatedToOrganization",
-    "https://imaging-plaza.epfl.ch/ontology#requiresGPU": "requiresGPU",
-    "https://imaging-plaza.epfl.ch/ontology#hasExecutableNotebook": "hasExecutableNotebook",
+    "sd:fundingSource": "fundingSource",
+    
+    # PULSE ontology properties (updated from imaging-plaza)
+    "https://open-pulse.epfl.ch/ontology#imagingModality": "imagingModality",
+    "pulse:imagingModality": "imagingModality",
+    "https://open-pulse.epfl.ch/ontology#isPluginModuleOf": "isPluginModuleOf",
+    "pulse:isPluginModuleOf": "isPluginModuleOf",
+    "https://open-pulse.epfl.ch/ontology#relatedToOrganization": "relatedToOrganization",
+    "pulse:relatedToOrganization": "relatedToOrganization",
+    "https://open-pulse.epfl.ch/ontology#requiresGPU": "requiresGPU",
+    "pulse:requiresGPU": "requiresGPU",
+    "https://open-pulse.epfl.ch/ontology#hasExecutableNotebook": "hasExecutableNotebook",
+    "pulse:hasExecutableNotebook": "hasExecutableNotebook",
+    "https://open-pulse.epfl.ch/ontology#gitAuthors": "gitAuthors",
+    "pulse:gitAuthors": "gitAuthors",
+    "https://open-pulse.epfl.ch/ontology#commits": "commits",
+    "pulse:commits": "commits",
+    "https://open-pulse.epfl.ch/ontology#discipline": "discipline",
+    "pulse:discipline": "discipline",
+    "https://open-pulse.epfl.ch/ontology#repositoryType": "repositoryType",
+    "pulse:repositoryType": "repositoryType",
+    "https://open-pulse.epfl.ch/ontology#username": "username",
+    "pulse:username": "username",
+    "https://open-pulse.epfl.ch/ontology#hasRepository": "hasRepository",
+    "pulse:hasRepository": "hasRepository",
+    "https://open-pulse.epfl.ch/ontology#hasAcademicCatalogRelation": "hasAcademicCatalogRelation",
+    "pulse:hasAcademicCatalogRelation": "hasAcademicCatalogRelation",
+    "https://open-pulse.epfl.ch/ontology#catalogType": "catalogType",
+    "pulse:catalogType": "catalogType",
+    "https://open-pulse.epfl.ch/ontology#entityType": "entityType",
+    "pulse:entityType": "entityType",
+    "https://open-pulse.epfl.ch/ontology#hasCatalogEntity": "hasCatalogEntity",
+    "pulse:hasCatalogEntity": "hasCatalogEntity",
+    "https://open-pulse.epfl.ch/ontology#confidence": "confidence",
+    "pulse:confidence": "confidence",
+    "https://open-pulse.epfl.ch/ontology#justification": "justification",
+    "pulse:justification": "justification",
+    "https://open-pulse.epfl.ch/ontology#matchedOn": "matchedOn",
+    "pulse:matchedOn": "matchedOn",
+    "https://open-pulse.epfl.ch/ontology#uuid": "uuid",
+    "pulse:uuid": "uuid",
+    "https://open-pulse.epfl.ch/ontology#email": "email",
+    "pulse:email": "email",
+    "https://open-pulse.epfl.ch/ontology#profileUrl": "profileUrl",
+    "pulse:profileUrl": "profileUrl",
+    
     # MD4I properties
     "http://w3id.org/nfdi4ing/metadata4ing#orcid": "orcid",
+    "md4i:orcid": "orcid",
+    "http://w3id.org/nfdi4ing/metadata4ing#orcidId": "orcid",
+    "md4i:orcidId": "orcid",
     "http://w3id.org/nfdi4ing/metadata4ing#hasRorId": "hasRorId",
-    # Git metadata
-    "https://imaging-plaza.epfl.ch/ontology#gitAuthors": "gitAuthors",
-    "https://imaging-plaza.epfl.ch/ontology#commits": "commits",
+    "md4i:hasRorId": "hasRorId",
 }
 
 
@@ -158,14 +256,17 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         )
     if "https://w3id.org/okn/o/sd#FundingInformation" in entity_types:
         source_ref = _get_value(entity.get("https://w3id.org/okn/o/sd#fundingSource"))
+        funding_source = Organization(type="Organization", legalName="Unknown")  # Default
+        if source_ref and source_ref in all_entities:
+            converted = _convert_entity(all_entities[source_ref], all_entities)
+            if isinstance(converted, Organization):
+                funding_source = converted
         return FundingInformation(
             identifier=_get_value(entity.get("http://schema.org/identifier")),
             fundingGrant=_get_value(
                 entity.get("https://w3id.org/okn/o/sd#fundingGrant"),
             ),
-            fundingSource=_convert_entity(all_entities[source_ref], all_entities)
-            if source_ref in all_entities
-            else None,
+            fundingSource=funding_source,
         )
     if "https://w3id.org/okn/o/sd#FormalParameter" in entity_types:
         return FormalParameter(
@@ -297,11 +398,20 @@ def convert_jsonld_to_pydantic(
 
 PYDANTIC_TO_ZOD_MAPPING = {
     "Person": {
+        "type": "@type",
         "name": "schema:name",
-        "orcid": "md4i:orcid",
-        "affiliation": "schema:affiliation",
+        "email": "pulse:email",
+        "orcid": "md4i:orcidId",
+        "gitAuthorIds": "pulse:gitAuthorIds",
+        "affiliations": "schema:affiliation",
+        "currentAffiliation": "schema:affiliation",
+        "affiliationHistory": "pulse:affiliationHistory",
+        "contributionSummary": "pulse:contributionSummary",
+        "biography": "schema:description",
+        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
     },
     "Organization": {
+        "type": "@type",
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
         "alternateNames": "schema:alternateName",
@@ -309,17 +419,46 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "parentOrganization": "schema:parentOrganization",
         "country": "schema:addressCountry",
         "website": "schema:url",
-        "attributionConfidence": "imag:attributionConfidence",
+        "attributionConfidence": "pulse:confidence",
+        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
+    },
+    "GitHubOrganization": {
+        "name": "schema:name",
+        "organizationType": "schema:additionalType",
+        "description": "schema:description",
+        "discipline": "pulse:discipline",
+        "disciplineJustification": "pulse:justification",
+        "relatedToEPFL": "pulse:relatedToEPFL",
+        "relatedToEPFLJustification": "pulse:justification",
+        "relatedToEPFLConfidence": "pulse:confidence",
+        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
+        "githubOrganizationMetadata": "pulse:metadata",
+    },
+    "GitHubUser": {
+        "name": "schema:name",
+        "fullname": "schema:name",
+        "githubHandle": "schema:username",
+        "githubUserMetadata": "pulse:metadata",
+        "relatedToOrganization": "pulse:relatedToOrganization",
+        "relatedToOrganizationJustification": "pulse:justification",
+        "discipline": "pulse:discipline",
+        "disciplineJustification": "pulse:justification",
+        "position": "schema:jobTitle",
+        "positionJustification": "pulse:justification",
+        "relatedToEPFL": "pulse:relatedToEPFL",
+        "relatedToEPFLJustification": "pulse:justification",
+        "relatedToEPFLConfidence": "pulse:confidence",
+        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
     },
     "Commits": {
-        "total": "imag:totalCommits",
-        "firstCommitDate": "imag:firstCommitDate",
-        "lastCommitDate": "imag:lastCommitDate",
+        "total": "pulse:totalCommits",
+        "firstCommitDate": "pulse:firstCommitDate",
+        "lastCommitDate": "pulse:lastCommitDate",
     },
     "GitAuthor": {
         "name": "schema:name",
-        "email": "schema:email",
-        "commits": "imag:commits",
+        "email": "pulse:email",
+        "commits": "pulse:commits",
     },
     "FundingInformation": {
         "identifier": "schema:identifier",
@@ -360,8 +499,57 @@ PYDANTIC_TO_ZOD_MAPPING = {
     "InfoscienceEntity": {
         "name": "schema:name",
         "url": "schema:url",
-        "confidence": "imag:confidence",
-        "justification": "imag:justification",
+        "confidence": "pulse:confidence",
+        "justification": "pulse:justification",
+    },
+    "AcademicCatalogRelation": {
+        "catalogType": "pulse:catalogType",
+        "entityType": "pulse:entityType",
+        "entity": "pulse:hasCatalogEntity",
+        "confidence": "pulse:confidence",
+        "justification": "pulse:justification",
+        "matchedOn": "pulse:matchedOn",
+    },
+    "CatalogEntity": {
+        "uuid": "pulse:uuid",
+        "name": "schema:name",
+        "email": "pulse:email",
+        "orcid": "md4i:orcidId",
+        "affiliation": "schema:affiliation",
+        "profileUrl": "pulse:profileUrl",
+    },
+    "InfosciencePublication": {
+        "type": "@type",
+        "uuid": "pulse:uuid",
+        "title": "schema:name",
+        "authors": "schema:author",
+        "abstract": "schema:abstract",
+        "doi": "schema:identifier",
+        "publication_date": "schema:datePublished",
+        "publication_type": "schema:additionalType",
+        "url": "schema:url",
+        "repository_url": "schema:codeRepository",
+        "lab": "schema:affiliation",
+        "subjects": "schema:keywords",
+    },
+    "InfoscienceAuthor": {
+        "type": "@type",
+        "uuid": "pulse:uuid",
+        "name": "schema:name",
+        "email": "pulse:email",
+        "orcid": "md4i:orcidId",
+        "affiliation": "schema:affiliation",
+        "profile_url": "pulse:profileUrl",
+    },
+    "InfoscienceLab": {
+        "type": "@type",
+        "uuid": "pulse:uuid",
+        "name": "schema:name",
+        "description": "schema:description",
+        "url": "schema:url",
+        "parent_organization": "schema:parentOrganization",
+        "website": "schema:url",
+        "research_areas": "schema:knowsAbout",
     },
     "SoftwareSourceCode": {
         "name": "schema:name",
@@ -376,42 +564,41 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "image": "schema:image",
         "isAccessibleForFree": "schema:isAccessibleForFree",
         "isBasedOn": "schema:isBasedOn",
-        "isPluginModuleOf": "imag:isPluginModuleOf",
+        "isPluginModuleOf": "pulse:isPluginModuleOf",
         "license": "schema:license",
         "author": "schema:author",
-        "relatedToOrganization": "imag:relatedToOrganization",
+        "relatedToOrganizations": "pulse:relatedToOrganization",
         "operatingSystem": "schema:operatingSystem",
         "programmingLanguage": "schema:programmingLanguage",
         "softwareRequirements": "schema:softwareRequirements",
         "processorRequirements": "schema:processorRequirements",
         "memoryRequirements": "schema:memoryRequirements",
-        "requiresGPU": "imag:requiresGPU",
+        "requiresGPU": "pulse:requiresGPU",
         "supportingData": "schema:supportingData",
         "url": "schema:url",
         "identifier": "schema:identifier",
         "hasAcknowledgements": "sd:hasAcknowledgements",
         "hasDocumentation": "sd:hasDocumentation",
         "hasExecutableInstructions": "sd:hasExecutableInstructions",
-        "hasExecutableNotebook": "imag:hasExecutableNotebook",
+        "hasExecutableNotebook": "pulse:hasExecutableNotebook",
         "readme": "sd:readme",
         "hasFunding": "sd:hasFunding",
         "hasSoftwareImage": "sd:hasSoftwareImage",
-        "imagingModality": "imag:imagingModality",
-        "gitAuthors": "imag:gitAuthors",
-        "relatedToOrganizations": "imag:relatedToOrganizations",
-        "relatedToOrganizationJustification": "imag:relatedToOrganizationJustification",
-        "repositoryType": "imag:repositoryType",
-        "repositoryTypeJustification": "imag:repositoryTypeJustification",
-        "relatedToEPFL": "imag:relatedToEPFL",
-        "relatedToEPFLConfidence": "imag:relatedToEPFLConfidence",
-        "relatedToEPFLJustification": "imag:relatedToEPFLJustification",
-        "infoscienceEntities": "imag:infoscienceEntities",
-        "relatedDatasets": "imag:relatedDatasets",
-        "relatedPublications": "imag:relatedPublications",
-        "relatedModels": "imag:relatedModels",
-        "relatedAPIs": "imag:relatedAPIs",
-        "discipline": "imag:discipline",
-        "disciplineJustification": "imag:disciplineJustification",
+        "imagingModality": "pulse:imagingModality",
+        "gitAuthors": "pulse:gitAuthors",
+        "relatedToOrganizationJustification": "pulse:justification",
+        "repositoryType": "pulse:repositoryType",
+        "repositoryTypeJustification": "pulse:justification",
+        "relatedToEPFL": "pulse:relatedToEPFL",
+        "relatedToEPFLConfidence": "pulse:confidence",
+        "relatedToEPFLJustification": "pulse:justification",
+        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
+        "relatedDatasets": "pulse:relatedDatasets",
+        "relatedPublications": "pulse:relatedPublications",
+        "relatedModels": "pulse:relatedModels",
+        "relatedAPIs": "pulse:relatedAPIs",
+        "discipline": "pulse:discipline",
+        "disciplineJustification": "pulse:justification",
     },
 }
 
@@ -480,12 +667,18 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
         A dictionary or list representing the JSON-LD graph
     """
     
-    # Define namespace prefixes for the @context
+    # Define namespace prefixes for the @context (aligned with PULSE ontology)
     context = {
         "schema": "http://schema.org/",
         "sd": "https://w3id.org/okn/o/sd#",
-        "imag": "https://imaging-plaza.epfl.ch/ontology/",
-        "md4i": "https://w3id.org/md4i/",
+        "pulse": "https://open-pulse.epfl.ch/ontology#",
+        "md4i": "http://w3id.org/nfdi4ing/metadata4ing#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+        "owl": "http://www.w3.org/2002/07/owl#",
+        "xsd": "http://www.w3.org/2001/XMLSchema#",
+        "dcterms": "http://purl.org/dc/terms/",
+        "wd": "http://www.wikidata.org/entity/",
     }
     
     # Helper function to convert a single entity
@@ -521,21 +714,28 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
         elif base_url and model_name == "SoftwareSourceCode":
             jsonld_entity["@id"] = base_url
         
-        # Add @type based on model name
+        # Add @type based on model name (aligned with PULSE ontology)
         type_mapping = {
-            "SoftwareSourceCode": "http://schema.org/SoftwareSourceCode",
-            "Person": "http://schema.org/Person",
-            "Organization": "http://schema.org/Organization",
-            "GitHubUser": "http://schema.org/Person",
-            "GitHubOrganization": "http://schema.org/Organization",
-            "DataFeed": "http://schema.org/DataFeed",
-            "FormalParameter": "http://schema.org/PropertyValue",
-            "ExecutableNotebook": "http://schema.org/SoftwareApplication",
-            "SoftwareImage": "http://schema.org/SoftwareApplication",
-            "Image": "http://schema.org/ImageObject",
-            "FundingInformation": "http://schema.org/Grant",
-            "GitAuthor": "http://schema.org/Person",
-            "InfoscienceEntity": "http://schema.org/Thing",
+            "SoftwareSourceCode": "schema:SoftwareSourceCode",
+            "Person": "schema:Person",
+            "Organization": "schema:Organization",
+            "GitHubOrganization": "schema:GitHubOrganization",
+            "GitHubUser": "schema:Person",
+            "DataFeed": "schema:DataFeed",
+            "FormalParameter": "schema:PropertyValue",
+            "ExecutableNotebook": "schema:SoftwareApplication",
+            "SoftwareImage": "schema:SoftwareApplication",
+            "Image": "schema:ImageObject",
+            "FundingInformation": "schema:Grant",
+            "GitAuthor": "schema:Person",
+            "InfoscienceEntity": "schema:Thing",
+            "AcademicCatalogRelation": "pulse:AcademicCatalogRelation",
+            "CatalogEntity": "pulse:CatalogEntity",
+            "InfosciencePublication": "schema:ScholarlyArticle",
+            "InfoscienceAuthor": "schema:Person",
+            "InfoscienceLab": "schema:Organization",
+            "Discipline": "pulse:DisciplineEnumeration",
+            "RepositoryType": "pulse:RepositoryTypeEnumeration",
         }
         
         if model_name in type_mapping:
@@ -574,6 +774,50 @@ def convert_pydantic_to_jsonld(pydantic_obj: Any, base_url: Optional[str] = None
                 converted = _convert_entity_to_jsonld(value)
                 if converted:
                     jsonld_entity[jsonld_key] = converted
+            
+            # Handle dictionaries that might be serialized BaseModels
+            elif isinstance(value, dict):
+                # Special case: if this is 'entity' field in AcademicCatalogRelation,
+                # it might be a dict representation of InfosciencePublication/Author/Lab
+                # Try to detect and map the fields appropriately
+                if pydantic_key == "entity" and model_name == "AcademicCatalogRelation":
+                    # Determine the entity type and apply appropriate mapping
+                    entity_dict = {}
+                    
+                    # Detect which type based on fields present
+                    entity_mapping = None
+                    if "title" in value and "authors" in value:
+                        # InfosciencePublication
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfosciencePublication", {})
+                        entity_dict["@type"] = "schema:ScholarlyArticle"
+                    elif "profile_url" in value or ("uuid" in value and "email" in value and "orcid" in value):
+                        # InfoscienceAuthor
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfoscienceAuthor", {})
+                        entity_dict["@type"] = "schema:Person"
+                    elif "parent_organization" in value or ("research_areas" in value):
+                        # InfoscienceLab
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfoscienceLab", {})
+                        entity_dict["@type"] = "schema:Organization"
+                    elif "name" in value:
+                        # CatalogEntity
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("CatalogEntity", {})
+                        entity_dict["@type"] = "pulse:CatalogEntity"
+                    
+                    if entity_mapping:
+                        # Map the fields using the detected mapping
+                        for entity_key, entity_value in value.items():
+                            if entity_value is not None:
+                                mapped_key = entity_mapping.get(entity_key, entity_key)
+                                # Recursively convert nested values
+                                converted_value = _convert_entity_to_jsonld(entity_value)
+                                entity_dict[mapped_key] = converted_value if converted_value is not None else entity_value
+                        jsonld_entity[jsonld_key] = entity_dict
+                    else:
+                        # Fallback: use dict as-is
+                        jsonld_entity[jsonld_key] = value
+                else:
+                    # Regular dict - use as-is but try to convert nested values
+                    jsonld_entity[jsonld_key] = value
             
             # Handle other types
             else:

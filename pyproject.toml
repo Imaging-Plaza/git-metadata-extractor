@@ -7,7 +7,7 @@ name = "git-metadata-extractor"
 version = "2.0.0"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Quentin Chappuis", email = "quentin.chappuis@epfl.ch" },

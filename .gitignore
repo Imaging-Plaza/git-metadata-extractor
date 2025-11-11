@@ -167,3 +167,7 @@ cython_debug/
 #.idea/
 
 else/
+DeepLabCutDeepLabCut.json
+MalloryWittwer.json
+output.jsonld
+sdsc-ordes.json
