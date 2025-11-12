@@ -137,23 +137,82 @@ def convert_to_json(input_file: Path, output_file: Path):
     # Extract graph if present
     graph = jsonld_data.get("@graph", [jsonld_data])
     
-    # Convert to Pydantic
-    try:
-        software = convert_jsonld_to_pydantic(graph)
-        if software is None:
-            print("❌ Error: No SoftwareSourceCode entity found in JSON-LD")
+    # Detect the type from @type in the graph
+    model_obj = None
+    model_type = None
+    
+    if isinstance(graph, list) and len(graph) > 0:
+        first_entity = graph[0]
+        entity_type = first_entity.get("@type", "")
+        
+        # Detect based on @type
+        if entity_type in ["schema:SoftwareSourceCode"]:
+            # Try to convert as repository
+            try:
+                model_obj = convert_jsonld_to_pydantic(graph)
+                if model_obj:
+                    model_type = "SoftwareSourceCode"
+                    print(f"✅ Successfully converted to SoftwareSourceCode")
+            except Exception as e:
+                print(f"❌ Error converting as SoftwareSourceCode: {e}")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+        elif entity_type in ["schema:GitHubOrganization", "schema:Organization"]:
+            # For now, organizations need manual reconstruction since convert_jsonld_to_pydantic
+            # only handles SoftwareSourceCode. Create GitHubOrganization from the data
+            print("⚠️  Note: Organization conversion from JSON-LD is simplified")
+            try:
+                # Extract basic fields - this is a simplified conversion
+                org_data = {
+                    "name": first_entity.get("schema:name"),
+                    "organizationType": first_entity.get("schema:additionalType"),
+                    "description": first_entity.get("schema:description"),
+                }
+                # TODO: Implement full reverse mapping for organizations
+                model_obj = org_data  # Return as dict for now
+                model_type = "GitHubOrganization"
+                print(f"✅ Extracted organization data (simplified)")
+            except Exception as e:
+                print(f"❌ Error converting organization: {e}")
+                sys.exit(1)
+        elif entity_type in ["schema:Person"]:
+            # Check if it's a GitHubUser (has username) or generic Person
+            if "schema:username" in first_entity or "pulse:metadata" in first_entity:
+                print("⚠️  Note: User conversion from JSON-LD is simplified")
+                try:
+                    user_data = {
+                        "name": first_entity.get("schema:name"),
+                        "githubHandle": first_entity.get("schema:username"),
+                    }
+                    # TODO: Implement full reverse mapping for users
+                    model_obj = user_data  # Return as dict for now
+                    model_type = "GitHubUser"
+                    print(f"✅ Extracted user data (simplified)")
+                except Exception as e:
+                    print(f"❌ Error converting user: {e}")
+                    sys.exit(1)
+            else:
+                print("❌ Generic Person type not yet supported for reverse conversion")
+                sys.exit(1)
+        else:
+            print(f"❌ Unknown entity type: {entity_type}")
             sys.exit(1)
-        print(f"✅ Successfully converted to SoftwareSourceCode")
-    except Exception as e:
-        print(f"❌ Error converting JSON-LD: {e}")
-        import traceback
-        traceback.print_exc()
+    else:
+        print("❌ No entities found in JSON-LD graph")
+        sys.exit(1)
+    
+    if model_obj is None:
+        print("❌ Error: Could not convert JSON-LD")
         sys.exit(1)
     
     print("🔄 Serializing to JSON...")
     
     # Convert to dict
-    data = software.model_dump(exclude_none=True, exclude_unset=True)
+    if hasattr(model_obj, 'model_dump'):
+        data = model_obj.model_dump(exclude_none=True, exclude_unset=True)
+    else:
+        data = model_obj  # Already a dict
     
     print(f"💾 Writing JSON to: {output_file}")
     
@@ -162,6 +221,7 @@ def convert_to_json(input_file: Path, output_file: Path):
     
     print("✅ Conversion complete!")
     print(f"\n📊 Summary:")
+    print(f"   - Type:   {model_type}")
     print(f"   - Input:  {input_file} ({input_file.stat().st_size:,} bytes)")
     print(f"   - Output: {output_file} ({output_file.stat().st_size:,} bytes)")
 
