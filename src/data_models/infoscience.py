@@ -328,7 +328,9 @@ class InfoscienceSearchResult(BaseModel):
         if self.publications:
             total = self.total_results
             showing = len(self.publications)
-            md_parts.append(f"## Publication Search Results ({showing} of {total} found)\n")
+            md_parts.append(
+                f"## Publication Search Results ({showing} of {total} found)\n",
+            )
 
             for idx, pub in enumerate(self.publications, 1):
                 md_parts.append(f"### {idx}. {pub.title}")
@@ -348,7 +350,9 @@ class InfoscienceSearchResult(BaseModel):
         elif self.labs:
             total = self.total_results
             showing = len(self.labs)
-            md_parts.append(f"## Lab/Organization Search Results ({showing} of {total} found)\n")
+            md_parts.append(
+                f"## Lab/Organization Search Results ({showing} of {total} found)\n",
+            )
 
             for idx, lab in enumerate(self.labs, 1):
                 md_parts.append(f"### {idx}. {lab.name}")
@@ -363,7 +367,8 @@ class InfoscienceSearchResult(BaseModel):
         if md_parts and self.total_results > 0:
             start = (self.page - 1) * self.results_per_page + 1
             end = min(self.page * self.results_per_page, self.total_results)
-            md_parts.append(f"\n---\n*Showing results {start}-{end} of {self.total_results}*")
+            md_parts.append(
+                f"\n---\n*Showing results {start}-{end} of {self.total_results}*",
+            )
 
         return "\n".join(md_parts)
-

@@ -150,12 +150,12 @@ To add JSON-LD support to a new model (e.g., `GitHubUser`):
 
 #### Benefits
 
-✅ **Semantic Web Compatibility**: Standard JSON-LD format works with RDF tools  
-✅ **Extensible Design**: Easy to add JSON-LD to any Pydantic model  
-✅ **Imaging Plaza Integration**: Uses Imaging Plaza ontology and schema.org  
-✅ **Comprehensive Documentation**: Clear guide for future development  
-✅ **Type Safety**: Pydantic validation + custom serializers preserve structure  
-✅ **Namespace Support**: Multiple ontologies (schema.org, custom EPFL ontologies)  
+✅ **Semantic Web Compatibility**: Standard JSON-LD format works with RDF tools
+✅ **Extensible Design**: Easy to add JSON-LD to any Pydantic model
+✅ **Imaging Plaza Integration**: Uses Imaging Plaza ontology and schema.org
+✅ **Comprehensive Documentation**: Clear guide for future development
+✅ **Type Safety**: Pydantic validation + custom serializers preserve structure
+✅ **Namespace Support**: Multiple ontologies (schema.org, custom EPFL ontologies)
 
 ---
 
@@ -375,23 +375,23 @@ curl "http://localhost:1234/v1/repository/llm/json/https%3A//github.com/sdsc-ord
 ## Benefits Summary
 
 ### Cache Changes
-✅ Cache persists essentially forever (365 days)  
-✅ Significantly reduced API calls  
-✅ Faster response times on repeated requests  
-✅ Only refreshes when explicitly requested  
+✅ Cache persists essentially forever (365 days)
+✅ Significantly reduced API calls
+✅ Faster response times on repeated requests
+✅ Only refreshes when explicitly requested
 
 ### Infoscience Integration
-✅ Rich EPFL research context for repositories  
-✅ Author publication history integration  
-✅ Lab/organization affiliation data  
-✅ Strategic tool usage prevents excessive API calls  
-✅ In-memory caching for efficient agent behavior  
+✅ Rich EPFL research context for repositories
+✅ Author publication history integration
+✅ Lab/organization affiliation data
+✅ Strategic tool usage prevents excessive API calls
+✅ In-memory caching for efficient agent behavior
 
 ### Documentation
-✅ Comprehensive rule files for future reference  
-✅ Clear integration patterns documented  
-✅ Environment variable reference updated  
-✅ Tool usage guidelines for AI agents  
+✅ Comprehensive rule files for future reference
+✅ Clear integration patterns documented
+✅ Environment variable reference updated
+✅ Tool usage guidelines for AI agents
 
 ---
 
@@ -420,4 +420,3 @@ curl "http://localhost:1234/v1/repository/llm/json/https%3A//github.com/sdsc-ord
 ---
 
 **All updates completed successfully!** 🎉
-

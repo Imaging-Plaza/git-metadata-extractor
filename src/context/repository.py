@@ -93,7 +93,9 @@ RELEVANT_EXTENSIONS = (
 
 
 async def clone_repo(
-    repo_url: str, temp_dir: str, max_retries: int = 3
+    repo_url: str,
+    temp_dir: str,
+    max_retries: int = 3,
 ) -> Optional[str]:
     """
     Clone a GitHub repository into a temporary directory asynchronously.
@@ -135,14 +137,17 @@ async def clone_repo(
             # Use asyncio.wait_for to add timeout
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=600.0  # 10 minute timeout
+                    process.communicate(),
+                    timeout=600.0,  # 10 minute timeout
                 )
             except asyncio.TimeoutError:
                 logger.error(f"Clone attempt {attempt} timed out after 10 minutes")
                 process.kill()
                 await process.wait()
                 if attempt < max_retries:
-                    logger.info(f"Retrying clone (attempt {attempt + 1}/{max_retries})...")
+                    logger.info(
+                        f"Retrying clone (attempt {attempt + 1}/{max_retries})...",
+                    )
                     await asyncio.sleep(2)  # Brief delay before retry
                     continue
                 return None
@@ -185,9 +190,9 @@ async def clone_repo(
             if any(error in stderr_text for error in retryable_errors):
                 if attempt < max_retries:
                     logger.warning(
-                        f"Network error detected, retrying (attempt {attempt + 1}/{max_retries})..."
+                        f"Network error detected, retrying (attempt {attempt + 1}/{max_retries})...",
                     )
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
                     continue
 
             # Non-retryable error, return None
@@ -195,11 +200,12 @@ async def clone_repo(
 
         except Exception as e:
             logger.error(
-                f"Failed to clone repository with exception: {e}", exc_info=True
+                f"Failed to clone repository with exception: {e}",
+                exc_info=True,
             )
             if attempt < max_retries:
                 logger.info(f"Retrying clone (attempt {attempt + 1}/{max_retries})...")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(2**attempt)  # Exponential backoff
                 continue
             return None
 
@@ -252,7 +258,7 @@ def is_relevant_file(filepath: str, filename: str) -> bool:
     # Check by filename (case-insensitive for special files)
     lower_filename = filename.lower()
     upper_filename = filename.upper()
-    
+
     # Check for README, LICENSE, CITATION (with or without extensions)
     if any(
         lower_filename.startswith(name.lower()) or lower_filename == name.lower()
@@ -267,7 +273,7 @@ def is_relevant_file(filepath: str, filename: str) -> bool:
     # Check for important documentation files (typically uppercase, no extension)
     if upper_filename in IMPORTANT_FILENAMES:
         return True
-    
+
     # Also check with common extensions for these files
     basename_upper = os.path.splitext(filename)[0].upper()
     if basename_upper in IMPORTANT_FILENAMES:
@@ -631,7 +637,7 @@ def generate_repository_markdown(repo_dir: str) -> str:
     result = "\n".join(markdown_parts)
     logger.info(
         f"Generated markdown document with {len(file_paths)} files, "
-        f"total size: {len(result)} characters"
+        f"total size: {len(result)} characters",
     )
 
     return result
@@ -811,8 +817,6 @@ def reduce_input_size(
         )
         return reduced_text
     return input_text
-
-
 
 
 async def prepare_repository_context(

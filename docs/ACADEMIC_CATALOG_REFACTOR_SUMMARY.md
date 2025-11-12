@@ -306,4 +306,3 @@ The system is now ready to:
 4. Scale to future requirements
 
 **Status:** All TODOs completed. Ready for testing with DeepLabCut repository.
-

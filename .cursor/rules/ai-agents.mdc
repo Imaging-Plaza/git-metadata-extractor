@@ -236,11 +236,11 @@ Include in prompts:
 ```python
 def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisContext):
     prompt = f"""Analyze the following repository authors...
-    
+
     Repository: {repository_url}
-    
+
     Git Authors: {json.dumps([...], indent=2)}
-    
+
     Please:
     1. [Specific instruction]
     2. [Specific instruction]
@@ -354,7 +354,7 @@ if hasattr(result, "usage"):
     usage = result.usage
     input_tokens = getattr(usage, "input_tokens", 0) or 0
     output_tokens = getattr(usage, "output_tokens", 0) or 0
-    
+
     # Fallback to details field for certain models
     if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
         details = usage.details
@@ -444,7 +444,7 @@ if usage:
 def get_usage_stats(self) -> dict:
     """
     Get accumulated token usage and timing from all agents.
-    
+
     Returns dict with:
     - input_tokens, output_tokens, total_tokens (official API counts)
     - estimated_input_tokens, estimated_output_tokens, estimated_total_tokens
@@ -454,7 +454,7 @@ def get_usage_stats(self) -> dict:
     duration = None
     if self.start_time and self.end_time:
         duration = (self.end_time - self.start_time).total_seconds()
-    
+
     return {
         "input_tokens": self.total_input_tokens,
         "output_tokens": self.total_output_tokens,
@@ -471,7 +471,7 @@ def get_usage_stats(self) -> dict:
 
 **Integration Points**:
 - Called by `run_llm_analysis()` - extracts usage from LLM agent
-- Called by `run_user_enrichment()` - extracts usage from user agent  
+- Called by `run_user_enrichment()` - extracts usage from user agent
 - Called by `run_organization_enrichment()` - extracts usage from org agent (with error handling)
 - `run_analysis()` sets start_time at beginning, end_time at end, and analysis_successful flag
 - API endpoint calls `get_usage_stats()` to populate response stats
@@ -487,15 +487,15 @@ class User:
         self.data: GitHubUser = None
         self.cache_manager: CacheManager = get_cache_manager()
         self.force_refresh: bool = force_refresh
-        
+
         # Track official API-reported token usage across all agents
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
-        
+
         # Track estimated token usage (client-side counts)
         self.estimated_input_tokens: int = 0
         self.estimated_output_tokens: int = 0
-        
+
         # Track timing and status
         self.start_time: datetime = None
         self.end_time: datetime = None
@@ -514,7 +514,7 @@ async def run_llm_analysis(self):
         "bio": github_metadata.get("bio"),
         # ... other fields
     }
-    
+
     try:
         # Call LLM agent
         result = await llm_request_user_infos(
@@ -522,22 +522,22 @@ async def run_llm_analysis(self):
             user_data=llm_input_data,
             max_tokens=20000,
         )
-        
+
         # Extract data and usage
         llm_result = result.get("data") if isinstance(result, dict) else result
         usage = result.get("usage") if isinstance(result, dict) else None
-        
+
         # Accumulate official API-reported usage
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
             logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
-        
+
         # Accumulate estimated tokens
         if usage and "estimated_input_tokens" in usage:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
             self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-        
+
         # Process llm_result...
 ```
 
@@ -552,7 +552,7 @@ async def run_analysis(
     """Run the full analysis pipeline with optional steps."""
     # Track start time
     self.start_time = datetime.now()
-    
+
     # Check cache first
     cache_params = {"username": self.username}
     if not self.force_refresh and self.check_in_cache("user", cache_params):
@@ -560,19 +560,19 @@ async def run_analysis(
         self.analysis_successful = True
         self.end_time = datetime.now()
         return
-    
+
     # Run analysis steps
     self.run_github_parsing()
-    
+
     if run_llm:
         await self.run_llm_analysis()
-    
+
     if run_organization_enrichment:
         await self.run_organization_enrichment()
-    
+
     if run_user_enrichment:
         await self.run_user_enrichment()
-    
+
     # Validate and cache
     if self.data is not None:
         self.run_validation()
@@ -580,10 +580,10 @@ async def run_analysis(
         self.analysis_successful = True
     else:
         self.analysis_successful = False
-    
+
     # Track end time
     self.end_time = datetime.now()
-    
+
     # Log duration
     if self.start_time and self.end_time:
         duration = (self.end_time - self.start_time).total_seconds()
@@ -597,7 +597,7 @@ def get_usage_stats(self) -> dict:
     duration = None
     if self.start_time and self.end_time:
         duration = (self.end_time - self.start_time).total_seconds()
-    
+
     return {
         "input_tokens": self.total_input_tokens,
         "output_tokens": self.total_output_tokens,
@@ -638,22 +638,22 @@ organizations = github_metadata.get("organizations", [])
 ```python
 async def run_llm_analysis(self):
     result = await llm_request_repo_infos(...)
-    
+
     # Extract data and usage separately
     llm_data = result.get("data") if isinstance(result, dict) else result
     usage = result.get("usage") if isinstance(result, dict) else None
-    
+
     # Accumulate official API tokens
     if usage:
         self.total_input_tokens += usage.get("input_tokens", 0)
         self.total_output_tokens += usage.get("output_tokens", 0)
         logger.info(f"LLM usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output")
-    
+
     # Accumulate estimated tokens (if available)
     if usage and "estimated_input_tokens" in usage:
         self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
         self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-    
+
     # Process llm_data normally...
 ```
 
@@ -680,22 +680,22 @@ The API returns comprehensive statistics in the `stats` field:
 **API Endpoint Integration** (Repository example):
 ```python
 @app.get("/v1/repository/llm/json/{full_path:path}")
-async def llm_json(full_path: str, force_refresh: bool = False, 
+async def llm_json(full_path: str, force_refresh: bool = False,
                    enrich_orgs: bool = False, enrich_users: bool = False) -> APIOutput:
     repository = Repository(full_path, force_refresh=force_refresh)
-    
+
     await repository.run_analysis(
         run_gimie=True,
         run_llm=True,
         run_user_enrichment=enrich_users,
         run_organization_enrichment=enrich_orgs,
     )
-    
+
     output = repository.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics
     usage_stats = repository.get_usage_stats()
-    
+
     # Create APIStats with token usage data, timing, and status
     from .data_models.api import APIStats
     stats = APIStats(
@@ -709,7 +709,7 @@ async def llm_json(full_path: str, force_refresh: bool = False,
         status_code=usage_stats["status_code"],
     )
     stats.calculate_total_tokens()
-    
+
     response = APIOutput(
         link=full_path,
         type=ResourceType.REPOSITORY,
@@ -717,7 +717,7 @@ async def llm_json(full_path: str, force_refresh: bool = False,
         output=output,
         stats=stats,  # Include stats in response
     )
-    
+
     return response
 ```
 
@@ -728,17 +728,17 @@ async def get_user_json(full_path: str, force_refresh: bool = False,
                         enrich_orgs: bool = False, enrich_users: bool = False) -> APIOutput:
     username = full_path.split("/")[-1]
     user = User(username, force_refresh=force_refresh)
-    
+
     await user.run_analysis(
         run_organization_enrichment=enrich_orgs,
         run_user_enrichment=enrich_users,
     )
-    
+
     output = user.dump_results(output_type="pydantic")
-    
+
     # Get usage statistics (same pattern as Repository)
     usage_stats = user.get_usage_stats()
-    
+
     # Create APIStats
     from .data_models.api import APIStats
     stats = APIStats(
@@ -752,7 +752,7 @@ async def get_user_json(full_path: str, force_refresh: bool = False,
         status_code=usage_stats["status_code"],
     )
     stats.calculate_total_tokens()
-    
+
     response = APIOutput(
         link=full_path,
         type=ResourceType.USER,
@@ -760,7 +760,7 @@ async def get_user_json(full_path: str, force_refresh: bool = False,
         output=output,
         stats=stats,  # Include stats in response
     )
-    
+
     return response
 ```
 
@@ -772,13 +772,13 @@ For agents that search for multiple entities (e.g., academic catalog enrichment)
 ```python
 class AcademicCatalogEnrichmentResult(BaseModel):
     """Results organized by what was searched for."""
-    
+
     # Repository-level results
     repository_relations: List[AcademicCatalogRelation] = []
-    
+
     # Author-level results (keyed by exact name provided)
     author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
-    
+
     # Organization-level results (keyed by exact name provided)
     organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
 ```
@@ -789,7 +789,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
 - Return results **keyed by the exact input names**
 - Include full entity details (not just references)
 
-#### Python Code Responsibilities  
+#### Python Code Responsibilities
 - Extract names to pass to agent
 - Perform **direct dictionary lookup** (no matching logic needed)
 - Assign results to appropriate objects

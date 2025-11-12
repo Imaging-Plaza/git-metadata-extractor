@@ -3,7 +3,7 @@ Organization Analysis Agent
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..context.infoscience import (
     get_author_publications_tool,
@@ -107,4 +107,3 @@ async def llm_request_org_infos(
         # Cleanup agents even on error
         await cleanup_agents()
         return {"data": None, "usage": None}
-

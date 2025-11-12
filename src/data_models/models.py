@@ -20,13 +20,13 @@ if TYPE_CHECKING:
 
 class Person(BaseModel):
     """Person model representing an individual author or contributor"""
-    
+
     # Type discriminator
     type: Literal["Person"] = Field(
         default="Person",
-        description="Type discriminator for Person/Organization unions"
+        description="Type discriminator for Person/Organization unions",
     )
-    
+
     # Core identity fields
     name: str = Field(description="Person's name")
     email: Optional[Union[str, List[str]]] = Field(
@@ -41,7 +41,7 @@ class Person(BaseModel):
         description="List of git author identifiers mapping to this person",
         default_factory=list,
     )
-    
+
     # Affiliation fields
     affiliations: List[str] = Field(
         description="List of all identified affiliations (current and historical)",
@@ -55,7 +55,7 @@ class Person(BaseModel):
         description="Temporal affiliation information with start/end dates when available",
         default_factory=list,
     )
-    
+
     # Additional metadata
     contributionSummary: Optional[str] = Field(
         description="Summary of the person's contributions to the repository",
@@ -99,13 +99,13 @@ class Person(BaseModel):
 
 class Organization(BaseModel):
     """Organization model representing an institution or company"""
-    
+
     # Type discriminator
     type: Literal["Organization"] = Field(
         default="Organization",
-        description="Type discriminator for Person/Organization unions"
+        description="Type discriminator for Person/Organization unions",
     )
-    
+
     legalName: Optional[str] = None
     hasRorId: Optional[HttpUrl] = None
     alternateNames: Optional[
@@ -124,7 +124,6 @@ class Organization(BaseModel):
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
-    
 
     @field_validator("hasRorId", mode="before")
     @classmethod
@@ -154,7 +153,7 @@ class Organization(BaseModel):
             if not v.startswith(("http://", "https://")):
                 v = f"https://{v}"
             # Basic validation - if it doesn't look like a URL, return None
-            if " " in v or not "." in v:
+            if " " in v or "." not in v:
                 return None
         return v
 

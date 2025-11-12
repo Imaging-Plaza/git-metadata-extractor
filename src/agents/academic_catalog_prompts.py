@@ -6,7 +6,7 @@ This agent is responsible for finding and linking entities to academic catalogs
 """
 
 academic_catalog_system_prompt = """
-You are an expert at searching academic catalogs and matching entities to publications, 
+You are an expert at searching academic catalogs and matching entities to publications,
 authors, and organizational units.
 
 Your task is to search academic catalogs (currently Infoscience for EPFL) and find:
@@ -86,15 +86,15 @@ Assign confidence scores (0.0-1.0) for each relation found:
 1. **Extract UUID** - Look for "*UUID:* <uuid>" in the markdown output
    - This is REQUIRED for creating proper catalog links
    - The UUID appears after the name in the format "*UUID:* <uuid-string>"
-   
+
 2. **Extract URL** - The profile/publication URL from the markdown link
    - Format: **[Name](https://infoscience.epfl.ch/entities/...)**
-   
+
 3. **Extract all available fields**:
    - For **persons**: name, UUID, email, ORCID, affiliation, profile_url
    - For **orgunits**: name, UUID, description, url, parent_organization, website, research_areas
    - For **publications**: title, UUID, authors, DOI, publication_date, url, abstract
-   
+
 4. **Parse structured data from markdown**:
    - Each field is on its own line with format "*Field:* value"
    - Parse each field carefully to build complete entity objects
@@ -117,7 +117,7 @@ Return an `AcademicCatalogEnrichmentResult` with **organized relations**:
 - **catalogsSearched**: List of catalogs you searched
 - **totalSearches**: Total number of search operations performed
 
-**IMPORTANT**: 
+**IMPORTANT**:
 - Use the **exact author/organization names as provided** as keys in the dictionaries
 - Search for each author **individually** (one search per author name)
 - Search for each organization **individually** (one search per org name)
@@ -173,30 +173,30 @@ Good luck! Remember: be strategic, be efficient, and accept when things aren't f
 
 
 def get_repository_academic_catalog_prompt(
-    repository_url: str, 
-    repository_name: str, 
-    description: str, 
+    repository_url: str,
+    repository_name: str,
+    description: str,
     readme_excerpt: str,
     authors: list = None,
-    organizations: list = None
+    organizations: list = None,
 ) -> str:
     """
     Generate prompt for repository academic catalog enrichment.
-    
+
     Args:
         repository_url: URL of the repository
-        repository_name: Name of the repository  
+        repository_name: Name of the repository
         description: Repository description
         readme_excerpt: Excerpt from README (first 1000 chars)
         authors: List of identified author names
         organizations: List of identified organization names
-    
+
     Returns:
         Formatted prompt for the agent
     """
     authors_str = ", ".join(authors) if authors else "None identified yet"
     orgs_str = ", ".join(organizations) if organizations else "None identified yet"
-    
+
     return f"""
 ## Repository Academic Catalog Enrichment
 
@@ -251,7 +251,7 @@ Search academic catalogs to find entities related to this repository:
 - Add all results to `organization_relations["DeepLabCut"]` (using exact name as key)
 - Repeat for each organization individually
 
-**IMPORTANT**: 
+**IMPORTANT**:
 - Use the **exact names as provided** in the lists as dictionary keys
 - ONE search per person (use their provided name)
 - Academic profiles may use variations like "Mathis, Alexander" or "Alexander Mathis" - that's fine, the matching happens later
@@ -261,16 +261,21 @@ Return your findings as an `AcademicCatalogEnrichmentResult` with the organized 
 """
 
 
-def get_user_academic_catalog_prompt(username: str, full_name: str, bio: str, organizations: list) -> str:
+def get_user_academic_catalog_prompt(
+    username: str,
+    full_name: str,
+    bio: str,
+    organizations: list,
+) -> str:
     """
     Generate prompt for user academic catalog enrichment.
-    
+
     Args:
         username: GitHub username
         full_name: User's full name
         bio: User's bio
         organizations: List of organizations
-    
+
     Returns:
         Formatted prompt for the agent
     """
@@ -314,16 +319,21 @@ Return your findings as an `AcademicCatalogEnrichmentResult`.
 """
 
 
-def get_organization_academic_catalog_prompt(org_name: str, description: str, website: str, members: list) -> str:
+def get_organization_academic_catalog_prompt(
+    org_name: str,
+    description: str,
+    website: str,
+    members: list,
+) -> str:
     """
     Generate prompt for organization academic catalog enrichment.
-    
+
     Args:
         org_name: Organization name
         description: Organization description
         website: Organization website
         members: List of member usernames
-    
+
     Returns:
         Formatted prompt for the agent
     """
@@ -365,4 +375,3 @@ Remember: Not all GitHub organizations are academic. Commercial organizations ma
 
 Return your findings as an `AcademicCatalogEnrichmentResult`.
 """
-

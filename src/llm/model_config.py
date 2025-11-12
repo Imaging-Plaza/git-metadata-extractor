@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 # Default model configurations
 MODEL_CONFIGS = {
     "run_llm_analysis": [
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 600.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -41,6 +51,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_user_enrichment": [
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -59,6 +79,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_organization_enrichment": [
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -77,6 +107,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_academic_catalog_enrichment": [
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 3,
+        #     "temperature": 0.1,
+        #     "max_tokens": 12000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -95,6 +135,16 @@ MODEL_CONFIGS = {
         },
     ],
     "run_epfl_assessment": [
+        # {
+        #     "provider": "openai-compatible",
+        #     "model": "openai/gpt-oss-120b",
+        #     "base_url": "https://inference.rcp.epfl.ch/v1",
+        #     "api_key_env": "RCP_TOKEN",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -180,6 +230,7 @@ def create_pydantic_ai_model(config: Dict[str, Any]):
     """
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.ollama import OllamaProvider
+    from pydantic_ai.providers.openai import OpenAIProvider
     from pydantic_ai.providers.openrouter import OpenRouterProvider
 
     provider = config.get("provider", "openai")
@@ -193,15 +244,17 @@ def create_pydantic_ai_model(config: Dict[str, Any]):
             provider=OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY")),
         )
     elif provider == "openai-compatible":
-        # For OpenAI-compatible endpoints, use base_url directly
+        # For OpenAI-compatible endpoints, use OpenAIProvider with base_url
         api_key_env = config.get("api_key_env", "OPENAI_API_KEY")
         base_url = config.get("base_url")
         if not base_url:
             raise ValueError("openai-compatible provider requires base_url")
         return OpenAIChatModel(
             model_name,
-            api_key=os.getenv(api_key_env),
-            base_url=base_url,
+            provider=OpenAIProvider(
+                base_url=base_url,
+                api_key=os.getenv(api_key_env),
+            ),
         )
     elif provider == "ollama":
         base_url = config.get("base_url", "http://localhost:11434/v1")

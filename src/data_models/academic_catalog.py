@@ -8,7 +8,7 @@ Unified models for academic catalog relationships across multiple catalogs
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -42,14 +42,21 @@ class AcademicCatalogRelation(BaseModel):
     """
 
     catalogType: CatalogType = Field(
-        description="Which academic catalog this entity comes from"
+        description="Which academic catalog this entity comes from",
     )
 
-    entityType: EntityType = Field(description="Type of entity (publication, person, orgunit)")
+    entityType: EntityType = Field(
+        description="Type of entity (publication, person, orgunit)",
+    )
 
-    entity: Union[InfosciencePublication, InfoscienceAuthor, InfoscienceLab, Dict[str, Any]] = Field(
+    entity: Union[
+        InfosciencePublication,
+        InfoscienceAuthor,
+        InfoscienceLab,
+        dict[str, Any],
+    ] = Field(
         description="Full entity details. For Infoscience: InfosciencePublication, "
-        "InfoscienceAuthor, or InfoscienceLab. For other catalogs: structured dict."
+        "InfoscienceAuthor, or InfoscienceLab. For other catalogs: structured dict.",
     )
 
     confidence: float = Field(
@@ -60,7 +67,7 @@ class AcademicCatalogRelation(BaseModel):
     )
 
     justification: str = Field(
-        description="Explanation of why this entity is related and how it was found"
+        description="Explanation of why this entity is related and how it was found",
     )
 
     matchedOn: Optional[List[str]] = Field(
@@ -70,8 +77,15 @@ class AcademicCatalogRelation(BaseModel):
 
     def get_display_name(self) -> str:
         """Get a display name for this entity."""
-        if isinstance(self.entity, (InfosciencePublication, InfoscienceLab, InfoscienceAuthor)):
-            return getattr(self.entity, "title", None) or getattr(self.entity, "name", "Unknown")
+        if isinstance(
+            self.entity,
+            (InfosciencePublication, InfoscienceLab, InfoscienceAuthor),
+        ):
+            return getattr(self.entity, "title", None) or getattr(
+                self.entity,
+                "name",
+                "Unknown",
+            )
         if isinstance(self.entity, dict):
             return self.entity.get("title") or self.entity.get("name", "Unknown")
         return "Unknown"
@@ -117,17 +131,17 @@ class AcademicCatalogEnrichmentResult(BaseModel):
     - organization_relations: Relations for each organization (orgunit profiles, publications)
     """
 
-    repository_relations: List[AcademicCatalogRelation] = Field(
+    repository_relations: list[AcademicCatalogRelation] = Field(
         description="Relations found for the repository itself (publications about the repository name/project)",
         default_factory=list,
     )
-    
-    author_relations: Dict[str, List[AcademicCatalogRelation]] = Field(
+
+    author_relations: dict[str, list[AcademicCatalogRelation]] = Field(
         description="Relations found for each author, keyed by author name as provided",
         default_factory=dict,
     )
-    
-    organization_relations: Dict[str, List[AcademicCatalogRelation]] = Field(
+
+    organization_relations: dict[str, list[AcademicCatalogRelation]] = Field(
         description="Relations found for each organization, keyed by organization name as provided",
         default_factory=dict,
     )
@@ -137,7 +151,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
         default=None,
     )
 
-    catalogsSearched: List[CatalogType] = Field(
+    catalogsSearched: list[CatalogType] = Field(
         description="Which catalogs were searched",
         default_factory=list,
     )
@@ -157,10 +171,10 @@ class AcademicCatalogEnrichmentResult(BaseModel):
         description="Output tokens used by the enrichment agent",
         default=None,
     )
-    
+
     # Backward compatibility - aggregates all relations
     @property
-    def relations(self) -> List[AcademicCatalogRelation]:
+    def relations(self) -> list[AcademicCatalogRelation]:
         """Get all relations combined (for backward compatibility)."""
         all_relations = list(self.repository_relations)
         for author_rels in self.author_relations.values():
@@ -169,23 +183,29 @@ class AcademicCatalogEnrichmentResult(BaseModel):
             all_relations.extend(org_rels)
         return all_relations
 
-    def get_by_catalog(self, catalog_type: CatalogType) -> List[AcademicCatalogRelation]:
+    def get_by_catalog(
+        self,
+        catalog_type: CatalogType,
+    ) -> list[AcademicCatalogRelation]:
         """Get relations from a specific catalog."""
         return [r for r in self.relations if r.catalogType == catalog_type]
 
-    def get_by_entity_type(self, entity_type: EntityType) -> List[AcademicCatalogRelation]:
+    def get_by_entity_type(
+        self,
+        entity_type: EntityType,
+    ) -> list[AcademicCatalogRelation]:
         """Get relations of a specific entity type."""
         return [r for r in self.relations if r.entityType == entity_type]
 
-    def get_publications(self) -> List[AcademicCatalogRelation]:
+    def get_publications(self) -> list[AcademicCatalogRelation]:
         """Get all publication relations."""
         return self.get_by_entity_type(EntityType.PUBLICATION)
 
-    def get_persons(self) -> List[AcademicCatalogRelation]:
+    def get_persons(self) -> list[AcademicCatalogRelation]:
         """Get all person relations."""
         return self.get_by_entity_type(EntityType.PERSON)
 
-    def get_orgunits(self) -> List[AcademicCatalogRelation]:
+    def get_orgunits(self) -> list[AcademicCatalogRelation]:
         """Get all organizational unit relations."""
         return self.get_by_entity_type(EntityType.ORGUNIT)
 
@@ -197,7 +217,9 @@ class AcademicCatalogEnrichmentResult(BaseModel):
         if self.searchStrategy:
             lines.append(f"**Search Strategy:** {self.searchStrategy}\n")
 
-        lines.append(f"**Catalogs Searched:** {', '.join([c.value for c in self.catalogsSearched])}")
+        lines.append(
+            f"**Catalogs Searched:** {', '.join([c.value for c in self.catalogsSearched])}",
+        )
         lines.append(f"**Total Searches:** {self.totalSearches}")
         lines.append(f"**Relations Found:** {len(self.relations)}\n")
 
@@ -211,4 +233,3 @@ class AcademicCatalogEnrichmentResult(BaseModel):
             lines.append("*No relations found*")
 
         return "\n".join(lines)
-
