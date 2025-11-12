@@ -8,7 +8,7 @@ Unified models for academic catalog relationships across multiple catalogs
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field
 

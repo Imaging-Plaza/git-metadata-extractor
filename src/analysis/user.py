@@ -53,7 +53,10 @@ class User:
             githubHandle=user_data_dict.get("login"),
             githubUserMetadata=github_metadata,
             # Enrichment fields (will be populated by analysis steps)
-            relatedToOrganization=user_data_dict.get("organizations", []) or [],
+            # NOTE: Don't pre-populate relatedToOrganization with GitHub orgs here
+            # Let LLM analysis extract them from all sources (bio, README, GitHub orgs, etc.)
+            # This prevents duplication when enrichment adds Organization objects later
+            relatedToOrganization=[],
             relatedToOrganizationJustification=[],
             discipline=[],
             disciplineJustification=[],
@@ -238,29 +241,10 @@ class User:
         # organization_enrichment is an OrganizationEnrichmentResult, not a dict
         enriched_orgs = organization_enrichment.organizations  # Direct attribute access
 
-        # Safely handle relatedToOrganizations list
-        related_orgs = getattr(self.data, "relatedToOrganization", None)
-        if related_orgs is None:
-            related_orgs = []
-            self.data.relatedToOrganization = related_orgs
-        for org in enriched_orgs:
-            legal_name = (
-                org.legalName
-            )  # Direct attribute access, org is already Organization
-            if legal_name:
-                related_orgs.append(legal_name)
-
-        # Safely handle relatedToOrganizationsROR list
-        # Merge enriched organizations into relatedToOrganization
-        # Combine string names and Organization objects
-        current_orgs = getattr(self.data, "relatedToOrganization", None) or []
-        if not isinstance(current_orgs, list):
-            current_orgs = []
-        
-        # Add enriched Organization objects
-        combined_orgs = list(current_orgs)  # Copy existing
-        combined_orgs.extend(enriched_orgs)  # Add Organization objects
-        self.data.relatedToOrganization = combined_orgs
+        # Replace the relatedToOrganization list with enriched Organization objects
+        # This prevents duplication - we don't add both strings and objects
+        # The LLM analysis already populated org name strings, now we replace them with full objects
+        self.data.relatedToOrganization = list(enriched_orgs)
 
         # For user profiles, preserve any existing EPFL assessment
         # Only update EPFL values if they weren't already set
