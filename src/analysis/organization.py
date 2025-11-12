@@ -315,28 +315,9 @@ class Organization:
         # organization_enrichment is an OrganizationEnrichmentResult, not a dict
         enriched_orgs = organization_enrichment.organizations  # Direct attribute access
 
-        # Safely handle relatedToOrganization list
-        related_orgs = getattr(self.data, "relatedToOrganization", None)
-        if related_orgs is None:
-            related_orgs = []
-            self.data.relatedToOrganization = related_orgs
-        for org in enriched_orgs:
-            legal_name = (
-                org.legalName
-            )  # Direct attribute access, org is already Organization
-            if legal_name:
-                related_orgs.append(legal_name)
-
-        # Merge enriched organizations into relatedToOrganization
-        # Combine string names and Organization objects
-        current_orgs = getattr(self.data, "relatedToOrganization", None) or []
-        if not isinstance(current_orgs, list):
-            current_orgs = []
-        
-        # Add enriched Organization objects
-        combined_orgs = list(current_orgs)  # Copy existing
-        combined_orgs.extend(enriched_orgs)  # Add Organization objects
-        self.data.relatedToOrganization = combined_orgs
+        # Replace relatedToOrganization with enriched Organization objects only
+        # Don't add both org name strings and Organization objects - just objects
+        self.data.relatedToOrganization = list(enriched_orgs)
 
         # For organization profiles, preserve LLM's EPFL assessment (which has full context)
         # Only update EPFL values if they weren't set by LLM analysis

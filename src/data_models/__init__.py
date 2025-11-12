@@ -232,3 +232,31 @@ delattr(_orgllm_module, "Dict")
 delattr(_orgllm_module, "Optional")
 delattr(_orgllm_module, "Union")
 delattr(_orgllm_module, "Any")
+
+# Rebuild AcademicCatalogRelation to resolve List typing import
+_catalog_relation_module = sys.modules[AcademicCatalogRelation.__module__]
+_catalog_relation_module.List = List
+_catalog_relation_module.Dict = Dict
+_catalog_relation_module.Optional = Optional
+_catalog_relation_module.Union = Union
+_catalog_relation_module.Any = Any
+AcademicCatalogRelation.model_rebuild()
+delattr(_catalog_relation_module, "List")
+delattr(_catalog_relation_module, "Dict")
+delattr(_catalog_relation_module, "Optional")
+delattr(_catalog_relation_module, "Union")
+delattr(_catalog_relation_module, "Any")
+
+# Rebuild AcademicCatalogEnrichmentResult to resolve List and other typing imports
+_catalog_module = sys.modules[AcademicCatalogEnrichmentResult.__module__]
+_catalog_module.List = List
+_catalog_module.Dict = Dict
+_catalog_module.Optional = Optional
+_catalog_module.Union = Union
+_catalog_module.Any = Any
+AcademicCatalogEnrichmentResult.model_rebuild()
+delattr(_catalog_module, "List")
+delattr(_catalog_module, "Dict")
+delattr(_catalog_module, "Optional")
+delattr(_catalog_module, "Union")
+delattr(_catalog_module, "Any")

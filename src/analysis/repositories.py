@@ -160,22 +160,9 @@ class Repository:
                 organization_enrichment.organizations
             )  # Direct attribute access
 
-            # Replace (not append) organization lists with enriched versions
-            # Build list of organization names for relatedToOrganizations
-            related_orgs = []
-            for org in enriched_orgs:
-                legal_name = org.legalName
-                if legal_name:
-                    related_orgs.append(legal_name)
-            
-            # Merge enriched organizations into relatedToOrganizations
-            # Combine string names and Organization objects
-            combined_orgs = []
-            if related_orgs:
-                combined_orgs.extend(related_orgs)
-            if enriched_orgs:
-                combined_orgs.extend(enriched_orgs)
-            self.data.relatedToOrganizations = combined_orgs if combined_orgs else None
+            # Replace relatedToOrganizations with enriched Organization objects only
+            # Don't add both org name strings and Organization objects - just objects
+            self.data.relatedToOrganizations = list(enriched_orgs) if enriched_orgs else None
 
             # These values are overwritten only if provided by the enrichment
             if organization_enrichment.relatedToEPFL is not None:
