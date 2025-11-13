@@ -69,7 +69,7 @@ class Repository:
         result = await llm_request_repo_infos(
             str(self.full_path),
             gimie_output=self.gimie,
-            max_tokens=20000,
+            max_tokens=10000,
         )
 
         # Extract data and usage
@@ -330,19 +330,10 @@ class Repository:
 
             # Get README excerpt (first 1000 chars from readme content if available)
             readme_excerpt = ""
-            if hasattr(self.data, "readme") and self.data.readme:
-                # The readme field is a URL, we'd need to fetch it
-                # For now, use description or other text
-                pass
 
             # Try to get some text from description or other fields
             if self.data.description:
                 readme_excerpt = self.data.description[:1000]
-            elif (
-                hasattr(self.data, "hasExecutableInstructions")
-                and self.data.hasExecutableInstructions
-            ):
-                readme_excerpt = self.data.hasExecutableInstructions[:1000]
 
             # Extract author names and organization names from existing data
             author_names = []

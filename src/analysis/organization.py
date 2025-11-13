@@ -96,7 +96,7 @@ class Organization:
             result = await llm_request_org_infos(
                 org_name=self.org_name,
                 org_data=llm_input_data,
-                max_tokens=20000,
+                max_tokens=10000,
             )
 
             # Extract data and usage

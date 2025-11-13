@@ -97,7 +97,7 @@ class User:
             result = await llm_request_user_infos(
                 username=self.username,
                 user_data=llm_input_data,
-                max_tokens=20000,
+                max_tokens=10000,
             )
 
             # Extract data and usage
