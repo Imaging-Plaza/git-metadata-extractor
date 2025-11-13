@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -120,6 +121,14 @@ async def clone_repo(
         try:
             logger.info(f"Clone attempt {attempt}/{max_retries}")
 
+            # Clean up any partial clone from previous attempt
+            if attempt > 1 and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.debug(f"Cleaned up partial clone from previous attempt")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up partial clone: {e}")
+
             process = await asyncio.create_subprocess_exec(
                 "git",
                 "clone",
@@ -190,6 +199,7 @@ async def clone_repo(
                 "unexpected disconnect",
                 "Connection timed out",
                 "Failed to connect",
+                "Recv failure",  # curl error: "curl 56 Recv failure: Connection reset by peer"
             ]
 
             if any(error in stderr_text for error in retryable_errors):
