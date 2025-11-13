@@ -776,7 +776,10 @@ def generate_repository_markdown(
     return result
 
 
-async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
+async def extract_git_authors(
+    temp_dir: str,
+    anonymize_email: bool = True,
+) -> List[GitAuthor]:
     """
     Extract git authors from the cloned repository using git shortlog.
     Returns a list of GitAuthor objects with commit counts and first/last commit dates.
@@ -787,7 +790,8 @@ async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
          10  Carlos <carlos@example.com>
 
     Args:
-        temp_dir: Directory containing the cloned repository
+        temp_dir: Directory containing the cloned repository.
+        anonymize_email: Whether to hash the email local part while keeping the domain.
 
     Returns:
         List of GitAuthor objects
@@ -904,9 +908,17 @@ async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
                         lastCommitDate=last_commit_date,
                     )
 
-                    git_authors.append(
-                        GitAuthor(name=name, email=email, commits=commits),
+                    # Create GitAuthor (id will be computed automatically by model_validator)
+                    git_author = GitAuthor(name=name, email=email, commits=commits)
+                    if anonymize_email:
+                        git_author.anonymize_email_local_part()
+                    logger.debug(
+                        "Created GitAuthor: %s (%s) [id: %s]",
+                        name,
+                        git_author.email if anonymize_email else email,
+                        git_author.id,
                     )
+                    git_authors.append(git_author)
 
             logger.info(f"Extracted {len(git_authors)} git authors from repository.")
             return git_authors

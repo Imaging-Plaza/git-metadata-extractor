@@ -2,6 +2,7 @@
 General data models
 """
 
+import hashlib
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
@@ -9,10 +10,9 @@ from typing import (
     List,
     Literal,
     Optional,
-    Union,
 )
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 if TYPE_CHECKING:
     from .academic_catalog import AcademicCatalogRelation
@@ -29,9 +29,9 @@ class Person(BaseModel):
 
     # Core identity fields
     name: str = Field(description="Person's name")
-    email: Optional[Union[str, List[str]]] = Field(
+    emails: Optional[List[str]] = Field(
         description="Email address(es) - can be a single string or a list of strings",
-        default=None,
+        default_factory=list,
     )
     orcid: Optional[str] = Field(
         description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
@@ -44,12 +44,8 @@ class Person(BaseModel):
 
     # Affiliation fields
     affiliations: List[str] = Field(
-        description="List of all identified affiliations (current and historical)",
+        description="List of all currents affiliations",
         default_factory=list,
-    )
-    currentAffiliation: Optional[str] = Field(
-        description="Most recent or current affiliation",
-        default=None,
     )
     affiliationHistory: List[dict[str, Any]] = Field(
         description="Temporal affiliation information with start/end dates when available",
@@ -57,14 +53,6 @@ class Person(BaseModel):
     )
 
     # Additional metadata
-    contributionSummary: Optional[str] = Field(
-        description="Summary of the person's contributions to the repository",
-        default=None,
-    )
-    biography: Optional[str] = Field(
-        description="Additional biographical or professional information",
-        default=None,
-    )
     academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
@@ -97,6 +85,43 @@ class Person(BaseModel):
             )
 
         return v
+
+    def anonymize_emails(self, hash_length: int = 12) -> None:
+        """
+        Replace the local part of each email with a SHA-256 hash while keeping the domain.
+
+        Args:
+            hash_length: Number of hexadecimal characters to keep from the hash. Defaults to 12.
+        """
+        if not self.emails:
+            return
+
+        anonymized_emails: list[str] = []
+        for email in self.emails:
+            if not email or "@" not in email:
+                anonymized_emails.append(email)
+                continue
+
+            local_part, domain = email.split("@", 1)
+            if not domain:
+                anonymized_emails.append(email)
+                continue
+
+            hashed_local = hashlib.sha256(local_part.encode("utf-8")).hexdigest()
+            if hash_length > 0:
+                hashed_local = hashed_local[:hash_length]
+
+            anonymized_emails.append(f"{hashed_local}@{domain}")
+
+        self.emails = anonymized_emails
+
+    @model_validator(mode="after")
+    def anonymize_emails_after_validation(self):
+        """
+        Automatically anonymize emails after Person model validation to ensure privacy.
+        """
+        self.anonymize_emails()
+        return self
 
 
 class Organization(BaseModel):

@@ -4,6 +4,7 @@ Repository data models
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import date
 from enum import Enum
@@ -195,6 +196,10 @@ class Commits(BaseModel):
 
 
 class GitAuthor(BaseModel):
+    id: Optional[str] = Field(
+        default="",
+        description="SHA-256 hash of email and name combination",
+    )
     name: str
     email: Optional[str] = None
     commits: Optional[Commits] = None
@@ -218,6 +223,35 @@ class GitAuthor(BaseModel):
 
         logger.warning(f"commits has unexpected type: {type(v)}")
         return v
+
+    @model_validator(mode="after")
+    def compute_id(self):
+        """Compute id as SHA-256 hash of email and name combination."""
+        email = self.email or ""
+        name = self.name or ""
+        emailname = f"{email}{name}".encode()
+        self.id = hashlib.sha256(emailname).hexdigest()
+        return self
+
+    def anonymize_email_local_part(self, hash_length: int = 12) -> None:
+        """
+        Replace the local part of the email with a SHA-256 hash while keeping the domain.
+
+        Args:
+            hash_length: Number of hexadecimal characters to keep from the hash. Defaults to 12.
+        """
+        if not self.email or "@" not in self.email:
+            return
+
+        local_part, domain = self.email.split("@", 1)
+        if not domain:
+            return
+
+        hashed_local = hashlib.sha256(local_part.encode("utf-8")).hexdigest()
+        if hash_length > 0:
+            hashed_local = hashed_local[:hash_length]
+
+        self.email = f"{hashed_local}@{domain}"
 
 
 class InfoscienceEntity(BaseModel):
@@ -261,26 +295,26 @@ class SoftwareSourceCode(BaseModel):
     hasAcknowledgements: Optional[str] = None
     hasDocumentation: Optional[HttpUrl] = None
     hasExecutableInstructions: Optional[str] = None
-    hasExecutableNotebook: Optional[List[ExecutableNotebook]] = []
+    hasExecutableNotebook: Optional[list[ExecutableNotebook]] = []
     readme: Optional[HttpUrl] = None
-    hasFunding: Optional[List[FundingInformation]] = None
-    hasSoftwareImage: Optional[List[SoftwareImage]] = []
-    imagingModality: Optional[List[str]] = None
-    discipline: Optional[List[Discipline]] = None
-    disciplineJustification: Optional[List[str]] = None
-    relatedDatasets: Optional[List[str]] = None
-    relatedPublications: Optional[List[str]] = None
-    relatedModels: Optional[List[str]] = None
-    relatedAPIs: Optional[List[str]] = None
-    relatedToOrganizations: Optional[List[Union[str, Organization]]] = None
-    relatedToOrganizationJustification: Optional[List[str]] = None
+    hasFunding: Optional[list[FundingInformation]] = None
+    hasSoftwareImage: Optional[list[SoftwareImage]] = []
+    imagingModality: Optional[list[str]] = None
+    discipline: Optional[list[Discipline]] = None
+    disciplineJustification: Optional[list[str]] = None
+    relatedDatasets: Optional[list[str]] = None
+    relatedPublications: Optional[list[str]] = None
+    relatedModels: Optional[list[str]] = None
+    relatedAPIs: Optional[list[str]] = None
+    relatedToOrganizations: Optional[list[Union[str, Organization]]] = None
+    relatedToOrganizationJustification: Optional[list[str]] = None
     repositoryType: RepositoryType
     repositoryTypeJustification: list[str]
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
     relatedToEPFLJustification: Optional[str] = None
-    gitAuthors: Optional[List[GitAuthor]] = None
-    academicCatalogRelations: Optional[List[AcademicCatalogRelation]] = Field(
+    gitAuthors: Optional[list[GitAuthor]] = None
+    academicCatalogRelations: Optional[list[AcademicCatalogRelation]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
@@ -414,12 +448,13 @@ class SoftwareSourceCode(BaseModel):
                 if isinstance(author, dict):
                     name = author.get("name", "Unknown")
                     email = author.get("email", "No email")
+                    author_id = author.get("id", "No ID")
                     commits = author.get("commits", {})
                     total_commits = (
                         commits.get("total", 0) if isinstance(commits, dict) else 0
                     )
                     logger.debug(
-                        f"    [{i+1}] {name} ({email}) - {total_commits} commits",
+                        f"    [{i+1}] {name} ({email}) [id: {author_id}] - {total_commits} commits",
                     )
 
             if len(v) > 5:

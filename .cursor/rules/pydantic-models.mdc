@@ -48,9 +48,9 @@ class Person(BaseModel):
 
     # Core identity fields
     name: str = Field(description="Person's name")
-    email: Optional[Union[str, List[str]]] = Field(
-        description="Email address(es) - can be a single string or a list of strings",
-        default=None,
+    emails: Optional[List[str]] = Field(
+        description="Email address(es) - list of strings (automatically anonymized after validation)",
+        default_factory=list,
     )
     orcid: Optional[str] = Field(
         description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
@@ -266,6 +266,173 @@ def validate_website(cls, v):
 3. **Auto-fix when possible**: Convert plain IDs to URLs automatically
 4. **Fail gracefully**: Return `None` for invalid data rather than raising
 5. **Log warnings**: Help debug validation issues
+
+## Email Privacy and Anonymization
+
+### Overview
+The system automatically anonymizes email addresses to protect privacy while preserving domain information for institutional affiliation analysis. Email local parts are hashed using SHA-256, keeping only the domain visible.
+
+### GitAuthor Model (`src/data_models/repository.py`)
+
+**Email Anonymization**:
+```python
+class GitAuthor(BaseModel):
+    id: str = Field(
+        default="",
+        description="SHA-256 hash of email and name combination",
+    )
+    name: str
+    email: Optional[str] = None
+    commits: Optional[Commits] = None
+
+    @model_validator(mode="after")
+    def compute_id(self):
+        """Compute id as SHA-256 hash of email and name combination."""
+        email = self.email or ""
+        name = self.name or ""
+        emailname = f"{email}{name}".encode("utf-8")
+        self.id = hashlib.sha256(emailname).hexdigest()
+        return self
+
+    def anonymize_email_local_part(self, hash_length: int = 12) -> None:
+        """
+        Replace the local part of the email with a SHA-256 hash while keeping the domain.
+
+        Example: "john.doe@epfl.ch" → "a1b2c3d4e5f6@epfl.ch"
+
+        Args:
+            hash_length: Number of hexadecimal characters to keep from the hash. Defaults to 12.
+        """
+```
+
+**Usage**:
+- Email anonymization is applied when extracting git authors via `extract_git_authors()` in `src/context/repository.py`
+- The `anonymize_email` parameter (default: `True`) controls whether emails are anonymized
+- Anonymization happens **after** the `id` is computed, so the `id` is based on the original email+name combination
+- The anonymized email is what gets stored in the model and returned via API
+
+**Example**:
+```python
+# In extract_git_authors()
+git_author = GitAuthor(name=name, email=email, commits=commits)
+if anonymize_email:
+    git_author.anonymize_email_local_part()
+# Result: email is now "a1b2c3d4e5f6@epfl.ch" (local part hashed)
+```
+
+### Person Model (`src/data_models/models.py`)
+
+**Email Anonymization**:
+```python
+class Person(BaseModel):
+    emails: Optional[List[str]] = Field(
+        description="Email address(es) - can be a single string or a list of strings",
+        default_factory=list,
+    )
+
+    def anonymize_emails(self, hash_length: int = 12) -> None:
+        """
+        Replace the local part of each email with a SHA-256 hash while keeping the domain.
+
+        Example: ["john.doe@epfl.ch", "jane@ethz.ch"] → ["a1b2c3d4e5f6@epfl.ch", "f6e5d4c3b2a1@ethz.ch"]
+
+        Args:
+            hash_length: Number of hexadecimal characters to keep from the hash. Defaults to 12.
+        """
+        if not self.emails:
+            return
+
+        anonymized_emails: list[str] = []
+        for email in self.emails:
+            if not email or "@" not in email:
+                anonymized_emails.append(email)
+                continue
+
+            local_part, domain = email.split("@", 1)
+            if not domain:
+                anonymized_emails.append(email)
+                continue
+
+            hashed_local = hashlib.sha256(local_part.encode("utf-8")).hexdigest()
+            if hash_length > 0:
+                hashed_local = hashed_local[:hash_length]
+
+            anonymized_emails.append(f"{hashed_local}@{domain}")
+
+        self.emails = anonymized_emails
+
+    @model_validator(mode="after")
+    def anonymize_emails_after_validation(self):
+        """
+        Automatically anonymize emails after Person model validation to ensure privacy.
+        This ensures all Person objects have anonymized emails when returned via API.
+        """
+        self.anonymize_emails()
+        return self
+```
+
+**Key Features**:
+- **Automatic anonymization**: Emails are automatically anonymized after model validation via `model_validator(mode="after")`
+- **Multiple emails**: Handles lists of email addresses, anonymizing each one
+- **Domain preservation**: Keeps the domain intact (e.g., `@epfl.ch`, `@ethz.ch`) for institutional analysis
+- **Hash length**: Default 12 hexadecimal characters (configurable via `hash_length` parameter)
+- **Graceful handling**: Skips invalid emails (no `@` symbol, missing domain)
+
+**Privacy Guarantee**:
+- All `Person` objects returned via API endpoints will have anonymized emails
+- The original email local parts are never exposed in API responses
+- Domain information is preserved for institutional affiliation analysis
+
+### Privacy Implementation Details
+
+**When Anonymization Occurs**:
+1. **GitAuthor**: During git author extraction (`extract_git_authors()`), if `anonymize_email=True` (default)
+2. **Person**: Automatically after model validation via `model_validator(mode="after")`
+
+**What Gets Anonymized**:
+- Email local parts (everything before `@`)
+- Domain is preserved (everything after `@`)
+
+**What Doesn't Get Anonymized**:
+- Domain names (needed for institutional analysis)
+- Email addresses without `@` symbol (skipped)
+- Invalid email formats (skipped)
+
+**Hash Algorithm**:
+- SHA-256 hash of the local part
+- First 12 hexadecimal characters used by default
+- Configurable via `hash_length` parameter
+
+**Example Transformations**:
+```
+"john.doe@epfl.ch"     → "a1b2c3d4e5f6@epfl.ch"
+"jane.smith@ethz.ch"   → "f6e5d4c3b2a1@ethz.ch"
+"admin@example.com"    → "c3b2a1f6e5d4@example.com"
+```
+
+### Best Practices
+
+1. **Always use anonymization**: Keep `anonymize_email=True` in `extract_git_authors()` for privacy
+2. **Don't disable for production**: Email anonymization should always be enabled in production APIs
+3. **Domain analysis**: Use anonymized emails for domain-based institutional analysis (domains are preserved)
+4. **ID computation**: For `GitAuthor`, the `id` field is computed from the **original** email+name before anonymization, ensuring consistent IDs
+5. **API responses**: All API responses will contain anonymized emails automatically (no additional steps needed)
+
+### Testing
+
+When testing email anonymization:
+```python
+# Test GitAuthor anonymization
+author = GitAuthor(name="John Doe", email="john.doe@epfl.ch")
+author.anonymize_email_local_part()
+assert author.email.startswith("a")  # Hashed local part
+assert author.email.endswith("@epfl.ch")  # Domain preserved
+
+# Test Person anonymization (automatic)
+person = Person(name="Jane Smith", emails=["jane@epfl.ch", "jane.smith@ethz.ch"])
+# Emails are automatically anonymized after validation
+assert all("@" in email and not email.split("@")[0].contains(".") for email in person.emails)
+```
 
 ## Model Conversion
 
