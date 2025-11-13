@@ -207,8 +207,7 @@ class User:
         # Add user as author if we have ORCID data
         if github_metadata.get("orcid"):
             author_data = {
-                "name": github_metadata.get("name")
-                or self.data.fullname,
+                "name": github_metadata.get("name") or self.data.fullname,
                 "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }
@@ -305,8 +304,7 @@ class User:
         # Build existing author data using the new model structure
         if self.data.fullname or github_metadata.get("name"):
             author_data = {
-                "name": self.data.fullname
-                or github_metadata.get("name"),
+                "name": self.data.fullname or github_metadata.get("name"),
                 "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }

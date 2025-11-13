@@ -75,10 +75,10 @@ class Person(BaseModel):
     def validate_orcid(cls, v):
         """Validate ORCID format and convert ID to URL if needed."""
         import re
-        
+
         if v is None:
             return v
-        
+
         if isinstance(v, str):
             # If it's already a URL, validate and return as-is (store as string)
             if v.startswith("http"):
@@ -92,8 +92,10 @@ class Person(BaseModel):
             if re.match(orcid_id_pattern, v):
                 return v
 
-            raise ValueError(f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000")
-        
+            raise ValueError(
+                f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000",
+            )
+
         return v
 
 

@@ -110,7 +110,7 @@ Be thorough and use the tools available to you to verify and standardize organiz
 """
 
 import json
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 #######################################
 # Organization Enrichment Prompt General
@@ -118,9 +118,9 @@ from typing import Optional, Dict, Any
 
 
 def get_organization_enrichment_prompt(
-    repository_url: str, 
-    context, 
-    pre_searched_ror: Optional[Dict[str, Any]] = None
+    repository_url: str,
+    context,
+    pre_searched_ror: Optional[Dict[str, Any]] = None,
 ) -> str:
     # Format pre-searched ROR results
     pre_searched_ror_section = ""
@@ -132,7 +132,7 @@ You can still use the search_ror tool for email domains or other organizations n
 
 {json.dumps(pre_searched_ror, indent=2)}
 
-**IMPORTANT**: 
+**IMPORTANT**:
 - For organizations listed above, select the BEST matching ROR entry from the pre-searched results
 - For email domains (e.g., @epfl.ch, @ethz.ch), use the search_ror tool to find the organization
 - For any other organizations you identify, use the search_ror tool if needed
@@ -142,7 +142,7 @@ You can still use the search_ror tool for email domains or other organizations n
 **PRE-SEARCHED ROR DATA:**
 No organizations were pre-searched. Use the search_ror tool for all organizations you identify.
 """
-    
+
     prompt = f"""Analyze the following repository metadata and identify all related organizations.
 
 Repository: {repository_url}
@@ -207,7 +207,7 @@ Existing EPFL justification: {context.existing_epfl_justification}
 
     # Log token breakdown for debugging
     from ..utils.token_counter import estimate_tokens_from_messages
-    
+
     # Estimate tokens for each section
     git_authors_json = json.dumps(
         [
@@ -228,7 +228,7 @@ Existing EPFL justification: {context.existing_epfl_justification}
         ],
         indent=2,
     )
-    
+
     orcid_authors_json = json.dumps(
         [
             {
@@ -240,27 +240,33 @@ Existing EPFL justification: {context.existing_epfl_justification}
         ],
         indent=2,
     )
-    
-    pre_searched_ror_json = json.dumps(pre_searched_ror, indent=2) if pre_searched_ror else ""
-    
+
+    pre_searched_ror_json = (
+        json.dumps(pre_searched_ror, indent=2) if pre_searched_ror else ""
+    )
+
     # Estimate tokens for each section
     system_tokens = estimate_tokens_from_messages(
         system_prompt=organization_enrichment_main_system_prompt,
         user_prompt="",
     ).get("input_tokens", 0)
-    
+
     git_authors_tokens = estimate_tokens_from_messages(
         user_prompt=git_authors_json,
     ).get("input_tokens", 0)
-    
+
     orcid_authors_tokens = estimate_tokens_from_messages(
         user_prompt=orcid_authors_json,
     ).get("input_tokens", 0)
-    
-    pre_searched_ror_tokens = estimate_tokens_from_messages(
-        user_prompt=pre_searched_ror_json,
-    ).get("input_tokens", 0) if pre_searched_ror_json else 0
-    
+
+    pre_searched_ror_tokens = (
+        estimate_tokens_from_messages(
+            user_prompt=pre_searched_ror_json,
+        ).get("input_tokens", 0)
+        if pre_searched_ror_json
+        else 0
+    )
+
     rest_of_prompt = f"""Analyze the following repository metadata and identify all related organizations.
 
 Repository: {repository_url}
@@ -280,23 +286,36 @@ Existing EPFL justification: {context.existing_epfl_justification}
 
 [Instructions section...]
 """
-    
+
     rest_tokens = estimate_tokens_from_messages(
         user_prompt=rest_of_prompt,
     ).get("input_tokens", 0)
-    
-    total_estimated = system_tokens + git_authors_tokens + orcid_authors_tokens + pre_searched_ror_tokens + rest_tokens
-    
+
+    total_estimated = (
+        system_tokens
+        + git_authors_tokens
+        + orcid_authors_tokens
+        + pre_searched_ror_tokens
+        + rest_tokens
+    )
+
     import logging
+
     logger = logging.getLogger(__name__)
-    logger.info(f"🔍 PROMPT TOKEN BREAKDOWN (estimated):")
+    logger.info("🔍 PROMPT TOKEN BREAKDOWN (estimated):")
     logger.info(f"  System prompt: ~{system_tokens:,} tokens")
-    logger.info(f"  Git authors JSON: ~{git_authors_tokens:,} tokens ({len(context.git_authors)} authors)")
-    logger.info(f"  ORCID authors JSON: ~{orcid_authors_tokens:,} tokens ({len(context.authors)} authors)")
-    logger.info(f"  Pre-searched ROR data: ~{pre_searched_ror_tokens:,} tokens ({len(pre_searched_ror) if pre_searched_ror else 0} organizations)")
+    logger.info(
+        f"  Git authors JSON: ~{git_authors_tokens:,} tokens ({len(context.git_authors)} authors)",
+    )
+    logger.info(
+        f"  ORCID authors JSON: ~{orcid_authors_tokens:,} tokens ({len(context.authors)} authors)",
+    )
+    logger.info(
+        f"  Pre-searched ROR data: ~{pre_searched_ror_tokens:,} tokens ({len(pre_searched_ror) if pre_searched_ror else 0} organizations)",
+    )
     logger.info(f"  Rest of prompt: ~{rest_tokens:,} tokens")
     logger.info(f"  TOTAL ESTIMATED: ~{total_estimated:,} tokens")
-    
+
     return prompt
 
 

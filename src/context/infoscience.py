@@ -248,7 +248,10 @@ def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
         description=_parse_metadata(metadata, "dc.description")
         or _parse_metadata(metadata, "dc.description.abstract"),
         url=url,
-        parent_organization=_parse_metadata(metadata, "organization.parentOrganization"),
+        parent_organization=_parse_metadata(
+            metadata,
+            "organization.parentOrganization",
+        ),
     )
 
 
@@ -418,7 +421,7 @@ async def search_authors(
                             authors.append(
                                 InfoscienceAuthor(
                                     name=author_name,
-                                )
+                                ),
                             )
             except Exception as e:
                 logger.warning(f"Error extracting authors from publication: {e}")
@@ -643,7 +646,7 @@ async def search_infoscience_publications_tool(
 
     IMPORTANT: This tool caches results - don't search for the same thing multiple times!
     Be strategic and avoid redundant searches.
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -693,7 +696,7 @@ async def search_infoscience_authors_tool(name: str, max_results: int = 10) -> s
 
     IMPORTANT: This tool caches results - don't search for the same person multiple times!
     Be strategic and avoid redundant searches.
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -740,7 +743,7 @@ async def search_infoscience_labs_tool(name: str, max_results: int = 10) -> str:
 
     IMPORTANT: This tool caches results - don't search for the same lab multiple times!
     If a lab isn't found, it may not be in Infoscience or has a different name - don't keep trying!
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -876,4 +879,3 @@ def normalize_infoscience_lab_url(url_or_uuid: str) -> Optional[str]:
     from ..agents.validation_utils import normalize_infoscience_url
 
     return normalize_infoscience_url(url_or_uuid, "orgunit")
-

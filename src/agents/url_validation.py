@@ -154,7 +154,9 @@ async def validate_ror_url(
     Returns:
         ValidationResult
     """
-    logger.info(f"Validating ROR URL: {ror_id} for organization: {expected_org.get('name', 'Unknown')}")
+    logger.info(
+        f"Validating ROR URL: {ror_id} for organization: {expected_org.get('name', 'Unknown')}",
+    )
 
     # Extract ROR ID from URL if needed
     if ror_id.startswith("http://") or ror_id.startswith("https://"):
@@ -166,7 +168,7 @@ async def validate_ror_url(
         ror_id_clean = ror_id
         ror_api_url = f"https://api.ror.org/v2/organizations/{ror_id_clean}"
         logger.debug(f"Using ROR ID '{ror_id_clean}' directly (not a full URL)")
-    
+
     logger.debug(f"Fetching ROR data from API: {ror_api_url}")
 
     try:
@@ -175,7 +177,7 @@ async def validate_ror_url(
             response = await client.get(ror_api_url)
             response.raise_for_status()
             ror_data = response.json()
-        
+
         # Extract organization name from names array
         org_name = None
         if ror_data.get("names"):
@@ -188,19 +190,23 @@ async def validate_ror_url(
                     if "label" in name_entry.get("types", []):
                         org_name = name_entry.get("value")
                         break
-        
+
         # Extract country from locations
         country = None
         if ror_data.get("locations"):
-            country = ror_data.get("locations", [{}])[0].get("geonames_details", {}).get("country_name")
-        
+            country = (
+                ror_data.get("locations", [{}])[0]
+                .get("geonames_details", {})
+                .get("country_name")
+            )
+
         # Extract aliases
         aliases = []
         if ror_data.get("names"):
             for name_entry in ror_data.get("names", []):
                 if name_entry.get("value") != org_name:
                     aliases.append(name_entry.get("value"))
-        
+
         # Extract website
         website = None
         if ror_data.get("links"):
@@ -208,7 +214,7 @@ async def validate_ror_url(
                 if link.get("type") == "website":
                     website = link.get("value")
                     break
-        
+
         # Format ROR data for validation prompt
         ror_data_summary = f"""ROR API Data:
 - Name: {org_name or 'N/A'}
@@ -270,7 +276,7 @@ Provide a clear validation result with confidence score and justification.
                 is_valid=False,
                 confidence=0.0,
                 justification=f"ROR ID {ror_id_clean} does not exist in ROR API (404 error)",
-                validation_errors=[f"HTTP 404: ROR ID not found"],
+                validation_errors=["HTTP 404: ROR ID not found"],
             )
         else:
             logger.error(f"HTTP error fetching ROR API data: {e.response.status_code}")
@@ -285,7 +291,7 @@ Provide a clear validation result with confidence score and justification.
         return ValidationResult(
             is_valid=False,
             confidence=0.0,
-            justification=f"Error during validation: {str(e)}",
+            justification=f"Error during validation: {e!s}",
             validation_errors=[str(e)],
         )
 
@@ -453,7 +459,6 @@ Provide a clear validation result with confidence score and justification.
         return ValidationResult(
             is_valid=False,
             confidence=0.0,
-            justification=f"Error during validation: {str(e)}",
+            justification=f"Error during validation: {e!s}",
             validation_errors=[str(e)],
         )
-

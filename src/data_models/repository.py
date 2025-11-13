@@ -280,7 +280,7 @@ class SoftwareSourceCode(BaseModel):
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
     relatedToEPFLJustification: Optional[str] = None
     gitAuthors: Optional[List[GitAuthor]] = None
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    academicCatalogRelations: Optional[List[AcademicCatalogRelation]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )

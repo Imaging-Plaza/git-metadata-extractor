@@ -125,7 +125,7 @@ async def clone_repo(
             if attempt > 1 and os.path.exists(temp_dir):
                 try:
                     shutil.rmtree(temp_dir)
-                    logger.debug(f"Cleaned up partial clone from previous attempt")
+                    logger.debug("Cleaned up partial clone from previous attempt")
                 except Exception as e:
                     logger.warning(f"Failed to clean up partial clone: {e}")
 
@@ -252,7 +252,9 @@ def is_binary_file(filepath: str) -> bool:
 
 
 def is_relevant_file(
-    filepath: str, filename: str, extraction_mode: str = EXTRACTION_MODE_README_ONLY
+    filepath: str,
+    filename: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
 ) -> bool:
     """
     Check if a file is relevant for extraction based on the extraction mode.
@@ -331,7 +333,8 @@ def is_relevant_file(
 
 
 def walk_repository_tree(
-    repo_dir: str, extraction_mode: str = EXTRACTION_MODE_README_ONLY
+    repo_dir: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
 ) -> Tuple[List[str], str]:
     """
     Walk the repository directory tree and collect relevant files.
@@ -394,7 +397,9 @@ def walk_repository_tree(
                     try:
                         for subitem in item.rglob("*"):
                             if subitem.is_file() and is_relevant_file(
-                                str(subitem), subitem.name, extraction_mode
+                                str(subitem),
+                                subitem.name,
+                                extraction_mode,
                             ):
                                 has_relevant_content = True
                                 break
@@ -606,7 +611,8 @@ def extract_r_imports(content: str) -> Set[str]:
 
 
 def generate_repository_markdown(
-    repo_dir: str, extraction_mode: str = EXTRACTION_MODE_README_ONLY
+    repo_dir: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
 ) -> str:
     """
     Generate comprehensive markdown documentation of repository contents.
