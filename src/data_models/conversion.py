@@ -681,6 +681,27 @@ def convert_pydantic_to_jsonld(
         "wd": "http://www.wikidata.org/entity/",
     }
 
+    # Helper function to generate IRI for a Person
+    def _generate_person_iri(person_obj: Any) -> Optional[str]:
+        """Generate a stable IRI for a Person based on their identifiers."""
+        # Priority: GitHub handle > ORCID > email
+        if hasattr(person_obj, 'gitAuthorIds') and person_obj.gitAuthorIds:
+            # Use first GitHub ID
+            github_id = person_obj.gitAuthorIds[0]
+            return f"https://github.com/{github_id}"
+        
+        if hasattr(person_obj, 'orcid') and person_obj.orcid:
+            orcid = str(person_obj.orcid)
+            if orcid.startswith('http'):
+                return orcid
+            return f"https://orcid.org/{orcid}"
+        
+        if hasattr(person_obj, 'email') and person_obj.email:
+            # Use mailto: URI for email
+            return f"mailto:{person_obj.email}"
+        
+        return None
+
     # Helper function to convert a single entity
     def _convert_entity_to_jsonld(
         obj: Any,
@@ -716,6 +737,23 @@ def convert_pydantic_to_jsonld(
             jsonld_entity["@id"] = entity_id
         elif base_url and model_name == "SoftwareSourceCode":
             jsonld_entity["@id"] = base_url
+        elif model_name == "GitHubUser" and hasattr(obj, "githubUserMetadata") and obj.githubUserMetadata:
+            # Use html_url from githubUserMetadata for GitHubUser
+            jsonld_entity["@id"] = obj.githubUserMetadata.html_url
+        elif model_name == "GitHubOrganization" and hasattr(obj, "githubOrganizationMetadata") and obj.githubOrganizationMetadata:
+            # Use html_url from githubOrganizationMetadata for GitHubOrganization
+            jsonld_entity["@id"] = obj.githubOrganizationMetadata.html_url
+        elif model_name == "Person":
+            # Generate IRI for Person based on their identifiers
+            person_iri = _generate_person_iri(obj)
+            if person_iri:
+                jsonld_entity["@id"] = person_iri
+        elif model_name == "GitHubUser" and base_url:
+            # Fallback to base_url if provided for users
+            jsonld_entity["@id"] = base_url
+        elif model_name == "GitHubOrganization" and base_url:
+            # Fallback to base_url if provided for organizations
+            jsonld_entity["@id"] = base_url
 
         type_mapping = {
             "SoftwareSourceCode": "schema:SoftwareSourceCode",
@@ -750,18 +788,64 @@ def convert_pydantic_to_jsonld(
 
             if pydantic_key not in key_map:
                 continue
+            
+            # Skip the 'type' field for models - we handle @type via type_mapping
+            if pydantic_key == "type":
+                continue
+            
+            # Skip contributionSummary for Person objects - this is a property of Contribution, not Person identity
+            if model_name == "Person" and pydantic_key == "contributionSummary":
+                continue
 
             jsonld_key = key_map[pydantic_key]
+
+            # Special handling for author field - create both author references and contribution objects
+            if pydantic_key == "author" and isinstance(value, list):
+                # Create schema:author with just IRI references
+                author_refs = []
+                # Create pulse:contribution with full Contribution objects
+                contributions = []
+                
+                for item in value:
+                    if isinstance(item, BaseModel) and item.__class__.__name__ == "Person":
+                        person_iri = _generate_person_iri(item)
+                        if person_iri:
+                            # Add IRI reference for schema:author
+                            author_refs.append({"@id": person_iri})
+                            
+                            # Create Contribution object if contributionSummary exists
+                            if hasattr(item, 'contributionSummary') and item.contributionSummary:
+                                contribution = {
+                                    "@type": "pulse:Contribution",
+                                    "pulse:contributor": {"@id": person_iri},
+                                    "pulse:role": item.contributionSummary
+                                }
+                                contributions.append(contribution)
+                
+                if author_refs:
+                    jsonld_entity["schema:author"] = author_refs
+                if contributions:
+                    jsonld_entity["pulse:contribution"] = contributions
+                
+                continue  # Skip the normal list handling below
 
             # Handle lists
             if isinstance(value, list):
                 jsonld_values = []
                 for item in value:
                     if isinstance(item, BaseModel):
-                        # Nested model - convert recursively
-                        converted = _convert_entity_to_jsonld(item)
-                        if converted:
-                            jsonld_values.append(converted)
+                        item_model_name = item.__class__.__name__
+                        
+                        # For Person objects in author field, just output IRI reference
+                        if item_model_name == "Person" and pydantic_key == "author":
+                            person_iri = _generate_person_iri(item)
+                            if person_iri:
+                                jsonld_values.append({"@id": person_iri})
+                        else:
+                            # Nested model - convert recursively
+                            converted = _convert_entity_to_jsonld(item)
+                            if converted:
+                                jsonld_values.append(converted)
                     else:
                         # Primitive or HttpUrl
                         converted = _convert_entity_to_jsonld(item)
@@ -773,9 +857,17 @@ def convert_pydantic_to_jsonld(
 
             # Handle nested models
             elif isinstance(value, BaseModel):
-                converted = _convert_entity_to_jsonld(value)
-                if converted:
-                    jsonld_entity[jsonld_key] = converted
+                nested_model_name = value.__class__.__name__
+                
+                # For Person objects in author field, just output IRI reference
+                if nested_model_name == "Person" and pydantic_key == "author":
+                    person_iri = _generate_person_iri(value)
+                    if person_iri:
+                        jsonld_entity[jsonld_key] = {"@id": person_iri}
+                else:
+                    converted = _convert_entity_to_jsonld(value)
+                    if converted:
+                        jsonld_entity[jsonld_key] = converted
 
             # Handle dictionaries that might be serialized BaseModels
             elif isinstance(value, dict):
@@ -838,16 +930,57 @@ def convert_pydantic_to_jsonld(
         
         return jsonld_entity
 
+    # Collect all Person entities encountered during conversion
+    person_entities = {}  # Dict to deduplicate by IRI
+    
+    def _collect_and_convert_person(person_obj: Any) -> Optional[str]:
+        """Convert a Person object and collect it, returning its IRI."""
+        person_iri = _generate_person_iri(person_obj)
+        if not person_iri:
+            return None
+        
+        # If we haven't seen this person yet, convert and store them
+        if person_iri not in person_entities:
+            person_entity = _convert_entity_to_jsonld(person_obj, entity_id=person_iri)
+            if person_entity:
+                person_entities[person_iri] = person_entity
+        
+        return person_iri
+
     # Convert the main object
     main_entity = _convert_entity_to_jsonld(pydantic_obj, base_url)
 
     if not main_entity:
         return {}
 
+    # Collect Person entities from the main object
+    # We need to traverse and collect all Person objects
+    def _collect_persons_from_obj(obj: Any):
+        """Recursively collect Person objects from the data structure."""
+        if isinstance(obj, BaseModel):
+            if obj.__class__.__name__ == "Person":
+                _collect_and_convert_person(obj)
+            # Traverse all fields
+            for key, value in obj:
+                _collect_persons_from_obj(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                _collect_persons_from_obj(item)
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                _collect_persons_from_obj(value)
+    
+    # Collect all Person entities
+    _collect_persons_from_obj(pydantic_obj)
+
+    # Build the graph with main entity and all collected persons
+    graph_entities = [main_entity]
+    graph_entities.extend(person_entities.values())
+
     # Return as JSON-LD graph structure
     result = {
         "@context": context,
-        "@graph": [main_entity],
+        "@graph": graph_entities,
     }
 
     return result
