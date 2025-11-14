@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Optional
 
 from ..agents.academic_catalog_enrichment import enrich_repository_academic_catalog
 from ..agents.atomic_agents import (
@@ -155,16 +156,12 @@ class Repository:
 
         # Stage 2: Generate structured output
         logger.info("Stage 2: Generating structured output...")
-        # Get simplified schema and example
-        # Create a temporary instance to get the schema
-        from ..data_models.models import RepositoryType
-        from ..data_models.repository import SoftwareSourceCode
+        # Get simplified schema from the dynamically generated model
+        # Import the simplified model (it's generated at module level in structured_output)
+        from ..agents.atomic_agents.structured_output import _SIMPLIFIED_MODEL
 
-        temp_instance = SoftwareSourceCode(
-            repositoryType=RepositoryType.OTHER,
-            repositoryTypeJustification=[],
-        )
-        schema = temp_instance.to_simplified_schema()
+        # Generate schema from the simplified model's JSON schema
+        schema = _SIMPLIFIED_MODEL.model_json_schema()
         # Create a minimal example for reference
         example = {
             "name": "Example Repository",
@@ -200,8 +197,11 @@ class Repository:
         else:
             simplified_dict = structured_output
 
+        # Get union_metadata for reconciliation
+        union_metadata = structured_result.get("union_metadata", {})
+
         # Convert simplified dict to full SoftwareSourceCode format
-        full_dict = self._convert_simplified_to_full(simplified_dict)
+        full_dict = self._convert_simplified_to_full(simplified_dict, union_metadata)
 
         # Stage 3: EPFL relationship check
         logger.info("Stage 3: Checking EPFL relationship...")
@@ -240,23 +240,77 @@ class Repository:
         except Exception as e:
             logger.error(f"Failed to validate SoftwareSourceCode: {e}", exc_info=True)
 
-    def _convert_simplified_to_full(self, simplified_dict: dict) -> dict:
+    def _convert_simplified_to_full(
+        self,
+        simplified_dict: dict,
+        union_metadata: Optional[dict] = None,
+    ) -> dict:
         """
         Convert simplified output dict to full SoftwareSourceCode format.
 
         Args:
             simplified_dict: Simplified output from structured output agent
+            union_metadata: Metadata about Union fields that were split (for reconciliation)
 
         Returns:
             Dictionary in full SoftwareSourceCode format
         """
         from datetime import date
 
-        from pydantic import HttpUrl
+        from pydantic import BaseModel, HttpUrl
 
         from ..data_models.models import RepositoryType
 
-        full_dict = {}
+        if union_metadata is None:
+            union_metadata = {}
+
+        full_dict = simplified_dict.copy()
+
+        # Handle Union fields first
+        for original_field, union_info_list in union_metadata.items():
+            reconciled_values = []
+            is_list = False  # Default to not being a list
+            for union_info in union_info_list:
+                is_list = union_info.get("is_list", False)
+                for new_field_name, field_data in union_info["fields"].items():
+                    if (
+                        new_field_name in simplified_dict
+                        and simplified_dict[new_field_name] is not None
+                    ):
+                        values = simplified_dict[new_field_name]
+
+                        # Ensure values is a list for consistent processing
+                        if not isinstance(values, list):
+                            values = [values]
+
+                        for value in values:
+                            target_type = field_data["type"]
+                            if isinstance(target_type, type) and issubclass(
+                                target_type,
+                                BaseModel,
+                            ):
+                                if isinstance(value, dict):
+                                    reconciled_values.append(target_type(**value))
+                                else:
+                                    reconciled_values.append(
+                                        value,
+                                    )  # Already a model instance
+                            else:
+                                reconciled_values.append(value)
+
+                        # Remove the split field from the dictionary
+                        if new_field_name in full_dict:
+                            del full_dict[new_field_name]
+
+            if reconciled_values:
+                if is_list:
+                    full_dict[original_field] = reconciled_values
+                else:
+                    full_dict[original_field] = (
+                        reconciled_values[0] if reconciled_values else None
+                    )
+            else:
+                full_dict[original_field] = [] if is_list else None
 
         # name
         if "name" in simplified_dict:
@@ -267,10 +321,10 @@ class Repository:
             full_dict["applicationCategory"] = simplified_dict["applicationCategory"]
 
         # codeRepository - convert strings to HttpUrl
-        if "codeRepository" in simplified_dict:
+        if "codeRepository" in simplified_dict and full_dict.get("codeRepository"):
             try:
                 full_dict["codeRepository"] = [
-                    HttpUrl(url) for url in simplified_dict["codeRepository"]
+                    HttpUrl(url) for url in full_dict["codeRepository"]
                 ]
             except Exception as e:
                 logger.warning(f"Failed to convert codeRepository URLs: {e}")
@@ -282,38 +336,22 @@ class Repository:
                 full_dict["dateCreated"] = date.fromisoformat(
                     simplified_dict["dateCreated"],
                 )
-            except Exception as e:
-                logger.warning(f"Failed to parse dateCreated: {e}")
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Failed to parse dateCreated: {simplified_dict['dateCreated']}",
+                )
+                full_dict["dateCreated"] = None
 
         # license
         if "license" in simplified_dict:
             full_dict["license"] = simplified_dict["license"]
 
-        # author - convert to Person objects
-        if "author" in simplified_dict and simplified_dict["author"]:
-            authors = []
-            for auth in simplified_dict["author"]:
-                author_dict = {
-                    "type": "Person",
-                    "name": auth.get("name", ""),
-                }
-                if auth.get("email"):
-                    author_dict["emails"] = (
-                        [auth["email"]]
-                        if isinstance(auth["email"], str)
-                        else auth["email"]
-                    )
-                if auth.get("orcid"):
-                    author_dict["orcid"] = auth["orcid"]
-                if auth.get("affiliations"):
-                    author_dict["affiliations"] = auth["affiliations"]
-                authors.append(author_dict)
-            full_dict["author"] = authors
-
         # gitAuthors - convert to GitAuthor format
-        if "gitAuthors" in simplified_dict and simplified_dict["gitAuthors"]:
+        if "gitAuthors" in simplified_dict and simplified_dict.get("gitAuthors"):
             git_authors = []
             for git_auth in simplified_dict["gitAuthors"]:
+                if not git_auth:
+                    continue
                 git_author_dict = {
                     "name": git_auth.get("name", ""),
                 }
@@ -336,7 +374,7 @@ class Repository:
             full_dict["gitAuthors"] = git_authors
 
         # discipline - convert strings to Discipline enum
-        if "discipline" in simplified_dict and simplified_dict["discipline"]:
+        if "discipline" in simplified_dict and simplified_dict.get("discipline"):
             from ..data_models.models import Discipline
 
             disciplines = []
@@ -361,7 +399,9 @@ class Repository:
             ]
 
         # repositoryType - convert string to RepositoryType enum
-        if "repositoryType" in simplified_dict:
+        if "repositoryType" in simplified_dict and simplified_dict.get(
+            "repositoryType",
+        ):
             try:
                 repo_type_str = simplified_dict["repositoryType"]
                 for repo_type in RepositoryType:

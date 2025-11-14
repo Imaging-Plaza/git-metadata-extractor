@@ -4,18 +4,13 @@ Test script to demonstrate the caching functionality.
 This script shows how the caching system reduces external API calls.
 """
 
-import sys
 import time
-from pathlib import Path
 
 import requests
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-# Import after path modification
-from core.cache import get_cache
-from core.cache_manager import get_cache_manager
+from src.cache.cache import get_cache
+from src.cache.cache_manager import get_cache_manager
 
 
 def test_cache_basic_functionality():

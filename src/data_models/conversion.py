@@ -4,10 +4,10 @@ Conversion functions for the data models
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import Any, Dict, Optional, Tuple, Type, Union, get_args, get_origin
 from typing import List as ListType
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, create_model
 
 from .models import (
     Organization,
@@ -607,5 +607,335 @@ def convert_pydantic_to_jsonld(
         "@context": context,
         "@graph": [main_entity],
     }
+
+    return result
+
+
+############################################################
+#
+# Simplified Model Generation for vLLM Compatibility
+#
+############################################################
+
+# Module-level cache for generated simplified models
+_SIMPLIFIED_MODEL_CACHE: Dict[
+    Type[BaseModel],
+    Tuple[Type[BaseModel], Dict[str, Any]],
+] = {}
+
+
+def _is_pydantic_model(annotation: Any) -> bool:
+    """Check if an annotation is a Pydantic BaseModel class."""
+    return (
+        isinstance(annotation, type)
+        and issubclass(annotation, BaseModel)
+        and annotation is not BaseModel
+    )
+
+
+def _get_type_name(type_obj: Any) -> str:
+    """Get a clean type name for field naming."""
+    if isinstance(type_obj, type):
+        # Capitalize primitive types for better field names
+        if type_obj is str:
+            return "String"
+        elif type_obj is int:
+            return "Int"
+        elif type_obj is float:
+            return "Float"
+        elif type_obj is bool:
+            return "Bool"
+        return type_obj.__name__
+    type_str = str(type_obj).replace("typing.", "").replace("'", "")
+    # Capitalize common types
+    if type_str == "str":
+        return "String"
+    elif type_str == "int":
+        return "Int"
+    elif type_str == "float":
+        return "Float"
+    elif type_str == "bool":
+        return "Bool"
+    return type_str
+
+
+def _simplify_type(
+    annotation: Any,
+    memo: Dict[Type[BaseModel], Tuple[Type[BaseModel], Dict[str, Any]]],
+    union_metadata: Dict[str, Any],
+    field_name: str,
+) -> Tuple[Any, Optional[str]]:
+    """
+    Convert a type annotation to a simplified type.
+
+    Returns:
+        Tuple of (simplified_type, description_addition)
+    """
+    origin = get_origin(annotation)
+
+    # Handle Optional (Union with None)
+    if origin is Union:
+        args = get_args(annotation)
+        # Filter out NoneType
+        non_none_args = [arg for arg in args if arg is not type(None)]
+
+        if len(non_none_args) == 0:
+            return (Optional[str], " (Original type: None)")
+
+        # If only one non-None type, simplify it
+        if len(non_none_args) == 1:
+            simplified, desc = _simplify_type(
+                non_none_args[0],
+                memo,
+                union_metadata,
+                field_name,
+            )
+            return (Optional[simplified], desc)
+
+        # Multiple types in Union - need to split into separate fields
+        # Store metadata for reconciliation
+        union_info = {
+            "original_field": field_name,
+            "types": non_none_args,
+            "fields": {},
+        }
+
+        simplified_types = []
+        for union_type in non_none_args:
+            simplified, desc = _simplify_type(
+                union_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            type_name = _get_type_name(union_type)
+            field_suffix = type_name.replace("typing.", "").replace("'", "")
+            new_field_name = f"{field_name}{field_suffix}"
+            union_info["fields"][new_field_name] = {
+                "type": union_type,
+                "simplified_type": simplified,
+                "description": desc,
+            }
+            simplified_types.append((new_field_name, simplified, desc))
+
+        # Store in union_metadata
+        if field_name not in union_metadata:
+            union_metadata[field_name] = []
+        union_metadata[field_name].append(union_info)
+
+        # Return None to indicate this field should be split
+        return (None, None)
+
+    # Handle List types
+    if origin is list or origin is ListType:
+        args = get_args(annotation)
+        if args:
+            inner_type = args[0]
+            inner_origin = get_origin(inner_type)
+
+            # Check if inner type is a Union that needs splitting
+            if inner_origin is Union:
+                inner_args = get_args(inner_type)
+                non_none_inner_args = [
+                    arg for arg in inner_args if arg is not type(None)
+                ]
+
+                if len(non_none_inner_args) > 1:
+                    # List[Union[A, B]] - split into separate List fields
+                    union_info = {
+                        "original_field": field_name,
+                        "types": non_none_inner_args,
+                        "fields": {},
+                        "is_list": True,
+                    }
+
+                    for union_type in non_none_inner_args:
+                        simplified, desc = _simplify_type(
+                            union_type,
+                            memo,
+                            union_metadata,
+                            field_name,
+                        )
+                        type_name = _get_type_name(union_type)
+                        field_suffix = type_name.replace("typing.", "").replace("'", "")
+                        new_field_name = f"{field_name}{field_suffix}"
+                        union_info["fields"][new_field_name] = {
+                            "type": union_type,
+                            "simplified_type": ListType[simplified],
+                            "description": desc,
+                        }
+
+                    # Store in union_metadata
+                    if field_name not in union_metadata:
+                        union_metadata[field_name] = []
+                    union_metadata[field_name].append(union_info)
+
+                    # Return None to indicate this field should be split
+                    return (None, None)
+
+            # Normal List handling
+            simplified_inner, desc = _simplify_type(
+                inner_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            if simplified_inner is None:
+                # This shouldn't happen after the Union check above, but handle it
+                return (None, None)
+            return (ListType[simplified_inner], desc)
+        return (ListType[str], " (Original type: List)")
+
+    # Handle HttpUrl -> str
+    if annotation is HttpUrl or (
+        isinstance(annotation, type) and issubclass(annotation, HttpUrl)
+    ):
+        return (str, " (Original type: HttpUrl)")
+
+    # Handle date -> str
+    if annotation is date:
+        return (str, " (Original type: date, ISO format: YYYY-MM-DD)")
+
+    # Handle datetime -> str
+    if annotation is datetime:
+        return (str, " (Original type: datetime, ISO format)")
+
+    # Handle Enum -> str
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        enum_values = [e.value for e in annotation]
+        return (
+            str,
+            f" (Original type: {annotation.__name__} enum, values: {enum_values})",
+        )
+
+    # Handle Pydantic models - recursively simplify
+    if _is_pydantic_model(annotation):
+        simplified_model, _ = create_simplified_model(annotation, memo)
+        return (simplified_model, f" (Original type: {annotation.__name__})")
+
+    # Primitive types - keep as-is
+    if annotation in (str, int, float, bool):
+        return (annotation, None)
+
+    # Default: convert to str
+    return (str, f" (Original type: {annotation})")
+
+
+def create_simplified_model(
+    source_model: Type[BaseModel],
+    memo: Optional[
+        Dict[Type[BaseModel], Tuple[Type[BaseModel], Dict[str, Any]]]
+    ] = None,
+) -> Tuple[Type[BaseModel], Dict[str, Any]]:
+    """
+    Dynamically create a simplified Pydantic model from a source model.
+
+    Converts complex Pydantic types (HttpUrl, date, datetime, Enum) to primitives (str)
+    and splits Union types into separate fields for vLLM compatibility.
+
+    Args:
+        source_model: The source Pydantic model class to simplify (e.g., SoftwareSourceCode)
+        memo: Optional memoization cache (uses module-level cache if None)
+
+    Returns:
+        Tuple of (simplified_model_class, union_metadata)
+        - simplified_model_class: The dynamically created simplified model
+        - union_metadata: Dict mapping original field names to Union field info for reconciliation
+
+    Example:
+        SimplifiedSoftwareSourceCode, union_meta = create_simplified_model(SoftwareSourceCode)
+        # Use SimplifiedSoftwareSourceCode as output_type in PydanticAI agent
+    """
+    # Use module-level cache if memo not provided
+    use_module_cache = memo is None
+    if use_module_cache:
+        if source_model in _SIMPLIFIED_MODEL_CACHE:
+            return _SIMPLIFIED_MODEL_CACHE[source_model]
+        memo = {}
+
+    # Check memoization cache
+    if source_model in memo:
+        return memo[source_model]
+
+    # Track union metadata for this model
+    union_metadata: Dict[str, Any] = {}
+
+    # Get all fields from source model
+    new_fields: Dict[str, Any] = {}
+
+    for field_name, field_info in source_model.model_fields.items():
+        annotation = field_info.annotation
+        default = field_info.default if field_info.default is not ... else None
+        default_factory = (
+            field_info.default_factory
+            if field_info.default_factory is not ...
+            else None
+        )
+
+        # Simplify the type (this may populate union_metadata)
+        simplified_type, desc_addition = _simplify_type(
+            annotation,
+            memo,
+            union_metadata,
+            field_name,
+        )
+
+        # If simplified_type is None, it's a Union that needs splitting
+        # Skip this field - it will be split into separate fields later
+        if simplified_type is None:
+            continue
+
+        # Double-check: if field_name is now in union_metadata, skip it
+        # (this handles the case where union_metadata was populated during _simplify_type)
+        if field_name in union_metadata:
+            continue
+
+        # Build description
+        description = field_info.description or ""
+        if desc_addition:
+            description = f"{description}{desc_addition}".strip()
+
+        # Create Field with description
+        if default_factory is not None:
+            # Handle default_factory (e.g., default_factory=list)
+            # Fields with default_factory are not required, so use the type directly (not Optional)
+            new_fields[field_name] = (
+                simplified_type,
+                Field(default_factory=default_factory, description=description),
+            )
+        elif default is None and not field_info.is_required():
+            new_fields[field_name] = (
+                Optional[simplified_type],
+                Field(default=None, description=description),
+            )
+        elif default is not None:
+            new_fields[field_name] = (
+                simplified_type,
+                Field(default=default, description=description),
+            )
+        else:
+            new_fields[field_name] = (simplified_type, Field(description=description))
+
+    # Handle Union field splitting - add separate fields
+    for field_name, union_info_list in union_metadata.items():
+        for union_info in union_info_list:
+            for new_field_name, field_data in union_info["fields"].items():
+                simplified_type = field_data["simplified_type"]
+                description = f"Part of Union field '{field_name}'. {field_data['description'] or ''}"
+                description = description.strip()
+                new_fields[new_field_name] = (
+                    Optional[simplified_type],
+                    Field(default=None, description=description),
+                )
+
+    # Create the simplified model
+    simplified_model_name = f"Simplified{source_model.__name__}"
+    simplified_model = create_model(simplified_model_name, **new_fields)
+
+    # Cache the result
+    result = (simplified_model, union_metadata)
+    memo[source_model] = result
+    if use_module_cache:
+        _SIMPLIFIED_MODEL_CACHE[source_model] = result
 
     return result

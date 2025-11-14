@@ -10,10 +10,12 @@ import logging
 from pprint import pformat
 from typing import Any, Dict, Optional
 
+from ...data_models.conversion import create_simplified_model
+from ...data_models.repository import SoftwareSourceCode
 from ...llm.model_config import load_model_config, validate_config
 from ...utils.token_counter import estimate_tokens_from_messages
 from ..agents_management import run_agent_with_fallback
-from .models import CompiledContext, SimplifiedRepositoryOutput
+from .models import CompiledContext
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,10 @@ for config in STRUCTURED_OUTPUT_CONFIGS:
     if not validate_config(config):
         logger.error(f"Invalid configuration for structured output: {config}")
         raise ValueError("Invalid model configuration")
+
+# Generate simplified model dynamically from SoftwareSourceCode
+# Cache it at module level to avoid regenerating on every call
+_SIMPLIFIED_MODEL, _UNION_METADATA = create_simplified_model(SoftwareSourceCode)
 
 # System prompt for structured output agent
 STRUCTURED_OUTPUT_SYSTEM_PROMPT = """
@@ -107,7 +113,8 @@ async def generate_structured_output(
         example: Optional example output
 
     Returns:
-        Dictionary with 'data' (SimplifiedRepositoryOutput) and 'usage' (dict with token info)
+        Dictionary with 'data' (dynamically generated simplified model), 'usage' (dict with token info),
+        and 'union_metadata' (dict for Union field reconciliation)
     """
     # Create context for the agent
     agent_context = {
@@ -123,11 +130,12 @@ async def generate_structured_output(
 
     try:
         # Run agent with fallback across multiple models
+        # Use dynamically generated simplified model
         result = await run_agent_with_fallback(
             STRUCTURED_OUTPUT_CONFIGS,
             prompt,
             agent_context,
-            SimplifiedRepositoryOutput,
+            _SIMPLIFIED_MODEL,
             STRUCTURED_OUTPUT_SYSTEM_PROMPT,
             tools,  # No tools for this agent
         )
@@ -196,6 +204,7 @@ async def generate_structured_output(
         return {
             "data": structured_output,
             "usage": usage_data,
+            "union_metadata": _UNION_METADATA,
         }
 
     except Exception as e:
@@ -203,4 +212,5 @@ async def generate_structured_output(
         return {
             "data": None,
             "usage": None,
+            "union_metadata": _UNION_METADATA,
         }
