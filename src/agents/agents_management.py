@@ -72,12 +72,26 @@ def create_agent_from_config(
     """
     model = create_pydantic_ai_model(config)
 
+    # Check if tools are allowed for this model configuration
+    # Default to True if not specified (backward compatibility)
+    allow_tools = config.get("allow_tools", True)
+
+    # Only register tools if allowed and tools are provided
+    agent_tools = []
+    if allow_tools and tools:
+        agent_tools = tools
+    elif not allow_tools and tools:
+        logger.warning(
+            f"Tools provided but allow_tools=False for {config.get('provider')}/{config.get('model')}. "
+            "Tools will not be registered.",
+        )
+
     # Create agent with the model and optional tools
     agent = Agent(
         model=model,
         output_type=output_type,  # SoftwareSourceCode,
         system_prompt=system_prompt,  # system_prompt_json,
-        tools=tools or [],  # Register tools if provided
+        tools=agent_tools,  # Register tools only if allowed
     )
 
     # Track agent for cleanup

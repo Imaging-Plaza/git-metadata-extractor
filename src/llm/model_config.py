@@ -15,16 +15,17 @@ logger = logging.getLogger(__name__)
 # Default model configurations
 MODEL_CONFIGS = {
     "run_llm_analysis": [
-        # {
-        #     "provider": "openai-compatible",
-        #     "model": "openai/gpt-oss-120b",
-        #     "base_url": "https://inference.rcp.epfl.ch/v1",
-        #     "api_key_env": "RCP_TOKEN",
-        #     "max_retries": 3,
-        #     "temperature": 0.2,
-        #     "max_tokens": 16000,
-        #     "timeout": 600.0,
-        # },
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 600.0,
+            "allow_tools": True,  # Enable tool usage for this model
+        },
         {
             "provider": "openai",
             "model": "o4-mini",
@@ -180,6 +181,45 @@ MODEL_CONFIGS = {
             "timeout": 60.0,
         },
     ],
+    "run_context_compiler": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 600.0,
+            "allow_tools": False,  # No tools - only use repository content and GIMIE data
+        },
+    ],
+    "run_structured_output": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 600.0,
+            "allow_tools": False,  # No tools for structured output
+        },
+    ],
+    "run_epfl_checker": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools for EPFL checker
+        },
+    ],
 }
 
 # Environment variable mappings
@@ -190,6 +230,9 @@ ENV_VAR_MAPPINGS = {
     "run_academic_catalog_enrichment": "ACADEMIC_CATALOG_ENRICHMENT_MODELS",
     "run_epfl_assessment": "EPFL_ASSESSMENT_MODELS",
     "run_url_validation": "URL_VALIDATION_MODELS",
+    "run_context_compiler": "CONTEXT_COMPILER_MODELS",
+    "run_structured_output": "STRUCTURED_OUTPUT_MODELS",
+    "run_epfl_checker": "EPFL_CHECKER_MODELS",
 }
 
 
@@ -292,6 +335,7 @@ def get_model_parameters(config: Dict[str, Any]) -> Dict[str, Any]:
         "base_url",
         "api_key_env",
         "max_completion_tokens",
+        "allow_tools",  # Tool access flag, not a model parameter
     }
 
     # Filter out non-parameter keys

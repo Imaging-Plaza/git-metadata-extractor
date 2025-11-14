@@ -2,11 +2,16 @@ import logging
 from datetime import datetime
 
 from ..agents.academic_catalog_enrichment import enrich_repository_academic_catalog
+from ..agents.atomic_agents import (
+    check_epfl_relationship,
+    compile_repository_context,
+    generate_structured_output,
+)
 from ..agents.epfl_assessment import assess_epfl_relationship
 from ..agents.organization_enrichment import enrich_organizations_from_dict
-from ..agents.repository import llm_request_repo_infos
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
+from ..context import prepare_repository_context
 from ..data_models import Organization, SoftwareSourceCode
 from ..gimie_utils.gimie_methods import extract_gimie
 from ..utils.utils import enrich_authors_with_orcid
@@ -66,42 +71,319 @@ class Repository:
             self.gimie = jsonld_gimie_data
 
     async def run_llm_analysis(self):
-        result = await llm_request_repo_infos(
-            str(self.full_path),
-            gimie_output=self.gimie,
-            max_tokens=10000,
+        """Run LLM analysis using the atomic agent pipeline."""
+        await self.run_atomic_llm_pipeline()
+
+    async def run_atomic_llm_pipeline(self):
+        """
+        Run atomic agent pipeline: context compilation -> structured output -> EPFL check.
+
+        This implements a two-stage pipeline:
+        1. Context compiler: Gathers repository information using tools
+        2. Structured output: Produces structured metadata from compiled context
+        3. EPFL checker: Assesses EPFL relationship from compiled context
+        """
+        logger.info(f"Starting atomic LLM pipeline for {self.full_path}")
+
+        # Prepare repository context (clone, extract content, etc.)
+        context_result = await prepare_repository_context(
+            self.full_path,
+            max_tokens=40000,
         )
 
-        # Extract data and usage
-        llm_data = result.get("data") if isinstance(result, dict) else result
-        usage = result.get("usage") if isinstance(result, dict) else None
+        if not context_result["success"]:
+            logger.error(
+                f"Failed to prepare repository context: {context_result.get('error')}",
+            )
+            return
 
-        # Accumulate official API-reported usage data
+        repository_content = context_result["input_text"]
+        git_authors = context_result.get("git_authors", [])
+
+        logger.debug("=" * 80)
+        logger.debug("REPOSITORY CONTENT PROVIDED TO CONTEXT COMPILER:")
+        logger.debug("=" * 80)
+        logger.debug(f"Content length: {len(repository_content)} chars")
+        logger.debug(f"First 1000 chars: {repository_content[:1000]}")
+        logger.debug("=" * 80)
+
+        # Prepare GIMIE data as string if available
+        gimie_data = None
+        if self.gimie:
+            import json as json_module
+
+            gimie_data = (
+                json_module.dumps(self.gimie)
+                if isinstance(self.gimie, dict)
+                else str(self.gimie)
+            )
+            logger.debug("=" * 80)
+            logger.debug("GIMIE DATA PROVIDED TO CONTEXT COMPILER:")
+            logger.debug("=" * 80)
+            logger.debug(
+                gimie_data[:2000] if len(gimie_data) > 2000 else gimie_data,
+            )  # First 2000 chars
+            if len(gimie_data) > 2000:
+                logger.debug(f"... (truncated, total length: {len(gimie_data)} chars)")
+            logger.debug("=" * 80)
+        else:
+            logger.warning("No GIMIE data available for context compiler")
+
+        # Stage 1: Compile repository context
+        logger.info("Stage 1: Compiling repository context...")
+        compiled_result = await compile_repository_context(
+            repo_url=self.full_path,
+            repository_content=repository_content,
+            gimie_data=gimie_data,
+            git_authors=git_authors,
+        )
+
+        compiled_context = compiled_result.get("data")
+        usage = compiled_result.get("usage")
+
+        if not compiled_context:
+            logger.error("Context compilation failed")
+            return
+
+        # Accumulate usage from context compiler
         if usage:
             self.total_input_tokens += usage.get("input_tokens", 0)
             self.total_output_tokens += usage.get("output_tokens", 0)
-            logger.info(
-                f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens",
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+        # Stage 2: Generate structured output
+        logger.info("Stage 2: Generating structured output...")
+        # Get simplified schema and example
+        # Create a temporary instance to get the schema
+        from ..data_models.models import RepositoryType
+        from ..data_models.repository import SoftwareSourceCode
+
+        temp_instance = SoftwareSourceCode(
+            repositoryType=RepositoryType.OTHER,
+            repositoryTypeJustification=[],
+        )
+        schema = temp_instance.to_simplified_schema()
+        # Create a minimal example for reference
+        example = {
+            "name": "Example Repository",
+            "repositoryType": "software",
+            "repositoryTypeJustification": ["Contains source code"],
+        }
+
+        structured_result = await generate_structured_output(
+            compiled_context=compiled_context,
+            schema=schema,
+            example=example,
+        )
+
+        structured_output = structured_result.get("data")
+        usage = structured_result.get("usage")
+
+        if not structured_output:
+            logger.error("Structured output generation failed")
+            return
+
+        # Accumulate usage from structured output
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+        # Convert simplified output to SoftwareSourceCode
+        # First convert to dict
+        if hasattr(structured_output, "model_dump"):
+            simplified_dict = structured_output.model_dump()
+        else:
+            simplified_dict = structured_output
+
+        # Convert simplified dict to full SoftwareSourceCode format
+        full_dict = self._convert_simplified_to_full(simplified_dict)
+
+        # Stage 3: EPFL relationship check
+        logger.info("Stage 3: Checking EPFL relationship...")
+        epfl_result = await check_epfl_relationship(compiled_context=compiled_context)
+
+        epfl_assessment = epfl_result.get("data")
+        usage = epfl_result.get("usage")
+
+        # Accumulate usage from EPFL checker
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+        # Add EPFL assessment to full_dict
+        if epfl_assessment:
+            if hasattr(epfl_assessment, "model_dump"):
+                epfl_dict = epfl_assessment.model_dump()
+            else:
+                epfl_dict = epfl_assessment
+
+            full_dict["relatedToEPFL"] = epfl_dict.get("relatedToEPFL")
+            full_dict["relatedToEPFLConfidence"] = epfl_dict.get(
+                "relatedToEPFLConfidence",
+            )
+            full_dict["relatedToEPFLJustification"] = epfl_dict.get(
+                "relatedToEPFLJustification",
             )
 
-        # Accumulate estimated tokens
-        if usage and "estimated_input_tokens" in usage:
-            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
-            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
-            logger.info(
-                f"LLM analysis estimated: {usage.get('estimated_input_tokens', 0)} input, {usage.get('estimated_output_tokens', 0)} output tokens",
-            )
+        # Validate and create SoftwareSourceCode
+        try:
+            self.data = SoftwareSourceCode.model_validate(full_dict)
+            logger.info("Atomic LLM pipeline completed successfully")
+        except Exception as e:
+            logger.error(f"Failed to validate SoftwareSourceCode: {e}", exc_info=True)
 
-        # Output Validation
-        if isinstance(llm_data, str):
-            llm_data = SoftwareSourceCode.model_validate_json(llm_data)
-        elif isinstance(llm_data, dict):
-            llm_data = SoftwareSourceCode.model_validate(llm_data)
+    def _convert_simplified_to_full(self, simplified_dict: dict) -> dict:
+        """
+        Convert simplified output dict to full SoftwareSourceCode format.
 
-        if isinstance(llm_data, SoftwareSourceCode):
-            self.data = llm_data
+        Args:
+            simplified_dict: Simplified output from structured output agent
 
-        # TODO: Handle errors and logging
+        Returns:
+            Dictionary in full SoftwareSourceCode format
+        """
+        from datetime import date
+
+        from pydantic import HttpUrl
+
+        from ..data_models.models import RepositoryType
+
+        full_dict = {}
+
+        # name
+        if "name" in simplified_dict:
+            full_dict["name"] = simplified_dict["name"]
+
+        # applicationCategory
+        if "applicationCategory" in simplified_dict:
+            full_dict["applicationCategory"] = simplified_dict["applicationCategory"]
+
+        # codeRepository - convert strings to HttpUrl
+        if "codeRepository" in simplified_dict:
+            try:
+                full_dict["codeRepository"] = [
+                    HttpUrl(url) for url in simplified_dict["codeRepository"]
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to convert codeRepository URLs: {e}")
+                full_dict["codeRepository"] = []
+
+        # dateCreated - convert string to date
+        if "dateCreated" in simplified_dict and simplified_dict["dateCreated"]:
+            try:
+                full_dict["dateCreated"] = date.fromisoformat(
+                    simplified_dict["dateCreated"],
+                )
+            except Exception as e:
+                logger.warning(f"Failed to parse dateCreated: {e}")
+
+        # license
+        if "license" in simplified_dict:
+            full_dict["license"] = simplified_dict["license"]
+
+        # author - convert to Person objects
+        if "author" in simplified_dict and simplified_dict["author"]:
+            authors = []
+            for auth in simplified_dict["author"]:
+                author_dict = {
+                    "type": "Person",
+                    "name": auth.get("name", ""),
+                }
+                if auth.get("email"):
+                    author_dict["emails"] = (
+                        [auth["email"]]
+                        if isinstance(auth["email"], str)
+                        else auth["email"]
+                    )
+                if auth.get("orcid"):
+                    author_dict["orcid"] = auth["orcid"]
+                if auth.get("affiliations"):
+                    author_dict["affiliations"] = auth["affiliations"]
+                authors.append(author_dict)
+            full_dict["author"] = authors
+
+        # gitAuthors - convert to GitAuthor format
+        if "gitAuthors" in simplified_dict and simplified_dict["gitAuthors"]:
+            git_authors = []
+            for git_auth in simplified_dict["gitAuthors"]:
+                git_author_dict = {
+                    "name": git_auth.get("name", ""),
+                }
+                if git_auth.get("email"):
+                    git_author_dict["email"] = git_auth["email"]
+                if git_auth.get("commits"):
+                    commits_dict = git_auth["commits"]
+                    git_author_dict["commits"] = {
+                        "count": commits_dict.get("count", 0),
+                    }
+                    if commits_dict.get("firstCommit"):
+                        git_author_dict["commits"]["firstCommit"] = commits_dict[
+                            "firstCommit"
+                        ]
+                    if commits_dict.get("lastCommit"):
+                        git_author_dict["commits"]["lastCommit"] = commits_dict[
+                            "lastCommit"
+                        ]
+                git_authors.append(git_author_dict)
+            full_dict["gitAuthors"] = git_authors
+
+        # discipline - convert strings to Discipline enum
+        if "discipline" in simplified_dict and simplified_dict["discipline"]:
+            from ..data_models.models import Discipline
+
+            disciplines = []
+            for disc_str in simplified_dict["discipline"]:
+                try:
+                    # Try to match enum value
+                    for disc in Discipline:
+                        if disc.value.lower() == disc_str.lower():
+                            disciplines.append(disc)
+                            break
+                    else:
+                        # If no match, try to create from string
+                        disciplines.append(Discipline(disc_str))
+                except Exception:
+                    logger.warning(f"Failed to convert discipline: {disc_str}")
+            full_dict["discipline"] = disciplines if disciplines else None
+
+        # disciplineJustification
+        if "disciplineJustification" in simplified_dict:
+            full_dict["disciplineJustification"] = simplified_dict[
+                "disciplineJustification"
+            ]
+
+        # repositoryType - convert string to RepositoryType enum
+        if "repositoryType" in simplified_dict:
+            try:
+                repo_type_str = simplified_dict["repositoryType"]
+                for repo_type in RepositoryType:
+                    if repo_type.value.lower() == repo_type_str.lower():
+                        full_dict["repositoryType"] = repo_type
+                        break
+                else:
+                    # Default to "other" if not found
+                    full_dict["repositoryType"] = RepositoryType.OTHER
+            except Exception as e:
+                logger.warning(f"Failed to convert repositoryType: {e}")
+                full_dict["repositoryType"] = RepositoryType.OTHER
+
+        # repositoryTypeJustification
+        if "repositoryTypeJustification" in simplified_dict:
+            full_dict["repositoryTypeJustification"] = simplified_dict[
+                "repositoryTypeJustification"
+            ]
+        else:
+            full_dict["repositoryTypeJustification"] = []
+
+        return full_dict
 
     def run_authors_enrichment(self):
         logger.info(f"ORCID enrichment for {self.full_path}")
@@ -643,12 +925,13 @@ class Repository:
             await self.run_llm_analysis()
 
             # Only run author enrichment if LLM analysis succeeded
-            if self.data is not None:
-                self.run_authors_enrichment()
-            else:
-                logging.warning(
-                    f"Skipping author enrichment: LLM analysis failed for {self.full_path}",
-                )
+            # COMMENTED OUT FOR TESTING - ORCID enrichment uses external APIs
+            # if self.data is not None:
+            #     self.run_authors_enrichment()
+            # else:
+            #     logging.warning(
+            #         f"Skipping author enrichment: LLM analysis failed for {self.full_path}",
+            #     )
 
             logging.info(f"LLM analysis completed for {self.full_path}")
 
@@ -665,16 +948,18 @@ class Repository:
             logging.info(f"Organization enrichment completed for {self.full_path}")
 
         # Run academic catalog enrichment
-        if self.data is not None:
-            logging.info(f"Academic catalog enrichment for {self.full_path}")
-            await self.run_academic_catalog_enrichment()
-            logging.info(f"Academic catalog enrichment completed for {self.full_path}")
+        # COMMENTED OUT FOR TESTING - uses tools (Infoscience)
+        # if self.data is not None:
+        #     logging.info(f"Academic catalog enrichment for {self.full_path}")
+        #     await self.run_academic_catalog_enrichment()
+        #     logging.info(f"Academic catalog enrichment completed for {self.full_path}")
 
         # Run final EPFL assessment after all enrichments complete
-        if self.data is not None:
-            logging.info(f"Final EPFL assessment for {self.full_path}")
-            await self.run_epfl_final_assessment()
-            logging.info(f"Final EPFL assessment completed for {self.full_path}")
+        # COMMENTED OUT FOR TESTING - EPFL assessment is already done in atomic pipeline (Stage 3)
+        # if self.data is not None:
+        #     logging.info(f"Final EPFL assessment for {self.full_path}")
+        #     await self.run_epfl_final_assessment()
+        #     logging.info(f"Final EPFL assessment completed for {self.full_path}")
 
         # Only validate and cache if we have data
         if self.data is not None:
