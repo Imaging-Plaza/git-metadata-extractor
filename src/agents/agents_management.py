@@ -179,6 +179,18 @@ async def run_agent_with_retry(
                 # Try to extract more context from the exception
                 if hasattr(e, "__cause__") and e.__cause__:
                     logger.error(f"Underlying cause: {e.__cause__}")
+                    # Traverse nested exception chains to find validation details
+                    cause = e.__cause__
+                    depth = 0
+                    while (
+                        hasattr(cause, "__cause__") and cause.__cause__ and depth < 10
+                    ):
+                        cause = cause.__cause__
+                        logger.error(f"Nested cause (depth {depth + 1}): {cause}")
+                        # If it's a ValidationError, log the details
+                        if hasattr(cause, "errors"):
+                            logger.error(f"Validation errors: {cause.errors()}")
+                        depth += 1
                     # Try to get even more nested causes (pydantic_core.ValidationError might be deeper)
                     cause = e.__cause__
                     depth = 0

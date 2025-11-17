@@ -210,6 +210,12 @@ def setup_logging(level=logging.INFO, use_colors: bool = True):
     logging.getLogger("selenium").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    # Silence noisy HTTP/API client loggers that log every request/response at DEBUG
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpcore.http11").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+
 
 # Example usage context manager
 class RequestContext:

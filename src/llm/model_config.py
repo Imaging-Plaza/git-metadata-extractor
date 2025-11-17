@@ -207,7 +207,7 @@ MODEL_CONFIGS = {
             "allow_tools": False,  # No tools for structured output
         },
     ],
-    "run_epfl_checker": [
+    "run_repository_classifier": [
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
@@ -217,7 +217,46 @@ MODEL_CONFIGS = {
             "temperature": 0.1,
             "max_tokens": 8000,
             "timeout": 300.0,
-            "allow_tools": False,  # No tools for EPFL checker
+            "allow_tools": False,  # No tools - classifies from compiled context
+        },
+    ],
+    "run_organization_identifier": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools - identifies from compiled context
+        },
+    ],
+    "run_epfl_final_checker": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 16000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools - analyzes enriched data only
+        },
+    ],
+    "run_linked_entities_searcher": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 12000,
+            "timeout": 400.0,
+            "allow_tools": True,  # Needs Infoscience search tools
         },
     ],
 }
@@ -229,10 +268,13 @@ ENV_VAR_MAPPINGS = {
     "run_organization_enrichment": "ORG_ENRICHMENT_MODELS",
     "run_linked_entities_enrichment": "linked_entities_ENRICHMENT_MODELS",
     "run_epfl_assessment": "EPFL_ASSESSMENT_MODELS",
+    "run_repository_classifier": "REPOSITORY_CLASSIFIER_MODELS",
+    "run_organization_identifier": "ORGANIZATION_IDENTIFIER_MODELS",
     "run_url_validation": "URL_VALIDATION_MODELS",
     "run_context_compiler": "CONTEXT_COMPILER_MODELS",
     "run_structured_output": "STRUCTURED_OUTPUT_MODELS",
-    "run_epfl_checker": "EPFL_CHECKER_MODELS",
+    "run_epfl_final_checker": "EPFL_FINAL_CHECKER_MODELS",
+    "run_linked_entities_searcher": "LINKED_ENTITIES_SEARCHER_MODELS",
 }
 
 

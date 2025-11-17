@@ -4,7 +4,17 @@ Conversion functions for the data models
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple, Type, Union, get_args, get_origin
+from typing import (
+    Any,
+    Dict,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
+from typing import Dict as DictType
 from typing import List as ListType
 
 from pydantic import BaseModel, Field, HttpUrl, create_model
@@ -730,6 +740,34 @@ def _simplify_type(
         # Return None to indicate this field should be split
         return (None, None)
 
+    # Handle Dict types
+    if origin is dict or origin is DictType:
+        args = get_args(annotation)
+        if len(args) >= 2:
+            key_type = args[0]
+            value_type = args[1]
+
+            # Simplify both key and value types
+            simplified_key, key_desc = _simplify_type(
+                key_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            simplified_value, value_desc = _simplify_type(
+                value_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+
+            # Return Dict with simplified types
+            return (
+                DictType[simplified_key, simplified_value],
+                f" (Original type: Dict[{key_type}, {value_type}])",
+            )
+        return (DictType[str, Any], " (Original type: Dict)")
+
     # Handle List types
     if origin is list or origin is ListType:
         args = get_args(annotation)
@@ -804,11 +842,20 @@ def _simplify_type(
     if annotation is datetime:
         return (str, " (Original type: datetime, ISO format)")
 
-    # Handle Enum -> str
+    # Handle Enum -> Literal with enum values
     if isinstance(annotation, type) and issubclass(annotation, Enum):
         enum_values = [e.value for e in annotation]
+        # Convert to Literal type with the specific enum values
+        # This ensures the LLM must use one of these exact strings
+        # Create Literal dynamically with unpacked values
+        if enum_values:
+            # Use eval to create Literal with unpacked values
+            # This is safe since enum_values come from the Enum class
+            literal_type = eval(f"Literal[{', '.join(repr(v) for v in enum_values)}]")
+        else:
+            literal_type = str
         return (
-            str,
+            literal_type,
             f" (Original type: {annotation.__name__} enum, values: {enum_values})",
         )
 

@@ -246,24 +246,20 @@ async def compile_repository_context(
                 "estimated_output_tokens": estimated.get("output_tokens", 0),
             }
 
-        logger.info("Context compilation completed successfully")
-
-        # Debug: Log the compiled markdown content
+        # Log compiled context size
         if hasattr(compiled_context, "markdown_content"):
-            logger.debug("=" * 80)
-            logger.debug("COMPILED CONTEXT MARKDOWN (First Agent Output):")
-            logger.debug("=" * 80)
-            logger.debug(compiled_context.markdown_content)
-            logger.debug("=" * 80)
+            content_size = len(compiled_context.markdown_content)
         elif (
             isinstance(compiled_context, dict)
             and "markdown_content" in compiled_context
         ):
-            logger.debug("=" * 80)
-            logger.debug("COMPILED CONTEXT MARKDOWN (First Agent Output):")
-            logger.debug("=" * 80)
-            logger.debug(compiled_context.get("markdown_content", ""))
-            logger.debug("=" * 80)
+            content_size = len(compiled_context.get("markdown_content", ""))
+        else:
+            content_size = 0
+
+        logger.info(
+            f"Context compilation completed: {content_size:,} chars of markdown",
+        )
 
         return {
             "data": compiled_context,

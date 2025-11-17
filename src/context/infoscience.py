@@ -199,12 +199,22 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
 
+    # Extract email, ORCID, and affiliation
+    email = _parse_metadata(metadata, "eperson.email")
+    orcid = _parse_metadata(metadata, "person.identifier.orcid")
+    affiliation = _parse_metadata(metadata, "person.affiliation.name")
+
+    # Log what we found for debugging
+    logger.debug(
+        f"Parsed author '{name}' - UUID: {uuid}, Email: {email}, ORCID: {orcid}, Affiliation: {affiliation}",
+    )
+
     return InfoscienceAuthor(
         uuid=uuid,
         name=name,
-        email=_parse_metadata(metadata, "eperson.email"),
-        orcid=_parse_metadata(metadata, "person.identifier.orcid"),
-        affiliation=_parse_metadata(metadata, "person.affiliation.name"),
+        email=email,
+        orcid=orcid,
+        affiliation=affiliation,
         profile_url=url,  # Fixed: use profile_url instead of url
     )
 

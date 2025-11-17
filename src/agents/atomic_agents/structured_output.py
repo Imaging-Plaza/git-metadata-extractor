@@ -7,7 +7,6 @@ to produce structured metadata output.
 
 import json
 import logging
-from pprint import pformat
 from typing import Any, Dict, Optional
 
 from ...data_models.conversion import create_simplified_model
@@ -28,16 +27,16 @@ MODEL_EXTRACTION_FIELDS = [
     "description",
     "applicationCategory",
     "featureList",
-    # Classification (requires LLM analysis)
-    "discipline",
-    "disciplineJustification",
-    "repositoryType",
-    "repositoryTypeJustification",
+    # Classification (handled by Stage 3: Repository Classifier)
+    # "discipline",  # Removed - handled by repository_classifier.py
+    # "disciplineJustification",  # Removed - handled by repository_classifier.py
+    # "repositoryType",  # Removed - handled by repository_classifier.py
+    # "repositoryTypeJustification",  # Removed - handled by repository_classifier.py
     # Authors (requires LLM analysis to identify from README, etc.)
     "author",  # Will be split into authorPerson and authorOrganization
-    # Related entities (requires LLM analysis)
-    "relatedToOrganizations",  # Will be split into relatedToOrganizationsString and relatedToOrganizationsObject
-    "relatedToOrganizationJustification",
+    # Related entities (handled by Stage 4: Organization Identifier)
+    # "relatedToOrganizations",  # Removed - handled by organization_identifier.py
+    # "relatedToOrganizationJustification",  # Removed - handled by organization_identifier.py
     "relatedDatasets",
     "relatedPublications",
     "relatedModels",
@@ -230,21 +229,15 @@ async def generate_structured_output(
                 "estimated_output_tokens": estimated.get("output_tokens", 0),
             }
 
-        logger.info("Structured output generation completed successfully")
-
-        # Debug: Log the structured output JSON
+        # Log output summary
         if hasattr(structured_output, "model_dump"):
             output_dict = structured_output.model_dump()
         elif isinstance(structured_output, dict):
             output_dict = structured_output
         else:
-            output_dict = {"raw_output": str(structured_output)}
+            output_dict = {}
 
-        logger.debug("=" * 80)
-        logger.debug("STRUCTURED OUTPUT JSON (Second Agent Output):")
-        logger.debug("=" * 80)
-        logger.debug(pformat(output_dict, width=120, indent=2))
-        logger.debug("=" * 80)
+        logger.info(f"Structured output generated: {len(output_dict)} top-level fields")
 
         return {
             "data": structured_output,

@@ -51,6 +51,10 @@ class Person(BaseModel):
         description="Email address(es) - can be a single string or a list of strings",
         default_factory=list,
     )
+    githubId: Optional[str] = Field(
+        description="GitHub username/handle (e.g., 'octocat')",
+        default=None,
+    )
     orcid: Optional[str] = Field(
         description="ORCID identifier (format: 0000-0000-0000-0000).",
         default=None,
@@ -250,6 +254,7 @@ class RepositoryType(str, Enum):
     EDUCATIONAL_RESOURCE = "educational resource"
     DOCUMENTATION = "documentation"
     DATA = "data"
+    WEBPAGE = "webpage"
     OTHER = "other"
 
 

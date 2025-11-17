@@ -8,7 +8,7 @@ Unified models for academic catalog relationships across multiple catalogs
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -49,14 +49,16 @@ class linkedEntitiesRelation(BaseModel):
         description="Type of entity (publication, person, orgunit)",
     )
 
-    entity: Union[
-        InfosciencePublication,
-        InfoscienceAuthor,
-        InfoscienceLab,
-        dict[str, Any],
+    entity: Optional[
+        Union[
+            InfosciencePublication,
+            InfoscienceAuthor,
+            InfoscienceLab,
+        ]
     ] = Field(
-        description="Full entity details. For Infoscience: InfosciencePublication, "
-        "InfoscienceAuthor, or InfoscienceLab. For other catalogs: structured dict.",
+        default=None,
+        description="Full entity details. Can be InfosciencePublication, InfoscienceAuthor, "
+        "or InfoscienceLab depending on entityType. Can be None if only URL/UUID available.",
     )
 
     confidence: float = Field(
@@ -70,36 +72,25 @@ class linkedEntitiesRelation(BaseModel):
         description="Explanation of why this entity is related and how it was found",
     )
 
-    matchedOn: Optional[list[str]] = Field(
-        description="Fields used to match this entity (e.g., ['name', 'email'], ['doi'])",
-        default_factory=list,
-    )
-
     def get_display_name(self) -> str:
         """Get a display name for this entity."""
-        if isinstance(
-            self.entity,
-            (InfosciencePublication, InfoscienceLab, InfoscienceAuthor),
-        ):
-            return getattr(self.entity, "title", None) or getattr(
-                self.entity,
-                "name",
-                "Unknown",
-            )
-        if isinstance(self.entity, dict):
-            return self.entity.get("title") or self.entity.get("name", "Unknown")
+        if self.entity is None:
+            return "Unknown"
+        if isinstance(self.entity, (InfosciencePublication, InfoscienceLab)):
+            return self.entity.title or "Unknown"
+        if isinstance(self.entity, InfoscienceAuthor):
+            return self.entity.name or "Unknown"
         return "Unknown"
 
     def get_url(self) -> Optional[str]:
         """Get the URL for this entity if available."""
-        if isinstance(self.entity, InfosciencePublication):
+        if self.entity is None:
+            # Fallback to the top-level url field if it exists
+            return self.url if self.url else None
+        if isinstance(self.entity, (InfosciencePublication, InfoscienceLab)):
             return self.entity.url
         if isinstance(self.entity, InfoscienceAuthor):
             return self.entity.profile_url
-        if isinstance(self.entity, InfoscienceLab):
-            return self.entity.url
-        if isinstance(self.entity, dict):
-            return self.entity.get("url") or self.entity.get("profile_url")
         return None
 
     def to_markdown(self) -> str:
@@ -114,9 +105,6 @@ class linkedEntitiesRelation(BaseModel):
 
         lines.append(f"*Confidence:* {self.confidence:.2f}")
         lines.append(f"*Justification:* {self.justification}")
-
-        if self.matchedOn:
-            lines.append(f"*Matched on:* {', '.join(self.matchedOn)}")
 
         return "\n".join(lines)
 
