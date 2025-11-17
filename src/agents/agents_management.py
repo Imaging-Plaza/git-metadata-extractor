@@ -92,6 +92,7 @@ def create_agent_from_config(
         output_type=output_type,  # SoftwareSourceCode,
         system_prompt=system_prompt,  # system_prompt_json,
         tools=agent_tools,  # Register tools only if allowed
+        retries=3,  # Allow model to retry up to 3 times on tool calls and output validation
     )
 
     # Track agent for cleanup
@@ -178,6 +179,13 @@ async def run_agent_with_retry(
                 # Try to extract more context from the exception
                 if hasattr(e, "__cause__") and e.__cause__:
                     logger.error(f"Underlying cause: {e.__cause__}")
+                    # Try to get even more nested causes (pydantic_core.ValidationError might be deeper)
+                    cause = e.__cause__
+                    depth = 0
+                    while hasattr(cause, "__cause__") and cause.__cause__ and depth < 5:
+                        cause = cause.__cause__
+                        logger.error(f"Nested cause (depth {depth + 1}): {cause}")
+                        depth += 1
             else:
                 logger.warning(f"Agent run failed on attempt {attempt + 1}: {e}")
 

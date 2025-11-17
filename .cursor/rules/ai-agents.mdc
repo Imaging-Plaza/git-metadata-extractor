@@ -60,6 +60,7 @@ model = create_pydantic_ai_model(configs[0])
 - **Enrichment Agents:**
   - User enrichment: `src/agents/user_enrichment.py` (uses `UserEnrichmentResult` schema)
   - Organization enrichment: `src/agents/organization_enrichment.py` (uses `OrganizationEnrichmentResult` schema)
+  - **ORCID enrichment**: `src/utils/utils.py` (functions: `enrich_authors_with_orcid`, `enrich_author_with_orcid`)
 - **Final Assessment Agent:**
   - EPFL assessment: `src/agents/epfl_assessment.py` (uses `EPFLAssessmentResult` schema)
 
@@ -291,6 +292,173 @@ result = await run_agent_with_fallback(
 - **User Enrichment**: `UserEnrichmentResult`
 - **Organization Enrichment**: `OrganizationEnrichmentResult`
 - **EPFL Assessment**: `EPFLAssessmentResult` (from `data_models/epfl_assessment.py`)
+
+## ORCID Enrichment Integration
+
+### Overview
+ORCID enrichment automatically fetches affiliation data from ORCID API for authors who have ORCID identifiers. This runs after the atomic LLM pipeline completes and before optional user/organization enrichments.
+
+**Location**: `src/utils/utils.py`
+
+### Key Functions
+
+#### `enrich_authors_with_orcid(repositoryObject: SoftwareSourceCode)`
+Enriches all Person authors in a repository who have ORCID IDs:
+- Skips Organization objects (only enriches Person)
+- Skips authors without ORCID IDs
+- Fetches employment history from ORCID API
+- Creates `Affiliation` objects with `source="orcid"`
+- Merges with existing affiliations (no duplicates, case-insensitive)
+
+#### `enrich_author_with_orcid(author: Person)`
+Enriches a single Person with ORCID affiliations:
+- Validates and normalizes ORCID ID to URL format
+- Calls `get_orcid_affiliations()` to fetch data
+- Returns enriched Person object
+
+#### `get_orcid_affiliations(orcid_id: str) -> List[Affiliation]`
+Fetches affiliations from ORCID API:
+- Returns list of `Affiliation` objects with `source="orcid"`
+- Cleans organization names (removes location suffixes)
+- Uses ORCID web scraping via Selenium
+- Cached to prevent duplicate API calls
+
+### Integration in Analysis Pipeline
+
+**File**: `src/analysis/repositories.py`
+
+ORCID enrichment runs automatically in `run_analysis()`:
+
+```python
+async def run_analysis(
+    self,
+    run_gimie: bool = True,
+    run_llm: bool = True,
+    run_user_enrichment: bool = True,
+    run_organization_enrichment: bool = True,
+):
+    # 1. GIMIE analysis
+    if run_gimie:
+        self.run_gimie_analysis()
+
+    # 2. Atomic LLM pipeline (stages 1-3)
+    if run_llm:
+        await self.run_llm_analysis()
+
+        # 3. ORCID enrichment (NEW - runs automatically after LLM)
+        if self.data is not None:
+            logging.info(f"ORCID enrichment for {self.full_path}")
+            self.run_authors_enrichment()
+            logging.info(f"ORCID enrichment completed for {self.full_path}")
+
+    # 4. User enrichment (optional)
+    if run_user_enrichment and self.data is not None:
+        await self.run_user_enrichment()
+
+    # 5. Organization enrichment (optional)
+    if run_organization_enrichment and self.data is not None:
+        await self.run_organization_enrichment()
+```
+
+### Execution Order
+1. Cache check
+2. GIMIE analysis (if `run_gimie=True`)
+3. Atomic LLM pipeline (if `run_llm=True`)
+4. **ORCID enrichment** (always runs if `self.data` exists after LLM)
+5. User enrichment (if `run_user_enrichment=True`)
+6. Organization enrichment (if `run_organization_enrichment=True`)
+7. Validation and caching
+
+### Benefits
+- ✅ **Automatic enrichment** for authors with ORCID IDs
+- ✅ **Provenance tracking** via `source="orcid"` in Affiliation objects
+- ✅ **No duplicates** - merges with existing affiliations intelligently
+- ✅ **No LLM tokens** consumed - uses ORCID API directly
+- ✅ **Runs before other enrichments** so they can utilize ORCID data
+
+### Example
+```python
+# Before ORCID enrichment
+person = Person(
+    name="John Doe",
+    orcid="0000-0002-1234-5678",
+    affiliations=[],
+)
+
+# After ORCID enrichment
+person = Person(
+    name="John Doe",
+    orcid="https://orcid.org/0000-0002-1234-5678",  # Normalized to URL
+    affiliations=[
+        Affiliation(
+            name="EPFL - École Polytechnique Fédérale de Lausanne",
+            organizationId=None,
+            source="orcid",
+        ),
+        Affiliation(
+            name="Swiss Data Science Center",
+            organizationId=None,
+            source="orcid",
+        ),
+    ],
+)
+```
+
+## Agent Configuration
+
+### Agent Creation with Retries
+
+**File**: `src/agents/agents_management.py`
+
+Agents are created with retry configuration for validation errors:
+
+```python
+agent = Agent(
+    model=model,
+    output_type=output_type,
+    system_prompt=system_prompt,
+    tools=agent_tools,
+    retries=3,  # Allow model to retry up to 3 times on validation errors
+)
+```
+
+**Parameter**: `retries` (not `result_retries` or `output_retries`)
+- Controls retry attempts for tool calls and output validation
+- Default: 1 (only one attempt)
+- Recommended: 3 (gives LLM multiple chances to correct validation errors)
+
+### Validation Error Handling
+
+When LLMs produce output that doesn't match the schema:
+1. PydanticAI validates output against `output_type` schema
+2. If validation fails, LLM gets error message and can retry
+3. Up to `retries` attempts before raising `UnexpectedModelBehavior`
+4. Each retry includes the validation error details for correction
+
+### Enhanced Error Logging
+
+Detailed exception chain logging for debugging:
+
+```python
+if "validation" in error_msg.lower() or "retries" in error_msg.lower():
+    logger.error(f"Agent run failed with validation error: {e}", exc_info=True)
+
+    # Traverse nested exception chains
+    if hasattr(e, "__cause__") and e.__cause__:
+        logger.error(f"Underlying cause: {e.__cause__}")
+        cause = e.__cause__
+        depth = 0
+        while hasattr(cause, "__cause__") and cause.__cause__ and depth < 5:
+            cause = cause.__cause__
+            logger.error(f"Nested cause (depth {depth + 1}): {cause}")
+            depth += 1
+```
+
+Benefits:
+- See exact validation errors (field names, types, expected vs actual)
+- Identify which fields are causing issues
+- Debug LLM output format problems
+- Trace through pydantic_core.ValidationError chains
 
 ## Analysis Context
 

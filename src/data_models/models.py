@@ -70,6 +70,12 @@ class Person(BaseModel):
         default_factory=list,
     )
 
+    # Provenance tracking
+    source: Optional[str] = Field(
+        default=None,
+        description="Data source: 'gimie', 'llm', 'orcid', 'agent_user_enrichment', 'github_profile'",
+    )
+
     # Additional metadata
     linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
@@ -157,18 +163,17 @@ class Organization(BaseModel):
 
     legalName: Optional[str] = None
     hasRorId: Optional[HttpUrl] = None
-    alternateNames: Optional[
-        List[str]
-    ] = None  # Other names the organization is known by
     organizationType: Optional[
         str
     ] = None  # university, research institute, lab, department, company, etc.
-    parentOrganization: Optional[
-        str
-    ] = None  # Name of parent organization if applicable
-    country: Optional[str] = None  # Country where the organization is located
-    website: Optional[HttpUrl] = None  # Official website
     attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
+
+    # Provenance tracking
+    source: Optional[str] = Field(
+        default=None,
+        description="Data source: 'gimie', 'llm', 'agent_org_enrichment', 'github_profile'",
+    )
+
     linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
@@ -188,22 +193,6 @@ class Organization(BaseModel):
             # ROR IDs typically look like: 05gzmn429 or 0abcdef12
             if len(v) == 9:  # ROR format is 9 characters
                 return f"https://ror.org/{v}"
-        return v
-
-    @field_validator("website", mode="before")
-    @classmethod
-    def validate_website(cls, v):
-        """Ensure website URL is valid, fix common issues."""
-        if v is None or v == "":
-            return None
-        if isinstance(v, str):
-            v = v.strip()
-            # If it doesn't start with http:// or https://, add https://
-            if not v.startswith(("http://", "https://")):
-                v = f"https://{v}"
-            # Basic validation - if it doesn't look like a URL, return None
-            if " " in v or "." not in v:
-                return None
         return v
 
 

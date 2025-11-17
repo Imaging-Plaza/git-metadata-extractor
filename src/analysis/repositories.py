@@ -801,6 +801,27 @@ class Repository:
             # Fallback: use empty string (default)
             full_dict["id"] = ""
 
+        # Helper function to clean None values for list fields in any model dict
+        def clean_model_dict(model_dict: dict, model_type: type) -> dict:
+            """Convert None to empty lists for fields with default_factory=list"""
+            if not isinstance(model_dict, dict):
+                return model_dict
+
+            # Check if model_type has model_fields
+            if hasattr(model_type, "model_fields"):
+                for field_name, field_info in model_type.model_fields.items():
+                    if field_name in model_dict and model_dict[field_name] is None:
+                        # Check if field has default_factory and it's callable
+                        if (
+                            hasattr(field_info, "default_factory")
+                            and field_info.default_factory is not ...
+                            and field_info.default_factory is not None
+                            and callable(field_info.default_factory)
+                        ):
+                            # Convert None to empty value from default_factory
+                            model_dict[field_name] = field_info.default_factory()
+            return model_dict
+
         # Handle Union fields first
         for original_field, union_info_list in union_metadata.items():
             reconciled_values = []
@@ -825,6 +846,8 @@ class Repository:
                                 BaseModel,
                             ):
                                 if isinstance(value, dict):
+                                    # Clean None values before instantiation
+                                    value = clean_model_dict(value, target_type)
                                     reconciled_values.append(target_type(**value))
                                 else:
                                     reconciled_values.append(
@@ -859,6 +882,7 @@ class Repository:
                     "type": "Person",
                     "id": gimie_author.get("id", ""),
                     "name": gimie_author.get("name", ""),
+                    "source": "gimie",
                 }
 
                 # Add ORCID if available
@@ -947,6 +971,8 @@ class Repository:
             for author in existing_authors:
                 if isinstance(author, dict):
                     try:
+                        # Clean None values before creating Person
+                        author = clean_model_dict(author, Person)
                         existing_person_objects.append(Person(**author))
                     except Exception as e:
                         logger.warning(f"Failed to convert author dict to Person: {e}")
@@ -1478,6 +1504,12 @@ class Repository:
         return full_dict
 
     def run_authors_enrichment(self):
+        """
+        Enrich authors with ORCID affiliations.
+
+        This runs after LLM analysis and enriches Person objects that have ORCID IDs
+        with affiliation data from ORCID API. Uses the Affiliation model with source="orcid".
+        """
         logger.info(f"ORCID enrichment for {self.full_path}")
 
         # Check if data exists before enrichment
@@ -1491,6 +1523,7 @@ class Repository:
 
         if isinstance(llm_result, SoftwareSourceCode):
             self.data = llm_result
+            logger.info(f"ORCID enrichment successful for {self.full_path}")
         else:
             logging.warning(f"Author enrichment failed for {self.full_path}")
 
@@ -2013,17 +2046,17 @@ class Repository:
         if run_llm:
             logging.info(f"LLM analysis for {self.full_path}")
             await self.run_llm_analysis()
-
-            # Only run author enrichment if LLM analysis succeeded
-            # COMMENTED OUT FOR TESTING - ORCID enrichment uses external APIs
-            # if self.data is not None:
-            #     self.run_authors_enrichment()
-            # else:
-            #     logging.warning(
-            #         f"Skipping author enrichment: LLM analysis failed for {self.full_path}",
-            #     )
-
             logging.info(f"LLM analysis completed for {self.full_path}")
+
+            # Run ORCID enrichment after LLM analysis (enriches authors with ORCID IDs)
+            if self.data is not None:
+                logging.info(f"ORCID enrichment for {self.full_path}")
+                self.run_authors_enrichment()
+                logging.info(f"ORCID enrichment completed for {self.full_path}")
+            else:
+                logging.warning(
+                    f"Skipping ORCID enrichment: LLM analysis failed for {self.full_path}",
+                )
 
         # Run user enrichment
         if run_user_enrichment and self.data is not None:

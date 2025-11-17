@@ -64,14 +64,17 @@ src/
 - Type discriminator: `type: Literal["Person"]` (auto-defaults)
 - Identity: `name`, `email` (Union[str, List[str]]), `orcid` (string), `gitAuthorIds`
 - Affiliations: `affiliations`, `currentAffiliation`, `affiliationHistory`
+- Provenance: `source` (gimie, llm, orcid, agent_user_enrichment, github_profile)
 - Metadata: `contributionSummary`, `biography`, `linkedEntities`
 - Backward compatibility: `affiliation` field deprecated but kept
 
-**Organization Model** - Institutions and companies:
+**Organization Model** - Institutions and companies (simplified fields):
 - Type discriminator: `type: Literal["Organization"]` (auto-defaults)
-- Identity: `legalName`, `hasRorId`, `alternateNames`
-- Details: `organizationType`, `parentOrganization`, `country`, `website`
+- Identity: `legalName`, `hasRorId`
+- Details: `organizationType`
+- Provenance: `source` (gimie, llm, agent_org_enrichment, github_profile)
 - Metadata: `attributionConfidence`, `linkedEntities`
+- Removed fields: ❌ `alternateNames`, `parentOrganization`, `country`, `website`
 
 #### Academic Catalog Models (`linked_entities.py`)
 **linkedEntitiesRelation** - Relation to an academic catalog entity:

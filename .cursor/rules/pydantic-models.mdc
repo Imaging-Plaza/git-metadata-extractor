@@ -75,6 +75,12 @@ class Person(BaseModel):
         default_factory=list,
     )
 
+    # Provenance tracking
+    source: Optional[str] = Field(
+        default=None,
+        description="Data source: 'gimie', 'llm', 'orcid', 'agent_user_enrichment', 'github_profile'",
+    )
+
     # Additional metadata
     contributionSummary: Optional[str] = Field(
         description="Summary of contributions to the repository",
@@ -339,6 +345,98 @@ affiliations: List[Affiliation] = [
 ```
 
 **This is a breaking change** - cached data and API responses changed format after implementation.
+
+## Person and Organization Source Tracking
+
+### Overview
+Both `Person` and `Organization` models include a `source` field to track data provenance - where the object was created or enriched from.
+
+**Location**: `src/data_models/models.py`
+
+### Source Field Definition
+
+**Person Model**:
+```python
+source: Optional[str] = Field(
+    default=None,
+    description="Data source: 'gimie', 'llm', 'orcid', 'agent_user_enrichment', 'github_profile'",
+)
+```
+
+**Organization Model**:
+```python
+source: Optional[str] = Field(
+    default=None,
+    description="Data source: 'gimie', 'llm', 'agent_org_enrichment', 'github_profile'",
+)
+```
+
+### Valid Source Values
+
+**For Person**:
+- `"gimie"` - From GIMIE extraction (GitHub/GitLab API)
+- `"llm"` - From LLM analysis of repository content
+- `"orcid"` - From ORCID enrichment
+- `"agent_user_enrichment"` - From user enrichment agent
+- `"github_profile"` - From GitHub profile parsing
+
+**For Organization**:
+- `"gimie"` - From GIMIE extraction
+- `"llm"` - From LLM analysis
+- `"agent_org_enrichment"` - From organization enrichment agent
+- `"github_profile"` - From GitHub organization profile
+
+### Usage Example
+
+```python
+# Creating Person with source
+person = Person(
+    name="John Doe",
+    orcid="0000-0002-1234-5678",
+    source="gimie",  # Extracted from GitHub API
+)
+
+# Creating Organization with source
+org = Organization(
+    legalName="Swiss Data Science Center",
+    hasRorId="https://ror.org/01234abcd",
+    source="agent_org_enrichment",  # From ROR enrichment
+)
+
+# Filtering by source
+gimie_authors = [p for p in authors if p.source == "gimie"]
+llm_authors = [p for p in authors if p.source == "llm"]
+```
+
+### Benefits of Source Tracking
+
+1. **Clear Provenance**: Know the origin of each Person/Organization
+2. **Data Quality**: Identify which sources provide better data
+3. **Debugging**: Trace data issues back to their source
+4. **Analytics**: Analyze data quality by source
+5. **Consistency**: Matches Affiliation's source tracking pattern
+
+## Organization Model - Simplified Fields
+
+The Organization model has been simplified to include only essential fields:
+
+**Current Fields** (kept):
+- `id` - Unique identifier
+- `type` - Type discriminator ("Organization")
+- `legalName` - Organization's legal name
+- `hasRorId` - ROR identifier (Optional[HttpUrl])
+- `organizationType` - Type (university, lab, company, etc.)
+- `attributionConfidence` - Confidence score (0.0 to 1.0)
+- `source` - Data provenance tracking
+- `linkedEntities` - Academic catalog relations
+
+**Removed Fields** (no longer used):
+- ❌ `alternateNames` - Alternate organization names
+- ❌ `parentOrganization` - Parent organization name
+- ❌ `country` - Organization country
+- ❌ `website` - Organization website URL
+
+**Rationale**: These fields were removed to simplify the model and focus on essential identification and attribution data. ROR ID provides sufficient organization identification, and additional metadata can be fetched from ROR API if needed.
 
 ### Common Pitfalls and Best Practices
 

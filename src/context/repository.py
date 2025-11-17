@@ -66,6 +66,9 @@ CONFIG_FILENAMES = {
     "Dockerfile",
     ".dockerignore",
     ".gitignore",
+    # Citation and attribution metadata files
+    "CITATION.cff",
+    "codemeta.json",
 }
 
 # Additional important documentation and metadata files (without extensions)
@@ -82,6 +85,9 @@ IMPORTANT_FILENAMES = {
     "ACKNOWLEDGMENTS",
     "ACKNOWLEDGEMENTS",
     "THANKS",
+    # Additional attribution files
+    "ATTRIBUTION",
+    "ATTRIBUTIONS",
 }
 
 # All relevant extensions combined

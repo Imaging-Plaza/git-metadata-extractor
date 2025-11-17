@@ -317,6 +317,173 @@ def to_simplified_schema(self) -> dict:
     return schema
 ```
 
+## Handling List Fields with default_factory
+
+### Problem: LLMs Returning None for List Fields
+
+LLMs sometimes return `None` for list fields instead of empty lists, causing validation errors:
+
+```
+pydantic_core._pydantic_core.ValidationError:
+affiliationHistory
+  Input should be a valid array [type=list_type, input_value=None, input_type=NoneType]
+```
+
+### Solution: Optional Fields in Simplified Models
+
+**File**: `src/data_models/conversion.py`
+
+When creating simplified models, fields with `default_factory` are converted to `Optional[type]` with `default=None`:
+
+```python
+def create_simplified_model(source_model: type[BaseModel], ...):
+    for field_name, field_info in source_fields.items():
+        simplified_type = simplify_type(field_info.annotation)
+        description = field_info.description or ""
+        default_factory = field_info.default_factory if hasattr(field_info, 'default_factory') else None
+
+        if default_factory is not None:
+            # Handle default_factory (e.g., default_factory=list)
+            # For LLM compatibility, convert to Optional with default=None
+            # This allows LLMs to return None instead of empty lists
+            # We'll convert None back to empty lists when reconstructing the full model
+            new_fields[field_name] = (
+                Optional[simplified_type],
+                Field(default=None, description=description),
+            )
+        elif field_info.default is not ...:
+            # Field has explicit default value
+            new_fields[field_name] = (
+                simplified_type,
+                Field(default=field_info.default, description=description),
+            )
+        else:
+            # Required field
+            new_fields[field_name] = (
+                simplified_type,
+                Field(description=description),
+            )
+```
+
+**Example transformation:**
+
+```python
+# Source model
+class Person(BaseModel):
+    affiliationHistory: List[str] = Field(
+        default_factory=list,
+        description="Temporal affiliation information with dates",
+    )
+
+# Simplified model (for LLM)
+class SimplifiedPerson(BaseModel):
+    affiliationHistory: Optional[List[str]] = Field(
+        default=None,  # LLM can return None
+        description="Temporal affiliation information with dates",
+    )
+```
+
+### Reconstructing Full Models: clean_model_dict
+
+**File**: `src/analysis/repositories.py`
+
+When converting simplified LLM output back to full Pydantic models, `None` values are converted back to empty lists/dicts:
+
+```python
+def clean_model_dict(model_dict: dict, model_type: type) -> dict:
+    """Convert None to empty lists for fields with default_factory=list"""
+    if not isinstance(model_dict, dict):
+        return model_dict
+
+    # Check if model_type has model_fields
+    if hasattr(model_type, "model_fields"):
+        for field_name, field_info in model_type.model_fields.items():
+            if field_name in model_dict and model_dict[field_name] is None:
+                # Check if field has default_factory and it's callable
+                if (
+                    hasattr(field_info, "default_factory")
+                    and field_info.default_factory is not ...
+                    and field_info.default_factory is not None
+                    and callable(field_info.default_factory)
+                ):
+                    # Convert None to empty value from default_factory
+                    model_dict[field_name] = field_info.default_factory()
+    return model_dict
+```
+
+**Usage in reconstruction:**
+
+```python
+def _convert_simplified_to_full(self, simplified_data: dict) -> SoftwareSourceCode:
+    # Clean up None values before model creation
+    cleaned_data = clean_model_dict(simplified_data, SoftwareSourceCode)
+
+    # Convert nested objects (authors)
+    if "authorPerson" in cleaned_data:
+        author_persons = []
+        for author_dict in cleaned_data.get("authorPerson", []):
+            # Clean author dict before creating Person object
+            cleaned_author = clean_model_dict(author_dict, Person)
+            person = Person(**cleaned_author)
+            author_persons.append(person)
+        cleaned_data["author"] = author_persons
+
+    # Create full model
+    return SoftwareSourceCode(**cleaned_data)
+```
+
+### Benefits
+
+1. **LLM Compatibility**: LLMs can return `None` without validation errors
+2. **Automatic Cleanup**: `clean_model_dict` handles None → empty list conversion
+3. **Type Safety**: Full models still enforce list types
+4. **Graceful Handling**: No crashes from missing list fields
+
+### Example Flow
+
+```python
+# 1. LLM receives simplified model schema
+# affiliationHistory: Optional[List[str]] = None
+
+# 2. LLM returns simplified output with None
+{
+    "name": "John Doe",
+    "affiliationHistory": None,  # LLM didn't provide affiliations
+}
+
+# 3. clean_model_dict converts None to empty list
+{
+    "name": "John Doe",
+    "affiliationHistory": [],  # Converted based on default_factory
+}
+
+# 4. Full model validation succeeds
+Person(
+    name="John Doe",
+    affiliationHistory=[],  # List as expected
+)
+```
+
+### Critical Checks in clean_model_dict
+
+The function includes multiple safety checks:
+
+```python
+# 1. Verify default_factory exists
+hasattr(field_info, "default_factory")
+
+# 2. Ensure it's not ellipsis (...)
+field_info.default_factory is not ...
+
+# 3. Ensure it's not None
+field_info.default_factory is not None
+
+# 4. Ensure it's callable
+callable(field_info.default_factory)
+```
+
+Without these checks, calling `field_info.default_factory()` could raise `TypeError: 'NoneType' object is not callable`.
+
 ## Best Practices
 
 ### 1. Always Use Field Descriptions

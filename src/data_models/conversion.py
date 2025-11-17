@@ -299,6 +299,7 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "name": "schema:name",
         "orcid": "md4i:orcid",
         "affiliation": "schema:affiliation",
+        "source": "imag:source",
     },
     "Affiliation": {
         "name": "schema:name",
@@ -308,12 +309,9 @@ PYDANTIC_TO_ZOD_MAPPING = {
     "Organization": {
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
-        "alternateNames": "schema:alternateName",
         "organizationType": "schema:additionalType",
-        "parentOrganization": "schema:parentOrganization",
-        "country": "schema:addressCountry",
-        "website": "schema:url",
         "attributionConfidence": "imag:attributionConfidence",
+        "source": "imag:source",
     },
     "Commits": {
         "total": "imag:totalCommits",
@@ -915,10 +913,12 @@ def create_simplified_model(
         # Create Field with description
         if default_factory is not None:
             # Handle default_factory (e.g., default_factory=list)
-            # Fields with default_factory are not required, so use the type directly (not Optional)
+            # For LLM compatibility, convert to Optional with default=None
+            # This allows LLMs to return None instead of empty lists
+            # We'll convert None back to empty lists when reconstructing the full model
             new_fields[field_name] = (
-                simplified_type,
-                Field(default_factory=default_factory, description=description),
+                Optional[simplified_type],
+                Field(default=None, description=description),
             )
         elif default is None and not field_info.is_required():
             new_fields[field_name] = (
