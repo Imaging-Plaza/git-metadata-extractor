@@ -248,3 +248,74 @@ class OrganizationIdentification(BaseModel):
 # Note: SimplifiedLinkedEntitiesRelation and SimplifiedLinkedEntitiesResult
 # are now generated dynamically in linked_entities_searcher.py using create_simplified_model()
 # to maintain consistency with other atomic agents
+
+
+class SimplifiedGitHubUser(BaseModel):
+    """Simplified GitHubUser model for structured output agent."""
+
+    # Core identity (basic fields only - id and githubUserMetadata populated separately)
+    name: Optional[str] = None
+    fullname: Optional[str] = None
+    githubHandle: Optional[str] = None
+
+
+class UserClassification(BaseModel):
+    """User discipline and position classification."""
+
+    discipline: List[ValidDiscipline] = Field(
+        description="List of scientific disciplines - at least one from the predefined list",
+    )
+    disciplineJustification: List[str] = Field(
+        description="List of justifications for each discipline classification",
+        default_factory=list,
+    )
+    position: List[str] = Field(
+        description="List of professional positions or roles",
+        default_factory=list,
+    )
+    positionJustification: List[str] = Field(
+        description="List of justifications for each position",
+        default_factory=list,
+    )
+
+    @field_validator("discipline")
+    @classmethod
+    def validate_discipline_not_empty(cls, v):
+        """Ensure at least one discipline is provided."""
+        if not v or len(v) == 0:
+            raise ValueError("At least one discipline must be provided.")
+        return v
+
+
+class SimplifiedGitHubOrganization(BaseModel):
+    """Simplified GitHubOrganization model for structured output agent."""
+
+    # Core identity (basic fields only - id and githubOrganizationMetadata populated separately)
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class OrganizationClassification(BaseModel):
+    """Organization type and discipline classification."""
+
+    organizationType: str = Field(
+        description="Type of organization (e.g., 'Research Institute', 'University', 'Company', 'Community Space', 'Non-Profit Organization', 'Government Agency', 'Software Project', 'Research Infrastructure')",
+    )
+    organizationTypeJustification: str = Field(
+        description="Justification for the organization type classification",
+    )
+    discipline: List[ValidDiscipline] = Field(
+        description="List of scientific disciplines - at least one from the predefined list",
+    )
+    disciplineJustification: List[str] = Field(
+        description="List of justifications for each discipline classification",
+        default_factory=list,
+    )
+
+    @field_validator("discipline")
+    @classmethod
+    def validate_discipline_not_empty(cls, v):
+        """Ensure at least one discipline is provided."""
+        if not v or len(v) == 0:
+            raise ValueError("At least one discipline must be provided.")
+        return v

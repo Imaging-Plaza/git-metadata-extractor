@@ -85,6 +85,10 @@ class InfosciencePublication(BaseModel):
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
 
+        # URL (explicit field for LLM extraction)
+        if self.url:
+            md_parts.append(f"*URL:* {self.url}")
+
         # Authors
         if self.authors:
             authors_str = ", ".join(self.authors)
@@ -208,6 +212,10 @@ class InfoscienceAuthor(BaseModel):
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
 
+        # URL (explicit field for LLM extraction)
+        if self.profile_url:
+            md_parts.append(f"*URL:* {self.profile_url}")
+
         # Affiliation
         if self.affiliation:
             md_parts.append(f"*Affiliation:* {self.affiliation}")
@@ -223,11 +231,11 @@ class InfoscienceAuthor(BaseModel):
         return "\n".join(md_parts)
 
 
-class InfoscienceLab(BaseModel):
-    """Laboratory or organizational unit metadata from Infoscience"""
+class InfoscienceOrgUnit(BaseModel):
+    """Organizational unit metadata from Infoscience"""
 
-    type: Literal["InfoscienceLab"] = Field(
-        default="InfoscienceLab",
+    type: Literal["InfoscienceOrgUnit"] = Field(
+        default="InfoscienceOrgUnit",
         description="Type discriminator for Infoscience entities",
     )
     uuid: Optional[str] = Field(
@@ -285,6 +293,10 @@ class InfoscienceLab(BaseModel):
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
 
+        # URL (explicit field for LLM extraction)
+        if self.url:
+            md_parts.append(f"*URL:* {self.url}")
+
         # Parent organization
         if self.parent_organization:
             md_parts.append(f"*Part of:* {self.parent_organization}")
@@ -322,7 +334,7 @@ class InfoscienceSearchResult(BaseModel):
         description="List of author results",
         default_factory=list,
     )
-    labs: List[InfoscienceLab] = Field(
+    labs: List[InfoscienceOrgUnit] = Field(
         description="List of lab/organization results",
         default_factory=list,
     )

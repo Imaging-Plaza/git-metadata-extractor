@@ -24,39 +24,31 @@ for config in ORGANIZATION_IDENTIFIER_CONFIGS:
         logger.error(f"Invalid configuration for organization identifier: {config}")
         raise ValueError("Invalid model configuration")
 
-# System prompt for organization identifier
+# System prompt for organization identifier (generic - works for both repositories and users)
 ORGANIZATION_IDENTIFIER_SYSTEM_PROMPT = """
-You are an expert at identifying institutional organizations directly related to software repositories.
+You are an expert at identifying institutional organizations related to software repositories or users.
 
 Your task is to:
-1. Analyze the compiled repository context provided.
-2. Identify ONLY institutional organizations that are DIRECTLY related to this software/repository.
+1. Analyze the compiled context provided (repository or user context).
+2. Identify institutional organizations that are related to the repository or user.
 3. Determine the type of each organization (Research Institute, University, Company, Community Space, etc.) - **REQUIRED for each organization**.
-4. Provide a confidence score (0.0 to 1.0) indicating how confident you are about the organization's relationship to the repository.
-5. Provide clear justifications explaining how each organization is directly related to the repository.
+4. Provide a confidence score (0.0 to 1.0) indicating how confident you are about the organization's relationship.
+5. Provide clear justifications explaining how each organization is related.
 
-**CRITICAL: Direct Relationship Required**
+**For Repositories:**
 - Focus on organizations that have a DIRECT institutional relationship with the software itself
 - A side affiliation of an author is NOT enough - the organization must be directly related to the software
-- Examples of DIRECT relationships:
-  - Organization develops, maintains, or owns the software
-  - Organization funds or sponsors the software project
-  - Organization hosts the repository or project
-  - Organization is explicitly mentioned as a partner or collaborator on the software
-  - Organization's research group or lab is directly associated with the software development
-- Examples that are NOT sufficient:
-  - An author happens to be affiliated with an organization (unless the organization is directly involved)
-  - An organization is mentioned in passing without clear connection to the software
-  - An organization is only related through a tangential author affiliation
+- Examples: developers, maintainers, sponsors, hosts, institutional partners, research groups/labs directly associated with the software
 
-**Types of Organizations to Look For:**
-- **Developers/Maintainers**: Organizations that develop or maintain the repository
-- **Sponsors/Funders**: Organizations that fund or sponsor the project
-- **Host Organizations**: Organizations that host or own the repository
-- **Institutional Partners**: Organizations explicitly mentioned as partners or collaborators
-- **Research Groups/Labs**: Research groups or labs directly associated with the software development
+**For Users:**
+- Focus on organizations that the user is affiliated with
+- Examples: current or past employers, universities, research institutes, labs, companies, organizations mentioned in bio/ORCID/GitHub profile
 
-**Organization Types:**
+**For Organizations:**
+- Focus on organizations that are related to this organization
+- Examples: parent organizations, partner organizations, affiliated organizations, founding organizations, collaborating institutions
+
+**Organization Types (REQUIRED for each organization):**
 - Research Institute
 - University
 - Government Agency
@@ -68,31 +60,100 @@ Your task is to:
 - etc.
 
 **Important:**
-- Extract organization names from README, documentation, funding acknowledgments, GitHub organization memberships
+- Extract organization names from the provided context (README, documentation, bio, ORCID, GitHub, etc.)
 - Look for GitHub organization URLs (e.g., https://github.com/orgname)
-- Check for explicit mentions in documentation, funding sections, acknowledgments
-- Provide specific evidence-based justifications that demonstrate DIRECT relationship
-- Only include organizations with clear, direct institutional connection to the software
-- Each justification should reference specific evidence from the repository showing direct relationship
+- Check for explicit mentions in documentation, funding sections, acknowledgments, bio, ORCID records
+- Provide specific evidence-based justifications that demonstrate the relationship
+- Each justification should reference specific evidence from the context
 
 **Output Format:**
-Return a JSON object matching the OrganizationIdentification schema exactly.
+Return a JSON object matching the OrganizationIdentification schema exactly. The schema requires:
+- relatedToOrganizations: List of SimplifiedOrganization objects, each with:
+  - name: Organization name (REQUIRED)
+  - organizationType: Type of organization (REQUIRED - must be a string like "Research Institute", "University", etc.)
+  - id: Optional organization identifier (GitHub URL, website, etc.)
+  - attributionConfidence: Optional confidence score (0.0 to 1.0)
+- relatedToOrganizationJustification: List of justification strings (one per organization)
 """
 
 
-def get_organization_identifier_prompt(compiled_context: CompiledContext) -> str:
+def get_organization_identifier_prompt(
+    compiled_context: CompiledContext,
+    context_type: str = "repository",
+) -> str:
     """
     Generate prompt for organization identifier agent.
 
     Args:
-        compiled_context: Compiled repository context from context compiler
+        compiled_context: Compiled context from context compiler
+        context_type: Type of context - "repository", "user", or "organization"
 
     Returns:
         Formatted prompt string
     """
-    prompt = f"""Identify institutional organizations DIRECTLY related to the following software repository:
+    if context_type == "organization":
+        url_label = "Organization Profile URL"
+    elif context_type == "user":
+        url_label = "User Profile URL"
+    else:
+        url_label = "Repository URL"
 
-**Repository URL:** {compiled_context.repository_url}
+    if context_type == "organization":
+        prompt = f"""Identify institutional organizations that are related to this organization:
+
+**{url_label}:** {compiled_context.repository_url}
+
+**Compiled Organization Context:**
+{compiled_context.markdown_content}
+
+**IMPORTANT:** Identify organizations that are related to this organization, such as:
+- Parent organizations (e.g., a lab's parent university)
+- Partner organizations (collaborating institutions)
+- Affiliated organizations (organizations this org is part of or works with)
+- Founding organizations (if this org was established by other orgs)
+- Organizations mentioned in the organization's description, README, or metadata
+
+Please identify:
+1. Institutional organizations related to this organization
+2. The type of each organization (REQUIRED - e.g., 'Research Institute', 'University', 'Company', etc.)
+3. Organization identifiers (GitHub URLs, websites, ROR IDs, etc.)
+4. Confidence score (0.0 to 1.0) for each organization's relationship
+
+For each organization, provide:
+- The organization type (REQUIRED)
+- A confidence score indicating how certain you are about the relationship
+- Clear justifications that demonstrate the relationship, referencing specific evidence from the organization context
+"""
+    elif context_type == "user":
+        prompt = f"""Identify institutional organizations that this user is affiliated with:
+
+**{url_label}:** {compiled_context.repository_url}
+
+**Compiled User Context:**
+{compiled_context.markdown_content}
+
+**IMPORTANT:** Identify organizations that the user is affiliated with, such as:
+- Current or past employers
+- Universities or educational institutions
+- Research institutes or labs
+- Companies or organizations they work for
+- Organizations mentioned in their bio, ORCID, or GitHub profile
+
+Please identify:
+1. Institutional organizations the user is affiliated with
+2. The type of each organization (REQUIRED - e.g., 'Research Institute', 'University', 'Company', etc.)
+3. Organization identifiers (GitHub URLs, websites, ROR IDs, etc.)
+4. Confidence score (0.0 to 1.0) for each organization's relationship to the user
+
+For each organization, provide:
+- The organization type (REQUIRED)
+- A confidence score indicating how certain you are about the affiliation
+- Clear justifications that demonstrate the user's affiliation, referencing specific evidence from the user context
+"""
+    else:
+        prompt = f"""Identify institutional organizations DIRECTLY related to the following software repository:
+
+**{url_label}:** {compiled_context.repository_url}
 
 **Compiled Repository Context:**
 {compiled_context.markdown_content}
@@ -117,22 +178,27 @@ For each organization, provide:
 
 async def identify_related_organizations(
     compiled_context: CompiledContext,
+    context_type: str = "repository",
 ) -> Dict[str, Any]:
     """
-    Identify organizations related to the repository using an atomic agent.
+    Identify organizations related to the repository or user using an atomic agent.
 
     Args:
-        compiled_context: Compiled markdown content with all repository information
+        compiled_context: Compiled markdown content with all repository/user/organization information
+        context_type: Type of context - "repository", "user", or "organization" (default: "repository")
 
     Returns:
         Dictionary with 'data' (OrganizationIdentification) and 'usage' (dict with token info)
     """
     logger.info(
-        f"Identifying related organizations for {compiled_context.repository_url}",
+        f"Identifying related organizations for {compiled_context.repository_url} (context_type: {context_type})",
     )
 
     # Prepare the prompt
-    prompt = get_organization_identifier_prompt(compiled_context)
+    prompt = get_organization_identifier_prompt(
+        compiled_context,
+        context_type=context_type,
+    )
 
     # Create agent context
     agent_context = {

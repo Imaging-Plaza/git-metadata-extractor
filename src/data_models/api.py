@@ -7,8 +7,6 @@ from typing import Any, Union
 from pydantic import (
     BaseModel,
     HttpUrl,
-    field_validator,
-    model_serializer,
 )
 
 from .models import ResourceType
@@ -89,25 +87,3 @@ class APIOutput(BaseModel):
         Any,
     ] = None
     stats: APIStats = None
-
-    @field_validator("output", mode="before")
-    @classmethod
-    def preserve_dict_output(cls, v):
-        """Preserve dict/list output as-is without converting to Pydantic models."""
-        # If it's already a dict or list (e.g., JSON-LD), don't try to convert it
-        if isinstance(v, (dict, list)):
-            return v
-        # Otherwise, let Pydantic handle it normally
-        return v
-
-    @model_serializer(mode="wrap")
-    def serialize_model(self, serializer):
-        """Custom serializer to preserve dict/list in output field."""
-        # Serialize the model normally
-        data = serializer(self)
-
-        # If output is a dict or list, keep it as-is (don't convert to model)
-        if isinstance(self.output, (dict, list)):
-            data["output"] = self.output
-
-        return data

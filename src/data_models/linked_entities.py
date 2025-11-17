@@ -12,7 +12,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .infoscience import InfoscienceAuthor, InfoscienceLab, InfosciencePublication
+from .infoscience import InfoscienceAuthor, InfoscienceOrgUnit, InfosciencePublication
 
 
 class CatalogType(str, Enum):
@@ -53,13 +53,46 @@ class linkedEntitiesRelation(BaseModel):
         Union[
             InfosciencePublication,
             InfoscienceAuthor,
-            InfoscienceLab,
+            InfoscienceOrgUnit,
         ]
     ] = Field(
         default=None,
         description="Full entity details. Can be InfosciencePublication, InfoscienceAuthor, "
-        "or InfoscienceLab depending on entityType. Can be None if only URL/UUID available.",
+        "or InfoscienceOrgUnit depending on entityType. Can be None if only URL/UUID available.",
     )
+
+    entityInfosciencePublication: Optional[InfosciencePublication] = Field(
+        default=None,
+        description="Full entity details for an Infoscience publication. Required if entityType is 'publication'.",
+    )
+
+    entityInfoscienceAuthor: Optional[InfoscienceAuthor] = Field(
+        default=None,
+        description="Full entity details for an Infoscience author. Required if entityType is 'person'.",
+    )
+
+    entityInfoscienceOrgUnit: Optional[InfoscienceOrgUnit] = Field(
+        default=None,
+        description="Full entity details for an Infoscience organizational unit. Required if entityType is 'orgunit'.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.entity:
+            if isinstance(self.entity, InfosciencePublication):
+                self.entityInfosciencePublication = self.entity
+            elif isinstance(self.entity, InfoscienceAuthor):
+                self.entityInfoscienceAuthor = self.entity
+            elif isinstance(self.entity, InfoscienceOrgUnit):
+                self.entityInfoscienceOrgUnit = self.entity
+        return super().model_post_init(__context)
+
+    def model_dump(self, *args, **kwargs):
+        kwargs["exclude"] = {
+            "entityInfosciencePublication",
+            "entityInfoscienceAuthor",
+            "entityInfoscienceOrgUnit",
+        }
+        return super().model_dump(*args, **kwargs)
 
     confidence: float = Field(
         description="Confidence score (0.0-1.0) for this relationship",
@@ -72,34 +105,41 @@ class linkedEntitiesRelation(BaseModel):
         description="Explanation of why this entity is related and how it was found",
     )
 
-    def get_display_name(self) -> str:
-        """Get a display name for this entity."""
-        if self.entity is None:
-            return "Unknown"
-        if isinstance(self.entity, (InfosciencePublication, InfoscienceLab)):
-            return self.entity.title or "Unknown"
-        if isinstance(self.entity, InfoscienceAuthor):
-            return self.entity.name or "Unknown"
-        return "Unknown"
-
-    def get_url(self) -> Optional[str]:
-        """Get the URL for this entity if available."""
-        if self.entity is None:
-            # Fallback to the top-level url field if it exists
-            return self.url if self.url else None
-        if isinstance(self.entity, (InfosciencePublication, InfoscienceLab)):
-            return self.entity.url
-        if isinstance(self.entity, InfoscienceAuthor):
-            return self.entity.profile_url
-        return None
-
     def to_markdown(self) -> str:
         """Convert relation to markdown format for logging/display."""
+        entity = None
+        if self.entityType == EntityType.PUBLICATION:
+            entity = self.entityInfosciencePublication
+        elif self.entityType == EntityType.PERSON:
+            entity = self.entityInfoscienceAuthor
+        elif self.entityType == EntityType.ORGUNIT:
+            entity = self.entityInfoscienceOrgUnit
+
+        def get_display_name() -> str:
+            """Get a display name for this entity."""
+            if entity is None:
+                return "Unknown"
+            if hasattr(entity, "title"):
+                return entity.title or "Unknown"
+            if hasattr(entity, "name"):
+                return entity.name or "Unknown"
+            return "Unknown"
+
+        def get_url() -> Optional[str]:
+            """Get the URL for this entity if available."""
+            if entity is None:
+                return None
+            if hasattr(entity, "url"):
+                return str(entity.url) if entity.url else None
+            if hasattr(entity, "profile_url"):
+                return str(entity.profile_url) if entity.profile_url else None
+            return None
+
         lines = []
         lines.append(f"**{self.catalogType.value}** - {self.entityType.value}")
-        lines.append(f"*Entity:* {self.get_display_name()}")
+        lines.append(f"*Entity:* {get_display_name()}")
 
-        url = self.get_url()
+        url = get_url()
         if url:
             lines.append(f"*URL:* {url}")
 
@@ -214,7 +254,22 @@ class linkedEntitiesEnrichmentResult(BaseModel):
         if self.relations:
             lines.append("### Relations\n")
             for idx, relation in enumerate(self.relations, 1):
-                lines.append(f"#### {idx}. {relation.get_display_name()}")
+                entity = None
+                if relation.entityType == EntityType.PUBLICATION:
+                    entity = relation.entityInfosciencePublication
+                elif relation.entityType == EntityType.PERSON:
+                    entity = relation.entityInfoscienceAuthor
+                elif relation.entityType == EntityType.ORGUNIT:
+                    entity = relation.entityInfoscienceOrgUnit
+
+                display_name = "Unknown"
+                if entity:
+                    if hasattr(entity, "title"):
+                        display_name = entity.title or "Unknown"
+                    elif hasattr(entity, "name"):
+                        display_name = entity.name or "Unknown"
+
+                lines.append(f"#### {idx}. {display_name}")
                 lines.append(relation.to_markdown())
                 lines.append("")  # Empty line between relations
         else:

@@ -1171,11 +1171,11 @@ class Repository:
         """
         Reconcile entity Union fields that were split during simplification.
 
-        The entity field Union[InfosciencePublication, InfoscienceAuthor, InfoscienceLab]
+        The entity field Union[InfosciencePublication, InfoscienceAuthor, InfoscienceOrgUnit]
         gets split into:
         - entityInfosciencePublication
         - entityInfoscienceAuthor
-        - entityInfoscienceLab
+        - entityInfoscienceOrgUnit
 
         This method merges them back into the single 'entity' field based on entityType.
 
@@ -1191,7 +1191,7 @@ class Repository:
         # Extract all three possible entity fields
         entity_pub = rel_dict.pop("entityInfosciencePublication", None)
         entity_author = rel_dict.pop("entityInfoscienceAuthor", None)
-        entity_lab = rel_dict.pop("entityInfoscienceLab", None)
+        entity_lab = rel_dict.pop("entityInfoscienceOrgUnit", None)
 
         # Select the correct entity based on entityType
         selected_entity = None
@@ -2453,7 +2453,7 @@ class Repository:
                             )
                             continue
 
-                        # Reconcile Union fields (entity split into entityInfosciencePublication, entityInfoscienceAuthor, entityInfoscienceLab)
+                        # Reconcile Union fields (entity split into entityInfosciencePublication, entityInfoscienceAuthor, entityInfoscienceOrgUnit)
                         rel_dict = self._reconcile_entity_union(rel_dict)
 
                         try:

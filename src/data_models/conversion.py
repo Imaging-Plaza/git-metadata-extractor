@@ -833,7 +833,10 @@ def _simplify_type(
     if annotation is HttpUrl or (
         isinstance(annotation, type) and issubclass(annotation, HttpUrl)
     ):
-        return (str, " (Original type: HttpUrl)")
+        return (
+            str,
+            " (Original type: HttpUrl, format: string URL like 'https://example.com/path')",
+        )
 
     # Handle date -> str
     if annotation is date:

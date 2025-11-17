@@ -13,7 +13,7 @@ import httpx
 
 from ..data_models.infoscience import (
     InfoscienceAuthor,
-    InfoscienceLab,
+    InfoscienceOrgUnit,
     InfosciencePublication,
     InfoscienceSearchResult,
 )
@@ -30,6 +30,13 @@ INFOSCIENCE_TOKEN = os.getenv("INFOSCIENCE_TOKEN")
 
 # Simple in-memory cache to prevent duplicate searches in same session
 _search_cache: Dict[str, str] = {}
+
+
+def clear_infoscience_cache():
+    """Clear the in-memory Infoscience search cache."""
+    global _search_cache
+    _search_cache.clear()
+    logger.info("Cleared Infoscience search cache")
 
 
 ##########################################################
@@ -219,15 +226,15 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
     )
 
 
-def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
+def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceOrgUnit]:
     """
-    Parse a DSpace organizational unit entity into an InfoscienceLab model.
+    Parse a DSpace organizational unit entity into an InfoscienceOrgUnit model.
 
     Args:
         item: DSpace orgunit item dictionary
 
     Returns:
-        InfoscienceLab instance or None if parsing fails
+        InfoscienceOrgUnit instance or None if parsing fails
     """
     metadata = item.get("metadata", {})
     uuid = item.get("uuid")
@@ -252,7 +259,7 @@ def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
 
-    return InfoscienceLab(
+    return InfoscienceOrgUnit(
         uuid=uuid,
         name=name,
         description=_parse_metadata(metadata, "dc.description")
@@ -551,7 +558,7 @@ async def search_labs(
                         pub_title = _parse_metadata(metadata, "dc.title")
                         description = f"Lab identified from publication: {pub_title[:100] if pub_title else 'N/A'}..."
 
-                        lab = InfoscienceLab(
+                        lab = InfoscienceOrgUnit(
                             name=lab_info,
                             description=description,
                         )

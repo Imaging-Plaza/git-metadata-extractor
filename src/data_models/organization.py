@@ -167,6 +167,10 @@ class GitHubOrganizationMetadata(BaseModel):
 
 
 class GitHubOrganization(BaseModel):
+    id: str = Field(
+        default="",
+        description="Unique identifier for the organization. Link to the organization's GitHub profile URL.",
+    )
     name: Optional[str] = None
     organizationType: Optional[str] = None
     githubOrganizationMetadata: Optional[GitHubOrganizationMetadata] = None

@@ -108,78 +108,91 @@ MODEL_CONFIGS = {
         },
     ],
     "run_linked_entities_enrichment": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.1,
+            "max_tokens": 12000,
+            "timeout": 300.0,
+            "allow_tools": True,  # Uses Infoscience search tools
+        },
         # {
-        #     "provider": "openai-compatible",
-        #     "model": "openai/gpt-oss-120b",
-        #     "base_url": "https://inference.rcp.epfl.ch/v1",
-        #     "api_key_env": "RCP_TOKEN",
+        #     "provider": "openai",
+        #     "model": "o4-mini",
         #     "max_retries": 3,
         #     "temperature": 0.1,
         #     "max_tokens": 12000,
         #     "timeout": 300.0,
         # },
-        {
-            "provider": "openai",
-            "model": "o4-mini",
-            "max_retries": 3,
-            "temperature": 0.1,
-            "max_tokens": 12000,
-            "timeout": 300.0,
-        },
-        {
-            "provider": "openrouter",
-            "model": "google/gemini-2.5-flash",
-            "max_retries": 3,
-            "temperature": 0.2,
-            "max_tokens": 16000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 300.0,
+        # },
     ],
     "run_epfl_assessment": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools needed for assessment
+        },
         # {
-        #     "provider": "openai-compatible",
-        #     "model": "openai/gpt-oss-120b",
-        #     "base_url": "https://inference.rcp.epfl.ch/v1",
-        #     "api_key_env": "RCP_TOKEN",
+        #     "provider": "openai",
+        #     "model": "o4-mini",
         #     "max_retries": 2,
         #     "temperature": 0.1,
         #     "max_tokens": 8000,
         #     "timeout": 300.0,
         # },
-        {
-            "provider": "openai",
-            "model": "o4-mini",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 8000,
-            "timeout": 300.0,
-        },
-        {
-            "provider": "openrouter",
-            "model": "google/gemini-2.5-flash",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 8000,
-            "timeout": 300.0,
-        },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
     ],
     "run_url_validation": [
         {
-            "provider": "openai",
-            "model": "gpt-4o-mini",
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
             "max_tokens": 4000,
             "timeout": 60.0,
+            "allow_tools": False,  # No tools needed for validation
         },
-        {
-            "provider": "openrouter",
-            "model": "google/gemini-2.0-flash",
-            "max_retries": 2,
-            "temperature": 0.1,
-            "max_tokens": 4000,
-            "timeout": 60.0,
-        },
+        # {
+        #     "provider": "openai",
+        #     "model": "gpt-4o-mini",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 4000,
+        #     "timeout": 60.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.0-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 4000,
+        #     "timeout": 60.0,
+        # },
     ],
     "run_context_compiler": [
         {
@@ -206,6 +219,22 @@ MODEL_CONFIGS = {
             "timeout": 600.0,
             "allow_tools": False,  # No tools for structured output
         },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 600.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 600.0,
+        # },
     ],
     "run_repository_classifier": [
         {
@@ -219,6 +248,22 @@ MODEL_CONFIGS = {
             "timeout": 300.0,
             "allow_tools": False,  # No tools - classifies from compiled context
         },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
     ],
     "run_organization_identifier": [
         {
@@ -232,6 +277,22 @@ MODEL_CONFIGS = {
             "timeout": 300.0,
             "allow_tools": False,  # No tools - identifies from compiled context
         },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
     ],
     "run_epfl_final_checker": [
         {
@@ -259,6 +320,148 @@ MODEL_CONFIGS = {
             "allow_tools": True,  # Needs Infoscience search tools
         },
     ],
+    "run_user_context_compiler": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 600.0,
+            "allow_tools": True,  # Uses ORCID, Infoscience, web search tools
+        },
+    ],
+    "run_user_structured_output": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools for structured output
+        },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 300.0,
+        # },
+    ],
+    "run_user_classifier": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 4000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools - classifies from compiled context
+        },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 4000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+    ],
+    "run_organization_context_compiler": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 600.0,
+            "allow_tools": True,  # Uses Infoscience, web search tools
+        },
+    ],
+    "run_organization_structured_output": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools for structured output
+        },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 3,
+        #     "temperature": 0.2,
+        #     "max_tokens": 16000,
+        #     "timeout": 300.0,
+        # },
+    ],
+    "run_organization_classifier": [
+        {
+            "provider": "openai-compatible",
+            "model": "openai/gpt-oss-120b",
+            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "api_key_env": "RCP_TOKEN",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 4000,
+            "timeout": 300.0,
+            "allow_tools": False,  # No tools - classifies from compiled context
+        },
+        # {
+        #     "provider": "openai",
+        #     "model": "o4-mini",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 4000,
+        #     "timeout": 300.0,
+        # },
+        # {
+        #     "provider": "openrouter",
+        #     "model": "google/gemini-2.5-flash",
+        #     "max_retries": 2,
+        #     "temperature": 0.1,
+        #     "max_tokens": 8000,
+        #     "timeout": 300.0,
+        # },
+    ],
 }
 
 # Environment variable mappings
@@ -275,6 +478,12 @@ ENV_VAR_MAPPINGS = {
     "run_structured_output": "STRUCTURED_OUTPUT_MODELS",
     "run_epfl_final_checker": "EPFL_FINAL_CHECKER_MODELS",
     "run_linked_entities_searcher": "LINKED_ENTITIES_SEARCHER_MODELS",
+    "run_user_context_compiler": "USER_CONTEXT_COMPILER_MODELS",
+    "run_user_structured_output": "USER_STRUCTURED_OUTPUT_MODELS",
+    "run_user_classifier": "USER_CLASSIFIER_MODELS",
+    "run_organization_context_compiler": "ORGANIZATION_CONTEXT_COMPILER_MODELS",
+    "run_organization_structured_output": "ORGANIZATION_STRUCTURED_OUTPUT_MODELS",
+    "run_organization_classifier": "ORGANIZATION_CLASSIFIER_MODELS",
 }
 
 

@@ -9,7 +9,7 @@ from .conversion import (
 from .epfl_assessment import EPFLAssessmentResult, EvidenceItem
 from .infoscience import (
     InfoscienceAuthor,
-    InfoscienceLab,
+    InfoscienceOrgUnit,
     InfosciencePublication,
     InfoscienceSearchResult,
 )
@@ -109,7 +109,7 @@ __all__ = [
     # Infoscience models
     "InfosciencePublication",
     "InfoscienceAuthor",
-    "InfoscienceLab",
+    "InfoscienceOrgUnit",
     "InfoscienceSearchResult",
     # API models
     "APIOutput",

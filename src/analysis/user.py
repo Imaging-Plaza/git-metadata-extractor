@@ -375,6 +375,7 @@ class User:
                 full_name=full_name,
                 bio=bio,
                 organizations=organizations,
+                force_refresh=self.force_refresh,
             )
 
             # Extract data and usage
@@ -548,9 +549,9 @@ class User:
         if output_type == "pydantic":
             return self.data
         elif output_type == "json":
-            return self.data.model_dump_json(indent=2, exclude_none=True)
+            return self.data.model_dump_json(indent=2)
         elif output_type == "dict":
-            return self.data.model_dump(exclude_none=True)
+            return self.data.model_dump()
         else:
             logging.error(f"Unsupported output type: {output_type}")
             return None

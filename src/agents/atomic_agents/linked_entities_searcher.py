@@ -128,7 +128,7 @@ For each entity type, include these fields:
   - orcid: ORCID identifier (if available)
   - affiliation: Primary affiliation/lab (if available)
 
-**entityInfoscienceLab (when entityType="orgunit"):**
+**entityInfoscienceOrgUnit (when entityType="orgunit"):**
   - name: Lab/organization name
   - url: Full Infoscience URL
   - uuid: Entity UUID
@@ -151,7 +151,7 @@ For each entity type, include these fields:
   "justification": "Found publication about the repository in Infoscience"
 }
 ```
-Note: Only entityInfosciencePublication is populated. Do NOT include entityInfoscienceAuthor or entityInfoscienceLab fields at all.
+Note: Only entityInfosciencePublication is populated. Do NOT include entityInfoscienceAuthor or entityInfoscienceOrgUnit fields at all.
 
 **Output Format:**
 Return a JSON object matching the provided schema exactly.

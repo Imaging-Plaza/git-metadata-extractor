@@ -555,22 +555,32 @@ async def get_org_json(
     github_info: dict = Depends(validate_github_token),
 ) -> APIOutput:
     """
-    Retrieve and enrich GitHub organization metadata.
+    Retrieve and enrich GitHub organization metadata using atomic agents pipeline.
 
-    Fetches organization profile from GitHub API and enriches it using LLM
-    to extract additional insights and structured information.
+    Fetches organization profile from GitHub API and enriches it using a multi-stage
+    atomic agents pipeline to extract structured metadata and relationships.
 
-    **LLM Analysis**:
-    Uses PydanticAI to analyze the organization profile and extract:
-    - Organization type (academic, research, industry, non-profit, etc.)
-    - Scientific/technical disciplines
-    - EPFL relationship analysis
+    **Atomic Agents Pipeline** (6 stages):
+    1. **Context Compilation**: Gathers comprehensive organization information using tools:
+       - Infoscience labs/orgunits search (EPFL organizational units)
+       - Infoscience publications search (related publications)
+       - Web search (DuckDuckGo) for additional context
+       - Compiles all information into structured markdown
+    2. **Structured Output**: Extracts basic identity fields (name, description) from compiled context
+    3. **Classification**: Classifies organization type and scientific disciplines with justifications:
+       - Organization type (Research Institute, University, Company, etc.)
+       - Scientific disciplines (from closed list of valid disciplines)
+    4. **Organization Identifier**: Identifies related organizations (parent, partner, affiliated organizations)
+    5. **Linked Entities**: Searches academic catalogs (Infoscience) for:
+       - Organizational units (orgunit) matching the organization
+       - Publications related to the organization
+       - Publications by organization members
+    6. **EPFL Assessment**: Final holistic assessment of EPFL relationship with confidence scoring
 
     **Organization Enrichment** (optional):
-    When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
-    - Query ROR (Research Organization Registry) for standardized organization names and IDs
+    When `enrich_orgs=true`, performs ROR (Research Organization Registry) enrichment to:
+    - Query ROR API for standardized organization names and IDs
     - Identify hierarchical relationships (departments, labs within universities)
-    - Provide detailed EPFL relationship analysis with evidence
     - Enrich organization metadata with type, country, website, etc.
 
     **Caching**: Results are cached with TTL of 365 days.
@@ -578,13 +588,14 @@ async def get_org_json(
     **Parameters**:
     - **full_path**: GitHub organization URL or path (e.g., `https://github.com/organization`)
     - **force_refresh**: Set to `true` to bypass cache and fetch fresh data
-    - **enrich_orgs**: Set to `true` to enable organization enrichment with PydanticAI agent
+    - **enrich_orgs**: Set to `true` to enable ROR-based organization enrichment
 
     **Returns**:
     - Organization link
     - Organization type
     - Parsing timestamp
     - Organization Object with enriched metadata
+    - Usage statistics (token counts, timing, status)
     """
     org_name = full_path.split("/")[-1]
 
@@ -666,8 +677,25 @@ async def get_user_json(
     """
     Retrieve and enrich GitHub user profile metadata.
 
-    Fetches user profile from GitHub API and enriches it using LLM
-    to extract additional insights, research interests, and structured information.
+    Uses a multi-stage atomic agent pipeline to extract and enrich user information:
+    1. **Context Compiler**: Gathers user information using tools (ORCID, Infoscience authors/labs, web search) and compiles into markdown
+    2. **Structured Output**: Extracts basic identity fields (name, fullname, githubHandle)
+    3. **Discipline/Position Classifier**: Classifies user's discipline(s) and position(s) with justifications (using closed list of disciplines)
+    4. **Organization Identifier**: Identifies related organizations (reuses repository's organization identification logic)
+    5. **Linked Entities Searcher**: Searches Infoscience for persona (user) and orgunit (organizations) entities
+    6. **EPFL Assessment**: Final holistic assessment of EPFL relationship (runs after all enrichments)
+
+    **Context Compiler Tools**:
+    - ORCID search for author information and affiliations
+    - Infoscience author search (persona) for EPFL researchers
+    - Infoscience lab search (orgunit) for EPFL labs and organizational units
+    - Web search for additional context
+    - Author publications retrieval from Infoscience
+
+    **Linked Entities Enhancement**:
+    - When searching for orgunit (labs), includes user's name in search queries
+    - Some labs use GitHub user profiles, so searching with both lab name and user name helps find them
+    - Searches both persona (user) and orgunit (organizations) in Infoscience
 
     **Organization Enrichment** (optional):
     When `enrich_orgs=true`, performs a second-pass agentic analysis using PydanticAI to:
@@ -695,7 +723,8 @@ async def get_user_json(
     - User profile link
     - User type
     - Parsing timestamp
-    - User Object with enriched metadata
+    - User Object with enriched metadata (id field set to full GitHub profile URL)
+    - Statistics (token usage, timing, and status)
     """
     username = full_path.split("/")[-1]
 
