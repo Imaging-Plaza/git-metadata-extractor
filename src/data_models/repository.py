@@ -38,7 +38,7 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from .academic_catalog import AcademicCatalogRelation
+    from .linked_entities import linkedEntitiesRelation
 
 #####################################################################
 # Debugging Utilities
@@ -256,7 +256,7 @@ class GitAuthor(BaseModel):
 
 class InfoscienceEntity(BaseModel):
     """
-    DEPRECATED: Use AcademicCatalogRelation instead.
+    DEPRECATED: Use linkedEntitiesRelation instead.
 
     Kept temporarily for backward compatibility during migration.
     """
@@ -268,6 +268,10 @@ class InfoscienceEntity(BaseModel):
 
 
 class SoftwareSourceCode(BaseModel):
+    id: str = Field(
+        default="",
+        description="Unique identifier for the repository. Link to the repository URL.",
+    )
     name: Optional[str] = Field(
         default=None,
         description="Repository name",
@@ -454,7 +458,7 @@ class SoftwareSourceCode(BaseModel):
         default=None,
         description="Git commit authors",
     )
-    academicCatalogRelations: Optional[list[AcademicCatalogRelation]] = Field(
+    linkedEntities: Optional[list[linkedEntitiesRelation]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
@@ -476,16 +480,43 @@ class SoftwareSourceCode(BaseModel):
             valid_authors = []
 
             for i, author in enumerate(v):
+                # Handle both dicts and Pydantic model instances
+                author_dict = None
                 if isinstance(author, dict):
+                    author_dict = author
+                elif hasattr(author, "model_dump"):
+                    # Pydantic model instance - convert to dict
+                    author_dict = author.model_dump()
+                elif hasattr(author, "name") or hasattr(author, "legalName"):
+                    # Pydantic model instance without model_dump - try to access attributes
+                    if hasattr(author, "name"):
+                        author_dict = {"name": author.name}
+                        # Copy other Person fields if available
+                        for field in [
+                            "orcid",
+                            "emails",
+                            "affiliations",
+                            "currentAffiliation",
+                        ]:
+                            if hasattr(author, field):
+                                author_dict[field] = getattr(author, field)
+                    elif hasattr(author, "legalName"):
+                        author_dict = {"legalName": author.legalName}
+                        # Copy other Organization fields if available
+                        for field in ["hasRorId", "country", "website"]:
+                            if hasattr(author, field):
+                                author_dict[field] = getattr(author, field)
+
+                if author_dict:
                     # Check if it's a Person/EnrichedAuthor (has "name") or Organization (has "legalName")
-                    name = author.get("name")
-                    legal_name = author.get("legalName")
+                    name = author_dict.get("name")
+                    legal_name = author_dict.get("legalName")
 
                     if name:
                         # Person or EnrichedAuthor object
                         # Check if it has enrichment fields to distinguish
                         has_enrichment = any(
-                            k in author
+                            k in author_dict
                             for k in [
                                 "currentAffiliation",
                                 "affiliationHistory",
@@ -503,14 +534,14 @@ class SoftwareSourceCode(BaseModel):
                         # Neither Person nor Organization - check if it's an empty/invalid entry
                         # Check if the entire entry is empty (all None values)
                         has_any_value = any(
-                            value is not None for value in author.values()
+                            value is not None for value in author_dict.values()
                         )
 
                         if has_any_value:
                             # Has some data but missing name/legalName - this is a problem
                             missing_names.append(f"Author {i+1}")
                             logger.warning(
-                                f"  ⚠️ Author {i+1} missing name/legalName: {author}",
+                                f"  ⚠️ Author {i+1} missing name/legalName: {author_dict}",
                             )
                         else:
                             # Completely empty entry - will be filtered out later, no need to warn
@@ -518,7 +549,12 @@ class SoftwareSourceCode(BaseModel):
                                 f"  🔕 Author {i+1} is completely empty (will be filtered)",
                             )
                 else:
-                    logger.warning(f"  ⚠️ Author {i+1} is not a dict: {type(author)}")
+                    # Not a dict and not a recognizable Pydantic model - keep as-is
+                    # Pydantic will handle validation
+                    logger.debug(
+                        f"  📦 Author {i+1} is a Pydantic model instance: {type(author)}",
+                    )
+                    valid_authors.append(str(type(author).__name__))
 
             # Summary
             if missing_names:
@@ -529,10 +565,24 @@ class SoftwareSourceCode(BaseModel):
                 logger.debug(f"  ✅ All {len(valid_authors)} authors have names")
 
             # Filter out completely empty entries (all fields are None)
+            # Also convert Pydantic model instances to dicts for consistency
             if v:
                 cleaned_authors = []
                 for author in v:
-                    if isinstance(author, dict):
+                    # Convert Pydantic model instances to dicts
+                    if hasattr(author, "model_dump"):
+                        author_dict = author.model_dump()
+                        # Check if the entry has any non-None values
+                        has_any_value = any(
+                            value is not None for value in author_dict.values()
+                        )
+                        if has_any_value:
+                            cleaned_authors.append(author_dict)
+                        else:
+                            logger.debug(
+                                "  🗑️ Removing empty author entry (all None values)",
+                            )
+                    elif isinstance(author, dict):
                         # Check if the entry has any non-None values
                         has_any_value = any(
                             value is not None for value in author.values()
@@ -544,7 +594,8 @@ class SoftwareSourceCode(BaseModel):
                                 "  🗑️ Removing empty author entry (all None values)",
                             )
                     else:
-                        # Keep non-dict entries (they'll be handled by Pydantic)
+                        # Pydantic model instance without model_dump - keep as-is
+                        # Pydantic will handle it
                         cleaned_authors.append(author)
 
                 if len(cleaned_authors) != len(v):
@@ -912,7 +963,11 @@ class SoftwareSourceCode(BaseModel):
                     if auth.orcid:
                         author_dict["orcid"] = auth.orcid
                     if auth.affiliations:
-                        author_dict["affiliations"] = list(auth.affiliations)
+                        # Convert Affiliation objects to simple strings for simplified schema
+                        author_dict["affiliations"] = [
+                            aff.name if hasattr(aff, "name") else str(aff)
+                            for aff in auth.affiliations
+                        ]
                     simplified_authors.append(author_dict)
                 elif isinstance(auth, dict):
                     # Already a dict, extract basic fields

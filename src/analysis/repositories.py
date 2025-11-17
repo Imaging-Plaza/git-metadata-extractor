@@ -2,18 +2,18 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from ..agents.academic_catalog_enrichment import enrich_repository_academic_catalog
 from ..agents.atomic_agents import (
     check_epfl_relationship,
     compile_repository_context,
     generate_structured_output,
 )
 from ..agents.epfl_assessment import assess_epfl_relationship
+from ..agents.linked_entities_enrichment import enrich_repository_linked_entities
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..context import prepare_repository_context
-from ..data_models import Organization, SoftwareSourceCode
+from ..data_models import Affiliation, Organization, SoftwareSourceCode
 from ..gimie_utils.gimie_methods import extract_gimie
 from ..utils.utils import enrich_authors_with_orcid
 
@@ -108,19 +108,37 @@ class Repository:
         logger.debug(f"First 1000 chars: {repository_content[:1000]}")
         logger.debug("=" * 80)
 
+        # Extract structured authors and organizations from GIMIE
+        gimie_authors_orgs = self._extract_gimie_authors_and_organizations()
+
         # Prepare GIMIE data as string if available
         gimie_data = None
         if self.gimie:
             import json as json_module
 
-            gimie_data = (
-                json_module.dumps(self.gimie)
-                if isinstance(self.gimie, dict)
-                else str(self.gimie)
-            )
+            # Include structured authors/orgs in GIMIE data for context compiler
+            # Convert Pydantic models to dicts for JSON serialization
+            authors_list = gimie_authors_orgs.get("authors", [])
+            orgs_list = gimie_authors_orgs.get("organizations", [])
+
+            gimie_data_dict = {
+                "raw_gimie": self.gimie,
+                "extracted_authors": [
+                    a.model_dump() if hasattr(a, "model_dump") else a
+                    for a in authors_list
+                ],
+                "extracted_organizations": [
+                    o.model_dump() if hasattr(o, "model_dump") else o for o in orgs_list
+                ],
+            }
+
+            gimie_data = json_module.dumps(gimie_data_dict, indent=2, default=str)
             logger.debug("=" * 80)
             logger.debug("GIMIE DATA PROVIDED TO CONTEXT COMPILER:")
             logger.debug("=" * 80)
+            logger.debug(
+                f"Extracted {len(gimie_authors_orgs.get('authors', []))} authors and {len(gimie_authors_orgs.get('organizations', []))} organizations",
+            )
             logger.debug(
                 gimie_data[:2000] if len(gimie_data) > 2000 else gimie_data,
             )  # First 2000 chars
@@ -201,7 +219,11 @@ class Repository:
         union_metadata = structured_result.get("union_metadata", {})
 
         # Convert simplified dict to full SoftwareSourceCode format
-        full_dict = self._convert_simplified_to_full(simplified_dict, union_metadata)
+        full_dict = self._convert_simplified_to_full(
+            simplified_dict,
+            union_metadata,
+            git_authors=git_authors,
+        )
 
         # Stage 3: EPFL relationship check
         logger.info("Stage 3: Checking EPFL relationship...")
@@ -240,31 +262,544 @@ class Repository:
         except Exception as e:
             logger.error(f"Failed to validate SoftwareSourceCode: {e}", exc_info=True)
 
+    def _extract_gimie_fields(self) -> dict:
+        """
+        Extract fields from GIMIE JSON-LD data that can be automatically populated.
+
+        Returns:
+            Dictionary with GIMIE-extracted fields
+        """
+        gimie_dict = {}
+
+        if not self.gimie:
+            logger.debug("No GIMIE data available for field extraction")
+            return gimie_dict
+
+        # GIMIE can be in different formats:
+        # 1. A list directly: [{"@id": "...", "@type": [...]}, ...]
+        # 2. A dict with @graph: {"@graph": [{"@id": "...", ...}, ...]}
+        # 3. A dict that is the graph itself
+        graph = None
+        if isinstance(self.gimie, list):
+            # Format 1: Direct list
+            graph = self.gimie
+            logger.debug(f"GIMIE data is a list with {len(graph)} entities")
+        elif isinstance(self.gimie, dict):
+            # Format 2: Dict with @graph
+            if "@graph" in self.gimie:
+                graph = self.gimie.get("@graph", [])
+                logger.debug(f"GIMIE data has @graph with {len(graph)} entities")
+            else:
+                # Format 3: Single entity dict (treat as list with one item)
+                graph = [self.gimie]
+                logger.debug("GIMIE data is a single entity dict")
+        else:
+            logger.warning(f"Unexpected GIMIE data type: {type(self.gimie)}")
+            return gimie_dict
+
+        if not graph:
+            logger.debug("GIMIE graph is empty")
+            return gimie_dict
+        for entity in graph:
+            if not isinstance(entity, dict):
+                continue
+
+            entity_types = entity.get("@type", [])
+            if not isinstance(entity_types, list):
+                entity_types = [entity_types]
+
+            # Check if this is a SoftwareSourceCode entity
+            if "http://schema.org/SoftwareSourceCode" not in entity_types:
+                logger.debug(f"Skipping entity type: {entity_types}")
+                continue
+
+            logger.debug("Found SoftwareSourceCode entity, extracting fields...")
+
+            # Extract @id (repository URL) - this becomes the id field
+            entity_id = entity.get("@id")
+            if entity_id:
+                gimie_dict["id"] = entity_id
+                logger.debug(f"Extracted id from GIMIE: {entity_id}")
+
+            # Helper to get value from JSON-LD
+            def get_ld_value(key: str):
+                value = entity.get(key)
+                if value is None:
+                    return None
+                if isinstance(value, dict):
+                    return value.get("@value") or value.get("@id")
+                if isinstance(value, list):
+                    return [
+                        v.get("@value") if isinstance(v, dict) else v for v in value
+                    ]
+                return value
+
+            # Extract name (can be string or array with @value objects)
+            # Check both prefixed and full URI formats
+            name_val = entity.get("http://schema.org/name") or entity.get("schema:name")
+            if name_val:
+                if isinstance(name_val, list):
+                    # Get first name from array
+                    if name_val and isinstance(name_val[0], dict):
+                        name_str = name_val[0].get("@value")
+                        if name_str:
+                            gimie_dict["name"] = name_str
+                    elif name_val:
+                        gimie_dict["name"] = name_val[0]
+                elif isinstance(name_val, dict):
+                    name_str = name_val.get("@value")
+                    if name_str:
+                        gimie_dict["name"] = name_str
+                else:
+                    gimie_dict["name"] = name_val
+
+            # Extract codeRepository
+            # Check both prefixed and full URI formats
+            code_repo = entity.get("http://schema.org/codeRepository") or entity.get(
+                "schema:codeRepository",
+            )
+            if code_repo:
+                if isinstance(code_repo, list):
+                    gimie_dict["codeRepository"] = [
+                        r.get("@id") if isinstance(r, dict) else r for r in code_repo
+                    ]
+                elif isinstance(code_repo, dict):
+                    gimie_dict["codeRepository"] = [code_repo.get("@id", code_repo)]
+                else:
+                    gimie_dict["codeRepository"] = [code_repo]
+
+            # Extract license (can be array with @id objects)
+            # Check both prefixed and full URI formats
+            license_val = entity.get("http://schema.org/license") or entity.get(
+                "schema:license",
+            )
+            if license_val:
+                if isinstance(license_val, list):
+                    # Get first license from array
+                    if license_val and isinstance(license_val[0], dict):
+                        license_str = license_val[0].get("@id")
+                        if license_str:
+                            gimie_dict["license"] = license_str
+                elif isinstance(license_val, dict):
+                    license_str = license_val.get("@id")
+                    if license_str:
+                        gimie_dict["license"] = license_str
+                else:
+                    gimie_dict["license"] = license_val
+
+            # Extract dateCreated (can be array with @value objects)
+            # Check both prefixed and full URI formats
+            date_created = entity.get("http://schema.org/dateCreated") or entity.get(
+                "schema:dateCreated",
+            )
+            if date_created:
+                if isinstance(date_created, list):
+                    # Get first date from array
+                    if date_created and isinstance(date_created[0], dict):
+                        date_str = date_created[0].get("@value")
+                        if date_str:
+                            gimie_dict["dateCreated"] = date_str
+                elif isinstance(date_created, dict):
+                    date_str = date_created.get("@value")
+                    if date_str:
+                        gimie_dict["dateCreated"] = date_str
+                else:
+                    gimie_dict["dateCreated"] = date_created
+
+            # Extract datePublished (can be array with @value objects)
+            # Check both prefixed and full URI formats
+            date_pub = entity.get("http://schema.org/datePublished") or entity.get(
+                "schema:datePublished",
+            )
+            if date_pub:
+                if isinstance(date_pub, list):
+                    # Get first date from array
+                    if date_pub and isinstance(date_pub[0], dict):
+                        date_str = date_pub[0].get("@value")
+                        if date_str:
+                            gimie_dict["datePublished"] = date_str
+                elif isinstance(date_pub, dict):
+                    date_str = date_pub.get("@value")
+                    if date_str:
+                        gimie_dict["datePublished"] = date_str
+                else:
+                    gimie_dict["datePublished"] = date_pub
+
+            # Extract dateModified (can be array with @value objects)
+            # Check both prefixed and full URI formats
+            date_modified = entity.get("http://schema.org/dateModified") or entity.get(
+                "schema:dateModified",
+            )
+            if date_modified:
+                if isinstance(date_modified, list):
+                    # Get first date from array
+                    if date_modified and isinstance(date_modified[0], dict):
+                        date_str = date_modified[0].get("@value")
+                        if date_str:
+                            gimie_dict["dateModified"] = date_str
+                elif isinstance(date_modified, dict):
+                    date_str = date_modified.get("@value")
+                    if date_str:
+                        gimie_dict["dateModified"] = date_str
+                else:
+                    gimie_dict["dateModified"] = date_modified
+
+            # Extract url
+            # Check both prefixed and full URI formats
+            url_val = entity.get("http://schema.org/url") or entity.get("schema:url")
+            if url_val:
+                url_str = url_val.get("@id") if isinstance(url_val, dict) else url_val
+                if url_str:
+                    gimie_dict["url"] = url_str
+
+            # Extract programmingLanguage
+            # Check both prefixed and full URI formats
+            prog_lang = entity.get(
+                "http://schema.org/programmingLanguage",
+            ) or entity.get(
+                "schema:programmingLanguage",
+            )
+            if prog_lang:
+                if isinstance(prog_lang, list):
+                    gimie_dict["programmingLanguage"] = [
+                        lang.get("@value") if isinstance(lang, dict) else lang
+                        for lang in prog_lang
+                    ]
+                else:
+                    lang_val = (
+                        prog_lang.get("@value")
+                        if isinstance(prog_lang, dict)
+                        else prog_lang
+                    )
+                    if lang_val:
+                        gimie_dict["programmingLanguage"] = [lang_val]
+
+            # Extract keywords (can be array with @value objects)
+            # Check both prefixed and full URI formats
+            keywords = entity.get("http://schema.org/keywords") or entity.get(
+                "schema:keywords",
+            )
+            if keywords:
+                if isinstance(keywords, list):
+                    # Extract @value from each keyword object
+                    keyword_list = []
+                    for kw in keywords:
+                        if isinstance(kw, dict):
+                            kw_val = kw.get("@value")
+                            if kw_val:
+                                keyword_list.append(kw_val)
+                        else:
+                            keyword_list.append(kw)
+                    if keyword_list:
+                        gimie_dict["keywords"] = keyword_list
+                else:
+                    kw_val = (
+                        keywords.get("@value")
+                        if isinstance(keywords, dict)
+                        else keywords
+                    )
+                    if kw_val:
+                        gimie_dict["keywords"] = (
+                            [kw_val] if isinstance(kw_val, str) else kw_val
+                        )
+
+            # Extract readme
+            # Check both prefixed and full URI formats
+            readme_val = entity.get("https://w3id.org/okn/o/sd#readme") or entity.get(
+                "sd:readme",
+            )
+            if readme_val:
+                readme_str = (
+                    readme_val.get("@id")
+                    if isinstance(readme_val, dict)
+                    else readme_val
+                )
+                if readme_str:
+                    gimie_dict["readme"] = readme_str
+
+            # Extract citation
+            # Check both prefixed and full URI formats
+            citation = entity.get("http://schema.org/citation") or entity.get(
+                "schema:citation",
+            )
+            if citation:
+                if isinstance(citation, list):
+                    gimie_dict["citation"] = [
+                        cit.get("@id") if isinstance(cit, dict) else cit
+                        for cit in citation
+                    ]
+                else:
+                    cit_val = (
+                        citation.get("@id") if isinstance(citation, dict) else citation
+                    )
+                    if cit_val:
+                        gimie_dict["citation"] = [cit_val]
+
+            # Only process the first SoftwareSourceCode entity
+            break
+
+        return gimie_dict
+
+    def _extract_gimie_authors_and_organizations(self) -> dict:
+        """
+        Extract authors (Person) and organizations from GIMIE JSON-LD data.
+        Resolves affiliations and maintains @id references.
+
+        Returns:
+            Dictionary with 'authors' and 'organizations' lists in structured format
+        """
+        result = {
+            "authors": [],
+            "organizations": [],
+        }
+
+        if not self.gimie:
+            return result
+
+        # Get graph (handle different formats)
+        graph = None
+        if isinstance(self.gimie, list):
+            graph = self.gimie
+        elif isinstance(self.gimie, dict):
+            if "@graph" in self.gimie:
+                graph = self.gimie.get("@graph", [])
+            else:
+                graph = [self.gimie]
+
+        if not graph:
+            return result
+
+        # Build entity lookup by @id for affiliation resolution
+        entity_lookup = {}
+        for entity in graph:
+            if isinstance(entity, dict) and "@id" in entity:
+                entity_lookup[entity["@id"]] = entity
+
+        # Helper to extract value from JSON-LD field
+        def extract_value(field_value):
+            """Extract actual value from JSON-LD field (handles @value, @id, arrays)"""
+            if field_value is None:
+                return None
+            if isinstance(field_value, list):
+                if not field_value:
+                    return None
+                # Get first value
+                first = field_value[0]
+                if isinstance(first, dict):
+                    return first.get("@value") or first.get("@id")
+                return first
+            if isinstance(field_value, dict):
+                return field_value.get("@value") or field_value.get("@id")
+            return field_value
+
+        # Helper to extract list of values
+        def extract_list(field_value):
+            """Extract list of values from JSON-LD field"""
+            if field_value is None:
+                return []
+            if isinstance(field_value, list):
+                result_list = []
+                for item in field_value:
+                    if isinstance(item, dict):
+                        value = item.get("@value") or item.get("@id")
+                        if value:
+                            result_list.append(value)
+                    else:
+                        result_list.append(item)
+                return result_list
+            # Single value
+            if isinstance(field_value, dict):
+                value = field_value.get("@value") or field_value.get("@id")
+                return [value] if value else []
+            return [field_value]
+
+        # Extract organizations first (needed for affiliation resolution)
+        organizations_by_id = {}
+        for entity in graph:
+            if not isinstance(entity, dict):
+                continue
+
+            entity_types = entity.get("@type", [])
+            if not isinstance(entity_types, list):
+                entity_types = [entity_types]
+
+            if "http://schema.org/Organization" not in entity_types:
+                continue
+
+            entity_id = entity.get("@id")
+            if not entity_id:
+                continue
+
+            org_data = {
+                "id": entity_id,
+                "legalName": extract_value(
+                    entity.get("http://schema.org/legalName")
+                    or entity.get("schema:legalName"),
+                ),
+                "name": extract_value(
+                    entity.get("http://schema.org/name") or entity.get("schema:name"),
+                ),
+                "description": extract_value(
+                    entity.get("http://schema.org/description")
+                    or entity.get("schema:description"),
+                ),
+            }
+
+            # Extract logo if available
+            logo = extract_value(
+                entity.get("http://schema.org/logo") or entity.get("schema:logo"),
+            )
+            if logo:
+                org_data["logo"] = logo
+
+            organizations_by_id[entity_id] = org_data
+            result["organizations"].append(org_data)
+
+        # Extract authors (Person entities)
+        for entity in graph:
+            if not isinstance(entity, dict):
+                continue
+
+            entity_types = entity.get("@type", [])
+            if not isinstance(entity_types, list):
+                entity_types = [entity_types]
+
+            if "http://schema.org/Person" not in entity_types:
+                continue
+
+            entity_id = entity.get("@id")
+            if not entity_id:
+                continue
+
+            # Extract basic person fields
+            person_data = {
+                "id": entity_id,
+                "name": extract_value(
+                    entity.get("http://schema.org/name") or entity.get("schema:name"),
+                ),
+            }
+
+            # Extract identifier (GitHub username, etc.)
+            identifier = extract_value(
+                entity.get("http://schema.org/identifier")
+                or entity.get("schema:identifier"),
+            )
+            if identifier:
+                person_data["identifier"] = identifier
+
+            # Extract ORCID
+            orcid = extract_value(
+                entity.get("http://w3id.org/nfdi4ing/metadata4ing#orcidId")
+                or entity.get("md4i:orcidId"),
+            )
+            if orcid:
+                person_data["orcid"] = orcid
+
+            # Extract affiliations and resolve them
+            affiliations_raw = entity.get(
+                "http://schema.org/affiliation",
+            ) or entity.get(
+                "schema:affiliation",
+            )
+            affiliations = []
+            if affiliations_raw:
+                affiliation_list = extract_list(affiliations_raw)
+                for aff in affiliation_list:
+                    if isinstance(aff, str):
+                        org_name = None
+                        org_id = None
+
+                        # Could be an @id reference or a string value
+                        if aff.startswith("http://") or aff.startswith("https://"):
+                            # It's an @id reference - resolve to organization
+                            if aff in organizations_by_id:
+                                org_data = organizations_by_id[aff]
+                                # Extract name from organization data
+                                org_name = (
+                                    org_data.get("legalName")
+                                    or org_data.get("name")
+                                    or aff
+                                )
+                                org_id = aff  # Store the URL as ID
+                            else:
+                                # Reference not found, use as string
+                                org_name = aff
+                                org_id = aff
+                        else:
+                            # String value (organization name)
+                            org_name = aff
+
+                        affiliations.append(
+                            Affiliation(
+                                name=org_name,
+                                organizationId=org_id,
+                                source="gimie",
+                            ),
+                        )
+
+            if affiliations:
+                person_data["affiliations"] = affiliations
+
+            result["authors"].append(person_data)
+
+        logger.info(
+            f"Extracted {len(result['authors'])} authors and {len(result['organizations'])} organizations from GIMIE",
+        )
+        return result
+
     def _convert_simplified_to_full(
         self,
         simplified_dict: dict,
         union_metadata: Optional[dict] = None,
+        git_authors: Optional[list] = None,
     ) -> dict:
         """
         Convert simplified output dict to full SoftwareSourceCode format.
+        Merges model output with GIMIE/git extracted data.
 
         Args:
             simplified_dict: Simplified output from structured output agent
             union_metadata: Metadata about Union fields that were split (for reconciliation)
+            git_authors: Optional list of GitAuthor objects extracted from the repository
 
         Returns:
-            Dictionary in full SoftwareSourceCode format
+            Dictionary in full SoftwareSourceCode format with merged GIMIE/git data
         """
         from datetime import date
 
         from pydantic import BaseModel, HttpUrl
 
         from ..data_models.models import RepositoryType
+        from ..data_models.repository import GitAuthor
 
         if union_metadata is None:
             union_metadata = {}
 
+        # Start with model output
         full_dict = simplified_dict.copy()
+
+        # Extract GIMIE fields
+        gimie_dict = self._extract_gimie_fields()
+        logger.debug(
+            f"Extracted {len(gimie_dict)} fields from GIMIE: {list(gimie_dict.keys())}",
+        )
+
+        # Extract GIMIE authors and organizations for merging
+        gimie_authors_orgs = self._extract_gimie_authors_and_organizations()
+
+        # id - prioritize GIMIE @id, then repository full_path, then model
+        if "id" in gimie_dict and gimie_dict.get("id"):
+            full_dict["id"] = gimie_dict["id"]
+            logger.info(f"Using id from GIMIE: {gimie_dict['id']}")
+        elif self.full_path:
+            full_dict["id"] = self.full_path
+            logger.info(f"Using repository full_path as id: {self.full_path}")
+        elif "id" in simplified_dict and simplified_dict.get("id"):
+            full_dict["id"] = simplified_dict["id"]
+            logger.debug(f"Using id from model: {simplified_dict['id']}")
+        else:
+            # Fallback: use empty string (default)
+            full_dict["id"] = ""
 
         # Handle Union fields first
         for original_field, union_info_list in union_metadata.items():
@@ -312,43 +847,394 @@ class Repository:
             else:
                 full_dict[original_field] = [] if is_list else None
 
-        # name
-        if "name" in simplified_dict:
+        # Merge GIMIE authors with model authors (after Union reconciliation)
+        # Convert GIMIE authors to Person objects and merge with model output
+        if gimie_authors_orgs.get("authors"):
+            from ..data_models.models import Person
+
+            gimie_authors = []
+            for gimie_author in gimie_authors_orgs["authors"]:
+                # Convert GIMIE author dict to Person object
+                person_data = {
+                    "type": "Person",
+                    "id": gimie_author.get("id", ""),
+                    "name": gimie_author.get("name", ""),
+                }
+
+                # Add ORCID if available
+                if gimie_author.get("orcid"):
+                    person_data["orcid"] = gimie_author["orcid"]
+
+                # Add identifier if available
+                if gimie_author.get("identifier"):
+                    # Store identifier in a way that can be used later
+                    # For now, we'll add it to affiliations or keep it separate
+                    pass
+
+                # Convert affiliations - handle Affiliation objects, organization objects, and strings
+                affiliations = []
+                if gimie_author.get("affiliations"):
+                    for aff in gimie_author["affiliations"]:
+                        if isinstance(aff, dict):
+                            # Could be Affiliation dict or Organization dict
+                            if "name" in aff and "source" in aff:
+                                # Affiliation object - validate name is a string
+                                aff_name = aff.get("name")
+                                if isinstance(aff_name, str):
+                                    affiliations.append(aff)
+                                else:
+                                    # Name is not a string, try to extract it
+                                    logger.warning(
+                                        f"Affiliation name is not a string: {type(aff_name)}",
+                                    )
+                                    if isinstance(aff_name, dict):
+                                        aff_name = aff_name.get(
+                                            "legalName",
+                                        ) or aff_name.get("name")
+                                    if isinstance(aff_name, str):
+                                        affiliations.append(
+                                            Affiliation(
+                                                name=aff_name,
+                                                organizationId=aff.get(
+                                                    "organizationId",
+                                                ),
+                                                source=aff.get("source", "gimie"),
+                                            ),
+                                        )
+                            elif "legalName" in aff or "name" in aff:
+                                # Organization object - convert to Affiliation
+                                org_name = aff.get("legalName") or aff.get("name")
+                                # Ensure org_name is a string
+                                if isinstance(org_name, dict):
+                                    org_name = org_name.get(
+                                        "legalName",
+                                    ) or org_name.get("name")
+                                if org_name and isinstance(org_name, str):
+                                    affiliations.append(
+                                        Affiliation(
+                                            name=org_name,
+                                            organizationId=aff.get("id"),
+                                            source="gimie",
+                                        ),
+                                    )
+                        elif isinstance(aff, str):
+                            # String affiliation - convert to Affiliation
+                            affiliations.append(
+                                Affiliation(
+                                    name=aff,
+                                    organizationId=None,
+                                    source="gimie",
+                                ),
+                            )
+
+                if affiliations:
+                    person_data["affiliations"] = affiliations
+
+                try:
+                    gimie_authors.append(Person(**person_data))
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to create Person from GIMIE author {gimie_author.get('name')}: {e}",
+                    )
+
+            # Get existing authors from model output
+            existing_authors = full_dict.get("author", [])
+            if not isinstance(existing_authors, list):
+                existing_authors = []
+
+            # Convert existing authors to Person objects if they're dicts
+            existing_person_objects = []
+            for author in existing_authors:
+                if isinstance(author, dict):
+                    try:
+                        existing_person_objects.append(Person(**author))
+                    except Exception as e:
+                        logger.warning(f"Failed to convert author dict to Person: {e}")
+                        # Keep as dict if conversion fails
+                        existing_person_objects.append(author)
+                elif isinstance(author, Person):
+                    existing_person_objects.append(author)
+                else:
+                    existing_person_objects.append(author)
+
+            # Build lookup of existing authors by name (normalized), id, and ORCID
+            existing_by_name = {}
+            existing_by_id = {}
+            existing_by_orcid = {}
+            for idx, author in enumerate(existing_person_objects):
+                if isinstance(author, Person):
+                    name = author.name.lower() if author.name else None
+                    author_id = author.id if author.id else None
+                    orcid = author.orcid if author.orcid else None
+
+                    if name:
+                        existing_by_name[name] = idx
+                    if author_id:
+                        existing_by_id[author_id] = idx
+                    if orcid:
+                        existing_by_orcid[orcid] = idx
+                elif isinstance(author, dict):
+                    name = (
+                        author.get("name", "").lower() if author.get("name") else None
+                    )
+                    author_id = author.get("id")
+                    orcid = author.get("orcid")
+
+                    if name:
+                        existing_by_name[name] = idx
+                    if author_id:
+                        existing_by_id[author_id] = idx
+                    if orcid:
+                        existing_by_orcid[orcid] = idx
+
+            # Merge: update existing authors with GIMIE data, add new ones
+            merged_authors = list(existing_person_objects)
+            gimie_processed = set()
+
+            for gimie_author in gimie_authors:
+                author_name = gimie_author.name.lower() if gimie_author.name else None
+                author_id = gimie_author.id if gimie_author.id else None
+                author_orcid = gimie_author.orcid if gimie_author.orcid else None
+
+                # Try to find matching existing author by ORCID (most reliable), then ID, then name
+                matched_idx = None
+                if author_orcid and author_orcid in existing_by_orcid:
+                    matched_idx = existing_by_orcid[author_orcid]
+                elif author_id and author_id in existing_by_id:
+                    matched_idx = existing_by_id[author_id]
+                elif author_name and author_name in existing_by_name:
+                    matched_idx = existing_by_name[author_name]
+
+                if matched_idx is not None:
+                    # Update existing author with GIMIE data (especially ID)
+                    existing_author = merged_authors[matched_idx]
+                    if isinstance(existing_author, Person):
+                        # Create updated Person object (Pydantic V2 is immutable)
+                        updated_data = existing_author.model_dump()
+                        updated = False
+
+                        # Update ID if missing
+                        if not updated_data.get("id") and gimie_author.id:
+                            updated_data["id"] = gimie_author.id
+                            updated = True
+                            logger.info(
+                                f"Updated author {existing_author.name} with GIMIE ID: {gimie_author.id}",
+                            )
+
+                        # Update ORCID if missing
+                        if not updated_data.get("orcid") and gimie_author.orcid:
+                            updated_data["orcid"] = gimie_author.orcid
+                            updated = True
+
+                        # Merge affiliations
+                        if gimie_author.affiliations:
+                            existing_affs = updated_data.get("affiliations", [])
+                            existing_names = {
+                                aff.name.lower(): aff
+                                for aff in existing_affs
+                                if isinstance(aff, Affiliation)
+                            }
+                            for aff in gimie_author.affiliations:
+                                if (
+                                    isinstance(aff, Affiliation)
+                                    and aff.name.lower() not in existing_names
+                                ):
+                                    updated_data.setdefault("affiliations", []).append(
+                                        aff,
+                                    )
+                                    updated = True
+
+                        if updated:
+                            try:
+                                merged_authors[matched_idx] = Person(**updated_data)
+                            except Exception as e:
+                                logger.warning(f"Failed to update Person object: {e}")
+                    elif isinstance(existing_author, dict):
+                        # Update dict
+                        updated = False
+                        if not existing_author.get("id") and gimie_author.id:
+                            existing_author["id"] = gimie_author.id
+                            updated = True
+                            logger.info(
+                                f"Updated author {existing_author.get('name')} with GIMIE ID: {gimie_author.id}",
+                            )
+                        if not existing_author.get("orcid") and gimie_author.orcid:
+                            existing_author["orcid"] = gimie_author.orcid
+                            updated = True
+                        # Merge affiliations
+                        if gimie_author.affiliations:
+                            existing_affs = existing_author.get("affiliations", [])
+                            existing_names = {
+                                aff.name.lower()
+                                if isinstance(aff, Affiliation)
+                                else str(aff).lower()
+                                for aff in existing_affs
+                            }
+                            for aff in gimie_author.affiliations:
+                                aff_name = (
+                                    aff.name.lower()
+                                    if isinstance(aff, Affiliation)
+                                    else str(aff).lower()
+                                )
+                                if aff_name not in existing_names:
+                                    existing_author.setdefault(
+                                        "affiliations",
+                                        [],
+                                    ).append(aff)
+                                    updated = True
+                    gimie_processed.add(gimie_author.id or gimie_author.name)
+                else:
+                    # New author from GIMIE - add it
+                    merged_authors.append(gimie_author)
+                    logger.info(
+                        f"Added new GIMIE author: {gimie_author.name} (id: {gimie_author.id})",
+                    )
+                    gimie_processed.add(gimie_author.id or gimie_author.name)
+
+            # Convert all merged authors to Person objects for consistency
+            final_authors = []
+            for author in merged_authors:
+                if isinstance(author, Person):
+                    final_authors.append(author)
+                elif isinstance(author, dict):
+                    try:
+                        final_authors.append(Person(**author))
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to convert merged author dict to Person: {e}",
+                        )
+                        # Keep as dict if conversion fails
+                        final_authors.append(author)
+                else:
+                    final_authors.append(author)
+
+            if final_authors:
+                full_dict["author"] = final_authors
+                logger.info(
+                    f"Merged {len(gimie_authors)} GIMIE authors with {len(existing_person_objects)} model authors, total: {len(final_authors)}",
+                )
+
+        # name - prioritize GIMIE, then model
+        if "name" in gimie_dict and gimie_dict.get("name"):
+            full_dict["name"] = gimie_dict["name"]
+            logger.info(f"Using name from GIMIE: {gimie_dict['name']}")
+        elif "name" in simplified_dict and simplified_dict.get("name"):
             full_dict["name"] = simplified_dict["name"]
 
         # applicationCategory
         if "applicationCategory" in simplified_dict:
             full_dict["applicationCategory"] = simplified_dict["applicationCategory"]
 
-        # codeRepository - convert strings to HttpUrl
-        if "codeRepository" in simplified_dict and full_dict.get("codeRepository"):
+        # codeRepository - merge from model and GIMIE, convert strings to HttpUrl
+        # Prioritize GIMIE, then merge with model
+        code_repos = []
+        if "codeRepository" in gimie_dict and gimie_dict.get("codeRepository"):
+            # Start with GIMIE repositories
+            code_repos.extend(gimie_dict["codeRepository"])
+            logger.info(
+                f"Using codeRepository from GIMIE: {gimie_dict['codeRepository']}",
+            )
+
+        if "codeRepository" in simplified_dict and simplified_dict.get(
+            "codeRepository",
+        ):
+            # Merge model codeRepository, avoiding duplicates
+            for model_repo in simplified_dict["codeRepository"]:
+                if model_repo not in code_repos:
+                    code_repos.append(model_repo)
+                    logger.debug(f"Adding codeRepository from model: {model_repo}")
+
+        if code_repos:
             try:
                 full_dict["codeRepository"] = [
-                    HttpUrl(url) for url in full_dict["codeRepository"]
+                    HttpUrl(url) if not isinstance(url, HttpUrl) else url
+                    for url in code_repos
                 ]
             except Exception as e:
                 logger.warning(f"Failed to convert codeRepository URLs: {e}")
                 full_dict["codeRepository"] = []
+        else:
+            # No codeRepository from either source
+            full_dict["codeRepository"] = []
 
-        # dateCreated - convert string to date
-        if "dateCreated" in simplified_dict and simplified_dict["dateCreated"]:
+        # dateCreated - prioritize GIMIE, then git authors, then model
+        # Model should NOT be asked for dateCreated (it comes from GIMIE/git)
+        date_created = None
+
+        # Priority 1: GIMIE (most reliable source)
+        if "dateCreated" in gimie_dict and gimie_dict.get("dateCreated"):
             try:
-                full_dict["dateCreated"] = date.fromisoformat(
-                    simplified_dict["dateCreated"],
-                )
+                date_created = date.fromisoformat(gimie_dict["dateCreated"])
+                logger.info(f"Using dateCreated from GIMIE: {date_created}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse GIMIE dateCreated: {e}")
+
+        # Priority 2: Oldest commit date from git authors
+        if date_created is None and git_authors:
+            oldest_date = None
+            for git_author in git_authors:
+                if isinstance(git_author, GitAuthor) and git_author.commits:
+                    if git_author.commits.firstCommitDate:
+                        if (
+                            oldest_date is None
+                            or git_author.commits.firstCommitDate < oldest_date
+                        ):
+                            oldest_date = git_author.commits.firstCommitDate
+                elif isinstance(git_author, dict):
+                    commits = git_author.get("commits")
+                    if commits:
+                        first_date = None
+                        if isinstance(commits, dict):
+                            first_date = commits.get("firstCommitDate")
+                        elif hasattr(commits, "firstCommitDate"):
+                            first_date = commits.firstCommitDate
+
+                        if first_date:
+                            if isinstance(first_date, str):
+                                try:
+                                    first_date = date.fromisoformat(first_date)
+                                except (ValueError, TypeError):
+                                    continue
+                            if oldest_date is None or first_date < oldest_date:
+                                oldest_date = first_date
+
+            if oldest_date:
+                date_created = oldest_date
+                logger.info(f"Using oldest commit date as dateCreated: {oldest_date}")
+
+        # Priority 3: Model output (fallback only - model shouldn't be asked for this)
+        if (
+            date_created is None
+            and "dateCreated" in simplified_dict
+            and simplified_dict.get("dateCreated")
+        ):
+            try:
+                date_created = date.fromisoformat(simplified_dict["dateCreated"])
+                logger.info(f"Using dateCreated from model (fallback): {date_created}")
             except (ValueError, TypeError):
                 logger.warning(
-                    f"Failed to parse dateCreated: {simplified_dict['dateCreated']}",
+                    f"Failed to parse model dateCreated: {simplified_dict['dateCreated']}",
                 )
-                full_dict["dateCreated"] = None
 
-        # license
-        if "license" in simplified_dict:
+        if date_created:
+            full_dict["dateCreated"] = date_created
+
+        # license - merge from model and GIMIE (prefer model if both exist)
+        if "license" in simplified_dict and simplified_dict.get("license"):
             full_dict["license"] = simplified_dict["license"]
+        elif "license" in gimie_dict and gimie_dict.get("license"):
+            full_dict["license"] = gimie_dict["license"]
 
-        # gitAuthors - convert to GitAuthor format
-        if "gitAuthors" in simplified_dict and simplified_dict.get("gitAuthors"):
-            git_authors = []
+        # gitAuthors - use extracted git_authors if available, otherwise convert from simplified_dict
+        if git_authors:
+            # Use the extracted git authors directly (they're already GitAuthor objects)
+            full_dict["gitAuthors"] = git_authors
+            logger.info(
+                f"Added {len(git_authors)} git authors from repository extraction",
+            )
+        elif "gitAuthors" in simplified_dict and simplified_dict.get("gitAuthors"):
+            # Fallback: convert from simplified_dict if git_authors not provided
+            converted_git_authors = []
             for git_auth in simplified_dict["gitAuthors"]:
                 if not git_auth:
                     continue
@@ -359,19 +1245,48 @@ class Repository:
                     git_author_dict["email"] = git_auth["email"]
                 if git_auth.get("commits"):
                     commits_dict = git_auth["commits"]
-                    git_author_dict["commits"] = {
-                        "count": commits_dict.get("count", 0),
+                    commits_obj = {
+                        "total": commits_dict.get(
+                            "count",
+                            commits_dict.get("total", 0),
+                        ),
                     }
-                    if commits_dict.get("firstCommit"):
-                        git_author_dict["commits"]["firstCommit"] = commits_dict[
-                            "firstCommit"
-                        ]
-                    if commits_dict.get("lastCommit"):
-                        git_author_dict["commits"]["lastCommit"] = commits_dict[
-                            "lastCommit"
-                        ]
-                git_authors.append(git_author_dict)
-            full_dict["gitAuthors"] = git_authors
+                    # Handle firstCommit/firstCommitDate (simplified model uses firstCommit as string)
+                    first_commit = commits_dict.get("firstCommit") or commits_dict.get(
+                        "firstCommitDate",
+                    )
+                    if first_commit:
+                        if isinstance(first_commit, str):
+                            try:
+                                commits_obj["firstCommitDate"] = date.fromisoformat(
+                                    first_commit,
+                                )
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    f"Failed to parse firstCommit date: {first_commit}",
+                                )
+                        else:
+                            commits_obj["firstCommitDate"] = first_commit
+                    # Handle lastCommit/lastCommitDate
+                    last_commit = commits_dict.get("lastCommit") or commits_dict.get(
+                        "lastCommitDate",
+                    )
+                    if last_commit:
+                        if isinstance(last_commit, str):
+                            try:
+                                commits_obj["lastCommitDate"] = date.fromisoformat(
+                                    last_commit,
+                                )
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    f"Failed to parse lastCommit date: {last_commit}",
+                                )
+                        else:
+                            commits_obj["lastCommitDate"] = last_commit
+                    git_author_dict["commits"] = commits_obj
+                converted_git_authors.append(git_author_dict)
+            if converted_git_authors:
+                full_dict["gitAuthors"] = converted_git_authors
 
         # discipline - convert strings to Discipline enum
         if "discipline" in simplified_dict and simplified_dict.get("discipline"):
@@ -422,6 +1337,143 @@ class Repository:
             ]
         else:
             full_dict["repositoryTypeJustification"] = []
+
+        # keywords - merge from GIMIE and model (prioritize GIMIE)
+        keywords_list = []
+        if "keywords" in gimie_dict and gimie_dict.get("keywords"):
+            gimie_keywords = gimie_dict["keywords"]
+            if isinstance(gimie_keywords, list):
+                keywords_list.extend(gimie_keywords)
+                logger.info(f"Using keywords from GIMIE: {gimie_keywords}")
+            else:
+                keywords_list.append(gimie_keywords)
+                logger.info(f"Using keyword from GIMIE: {gimie_keywords}")
+
+        if "keywords" in simplified_dict and simplified_dict.get("keywords"):
+            model_keywords = simplified_dict["keywords"]
+            if isinstance(model_keywords, list):
+                # Merge, avoiding duplicates
+                for kw in model_keywords:
+                    if kw not in keywords_list:
+                        keywords_list.append(kw)
+                        logger.debug(f"Adding keyword from model: {kw}")
+            else:
+                if model_keywords not in keywords_list:
+                    keywords_list.append(model_keywords)
+                    logger.debug(f"Adding keyword from model: {model_keywords}")
+
+        if keywords_list:
+            full_dict["keywords"] = keywords_list
+            logger.info(f"Final merged keywords: {keywords_list}")
+        else:
+            full_dict["keywords"] = []
+
+        # url - from GIMIE
+        if "url" in gimie_dict and gimie_dict.get("url"):
+            try:
+                full_dict["url"] = (
+                    HttpUrl(gimie_dict["url"])
+                    if not isinstance(gimie_dict["url"], HttpUrl)
+                    else gimie_dict["url"]
+                )
+            except Exception as e:
+                logger.warning(f"Failed to convert GIMIE url: {e}")
+
+        # datePublished - merge from model and GIMIE (prefer model if both exist)
+        if "datePublished" in simplified_dict and simplified_dict.get("datePublished"):
+            try:
+                full_dict["datePublished"] = date.fromisoformat(
+                    simplified_dict["datePublished"],
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse model datePublished: {e}")
+        elif "datePublished" in gimie_dict and gimie_dict.get("datePublished"):
+            try:
+                date_pub_str = gimie_dict["datePublished"]
+                if isinstance(date_pub_str, str):
+                    full_dict["datePublished"] = date.fromisoformat(date_pub_str)
+                    logger.info(
+                        f"Using datePublished from GIMIE: {full_dict['datePublished']}",
+                    )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse GIMIE datePublished: {e}")
+
+        # dateModified - from GIMIE
+        if "dateModified" in gimie_dict and gimie_dict.get("dateModified"):
+            try:
+                date_mod_str = gimie_dict["dateModified"]
+                if isinstance(date_mod_str, str):
+                    full_dict["dateModified"] = date.fromisoformat(date_mod_str)
+                    logger.info(
+                        f"Using dateModified from GIMIE: {full_dict['dateModified']}",
+                    )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse GIMIE dateModified: {e}")
+
+        # programmingLanguage - merge from model and GIMIE
+        prog_langs = []
+        if "programmingLanguage" in simplified_dict and simplified_dict.get(
+            "programmingLanguage",
+        ):
+            model_langs = simplified_dict["programmingLanguage"]
+            if isinstance(model_langs, list):
+                prog_langs.extend(model_langs)
+            else:
+                prog_langs.append(model_langs)
+
+        if "programmingLanguage" in gimie_dict and gimie_dict.get(
+            "programmingLanguage",
+        ):
+            gimie_langs = gimie_dict["programmingLanguage"]
+            if isinstance(gimie_langs, list):
+                for lang in gimie_langs:
+                    if lang not in prog_langs:
+                        prog_langs.append(lang)
+            else:
+                if gimie_langs not in prog_langs:
+                    prog_langs.append(gimie_langs)
+
+        if prog_langs:
+            full_dict["programmingLanguage"] = prog_langs
+
+        # readme - from GIMIE
+        if "readme" in gimie_dict and gimie_dict.get("readme"):
+            try:
+                full_dict["readme"] = (
+                    HttpUrl(gimie_dict["readme"])
+                    if not isinstance(gimie_dict["readme"], HttpUrl)
+                    else gimie_dict["readme"]
+                )
+            except Exception as e:
+                logger.warning(f"Failed to convert GIMIE readme URL: {e}")
+
+        # citation - merge from model and GIMIE
+        citations = []
+        if "citation" in simplified_dict and simplified_dict.get("citation"):
+            model_citations = simplified_dict["citation"]
+            if isinstance(model_citations, list):
+                citations.extend(model_citations)
+            else:
+                citations.append(model_citations)
+
+        if "citation" in gimie_dict and gimie_dict.get("citation"):
+            gimie_citations = gimie_dict["citation"]
+            if isinstance(gimie_citations, list):
+                for cit in gimie_citations:
+                    if cit not in citations:
+                        citations.append(cit)
+            else:
+                if gimie_citations not in citations:
+                    citations.append(gimie_citations)
+
+        if citations:
+            try:
+                full_dict["citation"] = [
+                    HttpUrl(cit) if not isinstance(cit, HttpUrl) else cit
+                    for cit in citations
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to convert citation URLs: {e}")
 
         return full_dict
 
@@ -635,14 +1687,14 @@ class Repository:
         else:
             return n2_parts.issubset(n1_parts)
 
-    async def run_academic_catalog_enrichment(self):
-        """Enrich repository with academic catalog relations (Infoscience, etc.)"""
-        logger.info(f"Academic catalog enrichment for {self.full_path}")
+    async def run_linked_entities_enrichment(self):
+        """Enrich repository with linked entities relations (Infoscience, etc.)"""
+        logger.info(f"linked entities enrichment for {self.full_path}")
 
         # Check if data exists before enrichment
         if self.data is None:
             logger.warning(
-                f"Cannot enrich academic catalogs: no data available for {self.full_path}",
+                f"Cannot enrich linked entities: no data available for {self.full_path}",
             )
             return
 
@@ -680,7 +1732,7 @@ class Repository:
                         if org.legalName not in organization_names:
                             organization_names.append(org.legalName)
 
-            result = await enrich_repository_academic_catalog(
+            result = await enrich_repository_linked_entities(
                 repository_url=self.full_path,
                 repository_name=repository_name,
                 description=description,
@@ -698,7 +1750,7 @@ class Repository:
                 self.total_input_tokens += usage.get("input_tokens", 0)
                 self.total_output_tokens += usage.get("output_tokens", 0)
                 logger.info(
-                    f"Academic catalog enrichment usage: {usage.get('input_tokens', 0)} input, "
+                    f"linked entities enrichment usage: {usage.get('input_tokens', 0)} input, "
                     f"{usage.get('output_tokens', 0)} output tokens",
                 )
 
@@ -706,21 +1758,19 @@ class Repository:
                 self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
                 self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
-            # Store the academic catalog relations at repository level
+            # Store the linked entities relations at repository level
             if enrichment_data:
                 # Repository-level relations (publications about the repository itself)
                 if hasattr(enrichment_data, "repository_relations"):
-                    self.data.academicCatalogRelations = (
-                        enrichment_data.repository_relations
-                    )
+                    self.data.linkedEntities = enrichment_data.repository_relations
                     logger.info(
-                        f"Stored {len(enrichment_data.repository_relations)} repository-level academic catalog relations",
+                        f"Stored {len(enrichment_data.repository_relations)} repository-level linked entities relations",
                     )
                 # Fallback for backward compatibility
                 elif hasattr(enrichment_data, "relations"):
-                    self.data.academicCatalogRelations = enrichment_data.relations
+                    self.data.linkedEntities = enrichment_data.relations
                     logger.info(
-                        f"Stored {len(enrichment_data.relations)} academic catalog relations at repository level",
+                        f"Stored {len(enrichment_data.relations)} linked entities relations at repository level",
                     )
 
                 # Directly assign relations to authors and organizations using the structured output
@@ -734,13 +1784,13 @@ class Repository:
                                     author_rels = enrichment_data.author_relations[
                                         author.name
                                     ]
-                                    author.academicCatalogRelations = author_rels
+                                    author.linkedEntities = author_rels
                                     logger.info(
                                         f"✓ Directly assigned {len(author_rels)} relations to author: {author.name}",
                                     )
                                 else:
                                     # Author had no results
-                                    author.academicCatalogRelations = []
+                                    author.linkedEntities = []
                                     logger.info(
                                         f"ℹ No relations found for author: {author.name}",
                                     )
@@ -755,19 +1805,19 @@ class Repository:
                                     org_rels = enrichment_data.organization_relations[
                                         author.legalName
                                     ]
-                                    author.academicCatalogRelations = org_rels
+                                    author.linkedEntities = org_rels
                                     logger.info(
                                         f"✓ Directly assigned {len(org_rels)} relations to organization: {author.legalName}",
                                     )
                                 else:
-                                    author.academicCatalogRelations = []
+                                    author.linkedEntities = []
                                     logger.info(
                                         f"ℹ No relations found for organization: {author.legalName}",
                                     )
 
         except Exception as e:
-            logger.error(f"Academic catalog enrichment failed: {e}", exc_info=True)
-            # Don't fail the entire analysis, just skip academic catalog enrichment
+            logger.error(f"linked entities enrichment failed: {e}", exc_info=True)
+            # Don't fail the entire analysis, just skip linked entities enrichment
             return
 
     async def run_epfl_final_assessment(self):
@@ -991,7 +2041,7 @@ class Repository:
         # COMMENTED OUT FOR TESTING - uses tools (Infoscience)
         # if self.data is not None:
         #     logging.info(f"Academic catalog enrichment for {self.full_path}")
-        #     await self.run_academic_catalog_enrichment()
+        #     await self.run_linked_entities_enrichment()
         #     logging.info(f"Academic catalog enrichment completed for {self.full_path}")
 
         # Run final EPFL assessment after all enrichments complete

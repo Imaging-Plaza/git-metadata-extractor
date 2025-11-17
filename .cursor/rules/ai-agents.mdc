@@ -22,7 +22,7 @@ Five analysis types with separate configs:
 - `run_llm_analysis` - Repository analysis
 - `run_user_enrichment` - User metadata enrichment
 - `run_organization_enrichment` - Organization metadata enrichment
-- `run_academic_catalog_enrichment` - Academic catalog searches (Infoscience, etc.)
+- `run_linked_entities_enrichment` - Academic catalog searches (Infoscience, etc.)
 - `run_epfl_assessment` - Final EPFL relationship assessment
 
 #### Provider Support
@@ -770,17 +770,17 @@ For agents that search for multiple entities (e.g., academic catalog enrichment)
 
 #### Pattern: Organized Results
 ```python
-class AcademicCatalogEnrichmentResult(BaseModel):
+class linkedEntitiesEnrichmentResult(BaseModel):
     """Results organized by what was searched for."""
 
     # Repository-level results
-    repository_relations: List[AcademicCatalogRelation] = []
+    repository_relations: List[linkedEntitiesRelation] = []
 
     # Author-level results (keyed by exact name provided)
-    author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    author_relations: Dict[str, List[linkedEntitiesRelation]] = {}
 
     # Organization-level results (keyed by exact name provided)
-    organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    organization_relations: Dict[str, List[linkedEntitiesRelation]] = {}
 ```
 
 #### Agent Responsibilities
@@ -798,7 +798,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
 #### Example Implementation
 ```python
 # Call agent with exact names
-result = await enrich_repository_academic_catalog(
+result = await enrich_repository_linked_entities(
     repository_name="DeepLabCut",
     authors=["Alexander Mathis", "Mackenzie Weygandt Mathis"],
     organizations=["DeepLabCut"],
@@ -808,14 +808,14 @@ result = await enrich_repository_academic_catalog(
 enrichment_data = result.get("data")
 
 # Repository level
-self.data.academicCatalogRelations = enrichment_data.repository_relations
+self.data.linkedEntities = enrichment_data.repository_relations
 
 # Author level (direct lookup)
 for author in self.data.author:
     if author.name in enrichment_data.author_relations:
-        author.academicCatalogRelations = enrichment_data.author_relations[author.name]
+        author.linkedEntities = enrichment_data.author_relations[author.name]
     else:
-        author.academicCatalogRelations = []
+        author.linkedEntities = []
 ```
 
 **Benefits**:
@@ -839,7 +839,7 @@ for author in self.data.author:
    - ✅ `run_llm_analysis()` - Repository analysis
    - ✅ `run_organization_enrichment()` - ROR matching
    - ✅ `run_user_enrichment()` - Author enrichment
-   - ✅ `run_academic_catalog_enrichment()` - Infoscience searches
+   - ✅ `run_linked_entities_enrichment()` - Infoscience searches
    - ✅ `run_epfl_final_assessment()` - Final assessment
    - Each must accumulate both `self.total_*_tokens` AND `self.estimated_*_tokens`
 5. **Track timing**: Record start/end times in `run_analysis()`, calculate duration in `get_usage_stats()`

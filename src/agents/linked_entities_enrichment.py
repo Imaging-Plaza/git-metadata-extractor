@@ -1,5 +1,5 @@
 """
-Academic Catalog Enrichment Agent
+linked entities Enrichment Agent
 
 This agent searches academic catalogs (Infoscience, OpenAlex, EPFL Graph) to find
 related publications, persons, and organizational units.
@@ -16,11 +16,11 @@ from ..context.infoscience import (
     search_infoscience_labs_tool,
     search_infoscience_publications_tool,
 )
-from ..data_models.academic_catalog import (
-    AcademicCatalogEnrichmentResult,
-    AcademicCatalogRelation,
+from ..data_models.linked_entities import (
     CatalogType,
     EntityType,
+    linkedEntitiesEnrichmentResult,
+    linkedEntitiesRelation,
 )
 from ..llm.model_config import (
     create_pydantic_ai_model,
@@ -28,33 +28,33 @@ from ..llm.model_config import (
     validate_config,
 )
 from ..utils.token_counter import estimate_tokens_from_messages
-from .academic_catalog_prompts import (
-    academic_catalog_system_prompt,
-    get_organization_academic_catalog_prompt,
-    get_repository_academic_catalog_prompt,
-    get_user_academic_catalog_prompt,
+from .linked_entities_prompts import (
+    get_organization_linked_entities_prompt,
+    get_repository_linked_entities_prompt,
+    get_user_linked_entities_prompt,
+    linked_entities_system_prompt,
 )
 from .url_validation import validate_infoscience_url
 
 logger = logging.getLogger(__name__)
 
-# Load model configuration for academic catalog enrichment
-academic_catalog_configs = load_model_config("run_academic_catalog_enrichment")
+# Load model configuration for linked entities enrichment
+linked_entities_configs = load_model_config("run_linked_entities_enrichment")
 
 # Validate configurations
-for config in academic_catalog_configs:
+for config in linked_entities_configs:
     if not validate_config(config):
         logger.error(
-            f"Invalid configuration for academic catalog enrichment: {config}",
+            f"Invalid configuration for linked entities enrichment: {config}",
         )
         raise ValueError("Invalid model configuration")
 
 # Track active agents for cleanup
-_active_catalog_agents = []
+_active_linked_entities_agents = []
 
 
-def create_academic_catalog_agent(config: dict) -> Agent:
-    """Create an academic catalog enrichment agent from configuration."""
+def create_linked_entities_agent(config: dict) -> Agent:
+    """Create an linked entities enrichment agent from configuration."""
     model = create_pydantic_ai_model(config)
 
     # Define tools for the agent
@@ -67,28 +67,28 @@ def create_academic_catalog_agent(config: dict) -> Agent:
 
     agent = Agent(
         model=model,
-        output_type=AcademicCatalogEnrichmentResult,
-        system_prompt=academic_catalog_system_prompt,
+        output_type=linkedEntitiesEnrichmentResult,
+        system_prompt=linked_entities_system_prompt,
         tools=tools,
     )
 
     # Track agent for cleanup
-    _active_catalog_agents.append(agent)
+    _active_linked_entities_agents.append(agent)
 
     return agent
 
 
-async def cleanup_catalog_agents():
-    """Cleanup academic catalog enrichment agents to free memory."""
-    global _active_catalog_agents
-    for agent in _active_catalog_agents:
+async def cleanup_linked_entities_agents():
+    """Cleanup linked entities enrichment agents to free memory."""
+    global _active_linked_entities_agents
+    for agent in _active_linked_entities_agents:
         try:
             # Close/cleanup if the agent has such methods
             if hasattr(agent, "close"):
                 await agent.close()
         except Exception as e:
             logger.warning(f"Error cleaning up catalog agent: {e}")
-    _active_catalog_agents = []
+    _active_linked_entities_agents = []
 
 
 async def run_agent_with_fallback(
@@ -96,7 +96,7 @@ async def run_agent_with_fallback(
     prompt: str,
 ) -> Any:
     """
-    Run the academic catalog enrichment agent with fallback across multiple models.
+    Run the linked entities enrichment agent with fallback across multiple models.
 
     Args:
         agent_configs: List of model configurations to try
@@ -110,11 +110,11 @@ async def run_agent_with_fallback(
     for idx, config in enumerate(agent_configs):
         try:
             logger.info(
-                f"Attempting academic catalog enrichment with model {idx + 1}/{len(agent_configs)}: {config.get('model')}",
+                f"Attempting linked entities enrichment with model {idx + 1}/{len(agent_configs)}: {config.get('model')}",
             )
 
             # Create agent
-            agent = create_academic_catalog_agent(config)
+            agent = create_linked_entities_agent(config)
 
             # Run the agent
             result = await agent.run(prompt)
@@ -146,7 +146,7 @@ async def run_agent_with_fallback(
                 }
 
                 logger.info(
-                    f"✓ Academic catalog enrichment succeeded with {input_tokens} input, {output_tokens} output tokens",
+                    f"✓ linked entities enrichment succeeded with {input_tokens} input, {output_tokens} output tokens",
                 )
 
             # Estimate tokens as fallback
@@ -154,7 +154,7 @@ async def run_agent_with_fallback(
                 output.model_dump_json() if hasattr(output, "model_dump_json") else ""
             )
             estimated = estimate_tokens_from_messages(
-                system_prompt=academic_catalog_system_prompt,
+                system_prompt=linked_entities_system_prompt,
                 user_prompt=prompt,
                 response=response_text,
             )
@@ -166,25 +166,25 @@ async def run_agent_with_fallback(
 
         except Exception as e:
             logger.warning(
-                f"Academic catalog enrichment failed with model {config.get('model')}: {e}",
+                f"linked entities enrichment failed with model {config.get('model')}: {e}",
             )
             last_exception = e
             continue
 
     logger.error(
-        f"All academic catalog enrichment models failed. Last error: {last_exception}",
+        f"All linked entities enrichment models failed. Last error: {last_exception}",
     )
-    raise (last_exception or Exception("All academic catalog enrichment models failed"))
+    raise (last_exception or Exception("All linked entities enrichment models failed"))
 
 
 async def _validate_infoscience_relations(
-    relations: list[AcademicCatalogRelation],
-) -> list[AcademicCatalogRelation]:
+    relations: list[linkedEntitiesRelation],
+) -> list[linkedEntitiesRelation]:
     """
-    Validate and normalize Infoscience URLs in academic catalog relations.
+    Validate and normalize Infoscience URLs in linked entities relations.
 
     Args:
-        relations: List of AcademicCatalogRelation objects
+        relations: List of linkedEntitiesRelation objects
 
     Returns:
         Filtered list with validated relations (invalid ones removed)
@@ -334,7 +334,7 @@ async def _validate_infoscience_relations(
     return validated_relations
 
 
-async def enrich_repository_academic_catalog(
+async def enrich_repository_linked_entities(
     repository_url: str,
     repository_name: str,
     description: str,
@@ -343,7 +343,7 @@ async def enrich_repository_academic_catalog(
     organizations: list = None,
 ) -> dict:
     """
-    Enrich repository with academic catalog relations.
+    Enrich repository with linked entities relations.
 
     Args:
         repository_url: URL of the repository
@@ -354,9 +354,9 @@ async def enrich_repository_academic_catalog(
         organizations: List of identified organization names
 
     Returns:
-        Dictionary with 'data' (AcademicCatalogEnrichmentResult) and 'usage' keys
+        Dictionary with 'data' (linkedEntitiesEnrichmentResult) and 'usage' keys
     """
-    prompt = get_repository_academic_catalog_prompt(
+    prompt = get_repository_linked_entities_prompt(
         repository_url=repository_url,
         repository_name=repository_name,
         description=description,
@@ -366,11 +366,11 @@ async def enrich_repository_academic_catalog(
     )
 
     logger.info(
-        f"🔍 Starting academic catalog enrichment for repository: {repository_name}",
+        f"🔍 Starting linked entities enrichment for repository: {repository_name}",
     )
 
     try:
-        result = await run_agent_with_fallback(academic_catalog_configs, prompt)
+        result = await run_agent_with_fallback(linked_entities_configs, prompt)
 
         if result and result.get("data"):
             enrichment_data = result["data"]
@@ -420,10 +420,10 @@ async def enrich_repository_academic_catalog(
 
         return result
     except Exception as e:
-        logger.error(f"Academic catalog enrichment failed: {e}")
+        logger.error(f"linked entities enrichment failed: {e}")
         # Return empty result instead of failing
         return {
-            "data": AcademicCatalogEnrichmentResult(
+            "data": linkedEntitiesEnrichmentResult(
                 repository_relations=[],
                 searchStrategy="Enrichment failed",
                 totalSearches=0,
@@ -432,14 +432,14 @@ async def enrich_repository_academic_catalog(
         }
 
 
-async def enrich_user_academic_catalog(
+async def enrich_user_linked_entities(
     username: str,
     full_name: str,
     bio: str,
     organizations: list,
 ) -> dict:
     """
-    Enrich user with academic catalog relations.
+    Enrich user with linked entities relations.
 
     Args:
         username: GitHub username
@@ -448,19 +448,19 @@ async def enrich_user_academic_catalog(
         organizations: List of organizations
 
     Returns:
-        Dictionary with 'data' (AcademicCatalogEnrichmentResult) and 'usage' keys
+        Dictionary with 'data' (linkedEntitiesEnrichmentResult) and 'usage' keys
     """
-    prompt = get_user_academic_catalog_prompt(
+    prompt = get_user_linked_entities_prompt(
         username=username,
         full_name=full_name,
         bio=bio,
         organizations=organizations,
     )
 
-    logger.info(f"🔍 Starting academic catalog enrichment for user: {username}")
+    logger.info(f"🔍 Starting linked entities enrichment for user: {username}")
 
     try:
-        result = await run_agent_with_fallback(academic_catalog_configs, prompt)
+        result = await run_agent_with_fallback(linked_entities_configs, prompt)
 
         if result and result.get("data"):
             enrichment_data = result["data"]
@@ -475,15 +475,15 @@ async def enrich_user_academic_catalog(
                 )
 
             logger.info(
-                f"✓ Found academic catalog relations for {len(enrichment_data.author_relations)} authors",
+                f"✓ Found linked entities relations for {len(enrichment_data.author_relations)} authors",
             )
 
         return result
     except Exception as e:
-        logger.error(f"Academic catalog enrichment failed: {e}")
+        logger.error(f"linked entities enrichment failed: {e}")
         # Return empty result instead of failing
         return {
-            "data": AcademicCatalogEnrichmentResult(
+            "data": linkedEntitiesEnrichmentResult(
                 author_relations={},
                 searchStrategy="Enrichment failed",
                 totalSearches=0,
@@ -492,14 +492,14 @@ async def enrich_user_academic_catalog(
         }
 
 
-async def enrich_organization_academic_catalog(
+async def enrich_organization_linked_entities(
     org_name: str,
     description: str,
     website: str,
     members: list,
 ) -> dict:
     """
-    Enrich organization with academic catalog relations.
+    Enrich organization with linked entities relations.
 
     Args:
         org_name: Organization name
@@ -508,19 +508,19 @@ async def enrich_organization_academic_catalog(
         members: List of member usernames
 
     Returns:
-        Dictionary with 'data' (AcademicCatalogEnrichmentResult) and 'usage' keys
+        Dictionary with 'data' (linkedEntitiesEnrichmentResult) and 'usage' keys
     """
-    prompt = get_organization_academic_catalog_prompt(
+    prompt = get_organization_linked_entities_prompt(
         org_name=org_name,
         description=description,
         website=website,
         members=members,
     )
 
-    logger.info(f"🔍 Starting academic catalog enrichment for organization: {org_name}")
+    logger.info(f"🔍 Starting linked entities enrichment for organization: {org_name}")
 
     try:
-        result = await run_agent_with_fallback(academic_catalog_configs, prompt)
+        result = await run_agent_with_fallback(linked_entities_configs, prompt)
 
         if result and result.get("data"):
             enrichment_data = result["data"]
@@ -535,15 +535,15 @@ async def enrich_organization_academic_catalog(
                 )
 
             logger.info(
-                f"✓ Found academic catalog relations for {len(enrichment_data.organization_relations)} organizations",
+                f"✓ Found linked entities relations for {len(enrichment_data.organization_relations)} organizations",
             )
 
         return result
     except Exception as e:
-        logger.error(f"Academic catalog enrichment failed: {e}")
+        logger.error(f"linked entities enrichment failed: {e}")
         # Return empty result instead of failing
         return {
-            "data": AcademicCatalogEnrichmentResult(
+            "data": linkedEntitiesEnrichmentResult(
                 organization_relations={},
                 searchStrategy="Enrichment failed",
                 totalSearches=0,

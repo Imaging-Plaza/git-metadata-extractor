@@ -19,6 +19,47 @@ from .models import CompiledContext
 
 logger = logging.getLogger(__name__)
 
+# Configuration: Fields that should be extracted by the LLM model
+# Fields NOT in this list will be automatically populated from GIMIE/git data
+# and merged with model output
+MODEL_EXTRACTION_FIELDS = [
+    # Core metadata (requires LLM analysis)
+    # "name",
+    "description",
+    "applicationCategory",
+    "featureList",
+    # Classification (requires LLM analysis)
+    "discipline",
+    "disciplineJustification",
+    "repositoryType",
+    "repositoryTypeJustification",
+    # Authors (requires LLM analysis to identify from README, etc.)
+    "author",  # Will be split into authorPerson and authorOrganization
+    # Related entities (requires LLM analysis)
+    "relatedToOrganizations",  # Will be split into relatedToOrganizationsString and relatedToOrganizationsObject
+    "relatedToOrganizationJustification",
+    "relatedDatasets",
+    "relatedPublications",
+    "relatedModels",
+    "relatedAPIs",
+    # EPFL assessment (handled separately by EPFL checker agent)
+    # Note: relatedToEPFL fields are handled by EPFL checker, not structured output
+]
+
+# Fields that are automatically populated from GIMIE/git (not asked to model):
+# - name (from GIMIE)
+# - gitAuthors (from git extraction)
+# - keywords (from GIMIE)
+# - dateCreated (from GIMIE, then oldest commit date, then model as fallback)
+# - codeRepository (from GIMIE)
+# - license (from GIMIE)
+# - datePublished (from GIMIE)
+# - dateModified (from GIMIE)
+# - url (from GIMIE)
+# - programmingLanguage (from GIMIE)
+# - citation (from GIMIE, if available)
+# - readme (from GIMIE)
+
 # Load model configurations for structured output
 # Use a separate config that may disable tools
 STRUCTURED_OUTPUT_CONFIGS = load_model_config("run_structured_output")
@@ -30,8 +71,12 @@ for config in STRUCTURED_OUTPUT_CONFIGS:
         raise ValueError("Invalid model configuration")
 
 # Generate simplified model dynamically from SoftwareSourceCode
+# Only include fields that should be extracted by the model
 # Cache it at module level to avoid regenerating on every call
-_SIMPLIFIED_MODEL, _UNION_METADATA = create_simplified_model(SoftwareSourceCode)
+_SIMPLIFIED_MODEL, _UNION_METADATA = create_simplified_model(
+    SoftwareSourceCode,
+    field_filter=MODEL_EXTRACTION_FIELDS,
+)
 
 # System prompt for structured output agent
 STRUCTURED_OUTPUT_SYSTEM_PROMPT = """

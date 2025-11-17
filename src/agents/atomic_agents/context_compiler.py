@@ -83,7 +83,40 @@ def get_context_compiler_prompt(
 """
 
     if gimie_data:
-        prompt += f"""
+        # Parse GIMIE data to extract structured authors/orgs if available
+        try:
+            import json as json_module
+
+            gimie_dict = json_module.loads(gimie_data)
+
+            # Extract structured authors and organizations if available
+            extracted_authors = gimie_dict.get("extracted_authors", [])
+            extracted_orgs = gimie_dict.get("extracted_organizations", [])
+
+            prompt += f"""
+
+**GIMIE Metadata (extracted from Git provider):**
+{gimie_data}
+"""
+
+            # Add structured authors/orgs section if available
+            if extracted_authors or extracted_orgs:
+                prompt += f"""
+
+**Pre-extracted Authors and Organizations from GIMIE:**
+
+**Authors ({len(extracted_authors)}):**
+{json_module.dumps(extracted_authors, indent=2)}
+
+**Organizations ({len(extracted_orgs)}):**
+{json_module.dumps(extracted_orgs, indent=2)}
+
+**Important:** These authors and organizations have been pre-extracted from GIMIE with their affiliations already resolved. Use this structured data when identifying authors and organizations in your compiled context. The affiliations field in authors may contain organization objects (with id, legalName, etc.) or organization name strings.
+"""
+        except Exception as e:
+            # If parsing fails, just include raw GIMIE data
+            logger.warning(f"Failed to parse GIMIE data for structured extraction: {e}")
+            prompt += f"""
 
 **GIMIE Metadata (extracted from Git provider):**
 {gimie_data}

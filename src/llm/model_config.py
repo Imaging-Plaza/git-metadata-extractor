@@ -107,7 +107,7 @@ MODEL_CONFIGS = {
             "timeout": 300.0,
         },
     ],
-    "run_academic_catalog_enrichment": [
+    "run_linked_entities_enrichment": [
         # {
         #     "provider": "openai-compatible",
         #     "model": "openai/gpt-oss-120b",
@@ -227,7 +227,7 @@ ENV_VAR_MAPPINGS = {
     "run_llm_analysis": "LLM_ANALYSIS_MODELS",
     "run_user_enrichment": "USER_ENRICHMENT_MODELS",
     "run_organization_enrichment": "ORG_ENRICHMENT_MODELS",
-    "run_academic_catalog_enrichment": "ACADEMIC_CATALOG_ENRICHMENT_MODELS",
+    "run_linked_entities_enrichment": "linked_entities_ENRICHMENT_MODELS",
     "run_epfl_assessment": "EPFL_ASSESSMENT_MODELS",
     "run_url_validation": "URL_VALIDATION_MODELS",
     "run_context_compiler": "CONTEXT_COMPILER_MODELS",

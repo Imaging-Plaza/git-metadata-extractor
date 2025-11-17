@@ -30,7 +30,7 @@ graph TD
     end
 
     subgraph "Final Assessments"
-        J[run_academic_catalog_enrichment<br/>Agent: enrich_repository_academic_catalog<br/>DataModel: AcademicCatalogEnrichmentResult];
+        J[run_linked_entities_enrichment<br/>Agent: enrich_repository_linked_entities<br/>DataModel: linkedEntitiesEnrichmentResult];
         K[run_epfl_final_assessment<br/>Agent: assess_epfl_relationship<br/>DataModel: EPFLAssessmentResult];
     end
 
@@ -102,10 +102,10 @@ The `Repository.run_analysis` method orchestrates the following steps in sequenc
     - **Purpose**: Analyzes git author emails and existing organization mentions to identify and standardize institutional affiliations. It uses the ROR (Research Organization Registry) API to fetch canonical data for organizations.
     - **Data Model**: The agent returns an `OrganizationEnrichmentResult`. The `Organization` objects from this result replace the `relatedToOrganizations` list in `self.data`.
 
-7.  **Academic Catalog Enrichment (`run_academic_catalog_enrichment`)**:
-    - **Agent**: `enrich_repository_academic_catalog`
+7.  **Academic Catalog Enrichment (`run_linked_entities_enrichment`)**:
+    - **Agent**: `enrich_repository_linked_entities`
     - **Purpose**: Searches academic catalogs (currently EPFL Infoscience) for publications, researchers, and labs related to the repository, its authors, and its affiliated organizations.
-    - **Data Model**: Returns an `AcademicCatalogEnrichmentResult`. The `AcademicCatalogRelation` objects are then assigned to the `academicCatalogRelations` fields on the main `SoftwareSourceCode` object as well as on the individual `Person` and `Organization` objects.
+    - **Data Model**: Returns an `linkedEntitiesEnrichmentResult`. The `linkedEntitiesRelation` objects are then assigned to the `linkedEntities` fields on the main `SoftwareSourceCode` object as well as on the individual `Person` and `Organization` objects.
 
 8.  **EPFL Final Assessment (`run_epfl_final_assessment`)**:
     - **Agent**: `assess_epfl_relationship`

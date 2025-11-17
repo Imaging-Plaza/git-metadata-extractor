@@ -21,7 +21,7 @@ from .models import Discipline, Organization, Person
 from .repository import GitAuthor
 
 if TYPE_CHECKING:
-    from .academic_catalog import AcademicCatalogRelation
+    from .linked_entities import linkedEntitiesRelation
 
 
 class OrganizationLLMAnalysisResult(BaseModel):
@@ -61,7 +61,7 @@ class OrganizationLLMAnalysisResult(BaseModel):
         ge=0.0,
         le=1.0,
     )
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
@@ -179,7 +179,7 @@ class GitHubOrganization(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )

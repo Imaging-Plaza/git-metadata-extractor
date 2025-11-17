@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_org_infos
-from ..agents.academic_catalog_enrichment import enrich_organization_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
+from ..agents.linked_entities_enrichment import enrich_organization_linked_entities
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..data_models import GitHubOrganization
@@ -359,7 +359,7 @@ class Organization:
 
         logger.info(f"Organization enrichment completed for {self.org_name}")
 
-    async def run_academic_catalog_enrichment(self):
+    async def run_linked_entities_enrichment(self):
         """Enrich organization with academic catalog relations (Infoscience, etc.)"""
         logger.info(f"Academic catalog enrichment for {self.org_name}")
 
@@ -384,7 +384,7 @@ class Organization:
             website = github_metadata.get("blog", "")
             members = github_metadata.get("public_members", [])
 
-            result = await enrich_organization_academic_catalog(
+            result = await enrich_organization_linked_entities(
                 org_name=self.org_name,
                 description=description,
                 website=website,
@@ -410,7 +410,7 @@ class Organization:
 
             # Store the academic catalog relations
             if enrichment_data and hasattr(enrichment_data, "relations"):
-                self.data.academicCatalogRelations = enrichment_data.relations
+                self.data.linkedEntities = enrichment_data.relations
                 logger.info(
                     f"Stored {len(enrichment_data.relations)} academic catalog relations",
                 )
@@ -614,7 +614,7 @@ class Organization:
         # Run academic catalog enrichment
         if self.data is not None:
             logging.info(f"Academic catalog enrichment for {self.org_name}")
-            await self.run_academic_catalog_enrichment()
+            await self.run_linked_entities_enrichment()
             logging.info(f"Academic catalog enrichment completed for {self.org_name}")
 
         # Run final EPFL assessment after all enrichments complete

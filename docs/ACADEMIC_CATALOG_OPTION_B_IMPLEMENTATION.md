@@ -28,19 +28,19 @@ Implemented **Option B**: Academic catalog agent searches for repository, author
 
 ## Data Model Changes
 
-### `AcademicCatalogEnrichmentResult`
+### `linkedEntitiesEnrichmentResult`
 
 **New structured fields:**
 
 ```python
-class AcademicCatalogEnrichmentResult(BaseModel):
-    repository_relations: List[AcademicCatalogRelation] = []
+class linkedEntitiesEnrichmentResult(BaseModel):
+    repository_relations: List[linkedEntitiesRelation] = []
     # Publications about the repository/project itself
 
-    author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    author_relations: Dict[str, List[linkedEntitiesRelation]] = {}
     # Keyed by author name as provided: {"Alexander Mathis": [...relations...]}
 
-    organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    organization_relations: Dict[str, List[linkedEntitiesRelation]] = {}
     # Keyed by org name as provided: {"DeepLabCut": [...relations...]}
 
     # Metadata fields...
@@ -53,7 +53,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
 
 ```python
 @property
-def relations(self) -> List[AcademicCatalogRelation]:
+def relations(self) -> List[linkedEntitiesRelation]:
     """Combines all relations for backward compatibility."""
     return (
         list(repository_relations) +
@@ -68,7 +68,7 @@ def relations(self) -> List[AcademicCatalogRelation]:
 
 **Input:**
 ```python
-enrich_repository_academic_catalog(
+enrich_repository_linked_entities(
     repository_url="https://github.com/DeepLabCut/DeepLabCut",
     repository_name="DeepLabCut",
     description="...",
@@ -129,25 +129,25 @@ enrich_repository_academic_catalog(
 
 ## Assignment Logic
 
-### In `Repository.run_academic_catalog_enrichment()`:
+### In `Repository.run_linked_entities_enrichment()`:
 
 ```python
 # 1. Repository-level relations
-self.data.academicCatalogRelations = enrichment_data.repository_relations
+self.data.linkedEntities = enrichment_data.repository_relations
 
 # 2. Author-level relations (direct lookup by name)
 for author in self.data.author:
     if author.name in enrichment_data.author_relations:
-        author.academicCatalogRelations = enrichment_data.author_relations[author.name]
+        author.linkedEntities = enrichment_data.author_relations[author.name]
     else:
-        author.academicCatalogRelations = []
+        author.linkedEntities = []
 
 # 3. Organization-level relations (direct lookup by name)
 for org in self.data.author:  # Orgs can be in author list
     if org.legalName in enrichment_data.organization_relations:
-        org.academicCatalogRelations = enrichment_data.organization_relations[org.legalName]
+        org.linkedEntities = enrichment_data.organization_relations[org.legalName]
     else:
-        org.academicCatalogRelations = []
+        org.linkedEntities = []
 ```
 
 **No name matching needed!** The agent uses the exact names we provide as dictionary keys.
@@ -215,18 +215,18 @@ Organizations: ["DeepLabCut"]
 ### Python Assigns:
 ```python
 # Repository
-repository.academicCatalogRelations = [4 publications about DeepLabCut]
+repository.linkedEntities = [4 publications about DeepLabCut]
 
 # Author: Alexander Mathis
-author1.academicCatalogRelations = author_relations["Alexander Mathis"]
+author1.linkedEntities = author_relations["Alexander Mathis"]
 # = [person profile + 10 publications]
 
 # Author: Mackenzie Weygandt Mathis
-author2.academicCatalogRelations = author_relations["Mackenzie Weygandt Mathis"]
+author2.linkedEntities = author_relations["Mackenzie Weygandt Mathis"]
 # = [person profile]
 
 # Org: DeepLabCut
-org.academicCatalogRelations = organization_relations["DeepLabCut"]
+org.linkedEntities = organization_relations["DeepLabCut"]
 # = [] (no EPFL orgunit found)
 ```
 
@@ -234,21 +234,21 @@ org.academicCatalogRelations = organization_relations["DeepLabCut"]
 ```json
 {
   "repository": {
-    "academicCatalogRelations": [
+    "linkedEntities": [
       "4 publications about DeepLabCut"
     ]
   },
   "authors": [
     {
       "name": "Alexander Mathis",
-      "academicCatalogRelations": [
+      "linkedEntities": [
         "person profile",
         "10 publications"
       ]
     },
     {
       "name": "Mackenzie Weygandt Mathis",
-      "academicCatalogRelations": [
+      "linkedEntities": [
         "person profile"
       ]
     }
@@ -272,7 +272,7 @@ for author in authors:
 ```python
 # New: Organized dict, direct lookup
 if author.name in enrichment_data.author_relations:
-    author.academicCatalogRelations = enrichment_data.author_relations[author.name]
+    author.linkedEntities = enrichment_data.author_relations[author.name]
 ```
 
 ## Testing
@@ -292,16 +292,16 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 ## Files Modified
 
 ### Data Models:
-- `src/data_models/academic_catalog.py` - Added structured fields
+- `src/data_models/linked_entities.py` - Added structured fields
 
 ### Agent:
-- `src/agents/academic_catalog_prompts.py` - Updated output format instructions
+- `src/agents/linked_entities_prompts.py` - Updated output format instructions
 
 ### Analysis:
 - `src/analysis/repositories.py` - Simplified assignment logic
 
 ### Documentation:
-- `ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md` (this file)
+- `linked_entities_OPTION_B_IMPLEMENTATION.md` (this file)
 
 ## Conclusion
 

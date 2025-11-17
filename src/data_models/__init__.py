@@ -1,12 +1,6 @@
 """Data models and schemas for the application."""
 
 # __init__.py - Clean up exports
-from .academic_catalog import (
-    AcademicCatalogEnrichmentResult,
-    AcademicCatalogRelation,
-    CatalogType,
-    EntityType,
-)
 from .api import APIOutput
 from .conversion import (
     convert_jsonld_to_pydantic,
@@ -19,7 +13,14 @@ from .infoscience import (
     InfosciencePublication,
     InfoscienceSearchResult,
 )
+from .linked_entities import (
+    CatalogType,
+    EntityType,
+    linkedEntitiesEnrichmentResult,
+    linkedEntitiesRelation,
+)
 from .models import (
+    Affiliation,
     Discipline,
     Organization,
     Person,
@@ -68,6 +69,7 @@ __all__ = [
     # Core models
     "Person",
     "Organization",
+    "Affiliation",
     "Discipline",
     "RepositoryType",
     "ResourceType",
@@ -77,7 +79,7 @@ __all__ = [
     "Commits",
     "Image",
     "ImageKeyword",
-    "InfoscienceEntity",  # Deprecated - use AcademicCatalogRelation
+    "InfoscienceEntity",  # Deprecated - use linkedEntitiesRelation
     "FundingInformation",
     "FormalParameter",
     "ExecutableNotebook",
@@ -100,8 +102,8 @@ __all__ = [
     "OrganizationAnalysisContext",
     "GitHubOrganizationMetadata",
     # Academic Catalog models
-    "AcademicCatalogRelation",
-    "AcademicCatalogEnrichmentResult",
+    "linkedEntitiesRelation",
+    "linkedEntitiesEnrichmentResult",
     "CatalogType",
     "EntityType",
     # Infoscience models
@@ -127,12 +129,12 @@ __all__ = [
 ]
 
 # Rebuild models after all imports to resolve forward references
-# This must happen after AcademicCatalogRelation is imported
+# This must happen after linkedEntitiesRelation is imported
 import sys
 from typing import Any, Dict, List, Optional, Union
 
 _module = sys.modules[Person.__module__]
-_module.AcademicCatalogRelation = AcademicCatalogRelation
+_module.linkedEntitiesRelation = linkedEntitiesRelation
 _module.InfoscienceEntity = (
     InfoscienceEntity  # Keep for backward compatibility during migration
 )
@@ -145,7 +147,7 @@ _module.Any = Any
 Person.model_rebuild()
 Organization.model_rebuild()
 # Clean up namespace
-delattr(_module, "AcademicCatalogRelation")
+delattr(_module, "linkedEntitiesRelation")
 delattr(_module, "InfoscienceEntity")
 delattr(_module, "List")
 delattr(_module, "Dict")
@@ -153,108 +155,108 @@ delattr(_module, "Optional")
 delattr(_module, "Union")
 delattr(_module, "Any")
 
-# Rebuild SoftwareSourceCode to resolve AcademicCatalogRelation forward reference
+# Rebuild SoftwareSourceCode to resolve linkedEntitiesRelation forward reference
 _repo_module = sys.modules[SoftwareSourceCode.__module__]
-_repo_module.AcademicCatalogRelation = AcademicCatalogRelation
+_repo_module.linkedEntitiesRelation = linkedEntitiesRelation
 _repo_module.List = List
 _repo_module.Dict = Dict
 _repo_module.Optional = Optional
 _repo_module.Union = Union
 _repo_module.Any = Any
 SoftwareSourceCode.model_rebuild()
-delattr(_repo_module, "AcademicCatalogRelation")
+delattr(_repo_module, "linkedEntitiesRelation")
 delattr(_repo_module, "List")
 delattr(_repo_module, "Dict")
 delattr(_repo_module, "Optional")
 delattr(_repo_module, "Union")
 delattr(_repo_module, "Any")
 
-# Rebuild EnrichedAuthor to resolve AcademicCatalogRelation forward reference
+# Rebuild EnrichedAuthor to resolve linkedEntitiesRelation forward reference
 _user_module = sys.modules[EnrichedAuthor.__module__]
-_user_module.AcademicCatalogRelation = AcademicCatalogRelation
+_user_module.linkedEntitiesRelation = linkedEntitiesRelation
 _user_module.List = List
 _user_module.Dict = Dict
 _user_module.Optional = Optional
 _user_module.Union = Union
 _user_module.Any = Any
 EnrichedAuthor.model_rebuild()
-delattr(_user_module, "AcademicCatalogRelation")
+delattr(_user_module, "linkedEntitiesRelation")
 delattr(_user_module, "List")
 delattr(_user_module, "Dict")
 delattr(_user_module, "Optional")
 delattr(_user_module, "Union")
 delattr(_user_module, "Any")
 
-# Rebuild GitHubUser to resolve AcademicCatalogRelation forward reference
+# Rebuild GitHubUser to resolve linkedEntitiesRelation forward reference
 _githubuser_module = sys.modules[GitHubUser.__module__]
-_githubuser_module.AcademicCatalogRelation = AcademicCatalogRelation
+_githubuser_module.linkedEntitiesRelation = linkedEntitiesRelation
 _githubuser_module.List = List
 _githubuser_module.Dict = Dict
 _githubuser_module.Optional = Optional
 _githubuser_module.Union = Union
 _githubuser_module.Any = Any
 GitHubUser.model_rebuild()
-delattr(_githubuser_module, "AcademicCatalogRelation")
+delattr(_githubuser_module, "linkedEntitiesRelation")
 delattr(_githubuser_module, "List")
 delattr(_githubuser_module, "Dict")
 delattr(_githubuser_module, "Optional")
 delattr(_githubuser_module, "Union")
 delattr(_githubuser_module, "Any")
 
-# Rebuild GitHubOrganization to resolve AcademicCatalogRelation forward reference
+# Rebuild GitHubOrganization to resolve linkedEntitiesRelation forward reference
 _org_module = sys.modules[GitHubOrganization.__module__]
-_org_module.AcademicCatalogRelation = AcademicCatalogRelation
+_org_module.linkedEntitiesRelation = linkedEntitiesRelation
 _org_module.List = List
 _org_module.Dict = Dict
 _org_module.Optional = Optional
 _org_module.Union = Union
 _org_module.Any = Any
 GitHubOrganization.model_rebuild()
-delattr(_org_module, "AcademicCatalogRelation")
+delattr(_org_module, "linkedEntitiesRelation")
 delattr(_org_module, "List")
 delattr(_org_module, "Dict")
 delattr(_org_module, "Optional")
 delattr(_org_module, "Union")
 delattr(_org_module, "Any")
 
-# Rebuild OrganizationLLMAnalysisResult to resolve AcademicCatalogRelation forward reference
+# Rebuild OrganizationLLMAnalysisResult to resolve linkedEntitiesRelation forward reference
 _orgllm_module = sys.modules[OrganizationLLMAnalysisResult.__module__]
-_orgllm_module.AcademicCatalogRelation = AcademicCatalogRelation
+_orgllm_module.linkedEntitiesRelation = linkedEntitiesRelation
 _orgllm_module.List = List
 _orgllm_module.Dict = Dict
 _orgllm_module.Optional = Optional
 _orgllm_module.Union = Union
 _orgllm_module.Any = Any
 OrganizationLLMAnalysisResult.model_rebuild()
-delattr(_orgllm_module, "AcademicCatalogRelation")
+delattr(_orgllm_module, "linkedEntitiesRelation")
 delattr(_orgllm_module, "List")
 delattr(_orgllm_module, "Dict")
 delattr(_orgllm_module, "Optional")
 delattr(_orgllm_module, "Union")
 delattr(_orgllm_module, "Any")
 
-# Rebuild AcademicCatalogRelation to resolve List typing import
-_catalog_relation_module = sys.modules[AcademicCatalogRelation.__module__]
+# Rebuild linkedEntitiesRelation to resolve List typing import
+_catalog_relation_module = sys.modules[linkedEntitiesRelation.__module__]
 _catalog_relation_module.List = List
 _catalog_relation_module.Dict = Dict
 _catalog_relation_module.Optional = Optional
 _catalog_relation_module.Union = Union
 _catalog_relation_module.Any = Any
-AcademicCatalogRelation.model_rebuild()
+linkedEntitiesRelation.model_rebuild()
 delattr(_catalog_relation_module, "List")
 delattr(_catalog_relation_module, "Dict")
 delattr(_catalog_relation_module, "Optional")
 delattr(_catalog_relation_module, "Union")
 delattr(_catalog_relation_module, "Any")
 
-# Rebuild AcademicCatalogEnrichmentResult to resolve List and other typing imports
-_catalog_module = sys.modules[AcademicCatalogEnrichmentResult.__module__]
+# Rebuild linkedEntitiesEnrichmentResult to resolve List and other typing imports
+_catalog_module = sys.modules[linkedEntitiesEnrichmentResult.__module__]
 _catalog_module.List = List
 _catalog_module.Dict = Dict
 _catalog_module.Optional = Optional
 _catalog_module.Union = Union
 _catalog_module.Any = Any
-AcademicCatalogEnrichmentResult.model_rebuild()
+linkedEntitiesEnrichmentResult.model_rebuild()
 delattr(_catalog_module, "List")
 delattr(_catalog_module, "Dict")
 delattr(_catalog_module, "Optional")

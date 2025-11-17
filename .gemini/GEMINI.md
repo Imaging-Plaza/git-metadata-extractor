@@ -43,7 +43,7 @@ The analysis pipeline for a repository is a key concept:
     - **ORCID Enrichment:** Author data is enriched with public ORCID information.
     - **User Enrichment (`src/agents/user_enrichment.py`):** Analyzes git authors and ORCID data to create detailed `Person` profiles.
     - **Organization Enrichment (`src/agents/organization_enrichment.py`):** Identifies and standardizes organizational affiliations using ROR.
-    - **Academic Catalog Enrichment (`src/agents/academic_catalog_enrichment.py`):** Searches academic catalogs like Infoscience for related publications, authors, and labs.
+    - **Academic Catalog Enrichment (`src/agents/linked_entities_enrichment.py`):** Searches academic catalogs like Infoscience for related publications, authors, and labs.
 5.  **Final EPFL Assessment (`src/agents/epfl_assessment.py`):** A final, holistic agent reviews all collected data to make a definitive, evidence-based assessment of the repository's relationship to EPFL, calculating a confidence score.
 6.  **Validation & Caching:** The final, enriched data is validated against the Pydantic models and cached in the SQLite database.
 

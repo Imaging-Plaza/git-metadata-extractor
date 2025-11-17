@@ -300,6 +300,11 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "orcid": "md4i:orcid",
         "affiliation": "schema:affiliation",
     },
+    "Affiliation": {
+        "name": "schema:name",
+        "organizationId": "schema:identifier",
+        "source": "imag:source",
+    },
     "Organization": {
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
@@ -531,6 +536,7 @@ def convert_pydantic_to_jsonld(
             "SoftwareSourceCode": "http://schema.org/SoftwareSourceCode",
             "Person": "http://schema.org/Person",
             "Organization": "http://schema.org/Organization",
+            "Affiliation": "http://schema.org/Organization",
             "GitHubUser": "http://schema.org/Person",
             "GitHubOrganization": "http://schema.org/Organization",
             "DataFeed": "http://schema.org/DataFeed",
@@ -826,6 +832,7 @@ def create_simplified_model(
     memo: Optional[
         Dict[Type[BaseModel], Tuple[Type[BaseModel], Dict[str, Any]]]
     ] = None,
+    field_filter: Optional[list[str]] = None,
 ) -> Tuple[Type[BaseModel], Dict[str, Any]]:
     """
     Dynamically create a simplified Pydantic model from a source model.
@@ -836,6 +843,7 @@ def create_simplified_model(
     Args:
         source_model: The source Pydantic model class to simplify (e.g., SoftwareSourceCode)
         memo: Optional memoization cache (uses module-level cache if None)
+        field_filter: Optional list of field names to include. If None, includes all fields.
 
     Returns:
         Tuple of (simplified_model_class, union_metadata)
@@ -845,12 +853,18 @@ def create_simplified_model(
     Example:
         SimplifiedSoftwareSourceCode, union_meta = create_simplified_model(SoftwareSourceCode)
         # Use SimplifiedSoftwareSourceCode as output_type in PydanticAI agent
+
+        # With field filtering:
+        fields_to_extract = ["name", "description", "discipline", "repositoryType"]
+        SimplifiedModel, union_meta = create_simplified_model(SoftwareSourceCode, field_filter=fields_to_extract)
     """
     # Use module-level cache if memo not provided
+    # Cache key includes field_filter to avoid collisions
     use_module_cache = memo is None
     if use_module_cache:
-        if source_model in _SIMPLIFIED_MODEL_CACHE:
-            return _SIMPLIFIED_MODEL_CACHE[source_model]
+        cache_key = (source_model, tuple(field_filter) if field_filter else None)
+        if cache_key in _SIMPLIFIED_MODEL_CACHE:
+            return _SIMPLIFIED_MODEL_CACHE[cache_key]
         memo = {}
 
     # Check memoization cache
@@ -864,6 +878,9 @@ def create_simplified_model(
     new_fields: Dict[str, Any] = {}
 
     for field_name, field_info in source_model.model_fields.items():
+        # Filter fields if field_filter is provided
+        if field_filter is not None and field_name not in field_filter:
+            continue
         annotation = field_info.annotation
         default = field_info.default if field_info.default is not ... else None
         default_factory = (
@@ -936,6 +953,7 @@ def create_simplified_model(
     result = (simplified_model, union_metadata)
     memo[source_model] = result
     if use_module_cache:
-        _SIMPLIFIED_MODEL_CACHE[source_model] = result
+        cache_key = (source_model, tuple(field_filter) if field_filter else None)
+        _SIMPLIFIED_MODEL_CACHE[cache_key] = result
 
     return result

@@ -62,19 +62,15 @@ class Person(BaseModel):
     )
 
     # Affiliation fields
-    affiliation: Optional[List[str]] = Field(
-        description="List of affiliations (deprecated, use affiliations)",
-        default=None,
-    )
-    affiliations: List[str] = Field(
-        description="List of all identified affiliations",
+    affiliations: List[Affiliation] = Field(
+        description="List of current affiliations with provenance tracking",
         default_factory=list,
     )
     currentAffiliation: Optional[str] = Field(
         description="Most recent or current affiliation",
         default=None,
     )
-    affiliationHistory: List[dict] = Field(
+    affiliationHistory: List[str] = Field(
         description="Temporal affiliation information with dates",
         default_factory=list,
     )
@@ -89,6 +85,260 @@ class Person(BaseModel):
         default=None,
     )
 ```
+
+## Affiliation Model with Provenance Tracking
+
+### Overview
+The `Affiliation` model provides structured affiliation tracking with provenance information. It replaces simple string-based affiliations (`List[str]`) with rich metadata that tracks organization identifiers and data sources.
+
+**Location**: `src/data_models/models.py`
+
+### Model Definition
+
+```python
+class Affiliation(BaseModel):
+    """Structured affiliation with provenance tracking"""
+
+    name: str = Field(
+        description="Organization name (e.g., 'Swiss Data Science Center', 'EPFL')"
+    )
+    organizationId: Optional[str] = Field(
+        default=None,
+        description="Organization identifier: ROR ID, GitHub handle, or internal ID"
+    )
+    source: str = Field(
+        description="Data source: 'gimie', 'orcid', 'agent_org_enrichment', 'agent_user_enrichment', 'github_profile', 'email_domain'"
+    )
+```
+
+### Fields
+
+**name** (required, str):
+- Human-readable organization name
+- Examples: "Swiss Data Science Center", "EPFL - École Polytechnique Fédérale de Lausanne", "Hackuarium"
+- Must always be a string (not a dict or other object)
+
+**organizationId** (optional, str):
+- Organization identifier from various sources
+- Can be:
+  - **ROR ID**: Full URL (e.g., `https://ror.org/02s376052`)
+  - **GitHub handle**: Organization handle (e.g., `SwissDataScienceCenter`)
+  - **Internal ID**: Any system-specific identifier
+  - **null**: When no identifier is available
+
+**source** (required, str):
+- Tracks where the affiliation data came from
+- Valid values:
+  - `"orcid"` - From ORCID employment records
+  - `"github_profile"` - From GitHub organization memberships
+  - `"email_domain"` - Inferred from email domains (@epfl.ch, etc.)
+  - `"agent_user_enrichment"` - From user enrichment AI agent
+  - `"agent_org_enrichment"` - From organization enrichment AI agent
+  - `"gimie"` - From GIMIE repository metadata
+
+### Usage Examples
+
+```python
+from src.data_models import Affiliation, Person
+
+# Create affiliations with different sources
+aff_orcid = Affiliation(
+    name="EPFL - École Polytechnique Fédérale de Lausanne",
+    organizationId="https://ror.org/02s376052",
+    source="orcid"
+)
+
+aff_github = Affiliation(
+    name="Swiss Data Science Center",
+    organizationId="SwissDataScienceCenter",
+    source="github_profile"
+)
+
+aff_email = Affiliation(
+    name="EPFL",
+    organizationId=None,
+    source="email_domain"
+)
+
+# Create person with affiliations
+person = Person(
+    name="Carlos Vivar Rios",
+    affiliations=[aff_orcid, aff_github, aff_email]
+)
+
+# Access affiliation details
+for aff in person.affiliations:
+    print(f"{aff.name} - Source: {aff.source}, ID: {aff.organizationId}")
+```
+
+### Integration Points
+
+#### 1. ORCID Enrichment (`src/utils/utils.py`)
+```python
+def get_orcid_affiliations(orcid_id: str) -> List[Affiliation]:
+    """Returns Affiliation objects from ORCID employment history"""
+    # Creates Affiliation with source="orcid"
+    return [
+        Affiliation(
+            name=org_name,
+            organizationId=None,  # ORCID doesn't provide ROR IDs
+            source="orcid"
+        )
+        for org_name in employment_records
+    ]
+```
+
+#### 2. GIMIE Extraction (`src/analysis/repositories.py`)
+```python
+# Extract affiliations from GIMIE metadata
+affiliations.append(
+    Affiliation(
+        name=org_name,
+        organizationId=org_id,  # Organization URL or ID from GIMIE
+        source="gimie"
+    )
+)
+```
+
+#### 3. Agent Prompts
+Agents receive and return structured affiliation data:
+```python
+# In prompts (formatted as JSON for LLMs)
+"affiliations": [
+    {
+        "name": "EPFL",
+        "organizationId": "https://ror.org/02s376052",
+        "source": "orcid"
+    }
+]
+```
+
+### Deduplication Strategy
+
+Affiliations are deduplicated by name (case-insensitive):
+
+```python
+# Merge affiliations
+existing_names = {aff.name.lower(): aff for aff in person.affiliations}
+
+for new_aff in new_affiliations:
+    if new_aff.name.lower() not in existing_names:
+        person.affiliations.append(new_aff)
+```
+
+### JSON Serialization
+
+When passing to `json.dumps()`, convert Pydantic models to dicts:
+
+```python
+import json
+
+# Convert Person with Affiliations to JSON
+person_dict = person.model_dump()
+json_str = json.dumps(person_dict, indent=2, default=str)
+```
+
+### JSON-LD Mapping
+
+The Affiliation model maps to schema.org Organization in JSON-LD:
+
+```python
+# In PYDANTIC_TO_ZOD_MAPPING
+"Affiliation": {
+    "name": "schema:name",
+    "organizationId": "schema:identifier",
+    "source": "imag:source",
+}
+
+# In type_mapping
+"Affiliation": "http://schema.org/Organization"
+```
+
+### Common Issues and Solutions
+
+#### Issue 1: Nested Organization Dicts in Affiliation.name
+
+**Problem**: Passing full organization dicts to `Affiliation.name` instead of just the name string.
+
+**Error**: `Input should be a valid string [type=string_type, input_value={'id': '...', ...}, input_type=dict]`
+
+**Solution**: Always extract the name string from organization dicts:
+```python
+# ❌ WRONG
+affiliations.append(
+    Affiliation(name=org_dict, ...)  # org_dict is a dict!
+)
+
+# ✅ CORRECT
+org_name = org_dict.get("legalName") or org_dict.get("name")
+affiliations.append(
+    Affiliation(name=org_name, ...)  # org_name is a string
+)
+```
+
+#### Issue 2: JSON Serialization Errors
+
+**Problem**: Pydantic models aren't directly JSON serializable.
+
+**Error**: `TypeError: Object of type Affiliation is not JSON serializable`
+
+**Solution**: Convert to dict before JSON serialization:
+```python
+# ❌ WRONG
+json.dumps({"authors": person_objects})
+
+# ✅ CORRECT
+json.dumps({
+    "authors": [p.model_dump() for p in person_objects]
+}, default=str)
+```
+
+### Benefits of Structured Affiliations
+
+1. **Provenance Tracking**: Know exactly where each affiliation came from
+   ```python
+   orcid_affs = [a for a in person.affiliations if a.source == "orcid"]
+   ```
+
+2. **Organization Linking**: Track organization identifiers across sources
+   ```python
+   epfl_by_ror = [a for a in affiliations if "02s376052" in (a.organizationId or "")]
+   ```
+
+3. **Common Organization Detection**: Find authors sharing organizations
+   ```python
+   # Find all authors affiliated with SwissCat+
+   for author in repository.author:
+       for aff in author.affiliations:
+           if "SwissCat" in aff.name:
+               print(f"{author.name} is affiliated with {aff.name}")
+   ```
+
+4. **Multi-Source Data Quality**: Same organization from multiple sources
+   ```python
+   # EPFL from both ORCID and email
+   [
+       Affiliation(name="EPFL", organizationId="https://ror.org/02s376052", source="orcid"),
+       Affiliation(name="EPFL", organizationId=None, source="email_domain")
+   ]
+   ```
+
+### Migration from Legacy Format
+
+**Old format** (deprecated):
+```python
+affiliations: List[str] = ["EPFL", "Swiss Data Science Center"]
+```
+
+**New format** (current):
+```python
+affiliations: List[Affiliation] = [
+    Affiliation(name="EPFL", organizationId="https://ror.org/02s376052", source="orcid"),
+    Affiliation(name="Swiss Data Science Center", organizationId="SwissDataScienceCenter", source="github_profile")
+]
+```
+
+**This is a breaking change** - cached data and API responses changed format after implementation.
 
 ### Common Pitfalls and Best Practices
 
@@ -139,7 +389,7 @@ class AcademicEntity(BaseModel):
         description="Direct link to entity",
         default=None,
     )
-    # Note: externalId field has been removed from AcademicCatalogRelation
+    # Note: externalId field has been removed from linkedEntitiesRelation
 ```
 
 **Chain of custody for identifiers**:
@@ -169,16 +419,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, List
 
 if TYPE_CHECKING:
-    from .academic_catalog import AcademicCatalogRelation
+    from .linked_entities import linkedEntitiesRelation
 
 class Person(BaseModel):
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         default_factory=list
     )
 
 # Then in __init__.py, rebuild models:
-from .academic_catalog import AcademicCatalogRelation
-Person.model_rebuild(_types_namespace={"AcademicCatalogRelation": AcademicCatalogRelation})
+from .linked_entities import linkedEntitiesRelation
+Person.model_rebuild(_types_namespace={"linkedEntitiesRelation": linkedEntitiesRelation})
 ```
 
 ### Enums

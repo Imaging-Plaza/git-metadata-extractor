@@ -741,8 +741,19 @@ async def _pre_search_ror_for_organizations(
     for author in context.authors:
         if author.affiliations:
             for aff in author.affiliations:
-                if aff and aff.strip():
-                    organizations_to_search.add(aff.strip())
+                if isinstance(aff, dict) and aff.get("name"):
+                    # Handle dict representation (from model_dump)
+                    org_name = aff.get("name")
+                    if org_name and org_name.strip():
+                        organizations_to_search.add(org_name.strip())
+                elif hasattr(aff, "name"):
+                    # Handle Affiliation object
+                    if aff.name and aff.name.strip():
+                        organizations_to_search.add(aff.name.strip())
+                elif isinstance(aff, str):
+                    # Handle legacy string format (should not occur)
+                    if aff and aff.strip():
+                        organizations_to_search.add(aff.strip())
 
     # Add existing organization mentions
     for org in context.existing_organizations:

@@ -64,23 +64,23 @@ src/
 - Type discriminator: `type: Literal["Person"]` (auto-defaults)
 - Identity: `name`, `email` (Union[str, List[str]]), `orcid` (string), `gitAuthorIds`
 - Affiliations: `affiliations`, `currentAffiliation`, `affiliationHistory`
-- Metadata: `contributionSummary`, `biography`, `academicCatalogRelations`
+- Metadata: `contributionSummary`, `biography`, `linkedEntities`
 - Backward compatibility: `affiliation` field deprecated but kept
 
 **Organization Model** - Institutions and companies:
 - Type discriminator: `type: Literal["Organization"]` (auto-defaults)
 - Identity: `legalName`, `hasRorId`, `alternateNames`
 - Details: `organizationType`, `parentOrganization`, `country`, `website`
-- Metadata: `attributionConfidence`, `academicCatalogRelations`
+- Metadata: `attributionConfidence`, `linkedEntities`
 
-#### Academic Catalog Models (`academic_catalog.py`)
-**AcademicCatalogRelation** - Relation to an academic catalog entity:
+#### Academic Catalog Models (`linked_entities.py`)
+**linkedEntitiesRelation** - Relation to an academic catalog entity:
 - Catalog: `catalogType` (infoscience, openalex, epfl_graph)
 - Entity: `entityType` (publication, person, orgunit), full `entity` object
 - Matching: `confidence`, `justification`, `matchedOn` fields
-- Identifiers: `uuid`, `url` (Note: `externalId` removed from AcademicCatalogRelation)
+- Identifiers: `uuid`, `url` (Note: `externalId` removed from linkedEntitiesRelation)
 
-**AcademicCatalogEnrichmentResult** - Structured agent output:
+**linkedEntitiesEnrichmentResult** - Structured agent output:
 - `repository_relations`: Publications about the repository itself
 - `author_relations`: Dict[author_name, List[relations]] for each author
 - `organization_relations`: Dict[org_name, List[relations]] for each org
@@ -109,7 +109,7 @@ src/
   - `repository_enrichment.py` - Main repository analysis
   - `user_enrichment.py` - Author/person enrichment with ORCID
   - `organization_enrichment.py` - ROR matching for organizations
-  - `academic_catalog_enrichment.py` - Infoscience/academic catalog searches
+  - `linked_entities_enrichment.py` - Infoscience/academic catalog searches
   - `epfl_assessment.py` - Final holistic EPFL relationship assessment
 - **Structured Output Pattern**: Agents return organized dicts keyed by input names for direct assignment
 

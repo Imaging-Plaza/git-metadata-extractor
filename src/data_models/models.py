@@ -6,7 +6,6 @@ import hashlib
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
-    Any,
     List,
     Literal,
     Optional,
@@ -15,12 +14,31 @@ from typing import (
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 if TYPE_CHECKING:
-    from .academic_catalog import AcademicCatalogRelation
+    from .linked_entities import linkedEntitiesRelation
+
+
+class Affiliation(BaseModel):
+    """Structured affiliation with provenance tracking"""
+
+    name: str = Field(
+        description="Organization name (e.g., 'Swiss Data Science Center', 'EPFL')",
+    )
+    organizationId: Optional[str] = Field(
+        default=None,
+        description="Organization identifier: ROR ID, GitHub handle, or internal ID",
+    )
+    source: str = Field(
+        description="Data source: 'gimie', 'orcid', 'agent_org_enrichment', 'agent_user_enrichment', 'github_profile', 'email_domain'",
+    )
 
 
 class Person(BaseModel):
     """Person model representing an individual author or contributor"""
 
+    id: str = Field(
+        default="",
+        description="Unique identifier for the person. Link to the person's URL or internal ID",
+    )
     # Type discriminator
     type: Literal["Person"] = Field(
         default="Person",
@@ -34,26 +52,26 @@ class Person(BaseModel):
         default_factory=list,
     )
     orcid: Optional[str] = Field(
-        description="ORCID identifier (format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000). Examples: '0000-0002-1234-5678', '0000-0000-0000-000X'",
+        description="ORCID identifier (format: 0000-0000-0000-0000).",
         default=None,
     )
-    gitAuthorIds: Optional[List[str]] = Field(
-        description="List of git author identifiers mapping to this person",
-        default_factory=list,
-    )
+    # gitAuthorIds: Optional[List[str]] = Field(
+    #     description="List of git author identifiers mapping to this person",
+    #     default_factory=list,
+    # )
 
     # Affiliation fields
-    affiliations: List[str] = Field(
-        description="List of all currents affiliations",
+    affiliations: List[Affiliation] = Field(
+        description="List of current affiliations with provenance tracking",
         default_factory=list,
     )
-    affiliationHistory: List[dict[str, Any]] = Field(
+    affiliationHistory: List[str] = Field(
         description="Temporal affiliation information with start/end dates when available",
         default_factory=list,
     )
 
     # Additional metadata
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )
@@ -127,6 +145,10 @@ class Person(BaseModel):
 class Organization(BaseModel):
     """Organization model representing an institution or company"""
 
+    id: str = Field(
+        default="",
+        description="Unique identifier for the organization. Link to the organization's URL or internal ID",
+    )
     # Type discriminator
     type: Literal["Organization"] = Field(
         default="Organization",
@@ -147,7 +169,7 @@ class Organization(BaseModel):
     country: Optional[str] = None  # Country where the organization is located
     website: Optional[HttpUrl] = None  # Official website
     attributionConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+    linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )

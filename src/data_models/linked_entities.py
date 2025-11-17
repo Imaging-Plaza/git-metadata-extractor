@@ -31,7 +31,7 @@ class EntityType(str, Enum):
     ORGUNIT = "orgunit"
 
 
-class AcademicCatalogRelation(BaseModel):
+class linkedEntitiesRelation(BaseModel):
     """
     Relationship to an entity in an academic catalog.
 
@@ -121,7 +121,7 @@ class AcademicCatalogRelation(BaseModel):
         return "\n".join(lines)
 
 
-class AcademicCatalogEnrichmentResult(BaseModel):
+class linkedEntitiesEnrichmentResult(BaseModel):
     """
     Result from academic catalog enrichment agent.
 
@@ -131,17 +131,17 @@ class AcademicCatalogEnrichmentResult(BaseModel):
     - organization_relations: Relations for each organization (orgunit profiles, publications)
     """
 
-    repository_relations: list[AcademicCatalogRelation] = Field(
+    repository_relations: list[linkedEntitiesRelation] = Field(
         description="Relations found for the repository itself (publications about the repository name/project)",
         default_factory=list,
     )
 
-    author_relations: dict[str, list[AcademicCatalogRelation]] = Field(
+    author_relations: dict[str, list[linkedEntitiesRelation]] = Field(
         description="Relations found for each author, keyed by author name as provided",
         default_factory=dict,
     )
 
-    organization_relations: dict[str, list[AcademicCatalogRelation]] = Field(
+    organization_relations: dict[str, list[linkedEntitiesRelation]] = Field(
         description="Relations found for each organization, keyed by organization name as provided",
         default_factory=dict,
     )
@@ -174,7 +174,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
 
     # Backward compatibility - aggregates all relations
     @property
-    def relations(self) -> list[AcademicCatalogRelation]:
+    def relations(self) -> list[linkedEntitiesRelation]:
         """Get all relations combined (for backward compatibility)."""
         all_relations = list(self.repository_relations)
         for author_rels in self.author_relations.values():
@@ -186,26 +186,26 @@ class AcademicCatalogEnrichmentResult(BaseModel):
     def get_by_catalog(
         self,
         catalog_type: CatalogType,
-    ) -> list[AcademicCatalogRelation]:
+    ) -> list[linkedEntitiesRelation]:
         """Get relations from a specific catalog."""
         return [r for r in self.relations if r.catalogType == catalog_type]
 
     def get_by_entity_type(
         self,
         entity_type: EntityType,
-    ) -> list[AcademicCatalogRelation]:
+    ) -> list[linkedEntitiesRelation]:
         """Get relations of a specific entity type."""
         return [r for r in self.relations if r.entityType == entity_type]
 
-    def get_publications(self) -> list[AcademicCatalogRelation]:
+    def get_publications(self) -> list[linkedEntitiesRelation]:
         """Get all publication relations."""
         return self.get_by_entity_type(EntityType.PUBLICATION)
 
-    def get_persons(self) -> list[AcademicCatalogRelation]:
+    def get_persons(self) -> list[linkedEntitiesRelation]:
         """Get all person relations."""
         return self.get_by_entity_type(EntityType.PERSON)
 
-    def get_orgunits(self) -> list[AcademicCatalogRelation]:
+    def get_orgunits(self) -> list[linkedEntitiesRelation]:
         """Get all organizational unit relations."""
         return self.get_by_entity_type(EntityType.ORGUNIT)
 

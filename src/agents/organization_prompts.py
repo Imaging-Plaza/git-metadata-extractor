@@ -177,7 +177,18 @@ Authors with ORCID affiliations:
                 {
                     "name": a.name,
                     "orcid": str(a.orcid) if a.orcid else None,
-                    "affiliations": a.affiliations,
+                    "affiliations": [
+                        {
+                            "name": aff.name,
+                            "organizationId": aff.organizationId,
+                            "source": aff.source,
+                        }
+                        if hasattr(aff, "name")
+                        else aff
+                        for aff in a.affiliations
+                    ]
+                    if a.affiliations
+                    else [],
                 }
                 for a in context.authors
             ],
@@ -234,7 +245,18 @@ Existing EPFL justification: {context.existing_epfl_justification}
             {
                 "name": a.name,
                 "orcid": str(a.orcid) if a.orcid else None,
-                "affiliations": a.affiliations,
+                "affiliations": [
+                    {
+                        "name": aff.name,
+                        "organizationId": aff.organizationId,
+                        "source": aff.source,
+                    }
+                    if hasattr(aff, "name")
+                    else aff
+                    for aff in a.affiliations
+                ]
+                if a.affiliations
+                else [],
             }
             for a in context.authors
         ],

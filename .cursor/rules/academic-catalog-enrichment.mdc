@@ -16,7 +16,7 @@ The Academic Catalog Enrichment system provides integration with academic reposi
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              AcademicCatalogEnrichmentResult                     │
+│              linkedEntitiesEnrichmentResult                     │
 │  ┌────────────────┬──────────────────┬──────────────────────┐  │
 │  │ repository_    │ author_relations │ organization_        │  │
 │  │ relations      │ Dict[str, List]  │ relations           │  │
@@ -36,13 +36,13 @@ The Academic Catalog Enrichment system provides integration with academic reposi
 ## Data Models
 
 ### Location
-- **Path**: `src/data_models/academic_catalog.py`
+- **Path**: `src/data_models/linked_entities.py`
 
 ### Key Models
 
-#### 1. AcademicCatalogRelation
+#### 1. linkedEntitiesRelation
 ```python
-class AcademicCatalogRelation(BaseModel):
+class linkedEntitiesRelation(BaseModel):
     """A single relation to an academic catalog entity."""
 
     catalogType: CatalogType  # "infoscience", "openalex", "epfl_graph"
@@ -54,19 +54,19 @@ class AcademicCatalogRelation(BaseModel):
     # Note: externalId field has been removed
 ```
 
-#### 2. AcademicCatalogEnrichmentResult (Structured Output)
+#### 2. linkedEntitiesEnrichmentResult (Structured Output)
 ```python
-class AcademicCatalogEnrichmentResult(BaseModel):
+class linkedEntitiesEnrichmentResult(BaseModel):
     """Organized results by what was searched for."""
 
     # Publications about the repository/project itself
-    repository_relations: List[AcademicCatalogRelation] = []
+    repository_relations: List[linkedEntitiesRelation] = []
 
     # Keyed by exact author name provided
-    author_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    author_relations: Dict[str, List[linkedEntitiesRelation]] = {}
 
     # Keyed by exact organization name provided
-    organization_relations: Dict[str, List[AcademicCatalogRelation]] = {}
+    organization_relations: Dict[str, List[linkedEntitiesRelation]] = {}
 
     # Metadata
     searchStrategy: Optional[str] = None
@@ -102,7 +102,7 @@ result = agent.run(prompt, authors=["Alexander Mathis", ...])
   }
 }
 # Direct assignment:
-author.academicCatalogRelations = result.author_relations[author.name]
+author.linkedEntities = result.author_relations[author.name]
 ```
 
 ### Agent Responsibilities
@@ -124,8 +124,8 @@ Python code is responsible for:
 
 ### 1. Agent Call
 ```python
-# src/agents/academic_catalog_enrichment.py
-async def enrich_repository_academic_catalog(
+# src/agents/linked_entities_enrichment.py
+async def enrich_repository_linked_entities(
     repository_url: str,
     repository_name: str,
     description: str,
@@ -161,9 +161,9 @@ async def enrich_repository_academic_catalog(
 ### 3. Direct Assignment
 ```python
 # src/analysis/repositories.py
-async def run_academic_catalog_enrichment(self):
+async def run_linked_entities_enrichment(self):
     # Call agent
-    result = await enrich_repository_academic_catalog(
+    result = await enrich_repository_linked_entities(
         repository_url=self.full_path,
         repository_name=repository_name,
         authors=author_names,           # ["Alexander Mathis", ...]
@@ -173,21 +173,21 @@ async def run_academic_catalog_enrichment(self):
     enrichment_data = result.get("data")
 
     # 1. Repository-level
-    self.data.academicCatalogRelations = enrichment_data.repository_relations
+    self.data.linkedEntities = enrichment_data.repository_relations
 
     # 2. Author-level (direct lookup by name)
     for author in self.data.author:
         if author.name in enrichment_data.author_relations:
-            author.academicCatalogRelations = enrichment_data.author_relations[author.name]
+            author.linkedEntities = enrichment_data.author_relations[author.name]
         else:
-            author.academicCatalogRelations = []
+            author.linkedEntities = []
 
     # 3. Organization-level (direct lookup by name)
     for org in self.data.author:
         if org.legalName in enrichment_data.organization_relations:
-            org.academicCatalogRelations = enrichment_data.organization_relations[org.legalName]
+            org.linkedEntities = enrichment_data.organization_relations[org.legalName]
         else:
-            org.academicCatalogRelations = []
+            org.linkedEntities = []
 ```
 
 **Key Points**:
@@ -309,10 +309,10 @@ return InfoscienceAuthor(
 
 4. **Agent extracts from markdown**:
    - Agent prompt explicitly instructs: "Extract UUID from '*UUID:* <uuid>' in markdown"
-   - Agent populates `AcademicCatalogRelation.uuid` field
+   - Agent populates `linkedEntitiesRelation.uuid` field
    - Agent populates `entity.uuid` in the full entity object
 
-**Chain of custody**: API → Parser → Pydantic Model → Markdown → Agent → AcademicCatalogRelation
+**Chain of custody**: API → Parser → Pydantic Model → Markdown → Agent → linkedEntitiesRelation
 
 #### 3. Markdown as Transport Layer
 Since tools return markdown (not structured data), markdown must include ALL critical fields:
@@ -466,7 +466,7 @@ ENV_VAR_MAPPINGS = {
 | LLM Analysis | `run_llm_analysis` | o4-mini | Main repository analysis |
 | User Enrichment | `run_user_enrichment` | o4-mini | Author enrichment with ORCID |
 | Org Enrichment | `run_organization_enrichment` | o4-mini | ROR matching |
-| Academic Catalog | `run_academic_catalog_enrichment` | o4-mini | Infoscience searches (tool-heavy) |
+| Academic Catalog | `run_linked_entities_enrichment` | o4-mini | Infoscience searches (tool-heavy) |
 | EPFL Assessment | `run_epfl_assessment` | o4-mini | Final holistic assessment |
 
 ## Integration into Analysis Pipeline
@@ -492,7 +492,7 @@ async def run_analysis(self):
     await self.run_user_enrichment()
 
     # 6. Academic catalog enrichment (NEW!)
-    await self.run_academic_catalog_enrichment()
+    await self.run_linked_entities_enrichment()
 
     # 7. Final EPFL assessment (holistic)
     await self.run_epfl_final_assessment()
@@ -517,7 +517,7 @@ if usage and "estimated_input_tokens" in usage:
 - ✅ `run_llm_analysis()`
 - ✅ `run_organization_enrichment()`
 - ✅ `run_user_enrichment()`
-- ✅ `run_academic_catalog_enrichment()`
+- ✅ `run_linked_entities_enrichment()`
 - ✅ `run_epfl_final_assessment()`
 
 ## Testing Guidelines
@@ -539,8 +539,8 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 
 ### Verification Checklist
 
-- [ ] Repository `academicCatalogRelations` populated
-- [ ] Each author has `academicCatalogRelations` (may be empty)
+- [ ] Repository `linkedEntities` populated
+- [ ] Each author has `linkedEntities` (may be empty)
 - [ ] Relations include full entity objects (not just UUIDs)
 - [ ] **UUIDs are populated** (not null) for all matched entities
 - [ ] **URLs/profile_urls are populated** for all matched entities
@@ -552,7 +552,7 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 
 ## Common Issues & Solutions
 
-### Issue: UUID is null in academicCatalogRelations
+### Issue: UUID is null in linkedEntities
 **Cause**: Field name mismatch in parser (e.g., `url=` instead of `profile_url=`)
 **Symptoms**:
 ```json
@@ -642,7 +642,7 @@ Future enhancement: Match same entities across catalogs using:
 
 ```python
 # Example future feature
-def deduplicate_across_catalogs(relations: List[AcademicCatalogRelation]):
+def deduplicate_across_catalogs(relations: List[linkedEntitiesRelation]):
     """Merge same entities from different catalogs."""
     # Group by DOI, ORCID, or other stable identifiers
     # Provide unified view across catalogs
@@ -660,8 +660,8 @@ def deduplicate_across_catalogs(relations: List[AcademicCatalogRelation]):
 
 ## References
 
-- Implementation: `src/agents/academic_catalog_enrichment.py`
-- Data Models: `src/data_models/academic_catalog.py`
+- Implementation: `src/agents/linked_entities_enrichment.py`
+- Data Models: `src/data_models/linked_entities.py`
 - Infoscience Client: `src/context/infoscience.py`
 - Integration: `src/analysis/repositories.py`
-- Documentation: `ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md` (if exists)
+- Documentation: `linked_entities_OPTION_B_IMPLEMENTATION.md` (if exists)

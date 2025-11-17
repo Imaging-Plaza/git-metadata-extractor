@@ -313,7 +313,7 @@ USER_ENRICHMENT_MODELS='[...]'
 ORG_ENRICHMENT_MODELS='[...]'
 
 # Academic catalog enrichment models (NEW)
-ACADEMIC_CATALOG_ENRICHMENT_MODELS='[
+linked_entities_ENRICHMENT_MODELS='[
   {
     "provider": "openai",
     "model": "o4-mini",

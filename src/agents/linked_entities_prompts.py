@@ -1,11 +1,11 @@
 """
-Prompts for Academic Catalog Enrichment Agent
+Prompts for linked entities Enrichment Agent
 
 This agent is responsible for finding and linking entities to academic catalogs
 (Infoscience, OpenAlex, EPFL Graph, etc.)
 """
 
-academic_catalog_system_prompt = """
+linked_entities_system_prompt = """
 You are an expert at searching academic catalogs and matching entities to publications,
 authors, and organizational units.
 
@@ -108,7 +108,7 @@ For each relation, provide clear justification:
 
 ## Output Format
 
-Return an `AcademicCatalogEnrichmentResult` with **organized relations**:
+Return an `linkedEntitiesEnrichmentResult` with **organized relations**:
 
 - **repository_relations**: Publications/entities related to the repository itself (searched by repository name)
 - **author_relations**: Dictionary keyed by author name (as provided), each containing their person profile + publications
@@ -146,7 +146,7 @@ Example structure:
 }
 ```
 
-Each `AcademicCatalogRelation` should have:
+Each `linkedEntitiesRelation` should have:
 - **catalogType**: "infoscience" (more catalogs will be added in the future)
 - **entityType**: "publication", "person", or "orgunit"
 - **uuid**: Extract from markdown ("*UUID:* <uuid>") - REQUIRED!
@@ -172,7 +172,7 @@ Good luck! Remember: be strategic, be efficient, and accept when things aren't f
 """
 
 
-def get_repository_academic_catalog_prompt(
+def get_repository_linked_entities_prompt(
     repository_url: str,
     repository_name: str,
     description: str,
@@ -181,7 +181,7 @@ def get_repository_academic_catalog_prompt(
     organizations: list = None,
 ) -> str:
     """
-    Generate prompt for repository academic catalog enrichment.
+    Generate prompt for repository linked entities enrichment.
 
     Args:
         repository_url: URL of the repository
@@ -198,7 +198,7 @@ def get_repository_academic_catalog_prompt(
     orgs_str = ", ".join(organizations) if organizations else "None identified yet"
 
     return f"""
-## Repository Academic Catalog Enrichment
+## Repository linked entities Enrichment
 
 **Repository**: {repository_url}
 **Name**: {repository_name}
@@ -257,18 +257,18 @@ Search academic catalogs to find entities related to this repository:
 - Academic profiles may use variations like "Mathis, Alexander" or "Alexander Mathis" - that's fine, the matching happens later
 - If no results for an author/org, return empty list for that key
 
-Return your findings as an `AcademicCatalogEnrichmentResult` with the organized structure.
+Return your findings as an `linkedEntitiesEnrichmentResult` with the organized structure.
 """
 
 
-def get_user_academic_catalog_prompt(
+def get_user_linked_entities_prompt(
     username: str,
     full_name: str,
     bio: str,
     organizations: list,
 ) -> str:
     """
-    Generate prompt for user academic catalog enrichment.
+    Generate prompt for user linked entities enrichment.
 
     Args:
         username: GitHub username
@@ -280,7 +280,7 @@ def get_user_academic_catalog_prompt(
         Formatted prompt for the agent
     """
     return f"""
-## User Academic Catalog Enrichment
+## User linked entities Enrichment
 
 **GitHub Username**: {username}
 **Full Name**: {full_name or "Not provided"}
@@ -315,18 +315,18 @@ Search academic catalogs to find entities related to this user:
 
 Remember: Not all GitHub users are academic researchers. If no results, that's okay.
 
-Return your findings as an `AcademicCatalogEnrichmentResult`.
+Return your findings as an `linkedEntitiesEnrichmentResult`.
 """
 
 
-def get_organization_academic_catalog_prompt(
+def get_organization_linked_entities_prompt(
     org_name: str,
     description: str,
     website: str,
     members: list,
 ) -> str:
     """
-    Generate prompt for organization academic catalog enrichment.
+    Generate prompt for organization linked entities enrichment.
 
     Args:
         org_name: Organization name
@@ -338,7 +338,7 @@ def get_organization_academic_catalog_prompt(
         Formatted prompt for the agent
     """
     return f"""
-## Organization Academic Catalog Enrichment
+## Organization linked entities Enrichment
 
 **Organization Name**: {org_name}
 **Description**: {description or "Not provided"}
@@ -373,5 +373,5 @@ Search academic catalogs to find entities related to this organization:
 
 Remember: Not all GitHub organizations are academic. Commercial organizations may not have entries.
 
-Return your findings as an `AcademicCatalogEnrichmentResult`.
+Return your findings as an `linkedEntitiesEnrichmentResult`.
 """

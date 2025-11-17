@@ -167,7 +167,19 @@ async def run_agent_with_retry(
             return result
         except Exception as e:
             last_exception = e
-            logger.warning(f"Agent run failed on attempt {attempt + 1}: {e}")
+            error_msg = str(e)
+
+            # Log more details about validation errors
+            if "validation" in error_msg.lower() or "retries" in error_msg.lower():
+                logger.error(
+                    f"Agent run failed on attempt {attempt + 1} with validation error: {e}",
+                    exc_info=True,  # Include full traceback
+                )
+                # Try to extract more context from the exception
+                if hasattr(e, "__cause__") and e.__cause__:
+                    logger.error(f"Underlying cause: {e.__cause__}")
+            else:
+                logger.warning(f"Agent run failed on attempt {attempt + 1}: {e}")
 
             if attempt < max_retries - 1:
                 delay = get_retry_delay(attempt)

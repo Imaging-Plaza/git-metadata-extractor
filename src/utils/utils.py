@@ -10,7 +10,7 @@ import requests
 from pydantic import BaseModel, HttpUrl, create_model
 from pyld import jsonld
 
-from ..data_models import Person, SoftwareSourceCode
+from ..data_models import Affiliation, Person, SoftwareSourceCode
 from ..parsers.users_parser import GitHubUsersParser
 
 logger = logging.getLogger(__name__)
@@ -300,19 +300,19 @@ def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
     return None
 
 
-def get_orcid_affiliations(orcid_id: str) -> List[str]:
+def get_orcid_affiliations(orcid_id: str) -> List[Affiliation]:
     """
-    Fetch affiliations (organization names only) from ORCID.
+    Fetch affiliations from ORCID with provenance tracking.
 
     Args:
         orcid_id: ORCID identifier (e.g., "0000-0002-1126-1535")
 
     Returns:
-        List of organization names from ORCID employment history
+        List of Affiliation objects from ORCID employment history
 
     Examples:
         >>> get_orcid_affiliations("0000-0002-1126-1535")
-        ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
+        [Affiliation(name='EPFL - École Polytechnique Fédérale de Lausanne', organizationId=None, source='orcid')]
     """
 
     if not orcid_id:
@@ -332,7 +332,7 @@ def get_orcid_affiliations(orcid_id: str) -> List[str]:
         if not orcid_activities or not orcid_activities.employment:
             return []
 
-        # Extract only organization names, removing duplicates while preserving order
+        # Extract organization names and create Affiliation objects
         affiliations = []
         seen = set()
 
@@ -343,7 +343,13 @@ def get_orcid_affiliations(orcid_id: str) -> List[str]:
                 org_name = org_name.split(":")[0].strip()
 
             if org_name and org_name not in seen:
-                affiliations.append(org_name)
+                affiliations.append(
+                    Affiliation(
+                        name=org_name,
+                        organizationId=None,  # ORCID doesn't provide ROR IDs directly
+                        source="orcid",
+                    ),
+                )
                 seen.add(org_name)
 
         return affiliations
@@ -407,34 +413,25 @@ def enrich_author_with_orcid(author: Person) -> Person:
         return author
 
     logger.info(
-        f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {orcid_affiliations}",
+        f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {[aff.name for aff in orcid_affiliations]}",
     )
 
-    # Get existing affiliations
+    # Merge affiliations by name (case-insensitive)
     existing_affiliations = author.affiliations or []
+    existing_names = {aff.name.lower(): aff for aff in existing_affiliations}
 
-    # Ensure it's a list
-    if not isinstance(existing_affiliations, list):
-        existing_affiliations = [existing_affiliations] if existing_affiliations else []
-
-    # Merge affiliations, removing duplicates while preserving order
-    merged_affiliations = list(existing_affiliations)
-    seen = set(aff.lower() for aff in existing_affiliations)
-
-    # Add ORCID affiliations that aren't already present
     added_count = 0
-    for aff in orcid_affiliations:
-        if aff.lower() not in seen:
-            merged_affiliations.append(aff)
-            seen.add(aff.lower())
+    for orcid_aff in orcid_affiliations:
+        if orcid_aff.name.lower() not in existing_names:
+            existing_affiliations.append(orcid_aff)
             added_count += 1
 
-    author.affiliations = merged_affiliations
+    author.affiliations = existing_affiliations
 
     if added_count > 0:
         logger.info(
             f"Enriched author {author.name} with {added_count} new affiliations "
-            f"from ORCID (total: {len(merged_affiliations)})",
+            f"from ORCID (total: {len(author.affiliations)})",
         )
 
     return author

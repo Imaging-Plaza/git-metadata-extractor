@@ -27,6 +27,12 @@ For each author you analyze:
   * Temporal alignment between commit dates and known affiliation periods
   * Amount and recency of contribution to the repository
 
+**Affiliation Structure:**
+Each affiliation must be returned as an object with:
+- "name": Organization name (required, e.g., "Swiss Data Science Center", "EPFL")
+- "organizationId": ROR ID, GitHub handle, or internal ID (optional, null if unknown)
+- "source": Data source (required, one of: "orcid", "github_profile", "email_domain", "agent_user_enrichment")
+
 Pay special attention to:
 - Different name variations (e.g., "John Smith", "J. Smith", "Smith, John")
 - Institutional email domains (e.g., @epfl.ch, @ethz.ch, @university.edu)
@@ -91,7 +97,18 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
                 {
                     "name": a.name,
                     "orcid": str(a.orcid) if a.orcid else None,
-                    "affiliations": a.affiliations,
+                    "affiliations": [
+                        {
+                            "name": aff.name,
+                            "organizationId": aff.organizationId,
+                            "source": aff.source,
+                        }
+                        if hasattr(aff, "name")
+                        else aff
+                        for aff in a.affiliations
+                    ]
+                    if a.affiliations
+                    else [],
                 }
                 for a in context.existing_authors
             ],
