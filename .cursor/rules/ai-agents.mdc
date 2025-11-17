@@ -18,12 +18,17 @@ alwaysApply: true
 - Environment variable overrides supported
 
 #### Model Types
-Five analysis types with separate configs:
+Multiple analysis types with separate configs:
 - `run_llm_analysis` - Repository analysis
 - `run_user_enrichment` - User metadata enrichment
 - `run_organization_enrichment` - Organization metadata enrichment
 - `run_linked_entities_enrichment` - Academic catalog searches (Infoscience, etc.)
 - `run_epfl_assessment` - Final EPFL relationship assessment
+- `run_repository_classifier` - Repository type and discipline classification (atomic agent)
+- `run_organization_identifier` - Organization identification (atomic agent)
+- `run_structured_output` - Structured metadata extraction (atomic agent)
+- `run_context_compiler` - Repository context compilation (atomic agent)
+- `run_linked_entities_searcher` - Academic catalog search with tools (atomic agent)
 
 #### Provider Support
 - **OpenAI**: Direct OpenAI API
@@ -61,6 +66,12 @@ model = create_pydantic_ai_model(configs[0])
   - User enrichment: `src/agents/user_enrichment.py` (uses `UserEnrichmentResult` schema)
   - Organization enrichment: `src/agents/organization_enrichment.py` (uses `OrganizationEnrichmentResult` schema)
   - **ORCID enrichment**: `src/utils/utils.py` (functions: `enrich_authors_with_orcid`, `enrich_author_with_orcid`)
+- **Atomic Agents** (multi-stage pipeline):
+  - Context compiler: `src/agents/atomic_agents/context_compiler.py` (uses `CompiledContext` schema)
+  - Structured output: `src/agents/atomic_agents/structured_output.py` (uses dynamically generated simplified model)
+  - Repository classifier: `src/agents/atomic_agents/repository_classifier.py` (uses `RepositoryClassification` schema)
+  - Organization identifier: `src/agents/atomic_agents/organization_identifier.py` (uses `OrganizationIdentification` schema)
+  - Linked entities searcher: `src/agents/atomic_agents/linked_entities_searcher.py` (uses `LinkedEntitiesContext` and `linkedEntitiesEnrichmentResult` schemas)
 - **Final Assessment Agent:**
   - EPFL assessment: `src/agents/epfl_assessment.py` (uses `EPFLAssessmentResult` schema)
 
@@ -292,6 +303,12 @@ result = await run_agent_with_fallback(
 - **User Enrichment**: `UserEnrichmentResult`
 - **Organization Enrichment**: `OrganizationEnrichmentResult`
 - **EPFL Assessment**: `EPFLAssessmentResult` (from `data_models/epfl_assessment.py`)
+- **Atomic Agents**:
+  - Context Compiler: `CompiledContext` (from `atomic_agents/models.py`)
+  - Structured Output: Dynamically generated simplified model (from `SoftwareSourceCode`)
+  - Repository Classifier: `RepositoryClassification` (from `atomic_agents/models.py`) - uses `Literal` types for `discipline` and `repositoryType` with enum constraints
+  - Organization Identifier: `OrganizationIdentification` (from `atomic_agents/models.py`) - uses `SimplifiedOrganization` with `name` (not `legalName`) for LLM compatibility
+  - Linked Entities Searcher: `LinkedEntitiesContext` and `linkedEntitiesEnrichmentResult` (from `data_models/linked_entities.py`)
 
 ## ORCID Enrichment Integration
 
@@ -996,6 +1013,146 @@ for author in self.data.author:
 - Searching for multiple entities of the same type
 - Need to assign results back to specific source objects
 - Name variations exist in the target system
+
+## Atomic Agents Pipeline
+
+### Overview
+The atomic agents pipeline is a multi-stage LLM-based system for repository metadata extraction. It breaks down the complex task of repository analysis into smaller, focused stages that can be optimized independently.
+
+### Pipeline Stages
+
+**Location**: `src/agents/atomic_agents/`
+
+#### Stage 1: Context Compiler
+- **File**: `context_compiler.py`
+- **Purpose**: Compiles repository information (GIMIE data, git authors, README) into structured markdown
+- **Output**: `CompiledContext` with markdown content and repository metadata
+- **Tools**: None (pure compilation)
+
+#### Stage 2: Structured Output
+- **File**: `structured_output.py`
+- **Purpose**: Extracts structured metadata from compiled context
+- **Output**: Simplified repository model with core fields (description, applicationCategory, authors, etc.)
+- **Tools**: None (structured extraction)
+- **Note**: Does NOT extract `discipline`, `repositoryType`, or `relatedToOrganizations` (handled by later stages)
+
+#### Stage 3: Repository Classifier
+- **File**: `repository_classifier.py`
+- **Purpose**: Classifies repository type and scientific disciplines
+- **Output**: `RepositoryClassification` with:
+  - `repositoryType`: Required, from `RepositoryType` enum (software, educational resource, documentation, data, webpage, other)
+  - `discipline`: Required list, from `Discipline` enum (at least one discipline required)
+  - Justifications for each classification
+- **Schema Enforcement**: Uses `Literal` types derived from enums to enforce valid values
+- **Tools**: None (classification only)
+
+#### Stage 4: Organization Identifier
+- **File**: `organization_identifier.py`
+- **Purpose**: Identifies institutional organizations directly related to the software
+- **Output**: `OrganizationIdentification` with:
+  - `relatedToOrganizations`: List of `SimplifiedOrganization` objects
+  - `relatedToOrganizationJustification`: List of justifications
+- **Key Requirements**:
+  - Focus on **direct institutional relationships** (developers, maintainers, sponsors, hosts)
+  - **NOT** just author affiliations - organization must be directly involved with the software
+  - `organizationType` is **required** for each organization
+  - `attributionConfidence` is optional but recommended
+- **Simplified Model**: Uses `name` (not `legalName`) for LLM compatibility, converted to `legalName` during reconciliation
+- **Tools**: None (identification only)
+
+#### Stage 5: Linked Entities Searcher (Academic Catalog)
+- **File**: `linked_entities_searcher.py`
+- **Purpose**: Searches academic catalogs (Infoscience) for publications related to the repository
+- **Output**: `linkedEntitiesEnrichmentResult` with `repository_relations` only
+- **Tools**: `search_infoscience_publications_tool`
+- **Scope**: Repository-level searches only (searches for publications about the repository/tool name)
+- **Author-level searches**: Handled separately in optional `run_author_linked_entities_enrichment()` method
+
+### Pipeline Execution Order
+
+```python
+# In src/analysis/repositories.py - run_atomic_llm_pipeline()
+# Stage 1: Compile context
+compiled_context = await compile_repository_context(...)
+
+# Stage 2: Generate structured output
+structured_output = await generate_structured_output(compiled_context, ...)
+
+# Stage 3: Classify repository (overrides Stage 2 values)
+classification = await classify_repository_type_and_discipline(compiled_context)
+# Override: repositoryType, discipline, justifications
+
+# Stage 4: Identify organizations
+organizations = await identify_related_organizations(compiled_context)
+# Set: relatedToOrganizations, relatedToOrganizationJustification
+
+# Stage 5: Search academic catalogs (repository-level only)
+linked_entities = await search_academic_catalogs(repository_name)
+# Set: repository.linkedEntities
+```
+
+### Key Design Principles
+
+1. **Stage Independence**: Each stage can be optimized independently
+2. **Schema Enforcement**: All stages use Pydantic models with strict validation
+3. **Field Override Pattern**: Later stages can override earlier stage values (e.g., Stage 3 overrides Stage 2's classification)
+4. **Simplified Models**: Use intuitive field names for LLMs (`name` not `legalName`), convert during reconciliation
+5. **Union Field Reconciliation**: Handle split union fields (e.g., `entityInfosciencePublication`, `entityInfoscienceAuthor`, `entityInfoscienceLab`) based on `entityType`
+
+### Repository Classification Schema
+
+**Critical**: The `RepositoryClassification` model uses `Literal` types to enforce enum constraints:
+
+```python
+# In src/agents/atomic_agents/models.py
+from ...data_models.models import Discipline, RepositoryType
+
+# Extract values from enums (avoid duplication)
+ValidDiscipline = Literal["Social sciences", "Anthropology", ...]  # All Discipline enum values
+ValidRepositoryType = Literal["software", "educational resource", ...]  # All RepositoryType enum values
+
+# Runtime verification ensures Literal values match enum values
+assert set(get_args(ValidDiscipline)) == {d.value for d in Discipline}
+assert set(get_args(ValidRepositoryType)) == {rt.value for rt in RepositoryType}
+
+class RepositoryClassification(BaseModel):
+    repositoryType: ValidRepositoryType  # Required, enforced by enum
+    discipline: List[ValidDiscipline]  # Required, at least one, enforced by enum
+    # ... justifications
+```
+
+**Benefits**:
+- LLM receives JSON schema with `enum` constraints
+- Pydantic validates against `Literal` types
+- Runtime assertions ensure synchronization with source enums
+- Fail-fast if values drift out of sync
+
+### Organization Identifier Requirements
+
+**System Prompt Emphasis**:
+- **Direct relationship required**: Organization must be directly involved with software (development, funding, hosting, partnership)
+- **NOT sufficient**: Side affiliation of an author (unless organization is directly involved)
+- **Required fields**: `organizationType` (required), `attributionConfidence` (optional)
+- **Field naming**: Use `name` in simplified model, convert to `legalName` in full model
+
+### Linked Entities Enrichment
+
+**Repository-Level Only (Default)**:
+- Searches Infoscience for publications about the repository/tool name
+- Stores results in `repository.linkedEntities`
+- Runs automatically in main pipeline
+
+**Author-Level (Optional)**:
+- Separate method: `run_author_linked_entities_enrichment()`
+- Controlled by `run_author_linked_entities` parameter in `run_analysis()`
+- Searches Infoscience for each author individually
+- Assigns results to `author.linkedEntities` for each Person
+
+**Union Field Handling**:
+- Entity union fields are split into three fields: `entityInfosciencePublication`, `entityInfoscienceAuthor`, `entityInfoscienceLab`
+- Reconciliation method (`_reconcile_entity_union`) selects correct field based on `entityType`
+- Converts `None` to empty lists for list fields (`subjects`, `authors`, `keywords`)
+- Only one union variant should be populated per relation
 
 ### Best Practices
 1. **Always extract usage**: Check both direct attributes and `details` field

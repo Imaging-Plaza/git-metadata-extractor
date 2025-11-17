@@ -466,8 +466,10 @@ ENV_VAR_MAPPINGS = {
 | LLM Analysis | `run_llm_analysis` | o4-mini | Main repository analysis |
 | User Enrichment | `run_user_enrichment` | o4-mini | Author enrichment with ORCID |
 | Org Enrichment | `run_organization_enrichment` | o4-mini | ROR matching |
-| Academic Catalog | `run_linked_entities_enrichment` | o4-mini | Infoscience searches (tool-heavy) |
+| Academic Catalog | `run_linked_entities_searcher` | o4-mini | Infoscience searches (tool-heavy, repository-level only) |
 | EPFL Assessment | `run_epfl_assessment` | o4-mini | Final holistic assessment |
+| Repository Classifier | `run_repository_classifier` | o4-mini | Repository type and discipline classification |
+| Organization Identifier | `run_organization_identifier` | o4-mini | Organization identification |
 
 ## Integration into Analysis Pipeline
 
@@ -475,32 +477,57 @@ ENV_VAR_MAPPINGS = {
 
 ```python
 # src/analysis/repositories.py
-async def run_analysis(self):
+async def run_analysis(self, run_author_linked_entities: bool = False):
     # 1. Extract metadata with GIMIE
     await self.run_gimie()
 
-    # 2. LLM analysis (main agent)
-    await self.run_llm_analysis()
+    # 2. Atomic LLM pipeline (stages 1-5)
+    await self.run_atomic_llm_pipeline()
+    # Stage 1: Context compiler
+    # Stage 2: Structured output
+    # Stage 3: Repository classifier
+    # Stage 4: Organization identifier
+    # Stage 5: Linked entities searcher (repository-level only)
 
     # 3. ORCID enrichment (no LLM)
     self.run_authors_enrichment()
 
-    # 4. Organization enrichment (ROR agent)
-    await self.run_organization_enrichment()
-
-    # 5. User enrichment (author agent)
+    # 4. User enrichment (optional)
     await self.run_user_enrichment()
 
-    # 6. Academic catalog enrichment (NEW!)
-    await self.run_linked_entities_enrichment()
+    # 5. Organization enrichment (optional)
+    await self.run_organization_enrichment()
 
-    # 7. Final EPFL assessment (holistic)
+    # 6. Academic catalog enrichment (repository-level - runs in atomic pipeline)
+    # Already completed in Stage 5 of atomic pipeline
+
+    # 7. Optional: Author-level linked entities enrichment
+    if run_author_linked_entities:
+        await self.run_author_linked_entities_enrichment()
+
+    # 8. Final EPFL assessment (holistic)
     await self.run_epfl_final_assessment()
 ```
 
 **Order matters**:
-- Academic catalog enrichment runs AFTER user/org enrichment (needs author names)
+- Academic catalog enrichment (repository-level) runs in Stage 5 of atomic pipeline
+- Author-level linked entities enrichment is optional and runs separately
 - EPFL assessment runs LAST (reviews all collected data)
+
+### Linked Entities Enrichment Scope
+
+**Repository-Level (Default)**:
+- Runs automatically in Stage 5 of atomic pipeline
+- Searches Infoscience for publications about the repository/tool name
+- Stores results in `repository.linkedEntities`
+- Uses `search_infoscience_publications_tool` with repository name as query
+
+**Author-Level (Optional)**:
+- Controlled by `run_author_linked_entities` parameter
+- Separate method: `run_author_linked_entities_enrichment()`
+- Searches Infoscience for each author individually
+- Assigns results to `author.linkedEntities` for each Person
+- Only runs when explicitly requested (default: `False`)
 
 ### Estimated Token Accumulation
 
@@ -603,6 +630,26 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 ### Issue: Profile URLs are missing
 **Cause**: Parser passing wrong field name to Pydantic model
 **Solution**: Pydantic silently ignores unknown fields - verify field names match model definition
+
+### Issue: Validation errors for union fields (entityInfosciencePublication, entityInfoscienceAuthor, entityInfoscienceLab)
+**Cause**: LLM populating all three union fields with the same data, or wrong entity type in wrong field
+**Symptoms**:
+```json
+{
+  "entityType": "publication",
+  "entityInfosciencePublication": {...},  // ✅ Correct
+  "entityInfoscienceAuthor": {...},       // ❌ Should be None/omitted
+  "entityInfoscienceLab": {...}           // ❌ Should be None/omitted
+}
+```
+
+**Solution**:
+1. **System prompt**: Explicitly instruct LLM to populate ONLY the field matching `entityType`
+2. **Reconciliation method**: `_reconcile_entity_union()` in `repositories.py`:
+   - Checks `entityType` to select correct union variant
+   - Removes other two fields
+   - Converts `None` to empty lists for list fields (`subjects`, `authors`, `keywords`)
+3. **List field handling**: Convert `None` to `[]` for list fields before validation
 
 ## Future Extensions
 

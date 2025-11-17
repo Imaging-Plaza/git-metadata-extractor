@@ -63,6 +63,14 @@ Only selected fields are included in simplified models:
 **SimplifiedGitAuthor** includes:
 - `name`, `email`, `commits`
 
+**SimplifiedOrganization** includes:
+- `name`: Organization name (uses `name` not `legalName` for LLM compatibility)
+- `organizationType`: Required - type of organization (Research Institute, University, Company, etc.)
+- `id`: Optional - organization identifier (GitHub URL, website, etc.)
+- `attributionConfidence`: Optional - confidence score (0.0-1.0) for the organization's relationship
+
+**Important**: `SimplifiedOrganization` uses `name` (not `legalName`) because LLMs naturally produce `name` fields. The conversion code in `repositories.py` maps `name` → `legalName` when creating full `Organization` objects.
+
 ## Implementation Pattern
 
 ### Generator Function
