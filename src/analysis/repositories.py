@@ -2870,6 +2870,10 @@ class Repository:
                 f"    Total tokens:  {self.estimated_input_tokens + self.estimated_output_tokens:,}",
             )
             logger.info("")
+            if self.total_input_tokens == 0 and self.total_output_tokens == 0:
+                logger.warning(
+                    "  ⚠️  API returned 0 tokens - using tiktoken estimates as primary metric",
+                )
             logger.info(f"  Analysis Duration: {duration:.2f} seconds")
             logger.info(
                 f"  Status: {'SUCCESS' if self.analysis_successful else 'FAILED'}",

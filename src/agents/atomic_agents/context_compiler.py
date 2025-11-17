@@ -14,7 +14,9 @@ from typing import Any, Dict, Optional
 #     search_infoscience_publications_tool,
 # )
 from ...llm.model_config import load_model_config, validate_config
-from ...utils.token_counter import estimate_tokens_from_messages
+from ...utils.token_counter import (
+    estimate_tokens_with_tools,
+)
 from ..agents_management import run_agent_with_fallback
 from .models import CompiledContext
 
@@ -218,33 +220,47 @@ async def compile_repository_context(
         elif isinstance(compiled_context, str):
             response_text = compiled_context
 
-        estimated = estimate_tokens_from_messages(
-            system_prompt=CONTEXT_COMPILER_SYSTEM_PROMPT,
-            user_prompt=prompt,
-            response=response_text,
-        )
-
         # Extract usage information from the result
-        usage_data = None
+        input_tokens = 0
+        output_tokens = 0
+        tool_calls_count = 0
 
         if hasattr(result, "usage"):
             usage = result.usage
             input_tokens = getattr(usage, "input_tokens", 0) or 0
             output_tokens = getattr(usage, "output_tokens", 0) or 0
+            tool_calls_count = getattr(usage, "tool_calls", 0) or 0
 
             # Fallback to details field for certain models
             if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
                 details = usage.details
                 if isinstance(details, dict):
-                    input_tokens = details.get("input_tokens", 0)
-                    output_tokens = details.get("output_tokens", 0)
+                    input_tokens = details.get("input_tokens", 0) or 0
+                    output_tokens = details.get("output_tokens", 0) or 0
 
-            usage_data = {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "estimated_input_tokens": estimated.get("input_tokens", 0),
-                "estimated_output_tokens": estimated.get("output_tokens", 0),
-            }
+        # Calculate estimates with tool call support (always, for validation/fallback)
+        estimated = estimate_tokens_with_tools(
+            system_prompt=CONTEXT_COMPILER_SYSTEM_PROMPT,
+            user_prompt=prompt,
+            response=response_text,
+            tool_calls=tool_calls_count,
+            tool_results_text=None,
+        )
+
+        # Use estimates as primary when API returns 0
+        if input_tokens == 0 and output_tokens == 0:
+            logger.warning(
+                "API returned 0 tokens, using tiktoken estimates as primary counts",
+            )
+            input_tokens = estimated.get("input_tokens", 0)
+            output_tokens = estimated.get("output_tokens", 0)
+
+        usage_data = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
 
         # Log compiled context size
         if hasattr(compiled_context, "markdown_content"):

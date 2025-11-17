@@ -119,3 +119,75 @@ def estimate_tokens_from_messages(
         if (input_tokens > 0 or output_tokens > 0)
         else None,
     }
+
+
+def estimate_tokens_with_tools(
+    system_prompt: Optional[str] = None,
+    user_prompt: Optional[str] = None,
+    response: Optional[str] = None,
+    tool_calls: int = 0,
+    tool_results_text: Optional[str] = None,
+) -> dict:
+    """
+    Estimate token counts including tool call overhead.
+
+    This function extends estimate_tokens_from_messages to account for:
+    - Tool call overhead (function definitions and call structures)
+    - Tool results text (returned data from tool executions)
+    - Multiple LLM round-trips when tools are used
+
+    Args:
+        system_prompt: The system prompt sent to the model
+        user_prompt: The user prompt/query sent to the model
+        response: The model's response (final output after tool calls)
+        tool_calls: Number of tool calls made during the agent run
+        tool_results_text: Combined text of all tool results (optional, for more accurate estimation)
+
+    Returns:
+        Dictionary with 'input_tokens', 'output_tokens', and 'total_tokens' estimates
+    """
+    # Start with base estimation
+    base_estimate = estimate_tokens_from_messages(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        response=response,
+    )
+
+    input_tokens = base_estimate.get("input_tokens", 0) or 0
+    output_tokens = base_estimate.get("output_tokens", 0) or 0
+
+    # Add tool call overhead
+    if tool_calls > 0:
+        # Each tool call adds overhead:
+        # - Function call structure: ~50 tokens
+        # - Function definition in system prompt: ~50 tokens (one-time, but we estimate per call)
+        # - Tool call formatting: ~20 tokens
+        tool_call_overhead = tool_calls * 100  # Conservative estimate per tool call
+
+        # Tool calls are part of the model's output (the model generates the function call)
+        output_tokens += tool_call_overhead
+
+        # Tool results become part of the input for the next request
+        if tool_results_text:
+            tool_results_tokens = count_tokens(tool_results_text)
+            if tool_results_tokens is not None:
+                # Add tool results as input tokens (they're sent back to the model)
+                input_tokens += tool_results_tokens
+                # Add formatting overhead for tool results (~20 tokens per result)
+                input_tokens += tool_calls * 20
+        else:
+            # If we don't have tool results text, estimate based on tool calls
+            # Assume each tool result is ~200 tokens on average
+            estimated_tool_results = tool_calls * 200
+            input_tokens += estimated_tool_results
+            input_tokens += tool_calls * 20  # Formatting overhead
+
+        # Additional overhead for tool-related message formatting
+        # Each tool interaction adds ~10 tokens for message structure
+        input_tokens += tool_calls * 10
+
+    return {
+        "input_tokens": input_tokens if input_tokens > 0 else 0,
+        "output_tokens": output_tokens if output_tokens > 0 else 0,
+        "total_tokens": input_tokens + output_tokens,
+    }

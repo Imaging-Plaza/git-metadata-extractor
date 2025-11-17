@@ -7,6 +7,7 @@ from enum import Enum
 from typing import (
     Any,
     Dict,
+    Literal,
     Optional,
     Tuple,
     Type,
@@ -851,7 +852,11 @@ def _simplify_type(
         if enum_values:
             # Use eval to create Literal with unpacked values
             # This is safe since enum_values come from the Enum class
-            literal_type = eval(f"Literal[{', '.join(repr(v) for v in enum_values)}]")
+            # Pass Literal in the namespace so eval can access it
+            literal_type = eval(
+                f"Literal[{', '.join(repr(v) for v in enum_values)}]",
+                {"Literal": Literal},
+            )
         else:
             literal_type = str
         return (

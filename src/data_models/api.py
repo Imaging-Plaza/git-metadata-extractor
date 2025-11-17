@@ -18,12 +18,23 @@ from .user import GitHubUser
 
 
 class APIStats(BaseModel):
+    """
+    API usage statistics.
+
+    Note: For OpenAI-compatible endpoints that don't report usage information
+    (e.g., custom endpoints, OSS models), the agent_input_tokens and agent_output_tokens
+    fields will be populated from tiktoken estimates instead of API-reported values.
+    This ensures meaningful token counts are always available even when the API
+    doesn't provide usage data.
+    """
+
     # Official API-reported token counts
     agent_input_tokens: int = None
     agent_output_tokens: int = None
     total_tokens: int = None
 
     # Tokenizer-based estimates (complementary/fallback)
+    # When API returns 0, these estimates are used as the primary metric
     estimated_input_tokens: int = None
     estimated_output_tokens: int = None
     estimated_total_tokens: int = None

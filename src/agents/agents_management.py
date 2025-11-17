@@ -176,28 +176,116 @@ async def run_agent_with_retry(
                     f"Agent run failed on attempt {attempt + 1} with validation error: {e}",
                     exc_info=True,  # Include full traceback
                 )
-                # Try to extract more context from the exception
-                if hasattr(e, "__cause__") and e.__cause__:
-                    logger.error(f"Underlying cause: {e.__cause__}")
-                    # Traverse nested exception chains to find validation details
-                    cause = e.__cause__
+
+                # Try to extract Pydantic ValidationError details
+                validation_error = None
+                current_exc = e
+
+                # Check the exception itself first
+                if hasattr(current_exc, "errors") and callable(current_exc.errors):
+                    try:
+                        validation_error = current_exc
+                        logger.error("Found ValidationError in main exception")
+                    except Exception:
+                        pass
+
+                # Traverse exception chain to find ValidationError
+                if not validation_error:
+                    visited = set()
+                    to_check = [e]
+                    if hasattr(e, "__cause__") and e.__cause__:
+                        to_check.append(e.__cause__)
+                    if hasattr(e, "__context__") and e.__context__:
+                        to_check.append(e.__context__)
+
                     depth = 0
-                    while (
-                        hasattr(cause, "__cause__") and cause.__cause__ and depth < 10
-                    ):
-                        cause = cause.__cause__
-                        logger.error(f"Nested cause (depth {depth + 1}): {cause}")
-                        # If it's a ValidationError, log the details
-                        if hasattr(cause, "errors"):
-                            logger.error(f"Validation errors: {cause.errors()}")
+                    while to_check and depth < 15:
+                        current = to_check.pop(0)
+                        if id(current) in visited:
+                            continue
+                        visited.add(id(current))
+
+                        # Check if this is a ValidationError
+                        if hasattr(current, "errors") and callable(current.errors):
+                            try:
+                                errors = current.errors()
+                                if errors:
+                                    validation_error = current
+                                    logger.error(
+                                        f"Found ValidationError at depth {depth}",
+                                    )
+                                    break
+                            except Exception:
+                                pass
+
+                        # Check for pydantic_core.ValidationError
+                        if type(
+                            current,
+                        ).__name__ == "ValidationError" or "ValidationError" in str(
+                            type(current),
+                        ):
+                            try:
+                                if hasattr(current, "errors"):
+                                    errors = current.errors()
+                                    if errors:
+                                        validation_error = current
+                                        logger.error(
+                                            f"Found ValidationError (pydantic_core) at depth {depth}",
+                                        )
+                                        break
+                            except Exception:
+                                pass
+
+                        # Add nested exceptions to check
+                        if hasattr(current, "__cause__") and current.__cause__:
+                            to_check.append(current.__cause__)
+                        if hasattr(current, "__context__") and current.__context__:
+                            to_check.append(current.__context__)
+
                         depth += 1
-                    # Try to get even more nested causes (pydantic_core.ValidationError might be deeper)
-                    cause = e.__cause__
-                    depth = 0
-                    while hasattr(cause, "__cause__") and cause.__cause__ and depth < 5:
-                        cause = cause.__cause__
-                        logger.error(f"Nested cause (depth {depth + 1}): {cause}")
-                        depth += 1
+
+                # Log validation error details if found
+                if validation_error and hasattr(validation_error, "errors"):
+                    try:
+                        errors = validation_error.errors()
+                        logger.error("=" * 80)
+                        logger.error(
+                            f"PYDANTIC VALIDATION ERRORS ({len(errors)} errors):",
+                        )
+                        logger.error("=" * 80)
+                        for i, error in enumerate(errors, 1):
+                            field_path = " -> ".join(
+                                str(loc) for loc in error.get("loc", [])
+                            )
+                            logger.error(f"Error {i}:")
+                            logger.error(f"  Field path: {field_path}")
+                            logger.error(f"  Error type: {error.get('type', 'N/A')}")
+                            logger.error(f"  Message: {error.get('msg', 'N/A')}")
+                            logger.error(f"  Input value: {error.get('input', 'N/A')}")
+                            if "ctx" in error:
+                                logger.error(f"  Context: {error['ctx']}")
+                        logger.error("=" * 80)
+                    except Exception as parse_err:
+                        logger.error(f"Failed to parse validation errors: {parse_err}")
+
+                # Try to extract raw LLM output from exception attributes
+                if hasattr(e, "args") and e.args:
+                    for arg in e.args:
+                        if isinstance(arg, dict):
+                            logger.error(f"Exception args dict: {arg}")
+                        elif isinstance(arg, str) and len(arg) > 100:
+                            logger.error(
+                                f"Exception args (first 500 chars): {arg[:500]}",
+                            )
+
+                # Log exception attributes that might contain LLM output
+                for attr in ["output", "raw_output", "response", "data", "result"]:
+                    if hasattr(e, attr):
+                        value = getattr(e, attr)
+                        if value is not None:
+                            logger.error(
+                                f"Exception.{attr}: {type(value)} = {str(value)[:500]}",
+                            )
             else:
                 logger.warning(f"Agent run failed on attempt {attempt + 1}: {e}")
 
