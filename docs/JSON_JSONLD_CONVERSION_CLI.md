@@ -150,7 +150,7 @@ repo = SoftwareSourceCode(
 
 # Convert to JSON-LD
 jsonld = convert_pydantic_to_jsonld(
-    repo, 
+    repo,
     base_url="https://github.com/example/my-repo"
 )
 
@@ -224,19 +224,19 @@ output_dir.mkdir(exist_ok=True)
 
 for json_file in input_dir.glob("*.json"):
     print(f"Converting {json_file.name}...")
-    
+
     # Load and convert
     with open(json_file) as f:
         data = json.load(f)
-    
+
     repo = SoftwareSourceCode(**data)
     jsonld = convert_pydantic_to_jsonld(repo)
-    
+
     # Save
     output_file = output_dir / f"{json_file.stem}.jsonld"
     with open(output_file, 'w') as f:
         json.dump(jsonld, f, indent=2)
-    
+
     print(f"  → {output_file}")
 ```
 

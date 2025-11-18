@@ -13,7 +13,7 @@ import httpx
 
 from ..data_models.infoscience import (
     InfoscienceAuthor,
-    InfoscienceLab,
+    InfoscienceOrgUnit,
     InfosciencePublication,
     InfoscienceSearchResult,
 )
@@ -30,6 +30,13 @@ INFOSCIENCE_TOKEN = os.getenv("INFOSCIENCE_TOKEN")
 
 # Simple in-memory cache to prevent duplicate searches in same session
 _search_cache: Dict[str, str] = {}
+
+
+def clear_infoscience_cache():
+    """Clear the in-memory Infoscience search cache."""
+    global _search_cache
+    _search_cache.clear()
+    logger.info("Cleared Infoscience search cache")
 
 
 ##########################################################
@@ -199,25 +206,35 @@ def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
 
+    # Extract email, ORCID, and affiliation
+    email = _parse_metadata(metadata, "eperson.email")
+    orcid = _parse_metadata(metadata, "person.identifier.orcid")
+    affiliation = _parse_metadata(metadata, "person.affiliation.name")
+
+    # Log what we found for debugging
+    logger.debug(
+        f"Parsed author '{name}' - UUID: {uuid}, Email: {email}, ORCID: {orcid}, Affiliation: {affiliation}",
+    )
+
     return InfoscienceAuthor(
         uuid=uuid,
         name=name,
-        email=_parse_metadata(metadata, "eperson.email"),
-        orcid=_parse_metadata(metadata, "person.identifier.orcid"),
-        affiliation=_parse_metadata(metadata, "person.affiliation.name"),
+        email=email,
+        orcid=orcid,
+        affiliation=affiliation,
         profile_url=url,  # Fixed: use profile_url instead of url
     )
 
 
-def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
+def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceOrgUnit]:
     """
-    Parse a DSpace organizational unit entity into an InfoscienceLab model.
+    Parse a DSpace organizational unit entity into an InfoscienceOrgUnit model.
 
     Args:
         item: DSpace orgunit item dictionary
 
     Returns:
-        InfoscienceLab instance or None if parsing fails
+        InfoscienceOrgUnit instance or None if parsing fails
     """
     metadata = item.get("metadata", {})
     uuid = item.get("uuid")
@@ -242,13 +259,16 @@ def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
     elif handle:
         url = f"https://infoscience.epfl.ch/record/{handle}"
 
-    return InfoscienceLab(
+    return InfoscienceOrgUnit(
         uuid=uuid,
         name=name,
         description=_parse_metadata(metadata, "dc.description")
         or _parse_metadata(metadata, "dc.description.abstract"),
         url=url,
-        parent_organization=_parse_metadata(metadata, "organization.parentOrganization"),
+        parent_organization=_parse_metadata(
+            metadata,
+            "organization.parentOrganization",
+        ),
     )
 
 
@@ -418,7 +438,7 @@ async def search_authors(
                             authors.append(
                                 InfoscienceAuthor(
                                     name=author_name,
-                                )
+                                ),
                             )
             except Exception as e:
                 logger.warning(f"Error extracting authors from publication: {e}")
@@ -538,7 +558,7 @@ async def search_labs(
                         pub_title = _parse_metadata(metadata, "dc.title")
                         description = f"Lab identified from publication: {pub_title[:100] if pub_title else 'N/A'}..."
 
-                        lab = InfoscienceLab(
+                        lab = InfoscienceOrgUnit(
                             name=lab_info,
                             description=description,
                         )
@@ -643,7 +663,7 @@ async def search_infoscience_publications_tool(
 
     IMPORTANT: This tool caches results - don't search for the same thing multiple times!
     Be strategic and avoid redundant searches.
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -693,7 +713,7 @@ async def search_infoscience_authors_tool(name: str, max_results: int = 10) -> s
 
     IMPORTANT: This tool caches results - don't search for the same person multiple times!
     Be strategic and avoid redundant searches.
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -740,7 +760,7 @@ async def search_infoscience_labs_tool(name: str, max_results: int = 10) -> str:
 
     IMPORTANT: This tool caches results - don't search for the same lab multiple times!
     If a lab isn't found, it may not be in Infoscience or has a different name - don't keep trying!
-    
+
     **CRITICAL: If this tool returns 0 results, STOP searching for this entity because the results were 0 - it is not in Infoscience. Do not try variations or search again.**
 
     Args:
@@ -876,4 +896,3 @@ def normalize_infoscience_lab_url(url_or_uuid: str) -> Optional[str]:
     from ..agents.validation_utils import normalize_infoscience_url
 
     return normalize_infoscience_url(url_or_uuid, "orgunit")
-

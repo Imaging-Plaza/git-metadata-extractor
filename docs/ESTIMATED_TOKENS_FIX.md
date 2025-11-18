@@ -16,7 +16,7 @@ After comprehensive audit, found **TWO critical bugs** where estimated tokens we
 
 ### Bug #1: Academic Catalog Enrichment - Wrong Key Names ❌
 
-**Location:** `src/agents/academic_catalog_enrichment.py` lines 155-157
+**Location:** `src/agents/linked_entities_enrichment.py` lines 155-157
 
 **Problem:**
 ```python
@@ -175,7 +175,7 @@ if hasattr(result, "usage"):
 
 ## Files Modified
 
-1. `src/agents/academic_catalog_enrichment.py`
+1. `src/agents/linked_entities_enrichment.py`
    - Fixed key names: `prompt_tokens` → `input_tokens`
    - Fixed key names: `completion_tokens` → `output_tokens`
 

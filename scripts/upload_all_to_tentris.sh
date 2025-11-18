@@ -57,10 +57,10 @@ for jsonld_file in *.jsonld; do
     if [ -f "$jsonld_file" ]; then
         count=$((count + 1))
         echo "[$count/$total_files] Processing: $jsonld_file"
-        
+
         # Convert to Turtle
         turtle_file="$TEMP_DIR/$(basename "$jsonld_file" .jsonld).ttl"
-        
+
         $PYTHON_CMD << PYEOF
 import sys
 from rdflib import Graph
@@ -68,33 +68,33 @@ from rdflib import Graph
 try:
     g = Graph()
     g.parse("$DATA_DIR/$jsonld_file", format="json-ld")
-    
+
     with open("$turtle_file", "w", encoding="utf-8") as f:
         f.write(g.serialize(format="turtle"))
-    
+
     print(f"  ✅ Converted to Turtle ({len(g)} triples)")
     sys.exit(0)
 except Exception as e:
     print(f"  ❌ Conversion failed: {e}")
     sys.exit(1)
 PYEOF
-        
+
         if [ $? -ne 0 ]; then
             echo "  ❌ Skipping due to conversion error"
             failed=$((failed + 1))
             failed_files+=("$jsonld_file (conversion failed)")
             continue
         fi
-        
+
         # Upload to Tentris
         upload_response=$(curl -s -w "\n%{http_code}" -b "$COOKIE_FILE" \
             -X POST \
             -H "Content-Type: text/turtle" \
             --data-binary "@$turtle_file" \
             "$TENTRIS_HOST/graph-store?default")
-        
+
         upload_code=$(echo "$upload_response" | tail -n1)
-        
+
         if [[ "$upload_code" =~ ^2[0-9][0-9]$ ]]; then
             echo "  ✅ Uploaded successfully (HTTP $upload_code)"
             success=$((success + 1))
@@ -106,7 +106,7 @@ PYEOF
             failed=$((failed + 1))
             failed_files+=("$jsonld_file (HTTP $upload_code)")
         fi
-        
+
         # Small delay to avoid overwhelming the server
         sleep 0.1
         echo ""

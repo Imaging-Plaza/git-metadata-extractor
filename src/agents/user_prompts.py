@@ -27,6 +27,12 @@ For each author you analyze:
   * Temporal alignment between commit dates and known affiliation periods
   * Amount and recency of contribution to the repository
 
+**Affiliation Structure:**
+Each affiliation must be returned as an object with:
+- "name": Organization name (required, e.g., "Swiss Data Science Center", "EPFL")
+- "organizationId": ROR ID, GitHub handle, or internal ID (optional, null if unknown)
+- "source": Data source (required, one of: "orcid", "github_profile", "email_domain", "agent_user_enrichment")
+
 Pay special attention to:
 - Different name variations (e.g., "John Smith", "J. Smith", "Smith, John")
 - Institutional email domains (e.g., @epfl.ch, @ethz.ch, @university.edu)
@@ -91,7 +97,18 @@ def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisC
                 {
                     "name": a.name,
                     "orcid": str(a.orcid) if a.orcid else None,
-                    "affiliations": a.affiliations,
+                    "affiliations": [
+                        {
+                            "name": aff.name,
+                            "organizationId": aff.organizationId,
+                            "source": aff.source,
+                        }
+                        if hasattr(aff, "name")
+                        else aff
+                        for aff in a.affiliations
+                    ]
+                    if a.affiliations
+                    else [],
                 }
                 for a in context.existing_authors
             ],
@@ -148,24 +165,24 @@ def get_general_user_agent_prompt(username: str, user_data: str):
     - ORCID activities: {user_data.get('orcid_activities', 'N/A')}
 
     EXTRACTION GUIDELINES:
-    
+
     **For Positions:**
     - Look for explicit statements about current or past roles in the bio, company field, or README
     - Look for phrases like "I am working as", "Currently working as", "Software Engineer at", etc.
     - ONLY extract positions that are EXPLICITLY mentioned in the data
     - DO NOT infer or assume positions that are not stated
-    
+
     **For Organizations:**
     - Look for company/employer information in the bio, company field, and README
     - Check GitHub organizations the user is a member of (institutions, universities, companies)
     - Include both primary organizations (e.g., "EPFL") and sub-units (e.g., "Swiss Data Science Center") ONLY if mentioned
     - Add EPFL to the list ONLY if the user explicitly mentions affiliation with an EPFL lab/center or has @epfl.ch email
     - DO NOT add organizations that are not explicitly mentioned or clearly indicated
-    
+
     **For Disciplines:**
     - Infer from the user's bio, projects, repositories, and stated roles
     - Base on technical skills, research areas, or explicit statements
-    
+
     **Critical Rules:**
     - For each field, provide a clear justification that quotes or references the actual source data
     - If a field cannot be determined from the available data, return an empty list []

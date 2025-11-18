@@ -4,10 +4,21 @@ Conversion functions for the data models
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import (
+    Any,
+    Dict,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
+from typing import Dict as DictType
 from typing import List as ListType
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, create_model
 
 from .models import (
     Organization,
@@ -112,7 +123,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "schema:parentOrganization": "parentOrganization",
     "http://schema.org/knowsAbout": "knowsAbout",
     "schema:knowsAbout": "knowsAbout",
-    
     # SD ontology properties
     "https://w3id.org/okn/o/sd#hasDocumentation": "hasDocumentation",
     "sd:hasDocumentation": "hasDocumentation",
@@ -136,7 +146,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "sd:fundingGrant": "fundingGrant",
     "https://w3id.org/okn/o/sd#fundingSource": "fundingSource",
     "sd:fundingSource": "fundingSource",
-    
     # PULSE ontology properties (updated from imaging-plaza)
     "https://open-pulse.epfl.ch/ontology#imagingModality": "imagingModality",
     "pulse:imagingModality": "imagingModality",
@@ -180,7 +189,6 @@ JSONLD_TO_PYDANTIC_MAPPING = {
     "pulse:email": "email",
     "https://open-pulse.epfl.ch/ontology#profileUrl": "profileUrl",
     "pulse:profileUrl": "profileUrl",
-    
     # MD4I properties
     "http://w3id.org/nfdi4ing/metadata4ing#orcid": "orcid",
     "md4i:orcid": "orcid",
@@ -231,7 +239,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             email_extracted = _get_value(email_value)
             if email_extracted:
                 person_data["email"] = email_extracted
-        
+
         # All other fields (gitAuthorIds, affiliations, currentAffiliation,
         # affiliationHistory, contributionSummary, biography, infoscienceEntity)
         # will use their default values as defined in the Person model
@@ -255,7 +263,10 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
         )
     if "https://w3id.org/okn/o/sd#FundingInformation" in entity_types:
         source_ref = _get_value(entity.get("https://w3id.org/okn/o/sd#fundingSource"))
-        funding_source = Organization(type="Organization", legalName="Unknown")  # Default
+        funding_source = Organization(
+            type="Organization",
+            legalName="Unknown",
+        )  # Default
         if source_ref and source_ref in all_entities:
             converted = _convert_entity(all_entities[source_ref], all_entities)
             if isinstance(converted, Organization):
@@ -413,7 +424,6 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "type": "@type",
         "legalName": "schema:legalName",
         "hasRorId": "md4i:hasRorId",
-        "alternateNames": "schema:alternateName",
         "organizationType": "schema:additionalType",
         "parentOrganization": "schema:parentOrganization",
         "country": "schema:addressCountry",
@@ -685,21 +695,21 @@ def convert_pydantic_to_jsonld(
     def _generate_person_iri(person_obj: Any) -> Optional[str]:
         """Generate a stable IRI for a Person based on their identifiers."""
         # Priority: GitHub handle > ORCID > email
-        if hasattr(person_obj, 'gitAuthorIds') and person_obj.gitAuthorIds:
+        if hasattr(person_obj, "gitAuthorIds") and person_obj.gitAuthorIds:
             # Use first GitHub ID
             github_id = person_obj.gitAuthorIds[0]
             return f"https://github.com/{github_id}"
-        
-        if hasattr(person_obj, 'orcid') and person_obj.orcid:
+
+        if hasattr(person_obj, "orcid") and person_obj.orcid:
             orcid = str(person_obj.orcid)
-            if orcid.startswith('http'):
+            if orcid.startswith("http"):
                 return orcid
             return f"https://orcid.org/{orcid}"
-        
-        if hasattr(person_obj, 'email') and person_obj.email:
+
+        if hasattr(person_obj, "email") and person_obj.email:
             # Use mailto: URI for email
             return f"mailto:{person_obj.email}"
-        
+
         return None
 
     # Helper function to convert a single entity
@@ -737,10 +747,18 @@ def convert_pydantic_to_jsonld(
             jsonld_entity["@id"] = entity_id
         elif base_url and model_name == "SoftwareSourceCode":
             jsonld_entity["@id"] = base_url
-        elif model_name == "GitHubUser" and hasattr(obj, "githubUserMetadata") and obj.githubUserMetadata:
+        elif (
+            model_name == "GitHubUser"
+            and hasattr(obj, "githubUserMetadata")
+            and obj.githubUserMetadata
+        ):
             # Use html_url from githubUserMetadata for GitHubUser
             jsonld_entity["@id"] = obj.githubUserMetadata.html_url
-        elif model_name == "GitHubOrganization" and hasattr(obj, "githubOrganizationMetadata") and obj.githubOrganizationMetadata:
+        elif (
+            model_name == "GitHubOrganization"
+            and hasattr(obj, "githubOrganizationMetadata")
+            and obj.githubOrganizationMetadata
+        ):
             # Use html_url from githubOrganizationMetadata for GitHubOrganization
             jsonld_entity["@id"] = obj.githubOrganizationMetadata.html_url
         elif model_name == "Person":
@@ -788,11 +806,11 @@ def convert_pydantic_to_jsonld(
 
             if pydantic_key not in key_map:
                 continue
-            
+
             # Skip the 'type' field for models - we handle @type via type_mapping
             if pydantic_key == "type":
                 continue
-            
+
             # Skip contributionSummary for Person objects - this is a property of Contribution, not Person identity
             if model_name == "Person" and pydantic_key == "contributionSummary":
                 continue
@@ -805,28 +823,34 @@ def convert_pydantic_to_jsonld(
                 author_refs = []
                 # Create pulse:contribution with full Contribution objects
                 contributions = []
-                
+
                 for item in value:
-                    if isinstance(item, BaseModel) and item.__class__.__name__ == "Person":
+                    if (
+                        isinstance(item, BaseModel)
+                        and item.__class__.__name__ == "Person"
+                    ):
                         person_iri = _generate_person_iri(item)
                         if person_iri:
                             # Add IRI reference for schema:author
                             author_refs.append({"@id": person_iri})
-                            
+
                             # Create Contribution object if contributionSummary exists
-                            if hasattr(item, 'contributionSummary') and item.contributionSummary:
+                            if (
+                                hasattr(item, "contributionSummary")
+                                and item.contributionSummary
+                            ):
                                 contribution = {
                                     "@type": "pulse:Contribution",
                                     "pulse:contributor": {"@id": person_iri},
-                                    "pulse:role": item.contributionSummary
+                                    "pulse:role": item.contributionSummary,
                                 }
                                 contributions.append(contribution)
-                
+
                 if author_refs:
                     jsonld_entity["schema:author"] = author_refs
                 if contributions:
                     jsonld_entity["pulse:contribution"] = contributions
-                
+
                 continue  # Skip the normal list handling below
 
             # Handle lists
@@ -835,7 +859,7 @@ def convert_pydantic_to_jsonld(
                 for item in value:
                     if isinstance(item, BaseModel):
                         item_model_name = item.__class__.__name__
-                        
+
                         # For Person objects in author field, just output IRI reference
                         if item_model_name == "Person" and pydantic_key == "author":
                             person_iri = _generate_person_iri(item)
@@ -858,7 +882,7 @@ def convert_pydantic_to_jsonld(
             # Handle nested models
             elif isinstance(value, BaseModel):
                 nested_model_name = value.__class__.__name__
-                
+
                 # For Person objects in author field, just output IRI reference
                 if nested_model_name == "Person" and pydantic_key == "author":
                     person_iri = _generate_person_iri(value)
@@ -877,34 +901,54 @@ def convert_pydantic_to_jsonld(
                 if pydantic_key == "entity" and model_name == "AcademicCatalogRelation":
                     # Determine the entity type and apply appropriate mapping
                     entity_dict = {}
-                    
+
                     # Detect which type based on fields present
                     entity_mapping = None
                     if "title" in value and "authors" in value:
                         # InfosciencePublication
-                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfosciencePublication", {})
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get(
+                            "InfosciencePublication",
+                            {},
+                        )
                         entity_dict["@type"] = "schema:ScholarlyArticle"
-                    elif "profile_url" in value or ("uuid" in value and "email" in value and "orcid" in value):
+                    elif "profile_url" in value or (
+                        "uuid" in value and "email" in value and "orcid" in value
+                    ):
                         # InfoscienceAuthor
-                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfoscienceAuthor", {})
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get(
+                            "InfoscienceAuthor",
+                            {},
+                        )
                         entity_dict["@type"] = "schema:Person"
                     elif "parent_organization" in value or ("research_areas" in value):
                         # InfoscienceLab
-                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("InfoscienceLab", {})
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get(
+                            "InfoscienceLab",
+                            {},
+                        )
                         entity_dict["@type"] = "schema:Organization"
                     elif "name" in value:
                         # CatalogEntity
-                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get("CatalogEntity", {})
+                        entity_mapping = PYDANTIC_TO_ZOD_MAPPING.get(
+                            "CatalogEntity",
+                            {},
+                        )
                         entity_dict["@type"] = "pulse:CatalogEntity"
-                    
+
                     if entity_mapping:
                         # Map the fields using the detected mapping
                         for entity_key, entity_value in value.items():
                             if entity_value is not None:
                                 mapped_key = entity_mapping.get(entity_key, entity_key)
                                 # Recursively convert nested values
-                                converted_value = _convert_entity_to_jsonld(entity_value)
-                                entity_dict[mapped_key] = converted_value if converted_value is not None else entity_value
+                                converted_value = _convert_entity_to_jsonld(
+                                    entity_value,
+                                )
+                                entity_dict[mapped_key] = (
+                                    converted_value
+                                    if converted_value is not None
+                                    else entity_value
+                                )
                         jsonld_entity[jsonld_key] = entity_dict
                     else:
                         # Fallback: use dict as-is
@@ -912,7 +956,6 @@ def convert_pydantic_to_jsonld(
                 else:
                     # Regular dict - use as-is but try to convert nested values
                     jsonld_entity[jsonld_key] = value
-            
 
             # Handle other types
             else:
@@ -927,24 +970,24 @@ def convert_pydantic_to_jsonld(
                     converted = _convert_entity_to_jsonld(value)
                     if converted is not None:
                         jsonld_entity[jsonld_key] = converted
-        
+
         return jsonld_entity
 
     # Collect all Person entities encountered during conversion
     person_entities = {}  # Dict to deduplicate by IRI
-    
+
     def _collect_and_convert_person(person_obj: Any) -> Optional[str]:
         """Convert a Person object and collect it, returning its IRI."""
         person_iri = _generate_person_iri(person_obj)
         if not person_iri:
             return None
-        
+
         # If we haven't seen this person yet, convert and store them
         if person_iri not in person_entities:
             person_entity = _convert_entity_to_jsonld(person_obj, entity_id=person_iri)
             if person_entity:
                 person_entities[person_iri] = person_entity
-        
+
         return person_iri
 
     # Convert the main object
@@ -969,7 +1012,7 @@ def convert_pydantic_to_jsonld(
         elif isinstance(obj, dict):
             for value in obj.values():
                 _collect_persons_from_obj(value)
-    
+
     # Collect all Person entities
     _collect_persons_from_obj(pydantic_obj)
 
@@ -982,5 +1025,393 @@ def convert_pydantic_to_jsonld(
         "@context": context,
         "@graph": graph_entities,
     }
+
+    return result
+
+
+############################################################
+#
+# Simplified Model Generation for vLLM Compatibility
+#
+############################################################
+
+# Module-level cache for generated simplified models
+_SIMPLIFIED_MODEL_CACHE: Dict[
+    Type[BaseModel],
+    Tuple[Type[BaseModel], Dict[str, Any]],
+] = {}
+
+
+def _is_pydantic_model(annotation: Any) -> bool:
+    """Check if an annotation is a Pydantic BaseModel class."""
+    return (
+        isinstance(annotation, type)
+        and issubclass(annotation, BaseModel)
+        and annotation is not BaseModel
+    )
+
+
+def _get_type_name(type_obj: Any) -> str:
+    """Get a clean type name for field naming."""
+    if isinstance(type_obj, type):
+        # Capitalize primitive types for better field names
+        if type_obj is str:
+            return "String"
+        elif type_obj is int:
+            return "Int"
+        elif type_obj is float:
+            return "Float"
+        elif type_obj is bool:
+            return "Bool"
+        return type_obj.__name__
+    type_str = str(type_obj).replace("typing.", "").replace("'", "")
+    # Capitalize common types
+    if type_str == "str":
+        return "String"
+    elif type_str == "int":
+        return "Int"
+    elif type_str == "float":
+        return "Float"
+    elif type_str == "bool":
+        return "Bool"
+    return type_str
+
+
+def _simplify_type(
+    annotation: Any,
+    memo: Dict[Type[BaseModel], Tuple[Type[BaseModel], Dict[str, Any]]],
+    union_metadata: Dict[str, Any],
+    field_name: str,
+) -> Tuple[Any, Optional[str]]:
+    """
+    Convert a type annotation to a simplified type.
+
+    Returns:
+        Tuple of (simplified_type, description_addition)
+    """
+    origin = get_origin(annotation)
+
+    # Handle Optional (Union with None)
+    if origin is Union:
+        args = get_args(annotation)
+        # Filter out NoneType
+        non_none_args = [arg for arg in args if arg is not type(None)]
+
+        if len(non_none_args) == 0:
+            return (Optional[str], " (Original type: None)")
+
+        # If only one non-None type, simplify it
+        if len(non_none_args) == 1:
+            simplified, desc = _simplify_type(
+                non_none_args[0],
+                memo,
+                union_metadata,
+                field_name,
+            )
+            return (Optional[simplified], desc)
+
+        # Multiple types in Union - need to split into separate fields
+        # Store metadata for reconciliation
+        union_info = {
+            "original_field": field_name,
+            "types": non_none_args,
+            "fields": {},
+        }
+
+        simplified_types = []
+        for union_type in non_none_args:
+            simplified, desc = _simplify_type(
+                union_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            type_name = _get_type_name(union_type)
+            field_suffix = type_name.replace("typing.", "").replace("'", "")
+            new_field_name = f"{field_name}{field_suffix}"
+            union_info["fields"][new_field_name] = {
+                "type": union_type,
+                "simplified_type": simplified,
+                "description": desc,
+            }
+            simplified_types.append((new_field_name, simplified, desc))
+
+        # Store in union_metadata
+        if field_name not in union_metadata:
+            union_metadata[field_name] = []
+        union_metadata[field_name].append(union_info)
+
+        # Return None to indicate this field should be split
+        return (None, None)
+
+    # Handle Dict types
+    if origin is dict or origin is DictType:
+        args = get_args(annotation)
+        if len(args) >= 2:
+            key_type = args[0]
+            value_type = args[1]
+
+            # Simplify both key and value types
+            simplified_key, key_desc = _simplify_type(
+                key_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            simplified_value, value_desc = _simplify_type(
+                value_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+
+            # Return Dict with simplified types
+            return (
+                DictType[simplified_key, simplified_value],
+                f" (Original type: Dict[{key_type}, {value_type}])",
+            )
+        return (DictType[str, Any], " (Original type: Dict)")
+
+    # Handle List types
+    if origin is list or origin is ListType:
+        args = get_args(annotation)
+        if args:
+            inner_type = args[0]
+            inner_origin = get_origin(inner_type)
+
+            # Check if inner type is a Union that needs splitting
+            if inner_origin is Union:
+                inner_args = get_args(inner_type)
+                non_none_inner_args = [
+                    arg for arg in inner_args if arg is not type(None)
+                ]
+
+                if len(non_none_inner_args) > 1:
+                    # List[Union[A, B]] - split into separate List fields
+                    union_info = {
+                        "original_field": field_name,
+                        "types": non_none_inner_args,
+                        "fields": {},
+                        "is_list": True,
+                    }
+
+                    for union_type in non_none_inner_args:
+                        simplified, desc = _simplify_type(
+                            union_type,
+                            memo,
+                            union_metadata,
+                            field_name,
+                        )
+                        type_name = _get_type_name(union_type)
+                        field_suffix = type_name.replace("typing.", "").replace("'", "")
+                        new_field_name = f"{field_name}{field_suffix}"
+                        union_info["fields"][new_field_name] = {
+                            "type": union_type,
+                            "simplified_type": ListType[simplified],
+                            "description": desc,
+                        }
+
+                    # Store in union_metadata
+                    if field_name not in union_metadata:
+                        union_metadata[field_name] = []
+                    union_metadata[field_name].append(union_info)
+
+                    # Return None to indicate this field should be split
+                    return (None, None)
+
+            # Normal List handling
+            simplified_inner, desc = _simplify_type(
+                inner_type,
+                memo,
+                union_metadata,
+                field_name,
+            )
+            if simplified_inner is None:
+                # This shouldn't happen after the Union check above, but handle it
+                return (None, None)
+            return (ListType[simplified_inner], desc)
+        return (ListType[str], " (Original type: List)")
+
+    # Handle HttpUrl -> str
+    if annotation is HttpUrl or (
+        isinstance(annotation, type) and issubclass(annotation, HttpUrl)
+    ):
+        return (
+            str,
+            " (Original type: HttpUrl, format: string URL like 'https://example.com/path')",
+        )
+
+    # Handle date -> str
+    if annotation is date:
+        return (str, " (Original type: date, ISO format: YYYY-MM-DD)")
+
+    # Handle datetime -> str
+    if annotation is datetime:
+        return (str, " (Original type: datetime, ISO format)")
+
+    # Handle Enum -> Literal with enum values
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        enum_values = [e.value for e in annotation]
+        # Convert to Literal type with the specific enum values
+        # This ensures the LLM must use one of these exact strings
+        # Create Literal dynamically with unpacked values
+        if enum_values:
+            # Use eval to create Literal with unpacked values
+            # This is safe since enum_values come from the Enum class
+            # Pass Literal in the namespace so eval can access it
+            literal_type = eval(
+                f"Literal[{', '.join(repr(v) for v in enum_values)}]",
+                {"Literal": Literal},
+            )
+        else:
+            literal_type = str
+        return (
+            literal_type,
+            f" (Original type: {annotation.__name__} enum, values: {enum_values})",
+        )
+
+    # Handle Pydantic models - recursively simplify
+    if _is_pydantic_model(annotation):
+        simplified_model, _ = create_simplified_model(annotation, memo)
+        return (simplified_model, f" (Original type: {annotation.__name__})")
+
+    # Primitive types - keep as-is
+    if annotation in (str, int, float, bool):
+        return (annotation, None)
+
+    # Default: convert to str
+    return (str, f" (Original type: {annotation})")
+
+
+def create_simplified_model(
+    source_model: Type[BaseModel],
+    memo: Optional[
+        Dict[Type[BaseModel], Tuple[Type[BaseModel], Dict[str, Any]]]
+    ] = None,
+    field_filter: Optional[list[str]] = None,
+) -> Tuple[Type[BaseModel], Dict[str, Any]]:
+    """
+    Dynamically create a simplified Pydantic model from a source model.
+
+    Converts complex Pydantic types (HttpUrl, date, datetime, Enum) to primitives (str)
+    and splits Union types into separate fields for vLLM compatibility.
+
+    Args:
+        source_model: The source Pydantic model class to simplify (e.g., SoftwareSourceCode)
+        memo: Optional memoization cache (uses module-level cache if None)
+        field_filter: Optional list of field names to include. If None, includes all fields.
+
+    Returns:
+        Tuple of (simplified_model_class, union_metadata)
+        - simplified_model_class: The dynamically created simplified model
+        - union_metadata: Dict mapping original field names to Union field info for reconciliation
+
+    Example:
+        SimplifiedSoftwareSourceCode, union_meta = create_simplified_model(SoftwareSourceCode)
+        # Use SimplifiedSoftwareSourceCode as output_type in PydanticAI agent
+
+        # With field filtering:
+        fields_to_extract = ["name", "description", "discipline", "repositoryType"]
+        SimplifiedModel, union_meta = create_simplified_model(SoftwareSourceCode, field_filter=fields_to_extract)
+    """
+    # Use module-level cache if memo not provided
+    # Cache key includes field_filter to avoid collisions
+    use_module_cache = memo is None
+    if use_module_cache:
+        cache_key = (source_model, tuple(field_filter) if field_filter else None)
+        if cache_key in _SIMPLIFIED_MODEL_CACHE:
+            return _SIMPLIFIED_MODEL_CACHE[cache_key]
+        memo = {}
+
+    # Check memoization cache
+    if source_model in memo:
+        return memo[source_model]
+
+    # Track union metadata for this model
+    union_metadata: Dict[str, Any] = {}
+
+    # Get all fields from source model
+    new_fields: Dict[str, Any] = {}
+
+    for field_name, field_info in source_model.model_fields.items():
+        # Filter fields if field_filter is provided
+        if field_filter is not None and field_name not in field_filter:
+            continue
+        annotation = field_info.annotation
+        default = field_info.default if field_info.default is not ... else None
+        default_factory = (
+            field_info.default_factory
+            if field_info.default_factory is not ...
+            else None
+        )
+
+        # Simplify the type (this may populate union_metadata)
+        simplified_type, desc_addition = _simplify_type(
+            annotation,
+            memo,
+            union_metadata,
+            field_name,
+        )
+
+        # If simplified_type is None, it's a Union that needs splitting
+        # Skip this field - it will be split into separate fields later
+        if simplified_type is None:
+            continue
+
+        # Double-check: if field_name is now in union_metadata, skip it
+        # (this handles the case where union_metadata was populated during _simplify_type)
+        if field_name in union_metadata:
+            continue
+
+        # Build description
+        description = field_info.description or ""
+        if desc_addition:
+            description = f"{description}{desc_addition}".strip()
+
+        # Create Field with description
+        if default_factory is not None:
+            # Handle default_factory (e.g., default_factory=list)
+            # For LLM compatibility, convert to Optional with default=None
+            # This allows LLMs to return None instead of empty lists
+            # We'll convert None back to empty lists when reconstructing the full model
+            new_fields[field_name] = (
+                Optional[simplified_type],
+                Field(default=None, description=description),
+            )
+        elif default is None and not field_info.is_required():
+            new_fields[field_name] = (
+                Optional[simplified_type],
+                Field(default=None, description=description),
+            )
+        elif default is not None:
+            new_fields[field_name] = (
+                simplified_type,
+                Field(default=default, description=description),
+            )
+        else:
+            new_fields[field_name] = (simplified_type, Field(description=description))
+
+    # Handle Union field splitting - add separate fields
+    for field_name, union_info_list in union_metadata.items():
+        for union_info in union_info_list:
+            for new_field_name, field_data in union_info["fields"].items():
+                simplified_type = field_data["simplified_type"]
+                description = f"Part of Union field '{field_name}'. {field_data['description'] or ''}"
+                description = description.strip()
+                new_fields[new_field_name] = (
+                    Optional[simplified_type],
+                    Field(default=None, description=description),
+                )
+
+    # Create the simplified model
+    simplified_model_name = f"Simplified{source_model.__name__}"
+    simplified_model = create_model(simplified_model_name, **new_fields)
+
+    # Cache the result
+    result = (simplified_model, union_metadata)
+    memo[source_model] = result
+    if use_module_cache:
+        cache_key = (source_model, tuple(field_filter) if field_filter else None)
+        _SIMPLIFIED_MODEL_CACHE[cache_key] = result
 
     return result

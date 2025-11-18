@@ -90,7 +90,7 @@ This document provides a quick reference for the most commonly used Pydantic→J
       ],
       "pulse:repositoryType": "pulse:Software",
       "pulse:discipline": [
-        {"@id": "wd:Q420"}  
+        {"@id": "wd:Q420"}
       ]
     }
   ]

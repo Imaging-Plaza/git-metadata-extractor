@@ -3,7 +3,6 @@ Infoscience data models for EPFL's Infoscience repository integration
 """
 
 import re
-from datetime import date
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -67,7 +66,9 @@ class InfosciencePublication(BaseModel):
         if isinstance(v, str):
             pattern = r"^https://infoscience\.epfl\.ch/entities/publication/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
             if not re.match(pattern, v):
-                raise ValueError(f"Invalid Infoscience publication URL format: {v}. Expected: https://infoscience.epfl.ch/entities/publication/{{uuid}}")
+                raise ValueError(
+                    f"Invalid Infoscience publication URL format: {v}. Expected: https://infoscience.epfl.ch/entities/publication/{{uuid}}",
+                )
         return v
 
     def to_markdown(self) -> str:
@@ -83,6 +84,10 @@ class InfosciencePublication(BaseModel):
         # UUID (important for creating relations)
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
+
+        # URL (explicit field for LLM extraction)
+        if self.url:
+            md_parts.append(f"*URL:* {self.url}")
 
         # Authors
         if self.authors:
@@ -159,7 +164,7 @@ class InfoscienceAuthor(BaseModel):
         """Validate ORCID format and convert ID to URL if needed."""
         if v is None:
             return v
-        
+
         if isinstance(v, str):
             # If it's already a URL, validate and return as-is (store as string)
             if v.startswith("http"):
@@ -173,8 +178,10 @@ class InfoscienceAuthor(BaseModel):
             if re.match(orcid_id_pattern, v):
                 return v
 
-            raise ValueError(f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000")
-        
+            raise ValueError(
+                f"Invalid ORCID format: {v}. Expected format: 0000-0000-0000-0000 or https://orcid.org/0000-0000-0000-0000",
+            )
+
         return v
 
     @field_validator("profile_url", mode="before")
@@ -186,7 +193,9 @@ class InfoscienceAuthor(BaseModel):
         if isinstance(v, str):
             pattern = r"^https://infoscience\.epfl\.ch/entities/person/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
             if not re.match(pattern, v):
-                raise ValueError(f"Invalid Infoscience person profile URL format: {v}. Expected: https://infoscience.epfl.ch/entities/person/{{uuid}}")
+                raise ValueError(
+                    f"Invalid Infoscience person profile URL format: {v}. Expected: https://infoscience.epfl.ch/entities/person/{{uuid}}",
+                )
         return v
 
     def to_markdown(self) -> str:
@@ -203,6 +212,10 @@ class InfoscienceAuthor(BaseModel):
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
 
+        # URL (explicit field for LLM extraction)
+        if self.profile_url:
+            md_parts.append(f"*URL:* {self.profile_url}")
+
         # Affiliation
         if self.affiliation:
             md_parts.append(f"*Affiliation:* {self.affiliation}")
@@ -218,11 +231,11 @@ class InfoscienceAuthor(BaseModel):
         return "\n".join(md_parts)
 
 
-class InfoscienceLab(BaseModel):
-    """Laboratory or organizational unit metadata from Infoscience"""
+class InfoscienceOrgUnit(BaseModel):
+    """Organizational unit metadata from Infoscience"""
 
-    type: Literal["InfoscienceLab"] = Field(
-        default="InfoscienceLab",
+    type: Literal["InfoscienceOrgUnit"] = Field(
+        default="InfoscienceOrgUnit",
         description="Type discriminator for Infoscience entities",
     )
     uuid: Optional[str] = Field(
@@ -248,7 +261,9 @@ class InfoscienceLab(BaseModel):
         if isinstance(v, str):
             pattern = r"^https://infoscience\.epfl\.ch/entities/orgunit/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
             if not re.match(pattern, v):
-                raise ValueError(f"Invalid Infoscience orgunit URL format: {v}. Expected: https://infoscience.epfl.ch/entities/orgunit/{{uuid}}")
+                raise ValueError(
+                    f"Invalid Infoscience orgunit URL format: {v}. Expected: https://infoscience.epfl.ch/entities/orgunit/{{uuid}}",
+                )
         return v
 
     parent_organization: Optional[str] = Field(
@@ -277,6 +292,10 @@ class InfoscienceLab(BaseModel):
         # UUID (important for creating relations)
         if self.uuid:
             md_parts.append(f"*UUID:* {self.uuid}")
+
+        # URL (explicit field for LLM extraction)
+        if self.url:
+            md_parts.append(f"*URL:* {self.url}")
 
         # Parent organization
         if self.parent_organization:
@@ -315,7 +334,7 @@ class InfoscienceSearchResult(BaseModel):
         description="List of author results",
         default_factory=list,
     )
-    labs: List[InfoscienceLab] = Field(
+    labs: List[InfoscienceOrgUnit] = Field(
         description="List of lab/organization results",
         default_factory=list,
     )
@@ -361,7 +380,9 @@ class InfoscienceSearchResult(BaseModel):
 
         else:
             md_parts.append("## ⚠️ STOP SEARCHING - No Results Found\n")
-            md_parts.append("**This search returned 0 results. The entity is NOT in Infoscience. Do NOT search again for this query because the results were 0.**")
+            md_parts.append(
+                "**This search returned 0 results. The entity is NOT in Infoscience. Do NOT search again for this query because the results were 0.**",
+            )
 
         # Footer
         if md_parts and self.total_results > 0:

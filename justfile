@@ -102,19 +102,19 @@ docker-up: docker-build docker-run
 
 # Run all tests
 test:
-    pytest src/test/ -v
+    PYTHONPATH=src pytest tests/ -v
 
 # Run tests with coverage
 test-coverage:
-    pytest src/test/ --cov=src --cov-report=html --cov-report=term
+    PYTHONPATH=src pytest tests/ --cov=src --cov-report=html --cov-report=term
 
 # Run specific test file
 test-file FILE:
-    pytest {{FILE}} -v
+    PYTHONPATH=src pytest {{FILE}} -v
 
 # Run tests in watch mode (requires pytest-watch)
 test-watch:
-    ptw src/test/
+    PYTHONPATH=src ptw tests/
 
 # ============================================================================
 # Cache Management (via API)

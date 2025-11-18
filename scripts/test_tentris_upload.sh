@@ -28,7 +28,7 @@ echo "Login response code: $login_code"
 if [[ "$login_code" =~ ^(2[0-9][0-9]|303)$ ]]; then
     echo "✅ Login successful (got redirect or 2xx)"
     echo "Cookie saved to: $COOKIE_FILE"
-    
+
     # Show what's in the cookie file
     if [ -f "$COOKIE_FILE" ]; then
         echo "Cookie contents:"
@@ -64,11 +64,11 @@ try:
     # Load JSON-LD file
     g = Graph()
     g.parse("/home/rmfranken/git-metadata-extractor/data/1_batch_11122025/1_batch/converted/0xKDI.jsonld", format="json-ld")
-    
+
     # Serialize to Turtle
     with open("/tmp/tentris_upload.ttl", "w", encoding="utf-8") as f:
         f.write(g.serialize(format="turtle"))
-    
+
     print(f"✅ Converted to Turtle ({len(g)} triples)")
     sys.exit(0)
 except Exception as e:

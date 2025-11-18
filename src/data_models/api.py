@@ -7,8 +7,6 @@ from typing import Any, Union
 from pydantic import (
     BaseModel,
     HttpUrl,
-    field_validator,
-    model_serializer,
 )
 
 from .models import ResourceType
@@ -18,12 +16,23 @@ from .user import GitHubUser
 
 
 class APIStats(BaseModel):
+    """
+    API usage statistics.
+
+    Note: For OpenAI-compatible endpoints that don't report usage information
+    (e.g., custom endpoints, OSS models), the agent_input_tokens and agent_output_tokens
+    fields will be populated from tiktoken estimates instead of API-reported values.
+    This ensures meaningful token counts are always available even when the API
+    doesn't provide usage data.
+    """
+
     # Official API-reported token counts
     agent_input_tokens: int = None
     agent_output_tokens: int = None
     total_tokens: int = None
 
     # Tokenizer-based estimates (complementary/fallback)
+    # When API returns 0, these estimates are used as the primary metric
     estimated_input_tokens: int = None
     estimated_output_tokens: int = None
     estimated_total_tokens: int = None
@@ -78,25 +87,3 @@ class APIOutput(BaseModel):
         Any,
     ] = None
     stats: APIStats = None
-
-    @field_validator("output", mode="before")
-    @classmethod
-    def preserve_dict_output(cls, v):
-        """Preserve dict/list output as-is without converting to Pydantic models."""
-        # If it's already a dict or list (e.g., JSON-LD), don't try to convert it
-        if isinstance(v, (dict, list)):
-            return v
-        # Otherwise, let Pydantic handle it normally
-        return v
-
-    @model_serializer(mode="wrap")
-    def serialize_model(self, serializer):
-        """Custom serializer to preserve dict/list in output field."""
-        # Serialize the model normally
-        data = serializer(self)
-
-        # If output is a dict or list, keep it as-is (don't convert to model)
-        if isinstance(self.output, (dict, list)):
-            data["output"] = self.output
-
-        return data

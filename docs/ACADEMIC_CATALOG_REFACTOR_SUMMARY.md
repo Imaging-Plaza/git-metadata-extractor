@@ -23,12 +23,12 @@ Successfully refactored the Infoscience-specific integration into a broader acad
 - Added `get_entity_by_uuid()` function for direct UUID access
 - Documented all findings
 
-### ✅ 2. New Data Models (src/data_models/academic_catalog.py)
+### ✅ 2. New Data Models (src/data_models/linked_entities.py)
 
 **Created:**
 - `CatalogType` enum: infoscience, openalex, epfl_graph
 - `EntityType` enum: publication, person, orgunit
-- `AcademicCatalogRelation`: Unified relation model with:
+- `linkedEntitiesRelation`: Unified relation model with:
   - `catalogType`: Which catalog (Infoscience, OpenAlex, etc.)
   - `entityType`: Type of entity (publication, person, orgunit)
   - `entity`: Full entity details embedded (InfosciencePublication, InfoscienceAuthor, InfoscienceLab, or Dict)
@@ -37,7 +37,7 @@ Successfully refactored the Infoscience-specific integration into a broader acad
   - `externalId`, `matchedOn`: Optional matching metadata
   - Helper methods: `get_display_name()`, `get_url()`, `to_markdown()`
 
-- `AcademicCatalogEnrichmentResult`: Agent output model with:
+- `linkedEntitiesEnrichmentResult`: Agent output model with:
   - `relations`: List of catalog relations found
   - `searchStrategy`: Description of search approach
   - `catalogsSearched`: List of catalogs searched
@@ -47,7 +47,7 @@ Successfully refactored the Infoscience-specific integration into a broader acad
 
 ### ✅ 3. Updated Core Models
 
-**Replaced `infoscienceEntity`/`infoscienceEntities` with `academicCatalogRelations` in:**
+**Replaced `infoscienceEntity`/`infoscienceEntities` with `linkedEntities` in:**
 - `Person` (src/data_models/models.py)
 - `Organization` (src/data_models/models.py)
 - `SoftwareSourceCode` (src/data_models/repository.py)
@@ -57,7 +57,7 @@ Successfully refactored the Infoscience-specific integration into a broader acad
 
 **Field Structure:**
 ```python
-academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
+linkedEntities: Optional[List["linkedEntitiesRelation"]] = Field(
     description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
     default_factory=list,
 )
@@ -84,14 +84,14 @@ academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
 ### ✅ 5. Academic Catalog Enrichment Agent
 
 **New Files:**
-- `src/agents/academic_catalog_enrichment.py`: Agent implementation
-- `src/agents/academic_catalog_prompts.py`: System and contextual prompts
+- `src/agents/linked_entities_enrichment.py`: Agent implementation
+- `src/agents/linked_entities_prompts.py`: System and contextual prompts
 
 **Agent Features:**
 - **Three specialized enrichment functions:**
-  - `enrich_repository_academic_catalog()`: For repositories
-  - `enrich_user_academic_catalog()`: For users
-  - `enrich_organization_academic_catalog()`: For organizations
+  - `enrich_repository_linked_entities()`: For repositories
+  - `enrich_user_linked_entities()`: For users
+  - `enrich_organization_linked_entities()`: For organizations
 
 - **Tools available:**
   - `search_infoscience_publications_tool`
@@ -106,31 +106,31 @@ academicCatalogRelations: Optional[List["AcademicCatalogRelation"]] = Field(
   - Accept when not found
   - Be selective and efficient
 
-- **Output:** Returns `AcademicCatalogEnrichmentResult` with structured relations
+- **Output:** Returns `linkedEntitiesEnrichmentResult` with structured relations
 
 ### ✅ 6. Pipeline Integration
 
 **Integrated into analysis classes:**
 
 **Repository (src/analysis/repositories.py):**
-- Added `run_academic_catalog_enrichment()` method
+- Added `run_linked_entities_enrichment()` method
 - Runs after organization enrichment, before EPFL assessment
 - Extracts repository name, description, README excerpt
-- Stores relations in `data.academicCatalogRelations`
+- Stores relations in `data.linkedEntities`
 - Tracks token usage
 
 **User (src/analysis/user.py):**
-- Added `run_academic_catalog_enrichment()` method
+- Added `run_linked_entities_enrichment()` method
 - Runs after user enrichment, before EPFL assessment
 - Extracts username, full name, bio, organizations
-- Stores relations in `data.academicCatalogRelations`
+- Stores relations in `data.linkedEntities`
 - Tracks token usage
 
 **Organization (src/analysis/organization.py):**
-- Added `run_academic_catalog_enrichment()` method
+- Added `run_linked_entities_enrichment()` method
 - Runs after organization enrichment, before EPFL assessment
 - Extracts org name, description, website, members
-- Stores relations in `data.academicCatalogRelations`
+- Stores relations in `data.linkedEntities`
 - Tracks token usage
 
 **All integrations:**
@@ -177,7 +177,7 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 ```
 
 **What to verify:**
-1. `academicCatalogRelations` field exists in output
+1. `linkedEntities` field exists in output
 2. Relations have `catalogType: "infoscience"`
 3. Relations have correct `entityType` (publication, person, orgunit)
 4. Entity objects are fully populated with UUIDs and URLs
@@ -232,11 +232,11 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 ## Files Created
 
 ### New Files:
-- `src/data_models/academic_catalog.py`
-- `src/agents/academic_catalog_enrichment.py`
-- `src/agents/academic_catalog_prompts.py`
+- `src/data_models/linked_entities.py`
+- `src/agents/linked_entities_enrichment.py`
+- `src/agents/linked_entities_prompts.py`
 - `INFOSCIENCE_API_FINDINGS.md`
-- `ACADEMIC_CATALOG_REFACTOR_SUMMARY.md` (this file)
+- `linked_entities_REFACTOR_SUMMARY.md` (this file)
 
 ### Modified Files:
 - `src/data_models/models.py`
@@ -258,7 +258,7 @@ curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabC
 ### ⚠️ API Changes:
 - **Removed field:** `infoscienceEntity` (singular) from `Person`, `Organization`
 - **Removed field:** `infoscienceEntities` (plural) from `SoftwareSourceCode`, `GitHubUser`, `GitHubOrganization`
-- **Added field:** `academicCatalogRelations` (always plural) to all above models
+- **Added field:** `linkedEntities` (always plural) to all above models
 
 ### Migration Path:
 Old code accessing `infoscienceEntity`:
@@ -271,8 +271,8 @@ if person.infoscienceEntity:
 New code:
 ```python
 # NEW
-if person.academicCatalogRelations:
-    for relation in person.academicCatalogRelations:
+if person.linkedEntities:
+    for relation in person.linkedEntities:
         if relation.catalogType == CatalogType.INFOSCIENCE:
             print(relation.entity.name)
 ```
@@ -280,7 +280,7 @@ if person.academicCatalogRelations:
 Helper methods:
 ```python
 # Get Infoscience publications
-catalog_result = enrichment_result  # AcademicCatalogEnrichmentResult
+catalog_result = enrichment_result  # linkedEntitiesEnrichmentResult
 infoscience_relations = catalog_result.get_by_catalog(CatalogType.INFOSCIENCE)
 publications = catalog_result.get_publications()
 persons = catalog_result.get_persons()

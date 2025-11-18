@@ -237,7 +237,7 @@ def validate_and_clean_urls(data: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(url_value, str) and url_value.strip() == "":
                 cleaned_data[field] = None
                 continue
-                
+
             if not is_valid_url(url_value):
                 logger.warning(f"Invalid URL in {field}: {url_value!r}")
                 cleaned_data[field] = None
@@ -288,7 +288,10 @@ def validate_author_urls(author: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(orcid, str) and orcid.strip():
             orcid = orcid.strip()
             # Basic validation - Person model validator will handle format conversion
-            if not (re.match(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$", orcid) or is_valid_orcid_url(orcid)):
+            if not (
+                re.match(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$", orcid)
+                or is_valid_orcid_url(orcid)
+            ):
                 logger.warning(f"Invalid ORCID format: {orcid}")
                 cleaned_author["orcid"] = None
             else:

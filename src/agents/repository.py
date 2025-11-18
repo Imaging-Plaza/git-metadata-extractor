@@ -15,7 +15,9 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
-from ..utils.token_counter import estimate_tokens_from_messages
+from ..utils.token_counter import (
+    estimate_tokens_with_tools,
+)
 from ..utils.url_validation import (
     validate_and_clean_urls,
     validate_author_urls,
@@ -144,14 +146,11 @@ async def llm_request_repo_infos(
         elif isinstance(json_data, str):
             response_text = json_data
 
-        estimated = estimate_tokens_from_messages(
-            system_prompt=system_prompt_repository,
-            user_prompt=prompt,
-            response=response_text,
-        )
-
         # Extract usage information from the result
         usage_data = None
+        input_tokens = 0
+        output_tokens = 0
+        tool_calls_count = 0
 
         if hasattr(result, "usage"):
             usage = result.usage
@@ -159,6 +158,7 @@ async def llm_request_repo_infos(
             # First try to get tokens from direct attributes
             input_tokens = getattr(usage, "input_tokens", 0) or 0
             output_tokens = getattr(usage, "output_tokens", 0) or 0
+            tool_calls_count = getattr(usage, "tool_calls", 0) or 0
 
             # If tokens are 0, check the details field (for Anthropic, OpenAI reasoning models, etc.)
             # See: https://github.com/pydantic/pydantic-ai/issues/3223
@@ -170,28 +170,40 @@ async def llm_request_repo_infos(
                     logger.debug(
                         f"Extracted tokens from usage.details: input={input_tokens}, output={output_tokens}",
                     )
-
-            usage_data = {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "estimated_input_tokens": estimated.get("input_tokens", 0),
-                "estimated_output_tokens": estimated.get("output_tokens", 0),
-            }
-            logger.info(
-                f"Repository agent token usage - Input: {input_tokens}, Output: {output_tokens}",
-            )
-            logger.info(
-                f"Repository agent estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
-            )
         else:
             logger.warning("Result object has no 'usage' attribute")
-            # Use estimates as fallback
-            usage_data = {
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "estimated_input_tokens": estimated.get("input_tokens", 0),
-                "estimated_output_tokens": estimated.get("output_tokens", 0),
-            }
+
+        # Calculate estimates with tool call support (always, for validation/fallback)
+        estimated = estimate_tokens_with_tools(
+            system_prompt=system_prompt_repository,
+            user_prompt=prompt,
+            response=response_text,
+            tool_calls=tool_calls_count,
+            tool_results_text=None,  # Tool results text extraction would require access to all_messages
+        )
+
+        # Use estimates as primary when API returns 0
+        if input_tokens == 0 and output_tokens == 0:
+            logger.warning(
+                "API returned 0 tokens, using tiktoken estimates as primary counts",
+            )
+            input_tokens = estimated.get("input_tokens", 0)
+            output_tokens = estimated.get("output_tokens", 0)
+
+        usage_data = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "estimated_input_tokens": estimated.get("input_tokens", 0),
+            "estimated_output_tokens": estimated.get("output_tokens", 0),
+        }
+        logger.info(
+            f"Repository agent token usage - Input: {input_tokens}, Output: {output_tokens}",
+        )
+        logger.info(
+            f"Repository agent estimated - Input: {estimated.get('input_tokens', 0)}, Output: {estimated.get('output_tokens', 0)}",
+        )
+        if tool_calls_count > 0:
+            logger.info(f"Repository agent tool calls: {tool_calls_count}")
 
         # Ensure it's a dictionary
         if hasattr(json_data, "model_dump"):

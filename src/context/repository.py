@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +66,9 @@ CONFIG_FILENAMES = {
     "Dockerfile",
     ".dockerignore",
     ".gitignore",
+    # Citation and attribution metadata files
+    "CITATION.cff",
+    "codemeta.json",
 }
 
 # Additional important documentation and metadata files (without extensions)
@@ -81,6 +85,9 @@ IMPORTANT_FILENAMES = {
     "ACKNOWLEDGMENTS",
     "ACKNOWLEDGEMENTS",
     "THANKS",
+    # Additional attribution files
+    "ATTRIBUTION",
+    "ATTRIBUTIONS",
 }
 
 # All relevant extensions combined
@@ -90,6 +97,11 @@ RELEVANT_EXTENSIONS = (
     | CONFIG_EXTENSIONS
     | RICH_CONTENT_EXTENSIONS
 )
+
+# Extraction mode constants
+EXTRACTION_MODE_README_ONLY = "readme_only"
+EXTRACTION_MODE_MARKDOWN_ONLY = "markdown_only"
+EXTRACTION_MODE_ALL = "all"
 
 
 async def clone_repo(
@@ -114,6 +126,14 @@ async def clone_repo(
     for attempt in range(1, max_retries + 1):
         try:
             logger.info(f"Clone attempt {attempt}/{max_retries}")
+
+            # Clean up any partial clone from previous attempt
+            if attempt > 1 and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.debug("Cleaned up partial clone from previous attempt")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up partial clone: {e}")
 
             process = await asyncio.create_subprocess_exec(
                 "git",
@@ -185,6 +205,7 @@ async def clone_repo(
                 "unexpected disconnect",
                 "Connection timed out",
                 "Failed to connect",
+                "Recv failure",  # curl error: "curl 56 Recv failure: Connection reset by peer"
             ]
 
             if any(error in stderr_text for error in retryable_errors):
@@ -236,13 +257,18 @@ def is_binary_file(filepath: str) -> bool:
         return True
 
 
-def is_relevant_file(filepath: str, filename: str) -> bool:
+def is_relevant_file(
+    filepath: str,
+    filename: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
+) -> bool:
     """
-    Check if a file is relevant for extraction.
+    Check if a file is relevant for extraction based on the extraction mode.
 
     Args:
         filepath: Full path to the file
         filename: Name of the file
+        extraction_mode: Extraction mode ("readme_only", "markdown_only", or "all")
 
     Returns:
         True if relevant, False otherwise
@@ -258,7 +284,29 @@ def is_relevant_file(filepath: str, filename: str) -> bool:
     # Check by filename (case-insensitive for special files)
     lower_filename = filename.lower()
     upper_filename = filename.upper()
+    basename_upper = os.path.splitext(filename)[0].upper()
 
+    # README-only mode: only README and AUTHORS files
+    if extraction_mode == EXTRACTION_MODE_README_ONLY:
+        # Check for README files (case-insensitive, with or without extension)
+        if lower_filename.startswith("readme"):
+            return True
+        # Check for AUTHORS files (case-insensitive, with or without extension)
+        if basename_upper == "AUTHORS" or upper_filename == "AUTHORS":
+            return True
+        return False
+
+    # Markdown-only mode: only .md files
+    if extraction_mode == EXTRACTION_MODE_MARKDOWN_ONLY:
+        _, ext = os.path.splitext(filename)
+        ext_lower = ext.lower()
+        if ext_lower == ".md":
+            # Additional check for binary files
+            if not is_binary_file(filepath):
+                return True
+        return False
+
+    # All mode: current behavior (all existing checks)
     # Check for README, LICENSE, CITATION (with or without extensions)
     if any(
         lower_filename.startswith(name.lower()) or lower_filename == name.lower()
@@ -275,7 +323,6 @@ def is_relevant_file(filepath: str, filename: str) -> bool:
         return True
 
     # Also check with common extensions for these files
-    basename_upper = os.path.splitext(filename)[0].upper()
     if basename_upper in IMPORTANT_FILENAMES:
         return True
 
@@ -291,12 +338,16 @@ def is_relevant_file(filepath: str, filename: str) -> bool:
     return False
 
 
-def walk_repository_tree(repo_dir: str) -> Tuple[List[str], str]:
+def walk_repository_tree(
+    repo_dir: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
+) -> Tuple[List[str], str]:
     """
     Walk the repository directory tree and collect relevant files.
 
     Args:
         repo_dir: Root directory of the repository
+        extraction_mode: Extraction mode ("readme_only", "markdown_only", or "all")
 
     Returns:
         Tuple of (list of file paths, tree structure as string)
@@ -317,9 +368,10 @@ def walk_repository_tree(repo_dir: str) -> Tuple[List[str], str]:
         except PermissionError:
             return
 
-        for index, item in enumerate(items):
-            is_last_item = index == len(items) - 1
-
+        # Filter items based on extraction mode
+        # In restricted modes, only include relevant files/directories
+        filtered_items = []
+        for item in items:
             # Skip hidden files and unwanted directories
             if item.name.startswith(".") and item.name not in {
                 ".env",
@@ -331,6 +383,44 @@ def walk_repository_tree(repo_dir: str) -> Tuple[List[str], str]:
             if item.is_dir() and should_skip_directory(item.name):
                 continue
 
+            # In restricted modes, skip files that aren't relevant
+            if item.is_file():
+                if not is_relevant_file(str(item), item.name, extraction_mode):
+                    continue
+                # File is relevant, add to both tree and relevant_files
+                relevant_files.append(str(item))
+
+            # For directories, we need to check if they contain any relevant files
+            # In restricted modes, we'll only include directories that have relevant content
+            if item.is_dir():
+                # Check if directory contains any relevant files
+                if extraction_mode in {
+                    EXTRACTION_MODE_README_ONLY,
+                    EXTRACTION_MODE_MARKDOWN_ONLY,
+                }:
+                    # In restricted modes, check if directory has relevant content
+                    has_relevant_content = False
+                    try:
+                        for subitem in item.rglob("*"):
+                            if subitem.is_file() and is_relevant_file(
+                                str(subitem),
+                                subitem.name,
+                                extraction_mode,
+                            ):
+                                has_relevant_content = True
+                                break
+                    except (PermissionError, OSError):
+                        pass
+
+                    if not has_relevant_content:
+                        continue
+
+            filtered_items.append(item)
+
+        # Build tree from filtered items
+        for index, item in enumerate(filtered_items):
+            is_last_item = index == len(filtered_items) - 1
+
             # Tree formatting
             connector = "└── " if is_last_item else "├── "
             tree_lines.append(f"{prefix}{connector}{item.name}")
@@ -338,10 +428,6 @@ def walk_repository_tree(repo_dir: str) -> Tuple[List[str], str]:
             if item.is_dir():
                 extension = "    " if is_last_item else "│   "
                 build_tree(item, prefix + extension, is_last_item)
-            elif item.is_file():
-                # Check if file is relevant
-                if is_relevant_file(str(item), item.name):
-                    relevant_files.append(str(item))
 
     # Build the tree
     tree_lines.append(f"{repo_path.name}/")
@@ -530,12 +616,16 @@ def extract_r_imports(content: str) -> Set[str]:
     return imports
 
 
-def generate_repository_markdown(repo_dir: str) -> str:
+def generate_repository_markdown(
+    repo_dir: str,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
+) -> str:
     """
     Generate comprehensive markdown documentation of repository contents.
 
     Args:
         repo_dir: Root directory of the repository
+        extraction_mode: Extraction mode ("readme_only", "markdown_only", or "all")
 
     Returns:
         Markdown formatted string with repository information
@@ -543,7 +633,56 @@ def generate_repository_markdown(repo_dir: str) -> str:
     logger.info(f"Generating repository markdown for {repo_dir}")
 
     # Walk repository and collect files
-    file_paths, tree_structure = walk_repository_tree(repo_dir)
+    file_paths, tree_structure = walk_repository_tree(repo_dir, extraction_mode)
+
+    # Log file extraction statistics
+    if file_paths:
+        # Categorize files by type
+        readme_files = []
+        authors_files = []
+        markdown_files = []
+        other_files = []
+
+        for filepath in file_paths:
+            filename = os.path.basename(filepath)
+            lower_filename = filename.lower()
+            basename, ext = os.path.splitext(filename)
+
+            if lower_filename.startswith("readme"):
+                readme_files.append(filepath)
+            elif basename.upper() == "AUTHORS" or filename.upper() == "AUTHORS":
+                authors_files.append(filepath)
+            elif ext.lower() == ".md":
+                markdown_files.append(filepath)
+            else:
+                other_files.append(filepath)
+
+        # Log summary
+        logger.info(
+            f"Extraction mode '{extraction_mode}': Found {len(file_paths)} file(s) - "
+            f"README: {len(readme_files)}, AUTHORS: {len(authors_files)}, "
+            f"Markdown: {len(markdown_files)}, Other: {len(other_files)}",
+        )
+
+        # Log file paths (up to 10 files to avoid log spam)
+        if readme_files:
+            logger.info(f"README files found: {readme_files[:10]}")
+            if len(readme_files) > 10:
+                logger.info(f"... and {len(readme_files) - 10} more README files")
+        if authors_files:
+            logger.info(f"AUTHORS files found: {authors_files}")
+        if markdown_files and extraction_mode == EXTRACTION_MODE_MARKDOWN_ONLY:
+            logger.info(f"Markdown files found: {markdown_files[:10]}")
+            if len(markdown_files) > 10:
+                logger.info(f"... and {len(markdown_files) - 10} more markdown files")
+        if other_files and extraction_mode == EXTRACTION_MODE_ALL:
+            logger.debug(f"Other files found: {other_files[:10]}")
+            if len(other_files) > 10:
+                logger.debug(f"... and {len(other_files) - 10} more files")
+    else:
+        logger.warning(
+            f"No files found for extraction mode '{extraction_mode}' in {repo_dir}",
+        )
 
     markdown_parts = []
 
@@ -643,7 +782,10 @@ def generate_repository_markdown(repo_dir: str) -> str:
     return result
 
 
-async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
+async def extract_git_authors(
+    temp_dir: str,
+    anonymize_email: bool = True,
+) -> List[GitAuthor]:
     """
     Extract git authors from the cloned repository using git shortlog.
     Returns a list of GitAuthor objects with commit counts and first/last commit dates.
@@ -654,7 +796,8 @@ async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
          10  Carlos <carlos@example.com>
 
     Args:
-        temp_dir: Directory containing the cloned repository
+        temp_dir: Directory containing the cloned repository.
+        anonymize_email: Whether to hash the email local part while keeping the domain.
 
     Returns:
         List of GitAuthor objects
@@ -771,9 +914,17 @@ async def extract_git_authors(temp_dir: str) -> List[GitAuthor]:
                         lastCommitDate=last_commit_date,
                     )
 
-                    git_authors.append(
-                        GitAuthor(name=name, email=email, commits=commits),
+                    # Create GitAuthor (id will be computed automatically by model_validator)
+                    git_author = GitAuthor(name=name, email=email, commits=commits)
+                    if anonymize_email:
+                        git_author.anonymize_email_local_part()
+                    logger.debug(
+                        "Created GitAuthor: %s (%s) [id: %s]",
+                        name,
+                        git_author.email if anonymize_email else email,
+                        git_author.id,
                     )
+                    git_authors.append(git_author)
 
             logger.info(f"Extracted {len(git_authors)} git authors from repository.")
             return git_authors
@@ -822,6 +973,7 @@ def reduce_input_size(
 async def prepare_repository_context(
     repo_url: str,
     max_tokens: int = 400000,
+    extraction_mode: str = EXTRACTION_MODE_README_ONLY,
 ) -> Dict[str, Any]:
     """
     Prepare repository context by cloning, extracting text, and getting git authors.
@@ -829,6 +981,8 @@ async def prepare_repository_context(
     Args:
         repo_url: Repository URL to process
         max_tokens: Maximum tokens for text content
+        extraction_mode: Extraction mode ("readme_only", "markdown_only", or "all").
+            Defaults to "readme_only" to minimize token usage.
 
     Returns:
         Dictionary containing:
@@ -844,6 +998,11 @@ async def prepare_repository_context(
         "error": None,
     }
 
+    # Log extraction mode
+    logger.info(
+        f"Using extraction mode: {extraction_mode} for repository {repo_url}",
+    )
+
     # Clone the GitHub repository into a temporary folder
     with tempfile.TemporaryDirectory() as temp_dir:
         # Clone repository asynchronously
@@ -854,7 +1013,7 @@ async def prepare_repository_context(
 
         # Generate comprehensive markdown documentation of repository
         try:
-            input_text = generate_repository_markdown(temp_dir)
+            input_text = generate_repository_markdown(temp_dir, extraction_mode)
             input_text = sanitize_special_tokens(input_text)
         except Exception as e:
             logger.error(f"Failed to generate repository markdown: {e}", exc_info=True)

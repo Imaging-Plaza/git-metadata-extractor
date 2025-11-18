@@ -13,10 +13,16 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear usuario no-root con UID/GID que suele usar VS Code (1000:1000)
+# Crear usuario no-root con UID/GID que suele usar VS Code (1000:1000).
+# TOOD: Take this user out of sudoers if you want to use this in fully agents mode.
 RUN useradd -ms /bin/bash -u 1000 vscode \
     && apt-get update && apt-get install -y sudo \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Gemini CLI
+# Please login outside of the container and copy your credentials to ~/.gemini/...
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && sudo apt-get install -y nodejs
+RUN npm install -g @google/gemini-cli
 
 USER vscode
 WORKDIR /workspaces

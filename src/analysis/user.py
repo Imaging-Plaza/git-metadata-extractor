@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_user_infos
-from ..agents.academic_catalog_enrichment import enrich_user_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
+from ..agents.linked_entities_enrichment import enrich_user_linked_entities
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..agents.user_enrichment import enrich_users_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
@@ -97,7 +97,7 @@ class User:
             result = await llm_request_user_infos(
                 username=self.username,
                 user_data=llm_input_data,
-                max_tokens=20000,
+                max_tokens=10000,
             )
 
             # Extract data and usage
@@ -207,8 +207,7 @@ class User:
         # Add user as author if we have ORCID data
         if github_metadata.get("orcid"):
             author_data = {
-                "name": github_metadata.get("name")
-                or self.data.fullname,
+                "name": github_metadata.get("name") or self.data.fullname,
                 "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }
@@ -305,8 +304,7 @@ class User:
         # Build existing author data using the new model structure
         if self.data.fullname or github_metadata.get("name"):
             author_data = {
-                "name": self.data.fullname
-                or github_metadata.get("name"),
+                "name": self.data.fullname or github_metadata.get("name"),
                 "orcid": github_metadata.get("orcid"),
                 "affiliation": github_metadata.get("organizations", []),
             }
@@ -349,7 +347,7 @@ class User:
 
         logger.info(f"User enrichment completed for {self.username}")
 
-    async def run_academic_catalog_enrichment(self):
+    async def run_linked_entities_enrichment(self):
         """Enrich user with academic catalog relations (Infoscience, etc.)"""
         logger.info(f"Academic catalog enrichment for {self.username}")
 
@@ -372,11 +370,12 @@ class User:
             bio = github_metadata.get("bio", "")
             organizations = github_metadata.get("organizations", [])
 
-            result = await enrich_user_academic_catalog(
+            result = await enrich_user_linked_entities(
                 username=self.username,
                 full_name=full_name,
                 bio=bio,
                 organizations=organizations,
+                force_refresh=self.force_refresh,
             )
 
             # Extract data and usage
@@ -398,7 +397,7 @@ class User:
 
             # Store the academic catalog relations
             if enrichment_data and hasattr(enrichment_data, "relations"):
-                self.data.academicCatalogRelations = enrichment_data.relations
+                self.data.linkedEntities = enrichment_data.relations
                 logger.info(
                     f"Stored {len(enrichment_data.relations)} academic catalog relations",
                 )
@@ -609,7 +608,7 @@ class User:
         # Run academic catalog enrichment
         if self.data is not None:
             logging.info(f"Academic catalog enrichment for {self.username}")
-            await self.run_academic_catalog_enrichment()
+            await self.run_linked_entities_enrichment()
             logging.info(f"Academic catalog enrichment completed for {self.username}")
 
         # Run final EPFL assessment after all enrichments complete
