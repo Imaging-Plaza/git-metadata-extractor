@@ -5,7 +5,7 @@ TENTRIS_HOST="http://128.178.219.51:7502"
 USERNAME="admin"
 PASSWORD="shrekislife"
 COOKIE_FILE="/tmp/tentris-cookie"
-DATA_DIR="/home/rmfranken/git-metadata-extractor/data/1_batch_11122025/1_batch/converted"
+DATA_DIR="/home/rmfranken/git-metadata-extractor/data/3_batch_18112025/3_batch/converted"
 PYTHON_CMD="/home/rmfranken/git-metadata-extractor/.venv/bin/python"
 TEMP_DIR="/tmp/tentris_batch"
 

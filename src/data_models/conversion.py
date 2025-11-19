@@ -240,8 +240,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             if email_extracted:
                 person_data["email"] = email_extracted
 
-        # All other fields (gitAuthorIds, affiliations, currentAffiliation,
-        # affiliationHistory, contributionSummary, biography, infoscienceEntity)
+        # All other fields (affiliationHistory, linkedEntities, etc.)
         # will use their default values as defined in the Person model
 
         return Person(**person_data)
@@ -367,9 +366,9 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
                     else:
                         # Handle single values
                         data[pydantic_key] = _get_value(value)
+
         return SoftwareSourceCode(**data)
     return None
-
 
 def convert_jsonld_to_pydantic(
     jsonld_graph: ListType[Dict[str, Any]],
@@ -410,15 +409,13 @@ PYDANTIC_TO_ZOD_MAPPING = {
     "Person": {
         "type": "@type",
         "name": "schema:name",
-        "email": "pulse:email",
+        "emails": "schema:email",
+        "githubId": "schema:username",
         "orcid": "md4i:orcidId",
-        "gitAuthorIds": "pulse:gitAuthorIds",
         "affiliations": "schema:affiliation",
-        "currentAffiliation": "schema:affiliation",
         "affiliationHistory": "pulse:affiliationHistory",
-        "contributionSummary": "pulse:contributionSummary",
-        "biography": "schema:description",
-        "academicCatalogRelations": "pulse:hasAcademicCatalogRelation",
+        "source": "pulse:source",
+        "linkedEntities": "pulse:linkedEntities",
     },
     "Organization": {
         "type": "@type",
@@ -608,6 +605,7 @@ PYDANTIC_TO_ZOD_MAPPING = {
         "relatedAPIs": "pulse:relatedAPIs",
         "discipline": "pulse:discipline",
         "disciplineJustification": "pulse:justification",
+        "linkedEntities": "pulse:linkedEntities",
     },
 }
 
@@ -694,23 +692,47 @@ def convert_pydantic_to_jsonld(
     # Helper function to generate IRI for a Person
     def _generate_person_iri(person_obj: Any) -> Optional[str]:
         """Generate a stable IRI for a Person based on their identifiers."""
-        # Priority: GitHub handle > ORCID > email
-        if hasattr(person_obj, "gitAuthorIds") and person_obj.gitAuthorIds:
-            # Use first GitHub ID
-            github_id = person_obj.gitAuthorIds[0]
-            return f"https://github.com/{github_id}"
-
+        # Priority: explicit id > githubId > ORCID > email
+        # New JSON structure has explicit 'id' field
+        if hasattr(person_obj, "id") and person_obj.id:
+            person_id = str(person_obj.id)
+            if person_id.startswith("http"):
+                return person_id
+        
+        # Fallback to githubId (new structure)
+        if hasattr(person_obj, "githubId") and person_obj.githubId:
+            return f"https://github.com/{person_obj.githubId}"
+        
         if hasattr(person_obj, "orcid") and person_obj.orcid:
             orcid = str(person_obj.orcid)
             if orcid.startswith("http"):
                 return orcid
             return f"https://orcid.org/{orcid}"
-
-        if hasattr(person_obj, "email") and person_obj.email:
-            # Use mailto: URI for email
-            return f"mailto:{person_obj.email}"
+        # New structure may include emails array
+        if hasattr(person_obj, "emails") and person_obj.emails:
+            return f"mailto:{person_obj.emails[0]}"
 
         return None
+
+    # Helper to make any value JSON-serializable
+    def _make_json_serializable(obj: Any) -> Any:
+        """Recursively convert objects to JSON-serializable types."""
+        if obj is None or isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, HttpUrl):
+            return str(obj)
+        if isinstance(obj, date):
+            return obj.isoformat()
+        if isinstance(obj, Enum):
+            return obj.value
+        if isinstance(obj, dict):
+            return {k: _make_json_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_make_json_serializable(item) for item in obj]
+        if isinstance(obj, BaseModel):
+            return obj.model_dump(exclude_unset=True, exclude_none=True, mode='json')
+        # Fallback for other types
+        return str(obj)
 
     # Helper function to convert a single entity
     def _convert_entity_to_jsonld(
@@ -728,6 +750,9 @@ def convert_pydantic_to_jsonld(
                 return {"@value": obj.isoformat()}
             if isinstance(obj, Enum):
                 return {"@value": obj.value}
+            if isinstance(obj, dict):
+                # Recursively ensure all values in dict are JSON-serializable
+                return _make_json_serializable(obj)
             # Return primitives as-is (strings, numbers, booleans)
             return obj
 
@@ -811,47 +836,135 @@ def convert_pydantic_to_jsonld(
             if pydantic_key == "type":
                 continue
 
-            # Skip contributionSummary for Person objects - this is a property of Contribution, not Person identity
-            if model_name == "Person" and pydantic_key == "contributionSummary":
-                continue
-
             jsonld_key = key_map[pydantic_key]
 
-            # Special handling for author field - create both author references and contribution objects
+            # Special handling for author field - just create IRI references
             if pydantic_key == "author" and isinstance(value, list):
-                # Create schema:author with just IRI references
                 author_refs = []
-                # Create pulse:contribution with full Contribution objects
-                contributions = []
 
                 for item in value:
+                    # Case 1: Pydantic Person model -> use IRI generator
                     if (
                         isinstance(item, BaseModel)
                         and item.__class__.__name__ == "Person"
                     ):
                         person_iri = _generate_person_iri(item)
                         if person_iri:
-                            # Add IRI reference for schema:author
                             author_refs.append({"@id": person_iri})
 
-                            # Create Contribution object if contributionSummary exists
-                            if (
-                                hasattr(item, "contributionSummary")
-                                and item.contributionSummary
+                    # Case 2: Raw dict (newer JSON) - prefer explicit 'id' field
+                    elif isinstance(item, dict):
+                        person_id = item.get("id") or item.get("url") or None
+                        if person_id:
+                            author_refs.append({"@id": person_id})
+
+                    # Fallback: primitives or other types - try converting
+                    else:
+                        converted = _convert_entity_to_jsonld(item)
+                        if converted is not None:
+                            # If converted is a string/IRI, keep as author ref
+                            if isinstance(converted, str) and (
+                                converted.startswith("http://") or converted.startswith("https://")
                             ):
-                                contribution = {
-                                    "@type": "pulse:Contribution",
-                                    "pulse:contributor": {"@id": person_iri},
-                                    "pulse:role": item.contributionSummary,
-                                }
-                                contributions.append(contribution)
+                                author_refs.append({"@id": converted})
+                            else:
+                                author_refs.append(converted)
 
                 if author_refs:
                     jsonld_entity["schema:author"] = author_refs
-                if contributions:
-                    jsonld_entity["pulse:contribution"] = contributions
 
                 continue  # Skip the normal list handling below
+
+            # Special handling for linkedEntities - preserve linkedEntities and extract DOIs as citations
+            if pydantic_key == "linkedEntities" and isinstance(value, list):
+                linked_entities_jsonld = []
+                citation_urls = []
+
+                for item in value:
+                    # Item may be a Pydantic model or a raw dict
+                    if isinstance(item, BaseModel):
+                        converted = _convert_entity_to_jsonld(item)
+                        if converted:
+                            linked_entities_jsonld.append(converted)
+
+                        # Try to extract DOI if present on the model (best-effort)
+                        doi_val = None
+                        if hasattr(item, "entityInfosciencePublication"):
+                            ent = getattr(item, "entityInfosciencePublication")
+                            if isinstance(ent, dict):
+                                doi_val = ent.get("doi")
+
+                    elif isinstance(item, dict):
+                        # Keep the raw dict converted normally
+                        converted = _convert_entity_to_jsonld(item)
+                        if converted:
+                            linked_entities_jsonld.append(converted)
+
+                        # Look for infoscience entries and pull DOI
+                        catalog = item.get("catalogType")
+                        if catalog and isinstance(catalog, str) and catalog.lower() == "infoscience":
+                            ent = item.get("entity") or item.get("entityInfosciencePublication") or {}
+                            doi_val = None
+                            if isinstance(ent, dict):
+                                doi_val = ent.get("doi")
+                                # Sometimes DOI is nested under identifiers
+                                if not doi_val and "identifiers" in ent:
+                                    for ident in ent.get("identifiers", []):
+                                        if isinstance(ident, dict) and ident.get("type") == "doi":
+                                            doi_val = ident.get("value")
+
+                            if doi_val:
+                                doi_str = str(doi_val).strip()
+                                if doi_str and not doi_str.lower().startswith("http"):
+                                    citation_urls.append(f"https://doi.org/{doi_str}")
+                                else:
+                                    citation_urls.append(doi_str)
+
+                    else:
+                        # Fallback conversion
+                        converted = _convert_entity_to_jsonld(item)
+                        if converted:
+                            linked_entities_jsonld.append(converted)
+
+                if linked_entities_jsonld:
+                    jsonld_entity[jsonld_key] = linked_entities_jsonld
+                if citation_urls:
+                    # Merge with any existing citation entries
+                    existing = jsonld_entity.get("schema:citation", [])
+                    jsonld_entity["schema:citation"] = list(dict.fromkeys(existing + citation_urls))
+
+                continue
+
+            # Special handling for relatedPublications - extract as schema:citation
+            if pydantic_key == "relatedPublications" and isinstance(value, list):
+                publication_urls = []
+                
+                for item in value:
+                    # Items should be strings (URLs)
+                    if isinstance(item, str):
+                        url = item.strip()
+                        if url:
+                            publication_urls.append(url)
+                    elif isinstance(item, BaseModel):
+                        # Handle if it's a Pydantic model (unlikely but defensive)
+                        converted = _convert_entity_to_jsonld(item)
+                        if isinstance(converted, str):
+                            publication_urls.append(converted)
+                    elif isinstance(item, dict):
+                        # Handle if it's a dict with url field (unlikely but defensive)
+                        url = item.get("url") or item.get("@id")
+                        if url:
+                            publication_urls.append(str(url).strip())
+
+                # Also preserve the original relatedPublications field
+                if publication_urls:
+                    jsonld_entity[jsonld_key] = publication_urls
+                    
+                    # Add to schema:citation
+                    existing = jsonld_entity.get("schema:citation", [])
+                    jsonld_entity["schema:citation"] = list(dict.fromkeys(existing + publication_urls))
+
+                continue
 
             # Handle lists
             if isinstance(value, list):
@@ -865,16 +978,42 @@ def convert_pydantic_to_jsonld(
                             person_iri = _generate_person_iri(item)
                             if person_iri:
                                 jsonld_values.append({"@id": person_iri})
+                        # For Affiliation models, extract organizationId (URL) or name
+                        elif item_model_name == "Affiliation" and pydantic_key in ["affiliations", "affiliation"]:
+                            org_id = getattr(item, "organizationId", None)
+                            if org_id and isinstance(org_id, str) and (org_id.startswith("http://") or org_id.startswith("https://")):
+                                jsonld_values.append({"@id": org_id})
+                            elif hasattr(item, "name") and item.name:
+                                jsonld_values.append(item.name)
                         else:
                             # Nested model - convert recursively
                             converted = _convert_entity_to_jsonld(item)
                             if converted:
                                 jsonld_values.append(converted)
                     else:
-                        # Primitive or HttpUrl
-                        converted = _convert_entity_to_jsonld(item)
-                        if converted is not None:
-                            jsonld_values.append(converted)
+                        # Special handling for affiliation objects present as dicts
+                        if pydantic_key in ["affiliations", "affiliation"] and isinstance(item, dict):
+                            # Prefer organizationId if it's a URL, otherwise use name
+                            org_id = item.get("organizationId")
+                            affiliation_value = None
+                            
+                            if org_id and isinstance(org_id, str) and (org_id.startswith("http://") or org_id.startswith("https://")):
+                                affiliation_value = {"@id": org_id}
+                            elif item.get("name"):
+                                affiliation_value = item.get("name")
+                            
+                            if affiliation_value:
+                                jsonld_values.append(affiliation_value)
+
+                        # Author dicts may contain an explicit id we should use as IRI
+                        elif pydantic_key == "author" and isinstance(item, dict) and item.get("id"):
+                            jsonld_values.append({"@id": item.get("id")})
+
+                        else:
+                            # Primitive or HttpUrl or other - fallback to normal conversion
+                            converted = _convert_entity_to_jsonld(item)
+                            if converted is not None:
+                                jsonld_values.append(converted)
 
                 if jsonld_values:
                     jsonld_entity[jsonld_key] = jsonld_values
@@ -1026,7 +1165,8 @@ def convert_pydantic_to_jsonld(
         "@graph": graph_entities,
     }
 
-    return result
+    # Ensure all values are JSON-serializable before returning
+    return _make_json_serializable(result)
 
 
 ############################################################
