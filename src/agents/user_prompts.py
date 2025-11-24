@@ -158,19 +158,21 @@ def get_general_user_agent_prompt(username: str, user_data: str):
     - "positionJustification": List of justifications for each position
 
     IMPORTANT: Extract organization and position information ONLY from the actual data provided:
-    - Company field: "{user_data.get('company', 'N/A')}"
-    - Bio content: "{user_data.get('bio', 'N/A')}"
-    - README content: "{user_data.get('readme_content', 'N/A')[:500]}..." (truncated)
-    - Organization affiliations: {user_data.get('organizations', [])}
-    - ORCID activities: {user_data.get('orcid_activities', 'N/A')}
+    - Company field: "{user_data.get('company') or 'N/A'}"
+    - Bio content: "{user_data.get('bio') or 'N/A'}"
+    - README content: "{(user_data.get('readme_content') or 'N/A')[:500]}..." (truncated)
+    - Organization affiliations: {user_data.get('organizations') or []}
+    - Repositories: {user_data.get('repositories') or []}
+    - ORCID activities: {user_data.get('orcid_activities') or 'N/A'}
 
     EXTRACTION GUIDELINES:
 
     **For Positions:**
     - Look for explicit statements about current or past roles in the bio, company field, or README
     - Look for phrases like "I am working as", "Currently working as", "Software Engineer at", etc.
-    - ONLY extract positions that are EXPLICITLY mentioned in the data
-    - DO NOT infer or assume positions that are not stated
+    - If explicit positions are found, extract them.
+    - **INFERENCE ALLOWED:** If NO explicit position is found, but the user has > 10 public repositories or > 100 followers (see provided data), you MAY infer "Open Source Developer" or "Software Engineer" based on the repositories' languages and content.
+    - If inferring, state clearly in the justification that it is inferred from GitHub activity.
 
     **For Organizations:**
     - Look for company/employer information in the bio, company field, and README

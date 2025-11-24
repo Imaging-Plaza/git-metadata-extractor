@@ -390,6 +390,7 @@ async def run_agent_with_fallback(
             agent = create_linked_entities_agent(config)
 
             # Run the agent
+            logger.info(f"Prompt length: {len(prompt)} chars")
             result = await agent.run(prompt)
 
             # Extract output and usage

@@ -42,12 +42,17 @@ class User:
         # Parse GitHub user metadata
         github_metadata = parse_github_user(self.username)
 
+        if github_metadata is None:
+            logger.error(f"Failed to parse GitHub user metadata for {self.username}")
+            return
+
         # Convert GitHubUserMetadata to dict and merge into self.data
         user_data_dict = github_metadata.model_dump()
 
         # Map GitHubUserMetadata fields to GitHubUser model
         self.data = GitHubUser(
             # Basic fields
+            id=f"https://github.com/{self.username}",
             name=user_data_dict.get("name"),
             fullname=user_data_dict.get("name"),  # Use name as fullname by now
             githubHandle=user_data_dict.get("login"),
@@ -90,6 +95,7 @@ class User:
             "public_repos": github_metadata.get("public_repos"),
             "followers": github_metadata.get("followers"),
             "following": github_metadata.get("following"),
+            "repositories": github_metadata.get("repositories", []),
         }
 
         try:

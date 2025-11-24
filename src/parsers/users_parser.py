@@ -87,6 +87,9 @@ class GitHubUsersParser:
         if orcid:
             orcid_activities = self._scrape_orcid_activities(orcid)
 
+        # Get repositories
+        repositories = self._get_user_repositories(username)
+
         # Combine all data and create Pydantic model
         user_data = {
             "login": rest_data["login"],
@@ -111,9 +114,37 @@ class GitHubUsersParser:
             "social_accounts": graphql_data.get("social_accounts", []),
             "readme_url": readme_data.get("url"),
             "readme_content": readme_data.get("content"),
+            "repositories": repositories,
         }
 
         return GitHubUserMetadata(**user_data)
+
+    def _get_user_repositories(self, username: str, limit: int = 100) -> List[str]:
+        """
+        Get user's repositories (limited for performance)
+        
+        Args:
+            username: GitHub username
+            limit: Maximum number of repositories to fetch (default 100)
+            
+        Returns:
+            List of repository names
+        """
+        url = f"{self.rest_base_url}/users/{username}/repos"
+        params = {"per_page": limit, "sort": "updated"}
+        
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            
+            if response.status_code != 200:
+                print(f"Warning: Failed to fetch repositories for {username}: {response.status_code}")
+                return []
+                
+            repos_data = response.json()
+            return [repo["name"] for repo in repos_data]
+        except Exception as e:
+            print(f"Warning: Error fetching repositories for {username}: {e}")
+            return []
 
     def _scrape_orcid_from_profile(self, username: str) -> Optional[str]:
         """

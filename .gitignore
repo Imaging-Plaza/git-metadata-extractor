@@ -2,6 +2,7 @@
 .ruff_cache
 data
 api_cache.db
+.env2
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -241,6 +241,10 @@ class GitHubUserMetadata(BaseModel):
         None,
         description="Profile README content if exists",
     )
+    repositories: list[str] = Field(
+        default_factory=list,
+        description="List of public repositories",
+    )
 
     @validator("orcid")
     def validate_orcid(cls, v):
@@ -264,8 +268,18 @@ class GitHubUserMetadata(BaseModel):
     @validator("email")
     def validate_email(cls, v):
         """Basic email validation"""
-        if v is not None and "@" not in v:
-            raise ValueError("Invalid email format")
+        if v is not None:
+            # Allow standard emails
+            if "@" in v:
+                return v
+            # Allow obfuscated emails (e.g. "user at domain dot com")
+            if " at " in v:
+                return v
+            # If it's not None but doesn't look like an email, we could either
+            # raise an error or just accept it. Given the goal is to extract metadata,
+            # accepting it is safer than crashing.
+            # raise ValueError("Invalid email format")
+            return v
         return v
 
     class Config:

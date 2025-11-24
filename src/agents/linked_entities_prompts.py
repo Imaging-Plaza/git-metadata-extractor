@@ -213,8 +213,23 @@ def get_repository_linked_entities_prompt(
     Returns:
         Formatted prompt for the agent
     """
-    authors_str = ", ".join(authors) if authors else "None identified yet"
-    orgs_str = ", ".join(organizations) if organizations else "None identified yet"
+    # Truncate lists to prevent token overflow
+    max_items = 50
+    authors_list = authors[:max_items] if authors else []
+    if authors and len(authors) > max_items:
+        authors_list.append(f"... and {len(authors) - max_items} more")
+    
+    orgs_list = organizations[:max_items] if organizations else []
+    if organizations and len(organizations) > max_items:
+        orgs_list.append(f"... and {len(organizations) - max_items} more")
+
+    authors_str = ", ".join(authors_list) if authors_list else "None identified yet"
+    orgs_str = ", ".join(orgs_list) if orgs_list else "None identified yet"
+    
+    # Truncate README
+    readme_content = readme_excerpt or "No README available"
+    if len(readme_content) > 5000:
+        readme_content = readme_content[:5000] + "... (truncated)"
 
     return f"""
 ## Repository linked entities Enrichment
@@ -227,7 +242,7 @@ def get_repository_linked_entities_prompt(
 
 **README excerpt**:
 ```
-{readme_excerpt or "No README available"}
+{readme_content}
 ```
 
 ## Your Task
@@ -298,13 +313,24 @@ def get_user_linked_entities_prompt(
     Returns:
         Formatted prompt for the agent
     """
-    orgs_str = ", ".join(organizations) if organizations else "None"
+    # Truncate organizations list
+    max_items = 50
+    orgs_list = organizations[:max_items] if organizations else []
+    if organizations and len(organizations) > max_items:
+        orgs_list.append(f"... and {len(organizations) - max_items} more")
+        
+    orgs_str = ", ".join(orgs_list) if orgs_list else "None"
+    
+    # Truncate bio
+    bio_content = bio or "Not provided"
+    if len(bio_content) > 2000:
+        bio_content = bio_content[:2000] + "... (truncated)"
     return f"""
 ## User linked entities Enrichment
 
 **GitHub Username**: {username}
 **Full Name**: {full_name or "Not provided"}
-**Bio**: {bio or "Not provided"}
+**Bio**: {bio_content}
 **Organizations**: {orgs_str}
 
 ## Your Task

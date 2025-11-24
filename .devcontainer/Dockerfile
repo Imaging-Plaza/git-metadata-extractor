@@ -24,5 +24,9 @@ RUN useradd -ms /bin/bash -u 1000 vscode \
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && sudo apt-get install -y nodejs
 RUN npm install -g @google/gemini-cli
 
+RUN mkdir -p /app/data \
+    && chown -R 1000:1000 /app/data \
+    && chmod 775 /app/data
+
 USER vscode
 WORKDIR /workspaces
