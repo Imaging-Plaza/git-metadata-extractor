@@ -1,12 +1,14 @@
 {
-  "timestamp": "2026-02-04T16:28:55.266256",
+  "timestamp": "2026-02-04T20:05:07.429340",
   "summary": {
     "total_instances": 27,
     "valid_references": 50,
     "invalid_references": 0,
+    "id_format_warnings": 0,
     "bidirectional_warnings": 0
   },
   "cross_reference_errors": [],
+  "id_format_warnings": [],
   "bidirectional_warnings": [],
   "details": {
     "Person": [
@@ -359,7 +361,7 @@
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:author",
-        "reference": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+        "reference": "0000-0001-2345-6789",
         "target_shape": "Person",
         "resolved_id": "0000-0001-2345-6789",
         "status": "valid"
@@ -367,7 +369,7 @@
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:author",
-        "reference": "b3f2a1c4-5d6e-4b7a-8c9d-1e2f3a4b5c6d",
+        "reference": "0000-0003-4567-8901",
         "target_shape": "Person",
         "resolved_id": "0000-0003-4567-8901",
         "status": "valid"
@@ -375,7 +377,7 @@
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:sourceOrganization",
-        "reference": "e2c4b6a8-1d3f-4e5a-9b7c-8d6e4f2a1b3c",
+        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
         "target_shape": "Organization",
         "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
         "status": "valid"
@@ -383,7 +385,7 @@
       {
         "source_id": "10.1016/j.softx.2023.101456",
         "field": "schema:author",
-        "reference": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+        "reference": "0000-0001-2345-6789",
         "target_shape": "Person",
         "resolved_id": "0000-0001-2345-6789",
         "status": "valid"
@@ -391,7 +393,7 @@
       {
         "source_id": "10.1016/j.softx.2023.101456",
         "field": "schema:author",
-        "reference": "a9b8c7d6-5e4f-4a3b-8c1d-9e8f7a6b5c4d",
+        "reference": "0000-0002-3456-7890",
         "target_shape": "Person",
         "resolved_id": "0000-0002-3456-7890",
         "status": "valid"
@@ -399,7 +401,7 @@
       {
         "source_id": "10.1016/j.softx.2023.101456",
         "field": "schema:sourceOrganization",
-        "reference": "e5a3b1c9-7d8e-4f6a-ab4c-6d8e0f2a4b6c",
+        "reference": "https://ror.org/02s376052",
         "target_shape": "Organization",
         "resolved_id": "https://ror.org/02s376052",
         "status": "valid"
@@ -407,7 +409,7 @@
       {
         "source_id": "10.1109/TBME.2024.3123456",
         "field": "schema:author",
-        "reference": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+        "reference": "mweber",
         "target_shape": "Person",
         "resolved_id": "mweber",
         "status": "valid"
@@ -415,7 +417,7 @@
       {
         "source_id": "10.1109/TBME.2024.3123456",
         "field": "schema:sourceOrganization",
-        "reference": "e4d3c2b1-6a5f-4e8d-9c9b-0a1f2e3d4c5b",
+        "reference": "https://ror.org/05a28rw58",
         "target_shape": "Organization",
         "resolved_id": "https://ror.org/05a28rw58",
         "status": "valid"

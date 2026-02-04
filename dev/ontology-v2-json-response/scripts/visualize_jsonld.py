@@ -133,7 +133,7 @@ def build_id_index(graph: list[dict]) -> dict[str, dict]:
             "pulse:githubRepositoryHandle",
             "pulse:githubOrganizationHandle",
             "pulse:infosciencePersonIdentifier",
-            "pulse:infoscienceOrgIdentifier",
+            "pulse:infoscienceOrganizationIdentifier",
             "pulse:ror",
             "schema:identifier",
             "pulse:composite",

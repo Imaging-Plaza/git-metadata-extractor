@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:OrganizationShape.schema.json",
   "title": "OrganizationShape",
-  "description": "Schema for validating Organization entities following Open Pulse Ontology v2.0.0. ID hierarchy: ror → infoscienceOrgIdentifier → githubOrganizationHandle → uuid",
+  "description": "Schema for validating Organization entities following Open Pulse Ontology v2.0.0. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
   "properties": {
     "id": {
       "type": "string",
-      "description": "Resolved hierarchical identifier (first non-null in priority: ror → infoscienceOrgIdentifier → githubOrganizationHandle → uuid)"
+      "description": "Resolved hierarchical identifier (first non-null in priority: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid)"
     },
     "type": {
       "type": "string",
@@ -28,7 +28,7 @@
           "type": ["string", "null"],
           "pattern": "^https://ror\\.org/[0-9a-z]{9}$"
         },
-        "pulse:infoscienceOrgIdentifier": {
+        "pulse:infoscienceOrganizationIdentifier": {
           "type": ["string", "null"],
           "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
@@ -43,7 +43,7 @@
     },
     "idSource": {
       "type": "string",
-      "enum": ["pulse:ror", "pulse:infoscienceOrgIdentifier", "pulse:githubOrganizationHandle", "uuid"]
+      "enum": ["pulse:ror", "pulse:infoscienceOrganizationIdentifier", "pulse:githubOrganizationHandle", "uuid"]
     },
     "schema:name": {
       "type": "string",
@@ -55,6 +55,10 @@
     },
     "pulse:githubOrganizationHandle": {
       "type": ["string", "null"]
+    },
+    "pulse:infoscienceOrganizationIdentifier": {
+      "type": ["string", "null"],
+      "description": "Infoscience organization identifier (UUID format)."
     },
     "pulse:OrganizationType": {
       "type": "string",

@@ -29,7 +29,7 @@ githubHandle → doi → uuid
 
 ### OrganizationShape
 ```
-ror → infoscienceOrgIdentifier → githubOrganizationHandle → uuid
+ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid
 ```
 | Priority | Identifier | Example |
 |----------|------------|---------|
@@ -68,9 +68,9 @@ composite (personId_repoId) → uuid
 
 ## Files
 
-- `pulse:PersonShape.json` - 4 persons
-- `pulse:RepositoryShape.json` - 3 repositories
-- `pulse:OrganizationShape.json` - 5 organizations
-- `pulse:MembershipShape.json` - 5 memberships
-- `pulse:ContributionShape.json` - 7 contributions
-- `pulse:ArticleShape.json` - 2 articles
+- `pulse_PersonShape.json` - 4 persons
+- `pulse_RepositoryShape.json` - 3 repositories
+- `pulse_OrganizationShape.json` - 5 organizations
+- `pulse_MembershipShape.json` - 5 memberships
+- `pulse_ContributionShape.json` - 7 contributions
+- `pulse_ArticleShape.json` - 3 articles

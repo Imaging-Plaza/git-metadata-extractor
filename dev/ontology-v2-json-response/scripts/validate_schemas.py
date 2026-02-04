@@ -32,12 +32,12 @@ TEST_OUTPUT_DIR = JSON_DIR / "test"
 
 # Shape files to validate
 SHAPE_FILES = [
-    "pulse:PersonShape.json",
-    "pulse:RepositoryShape.json",
-    "pulse:OrganizationShape.json",
-    "pulse:MembershipShape.json",
-    "pulse:ContributionShape.json",
-    "pulse:ArticleShape.json",
+    "pulse_PersonShape.json",
+    "pulse_RepositoryShape.json",
+    "pulse_OrganizationShape.json",
+    "pulse_MembershipShape.json",
+    "pulse_ContributionShape.json",
+    "pulse_ArticleShape.json",
 ]
 
 

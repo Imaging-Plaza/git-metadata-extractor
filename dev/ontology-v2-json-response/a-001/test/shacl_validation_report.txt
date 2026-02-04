@@ -1,0 +1,24 @@
+Validation Report
+Conforms: False
+Results (3):
+Constraint Violation in ClosedConstraintComponent (http://www.w3.org/ns/shacl#ClosedConstraintComponent):
+	Severity: sh:Violation
+	Source Shape: pulse:OrganizationShape
+	Focus Node: <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05>
+	Value Node: Literal("95372c6b-7d45-432e-a84e-660c9fa54e05")
+	Result Path: pulse:infoscienceOrganizationIdentifier
+	Message: Node <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05> is closed. It cannot have value: Literal("95372c6b-7d45-432e-a84e-660c9fa54e05")
+Constraint Violation in ClosedConstraintComponent (http://www.w3.org/ns/shacl#ClosedConstraintComponent):
+	Severity: sh:Violation
+	Source Shape: pulse:OrganizationShape
+	Focus Node: <https://ror.org/02s376052>
+	Value Node: Literal("41674f42-ba15-4612-9817-2a6f60985c01")
+	Result Path: pulse:infoscienceOrganizationIdentifier
+	Message: Node <https://ror.org/02s376052> is closed. It cannot have value: Literal("41674f42-ba15-4612-9817-2a6f60985c01")
+Constraint Violation in PatternConstraintComponent (http://www.w3.org/ns/shacl#PatternConstraintComponent):
+	Severity: sh:Violation
+	Source Shape: pulse:RorPropertyShape
+	Focus Node: <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05>
+	Value Node: Literal("95372c6b-7d45-432e-a84e-660c9fa54e05")
+	Result Path: schema1:identifier
+	Message: Value does not match pattern '^https://ror\.org/[0-9a-z]{9}$'

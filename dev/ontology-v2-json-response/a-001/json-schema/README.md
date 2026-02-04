@@ -84,7 +84,7 @@ Each shape uses a prioritized hierarchy of identifiers. The `id` field is set to
 |-------|--------------|
 | PersonShape | `orcid` → `infosciencePersonIdentifier` → `githubUsername` → `uuid` |
 | RepositoryShape | `githubRepositoryHandle` → `doi` → `uuid` |
-| OrganizationShape | `ror` → `infoscienceOrgIdentifier` → `githubOrganizationHandle` → `uuid` |
+| OrganizationShape | `ror` → `infoscienceOrganizationIdentifier` → `githubOrganizationHandle` → `uuid` |
 | MembershipShape | `composite (personId_orgId)` → `uuid` |
 | ContributionShape | `composite (personId_repoId)` → `uuid` |
 | ArticleShape | `doi` → `infoscienceArticleIdentifier` → `uuid` |
@@ -133,12 +133,12 @@ Cross-references between shapes use the **hierarchical ID** of the target shape 
 | PersonShape | `pulse:owns` | RepositoryShape | `githubHandle` → `doi` → `uuid` |
 | RepositoryShape | `schema:author` | PersonShape | `orcid` → `infosciencePersonIdentifier` → `githubUsername` → `uuid` |
 | RepositoryShape | `pulse:ownedBy` | PersonShape/OrganizationShape | Depends on target shape |
-| OrganizationShape | `org:hasUnit` / `org:unitOf` | OrganizationShape | `ror` → `infoscienceOrgIdentifier` → `githubOrganizationHandle` → `uuid` |
+| OrganizationShape | `org:hasUnit` / `org:unitOf` | OrganizationShape | `ror` → `infoscienceOrganizationIdentifier` → `githubOrganizationHandle` → `uuid` |
 | OrganizationShape | `pulse:owns` | RepositoryShape | `githubHandle` → `doi` → `uuid` |
-| MembershipShape | `org:organization` | OrganizationShape | `ror` → `infoscienceOrgIdentifier` → `githubOrganizationHandle` → `uuid` |
+| MembershipShape | `org:organization` | OrganizationShape | `ror` → `infoscienceOrganizationIdentifier` → `githubOrganizationHandle` → `uuid` |
 | ContributionShape | `pulse:contributionTo` | RepositoryShape | `githubHandle` → `doi` → `uuid` |
 | ContributionShape | `schema:author` | PersonShape | `orcid` → `infosciencePersonIdentifier` → `githubUsername` → `uuid` |
 | ArticleShape | `schema:author` | PersonShape | `orcid` → `infosciencePersonIdentifier` → `githubUsername` → `uuid` |
-| ArticleShape | `schema:sourceOrganization` | OrganizationShape | `ror` → `infoscienceOrgIdentifier` → `githubOrganizationHandle` → `uuid` |
+| ArticleShape | `schema:sourceOrganization` | OrganizationShape | `ror` → `infoscienceOrganizationIdentifier` → `githubOrganizationHandle` → `uuid` |
 
 > **Note:** Cross-references always use the target's resolved `id` value. For example, an ArticleShape's `schema:author` could be an ORCID (`0000-0001-2345-6789`), a GitHub username (`mweber`), or a UUID—depending on which identifier is available for that person.

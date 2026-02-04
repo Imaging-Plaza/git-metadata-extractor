@@ -21,7 +21,7 @@ Each entity in the Open Pulse ontology is defined by an RDF class and validated 
 |-------|-------------|--------------|-------------|
 | `schema:Person` | `pulse:PersonShape` | `orcid → infosciencePersonIdentifier → githubUsername → uuid` | MembershipShape, ContributionShape, RepositoryShape |
 | `schema:SoftwareSourceCode` | `pulse:RepositoryShape` | `githubHandle → identifier → uuid` | PersonShape (author), OrganizationShape (owner) |
-| `org:Organization` | `pulse:OrganizationShape` | `ror → infoscienceOrgIdentifier → githubOrganizationHandle → uuid` | RepositoryShape (owns), OrganizationShape (units) |
+| `org:Organization` | `pulse:OrganizationShape` | `ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid` | RepositoryShape (owns), OrganizationShape (units) |
 | `org:Membership` | `pulse:MembershipShape` | `composite (personId_orgId) → uuid` | OrganizationShape |
 | `pulse:Contribution` | `pulse:ContributionShape` | `composite (personId_repoId) → uuid` | RepositoryShape, PersonShape |
 | `schema:ScholarlyArticle` | `pulse:ArticleShape` | `doi → infoscienceArticleIdentifier → uuid` | PersonShape (author) |
@@ -173,6 +173,16 @@ python scripts/visualize_jsonld.py
 4. Hover nodes for property details, click for full details
 5. Toggle drag mode to manually arrange nodes
 6. Use the sidebar toggle (◀) to maximize graph space
+
+**Serve locally:**
+
+```bash
+cd dev/ontology-v2-json-response/a-001/test
+python -m http.server 8000
+```
+
+Then open http://localhost:8000/visualization.html in your browser.
+
 
 ---
 

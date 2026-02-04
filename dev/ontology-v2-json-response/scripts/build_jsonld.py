@@ -25,12 +25,12 @@ TEST_OUTPUT_DIR = JSON_DIR / "test"
 
 # Shape files
 SHAPE_FILES = {
-    "Person": "pulse:PersonShape.json",
-    "Repository": "pulse:RepositoryShape.json",
-    "Organization": "pulse:OrganizationShape.json",
-    "Membership": "pulse:MembershipShape.json",
-    "Contribution": "pulse:ContributionShape.json",
-    "Article": "pulse:ArticleShape.json",
+    "Person": "pulse_PersonShape.json",
+    "Repository": "pulse_RepositoryShape.json",
+    "Organization": "pulse_OrganizationShape.json",
+    "Membership": "pulse_MembershipShape.json",
+    "Contribution": "pulse_ContributionShape.json",
+    "Article": "pulse_ArticleShape.json",
 }
 
 # JSON-LD Context
@@ -97,6 +97,64 @@ JSONLD_CONTEXT = {
     "githubRepoStars": {"@id": "pulse:githubRepoStars", "@type": "xsd:integer"},
     "githubRepoForks": {"@id": "pulse:githubRepoForks", "@type": "xsd:integer"},
     "githubOrgFollowers": {"@id": "pulse:githubOrgFollowers", "@type": "xsd:integer"},
+    # Prefixed property mappings (for source JSON that uses pulse: prefix)
+    "pulse:repositoryType": {"@id": "pulse:repositoryType", "@type": "@id"},
+    "pulse:OrganizationType": {"@id": "pulse:OrganizationType", "@type": "@id"},
+    "pulse:discipline": {"@id": "pulse:discipline", "@type": "@id"},
+    "pulse:owns": {"@id": "pulse:owns", "@type": "@id"},
+    "pulse:ownedBy": {"@id": "pulse:ownedBy", "@type": "@id"},
+    "pulse:isForkOf": {"@id": "pulse:isForkOf", "@type": "@id"},
+    "pulse:hasContribution": {"@id": "pulse:hasContribution", "@type": "@id"},
+    "pulse:contributionTo": {"@id": "pulse:contributionTo", "@type": "@id"},
+    "pulse:contributionCount": {
+        "@id": "pulse:contributionCount",
+        "@type": "xsd:integer",
+    },
+    "pulse:firstContributionDate": {
+        "@id": "pulse:firstContributionDate",
+        "@type": "xsd:dateTime",
+    },
+    "pulse:lastContributionDate": {
+        "@id": "pulse:lastContributionDate",
+        "@type": "xsd:dateTime",
+    },
+    "pulse:githubRepoStars": {"@id": "pulse:githubRepoStars", "@type": "xsd:integer"},
+    "pulse:githubRepoForks": {"@id": "pulse:githubRepoForks", "@type": "xsd:integer"},
+    "pulse:githubOrgFollowers": {
+        "@id": "pulse:githubOrgFollowers",
+        "@type": "xsd:integer",
+    },
+    "pulse:githubUsername": "pulse:githubUsername",
+    "pulse:githubOrganizationHandle": "pulse:githubOrganizationHandle",
+    "pulse:githubRepositoryHandle": "pulse:githubRepositoryHandle",
+    "pulse:orcidIdentifier": "pulse:orcidIdentifier",
+    "pulse:infosciencePersonIdentifier": "pulse:infosciencePersonIdentifier",
+    "pulse:infoscienceArticleIdentifier": "pulse:infoscienceArticleIdentifier",
+    "pulse:infoscienceOrganizationIdentifier": "pulse:infoscienceOrganizationIdentifier",
+    "pulse:ror": {"@id": "pulse:ror", "@type": "@id"},
+    "pulse:orcid": {"@id": "pulse:orcid", "@type": "@id"},
+    # Schema.org prefixed mappings
+    "schema:name": "schema:name",
+    "schema:email": "schema:email",
+    "schema:url": {"@id": "schema:url", "@type": "@id"},
+    "schema:author": {"@id": "schema:author", "@type": "@id"},
+    "schema:identifier": "schema:identifier",
+    "schema:dateCreated": {"@id": "schema:dateCreated", "@type": "xsd:dateTime"},
+    "schema:datePublished": {"@id": "schema:datePublished", "@type": "xsd:date"},
+    "schema:dateModified": {"@id": "schema:dateModified", "@type": "xsd:dateTime"},
+    "schema:license": {"@id": "schema:license", "@type": "@id"},
+    "schema:citation": {"@id": "schema:citation", "@type": "@id"},
+    "schema:sourceOrganization": {"@id": "schema:sourceOrganization", "@type": "@id"},
+    "schema:programmingLanguage": "schema:programmingLanguage",
+    # Org ontology prefixed mappings
+    "org:organization": {"@id": "org:organization", "@type": "@id"},
+    "org:hasMembership": {"@id": "org:hasMembership", "@type": "@id"},
+    "org:hasUnit": {"@id": "org:hasUnit", "@type": "@id"},
+    "org:unitOf": {"@id": "org:unitOf", "@type": "@id"},
+    "org:role": "org:role",
+    # Time ontology prefixed mappings
+    "time:hasBeginning": {"@id": "time:hasBeginning", "@type": "xsd:date"},
+    "time:hasEnd": {"@id": "time:hasEnd", "@type": "xsd:date"},
 }
 
 # Cross-reference definitions: (source_shape, field) -> target_shape
@@ -116,6 +174,70 @@ CROSS_REFERENCES = {
     ("Article", "schema:author"): "Person",
     ("Article", "schema:sourceOrganization"): "Organization",
 }
+
+# ID hierarchy for each shape (order of priority)
+# Used to validate that cross-references use hierarchical IDs, not internal UUIDs
+ID_HIERARCHIES = {
+    "Person": [
+        "pulse:orcid",
+        "pulse:infosciencePersonIdentifier",
+        "pulse:githubUsername",
+        "uuid",
+    ],
+    "Repository": ["pulse:githubRepositoryHandle", "schema:identifier", "uuid"],
+    "Organization": [
+        "pulse:ror",
+        "pulse:infoscienceOrganizationIdentifier",
+        "pulse:githubOrganizationHandle",
+        "uuid",
+    ],
+    "Article": ["schema:identifier", "pulse:infoscienceArticleIdentifier", "uuid"],
+    "Membership": ["pulse:composite", "uuid"],
+    "Contribution": ["pulse:composite", "uuid"],
+}
+
+# Regex patterns for common ID formats
+import re
+
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
+ROR_PATTERN = re.compile(r"^https://ror\.org/\w+$")
+DOI_PATTERN = re.compile(r"^10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+$")
+
+
+def is_uuid_format(value: str) -> bool:
+    """Check if a string looks like a UUID."""
+    return bool(UUID_PATTERN.match(value))
+
+
+def is_hierarchical_id(value: str, target_shape: str) -> bool:
+    """Check if a reference value looks like a hierarchical ID (not a UUID fallback)."""
+    if not value:
+        return False
+
+    # If it's a UUID, check if target shape has higher priority IDs available
+    if is_uuid_format(value):
+        # UUID should only be used if no higher-priority ID is available
+        # For cross-references, we expect hierarchical IDs when available
+        return False
+
+    # Known hierarchical ID patterns
+    if ORCID_PATTERN.match(value):
+        return True
+    if ROR_PATTERN.match(value):
+        return True
+    if DOI_PATTERN.match(value):
+        return True
+    if "/" in value:  # GitHub handles like owner/repo or org names
+        return True
+    if value.startswith("http"):  # URLs like ROR
+        return True
+
+    # GitHub usernames, composite IDs, etc.
+    return True
 
 
 def load_json(filepath: Path) -> Any:
@@ -235,18 +357,48 @@ def validate_cross_references(shapes: dict[str, list[dict]], id_index: dict) -> 
                             matched_shape = target_shape
                             break
 
+                    # Check if reference uses UUID instead of hierarchical ID
+                    uses_uuid = is_uuid_format(ref) if ref else False
+                    id_format_warning = None
+                    if uses_uuid and found:
+                        # Check if the target entity has a higher-priority ID available
+                        target_instance = None
+                        for inst in shapes.get(matched_shape, []):
+                            if inst.get("id") == matched_id:
+                                target_instance = inst
+                                break
+
+                        if target_instance:
+                            target_primary_id = target_instance.get("id")
+                            # If target has a hierarchical ID but we're using UUID, warn
+                            if target_primary_id and not is_uuid_format(
+                                target_primary_id,
+                            ):
+                                id_format_warning = {
+                                    "type": "uuid_instead_of_hierarchical_id",
+                                    "source_shape": shape_name,
+                                    "source_id": instance_id,
+                                    "field": field,
+                                    "reference_used": ref,
+                                    "should_use": target_primary_id,
+                                    "target_shape": matched_shape,
+                                    "message": f"Cross-reference uses UUID '{ref}' but target has hierarchical ID '{target_primary_id}'",
+                                }
+                                results["warnings"].append(id_format_warning)
+
                     if found:
                         results["valid_references"] += 1
-                        results["details"][shape_name].append(
-                            {
-                                "source_id": instance_id,
-                                "field": field,
-                                "reference": ref,
-                                "target_shape": matched_shape,
-                                "resolved_id": matched_id,
-                                "status": "valid",
-                            },
-                        )
+                        detail_entry = {
+                            "source_id": instance_id,
+                            "field": field,
+                            "reference": ref,
+                            "target_shape": matched_shape,
+                            "resolved_id": matched_id,
+                            "status": "valid",
+                        }
+                        if id_format_warning:
+                            detail_entry["warning"] = id_format_warning["message"]
+                        results["details"][shape_name].append(detail_entry)
                     else:
                         results["invalid_references"] += 1
                         error = {
@@ -393,19 +545,15 @@ def build_jsonld(shapes: dict[str, list[dict]]) -> dict:
                 "@type": instance.get("type", shape_name),
             }
 
-            # Copy relevant properties (skip metadata fields)
+            # Copy relevant properties (skip metadata/helper fields)
+            # These are internal properties for building/validating, not semantic data:
+            # - shacl: SHACL shape reference for validation
+            # - identifiers: all possible IDs for cross-reference lookups
+            # - idSource: indicates which identifier was used as primary id
             skip_fields = {"id", "type", "shacl", "identifiers", "idSource"}
             for key, value in instance.items():
                 if key not in skip_fields and value is not None:
-                    # Convert prefixed keys to JSON-LD friendly format
-                    ld_key = key.replace(":", "_") if ":" in key else key
                     node[key] = value
-
-            # Add identifiers as separate properties
-            identifiers = instance.get("identifiers", {})
-            for id_key, id_value in identifiers.items():
-                if id_value is not None:
-                    node[id_key] = id_value
 
             jsonld["@graph"].append(node)
 
@@ -430,6 +578,23 @@ def print_summary(cross_ref_results: dict, bidirectional_warnings: list):
             print(f"     Reference: {err['reference']}")
             print(f"     Expected in: {err['expected_target']}")
 
+    # Show ID format warnings (UUID used instead of hierarchical ID)
+    id_format_warnings = [
+        w
+        for w in cross_ref_results.get("warnings", [])
+        if w.get("type") == "uuid_instead_of_hierarchical_id"
+    ]
+    if id_format_warnings:
+        print(f"\n⚠️  ID Format Warnings: {len(id_format_warnings)}")
+        print("   Cross-references should use hierarchical IDs, not UUIDs:")
+        for warn in id_format_warnings[:5]:  # Show first 5
+            print(f"  ⚠️  [{warn['source_shape']}] {warn['source_id']}")
+            print(f"     Field: {warn['field']}")
+            print(f"     Used: {warn['reference_used']}")
+            print(f"     Should use: {warn['should_use']}")
+        if len(id_format_warnings) > 5:
+            print(f"     ... and {len(id_format_warnings) - 5} more")
+
     if bidirectional_warnings:
         print(f"\nBidirectional Consistency Warnings: {len(bidirectional_warnings)}")
         for warn in bidirectional_warnings:
@@ -437,7 +602,11 @@ def print_summary(cross_ref_results: dict, bidirectional_warnings: list):
     else:
         print("\n✓ Bidirectional references are consistent")
 
-    total_issues = cross_ref_results["invalid_references"] + len(bidirectional_warnings)
+    total_issues = (
+        cross_ref_results["invalid_references"]
+        + len(bidirectional_warnings)
+        + len(id_format_warnings)
+    )
     if total_issues == 0:
         print("\n✅ All consistency checks passed!")
     else:
@@ -476,6 +645,13 @@ def main():
         json.dump(jsonld, f, indent=2)
     print(f"\nJSON-LD saved to: {jsonld_file}")
 
+    # Extract ID format warnings
+    id_format_warnings = [
+        w
+        for w in cross_ref_results.get("warnings", [])
+        if w.get("type") == "uuid_instead_of_hierarchical_id"
+    ]
+
     # Save consistency results
     consistency_results = {
         "timestamp": datetime.now().isoformat(),
@@ -483,9 +659,11 @@ def main():
             "total_instances": total_instances,
             "valid_references": cross_ref_results["valid_references"],
             "invalid_references": cross_ref_results["invalid_references"],
+            "id_format_warnings": len(id_format_warnings),
             "bidirectional_warnings": len(bidirectional_warnings),
         },
         "cross_reference_errors": cross_ref_results["errors"],
+        "id_format_warnings": id_format_warnings,
         "bidirectional_warnings": bidirectional_warnings,
         "details": dict(cross_ref_results["details"]),
     }
@@ -499,7 +677,11 @@ def main():
     print_summary(cross_ref_results, bidirectional_warnings)
 
     # Exit with error code if issues found
-    total_issues = cross_ref_results["invalid_references"] + len(bidirectional_warnings)
+    total_issues = (
+        cross_ref_results["invalid_references"]
+        + len(bidirectional_warnings)
+        + len(id_format_warnings)
+    )
     exit(1 if total_issues > 0 else 0)
 
 
