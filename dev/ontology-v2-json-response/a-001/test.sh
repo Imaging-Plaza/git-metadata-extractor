@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 SCRIPTS_DIR="$BASE_DIR/scripts"
 TEST_OUTPUT_DIR="$SCRIPT_DIR/test"
+SUMMARY_FILE="$TEST_OUTPUT_DIR/validation_summary.txt"
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,6 +16,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Function to print to both console and summary file
+log() {
+    echo -e "$1"
+    # Strip color codes for the file
+    echo -e "$1" | sed 's/\x1b\[[0-9;]*m//g' >> "$SUMMARY_FILE"
+}
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Open Pulse Ontology v2 - Test Suite  ${NC}"
@@ -26,6 +34,13 @@ echo ""
 
 # Create test output directory
 mkdir -p "$TEST_OUTPUT_DIR"
+
+# Initialize summary file
+cat > "$SUMMARY_FILE" << EOF
+# Open Pulse Ontology v2 - Validation Summary
+# Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+EOF
 
 # Track overall status
 TOTAL_TESTS=0
@@ -41,12 +56,33 @@ run_test() {
     echo "Command: $test_command"
     echo "---"
 
-    if eval "$test_command"; then
+    # Capture output for summary file
+    local output
+    local exit_code
+    output=$(eval "$test_command" 2>&1) || exit_code=$?
+    exit_code=${exit_code:-0}
+
+    # Print to console
+    echo "$output"
+
+    # Write to summary file
+    echo "" >> "$SUMMARY_FILE"
+    echo "## $test_name" >> "$SUMMARY_FILE"
+    echo "" >> "$SUMMARY_FILE"
+    echo '```' >> "$SUMMARY_FILE"
+    echo "$output" >> "$SUMMARY_FILE"
+    echo '```' >> "$SUMMARY_FILE"
+
+    if [ $exit_code -eq 0 ]; then
         echo -e "${GREEN}✓ PASSED: $test_name${NC}"
+        echo "" >> "$SUMMARY_FILE"
+        echo "**Result: ✓ PASSED**" >> "$SUMMARY_FILE"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0
     else
         echo -e "${RED}✗ FAILED: $test_name${NC}"
+        echo "" >> "$SUMMARY_FILE"
+        echo "**Result: ✗ FAILED**" >> "$SUMMARY_FILE"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         return 1
     fi
@@ -88,6 +124,18 @@ echo -e "${GREEN}Passed: $PASSED_TESTS${NC}"
 echo -e "${RED}Failed: $FAILED_TESTS${NC}"
 echo ""
 
+# Write summary to file
+echo "" >> "$SUMMARY_FILE"
+echo "---" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "## Summary" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "| Metric | Count |" >> "$SUMMARY_FILE"
+echo "|--------|-------|" >> "$SUMMARY_FILE"
+echo "| Total Tests | $TOTAL_TESTS |" >> "$SUMMARY_FILE"
+echo "| Passed | $PASSED_TESTS |" >> "$SUMMARY_FILE"
+echo "| Failed | $FAILED_TESTS |" >> "$SUMMARY_FILE"
+
 # List generated test outputs
 echo -e "${BLUE}Generated Test Outputs:${NC}"
 if [ -d "$TEST_OUTPUT_DIR" ]; then
@@ -100,9 +148,17 @@ fi
 if [ $FAILED_TESTS -eq 0 ]; then
     echo ""
     echo -e "${GREEN}✅ All tests passed!${NC}"
+    echo "" >> "$SUMMARY_FILE"
+    echo "**✅ All tests passed!**" >> "$SUMMARY_FILE"
+    echo ""
+    echo -e "${BLUE}Validation summary saved to: $SUMMARY_FILE${NC}"
     exit 0
 else
     echo ""
     echo -e "${RED}❌ Some tests failed. Check output above for details.${NC}"
+    echo "" >> "$SUMMARY_FILE"
+    echo "**❌ Some tests failed.**" >> "$SUMMARY_FILE"
+    echo ""
+    echo -e "${BLUE}Validation summary saved to: $SUMMARY_FILE${NC}"
     exit 1
 fi

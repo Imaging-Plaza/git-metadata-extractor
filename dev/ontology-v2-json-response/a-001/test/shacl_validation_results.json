@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-04T20:05:08.381464",
+  "timestamp": "2026-02-04T20:23:20.338269",
   "ontology_file": "open-pulse-ontology-v2.0.0.ttl",
   "jsonld_file": "jsonld_output.json",
   "conforms": false,
@@ -10,17 +10,17 @@
   },
   "violations": [
     {
-      "focusNode": "file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05",
-      "path": "https://open-pulse.epfl.ch/ontology#infoscienceOrganizationIdentifier",
-      "value": "95372c6b-7d45-432e-a84e-660c9fa54e05",
-      "message": "Node <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05> is closed. It cannot have value: Literal(\"95372c6b-7d45-432e-a84e-660c9fa54e05\")",
-      "sourceShape": "https://open-pulse.epfl.ch/ontology#OrganizationShape"
-    },
-    {
       "focusNode": "https://ror.org/02s376052",
       "path": "https://open-pulse.epfl.ch/ontology#infoscienceOrganizationIdentifier",
       "value": "41674f42-ba15-4612-9817-2a6f60985c01",
       "message": "Node <https://ror.org/02s376052> is closed. It cannot have value: Literal(\"41674f42-ba15-4612-9817-2a6f60985c01\")",
+      "sourceShape": "https://open-pulse.epfl.ch/ontology#OrganizationShape"
+    },
+    {
+      "focusNode": "file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05",
+      "path": "https://open-pulse.epfl.ch/ontology#infoscienceOrganizationIdentifier",
+      "value": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+      "message": "Node <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05> is closed. It cannot have value: Literal(\"95372c6b-7d45-432e-a84e-660c9fa54e05\")",
       "sourceShape": "https://open-pulse.epfl.ch/ontology#OrganizationShape"
     },
     {
