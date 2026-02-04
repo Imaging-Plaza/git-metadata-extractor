@@ -1,0 +1,61 @@
+[
+  {
+    "id": "10.1038/s41586-024-07856-z",
+    "type": "schema:ScholarlyArticle",
+    "shacl": "pulse:ArticleShape",
+    "identifiers": {
+      "schema:identifier": "10.1038/s41586-024-07856-z",
+      "pulse:infoscienceArticleIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+      "uuid": "f8a3b2c1-4d5e-4f6a-8b9c-1d2e3f4a5b6c"
+    },
+    "idSource": "schema:identifier",
+    "schema:name": "Open Pulse: A Framework for Tracking Scientific Software Contributions",
+    "schema:identifier": "10.1038/s41586-024-07856-z",
+    "schema:datePublished": "2025-06-15",
+    "schema:author": [
+      "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+      "b3f2a1c4-5d6e-4b7a-8c9d-1e2f3a4b5c6d"
+    ],
+    "pulse:infoscienceArticleIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "schema:sourceOrganization": "e2c4b6a8-1d3f-4e5a-9b7c-8d6e4f2a1b3c"
+  },
+  {
+    "id": "10.1016/j.softx.2023.101456",
+    "type": "schema:ScholarlyArticle",
+    "shacl": "pulse:ArticleShape",
+    "identifiers": {
+      "schema:identifier": "10.1016/j.softx.2023.101456",
+      "pulse:infoscienceArticleIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+      "uuid": "f1e2d3c4-5b6a-4789-abcd-ef1234567890"
+    },
+    "idSource": "schema:identifier",
+    "schema:name": "Gimie: Automated Git Metadata Extraction for Research Software",
+    "schema:identifier": "10.1016/j.softx.2023.101456",
+    "schema:datePublished": "2023-11-20",
+    "schema:author": [
+      "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+      "a9b8c7d6-5e4f-4a3b-8c1d-9e8f7a6b5c4d"
+    ],
+    "pulse:infoscienceArticleIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+    "schema:sourceOrganization": "e5a3b1c9-7d8e-4f6a-ab4c-6d8e0f2a4b6c"
+  },
+  {
+    "id": "10.1109/TBME.2024.3123456",
+    "type": "schema:ScholarlyArticle",
+    "shacl": "pulse:ArticleShape",
+    "identifiers": {
+      "schema:identifier": "10.1109/TBME.2024.3123456",
+      "pulse:infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
+      "uuid": "f4c3b2a1-8d7e-4f6a-9b4c-3d2e1f0a9b8c"
+    },
+    "idSource": "schema:identifier",
+    "schema:name": "Deep Learning Approaches for Biomedical Image Segmentation",
+    "schema:identifier": "10.1109/TBME.2024.3123456",
+    "schema:datePublished": "2024-08-10",
+    "schema:author": [
+      "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+    ],
+    "pulse:infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
+    "schema:sourceOrganization": "e4d3c2b1-6a5f-4e8d-9c9b-0a1f2e3d4c5b"
+  }
+]

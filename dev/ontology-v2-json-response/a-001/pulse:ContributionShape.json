@@ -1,0 +1,107 @@
+[
+  {
+    "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+      "uuid": "d1a2b3c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 156,
+    "pulse:firstContributionDate": "2023-03-15T10:30:00Z",
+    "pulse:lastContributionDate": "2025-01-20T14:45:00Z",
+    "schema:author": "0000-0001-2345-6789"
+  },
+  {
+    "id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+      "uuid": "d2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 42,
+    "pulse:firstContributionDate": "2022-05-10T09:00:00Z",
+    "pulse:lastContributionDate": "2024-11-30T16:20:00Z",
+    "schema:author": "0000-0001-2345-6789"
+  },
+  {
+    "id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+      "uuid": "d3c4d5e6-7f8a-4b9c-8d1e-2f3a4b5c6d7e"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 89,
+    "pulse:firstContributionDate": "2023-06-01T11:30:00Z",
+    "pulse:lastContributionDate": "2025-01-15T10:00:00Z",
+    "schema:author": "0000-0002-3456-7890"
+  },
+  {
+    "id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+      "uuid": "d4d5e6f7-8a9b-4c0d-9e2f-3a4b5c6d7e8f"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 234,
+    "pulse:firstContributionDate": "2022-01-10T08:00:00Z",
+    "pulse:lastContributionDate": "2024-12-01T17:30:00Z",
+    "schema:author": "0000-0002-3456-7890"
+  },
+  {
+    "id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+      "uuid": "d5e6f7a8-9b0c-4d1e-af3a-4b5c6d7e8f9a"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 15,
+    "pulse:firstContributionDate": "2024-02-01T13:00:00Z",
+    "pulse:lastContributionDate": "2024-06-15T09:45:00Z",
+    "schema:author": "0000-0003-4567-8901"
+  },
+  {
+    "id": "mweber_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "mweber_EPFL-ENAC/structural-analysis",
+      "uuid": "d6f7a8b9-0c1d-4e2f-9a4b-5c6d7e8f9a0b"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 78,
+    "pulse:firstContributionDate": "2022-03-20T10:15:00Z",
+    "pulse:lastContributionDate": "2024-10-10T14:00:00Z",
+    "schema:author": "mweber"
+  },
+  {
+    "id": "mweber_mweber/data-pipeline",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "mweber_mweber/data-pipeline",
+      "uuid": "d7a8b9c0-1d2e-4f3a-8b5c-6d7e8f9a0b1c"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "mweber/data-pipeline",
+    "pulse:contributionCount": 320,
+    "pulse:firstContributionDate": "2024-06-20T14:15:00Z",
+    "pulse:lastContributionDate": "2025-01-28T11:30:00Z",
+    "schema:author": "mweber"
+  }
+]

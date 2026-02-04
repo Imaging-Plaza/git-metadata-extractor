@@ -33,7 +33,6 @@ from ..context.infoscience import (
     search_infoscience_labs_tool,
     search_infoscience_publications_tool,
 )
-from .url_validation import validate_ror_url
 from ..data_models import (
     GitAuthor,
     OrganizationAnalysisContext,
@@ -52,6 +51,7 @@ from .organization_prompts import (
     get_organization_enrichment_prompt,
     organization_enrichment_main_system_prompt,
 )
+from .url_validation import validate_ror_url
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -95,7 +95,9 @@ async def validate_ror_organization_tool(
     Returns:
         JSON string with validation result
     """
-    logger.info(f"🔍 Agent tool called: validate_ror_organization('{ror_id}', '{org_name}')")
+    logger.info(
+        f"🔍 Agent tool called: validate_ror_organization('{ror_id}', '{org_name}')",
+    )
     try:
         # Prepare expected org dict
         expected_org = {
@@ -131,7 +133,7 @@ async def validate_ror_organization_tool(
             {
                 "is_valid": False,
                 "confidence": 0.0,
-                "justification": f"Error during validation: {str(e)}",
+                "justification": f"Error during validation: {e!s}",
                 "matched_fields": [],
                 "validation_errors": [str(e)],
             },
@@ -248,12 +250,16 @@ async def search_ror(
                     # Fallback to first name value
                     if not org_name and item.get("names"):
                         org_name = item.get("names", [{}])[0].get("value")
-                
+
                 # Extract country from locations if country field is not available
                 country = item.get("country", {}).get("country_name")
                 if not country and item.get("locations"):
-                    country = item.get("locations", [{}])[0].get("geonames_details", {}).get("country_name")
-                
+                    country = (
+                        item.get("locations", [{}])[0]
+                        .get("geonames_details", {})
+                        .get("country_name")
+                    )
+
                 org_info = {
                     "name": org_name,
                     "ror_id": item.get("id"),
@@ -262,8 +268,14 @@ async def search_ror(
                     "aliases": item.get("aliases", []),
                     "acronyms": item.get("acronyms", []),
                     "links": item.get("links", []),
-                    "names": item.get("names", []),  # Include full names array for agent
-                    "locations": item.get("locations", []),  # Include locations for country info
+                    "names": item.get(
+                        "names",
+                        [],
+                    ),  # Include full names array for agent
+                    "locations": item.get(
+                        "locations",
+                        [],
+                    ),  # Include locations for country info
                     "relationships": [
                         {
                             "label": rel.get("label"),
@@ -279,17 +291,25 @@ async def search_ror(
             # Log the actual results for debugging (INFO level so agent can see what it has)
             logger.info(f"📋 ROR search results for '{query}':")
             for i, result in enumerate(results[:5], 1):  # Show top 5
-                ror_id_clean = result.get("ror_id", "").split("/")[-1] if "/" in result.get("ror_id", "") else result.get("ror_id", "")
-                logger.info(
-                    f"  {i}. {result.get('name', 'N/A')} - ROR ID: {ror_id_clean}"
+                ror_id_clean = (
+                    result.get("ror_id", "").split("/")[-1]
+                    if "/" in result.get("ror_id", "")
+                    else result.get("ror_id", "")
                 )
-            
+                logger.info(
+                    f"  {i}. {result.get('name', 'N/A')} - ROR ID: {ror_id_clean}",
+                )
+
             # DEBUG: Show EXACTLY what we're returning to the agent
             json_result = json.dumps(results, indent=2)
-            logger.info(f"🔍 DEBUG - EXACT ROR SEARCH RESULT PROVIDED TO AGENT for '{query}':")
+            logger.info(
+                f"🔍 DEBUG - EXACT ROR SEARCH RESULT PROVIDED TO AGENT for '{query}':",
+            )
             logger.info(f"JSON returned to agent ({len(json_result)} chars):")
             logger.info(json_result)
-            logger.debug(f"Full ROR search results for '{query}': {json.dumps(results, indent=2)}")
+            logger.debug(
+                f"Full ROR search results for '{query}': {json.dumps(results, indent=2)}",
+            )
             return json_result
 
     except Exception as e:
@@ -710,27 +730,29 @@ async def _pre_search_ror_for_organizations(
     """
     Proactively search ROR for organizations identified from ORCID affiliations and existing mentions.
     Does NOT search for email domains - let the agent decide on those.
-    
+
     Returns:
         Dictionary mapping organization names/queries to their ROR search results
     """
     ror_results = {}
     organizations_to_search = set()
-    
+
     # Extract from ORCID affiliations
     for author in context.authors:
         if author.affiliations:
             for aff in author.affiliations:
                 if aff and aff.strip():
                     organizations_to_search.add(aff.strip())
-    
+
     # Add existing organization mentions
     for org in context.existing_organizations:
         if org and org.strip():
             organizations_to_search.add(org.strip())
-    
-    logger.info(f"🔍 Pre-searching ROR for {len(organizations_to_search)} organizations (from ORCID and existing mentions)...")
-    
+
+    logger.info(
+        f"🔍 Pre-searching ROR for {len(organizations_to_search)} organizations (from ORCID and existing mentions)...",
+    )
+
     # Search ROR for each organization
     for org_query in organizations_to_search:
         try:
@@ -744,7 +766,7 @@ async def _pre_search_ror_for_organizations(
                 )
                 response.raise_for_status()
                 data = response.json()
-                
+
                 # Process results (same logic as search_ror tool)
                 results = []
                 for item in data.get("items", [])[:5]:
@@ -762,12 +784,16 @@ async def _pre_search_ror_for_organizations(
                                     break
                         if not org_name and item.get("names"):
                             org_name = item.get("names", [{}])[0].get("value")
-                    
+
                     # Extract country from locations if country field is not available
                     country = item.get("country", {}).get("country_name")
                     if not country and item.get("locations"):
-                        country = item.get("locations", [{}])[0].get("geonames_details", {}).get("country_name")
-                    
+                        country = (
+                            item.get("locations", [{}])[0]
+                            .get("geonames_details", {})
+                            .get("country_name")
+                        )
+
                     # Extract only essential fields for affiliation matching
                     # Limit to parent relationships only (most relevant for affiliation)
                     parent_relationships = [
@@ -779,7 +805,7 @@ async def _pre_search_ror_for_organizations(
                         for rel in item.get("relationships", [])
                         if rel.get("type") == "parent"
                     ][:2]  # Limit to 2 parent relationships max
-                    
+
                     # Extract website from links
                     website = None
                     if item.get("links"):
@@ -787,7 +813,7 @@ async def _pre_search_ror_for_organizations(
                             if link.get("type") == "website":
                                 website = link.get("value")
                                 break
-                    
+
                     # Extract key aliases (limit to 3 most important)
                     key_aliases = []
                     if item.get("names"):
@@ -798,7 +824,7 @@ async def _pre_search_ror_for_organizations(
                                     key_aliases.append(alias)
                                     if len(key_aliases) >= 3:
                                         break
-                    
+
                     org_info = {
                         "name": org_name,
                         "ror_id": item.get("id"),
@@ -808,16 +834,18 @@ async def _pre_search_ror_for_organizations(
                         "parent_organizations": parent_relationships,  # Only parent relationships
                     }
                     results.append(org_info)
-                
+
                 if results:
                     ror_results[org_query] = results
-                    logger.info(f"  ✓ Found {len(results)} ROR results for '{org_query}'")
+                    logger.info(
+                        f"  ✓ Found {len(results)} ROR results for '{org_query}'",
+                    )
                 else:
                     logger.info(f"  ⚠ No ROR results for '{org_query}'")
-                    
+
         except Exception as e:
             logger.warning(f"  ✗ Error pre-searching ROR for '{org_query}': {e}")
-    
+
     logger.info(f"✅ Pre-searched ROR for {len(ror_results)} organizations")
     return ror_results
 
@@ -856,28 +884,40 @@ async def enrich_organizations(
     )
 
     # Pre-search ROR for organizations from ORCID and existing mentions
-    logger.info("🔍 Pre-searching ROR for organizations from ORCID affiliations and existing mentions...")
+    logger.info(
+        "🔍 Pre-searching ROR for organizations from ORCID affiliations and existing mentions...",
+    )
     pre_searched_ror = await _pre_search_ror_for_organizations(context)
-    
+
     # DEBUG: Log what we found
     if pre_searched_ror:
-        logger.info(f"📋 Pre-searched ROR results: {len(pre_searched_ror)} organizations")
+        logger.info(
+            f"📋 Pre-searched ROR results: {len(pre_searched_ror)} organizations",
+        )
         for org_query, results in pre_searched_ror.items():
             logger.info(f"  '{org_query}': {len(results)} ROR matches")
             for i, result in enumerate(results[:3], 1):
-                ror_id = result.get("ror_id", "").split("/")[-1] if "/" in result.get("ror_id", "") else result.get("ror_id", "")
+                ror_id = (
+                    result.get("ror_id", "").split("/")[-1]
+                    if "/" in result.get("ror_id", "")
+                    else result.get("ror_id", "")
+                )
                 logger.info(f"    {i}. {result.get('name')} - ROR: {ror_id}")
     else:
         logger.info("  No organizations found to pre-search")
-    
+
     # Prepare the prompt for the agent (include pre-searched ROR results)
-    prompt = get_organization_enrichment_prompt(repository_url, context, pre_searched_ror)
+    prompt = get_organization_enrichment_prompt(
+        repository_url,
+        context,
+        pre_searched_ror,
+    )
 
     logger.info(f"🚀 Starting organization enrichment for {repository_url}")
     logger.info(
         f"📊 Input data: {len(context.git_authors)} git authors, {len(context.authors)} ORCID authors",
     )
-    
+
     # Run the agent with fallback across multiple models
     logger.info("🤖 Running PydanticAI agent with fallback...")
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
@@ -950,7 +990,7 @@ async def enrich_organizations(
             org_name = org.legalName if hasattr(org, "legalName") else str(org)
             ror_id = str(org.hasRorId) if org.hasRorId else "None"
             logger.info(f"  {i}. {org_name} - ROR ID: {ror_id}")
-    
+
     # Validate ROR IDs for all organizations
     logger.info("🔍 Validating ROR IDs for all organizations...")
     for org in result.output.organizations:
@@ -962,7 +1002,7 @@ async def enrich_organizations(
                     ror_id = ror_id.split("/")[-1]
 
                 logger.info(
-                    f"🔍 Validating ROR ID for {org.legalName}: {ror_id} (URL: https://ror.org/{ror_id})"
+                    f"🔍 Validating ROR ID for {org.legalName}: {ror_id} (URL: https://ror.org/{ror_id})",
                 )
 
                 # Quick pre-validation: Check if ROR ID exists in ROR API
@@ -973,18 +1013,18 @@ async def enrich_organizations(
                         if api_response.status_code == 404:
                             logger.warning(
                                 f"⚠ ROR ID {ror_id} does not exist in ROR API (404). "
-                                f"Removing invalid ROR ID for {org.legalName}"
+                                f"Removing invalid ROR ID for {org.legalName}",
                             )
                             org.hasRorId = None
                             continue
                         elif api_response.status_code != 200:
                             logger.warning(
                                 f"⚠ ROR API returned {api_response.status_code} for {ror_id}. "
-                                f"Proceeding with full validation..."
+                                f"Proceeding with full validation...",
                             )
                 except Exception as e:
                     logger.debug(
-                        f"Pre-validation check failed for {ror_id}: {e}. Proceeding with full validation..."
+                        f"Pre-validation check failed for {ror_id}: {e}. Proceeding with full validation...",
                     )
 
                 # Prepare expected org data
@@ -1006,14 +1046,14 @@ async def enrich_organizations(
                 if not validation_result.is_valid:
                     logger.warning(
                         f"⚠ ROR validation failed for {org.legalName} (ROR: {ror_id}): "
-                        f"{validation_result.justification}"
+                        f"{validation_result.justification}",
                     )
                     # Remove invalid ROR ID
                     org.hasRorId = None
                 elif validation_result.confidence < 0.7:
                     logger.info(
                         f"⚠ Low confidence ROR match for {org.legalName} (ROR: {ror_id}): "
-                        f"confidence={validation_result.confidence:.2f}"
+                        f"confidence={validation_result.confidence:.2f}",
                     )
                     # Reduce confidence
                     if org.attributionConfidence:
@@ -1021,7 +1061,7 @@ async def enrich_organizations(
                 else:
                     logger.info(
                         f"✓ ROR validation passed for {org.legalName} (ROR: {ror_id}): "
-                        f"confidence={validation_result.confidence:.2f}"
+                        f"confidence={validation_result.confidence:.2f}",
                     )
 
             except Exception as e:
@@ -1138,28 +1178,40 @@ async def enrich_organizations_from_dict(
     )
 
     # Pre-search ROR for organizations from ORCID and existing mentions
-    logger.info("🔍 Pre-searching ROR for organizations from ORCID affiliations and existing mentions...")
+    logger.info(
+        "🔍 Pre-searching ROR for organizations from ORCID affiliations and existing mentions...",
+    )
     pre_searched_ror = await _pre_search_ror_for_organizations(context)
-    
+
     # DEBUG: Log what we found
     if pre_searched_ror:
-        logger.info(f"📋 Pre-searched ROR results: {len(pre_searched_ror)} organizations")
+        logger.info(
+            f"📋 Pre-searched ROR results: {len(pre_searched_ror)} organizations",
+        )
         for org_query, results in pre_searched_ror.items():
             logger.info(f"  '{org_query}': {len(results)} ROR matches")
             for i, result in enumerate(results[:3], 1):
-                ror_id = result.get("ror_id", "").split("/")[-1] if "/" in result.get("ror_id", "") else result.get("ror_id", "")
+                ror_id = (
+                    result.get("ror_id", "").split("/")[-1]
+                    if "/" in result.get("ror_id", "")
+                    else result.get("ror_id", "")
+                )
                 logger.info(f"    {i}. {result.get('name')} - ROR: {ror_id}")
     else:
         logger.info("  No organizations found to pre-search")
-    
+
     # Prepare the prompt for the agent (include pre-searched ROR results)
-    prompt = get_organization_enrichment_prompt(repository_url, context, pre_searched_ror)
+    prompt = get_organization_enrichment_prompt(
+        repository_url,
+        context,
+        pre_searched_ror,
+    )
 
     logger.info(f"🚀 Starting organization enrichment from dict for {repository_url}")
     logger.info(
         f"📊 Input data: {len(git_authors)} git authors, {len(authors)} ORCID authors",
     )
-    
+
     # Run the agent with fallback across multiple models
     logger.info("🤖 Running PydanticAI agent with fallback...")
     result = await run_agent_with_fallback(org_enrichment_configs, prompt, context)
@@ -1232,7 +1284,7 @@ async def enrich_organizations_from_dict(
             org_name = org.legalName if hasattr(org, "legalName") else str(org)
             ror_id = str(org.hasRorId) if org.hasRorId else "None"
             logger.info(f"  {i}. {org_name} - ROR ID: {ror_id}")
-    
+
     # Pydantic Validation
     if OrganizationEnrichmentResult.model_validate(result.output):
         logger.info("✅ Output validated against OrganizationEnrichmentResult model")
@@ -1243,7 +1295,7 @@ async def enrich_organizations_from_dict(
 
     # Validate ROR IDs for all organizations
     enriched_result = OrganizationEnrichmentResult(**result.output.model_dump())
-    
+
     logger.info("🔍 Validating ROR IDs for all organizations...")
     for org in enriched_result.organizations:
         if org.hasRorId:
@@ -1254,7 +1306,7 @@ async def enrich_organizations_from_dict(
                     ror_id = ror_id.split("/")[-1]
 
                 logger.info(
-                    f"🔍 Validating ROR ID for {org.legalName}: {ror_id} (URL: https://ror.org/{ror_id})"
+                    f"🔍 Validating ROR ID for {org.legalName}: {ror_id} (URL: https://ror.org/{ror_id})",
                 )
 
                 # Quick pre-validation: Check if ROR ID exists in ROR API
@@ -1265,18 +1317,18 @@ async def enrich_organizations_from_dict(
                         if api_response.status_code == 404:
                             logger.warning(
                                 f"⚠ ROR ID {ror_id} does not exist in ROR API (404). "
-                                f"Removing invalid ROR ID for {org.legalName}"
+                                f"Removing invalid ROR ID for {org.legalName}",
                             )
                             org.hasRorId = None
                             continue
                         elif api_response.status_code != 200:
                             logger.warning(
                                 f"⚠ ROR API returned {api_response.status_code} for {ror_id}. "
-                                f"Proceeding with full validation..."
+                                f"Proceeding with full validation...",
                             )
                 except Exception as e:
                     logger.debug(
-                        f"Pre-validation check failed for {ror_id}: {e}. Proceeding with full validation..."
+                        f"Pre-validation check failed for {ror_id}: {e}. Proceeding with full validation...",
                     )
 
                 # Prepare expected org data
@@ -1298,14 +1350,14 @@ async def enrich_organizations_from_dict(
                 if not validation_result.is_valid:
                     logger.warning(
                         f"⚠ ROR validation failed for {org.legalName} (ROR: {ror_id}): "
-                        f"{validation_result.justification}"
+                        f"{validation_result.justification}",
                     )
                     # Remove invalid ROR ID
                     org.hasRorId = None
                 elif validation_result.confidence < 0.7:
                     logger.info(
                         f"⚠ Low confidence ROR match for {org.legalName} (ROR: {ror_id}): "
-                        f"confidence={validation_result.confidence:.2f}"
+                        f"confidence={validation_result.confidence:.2f}",
                     )
                     # Reduce confidence
                     if org.attributionConfidence:
@@ -1313,7 +1365,7 @@ async def enrich_organizations_from_dict(
                 else:
                     logger.info(
                         f"✓ ROR validation passed for {org.legalName} (ROR: {ror_id}): "
-                        f"confidence={validation_result.confidence:.2f}"
+                        f"confidence={validation_result.confidence:.2f}",
                     )
 
             except Exception as e:

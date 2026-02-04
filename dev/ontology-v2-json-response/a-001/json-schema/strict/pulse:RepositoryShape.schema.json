@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:RepositoryShape.schema.json",
+  "title": "RepositoryShape",
+  "description": "Schema for validating Repository entities following Open Pulse Ontology v2.0.0. ID hierarchy: githubRepositoryHandle → doi → uuid",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "pulse:githubRepositoryHandle", "schema:author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier (first non-null in priority: githubRepositoryHandle → doi → uuid)"
+    },
+    "type": {
+      "type": "string",
+      "const": "schema:SoftwareSourceCode"
+    },
+    "shacl": {
+      "type": "string",
+      "const": "pulse:RepositoryShape"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pulse:githubRepositoryHandle", "uuid"],
+      "properties": {
+        "pulse:githubRepositoryHandle": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$"
+        },
+        "schema:identifier": {
+          "type": ["string", "null"],
+          "pattern": "^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
+          "description": "DOI identifier"
+        },
+        "uuid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "enum": ["pulse:githubRepositoryHandle", "schema:identifier", "uuid"]
+    },
+    "schema:name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pulse:githubRepositoryHandle": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$"
+    },
+    "pulse:repositoryType": {
+      "type": "string",
+      "enum": ["pulse:Software", "pulse:Data", "pulse:Documentation", "pulse:EducationalResource", "pulse:Other"],
+      "description": "Repository type. Optional per SHACL."
+    },
+    "pulse:discipline": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^wd:Q\\d+$",
+        "description": "Wikidata IRI for discipline"
+      }
+    },
+    "schema:author": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "description": "Reference to PersonShape ID (hierarchical)"
+      }
+    },
+    "pulse:githubRepoStars": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "pulse:githubRepoForks": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "schema:dateCreated": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "ISO 8601 datetime format"
+    },
+    "schema:license": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "SPDX license IRI"
+    },
+    "schema:citation": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "DOI URL for citation"
+    },
+    "schema:programmingLanguage": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pulse:ownedBy": {
+      "type": ["string", "null"],
+      "description": "Reference to PersonShape or OrganizationShape ID (hierarchical)"
+    },
+    "pulse:isForkOf": {
+      "type": ["string", "null"],
+      "description": "Reference to parent RepositoryShape ID (GitHub handle)"
+    }
+  }
+}

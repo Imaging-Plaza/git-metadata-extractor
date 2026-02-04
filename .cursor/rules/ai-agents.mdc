@@ -853,7 +853,7 @@ for author in self.data.author:
     - Pre-searched ROR data: Only essential fields (name, ror_id, country, website, 3 aliases, parent orgs)
     - Prompt instructions: Concise and focused, avoid verbose explanations
     - Token breakdown logging: Helps identify which sections consume most tokens
-13. **Token accumulation verification**: 
+13. **Token accumulation verification**:
     - All agents accumulate tokens in `Repository` class instance variables
     - `get_usage_stats()` returns accumulated totals from all agents
     - `APIStats.calculate_total_tokens()` calculates both official and estimated totals

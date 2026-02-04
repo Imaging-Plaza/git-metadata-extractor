@@ -162,7 +162,9 @@ class Repository:
 
             # Replace relatedToOrganizations with enriched Organization objects only
             # Don't add both org name strings and Organization objects - just objects
-            self.data.relatedToOrganizations = list(enriched_orgs) if enriched_orgs else None
+            self.data.relatedToOrganizations = (
+                list(enriched_orgs) if enriched_orgs else None
+            )
 
             # These values are overwritten only if provided by the enrichment
             if organization_enrichment.relatedToEPFL is not None:
@@ -279,7 +281,6 @@ class Repository:
             self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
             self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
 
-
     def _names_match(self, name1: str, name2: str) -> bool:
         """
         Check if two names match, handling variations like:
@@ -354,11 +355,15 @@ class Repository:
                         author_names.append(author.name)
                     elif hasattr(author, "legalName") and author.legalName:
                         organization_names.append(author.legalName)
-            
+
             # Also check relatedToOrganizations for Organization objects
             if self.data.relatedToOrganizations:
                 for org in self.data.relatedToOrganizations:
-                    if isinstance(org, Organization) and hasattr(org, "legalName") and org.legalName:
+                    if (
+                        isinstance(org, Organization)
+                        and hasattr(org, "legalName")
+                        and org.legalName
+                    ):
                         if org.legalName not in organization_names:
                             organization_names.append(org.legalName)
 

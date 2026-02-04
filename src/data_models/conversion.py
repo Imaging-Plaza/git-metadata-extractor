@@ -133,7 +133,7 @@ def _convert_entity(entity: Dict, all_entities: Dict) -> Optional[BaseModel]:
             email_extracted = _get_value(email_value)
             if email_extracted:
                 person_data["email"] = email_extracted
-        
+
         # All other fields (gitAuthorIds, affiliations, currentAffiliation,
         # affiliationHistory, contributionSummary, biography, infoscienceEntity)
         # will use their default values as defined in the Person model
@@ -593,7 +593,7 @@ def convert_pydantic_to_jsonld(
                     converted = _convert_entity_to_jsonld(value)
                     if converted is not None:
                         jsonld_entity[jsonld_key] = converted
-        
+
         return jsonld_entity
 
     # Convert the main object

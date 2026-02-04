@@ -1,0 +1,255 @@
+{
+  "timestamp": "2026-02-04T14:23:04.379768",
+  "schema_type": "strict",
+  "summary": {
+    "total_files": 6,
+    "valid_files": 6,
+    "total_instances": 27,
+    "valid_instances": 27
+  },
+  "results": {
+    "pulse:PersonShape": {
+      "json_file": "pulse:PersonShape.json",
+      "schema_file": "pulse:PersonShape.schema.json",
+      "valid_count": 4,
+      "invalid_count": 0,
+      "total_count": 4,
+      "instances": [
+        {
+          "id": "0000-0001-2345-6789",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0002-3456-7890",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0003-4567-8901",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "mweber",
+          "index": 3,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    },
+    "pulse:RepositoryShape": {
+      "json_file": "pulse:RepositoryShape.json",
+      "schema_file": "pulse:RepositoryShape.schema.json",
+      "valid_count": 3,
+      "invalid_count": 0,
+      "total_count": 3,
+      "instances": [
+        {
+          "id": "EPFL-ENAC/geodata-toolkit",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "EPFL-ENAC/structural-analysis",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "mweber/data-pipeline",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    },
+    "pulse:OrganizationShape": {
+      "json_file": "pulse:OrganizationShape.json",
+      "schema_file": "pulse:OrganizationShape.schema.json",
+      "valid_count": 5,
+      "invalid_count": 0,
+      "total_count": 5,
+      "instances": [
+        {
+          "id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "https://ror.org/02s376052",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "https://ror.org/01ggx4157",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "https://ror.org/05a28rw58",
+          "index": 3,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "numpy",
+          "index": 4,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    },
+    "pulse:MembershipShape": {
+      "json_file": "pulse:MembershipShape.json",
+      "schema_file": "pulse:MembershipShape.schema.json",
+      "valid_count": 5,
+      "invalid_count": 0,
+      "total_count": 5,
+      "instances": [
+        {
+          "id": "0000-0001-2345-6789_https://ror.org/02s376052",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0002-3456-7890_https://ror.org/02s376052",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "mweber_https://ror.org/05a28rw58",
+          "index": 3,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0001-2345-6789_numpy",
+          "index": 4,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    },
+    "pulse:ContributionShape": {
+      "json_file": "pulse:ContributionShape.json",
+      "schema_file": "pulse:ContributionShape.schema.json",
+      "valid_count": 7,
+      "invalid_count": 0,
+      "total_count": 7,
+      "instances": [
+        {
+          "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+          "index": 3,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+          "index": 4,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "mweber_EPFL-ENAC/structural-analysis",
+          "index": 5,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "mweber_mweber/data-pipeline",
+          "index": 6,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    },
+    "pulse:ArticleShape": {
+      "json_file": "pulse:ArticleShape.json",
+      "schema_file": "pulse:ArticleShape.schema.json",
+      "valid_count": 3,
+      "invalid_count": 0,
+      "total_count": 3,
+      "instances": [
+        {
+          "id": "10.1038/s41586-024-07856-z",
+          "index": 0,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "10.1016/j.softx.2023.101456",
+          "index": 1,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "10.1109/TBME.2024.3123456",
+          "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        }
+      ]
+    }
+  }
+}

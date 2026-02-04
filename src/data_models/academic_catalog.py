@@ -8,7 +8,7 @@ Unified models for academic catalog relationships across multiple catalogs
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, List, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -70,7 +70,7 @@ class AcademicCatalogRelation(BaseModel):
         description="Explanation of why this entity is related and how it was found",
     )
 
-    matchedOn: Optional[List[str]] = Field(
+    matchedOn: Optional[list[str]] = Field(
         description="Fields used to match this entity (e.g., ['name', 'email'], ['doi'])",
         default_factory=list,
     )

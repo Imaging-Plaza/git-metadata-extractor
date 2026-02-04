@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:MembershipShape.schema.json",
+  "title": "MembershipShape",
+  "description": "Schema for validating Membership entities following Open Pulse Ontology v2.0.0. ID hierarchy: composite (personId_orgId) → uuid",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "org:organization"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier (composite format: personId_orgId, or uuid fallback)"
+    },
+    "type": {
+      "type": "string",
+      "const": "org:Membership"
+    },
+    "shacl": {
+      "type": "string",
+      "const": "pulse:MembershipShape"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pulse:composite", "uuid"],
+      "properties": {
+        "pulse:composite": {
+          "type": "string",
+          "description": "Composite identifier in format: personId_orgId"
+        },
+        "uuid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "enum": ["pulse:composite", "uuid"]
+    },
+    "org:organization": {
+      "type": "string",
+      "description": "Reference to OrganizationShape ID (hierarchical)"
+    },
+    "org:role": {
+      "type": ["string", "null"],
+      "description": "Role or position title within the organization. Optional per SHACL (maxCount 1)."
+    },
+    "time:hasBeginning": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Start date in ISO 8601 date format (YYYY-MM-DD)"
+    },
+    "time:hasEnd": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "End date in ISO 8601 date format (YYYY-MM-DD)"
+    }
+  }
+}

@@ -1,0 +1,425 @@
+{
+  "timestamp": "2026-02-04T16:28:55.266256",
+  "summary": {
+    "total_instances": 27,
+    "valid_references": 50,
+    "invalid_references": 0,
+    "bidirectional_warnings": 0
+  },
+  "cross_reference_errors": [],
+  "bidirectional_warnings": [],
+  "details": {
+    "Person": [
+      {
+        "source_id": "0000-0001-2345-6789",
+        "field": "org:hasMembership",
+        "reference": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "target_shape": "Membership",
+        "resolved_id": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789",
+        "field": "org:hasMembership",
+        "reference": "0000-0001-2345-6789_numpy",
+        "target_shape": "Membership",
+        "resolved_id": "0000-0001-2345-6789_numpy",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890",
+        "field": "org:hasMembership",
+        "reference": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "target_shape": "Membership",
+        "resolved_id": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901",
+        "field": "org:hasMembership",
+        "reference": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "target_shape": "Membership",
+        "resolved_id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber",
+        "field": "org:hasMembership",
+        "reference": "mweber_https://ror.org/05a28rw58",
+        "target_shape": "Membership",
+        "resolved_id": "mweber_https://ror.org/05a28rw58",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber",
+        "field": "pulse:hasContribution",
+        "reference": "mweber_EPFL-ENAC/structural-analysis",
+        "target_shape": "Contribution",
+        "resolved_id": "mweber_EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber",
+        "field": "pulse:hasContribution",
+        "reference": "mweber_mweber/data-pipeline",
+        "target_shape": "Contribution",
+        "resolved_id": "mweber_mweber/data-pipeline",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber",
+        "field": "pulse:owns",
+        "reference": "mweber/data-pipeline",
+        "target_shape": "Repository",
+        "resolved_id": "mweber/data-pipeline",
+        "status": "valid"
+      }
+    ],
+    "Repository": [
+      {
+        "source_id": "EPFL-ENAC/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0001-2345-6789",
+        "target_shape": "Person",
+        "resolved_id": "0000-0001-2345-6789",
+        "status": "valid"
+      },
+      {
+        "source_id": "EPFL-ENAC/geodata-toolkit",
+        "field": "pulse:ownedBy",
+        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "target_shape": "Organization",
+        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "status": "valid"
+      },
+      {
+        "source_id": "EPFL-ENAC/structural-analysis",
+        "field": "schema:author",
+        "reference": "mweber",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      },
+      {
+        "source_id": "EPFL-ENAC/structural-analysis",
+        "field": "pulse:ownedBy",
+        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "target_shape": "Organization",
+        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber/data-pipeline",
+        "field": "schema:author",
+        "reference": "mweber",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber/data-pipeline",
+        "field": "pulse:ownedBy",
+        "reference": "mweber",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      }
+    ],
+    "Organization": [
+      {
+        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "field": "org:unitOf",
+        "reference": "https://ror.org/02s376052",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "field": "pulse:owns",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "field": "pulse:owns",
+        "reference": "EPFL-ENAC/structural-analysis",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "https://ror.org/02s376052",
+        "field": "org:hasUnit",
+        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "target_shape": "Organization",
+        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "status": "valid"
+      }
+    ],
+    "Membership": [
+      {
+        "source_id": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "field": "org:organization",
+        "reference": "https://ror.org/02s376052",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "field": "org:organization",
+        "reference": "https://ror.org/02s376052",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "field": "org:organization",
+        "reference": "https://ror.org/01ggx4157",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/01ggx4157",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber_https://ror.org/05a28rw58",
+        "field": "org:organization",
+        "reference": "https://ror.org/05a28rw58",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/05a28rw58",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789_numpy",
+        "field": "org:organization",
+        "reference": "numpy",
+        "target_shape": "Organization",
+        "resolved_id": "numpy",
+        "status": "valid"
+      }
+    ],
+    "Contribution": [
+      {
+        "source_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0001-2345-6789",
+        "target_shape": "Person",
+        "resolved_id": "0000-0001-2345-6789",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/structural-analysis",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "field": "schema:author",
+        "reference": "0000-0001-2345-6789",
+        "target_shape": "Person",
+        "resolved_id": "0000-0001-2345-6789",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0002-3456-7890",
+        "target_shape": "Person",
+        "resolved_id": "0000-0002-3456-7890",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/structural-analysis",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "field": "schema:author",
+        "reference": "0000-0002-3456-7890",
+        "target_shape": "Person",
+        "resolved_id": "0000-0002-3456-7890",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0003-4567-8901",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber_EPFL-ENAC/structural-analysis",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/structural-analysis",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/structural-analysis",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber_EPFL-ENAC/structural-analysis",
+        "field": "schema:author",
+        "reference": "mweber",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber_mweber/data-pipeline",
+        "field": "pulse:contributionTo",
+        "reference": "mweber/data-pipeline",
+        "target_shape": "Repository",
+        "resolved_id": "mweber/data-pipeline",
+        "status": "valid"
+      },
+      {
+        "source_id": "mweber_mweber/data-pipeline",
+        "field": "schema:author",
+        "reference": "mweber",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      }
+    ],
+    "Article": [
+      {
+        "source_id": "10.1038/s41586-024-07856-z",
+        "field": "schema:author",
+        "reference": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+        "target_shape": "Person",
+        "resolved_id": "0000-0001-2345-6789",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1038/s41586-024-07856-z",
+        "field": "schema:author",
+        "reference": "b3f2a1c4-5d6e-4b7a-8c9d-1e2f3a4b5c6d",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1038/s41586-024-07856-z",
+        "field": "schema:sourceOrganization",
+        "reference": "e2c4b6a8-1d3f-4e5a-9b7c-8d6e4f2a1b3c",
+        "target_shape": "Organization",
+        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1016/j.softx.2023.101456",
+        "field": "schema:author",
+        "reference": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e",
+        "target_shape": "Person",
+        "resolved_id": "0000-0001-2345-6789",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1016/j.softx.2023.101456",
+        "field": "schema:author",
+        "reference": "a9b8c7d6-5e4f-4a3b-8c1d-9e8f7a6b5c4d",
+        "target_shape": "Person",
+        "resolved_id": "0000-0002-3456-7890",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1016/j.softx.2023.101456",
+        "field": "schema:sourceOrganization",
+        "reference": "e5a3b1c9-7d8e-4f6a-ab4c-6d8e0f2a4b6c",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/02s376052",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1109/TBME.2024.3123456",
+        "field": "schema:author",
+        "reference": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+        "target_shape": "Person",
+        "resolved_id": "mweber",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1109/TBME.2024.3123456",
+        "field": "schema:sourceOrganization",
+        "reference": "e4d3c2b1-6a5f-4e8d-9c9b-0a1f2e3d4c5b",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/05a28rw58",
+        "status": "valid"
+      }
+    ]
+  }
+}
