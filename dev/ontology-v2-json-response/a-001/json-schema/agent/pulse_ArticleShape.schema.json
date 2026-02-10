@@ -47,7 +47,7 @@
       "description": "Article title. REQUIRED per SHACL. Example: 'Open Pulse: A Framework for Tracking Scientific Software Contributions'"
     },
     "schema:identifier": {
-      "type": ["string", "null"],
+      "type": "string",
       "description": "DOI identifier. REQUIRED per SHACL. Format: 10.XXXX/suffix. Example: '10.1038/s41586-024-07856-z'"
     },
     "schema:datePublished": {

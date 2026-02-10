@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Validate JSON files in a-001 against both strict and agent JSON schemas.
-Results are stored in a-001/test/ directory.
+Also runs expected-invalid regression fixtures to ensure key constraints do not
+silently regress. Results are stored in a-001/test/ directory.
 
 Usage:
     python scripts/validate_schemas.py
@@ -16,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from jsonschema import Draft7Validator, ValidationError
+    from jsonschema import Draft7Validator
 except ImportError:
     print("Error: jsonschema not installed. Run: pip install jsonschema")
     exit(1)
@@ -29,6 +30,7 @@ JSON_DIR = BASE_DIR / "a-001"
 STRICT_SCHEMA_DIR = JSON_DIR / "json-schema" / "strict"
 AGENT_SCHEMA_DIR = JSON_DIR / "json-schema" / "agent"
 TEST_OUTPUT_DIR = JSON_DIR / "test"
+FIXTURES_DIR = JSON_DIR / "fixtures"
 
 # Shape files to validate
 SHAPE_FILES = [
@@ -38,6 +40,16 @@ SHAPE_FILES = [
     "pulse_MembershipShape.json",
     "pulse_ContributionShape.json",
     "pulse_ArticleShape.json",
+]
+
+# Fixtures that are expected to FAIL validation.
+NEGATIVE_EXPECTED_INVALID_CASES = [
+    {
+        "name": "person_invalid_null_identifiers_no_email",
+        "fixture_file": "person_invalid_null_identifiers_no_email.json",
+        "shape_name": "pulse_PersonShape",
+        "schema_types": ["strict", "agent"],
+    },
 ]
 
 
@@ -115,12 +127,102 @@ def validate_file(json_file: Path, schema_file: Path) -> dict:
     return result
 
 
+def validate_expected_invalid_case(
+    *,
+    case_name: str,
+    fixture_file: Path,
+    schema_file: Path,
+    schema_type: str,
+) -> dict:
+    """Validate a fixture that is expected to be invalid."""
+    result = {
+        "name": case_name,
+        "schema_type": schema_type,
+        "fixture_file": str(fixture_file.relative_to(JSON_DIR)),
+        "schema_file": str(schema_file.name),
+        "expected_valid": False,
+        "actual_valid": False,
+        "passed": False,
+        "error_count": 0,
+        "errors": [],
+    }
+
+    try:
+        data = load_json(fixture_file)
+        schema = load_json(schema_file)
+    except FileNotFoundError as e:
+        result["error"] = f"File not found: {e.filename}"
+        return result
+    except json.JSONDecodeError as e:
+        result["error"] = f"JSON decode error: {e.msg}"
+        return result
+
+    if not isinstance(data, dict):
+        result["error"] = "Fixture must be a single JSON object"
+        return result
+
+    validator = Draft7Validator(schema)
+    errors = validate_instance(data, schema, validator)
+    actual_valid = len(errors) == 0
+
+    result["actual_valid"] = actual_valid
+    result["passed"] = not actual_valid
+    result["error_count"] = len(errors)
+    result["errors"] = errors
+    return result
+
+
+def run_negative_validation() -> dict:
+    """Run expected-invalid fixture validation checks."""
+    results = {
+        "summary": {
+            "total_cases": 0,
+            "passed_cases": 0,
+            "failed_cases": 0,
+        },
+        "cases": [],
+    }
+
+    schema_dirs = {
+        "strict": STRICT_SCHEMA_DIR,
+        "agent": AGENT_SCHEMA_DIR,
+    }
+
+    for case in NEGATIVE_EXPECTED_INVALID_CASES:
+        fixture_path = FIXTURES_DIR / case["fixture_file"]
+        for schema_type in case["schema_types"]:
+            schema_dir = schema_dirs[schema_type]
+            schema_path = schema_dir / f"{case['shape_name']}.schema.json"
+            case_result = validate_expected_invalid_case(
+                case_name=case["name"],
+                fixture_file=fixture_path,
+                schema_file=schema_path,
+                schema_type=schema_type,
+            )
+            results["cases"].append(case_result)
+            results["summary"]["total_cases"] += 1
+            if case_result.get("passed"):
+                results["summary"]["passed_cases"] += 1
+            else:
+                results["summary"]["failed_cases"] += 1
+
+    return results
+
+
 def run_validation() -> dict:
     """Run validation for all files against both schema types."""
     results = {
         "timestamp": datetime.now().isoformat(),
         "strict": {},
         "agent": {},
+        "negative": {
+            "summary": {
+                "total_cases": 0,
+                "passed_cases": 0,
+                "failed_cases": 0,
+            },
+            "cases": [],
+        },
         "summary": {
             "strict": {
                 "total_files": 0,
@@ -133,6 +235,11 @@ def run_validation() -> dict:
                 "valid_files": 0,
                 "total_instances": 0,
                 "valid_instances": 0,
+            },
+            "negative": {
+                "total_cases": 0,
+                "passed_cases": 0,
+                "failed_cases": 0,
             },
         },
     }
@@ -181,6 +288,10 @@ def run_validation() -> dict:
             ):
                 results["summary"]["agent"]["valid_files"] += 1
 
+    negative_results = run_negative_validation()
+    results["negative"] = negative_results
+    results["summary"]["negative"] = negative_results["summary"]
+
     return results
 
 
@@ -222,6 +333,35 @@ def print_summary(results: dict):
                     f"\n  ✓ {shape_name}: {result.get('valid_count', 0)} instances valid",
                 )
 
+    negative_results = results.get("negative", {})
+    negative_summary = negative_results.get("summary", {})
+    if negative_summary:
+        print("\nNEGATIVE REGRESSION CASES:")
+        print(
+            "  Cases: "
+            f"{negative_summary.get('passed_cases', 0)}/"
+            f"{negative_summary.get('total_cases', 0)} passed",
+        )
+
+        for case in negative_results.get("cases", []):
+            status = "✓" if case.get("passed") else "❌"
+            print(f"\n  {status} {case['name']} ({case['schema_type']})")
+            if "error" in case:
+                print(f"     Error: {case['error']}")
+                continue
+
+            if case.get("passed"):
+                print("     Expected invalid and validation failed as intended")
+            else:
+                print("     Expected invalid but fixture validated successfully")
+                for err in case.get("errors", [])[:3]:
+                    path = ".".join(str(p) for p in err["path"]) or "(root)"
+                    print(f"       [{path}] {err['message']}")
+                if len(case.get("errors", [])) > 3:
+                    print(
+                        f"       ... and {len(case['errors']) - 3} more errors",
+                    )
+
 
 def main():
     """Main entry point."""
@@ -255,6 +395,17 @@ def main():
             json.dump(report, f, indent=2)
         print(f"{schema_type.capitalize()} report saved to: {report_file}")
 
+    negative_report_file = TEST_OUTPUT_DIR / "validation_negative.json"
+    negative_report = {
+        "timestamp": results["timestamp"],
+        "schema_type": "negative",
+        "summary": results["negative"]["summary"],
+        "results": results["negative"]["cases"],
+    }
+    with open(negative_report_file, "w", encoding="utf-8") as f:
+        json.dump(negative_report, f, indent=2)
+    print(f"Negative report saved to: {negative_report_file}")
+
     # Print summary
     print_summary(results)
 
@@ -264,6 +415,7 @@ def main():
         - results["summary"]["strict"]["valid_instances"]
         + results["summary"]["agent"]["total_instances"]
         - results["summary"]["agent"]["valid_instances"]
+        + results["summary"]["negative"]["failed_cases"]
     )
     if total_invalid > 0:
         print(f"\n⚠️  {total_invalid} validation error(s) found")

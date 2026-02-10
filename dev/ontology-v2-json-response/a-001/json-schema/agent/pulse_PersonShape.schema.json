@@ -91,5 +91,34 @@
         "type": "string"
       }
     }
-  }
+  },
+  "anyOf": [
+    {
+      "description": "At least githubUsername required",
+      "required": ["pulse:githubUsername"],
+      "properties": {
+        "pulse:githubUsername": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least email required",
+      "required": ["schema:email"],
+      "properties": {
+        "schema:email": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least infosciencePersonIdentifier required",
+      "required": ["pulse:infosciencePersonIdentifier"],
+      "properties": {
+        "pulse:infosciencePersonIdentifier": {
+          "type": "string"
+        }
+      }
+    }
+  ]
 }

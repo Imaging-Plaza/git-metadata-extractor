@@ -237,8 +237,8 @@ pulse:InfoscienceOrganizationIdentifierShape
     a sh:PropertyShape ;
     sh:path pulse:infoscienceOrganizationIdentifier;
     sh:datatype xsd:string ;
-    sh:pattern "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" ;
-    sh:description "Infoscience Organization ID validation." .
+    sh:pattern "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" ;
+    sh:description "Infoscience Organization UUID4 ID validation." .
 
 pulse:RorPropertyShape
     a sh:PropertyShape ;

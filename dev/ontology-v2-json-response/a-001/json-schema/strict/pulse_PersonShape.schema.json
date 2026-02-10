@@ -91,8 +91,32 @@
     }
   },
   "anyOf": [
-    { "required": ["pulse:githubUsername"], "description": "At least githubUsername required" },
-    { "required": ["schema:email"], "description": "At least email required" },
-    { "required": ["pulse:infosciencePersonIdentifier"], "description": "At least infosciencePersonIdentifier required" }
+    {
+      "description": "At least githubUsername required",
+      "required": ["pulse:githubUsername"],
+      "properties": {
+        "pulse:githubUsername": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least email required",
+      "required": ["schema:email"],
+      "properties": {
+        "schema:email": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least infosciencePersonIdentifier required",
+      "required": ["pulse:infosciencePersonIdentifier"],
+      "properties": {
+        "pulse:infosciencePersonIdentifier": {
+          "type": "string"
+        }
+      }
+    }
   ]
 }
