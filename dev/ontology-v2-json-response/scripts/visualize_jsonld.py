@@ -1019,6 +1019,44 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
             color: #0f172a;
         }}
 
+        #jsonld-editor-toolbar {{
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .jsonld-toolbar-btn {{
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            background: white;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 9px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }}
+
+        .jsonld-toolbar-btn:hover:not(:disabled) {{
+            background: #e2e8f0;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }}
+
+        .jsonld-toolbar-btn.active {{
+            background: #dbeafe;
+            border-color: #93c5fd;
+            color: #1e3a8a;
+        }}
+
+        .jsonld-toolbar-btn:disabled {{
+            opacity: 0.55;
+            cursor: not-allowed;
+        }}
+
         #jsonld-editor-status {{
             min-height: 36px;
             padding: 9px 12px;
@@ -1044,6 +1082,14 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
         #jsonld-editor-container {{
             flex: 1;
             min-height: 0;
+            display: flex;
+            min-width: 0;
+        }}
+
+        #jsonld-editor-main {{
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
         }}
 
         #jsonld-editor-textarea {{
@@ -1063,6 +1109,59 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
 
         #jsonld-editor-container .cm-node-ref-line {{
             background: rgba(14, 165, 233, 0.14);
+        }}
+
+        #jsonld-minimap {{
+            width: 64px;
+            min-width: 64px;
+            border-left: 1px solid #e2e8f0;
+            background: #f8fafc;
+            position: relative;
+            display: none;
+            cursor: pointer;
+        }}
+
+        #jsonld-minimap.visible {{
+            display: block;
+        }}
+
+        #jsonld-minimap-track {{
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.08));
+        }}
+
+        #jsonld-minimap-markers {{
+            position: absolute;
+            inset: 0;
+        }}
+
+        .minimap-marker {{
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            min-height: 2px;
+            border-radius: 2px;
+            opacity: 0.95;
+        }}
+
+        .minimap-marker-node {{
+            background: rgba(37, 99, 235, 0.95);
+        }}
+
+        .minimap-marker-ref {{
+            background: rgba(14, 116, 144, 0.85);
+        }}
+
+        #jsonld-minimap-viewport {{
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            border: 1px solid rgba(100, 116, 139, 0.6);
+            background: rgba(148, 163, 184, 0.16);
+            border-radius: 4px;
+            pointer-events: none;
+            min-height: 10px;
         }}
 
         /* Graph container */
@@ -1693,9 +1792,19 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
                             <button id="jsonld-download-btn" class="jsonld-action-btn" title="Download edited JSON-LD">Download</button>
                         </div>
                     </div>
+                    <div id="jsonld-editor-toolbar">
+                        <button id="jsonld-toggle-minimap-btn" class="jsonld-toolbar-btn" title="Show or hide editor minimap">Show Minimap</button>
+                    </div>
                     <div id="jsonld-editor-status">Editor ready. Select a node and use "Edit in JSON-LD" to jump to related lines.</div>
                     <div id="jsonld-editor-container">
-                        <textarea id="jsonld-editor-textarea"></textarea>
+                        <div id="jsonld-editor-main">
+                            <textarea id="jsonld-editor-textarea"></textarea>
+                        </div>
+                        <div id="jsonld-minimap" aria-hidden="true">
+                            <div id="jsonld-minimap-track"></div>
+                            <div id="jsonld-minimap-markers"></div>
+                            <div id="jsonld-minimap-viewport"></div>
+                        </div>
                     </div>
                 </div>
                 <button id="jsonld-editor-toggle" title="Toggle JSON-LD editor">▶</button>
@@ -2534,8 +2643,13 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
         const editNodeJsonldBtn = document.getElementById("edit-node-jsonld-btn");
         const jsonldApplyBtn = document.getElementById("jsonld-apply-btn");
         const jsonldDownloadBtn = document.getElementById("jsonld-download-btn");
+        const jsonldToggleMinimapBtn = document.getElementById("jsonld-toggle-minimap-btn");
         const jsonldStatusEl = document.getElementById("jsonld-editor-status");
         const jsonldTextarea = document.getElementById("jsonld-editor-textarea");
+        const jsonldMinimap = document.getElementById("jsonld-minimap");
+        const jsonldMinimapMarkers = document.getElementById("jsonld-minimap-markers");
+        const jsonldMinimapViewport = document.getElementById("jsonld-minimap-viewport");
+        let minimapVisible = false;
 
         function setJsonldStatus(message, level = "info") {{
             jsonldStatusEl.classList.remove("success", "error");
@@ -2569,6 +2683,8 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
                         if (selectedNode) {{
                             highlightSourceForNode(selectedNode, true);
                         }}
+                        updateMinimapMarkers();
+                        updateMinimapViewport();
                     }}
                     sigma.refresh();
                 }}, 350);
@@ -2595,6 +2711,90 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
             const enabled = Boolean(nodeId && graph.hasNode(nodeId));
             editNodeJsonldBtn.disabled = !enabled;
             editNodeJsonldBtn.dataset.nodeId = enabled ? nodeId : "";
+        }}
+
+        function scrollEditorToLine(line, focus = false) {{
+            if (!jsonldEditor) return;
+            const maxLine = Math.max(0, jsonldEditor.lineCount() - 1);
+            const safeLine = Math.max(0, Math.min(line, maxLine));
+            jsonldEditor.scrollIntoView({{ line: safeLine, ch: 0 }}, 120);
+            jsonldEditor.setCursor({{ line: safeLine, ch: 0 }});
+            if (focus) {{
+                jsonldEditor.focus();
+            }}
+            updateMinimapViewport();
+        }}
+
+        function setMinimapButtonState() {{
+            jsonldToggleMinimapBtn.classList.toggle("active", minimapVisible);
+            jsonldToggleMinimapBtn.textContent = minimapVisible ? "Hide Minimap" : "Show Minimap";
+            jsonldToggleMinimapBtn.setAttribute("aria-pressed", minimapVisible ? "true" : "false");
+        }}
+
+        function updateMinimapViewport() {{
+            if (!jsonldEditor || !minimapVisible) return;
+            const scrollInfo = jsonldEditor.getScrollInfo();
+            const fullHeight = Math.max(scrollInfo.height, 1);
+            const viewHeight = Math.max(scrollInfo.clientHeight, 1);
+
+            if (fullHeight <= viewHeight) {{
+                jsonldMinimapViewport.style.top = "0%";
+                jsonldMinimapViewport.style.height = "100%";
+                return;
+            }}
+
+            const topRatio = Math.max(0, Math.min(1, scrollInfo.top / (fullHeight - viewHeight)));
+            const heightRatio = Math.max(0.02, Math.min(1, viewHeight / fullHeight));
+
+            jsonldMinimapViewport.style.top = `${{topRatio * 100}}%`;
+            jsonldMinimapViewport.style.height = `${{heightRatio * 100}}%`;
+        }}
+
+        function updateMinimapMarkers() {{
+            if (!minimapVisible) return;
+            jsonldMinimapMarkers.innerHTML = "";
+            if (!jsonldEditor) return;
+
+            const lineCount = Math.max(1, jsonldEditor.lineCount());
+            const markerMap = new Map();
+
+            highlightedSourceLines.forEach(item => {{
+                const kind = item.className === "cm-node-line" ? "node" : "ref";
+                if (!markerMap.has(item.line) || kind === "node") {{
+                    markerMap.set(item.line, kind);
+                }}
+            }});
+
+            const fragment = document.createDocumentFragment();
+            markerMap.forEach((kind, line) => {{
+                const marker = document.createElement("div");
+                marker.className = `minimap-marker minimap-marker-${{kind}}`;
+                marker.style.top = `${{(line / lineCount) * 100}}%`;
+                marker.title = `Line ${{line + 1}}`;
+                marker.addEventListener("click", (event) => {{
+                    event.stopPropagation();
+                    scrollEditorToLine(line, true);
+                }});
+                fragment.appendChild(marker);
+            }});
+            jsonldMinimapMarkers.appendChild(fragment);
+        }}
+
+        function setMinimapVisibility(visible) {{
+            minimapVisible = visible;
+            jsonldMinimap.classList.toggle("visible", minimapVisible);
+            setMinimapButtonState();
+            if (jsonldEditor) {{
+                setTimeout(() => {{
+                    jsonldEditor.refresh();
+                    updateMinimapMarkers();
+                    updateMinimapViewport();
+                }}, 0);
+            }}
+        }}
+
+        function toggleMinimap() {{
+            setMinimapVisibility(!minimapVisible);
         }}
 
         function buildLineStartOffsets(text) {{
@@ -2768,15 +2968,18 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
                 jsonldEditor.removeLineClass(item.line, "background", item.className);
             }});
             highlightedSourceLines = [];
+            updateMinimapMarkers();
         }}
 
-        function highlightSourceForNode(nodeId, scrollToFirst = true) {{
+        function highlightSourceForNode(nodeId, scrollToFirst = true, suppressStatus = false) {{
             if (!jsonldEditor || !nodeId) return;
             clearSourceHighlights();
 
             const entry = sourceIndex[nodeId];
             if (!entry) {{
-                setJsonldStatus(`No JSON-LD block found for node "${{nodeId}}".`, "error");
+                if (!suppressStatus) {{
+                    setJsonldStatus(`No JSON-LD block found for node "${{nodeId}}".`, "error");
+                }}
                 return;
             }}
 
@@ -2793,20 +2996,24 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
             }});
 
             if (scrollToFirst) {{
-                jsonldEditor.scrollIntoView({{ line: entry.block.startLine, ch: 0 }}, 120);
-                jsonldEditor.setCursor({{ line: entry.block.startLine, ch: 0 }});
-                jsonldEditor.focus();
+                scrollEditorToLine(entry.block.startLine, true);
+            }} else {{
+                updateMinimapViewport();
             }}
 
-            setJsonldStatus(
-                `Highlighted ${{entry.block.endLine - entry.block.startLine + 1}} node lines and ${{entry.referenceLines.length}} reference lines for "${{nodeId}}".`,
-                "info",
-            );
+            updateMinimapMarkers();
+
+            if (!suppressStatus) {{
+                setJsonldStatus(
+                    `Highlighted ${{entry.block.endLine - entry.block.startLine + 1}} node lines and ${{entry.referenceLines.length}} reference lines for "${{nodeId}}".`,
+                    "info",
+                );
+            }}
         }}
 
-        function highlightSelectedNodeSource() {{
+        function highlightSelectedNodeSource(scrollToFirst = true) {{
             if (!selectedNode || !isJsonldEditorOpen()) return;
-            highlightSourceForNode(selectedNode, false);
+            highlightSourceForNode(selectedNode, scrollToFirst);
         }}
 
         function getEntityTypeKey(node) {{
@@ -3123,6 +3330,8 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
             if (typeof CodeMirror === "undefined") {{
                 jsonldTextarea.value = INITIAL_JSONLD_TEXT;
                 sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
+                jsonldToggleMinimapBtn.disabled = true;
+                setMinimapVisibility(false);
                 setJsonldStatus("CodeMirror failed to load; using plain textarea editor.", "error");
                 return;
             }}
@@ -3138,7 +3347,17 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
             sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
             jsonldEditor.on("changes", () => {{
                 sourceIndex = buildSourceIndexFromText(jsonldEditor.getValue());
+                if (selectedNode && highlightedSourceLines.length > 0 && isJsonldEditorOpen()) {{
+                    highlightSourceForNode(selectedNode, false, true);
+                }} else {{
+                    updateMinimapMarkers();
+                }}
+                updateMinimapViewport();
             }});
+            jsonldEditor.on("scroll", () => {{
+                updateMinimapViewport();
+            }});
+            setMinimapButtonState();
             setJsonldStatus("Editor ready. Select a node and click 'Edit in JSON-LD'.", "info");
         }}
 
@@ -3166,6 +3385,19 @@ def generate_html(graph_data: dict, jsonld_text: str) -> str:
 
         jsonldDownloadBtn.addEventListener("click", () => {{
             downloadJsonldText();
+        }});
+
+        jsonldToggleMinimapBtn.addEventListener("click", () => {{
+            toggleMinimap();
+        }});
+
+        jsonldMinimap.addEventListener("click", (event) => {{
+            if (!jsonldEditor || !minimapVisible) return;
+            const rect = jsonldMinimap.getBoundingClientRect();
+            if (!rect.height) return;
+            const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+            const line = Math.floor(ratio * Math.max(0, jsonldEditor.lineCount() - 1));
+            scrollEditorToLine(line, true);
         }});
 
         // Search functionality

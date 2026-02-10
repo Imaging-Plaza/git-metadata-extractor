@@ -522,6 +522,44 @@
             color: #0f172a;
         }
 
+        #jsonld-editor-toolbar {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .jsonld-toolbar-btn {
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            background: white;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 9px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+
+        .jsonld-toolbar-btn:hover:not(:disabled) {
+            background: #e2e8f0;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+
+        .jsonld-toolbar-btn.active {
+            background: #dbeafe;
+            border-color: #93c5fd;
+            color: #1e3a8a;
+        }
+
+        .jsonld-toolbar-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
         #jsonld-editor-status {
             min-height: 36px;
             padding: 9px 12px;
@@ -547,6 +585,14 @@
         #jsonld-editor-container {
             flex: 1;
             min-height: 0;
+            display: flex;
+            min-width: 0;
+        }
+
+        #jsonld-editor-main {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
         }
 
         #jsonld-editor-textarea {
@@ -566,6 +612,59 @@
 
         #jsonld-editor-container .cm-node-ref-line {
             background: rgba(14, 165, 233, 0.14);
+        }
+
+        #jsonld-minimap {
+            width: 64px;
+            min-width: 64px;
+            border-left: 1px solid #e2e8f0;
+            background: #f8fafc;
+            position: relative;
+            display: none;
+            cursor: pointer;
+        }
+
+        #jsonld-minimap.visible {
+            display: block;
+        }
+
+        #jsonld-minimap-track {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.08));
+        }
+
+        #jsonld-minimap-markers {
+            position: absolute;
+            inset: 0;
+        }
+
+        .minimap-marker {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            min-height: 2px;
+            border-radius: 2px;
+            opacity: 0.95;
+        }
+
+        .minimap-marker-node {
+            background: rgba(37, 99, 235, 0.95);
+        }
+
+        .minimap-marker-ref {
+            background: rgba(14, 116, 144, 0.85);
+        }
+
+        #jsonld-minimap-viewport {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            border: 1px solid rgba(100, 116, 139, 0.6);
+            background: rgba(148, 163, 184, 0.16);
+            border-radius: 4px;
+            pointer-events: none;
+            min-height: 10px;
         }
 
         /* Graph container */
@@ -1196,9 +1295,19 @@
                             <button id="jsonld-download-btn" class="jsonld-action-btn" title="Download edited JSON-LD">Download</button>
                         </div>
                     </div>
+                    <div id="jsonld-editor-toolbar">
+                        <button id="jsonld-toggle-minimap-btn" class="jsonld-toolbar-btn" title="Show or hide editor minimap">Show Minimap</button>
+                    </div>
                     <div id="jsonld-editor-status">Editor ready. Select a node and use "Edit in JSON-LD" to jump to related lines.</div>
                     <div id="jsonld-editor-container">
-                        <textarea id="jsonld-editor-textarea"></textarea>
+                        <div id="jsonld-editor-main">
+                            <textarea id="jsonld-editor-textarea"></textarea>
+                        </div>
+                        <div id="jsonld-minimap" aria-hidden="true">
+                            <div id="jsonld-minimap-track"></div>
+                            <div id="jsonld-minimap-markers"></div>
+                            <div id="jsonld-minimap-viewport"></div>
+                        </div>
                     </div>
                 </div>
                 <button id="jsonld-editor-toggle" title="Toggle JSON-LD editor">▶</button>
@@ -1332,8 +1441,8 @@
     {
       "id": "0000-0003-4567-8901",
       "label": "Jean Dupont",
-      "x": 88.16778784387098,
-      "y": 121.3525491562421,
+      "x": 88.16778784387097,
+      "y": 121.35254915624212,
       "size": 22,
       "color": "#3b82f6",
       "nodeType": "Person",
@@ -1730,7 +1839,7 @@
     {
       "id": "0000-0002-3456-7890_https://ror.org/02s376052",
       "label": "02s376052",
-      "x": 183.03148938411007,
+      "x": 183.0314893841101,
       "y": -411.0954559391704,
       "size": 12,
       "color": "#a855f7",
@@ -1842,7 +1951,7 @@
       "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
       "label": "geodata-toolkit",
       "x": 264.50336353161293,
-      "y": 364.0576474687263,
+      "y": 364.0576474687264,
       "size": 14,
       "color": "#06b6d4",
       "nodeType": "Contribution",
@@ -2009,7 +2118,7 @@
     {
       "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
       "label": "geodata-toolkit",
-      "x": -334.4151714648273,
+      "x": -334.41517146482727,
       "y": -301.10877286148633,
       "size": 14,
       "color": "#06b6d4",
@@ -2688,7 +2797,7 @@
     }
   ],
   "metadata": {
-    "generated": "2026-02-10T16:54:25.611943",
+    "generated": "2026-02-10T17:01:16.118992",
     "nodeCount": 33,
     "edgeCount": 65,
     "entityTypes": [
@@ -2707,7 +2816,7 @@
     }
   }
 };
-        const INITIAL_JSONLD_TEXT = "{\n  \"@context\": {\n    \"@base\": \"https://open-pulse.epfl.ch/data/\",\n    \"@vocab\": \"https://open-pulse.epfl.ch/ontology#\",\n    \"schema\": \"http://schema.org/\",\n    \"org\": \"http://www.w3.org/ns/org#\",\n    \"time\": \"http://www.w3.org/2006/time#\",\n    \"pulse\": \"https://open-pulse.epfl.ch/ontology#\",\n    \"wd\": \"http://www.wikidata.org/entity/\",\n    \"xsd\": \"http://www.w3.org/2001/XMLSchema#\",\n    \"Person\": \"schema:Person\",\n    \"Repository\": \"schema:SoftwareSourceCode\",\n    \"Organization\": \"org:Organization\",\n    \"Membership\": \"org:Membership\",\n    \"Contribution\": \"pulse:Contribution\",\n    \"Article\": \"schema:ScholarlyArticle\",\n    \"name\": \"schema:name\",\n    \"email\": \"schema:email\",\n    \"url\": \"schema:url\",\n    \"author\": {\n      \"@id\": \"schema:author\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"dateCreated\": {\n      \"@id\": \"schema:dateCreated\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"datePublished\": {\n      \"@id\": \"schema:datePublished\",\n      \"@type\": \"xsd:date\"\n    },\n    \"license\": {\n      \"@id\": \"schema:license\",\n      \"@type\": \"@id\"\n    },\n    \"citation\": {\n      \"@id\": \"schema:citation\",\n      \"@type\": \"@id\"\n    },\n    \"programmingLanguage\": {\n      \"@id\": \"schema:programmingLanguage\",\n      \"@container\": \"@set\"\n    },\n    \"sourceOrganization\": {\n      \"@id\": \"schema:sourceOrganization\",\n      \"@type\": \"@id\"\n    },\n    \"identifier\": \"schema:identifier\",\n    \"organization\": {\n      \"@id\": \"org:organization\",\n      \"@type\": \"@id\"\n    },\n    \"hasMembership\": {\n      \"@id\": \"org:hasMembership\",\n      \"@type\": \"@id\"\n    },\n    \"hasUnit\": {\n      \"@id\": \"org:hasUnit\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"unitOf\": {\n      \"@id\": \"org:unitOf\",\n      \"@type\": \"@id\"\n    },\n    \"role\": \"org:role\",\n    \"hasBeginning\": {\n      \"@id\": \"time:hasBeginning\",\n      \"@type\": \"xsd:date\"\n    },\n    \"hasEnd\": {\n      \"@id\": \"time:hasEnd\",\n      \"@type\": \"xsd:date\"\n    },\n    \"githubUsername\": \"pulse:githubUsername\",\n    \"githubOrganizationHandle\": \"pulse:githubOrganizationHandle\",\n    \"githubRepositoryHandle\": \"pulse:githubRepositoryHandle\",\n    \"orcidIdentifier\": \"pulse:orcidIdentifier\",\n    \"infosciencePersonIdentifier\": \"pulse:infosciencePersonIdentifier\",\n    \"infoscienceArticleIdentifier\": \"pulse:infoscienceArticleIdentifier\",\n    \"repositoryType\": {\n      \"@id\": \"pulse:repositoryType\",\n      \"@type\": \"@id\"\n    },\n    \"OrganizationType\": {\n      \"@id\": \"pulse:OrganizationType\",\n      \"@type\": \"@id\"\n    },\n    \"discipline\": {\n      \"@id\": \"pulse:discipline\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"owns\": {\n      \"@id\": \"pulse:owns\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"ownedBy\": {\n      \"@id\": \"pulse:ownedBy\",\n      \"@type\": \"@id\"\n    },\n    \"isForkOf\": {\n      \"@id\": \"pulse:isForkOf\",\n      \"@type\": \"@id\"\n    },\n    \"hasContribution\": {\n      \"@id\": \"pulse:hasContribution\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"contributionTo\": {\n      \"@id\": \"pulse:contributionTo\",\n      \"@type\": \"@id\"\n    },\n    \"contributionCount\": {\n      \"@id\": \"pulse:contributionCount\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"firstContributionDate\": {\n      \"@id\": \"pulse:firstContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"lastContributionDate\": {\n      \"@id\": \"pulse:lastContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"githubRepoStars\": {\n      \"@id\": \"pulse:githubRepoStars\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"githubRepoForks\": {\n      \"@id\": \"pulse:githubRepoForks\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"githubOrgFollowers\": {\n      \"@id\": \"pulse:githubOrgFollowers\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:repositoryType\": {\n      \"@id\": \"pulse:repositoryType\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:OrganizationType\": {\n      \"@id\": \"pulse:OrganizationType\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:discipline\": {\n      \"@id\": \"pulse:discipline\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"pulse:owns\": {\n      \"@id\": \"pulse:owns\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:ownedBy\": {\n      \"@id\": \"pulse:ownedBy\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:isForkOf\": {\n      \"@id\": \"pulse:isForkOf\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:hasContribution\": {\n      \"@id\": \"pulse:hasContribution\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:contributionTo\": {\n      \"@id\": \"pulse:contributionTo\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:contributionCount\": {\n      \"@id\": \"pulse:contributionCount\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:firstContributionDate\": {\n      \"@id\": \"pulse:firstContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"pulse:lastContributionDate\": {\n      \"@id\": \"pulse:lastContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"pulse:githubRepoStars\": {\n      \"@id\": \"pulse:githubRepoStars\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubRepoForks\": {\n      \"@id\": \"pulse:githubRepoForks\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubOrgFollowers\": {\n      \"@id\": \"pulse:githubOrgFollowers\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubUsername\": \"pulse:githubUsername\",\n    \"pulse:githubOrganizationHandle\": \"pulse:githubOrganizationHandle\",\n    \"pulse:githubRepositoryHandle\": \"pulse:githubRepositoryHandle\",\n    \"pulse:orcidIdentifier\": \"pulse:orcidIdentifier\",\n    \"pulse:infosciencePersonIdentifier\": \"pulse:infosciencePersonIdentifier\",\n    \"pulse:infoscienceArticleIdentifier\": \"pulse:infoscienceArticleIdentifier\",\n    \"pulse:infoscienceOrganizationIdentifier\": \"pulse:infoscienceOrganizationIdentifier\",\n    \"pulse:ror\": {\n      \"@id\": \"pulse:ror\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:orcid\": {\n      \"@id\": \"pulse:orcid\",\n      \"@type\": \"@id\"\n    },\n    \"schema:name\": \"schema:name\",\n    \"schema:email\": \"schema:email\",\n    \"schema:url\": {\n      \"@id\": \"schema:url\",\n      \"@type\": \"@id\"\n    },\n    \"schema:author\": {\n      \"@id\": \"schema:author\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"schema:identifier\": \"schema:identifier\",\n    \"schema:dateCreated\": {\n      \"@id\": \"schema:dateCreated\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"schema:datePublished\": {\n      \"@id\": \"schema:datePublished\",\n      \"@type\": \"xsd:date\"\n    },\n    \"schema:dateModified\": {\n      \"@id\": \"schema:dateModified\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"schema:license\": {\n      \"@id\": \"schema:license\",\n      \"@type\": \"@id\"\n    },\n    \"schema:citation\": {\n      \"@id\": \"schema:citation\",\n      \"@type\": \"@id\"\n    },\n    \"schema:sourceOrganization\": {\n      \"@id\": \"schema:sourceOrganization\",\n      \"@type\": \"@id\"\n    },\n    \"schema:programmingLanguage\": {\n      \"@id\": \"schema:programmingLanguage\",\n      \"@container\": \"@set\"\n    },\n    \"org:organization\": {\n      \"@id\": \"org:organization\",\n      \"@type\": \"@id\"\n    },\n    \"org:hasMembership\": {\n      \"@id\": \"org:hasMembership\",\n      \"@type\": \"@id\"\n    },\n    \"org:hasUnit\": {\n      \"@id\": \"org:hasUnit\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"org:unitOf\": {\n      \"@id\": \"org:unitOf\",\n      \"@type\": \"@id\"\n    },\n    \"org:role\": \"org:role\",\n    \"time:hasBeginning\": {\n      \"@id\": \"time:hasBeginning\",\n      \"@type\": \"xsd:date\"\n    },\n    \"time:hasEnd\": {\n      \"@id\": \"time:hasEnd\",\n      \"@type\": \"xsd:date\"\n    }\n  },\n  \"@graph\": [\n    {\n      \"@id\": \"0000-0001-2345-6789\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Carlos Vivar Rios\",\n      \"schema:email\": \"carlos.vivar@epfl.ch\",\n      \"schema:url\": \"https://people.epfl.ch/carlos.vivar\",\n      \"pulse:githubUsername\": \"caviri\",\n      \"pulse:orcidIdentifier\": \"0000-0001-2345-6789\",\n      \"pulse:infosciencePersonIdentifier\": \"f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb\",\n      \"org:hasMembership\": [\n        \"0000-0001-2345-6789_https://ror.org/02s376052\",\n        \"0000-0001-2345-6789_numpy\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0001-2345-6789_EPFL-ENAC/structural-analysis\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Alice Morin\",\n      \"schema:email\": \"alice.morin@epfl.ch\",\n      \"schema:url\": \"https://people.epfl.ch/alice.morin\",\n      \"pulse:githubUsername\": \"amorin\",\n      \"pulse:orcidIdentifier\": \"0000-0002-3456-7890\",\n      \"pulse:infosciencePersonIdentifier\": \"a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d\",\n      \"org:hasMembership\": [\n        \"0000-0002-3456-7890_https://ror.org/02s376052\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0002-3456-7890_EPFL-ENAC/structural-analysis\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Jean Dupont\",\n      \"schema:email\": \"jean.dupont@cern.ch\",\n      \"pulse:githubUsername\": \"jdupont\",\n      \"pulse:orcidIdentifier\": \"0000-0003-4567-8901\",\n      \"org:hasMembership\": [\n        \"0000-0003-4567-8901_https://ror.org/01ggx4157\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0003-4567-8901_jdupont/geodata-toolkit\"\n      ],\n      \"pulse:owns\": [\n        \"jdupont/geodata-toolkit\"\n      ]\n    },\n    {\n      \"@id\": \"mweber\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Marie Weber\",\n      \"schema:email\": \"marie.weber@eth.ch\",\n      \"pulse:githubUsername\": \"mweber\",\n      \"org:hasMembership\": [\n        \"mweber_https://ror.org/05a28rw58\"\n      ],\n      \"pulse:hasContribution\": [\n        \"mweber_EPFL-ENAC/structural-analysis\",\n        \"mweber_mweber/data-pipeline\"\n      ],\n      \"pulse:owns\": [\n        \"mweber/data-pipeline\"\n      ]\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Luca Rossi\",\n      \"schema:email\": \"luca.rossi@cern.ch\",\n      \"org:hasMembership\": [\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157\"\n      ],\n      \"pulse:hasContribution\": [\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Open Pulse Platform\",\n      \"pulse:githubRepositoryHandle\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\",\n        \"wd:Q8434\"\n      ],\n      \"schema:author\": [\n        \"0000-0001-2345-6789\"\n      ],\n      \"pulse:githubRepoStars\": 45,\n      \"pulse:githubRepoForks\": 12,\n      \"schema:dateCreated\": \"2023-03-15T10:30:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/MIT.html\",\n      \"schema:citation\": \"https://doi.org/10.5281/zenodo.12345678\",\n      \"schema:programmingLanguage\": [\n        \"Python\",\n        \"TypeScript\"\n      ],\n      \"pulse:ownedBy\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"EPFL-ENAC/structural-analysis\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Gimie\",\n      \"pulse:githubRepositoryHandle\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\"\n      ],\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:githubRepoStars\": 128,\n      \"pulse:githubRepoForks\": 34,\n      \"schema:dateCreated\": \"2022-01-10T08:00:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/Apache-2.0.html\",\n      \"schema:programmingLanguage\": [\n        \"Python\"\n      ],\n      \"pulse:ownedBy\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"mweber/data-pipeline\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Data Pipeline\",\n      \"pulse:githubRepositoryHandle\": \"mweber/data-pipeline\",\n      \"pulse:repositoryType\": \"pulse:Data\",\n      \"pulse:discipline\": [\n        \"wd:Q12483\"\n      ],\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:githubRepoStars\": 5,\n      \"pulse:githubRepoForks\": 1,\n      \"schema:dateCreated\": \"2024-06-20T14:15:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/GPL-3.0-only.html\",\n      \"schema:programmingLanguage\": [\n        \"R\",\n        \"Python\"\n      ],\n      \"pulse:ownedBy\": \"mweber\"\n    },\n    {\n      \"@id\": \"jdupont/geodata-toolkit\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Geodata Toolkit (Fork)\",\n      \"pulse:githubRepositoryHandle\": \"jdupont/geodata-toolkit\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\",\n        \"wd:Q8434\"\n      ],\n      \"schema:author\": [\n        \"0000-0003-4567-8901\"\n      ],\n      \"pulse:githubRepoStars\": 2,\n      \"pulse:githubRepoForks\": 0,\n      \"schema:dateCreated\": \"2024-02-01T13:00:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/MIT.html\",\n      \"schema:programmingLanguage\": [\n        \"Python\",\n        \"TypeScript\"\n      ],\n      \"pulse:ownedBy\": \"0000-0003-4567-8901\",\n      \"pulse:isForkOf\": \"EPFL-ENAC/geodata-toolkit\"\n    },\n    {\n      \"@id\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"EPFL School of Architecture, Civil and Environmental Engineering\",\n      \"pulse:githubOrganizationHandle\": \"EPFL-ENAC\",\n      \"pulse:infoscienceOrganizationIdentifier\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"pulse:githubOrgFollowers\": 342,\n      \"org:hasUnit\": [],\n      \"org:unitOf\": \"https://ror.org/02s376052\",\n      \"pulse:owns\": [\n        \"EPFL-ENAC/geodata-toolkit\",\n        \"EPFL-ENAC/structural-analysis\"\n      ]\n    },\n    {\n      \"@id\": \"https://ror.org/02s376052\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"\\u00c9cole Polytechnique F\\u00e9d\\u00e9rale de Lausanne\",\n      \"schema:identifier\": \"https://ror.org/02s376052\",\n      \"pulse:infoscienceOrganizationIdentifier\": \"41674f42-ba15-4612-9817-2a6f60985c01\",\n      \"pulse:githubOrganizationHandle\": \"epaboratories\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"pulse:githubOrgFollowers\": 89,\n      \"org:hasUnit\": [\n        \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"https://ror.org/01ggx4157\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"CERN\",\n      \"schema:identifier\": \"https://ror.org/01ggx4157\",\n      \"pulse:OrganizationType\": \"pulse:ResearchInstitution\",\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"https://ror.org/05a28rw58\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"ETH Z\\u00fcrich\",\n      \"schema:identifier\": \"https://ror.org/05a28rw58\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"numpy\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"NumPy\",\n      \"pulse:githubOrganizationHandle\": \"numpy\",\n      \"pulse:OrganizationType\": \"pulse:SoftwareProject\",\n      \"pulse:githubOrgFollowers\": 1250,\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_https://ror.org/02s376052\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/02s376052\",\n      \"org:role\": \"Research Engineer\",\n      \"time:hasBeginning\": \"2020-09-01\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_https://ror.org/02s376052\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/02s376052\",\n      \"org:role\": \"Postdoctoral Researcher\",\n      \"time:hasBeginning\": \"2022-01-15\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_https://ror.org/01ggx4157\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/01ggx4157\",\n      \"org:role\": \"Software Engineer\",\n      \"time:hasBeginning\": \"2019-03-01\",\n      \"time:hasEnd\": \"2024-02-28\"\n    },\n    {\n      \"@id\": \"mweber_https://ror.org/05a28rw58\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/05a28rw58\",\n      \"org:role\": \"PhD Student\",\n      \"time:hasBeginning\": \"2021-10-01\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_numpy\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"numpy\",\n      \"org:role\": \"Contributor\",\n      \"time:hasBeginning\": \"2023-05-10\"\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/01ggx4157\",\n      \"org:role\": \"Research Physicist\",\n      \"time:hasBeginning\": \"2023-01-15\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 156,\n      \"pulse:firstContributionDate\": \"2023-03-15T10:30:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-20T14:45:00Z\",\n      \"schema:author\": \"0000-0001-2345-6789\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 42,\n      \"pulse:firstContributionDate\": \"2022-05-10T09:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-11-30T16:20:00Z\",\n      \"schema:author\": \"0000-0001-2345-6789\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 89,\n      \"pulse:firstContributionDate\": \"2023-06-01T11:30:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-15T10:00:00Z\",\n      \"schema:author\": \"0000-0002-3456-7890\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 234,\n      \"pulse:firstContributionDate\": \"2022-01-10T08:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-12-01T17:30:00Z\",\n      \"schema:author\": \"0000-0002-3456-7890\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 15,\n      \"pulse:firstContributionDate\": \"2024-02-01T13:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-06-15T09:45:00Z\",\n      \"schema:author\": \"0000-0003-4567-8901\"\n    },\n    {\n      \"@id\": \"mweber_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 78,\n      \"pulse:firstContributionDate\": \"2022-03-20T10:15:00Z\",\n      \"pulse:lastContributionDate\": \"2024-10-10T14:00:00Z\",\n      \"schema:author\": \"mweber\"\n    },\n    {\n      \"@id\": \"mweber_mweber/data-pipeline\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"mweber/data-pipeline\",\n      \"pulse:contributionCount\": 320,\n      \"pulse:firstContributionDate\": \"2024-06-20T14:15:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-28T11:30:00Z\",\n      \"schema:author\": \"mweber\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_jdupont/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"jdupont/geodata-toolkit\",\n      \"pulse:contributionCount\": 23,\n      \"pulse:firstContributionDate\": \"2024-02-05T10:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-08-15T16:30:00Z\",\n      \"schema:author\": \"0000-0003-4567-8901\"\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 8,\n      \"pulse:firstContributionDate\": \"2024-09-01T09:00:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-10T15:20:00Z\",\n      \"schema:author\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\"\n    },\n    {\n      \"@id\": \"10.1038/s41586-024-07856-z\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Open Pulse: A Framework for Tracking Scientific Software Contributions\",\n      \"schema:identifier\": \"10.1038/s41586-024-07856-z\",\n      \"schema:datePublished\": \"2025-06-15\",\n      \"schema:author\": [\n        \"0000-0001-2345-6789\",\n        \"0000-0003-4567-8901\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c\",\n      \"schema:sourceOrganization\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"10.1016/j.softx.2023.101456\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Gimie: Automated Git Metadata Extraction for Research Software\",\n      \"schema:identifier\": \"10.1016/j.softx.2023.101456\",\n      \"schema:datePublished\": \"2023-11-20\",\n      \"schema:author\": [\n        \"0000-0001-2345-6789\",\n        \"0000-0002-3456-7890\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d\",\n      \"schema:sourceOrganization\": \"https://ror.org/02s376052\"\n    },\n    {\n      \"@id\": \"10.1109/TBME.2024.3123456\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Deep Learning Approaches for Biomedical Image Segmentation\",\n      \"schema:identifier\": \"10.1109/TBME.2024.3123456\",\n      \"schema:datePublished\": \"2024-08-10\",\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d\",\n      \"schema:sourceOrganization\": \"https://ror.org/05a28rw58\"\n    },\n    {\n      \"@id\": \"10.1145/3597503.3639187\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Reproducible Workflows for Large-Scale Particle Physics Simulations\",\n      \"schema:identifier\": \"10.1145/3597503.3639187\",\n      \"schema:datePublished\": \"2024-04-22\",\n      \"schema:author\": [\n        \"0000-0003-4567-8901\",\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\"\n      ],\n      \"schema:sourceOrganization\": \"https://ror.org/01ggx4157\"\n    }\n  ]\n}";
+        const INITIAL_JSONLD_TEXT = "{\n  \"@context\": {\n    \"@base\": \"https://open-pulse.epfl.ch/data/\",\n    \"@vocab\": \"https://open-pulse.epfl.ch/ontology#\",\n    \"schema\": \"http://schema.org/\",\n    \"org\": \"http://www.w3.org/ns/org#\",\n    \"time\": \"http://www.w3.org/2006/time#\",\n    \"pulse\": \"https://open-pulse.epfl.ch/ontology#\",\n    \"wd\": \"http://www.wikidata.org/entity/\",\n    \"xsd\": \"http://www.w3.org/2001/XMLSchema#\",\n    \"Person\": \"schema:Person\",\n    \"Repository\": \"schema:SoftwareSourceCode\",\n    \"Organization\": \"org:Organization\",\n    \"Membership\": \"org:Membership\",\n    \"Contribution\": \"pulse:Contribution\",\n    \"Article\": \"schema:ScholarlyArticle\",\n    \"name\": \"schema:name\",\n    \"email\": \"schema:email\",\n    \"url\": \"schema:url\",\n    \"author\": {\n      \"@id\": \"schema:author\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"dateCreated\": {\n      \"@id\": \"schema:dateCreated\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"datePublished\": {\n      \"@id\": \"schema:datePublished\",\n      \"@type\": \"xsd:date\"\n    },\n    \"license\": {\n      \"@id\": \"schema:license\",\n      \"@type\": \"@id\"\n    },\n    \"citation\": {\n      \"@id\": \"schema:citation\",\n      \"@type\": \"@id\"\n    },\n    \"programmingLanguage\": {\n      \"@id\": \"schema:programmingLanguage\",\n      \"@container\": \"@set\"\n    },\n    \"sourceOrganization\": {\n      \"@id\": \"schema:sourceOrganization\",\n      \"@type\": \"@id\"\n    },\n    \"identifier\": \"schema:identifier\",\n    \"organization\": {\n      \"@id\": \"org:organization\",\n      \"@type\": \"@id\"\n    },\n    \"hasMembership\": {\n      \"@id\": \"org:hasMembership\",\n      \"@type\": \"@id\"\n    },\n    \"hasUnit\": {\n      \"@id\": \"org:hasUnit\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"unitOf\": {\n      \"@id\": \"org:unitOf\",\n      \"@type\": \"@id\"\n    },\n    \"role\": \"org:role\",\n    \"hasBeginning\": {\n      \"@id\": \"time:hasBeginning\",\n      \"@type\": \"xsd:date\"\n    },\n    \"hasEnd\": {\n      \"@id\": \"time:hasEnd\",\n      \"@type\": \"xsd:date\"\n    },\n    \"githubUsername\": \"pulse:githubUsername\",\n    \"githubOrganizationHandle\": \"pulse:githubOrganizationHandle\",\n    \"githubRepositoryHandle\": \"pulse:githubRepositoryHandle\",\n    \"orcidIdentifier\": \"pulse:orcidIdentifier\",\n    \"infosciencePersonIdentifier\": \"pulse:infosciencePersonIdentifier\",\n    \"infoscienceArticleIdentifier\": \"pulse:infoscienceArticleIdentifier\",\n    \"repositoryType\": {\n      \"@id\": \"pulse:repositoryType\",\n      \"@type\": \"@id\"\n    },\n    \"OrganizationType\": {\n      \"@id\": \"pulse:OrganizationType\",\n      \"@type\": \"@id\"\n    },\n    \"discipline\": {\n      \"@id\": \"pulse:discipline\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"owns\": {\n      \"@id\": \"pulse:owns\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"ownedBy\": {\n      \"@id\": \"pulse:ownedBy\",\n      \"@type\": \"@id\"\n    },\n    \"isForkOf\": {\n      \"@id\": \"pulse:isForkOf\",\n      \"@type\": \"@id\"\n    },\n    \"hasContribution\": {\n      \"@id\": \"pulse:hasContribution\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"contributionTo\": {\n      \"@id\": \"pulse:contributionTo\",\n      \"@type\": \"@id\"\n    },\n    \"contributionCount\": {\n      \"@id\": \"pulse:contributionCount\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"firstContributionDate\": {\n      \"@id\": \"pulse:firstContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"lastContributionDate\": {\n      \"@id\": \"pulse:lastContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"githubRepoStars\": {\n      \"@id\": \"pulse:githubRepoStars\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"githubRepoForks\": {\n      \"@id\": \"pulse:githubRepoForks\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"githubOrgFollowers\": {\n      \"@id\": \"pulse:githubOrgFollowers\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:repositoryType\": {\n      \"@id\": \"pulse:repositoryType\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:OrganizationType\": {\n      \"@id\": \"pulse:OrganizationType\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:discipline\": {\n      \"@id\": \"pulse:discipline\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"pulse:owns\": {\n      \"@id\": \"pulse:owns\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:ownedBy\": {\n      \"@id\": \"pulse:ownedBy\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:isForkOf\": {\n      \"@id\": \"pulse:isForkOf\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:hasContribution\": {\n      \"@id\": \"pulse:hasContribution\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:contributionTo\": {\n      \"@id\": \"pulse:contributionTo\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:contributionCount\": {\n      \"@id\": \"pulse:contributionCount\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:firstContributionDate\": {\n      \"@id\": \"pulse:firstContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"pulse:lastContributionDate\": {\n      \"@id\": \"pulse:lastContributionDate\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"pulse:githubRepoStars\": {\n      \"@id\": \"pulse:githubRepoStars\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubRepoForks\": {\n      \"@id\": \"pulse:githubRepoForks\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubOrgFollowers\": {\n      \"@id\": \"pulse:githubOrgFollowers\",\n      \"@type\": \"xsd:integer\"\n    },\n    \"pulse:githubUsername\": \"pulse:githubUsername\",\n    \"pulse:githubOrganizationHandle\": \"pulse:githubOrganizationHandle\",\n    \"pulse:githubRepositoryHandle\": \"pulse:githubRepositoryHandle\",\n    \"pulse:orcidIdentifier\": \"pulse:orcidIdentifier\",\n    \"pulse:infosciencePersonIdentifier\": \"pulse:infosciencePersonIdentifier\",\n    \"pulse:infoscienceArticleIdentifier\": \"pulse:infoscienceArticleIdentifier\",\n    \"pulse:infoscienceOrganizationIdentifier\": \"pulse:infoscienceOrganizationIdentifier\",\n    \"pulse:ror\": {\n      \"@id\": \"pulse:ror\",\n      \"@type\": \"@id\"\n    },\n    \"pulse:orcid\": {\n      \"@id\": \"pulse:orcid\",\n      \"@type\": \"@id\"\n    },\n    \"schema:name\": \"schema:name\",\n    \"schema:email\": \"schema:email\",\n    \"schema:url\": {\n      \"@id\": \"schema:url\",\n      \"@type\": \"@id\"\n    },\n    \"schema:author\": {\n      \"@id\": \"schema:author\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"schema:identifier\": \"schema:identifier\",\n    \"schema:dateCreated\": {\n      \"@id\": \"schema:dateCreated\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"schema:datePublished\": {\n      \"@id\": \"schema:datePublished\",\n      \"@type\": \"xsd:date\"\n    },\n    \"schema:dateModified\": {\n      \"@id\": \"schema:dateModified\",\n      \"@type\": \"xsd:dateTime\"\n    },\n    \"schema:license\": {\n      \"@id\": \"schema:license\",\n      \"@type\": \"@id\"\n    },\n    \"schema:citation\": {\n      \"@id\": \"schema:citation\",\n      \"@type\": \"@id\"\n    },\n    \"schema:sourceOrganization\": {\n      \"@id\": \"schema:sourceOrganization\",\n      \"@type\": \"@id\"\n    },\n    \"schema:programmingLanguage\": {\n      \"@id\": \"schema:programmingLanguage\",\n      \"@container\": \"@set\"\n    },\n    \"org:organization\": {\n      \"@id\": \"org:organization\",\n      \"@type\": \"@id\"\n    },\n    \"org:hasMembership\": {\n      \"@id\": \"org:hasMembership\",\n      \"@type\": \"@id\"\n    },\n    \"org:hasUnit\": {\n      \"@id\": \"org:hasUnit\",\n      \"@type\": \"@id\",\n      \"@container\": \"@set\"\n    },\n    \"org:unitOf\": {\n      \"@id\": \"org:unitOf\",\n      \"@type\": \"@id\"\n    },\n    \"org:role\": \"org:role\",\n    \"time:hasBeginning\": {\n      \"@id\": \"time:hasBeginning\",\n      \"@type\": \"xsd:date\"\n    },\n    \"time:hasEnd\": {\n      \"@id\": \"time:hasEnd\",\n      \"@type\": \"xsd:date\"\n    }\n  },\n  \"@graph\": [\n    {\n      \"@id\": \"0000-0001-2345-6789\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Carlos Vivar Rios\",\n      \"schema:email\": \"carlos.vivar@epfl.ch\",\n      \"schema:url\": \"https://people.epfl.ch/carlos.vivar\",\n      \"pulse:githubUsername\": \"caviri\",\n      \"pulse:orcidIdentifier\": \"0000-0001-2345-6789\",\n      \"pulse:infosciencePersonIdentifier\": \"f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb\",\n      \"org:hasMembership\": [\n        \"0000-0001-2345-6789_https://ror.org/02s376052\",\n        \"0000-0001-2345-6789_numpy\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0001-2345-6789_EPFL-ENAC/structural-analysis\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Alice Morin\",\n      \"schema:email\": \"alice.morin@epfl.ch\",\n      \"schema:url\": \"https://people.epfl.ch/alice.morin\",\n      \"pulse:githubUsername\": \"amorin\",\n      \"pulse:orcidIdentifier\": \"0000-0002-3456-7890\",\n      \"pulse:infosciencePersonIdentifier\": \"a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d\",\n      \"org:hasMembership\": [\n        \"0000-0002-3456-7890_https://ror.org/02s376052\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0002-3456-7890_EPFL-ENAC/structural-analysis\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Jean Dupont\",\n      \"schema:email\": \"jean.dupont@cern.ch\",\n      \"pulse:githubUsername\": \"jdupont\",\n      \"pulse:orcidIdentifier\": \"0000-0003-4567-8901\",\n      \"org:hasMembership\": [\n        \"0000-0003-4567-8901_https://ror.org/01ggx4157\"\n      ],\n      \"pulse:hasContribution\": [\n        \"0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit\",\n        \"0000-0003-4567-8901_jdupont/geodata-toolkit\"\n      ],\n      \"pulse:owns\": [\n        \"jdupont/geodata-toolkit\"\n      ]\n    },\n    {\n      \"@id\": \"mweber\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Marie Weber\",\n      \"schema:email\": \"marie.weber@eth.ch\",\n      \"pulse:githubUsername\": \"mweber\",\n      \"org:hasMembership\": [\n        \"mweber_https://ror.org/05a28rw58\"\n      ],\n      \"pulse:hasContribution\": [\n        \"mweber_EPFL-ENAC/structural-analysis\",\n        \"mweber_mweber/data-pipeline\"\n      ],\n      \"pulse:owns\": [\n        \"mweber/data-pipeline\"\n      ]\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\",\n      \"@type\": \"schema:Person\",\n      \"schema:name\": \"Luca Rossi\",\n      \"schema:email\": \"luca.rossi@cern.ch\",\n      \"org:hasMembership\": [\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157\"\n      ],\n      \"pulse:hasContribution\": [\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Open Pulse Platform\",\n      \"pulse:githubRepositoryHandle\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\",\n        \"wd:Q8434\"\n      ],\n      \"schema:author\": [\n        \"0000-0001-2345-6789\"\n      ],\n      \"pulse:githubRepoStars\": 45,\n      \"pulse:githubRepoForks\": 12,\n      \"schema:dateCreated\": \"2023-03-15T10:30:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/MIT.html\",\n      \"schema:citation\": \"https://doi.org/10.5281/zenodo.12345678\",\n      \"schema:programmingLanguage\": [\n        \"Python\",\n        \"TypeScript\"\n      ],\n      \"pulse:ownedBy\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"EPFL-ENAC/structural-analysis\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Gimie\",\n      \"pulse:githubRepositoryHandle\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\"\n      ],\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:githubRepoStars\": 128,\n      \"pulse:githubRepoForks\": 34,\n      \"schema:dateCreated\": \"2022-01-10T08:00:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/Apache-2.0.html\",\n      \"schema:programmingLanguage\": [\n        \"Python\"\n      ],\n      \"pulse:ownedBy\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"mweber/data-pipeline\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Data Pipeline\",\n      \"pulse:githubRepositoryHandle\": \"mweber/data-pipeline\",\n      \"pulse:repositoryType\": \"pulse:Data\",\n      \"pulse:discipline\": [\n        \"wd:Q12483\"\n      ],\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:githubRepoStars\": 5,\n      \"pulse:githubRepoForks\": 1,\n      \"schema:dateCreated\": \"2024-06-20T14:15:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/GPL-3.0-only.html\",\n      \"schema:programmingLanguage\": [\n        \"R\",\n        \"Python\"\n      ],\n      \"pulse:ownedBy\": \"mweber\"\n    },\n    {\n      \"@id\": \"jdupont/geodata-toolkit\",\n      \"@type\": \"schema:SoftwareSourceCode\",\n      \"schema:name\": \"Geodata Toolkit (Fork)\",\n      \"pulse:githubRepositoryHandle\": \"jdupont/geodata-toolkit\",\n      \"pulse:repositoryType\": \"pulse:Software\",\n      \"pulse:discipline\": [\n        \"wd:Q21201\",\n        \"wd:Q8434\"\n      ],\n      \"schema:author\": [\n        \"0000-0003-4567-8901\"\n      ],\n      \"pulse:githubRepoStars\": 2,\n      \"pulse:githubRepoForks\": 0,\n      \"schema:dateCreated\": \"2024-02-01T13:00:00Z\",\n      \"schema:license\": \"https://spdx.org/licenses/MIT.html\",\n      \"schema:programmingLanguage\": [\n        \"Python\",\n        \"TypeScript\"\n      ],\n      \"pulse:ownedBy\": \"0000-0003-4567-8901\",\n      \"pulse:isForkOf\": \"EPFL-ENAC/geodata-toolkit\"\n    },\n    {\n      \"@id\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"EPFL School of Architecture, Civil and Environmental Engineering\",\n      \"pulse:githubOrganizationHandle\": \"EPFL-ENAC\",\n      \"pulse:infoscienceOrganizationIdentifier\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"pulse:githubOrgFollowers\": 342,\n      \"org:hasUnit\": [],\n      \"org:unitOf\": \"https://ror.org/02s376052\",\n      \"pulse:owns\": [\n        \"EPFL-ENAC/geodata-toolkit\",\n        \"EPFL-ENAC/structural-analysis\"\n      ]\n    },\n    {\n      \"@id\": \"https://ror.org/02s376052\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"\\u00c9cole Polytechnique F\\u00e9d\\u00e9rale de Lausanne\",\n      \"schema:identifier\": \"https://ror.org/02s376052\",\n      \"pulse:infoscienceOrganizationIdentifier\": \"41674f42-ba15-4612-9817-2a6f60985c01\",\n      \"pulse:githubOrganizationHandle\": \"epaboratories\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"pulse:githubOrgFollowers\": 89,\n      \"org:hasUnit\": [\n        \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n      ],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"https://ror.org/01ggx4157\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"CERN\",\n      \"schema:identifier\": \"https://ror.org/01ggx4157\",\n      \"pulse:OrganizationType\": \"pulse:ResearchInstitution\",\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"https://ror.org/05a28rw58\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"ETH Z\\u00fcrich\",\n      \"schema:identifier\": \"https://ror.org/05a28rw58\",\n      \"pulse:OrganizationType\": \"pulse:University\",\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"numpy\",\n      \"@type\": \"org:Organization\",\n      \"schema:name\": \"NumPy\",\n      \"pulse:githubOrganizationHandle\": \"numpy\",\n      \"pulse:OrganizationType\": \"pulse:SoftwareProject\",\n      \"pulse:githubOrgFollowers\": 1250,\n      \"org:hasUnit\": [],\n      \"pulse:owns\": []\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_https://ror.org/02s376052\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/02s376052\",\n      \"org:role\": \"Research Engineer\",\n      \"time:hasBeginning\": \"2020-09-01\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_https://ror.org/02s376052\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/02s376052\",\n      \"org:role\": \"Postdoctoral Researcher\",\n      \"time:hasBeginning\": \"2022-01-15\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_https://ror.org/01ggx4157\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/01ggx4157\",\n      \"org:role\": \"Software Engineer\",\n      \"time:hasBeginning\": \"2019-03-01\",\n      \"time:hasEnd\": \"2024-02-28\"\n    },\n    {\n      \"@id\": \"mweber_https://ror.org/05a28rw58\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/05a28rw58\",\n      \"org:role\": \"PhD Student\",\n      \"time:hasBeginning\": \"2021-10-01\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_numpy\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"numpy\",\n      \"org:role\": \"Contributor\",\n      \"time:hasBeginning\": \"2023-05-10\"\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157\",\n      \"@type\": \"org:Membership\",\n      \"org:organization\": \"https://ror.org/01ggx4157\",\n      \"org:role\": \"Research Physicist\",\n      \"time:hasBeginning\": \"2023-01-15\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 156,\n      \"pulse:firstContributionDate\": \"2023-03-15T10:30:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-20T14:45:00Z\",\n      \"schema:author\": \"0000-0001-2345-6789\"\n    },\n    {\n      \"@id\": \"0000-0001-2345-6789_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 42,\n      \"pulse:firstContributionDate\": \"2022-05-10T09:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-11-30T16:20:00Z\",\n      \"schema:author\": \"0000-0001-2345-6789\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 89,\n      \"pulse:firstContributionDate\": \"2023-06-01T11:30:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-15T10:00:00Z\",\n      \"schema:author\": \"0000-0002-3456-7890\"\n    },\n    {\n      \"@id\": \"0000-0002-3456-7890_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 234,\n      \"pulse:firstContributionDate\": \"2022-01-10T08:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-12-01T17:30:00Z\",\n      \"schema:author\": \"0000-0002-3456-7890\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 15,\n      \"pulse:firstContributionDate\": \"2024-02-01T13:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-06-15T09:45:00Z\",\n      \"schema:author\": \"0000-0003-4567-8901\"\n    },\n    {\n      \"@id\": \"mweber_EPFL-ENAC/structural-analysis\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/structural-analysis\",\n      \"pulse:contributionCount\": 78,\n      \"pulse:firstContributionDate\": \"2022-03-20T10:15:00Z\",\n      \"pulse:lastContributionDate\": \"2024-10-10T14:00:00Z\",\n      \"schema:author\": \"mweber\"\n    },\n    {\n      \"@id\": \"mweber_mweber/data-pipeline\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"mweber/data-pipeline\",\n      \"pulse:contributionCount\": 320,\n      \"pulse:firstContributionDate\": \"2024-06-20T14:15:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-28T11:30:00Z\",\n      \"schema:author\": \"mweber\"\n    },\n    {\n      \"@id\": \"0000-0003-4567-8901_jdupont/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"jdupont/geodata-toolkit\",\n      \"pulse:contributionCount\": 23,\n      \"pulse:firstContributionDate\": \"2024-02-05T10:00:00Z\",\n      \"pulse:lastContributionDate\": \"2024-08-15T16:30:00Z\",\n      \"schema:author\": \"0000-0003-4567-8901\"\n    },\n    {\n      \"@id\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit\",\n      \"@type\": \"pulse:Contribution\",\n      \"pulse:contributionTo\": \"EPFL-ENAC/geodata-toolkit\",\n      \"pulse:contributionCount\": 8,\n      \"pulse:firstContributionDate\": \"2024-09-01T09:00:00Z\",\n      \"pulse:lastContributionDate\": \"2025-01-10T15:20:00Z\",\n      \"schema:author\": \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\"\n    },\n    {\n      \"@id\": \"10.1038/s41586-024-07856-z\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Open Pulse: A Framework for Tracking Scientific Software Contributions\",\n      \"schema:identifier\": \"10.1038/s41586-024-07856-z\",\n      \"schema:datePublished\": \"2025-06-15\",\n      \"schema:author\": [\n        \"0000-0001-2345-6789\",\n        \"0000-0003-4567-8901\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c\",\n      \"schema:sourceOrganization\": \"95372c6b-7d45-432e-a84e-660c9fa54e05\"\n    },\n    {\n      \"@id\": \"10.1016/j.softx.2023.101456\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Gimie: Automated Git Metadata Extraction for Research Software\",\n      \"schema:identifier\": \"10.1016/j.softx.2023.101456\",\n      \"schema:datePublished\": \"2023-11-20\",\n      \"schema:author\": [\n        \"0000-0001-2345-6789\",\n        \"0000-0002-3456-7890\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d\",\n      \"schema:sourceOrganization\": \"https://ror.org/02s376052\"\n    },\n    {\n      \"@id\": \"10.1109/TBME.2024.3123456\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Deep Learning Approaches for Biomedical Image Segmentation\",\n      \"schema:identifier\": \"10.1109/TBME.2024.3123456\",\n      \"schema:datePublished\": \"2024-08-10\",\n      \"schema:author\": [\n        \"mweber\"\n      ],\n      \"pulse:infoscienceArticleIdentifier\": \"b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d\",\n      \"schema:sourceOrganization\": \"https://ror.org/05a28rw58\"\n    },\n    {\n      \"@id\": \"10.1145/3597503.3639187\",\n      \"@type\": \"schema:ScholarlyArticle\",\n      \"schema:name\": \"Reproducible Workflows for Large-Scale Particle Physics Simulations\",\n      \"schema:identifier\": \"10.1145/3597503.3639187\",\n      \"schema:datePublished\": \"2024-04-22\",\n      \"schema:author\": [\n        \"0000-0003-4567-8901\",\n        \"e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b\"\n      ],\n      \"schema:sourceOrganization\": \"https://ror.org/01ggx4157\"\n    }\n  ]\n}\n";
         const ENTITY_TYPE_CONFIG = {
   "schema:Person": {
     "color": "#3b82f6",
@@ -3630,8 +3739,13 @@
         const editNodeJsonldBtn = document.getElementById("edit-node-jsonld-btn");
         const jsonldApplyBtn = document.getElementById("jsonld-apply-btn");
         const jsonldDownloadBtn = document.getElementById("jsonld-download-btn");
+        const jsonldToggleMinimapBtn = document.getElementById("jsonld-toggle-minimap-btn");
         const jsonldStatusEl = document.getElementById("jsonld-editor-status");
         const jsonldTextarea = document.getElementById("jsonld-editor-textarea");
+        const jsonldMinimap = document.getElementById("jsonld-minimap");
+        const jsonldMinimapMarkers = document.getElementById("jsonld-minimap-markers");
+        const jsonldMinimapViewport = document.getElementById("jsonld-minimap-viewport");
+        let minimapVisible = false;
 
         function setJsonldStatus(message, level = "info") {
             jsonldStatusEl.classList.remove("success", "error");
@@ -3665,6 +3779,8 @@
                         if (selectedNode) {
                             highlightSourceForNode(selectedNode, true);
                         }
+                        updateMinimapMarkers();
+                        updateMinimapViewport();
                     }
                     sigma.refresh();
                 }, 350);
@@ -3691,6 +3807,90 @@
             const enabled = Boolean(nodeId && graph.hasNode(nodeId));
             editNodeJsonldBtn.disabled = !enabled;
             editNodeJsonldBtn.dataset.nodeId = enabled ? nodeId : "";
+        }
+
+        function scrollEditorToLine(line, focus = false) {
+            if (!jsonldEditor) return;
+            const maxLine = Math.max(0, jsonldEditor.lineCount() - 1);
+            const safeLine = Math.max(0, Math.min(line, maxLine));
+            jsonldEditor.scrollIntoView({ line: safeLine, ch: 0 }, 120);
+            jsonldEditor.setCursor({ line: safeLine, ch: 0 });
+            if (focus) {
+                jsonldEditor.focus();
+            }
+            updateMinimapViewport();
+        }
+
+        function setMinimapButtonState() {
+            jsonldToggleMinimapBtn.classList.toggle("active", minimapVisible);
+            jsonldToggleMinimapBtn.textContent = minimapVisible ? "Hide Minimap" : "Show Minimap";
+            jsonldToggleMinimapBtn.setAttribute("aria-pressed", minimapVisible ? "true" : "false");
+        }
+
+        function updateMinimapViewport() {
+            if (!jsonldEditor || !minimapVisible) return;
+            const scrollInfo = jsonldEditor.getScrollInfo();
+            const fullHeight = Math.max(scrollInfo.height, 1);
+            const viewHeight = Math.max(scrollInfo.clientHeight, 1);
+
+            if (fullHeight <= viewHeight) {
+                jsonldMinimapViewport.style.top = "0%";
+                jsonldMinimapViewport.style.height = "100%";
+                return;
+            }
+
+            const topRatio = Math.max(0, Math.min(1, scrollInfo.top / (fullHeight - viewHeight)));
+            const heightRatio = Math.max(0.02, Math.min(1, viewHeight / fullHeight));
+
+            jsonldMinimapViewport.style.top = `${topRatio * 100}%`;
+            jsonldMinimapViewport.style.height = `${heightRatio * 100}%`;
+        }
+
+        function updateMinimapMarkers() {
+            if (!minimapVisible) return;
+            jsonldMinimapMarkers.innerHTML = "";
+            if (!jsonldEditor) return;
+
+            const lineCount = Math.max(1, jsonldEditor.lineCount());
+            const markerMap = new Map();
+
+            highlightedSourceLines.forEach(item => {
+                const kind = item.className === "cm-node-line" ? "node" : "ref";
+                if (!markerMap.has(item.line) || kind === "node") {
+                    markerMap.set(item.line, kind);
+                }
+            });
+
+            const fragment = document.createDocumentFragment();
+            markerMap.forEach((kind, line) => {
+                const marker = document.createElement("div");
+                marker.className = `minimap-marker minimap-marker-${kind}`;
+                marker.style.top = `${(line / lineCount) * 100}%`;
+                marker.title = `Line ${line + 1}`;
+                marker.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    scrollEditorToLine(line, true);
+                });
+                fragment.appendChild(marker);
+            });
+            jsonldMinimapMarkers.appendChild(fragment);
+        }
+
+        function setMinimapVisibility(visible) {
+            minimapVisible = visible;
+            jsonldMinimap.classList.toggle("visible", minimapVisible);
+            setMinimapButtonState();
+            if (jsonldEditor) {
+                setTimeout(() => {
+                    jsonldEditor.refresh();
+                    updateMinimapMarkers();
+                    updateMinimapViewport();
+                }, 0);
+            }
+        }
+
+        function toggleMinimap() {
+            setMinimapVisibility(!minimapVisible);
         }
 
         function buildLineStartOffsets(text) {
@@ -3864,15 +4064,18 @@
                 jsonldEditor.removeLineClass(item.line, "background", item.className);
             });
             highlightedSourceLines = [];
+            updateMinimapMarkers();
         }
 
-        function highlightSourceForNode(nodeId, scrollToFirst = true) {
+        function highlightSourceForNode(nodeId, scrollToFirst = true, suppressStatus = false) {
             if (!jsonldEditor || !nodeId) return;
             clearSourceHighlights();
 
             const entry = sourceIndex[nodeId];
             if (!entry) {
-                setJsonldStatus(`No JSON-LD block found for node "${nodeId}".`, "error");
+                if (!suppressStatus) {
+                    setJsonldStatus(`No JSON-LD block found for node "${nodeId}".`, "error");
+                }
                 return;
             }
 
@@ -3889,20 +4092,24 @@
             });
 
             if (scrollToFirst) {
-                jsonldEditor.scrollIntoView({ line: entry.block.startLine, ch: 0 }, 120);
-                jsonldEditor.setCursor({ line: entry.block.startLine, ch: 0 });
-                jsonldEditor.focus();
+                scrollEditorToLine(entry.block.startLine, true);
+            } else {
+                updateMinimapViewport();
             }
 
-            setJsonldStatus(
-                `Highlighted ${entry.block.endLine - entry.block.startLine + 1} node lines and ${entry.referenceLines.length} reference lines for "${nodeId}".`,
-                "info",
-            );
+            updateMinimapMarkers();
+
+            if (!suppressStatus) {
+                setJsonldStatus(
+                    `Highlighted ${entry.block.endLine - entry.block.startLine + 1} node lines and ${entry.referenceLines.length} reference lines for "${nodeId}".`,
+                    "info",
+                );
+            }
         }
 
-        function highlightSelectedNodeSource() {
+        function highlightSelectedNodeSource(scrollToFirst = true) {
             if (!selectedNode || !isJsonldEditorOpen()) return;
-            highlightSourceForNode(selectedNode, false);
+            highlightSourceForNode(selectedNode, scrollToFirst);
         }
 
         function getEntityTypeKey(node) {
@@ -4219,6 +4426,8 @@
             if (typeof CodeMirror === "undefined") {
                 jsonldTextarea.value = INITIAL_JSONLD_TEXT;
                 sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
+                jsonldToggleMinimapBtn.disabled = true;
+                setMinimapVisibility(false);
                 setJsonldStatus("CodeMirror failed to load; using plain textarea editor.", "error");
                 return;
             }
@@ -4234,7 +4443,17 @@
             sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
             jsonldEditor.on("changes", () => {
                 sourceIndex = buildSourceIndexFromText(jsonldEditor.getValue());
+                if (selectedNode && highlightedSourceLines.length > 0 && isJsonldEditorOpen()) {
+                    highlightSourceForNode(selectedNode, false, true);
+                } else {
+                    updateMinimapMarkers();
+                }
+                updateMinimapViewport();
             });
+            jsonldEditor.on("scroll", () => {
+                updateMinimapViewport();
+            });
+            setMinimapButtonState();
             setJsonldStatus("Editor ready. Select a node and click 'Edit in JSON-LD'.", "info");
         }
 
@@ -4262,6 +4481,19 @@
 
         jsonldDownloadBtn.addEventListener("click", () => {
             downloadJsonldText();
+        });
+
+        jsonldToggleMinimapBtn.addEventListener("click", () => {
+            toggleMinimap();
+        });
+
+        jsonldMinimap.addEventListener("click", (event) => {
+            if (!jsonldEditor || !minimapVisible) return;
+            const rect = jsonldMinimap.getBoundingClientRect();
+            if (!rect.height) return;
+            const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+            const line = Math.floor(ratio * Math.max(0, jsonldEditor.lineCount() - 1));
+            scrollEditorToLine(line, true);
         });
 
         // Search functionality

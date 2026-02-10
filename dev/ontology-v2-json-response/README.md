@@ -157,6 +157,7 @@ python scripts/visualize_jsonld.py
 | **Node Details Panel** | Click a node to see full details in the sidebar |
 | **JSON-LD Editor Panel** | Collapsible editor between sidebar and graph (collapsed by default) for direct JSON-LD editing |
 | **Node-to-Source Jump** | From Node Details, use **Edit in JSON-LD** to open the editor and highlight the node block plus all reference lines |
+| **Editor Minimap** | Toggle a minimap from the editor toolbar to navigate quickly; minimap markers follow highlighted node-related lines |
 | **Apply + Download** | Apply edited JSON-LD to rebuild graph/tables in-browser and download edited JSON-LD as a file |
 | **Data Tables** | Collapsible panel with tabbed tables for each entity type |
 | **Collapsible Sidebar** | Toggle button to collapse/expand the sidebar for more graph space |
