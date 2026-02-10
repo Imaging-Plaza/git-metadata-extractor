@@ -204,7 +204,7 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
-ROR_PATTERN = re.compile(r"^https://ror\.org/\w+$")
+ROR_PATTERN = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
 DOI_PATTERN = re.compile(r"^10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+$")
 
 
@@ -236,8 +236,9 @@ def is_hierarchical_id(value: str, target_shape: str) -> bool:
     if value.startswith("http"):  # URLs like ROR
         return True
 
-    # GitHub usernames, composite IDs, etc.
-    return True
+    # Non-UUID, non-URL values: GitHub usernames, composite IDs, etc.
+    # Any non-empty, non-UUID string is treated as a hierarchical ID.
+    return len(value) > 0
 
 
 def load_json(filepath: Path) -> Any:

@@ -107,7 +107,29 @@ else
     echo "  Install with: pip install pyshacl rdflib"
 fi
 
-# Test 4: Generate visualization HTML
+# Test 4: TTL-Schema Semantic Alignment (if rdflib is available)
+echo ""
+echo -e "${YELLOW}Checking for rdflib...${NC}"
+if python -c "import rdflib" 2>/dev/null; then
+    run_test "TTL-Schema Semantic Alignment" \
+        "python $SCRIPTS_DIR/test_ttl_alignment.py" || true
+else
+    echo -e "${YELLOW}⚠ Skipping alignment test - rdflib not installed${NC}"
+    echo "  Install with: pip install rdflib"
+fi
+
+# Test 5: Round-Trip Test (if rdflib is available)
+echo ""
+echo -e "${YELLOW}Checking for rdflib (round-trip)...${NC}"
+if python -c "import rdflib" 2>/dev/null; then
+    run_test "JSON-LD Round-Trip Test" \
+        "python $SCRIPTS_DIR/test_roundtrip.py" || true
+else
+    echo -e "${YELLOW}⚠ Skipping round-trip test - rdflib not installed${NC}"
+    echo "  Install with: pip install rdflib"
+fi
+
+# Test 6: Generate visualization HTML
 echo ""
 echo -e "${YELLOW}Generating visualization...${NC}"
 run_test "Generate Visualization HTML" \
