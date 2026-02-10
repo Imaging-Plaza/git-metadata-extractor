@@ -1,5 +1,5 @@
 # Open Pulse Ontology v2 - Validation Summary
-# Generated: 2026-02-04T20:23:17Z
+# Generated: 2026-02-10T07:14:19Z
 
 
 ## JSON Schema Validation
@@ -88,13 +88,13 @@ Ontology: /workspaces/git-metadata-extractor/dev/ontology-v2-json-response/open-
 JSON-LD: /workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/jsonld_output.json
 
 Loading SHACL shapes from TTL...
-  Loaded 646 triples
+  Loaded 641 triples
 
 Loading ontology definitions...
-  Loaded 646 triples (for enumeration class membership)
+  Loaded 641 triples (for enumeration class membership)
 
 Loading JSON-LD data...
-  Loaded 191 triples
+  Loaded 190 triples
 
 Running SHACL validation...
 
@@ -105,34 +105,14 @@ Full report saved to: /workspaces/git-metadata-extractor/dev/ontology-v2-json-re
 SHACL VALIDATION SUMMARY
 ============================================================
 
-❌ Data does NOT conform to SHACL shapes
+✅ Data CONFORMS to SHACL shapes!
 
-  Violations: 3
+  Violations: 0
   Warnings: 0
   Infos: 0
-
---- VIOLATIONS ---
-
-1. Focus Node: https://ror.org/02s376052
-   Path: https://open-pulse.epfl.ch/ontology#infoscienceOrganizationIdentifier
-   Value: 41674f42-ba15-4612-9817-2a6f60985c01
-   Message: Node <https://ror.org/02s376052> is closed. It cannot have value: Literal("41674f42-ba15-4612-9817-2a6f60985c01")
-   Shape: https://open-pulse.epfl.ch/ontology#OrganizationShape
-
-2. Focus Node: file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05
-   Path: https://open-pulse.epfl.ch/ontology#infoscienceOrganizationIdentifier
-   Value: 95372c6b-7d45-432e-a84e-660c9fa54e05
-   Message: Node <file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05> is closed. It cannot have value: Literal("95372c6b-7d45-432e-a84e-660c9fa54e05")
-   Shape: https://open-pulse.epfl.ch/ontology#OrganizationShape
-
-3. Focus Node: file:///workspaces/git-metadata-extractor/dev/ontology-v2-json-response/a-001/95372c6b-7d45-432e-a84e-660c9fa54e05
-   Path: http://schema.org/identifier
-   Value: 95372c6b-7d45-432e-a84e-660c9fa54e05
-   Message: Value does not match pattern '^https://ror\.org/[0-9a-z]{9}$'
-   Shape: https://open-pulse.epfl.ch/ontology#RorPropertyShape
 ```
 
-**Result: ✗ FAILED**
+**Result: ✓ PASSED**
 
 ## Generate Visualization HTML
 
@@ -156,7 +136,7 @@ Generating HTML visualization...
 | Metric | Count |
 |--------|-------|
 | Total Tests | 4 |
-| Passed | 3 |
-| Failed | 1 |
+| Passed | 4 |
+| Failed | 0 |
 
-**❌ Some tests failed.**
+**✅ All tests passed!**

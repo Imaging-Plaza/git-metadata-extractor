@@ -11,7 +11,7 @@
     },
     "idSource": "pulse:infoscienceOrganizationIdentifier",
     "schema:name": "EPFL School of Architecture, Civil and Environmental Engineering",
-    "schema:identifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "schema:identifier": null,
     "pulse:githubOrganizationHandle": "EPFL-ENAC",
     "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
     "pulse:OrganizationType": "pulse:University",

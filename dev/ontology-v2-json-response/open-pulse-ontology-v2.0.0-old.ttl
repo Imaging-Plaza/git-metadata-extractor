@@ -11,11 +11,9 @@
 @prefix wd: <http://www.wikidata.org/entity/> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
-
 # ---------------------------------------------------------
 # 1. CLASS & PROPERTY SECTION
 # ---------------------------------------------------------
-
 <https://open-pulse.epfl.ch/ontology#> a owl:Ontology ;
     dct:abstract "The Open Pulse Ontology to model contributions to open source scientific software and research articles from EPFL." ;
     dct:license <https://spdx.org/licenses/CC-BY-4.0.html> ;
@@ -138,7 +136,7 @@ pulse:githubRepoForks a rdf:Property ; rdfs:range xsd:integer ; skos:prefLabel "
 # Ownership and contribution properties
 pulse:owns a rdf:Property ; skos:prefLabel "owns" ; skos:definition "Links a Person or Organization to a software repository they own." ; owl:inverseOf pulse:ownedBy .
 pulse:ownedBy a rdf:Property ; skos:prefLabel "owned by" ; skos:definition "Links a software repository to its owning Person or Organization." .
-pulse:isForkOf a rdf:Property ; skos:prefLabel "is fork of" ; skos:definition "Links a repository to the parent-repository it was forked from." ; rdfs:domain schema:SoftwareSourceCode ; rdfs:range schema:SoftwareSourceCode .
+pulse:isForkOf a rdf:Property ; skos:prefLabel "is fork of" ; skos:definition "Links a repository to the repository it was forked from." ; rdfs:domain schema:SoftwareSourceCode ; rdfs:range schema:SoftwareSourceCode .
 pulse:hasContribution a rdf:Property ; skos:prefLabel "has contribution" ; skos:definition "Links a Person to a Contribution they made to a repository." .
 pulse:contributionTo a rdf:Property ; skos:prefLabel "contribution to" ; skos:definition "Links a Contribution to the Repository it belongs to." ; rdfs:domain pulse:Contribution ; rdfs:range schema:SoftwareSourceCode .
 pulse:contributionCount a rdf:Property ; rdfs:range xsd:integer ; skos:prefLabel "contribution count" ; skos:definition "The number of contributions (commits) made." .
@@ -146,7 +144,6 @@ pulse:firstContributionDate a rdf:Property ; rdfs:range xsd:dateTime ; skos:pref
 pulse:lastContributionDate a rdf:Property ; rdfs:range xsd:dateTime ; skos:prefLabel "last contribution date" ; skos:definition "The date of the most recent contribution." .
 pulse:infoscienceArticleIdentifier a rdf:Property ; skos:prefLabel "infoscience article identifier" ; skos:definition "The Infoscience identifier for an article." .
 pulse:orcidIdentifier a rdf:Property ; skos:prefLabel "ORCID identifier" ; skos:definition "The ORCID identifier for a person." .
-
 # ---------------------------------------------------------
 # 2. REUSABLE PROPERTY SHAPES
 # ---------------------------------------------------------
@@ -317,7 +314,14 @@ pulse:ArticleShape
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
     sh:property pulse:NameShape ;
-    sh:property pulse:DoiPropertyShape ;
+    sh:property [
+        sh:path schema:identifier ;
+        sh:datatype xsd:string ;
+        sh:pattern "^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$" ;
+        sh:minCount 1 ;
+        sh:name "DOI" ;
+        sh:description "Digital Object Identifier (DOI) - mandatory."
+    ] ;
     sh:property pulse:InfoscienceArticleIdentifierShape ;
     sh:property [ sh:path schema:datePublished ; sh:datatype xsd:date ; sh:minCount 1 ; sh:name "Publication Date" ] ;
     sh:property [ sh:path schema:author ; sh:class schema:Person ; sh:minCount 1 ; sh:name "Author"; sh:description "The author of this article"   ] ;
@@ -331,7 +335,6 @@ pulse:OrganizationShape
     sh:property pulse:NameShape ;
     sh:property pulse:RorPropertyShape ;
     sh:property pulse:GithubOrganizationHandleShape ;
-    sh:property pulse:InfoscienceOrganizationIdentifierShape ;
     sh:property pulse:OrganizationTypeShape ;
     sh:property pulse:GithubOrgFollowersShape ;
     sh:property pulse:HasUnitPropertyShape ;

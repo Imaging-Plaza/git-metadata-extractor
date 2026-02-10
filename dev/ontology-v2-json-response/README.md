@@ -19,12 +19,12 @@ Each entity in the Open Pulse ontology is defined by an RDF class and validated 
 
 | Class | SHACL Shape | ID Hierarchy | Connects To |
 |-------|-------------|--------------|-------------|
-| `schema:Person` | `pulse:PersonShape` | `orcid → infosciencePersonIdentifier → githubUsername → uuid` | MembershipShape, ContributionShape, RepositoryShape |
-| `schema:SoftwareSourceCode` | `pulse:RepositoryShape` | `githubHandle → identifier → uuid` | PersonShape (author), OrganizationShape (owner) |
-| `org:Organization` | `pulse:OrganizationShape` | `ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid` | RepositoryShape (owns), OrganizationShape (units) |
+| `schema:Person` | `pulse:PersonShape` | `orcidIdentifier → infosciencePersonIdentifier → githubUsername → uuid` | MembershipShape, ContributionShape, RepositoryShape |
+| `schema:SoftwareSourceCode` | `pulse:RepositoryShape` | `githubHandle → citation (doi?) → uuid` | PersonShape (author), OrganizationShape (owner) |
+| `org:Organization` | `pulse:OrganizationShape` | `identifier (ror) → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid` | RepositoryShape (owns), OrganizationShape (units) |
 | `org:Membership` | `pulse:MembershipShape` | `composite (personId_orgId) → uuid` | OrganizationShape |
 | `pulse:Contribution` | `pulse:ContributionShape` | `composite (personId_repoId) → uuid` | RepositoryShape, PersonShape |
-| `schema:ScholarlyArticle` | `pulse:ArticleShape` | `doi → infoscienceArticleIdentifier → uuid` | PersonShape (author) |
+| `schema:ScholarlyArticle` | `pulse:ArticleShape` | `identifier (doi) → infoscienceArticleIdentifier → uuid` | PersonShape (author) |
 
 ##### Shape vs. Type
 
