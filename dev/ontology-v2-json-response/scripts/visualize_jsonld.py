@@ -25,6 +25,12 @@ Features:
         - Entity-type checkboxes to show/hide node categories.
         - Click a node to highlight it and its direct neighbours; click the
           stage background to reset.
+        - Collapsible JSON-LD editor panel (collapsed by default) between the
+          sidebar and graph canvas.
+        - "Edit in JSON-LD" action in node details to jump to and highlight
+          node-related source lines (node block + references).
+        - Apply edited JSON-LD to rebuild the graph in-browser and download the
+          edited JSON-LD text.
         - Hover tooltips with truncated property previews.
         - Drag mode (toggle) to reposition individual nodes.
         - Zoom, fit-to-view, and full reset controls.
@@ -153,10 +159,10 @@ CROSS_REF_FIELDS = [
 ]
 
 
-def load_jsonld() -> dict:
-    """Load JSON-LD file."""
-    with open(JSONLD_FILE, encoding="utf-8") as f:
-        return json.load(f)
+def load_jsonld() -> tuple[dict, str]:
+    """Load JSON-LD file and return both parsed data and original raw text."""
+    raw_text = JSONLD_FILE.read_text(encoding="utf-8")
+    return json.loads(raw_text), raw_text
 
 
 def load_validation() -> dict[str, dict]:
@@ -487,7 +493,7 @@ def build_graph_data(
     }
 
 
-def generate_html(graph_data: dict) -> str:
+def generate_html(graph_data: dict, jsonld_text: str) -> str:
     """Generate the complete HTML visualization."""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -501,6 +507,10 @@ def generate_html(graph_data: dict) -> str:
     <script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
     <!-- ForceAtlas2 layout - use specific bundle that exposes global -->
     <script src="https://cdn.jsdelivr.net/npm/graphology-layout-forceatlas2@0.10.1/build/graphology-layout-forceatlas2.umd.min.js"></script>
+    <!-- CodeMirror JSON editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 
     <style>
         * {{
@@ -596,6 +606,13 @@ def generate_html(graph_data: dict) -> str:
             border-bottom: 1px solid #e2e8f0;
         }}
 
+        #sidebar-header-top {{
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }}
+
         #sidebar-header h1 {{
             font-size: 18px;
             font-weight: 600;
@@ -606,6 +623,25 @@ def generate_html(graph_data: dict) -> str:
         #sidebar-header p {{
             font-size: 12px;
             color: #64748b;
+        }}
+
+        .sidebar-header-action {{
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }}
+
+        .sidebar-header-action:hover {{
+            background: #e2e8f0;
+            color: #0f172a;
+            border-color: #94a3b8;
         }}
 
         /* Search */
@@ -826,6 +862,35 @@ def generate_html(graph_data: dict) -> str:
             margin-bottom: 16px;
         }}
 
+        #node-actions {{
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }}
+
+        .node-action-btn {{
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }}
+
+        .node-action-btn:hover:not(:disabled) {{
+            background: #dbeafe;
+            color: #1e3a8a;
+            border-color: #93c5fd;
+        }}
+
+        .node-action-btn:disabled {{
+            opacity: 0.55;
+            cursor: not-allowed;
+        }}
+
         .property-item {{
             padding: 8px 0;
             border-bottom: 1px solid #f1f5f9;
@@ -851,6 +916,153 @@ def generate_html(graph_data: dict) -> str:
 
         .property-value a:hover {{
             text-decoration: underline;
+        }}
+
+        /* JSON-LD editor panel */
+        #jsonld-editor-wrapper {{
+            position: relative;
+            display: flex;
+            width: 440px;
+            min-width: 440px;
+            border-right: 1px solid #e2e8f0;
+            background: white;
+            transition: width 0.3s ease, min-width 0.3s ease, border-color 0.3s ease;
+            flex-shrink: 0;
+            z-index: 30;
+        }}
+
+        #jsonld-editor-wrapper.collapsed {{
+            width: 0;
+            min-width: 0;
+            border-right-color: transparent;
+        }}
+
+        #jsonld-editor-panel {{
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: opacity 0.2s ease;
+        }}
+
+        #jsonld-editor-wrapper.collapsed #jsonld-editor-panel {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+
+        #jsonld-editor-toggle {{
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 50px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #64748b;
+            z-index: 120;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+            transition: background 0.2s, color 0.2s;
+        }}
+
+        #jsonld-editor-toggle:hover {{
+            background: #f1f5f9;
+            color: #0f172a;
+        }}
+
+        #jsonld-editor-header {{
+            padding: 12px 14px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }}
+
+        #jsonld-editor-title {{
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }}
+
+        #jsonld-editor-actions {{
+            display: flex;
+            gap: 6px;
+        }}
+
+        .jsonld-action-btn {{
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            background: white;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 9px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }}
+
+        .jsonld-action-btn:hover {{
+            background: #e2e8f0;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }}
+
+        #jsonld-editor-status {{
+            min-height: 36px;
+            padding: 9px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #334155;
+            background: #f8fafc;
+        }}
+
+        #jsonld-editor-status.success {{
+            color: #166534;
+            background: #f0fdf4;
+            border-bottom-color: #bbf7d0;
+        }}
+
+        #jsonld-editor-status.error {{
+            color: #991b1b;
+            background: #fef2f2;
+            border-bottom-color: #fecaca;
+        }}
+
+        #jsonld-editor-container {{
+            flex: 1;
+            min-height: 0;
+        }}
+
+        #jsonld-editor-textarea {{
+            width: 100%;
+            height: 100%;
+        }}
+
+        #jsonld-editor-container .CodeMirror {{
+            height: 100%;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+        }}
+
+        #jsonld-editor-container .cm-node-line {{
+            background: rgba(59, 130, 246, 0.16);
+        }}
+
+        #jsonld-editor-container .cm-node-ref-line {{
+            background: rgba(14, 165, 233, 0.14);
         }}
 
         /* Graph container */
@@ -1417,8 +1629,13 @@ def generate_html(graph_data: dict) -> str:
             <div id="sidebar-wrapper">
                 <div id="sidebar">
                     <div id="sidebar-header">
-                        <h1>Open Pulse Ontology</h1>
-                        <p>JSON-LD Graph Visualization</p>
+                        <div id="sidebar-header-top">
+                            <div>
+                                <h1>Open Pulse Ontology</h1>
+                                <p>JSON-LD Graph Visualization</p>
+                            </div>
+                            <button id="open-jsonld-editor-btn" class="sidebar-header-action" title="Open JSON-LD editor">Edit JSON-LD</button>
+                        </div>
                     </div>
 
                 <div id="search-container">
@@ -1456,12 +1673,32 @@ def generate_html(graph_data: dict) -> str:
                         <div id="node-details">
                             <div id="node-title"></div>
                             <span id="node-type"></span>
+                            <div id="node-actions">
+                                <button id="edit-node-jsonld-btn" class="node-action-btn" disabled title="Open editor and highlight this node in JSON-LD">Edit in JSON-LD</button>
+                            </div>
                             <div id="node-properties"></div>
                         </div>
                     </div>
                 </div>
             </div>
             <button id="sidebar-toggle" title="Toggle Sidebar">◀</button>
+            </div>
+
+            <div id="jsonld-editor-wrapper" class="collapsed">
+                <div id="jsonld-editor-panel">
+                    <div id="jsonld-editor-header">
+                        <span id="jsonld-editor-title">JSON-LD Editor</span>
+                        <div id="jsonld-editor-actions">
+                            <button id="jsonld-apply-btn" class="jsonld-action-btn" title="Apply JSON-LD changes to rebuild graph">Apply</button>
+                            <button id="jsonld-download-btn" class="jsonld-action-btn" title="Download edited JSON-LD">Download</button>
+                        </div>
+                    </div>
+                    <div id="jsonld-editor-status">Editor ready. Select a node and use "Edit in JSON-LD" to jump to related lines.</div>
+                    <div id="jsonld-editor-container">
+                        <textarea id="jsonld-editor-textarea"></textarea>
+                    </div>
+                </div>
+                <button id="jsonld-editor-toggle" title="Toggle JSON-LD editor">▶</button>
             </div>
 
             <div id="graph-area">
@@ -1519,14 +1756,18 @@ def generate_html(graph_data: dict) -> str:
     </div>
 
     <script>
-        // Graph data injected from Python
-        const GRAPH_DATA = {json.dumps(graph_data, indent=2)};
+        // Graph/source data injected from Python
+        let graphData = {json.dumps(graph_data, indent=2)};
+        const INITIAL_JSONLD_TEXT = {json.dumps(jsonld_text)};
+        const ENTITY_TYPE_CONFIG = {json.dumps(ENTITY_CONFIG, indent=2)};
+        const EDGE_TYPE_CONFIG = {json.dumps(EDGE_CONFIG, indent=2)};
+        const CROSS_REF_FIELDS = {json.dumps(CROSS_REF_FIELDS, indent=2)};
 
-        // Entity configuration
-        const ENTITY_CONFIG = {json.dumps({v["label"]: {"color": v["color"]} for k, v in ENTITY_CONFIG.items()}, indent=2)};
+        // Entity configuration for tabs/filters (label-keyed)
+        const ENTITY_CONFIG = {json.dumps({v["label"]: {"color": v["color"]} for v in ENTITY_CONFIG.values()}, indent=2)};
 
-        // Edge configuration
-        const EDGE_CONFIG = {json.dumps({v["label"]: {"color": v["color"]} for k, v in EDGE_CONFIG.items()}, indent=2)};
+        // Edge legend configuration (label-keyed)
+        const EDGE_CONFIG = {json.dumps({v["label"]: {"color": v["color"]} for v in EDGE_CONFIG.values()}, indent=2)};
 
         // Initialize the graph
         const graph = new graphology.Graph({{ multi: true }});
@@ -1540,37 +1781,61 @@ def generate_html(graph_data: dict) -> str:
         let layoutRunning = false;
         let tooltipsEnabled = true;
         let tableSyncEnabled = true;
+        let nodesByType = {{}};
+        let activeDataTab = null;
 
-        // Add nodes
-        GRAPH_DATA.nodes.forEach(node => {{
-            graph.addNode(node.id, {{
-                label: node.label,
-                x: node.x,
-                y: node.y,
-                size: node.size,
-                color: node.color,
-                nodeType: node.nodeType,
-                entityType: node.entityType,
-                properties: node.properties,
-                validation: node.validation,
-                originalColor: node.color,
-                originalSize: node.size,
-            }});
-        }});
+        // JSON-LD editor state
+        let jsonldEditor = null;
+        let sourceIndex = {{}};
+        let highlightedSourceLines = [];
 
-        // Add edges
-        GRAPH_DATA.edges.forEach((edge, index) => {{
-            if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {{
-                graph.addEdgeWithKey(`edge-${{index}}`, edge.source, edge.target, {{
-                    label: edge.label,
-                    color: edge.color,
-                    size: 2,
-                    edgeType: edge.type,
-                    originalColor: edge.color,
-                    curvature: edge.curvature,
+        function addGraphDataToGraph(data) {{
+            graph.clear();
+            data.nodes.forEach(node => {{
+                graph.addNode(node.id, {{
+                    label: node.label,
+                    x: node.x,
+                    y: node.y,
+                    size: node.size,
+                    color: node.color,
+                    nodeType: node.nodeType,
+                    entityType: node.entityType,
+                    properties: node.properties,
+                    validation: node.validation,
+                    originalColor: node.color,
+                    originalSize: node.size,
                 }});
-            }}
-        }});
+            }});
+
+            data.edges.forEach((edge, index) => {{
+                if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {{
+                    graph.addEdgeWithKey(`edge-${{index}}`, edge.source, edge.target, {{
+                        label: edge.label,
+                        color: edge.color,
+                        size: 2,
+                        edgeType: edge.type,
+                        originalColor: edge.color,
+                        curvature: edge.curvature,
+                    }});
+                }}
+            }});
+        }}
+
+        function buildValidationLookupFromGraphData(data) {{
+            const lookup = {{}};
+            (data.nodes || []).forEach(node => {{
+                if (node.validation !== undefined && node.validation !== null) {{
+                    lookup[node.id] = node.validation;
+                    if (node.id.includes("/")) {{
+                        lookup[node.id.split("/").slice(-1)[0]] = node.validation;
+                    }}
+                }}
+            }});
+            return lookup;
+        }}
+
+        const validationLookupById = buildValidationLookupFromGraphData(graphData);
+        addGraphDataToGraph(graphData);
 
         // Custom label renderer with type badge
         function drawLabel(context, data, settings) {{
@@ -2168,66 +2433,71 @@ def generate_html(graph_data: dict) -> str:
             sigma.getCamera().enable();
         }});
 
-        // Update stats
-        document.getElementById("node-count").textContent = graph.order;
-        document.getElementById("edge-count").textContent = graph.size;
+        const filtersContainer = document.getElementById("filters");
+        const edgeLegend = document.getElementById("edge-legend");
 
-        // Update validation count in stats
-        const valStats = GRAPH_DATA.metadata.validation || {{}};
-        if (valStats.total > 0) {{
-            const valSpan = document.getElementById("validation-count");
-            const allValid = valStats.invalid === 0;
-            valSpan.style.color = allValid ? "#22c55e" : "#ef4444";
-            valSpan.style.fontWeight = "600";
-            valSpan.textContent = `${{valStats.valid}}/${{valStats.total}} valid`;
+        function regroupNodesByType() {{
+            nodesByType = {{}};
+            (graphData.nodes || []).forEach(node => {{
+                if (!nodesByType[node.nodeType]) {{
+                    nodesByType[node.nodeType] = [];
+                }}
+                nodesByType[node.nodeType].push(node);
+            }});
         }}
 
-        // Build filters
-        const filtersContainer = document.getElementById("filters");
-        const typeCounts = {{}};
-        GRAPH_DATA.nodes.forEach(node => {{
-            typeCounts[node.nodeType] = (typeCounts[node.nodeType] || 0) + 1;
-        }});
-
-        Object.entries(ENTITY_CONFIG).forEach(([type, config]) => {{
-            const count = typeCounts[type] || 0;
-            if (count === 0) return;
-
-            const item = document.createElement("label");
-            item.className = "filter-item";
-            item.innerHTML = `
-                <input type="checkbox" class="filter-checkbox" data-type="${{type}}" checked>
-                <span class="filter-color" style="background: ${{config.color}}"></span>
-                <span class="filter-label">${{type}}</span>
-                <span class="filter-count">${{count}}</span>
-            `;
-            filtersContainer.appendChild(item);
-        }});
-
-        // Build edge legend
-        const edgeLegend = document.getElementById("edge-legend");
-        Object.entries(EDGE_CONFIG).forEach(([label, config]) => {{
-            const item = document.createElement("div");
-            item.className = "legend-item";
-            item.innerHTML = `
-                <span class="legend-line" style="background: ${{config.color}}"></span>
-                <span>${{label}}</span>
-            `;
-            edgeLegend.appendChild(item);
-        }});
-
-        // Filter functionality
-        filtersContainer.addEventListener("change", (e) => {{
-            if (e.target.classList.contains("filter-checkbox")) {{
-                const type = e.target.dataset.type;
-                if (e.target.checked) {{
-                    hiddenTypes.delete(type);
-                }} else {{
-                    hiddenTypes.add(type);
-                }}
-                updateVisibility();
+        function updateStats() {{
+            document.getElementById("node-count").textContent = graph.order;
+            document.getElementById("edge-count").textContent = graph.size;
+            const valSpan = document.getElementById("validation-count");
+            const valStats = graphData.metadata.validation || {{}};
+            if (valStats.total > 0) {{
+                const allValid = valStats.invalid === 0;
+                valSpan.style.color = allValid ? "#22c55e" : "#ef4444";
+                valSpan.style.fontWeight = "600";
+                valSpan.textContent = `${{valStats.valid}}/${{valStats.total}} valid`;
+            }} else {{
+                valSpan.textContent = "no validation";
+                valSpan.style.color = "#94a3b8";
+                valSpan.style.fontWeight = "500";
             }}
-        }});
+        }}
+
+        function rebuildFilters() {{
+            filtersContainer.innerHTML = "";
+            const typeCounts = {{}};
+            (graphData.nodes || []).forEach(node => {{
+                typeCounts[node.nodeType] = (typeCounts[node.nodeType] || 0) + 1;
+            }});
+
+            Object.entries(ENTITY_CONFIG).forEach(([type, config]) => {{
+                const count = typeCounts[type] || 0;
+                if (count === 0) return;
+
+                const item = document.createElement("label");
+                item.className = "filter-item";
+                item.innerHTML = `
+                    <input type="checkbox" class="filter-checkbox" data-type="${{type}}" ${{hiddenTypes.has(type) ? "" : "checked"}}>
+                    <span class="filter-color" style="background: ${{config.color}}"></span>
+                    <span class="filter-label">${{type}}</span>
+                    <span class="filter-count">${{count}}</span>
+                `;
+                filtersContainer.appendChild(item);
+            }});
+        }}
+
+        function buildEdgeLegend() {{
+            edgeLegend.innerHTML = "";
+            Object.entries(EDGE_CONFIG).forEach(([label, config]) => {{
+                const item = document.createElement("div");
+                item.className = "legend-item";
+                item.innerHTML = `
+                    <span class="legend-line" style="background: ${{config.color}}"></span>
+                    <span>${{label}}</span>
+                `;
+                edgeLegend.appendChild(item);
+            }});
+        }}
 
         function updateVisibility() {{
             graph.forEachNode((nodeId, attrs) => {{
@@ -2243,6 +2513,660 @@ def generate_html(graph_data: dict) -> str:
 
             sigma.refresh();
         }}
+
+        // Filter functionality
+        filtersContainer.addEventListener("change", (e) => {{
+            if (e.target.classList.contains("filter-checkbox")) {{
+                const type = e.target.dataset.type;
+                if (e.target.checked) {{
+                    hiddenTypes.delete(type);
+                }} else {{
+                    hiddenTypes.add(type);
+                }}
+                updateVisibility();
+            }}
+        }});
+
+        // JSON-LD editor elements
+        const jsonldEditorWrapper = document.getElementById("jsonld-editor-wrapper");
+        const jsonldEditorToggle = document.getElementById("jsonld-editor-toggle");
+        const openJsonldEditorBtn = document.getElementById("open-jsonld-editor-btn");
+        const editNodeJsonldBtn = document.getElementById("edit-node-jsonld-btn");
+        const jsonldApplyBtn = document.getElementById("jsonld-apply-btn");
+        const jsonldDownloadBtn = document.getElementById("jsonld-download-btn");
+        const jsonldStatusEl = document.getElementById("jsonld-editor-status");
+        const jsonldTextarea = document.getElementById("jsonld-editor-textarea");
+
+        function setJsonldStatus(message, level = "info") {{
+            jsonldStatusEl.classList.remove("success", "error");
+            if (level === "success") {{
+                jsonldStatusEl.classList.add("success");
+            }} else if (level === "error") {{
+                jsonldStatusEl.classList.add("error");
+            }}
+            jsonldStatusEl.textContent = message;
+        }}
+
+        function getJsonldText() {{
+            return jsonldEditor ? jsonldEditor.getValue() : jsonldTextarea.value;
+        }}
+
+        function isJsonldEditorOpen() {{
+            return !jsonldEditorWrapper.classList.contains("collapsed");
+        }}
+
+        function syncJsonldEditorToggleState() {{
+            jsonldEditorToggle.textContent = isJsonldEditorOpen() ? "◀" : "▶";
+        }}
+
+        function openJsonldEditor() {{
+            if (!isJsonldEditorOpen()) {{
+                jsonldEditorWrapper.classList.remove("collapsed");
+                syncJsonldEditorToggleState();
+                setTimeout(() => {{
+                    if (jsonldEditor) {{
+                        jsonldEditor.refresh();
+                        if (selectedNode) {{
+                            highlightSourceForNode(selectedNode, true);
+                        }}
+                    }}
+                    sigma.refresh();
+                }}, 350);
+            }}
+        }}
+
+        function closeJsonldEditor() {{
+            if (isJsonldEditorOpen()) {{
+                jsonldEditorWrapper.classList.add("collapsed");
+                syncJsonldEditorToggleState();
+                setTimeout(() => sigma.refresh(), 350);
+            }}
+        }}
+
+        function toggleJsonldEditor() {{
+            if (isJsonldEditorOpen()) {{
+                closeJsonldEditor();
+            }} else {{
+                openJsonldEditor();
+            }}
+        }}
+
+        function setNodeEditButtonState(nodeId) {{
+            const enabled = Boolean(nodeId && graph.hasNode(nodeId));
+            editNodeJsonldBtn.disabled = !enabled;
+            editNodeJsonldBtn.dataset.nodeId = enabled ? nodeId : "";
+        }}
+
+        function buildLineStartOffsets(text) {{
+            const offsets = [0];
+            for (let i = 0; i < text.length; i += 1) {{
+                if (text[i] === "\\n") {{
+                    offsets.push(i + 1);
+                }}
+            }}
+            return offsets;
+        }}
+
+        function findLineForOffset(offsets, index) {{
+            let low = 0;
+            let high = offsets.length - 1;
+            while (low <= high) {{
+                const mid = Math.floor((low + high) / 2);
+                if (offsets[mid] <= index) {{
+                    low = mid + 1;
+                }} else {{
+                    high = mid - 1;
+                }}
+            }}
+            return Math.max(0, high);
+        }}
+
+        function getLineAndColumnForOffset(text, index) {{
+            const offsets = buildLineStartOffsets(text);
+            const line = findLineForOffset(offsets, index);
+            return {{
+                line: line + 1,
+                column: index - offsets[line] + 1,
+            }};
+        }}
+
+        function extractGraphObjectRanges(text) {{
+            const graphMatch = /"@graph"\\s*:/.exec(text);
+            if (!graphMatch) return [];
+
+            let cursor = graphMatch.index + graphMatch[0].length;
+            while (cursor < text.length && /\\s/.test(text[cursor])) {{
+                cursor += 1;
+            }}
+            if (text[cursor] !== "[") return [];
+
+            const arrayStart = cursor;
+            let inString = false;
+            let escaped = false;
+            let bracketDepth = 0;
+            let arrayEnd = -1;
+
+            for (let i = arrayStart; i < text.length; i += 1) {{
+                const ch = text[i];
+                if (inString) {{
+                    if (escaped) {{
+                        escaped = false;
+                    }} else if (ch === "\\\\") {{
+                        escaped = true;
+                    }} else if (ch === '"') {{
+                        inString = false;
+                    }}
+                    continue;
+                }}
+
+                if (ch === '"') {{
+                    inString = true;
+                }} else if (ch === "[") {{
+                    bracketDepth += 1;
+                }} else if (ch === "]") {{
+                    bracketDepth -= 1;
+                    if (bracketDepth === 0) {{
+                        arrayEnd = i;
+                        break;
+                    }}
+                }}
+            }}
+
+            if (arrayEnd < 0) return [];
+
+            const ranges = [];
+            inString = false;
+            escaped = false;
+            let braceDepth = 0;
+            let objectStart = -1;
+
+            for (let i = arrayStart + 1; i < arrayEnd; i += 1) {{
+                const ch = text[i];
+                if (inString) {{
+                    if (escaped) {{
+                        escaped = false;
+                    }} else if (ch === "\\\\") {{
+                        escaped = true;
+                    }} else if (ch === '"') {{
+                        inString = false;
+                    }}
+                    continue;
+                }}
+
+                if (ch === '"') {{
+                    inString = true;
+                }} else if (ch === "{{") {{
+                    if (braceDepth === 0) {{
+                        objectStart = i;
+                    }}
+                    braceDepth += 1;
+                }} else if (ch === "}}") {{
+                    braceDepth -= 1;
+                    if (braceDepth === 0 && objectStart >= 0) {{
+                        ranges.push({{ start: objectStart, end: i }});
+                        objectStart = -1;
+                    }}
+                }}
+            }}
+
+            return ranges;
+        }}
+
+        function buildSourceIndexFromText(text) {{
+            const lineOffsets = buildLineStartOffsets(text);
+            const lines = text.split(/\\r?\\n/);
+            const ranges = extractGraphObjectRanges(text);
+            const index = {{}};
+
+            ranges.forEach(range => {{
+                const blockText = text.slice(range.start, range.end + 1);
+                const idMatch = /"@id"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"/.exec(blockText);
+                if (!idMatch) return;
+                let nodeId = idMatch[1];
+                try {{
+                    nodeId = JSON.parse(`"${{idMatch[1]}}"`);
+                }} catch (err) {{
+                    nodeId = idMatch[1];
+                }}
+
+                const startLine = findLineForOffset(lineOffsets, range.start);
+                const endLine = findLineForOffset(lineOffsets, range.end);
+                index[nodeId] = {{
+                    block: {{ startLine, endLine }},
+                    referenceLines: [],
+                    allLines: [],
+                }};
+            }});
+
+            Object.entries(index).forEach(([nodeId, entry]) => {{
+                const quotedId = JSON.stringify(nodeId);
+                const references = [];
+
+                lines.forEach((line, lineNumber) => {{
+                    if (line.includes(quotedId)) {{
+                        references.push(lineNumber);
+                    }}
+                }});
+
+                const all = new Set(references);
+                for (let line = entry.block.startLine; line <= entry.block.endLine; line += 1) {{
+                    all.add(line);
+                }}
+
+                entry.referenceLines = references.filter(
+                    line => line < entry.block.startLine || line > entry.block.endLine,
+                );
+                entry.allLines = Array.from(all).sort((a, b) => a - b);
+            }});
+
+            return index;
+        }}
+
+        function clearSourceHighlights() {{
+            if (!jsonldEditor) return;
+            highlightedSourceLines.forEach(item => {{
+                jsonldEditor.removeLineClass(item.line, "background", item.className);
+            }});
+            highlightedSourceLines = [];
+        }}
+
+        function highlightSourceForNode(nodeId, scrollToFirst = true) {{
+            if (!jsonldEditor || !nodeId) return;
+            clearSourceHighlights();
+
+            const entry = sourceIndex[nodeId];
+            if (!entry) {{
+                setJsonldStatus(`No JSON-LD block found for node "${{nodeId}}".`, "error");
+                return;
+            }}
+
+            for (let line = entry.block.startLine; line <= entry.block.endLine; line += 1) {{
+                jsonldEditor.addLineClass(line, "background", "cm-node-line");
+                highlightedSourceLines.push({{ line, className: "cm-node-line" }});
+            }}
+
+            entry.referenceLines.forEach(line => {{
+                if (line < entry.block.startLine || line > entry.block.endLine) {{
+                    jsonldEditor.addLineClass(line, "background", "cm-node-ref-line");
+                    highlightedSourceLines.push({{ line, className: "cm-node-ref-line" }});
+                }}
+            }});
+
+            if (scrollToFirst) {{
+                jsonldEditor.scrollIntoView({{ line: entry.block.startLine, ch: 0 }}, 120);
+                jsonldEditor.setCursor({{ line: entry.block.startLine, ch: 0 }});
+                jsonldEditor.focus();
+            }}
+
+            setJsonldStatus(
+                `Highlighted ${{entry.block.endLine - entry.block.startLine + 1}} node lines and ${{entry.referenceLines.length}} reference lines for "${{nodeId}}".`,
+                "info",
+            );
+        }}
+
+        function highlightSelectedNodeSource() {{
+            if (!selectedNode || !isJsonldEditorOpen()) return;
+            highlightSourceForNode(selectedNode, false);
+        }}
+
+        function getEntityTypeKey(node) {{
+            const nodeType = node["@type"] || "";
+            return ENTITY_TYPE_CONFIG[nodeType] ? nodeType : "schema:Person";
+        }}
+
+        function extractNodeLabel(node) {{
+            if (node["schema:name"]) return node["schema:name"];
+            const nodeId = node["@id"] || "unknown";
+            if (nodeId.includes("/")) {{
+                return nodeId.split("/").slice(-1)[0];
+            }}
+            return nodeId;
+        }}
+
+        function buildIdIndex(graphNodes) {{
+            const index = {{}};
+            const identifierFields = [
+                "pulse:orcidIdentifier",
+                "pulse:orcid",
+                "pulse:githubUsername",
+                "pulse:githubRepositoryHandle",
+                "pulse:githubOrganizationHandle",
+                "pulse:infosciencePersonIdentifier",
+                "pulse:infoscienceOrganizationIdentifier",
+                "pulse:ror",
+                "schema:identifier",
+                "pulse:composite",
+                "uuid",
+            ];
+
+            graphNodes.forEach(node => {{
+                const nodeId = node["@id"] || "";
+                if (!nodeId) return;
+                index[nodeId] = node;
+
+                if (nodeId.includes("/")) {{
+                    const shortId = nodeId.split("/").slice(-1)[0];
+                    if (!index[shortId]) {{
+                        index[shortId] = node;
+                    }}
+                }}
+
+                identifierFields.forEach(field => {{
+                    const value = node[field];
+                    if (typeof value === "string" && !index[value]) {{
+                        index[value] = node;
+                    }}
+                }});
+            }});
+
+            return index;
+        }}
+
+        function extractEdges(graphNodes, idIndex) {{
+            const edges = [];
+            const edgeSet = new Set();
+            const directedPairs = new Set();
+
+            graphNodes.forEach(node => {{
+                const sourceId = node["@id"] || "";
+                CROSS_REF_FIELDS.forEach(field => {{
+                    let values = node[field];
+                    if (values === undefined || values === null) return;
+                    if (!Array.isArray(values)) values = [values];
+
+                    values.forEach(targetRef => {{
+                        if (targetRef === null || targetRef === undefined) return;
+                        const targetNode = idIndex[targetRef];
+                        if (!targetNode) return;
+
+                        const targetId = targetNode["@id"] || "";
+                        const edgeKey = `${{sourceId}}|${{targetId}}|${{field}}`;
+                        if (edgeSet.has(edgeKey)) return;
+                        edgeSet.add(edgeKey);
+                        directedPairs.add(`${{sourceId}}|${{targetId}}`);
+
+                        const edgeConfig = EDGE_TYPE_CONFIG[field] || {{
+                            label: field,
+                            color: "#94a3b8",
+                        }};
+
+                        edges.push({{
+                            source: sourceId,
+                            target: targetId,
+                            label: edgeConfig.label,
+                            color: edgeConfig.color,
+                            type: field,
+                        }});
+                    }});
+                }});
+            }});
+
+            edges.forEach(edge => {{
+                const reverseKey = `${{edge.target}}|${{edge.source}}`;
+                edge.curvature = directedPairs.has(reverseKey) ? 0.3 : 0;
+            }});
+            return edges;
+        }}
+
+        function calculateRadialPositions(nodesByTypeKey) {{
+            const positions = {{}};
+            const ringRadius = {{ 0: 0, 1: 150, 2: 300, 3: 450 }};
+            const nodesByRing = {{}};
+
+            Object.entries(nodesByTypeKey).forEach(([entityType, nodes]) => {{
+                const config = ENTITY_TYPE_CONFIG[entityType] || ENTITY_TYPE_CONFIG["schema:Person"];
+                const ring = config.ring;
+                if (!nodesByRing[ring]) nodesByRing[ring] = [];
+                nodes.forEach(node => nodesByRing[ring].push(node));
+            }});
+
+            Object.entries(nodesByRing).forEach(([ringKey, ringNodes]) => {{
+                const ring = Number(ringKey);
+                const radius = ringRadius[ring] ?? 450;
+                const count = ringNodes.length;
+                if (count === 0) return;
+
+                if (ring === 0 && count === 1) {{
+                    positions[ringNodes[0]["@id"]] = {{ x: 0, y: 0 }};
+                    return;
+                }}
+
+                ringNodes.forEach((node, idx) => {{
+                    const angle = (2 * Math.PI * idx / count) - (Math.PI / 2);
+                    positions[node["@id"]] = {{
+                        x: radius * Math.cos(angle),
+                        y: radius * Math.sin(angle),
+                    }};
+                }});
+            }});
+            return positions;
+        }}
+
+        function matchValidation(nodeId, validationLookup) {{
+            if (validationLookup[nodeId]) return validationLookup[nodeId];
+            if (nodeId.includes("/")) {{
+                const shortId = nodeId.split("/").slice(-1)[0];
+                if (validationLookup[shortId]) return validationLookup[shortId];
+            }}
+            return null;
+        }}
+
+        function buildGraphDataFromJsonld(jsonld, validationLookup) {{
+            const graphNodes = jsonld["@graph"];
+            if (!Array.isArray(graphNodes)) {{
+                throw new Error('Edited JSON-LD must include an "@graph" array.');
+            }}
+
+            const idIndex = buildIdIndex(graphNodes);
+            const nodesByTypeKey = {{}};
+            graphNodes.forEach(node => {{
+                const nodeType = node["@type"];
+                if (ENTITY_TYPE_CONFIG[nodeType]) {{
+                    if (!nodesByTypeKey[nodeType]) nodesByTypeKey[nodeType] = [];
+                    nodesByTypeKey[nodeType].push(node);
+                }}
+            }});
+
+            const positions = calculateRadialPositions(nodesByTypeKey);
+            const edges = extractEdges(graphNodes, idIndex);
+            const connectionCounts = {{}};
+            edges.forEach(edge => {{
+                connectionCounts[edge.source] = (connectionCounts[edge.source] || 0) + 1;
+                connectionCounts[edge.target] = (connectionCounts[edge.target] || 0) + 1;
+            }});
+
+            let validCount = 0;
+            let invalidCount = 0;
+            let noValidationCount = 0;
+            const nodes = [];
+
+            graphNodes.forEach(node => {{
+                const nodeId = node["@id"] || "";
+                const nodeType = node["@type"] || "";
+                if (!ENTITY_TYPE_CONFIG[nodeType]) return;
+
+                const config = ENTITY_TYPE_CONFIG[nodeType];
+                const pos = positions[nodeId] || {{ x: 0, y: 0 }};
+                const connCount = connectionCounts[nodeId] || 0;
+                const size = config.size_base + Math.min(connCount * 2, 10);
+
+                const properties = {{}};
+                Object.entries(node).forEach(([key, value]) => {{
+                    if ((key === "@id" || key === "@type") || value === null || value === undefined) {{
+                        return;
+                    }}
+                    const displayKey = key.includes(":") ? key.split(":").slice(-1)[0] : key;
+                    properties[displayKey] = value;
+                }});
+
+                const val = matchValidation(nodeId, validationLookup);
+                let validation = null;
+                if (val) {{
+                    validation = {{
+                        strict: Boolean(val.strict),
+                        agent: Boolean(val.agent),
+                        strict_errors: val.strict_errors || [],
+                        agent_errors: val.agent_errors || [],
+                        shape: val.shape || "",
+                    }};
+                    if (validation.strict && validation.agent) {{
+                        validCount += 1;
+                    }} else {{
+                        invalidCount += 1;
+                    }}
+                }} else {{
+                    noValidationCount += 1;
+                }}
+
+                nodes.push({{
+                    id: nodeId,
+                    label: extractNodeLabel(node),
+                    x: pos.x,
+                    y: pos.y,
+                    size,
+                    color: config.color,
+                    nodeType: config.label,
+                    entityType: nodeType,
+                    properties,
+                    validation,
+                }});
+            }});
+
+            return {{
+                nodes,
+                edges,
+                metadata: {{
+                    generated: new Date().toISOString(),
+                    nodeCount: nodes.length,
+                    edgeCount: edges.length,
+                    entityTypes: Object.keys(ENTITY_TYPE_CONFIG),
+                    validation: {{
+                        valid: validCount,
+                        invalid: invalidCount,
+                        noData: noValidationCount,
+                        total: validCount + invalidCount + noValidationCount,
+                    }},
+                }},
+            }};
+        }}
+
+        function applyGraphData(nextGraphData, preferredTab = null) {{
+            graphData = nextGraphData;
+            addGraphDataToGraph(graphData);
+            rebuildSidebarAndTables(preferredTab);
+            applyLayout(currentLayout);
+
+            if (selectedNode && graph.hasNode(selectedNode)) {{
+                selectNode(selectedNode);
+                if (tableSyncEnabled) {{
+                    const nodeType = graph.getNodeAttribute(selectedNode, "nodeType");
+                    switchTab(nodeType);
+                    highlightTableRow(selectedNode);
+                }}
+            }} else {{
+                selectedNode = null;
+                hideNodeDetails();
+                clearTableSelection();
+                clearSourceHighlights();
+            }}
+        }}
+
+        function applyJsonldChanges() {{
+            const text = getJsonldText();
+            let parsed;
+            try {{
+                parsed = JSON.parse(text);
+            }} catch (err) {{
+                const msg = err && err.message ? err.message : "Invalid JSON.";
+                const posMatch = /position\\s+(\\d+)/i.exec(msg);
+                if (posMatch) {{
+                    const pos = Number(posMatch[1]);
+                    const lc = getLineAndColumnForOffset(text, pos);
+                    setJsonldStatus(`Invalid JSON at line ${{lc.line}}, column ${{lc.column}}: ${{msg}}`, "error");
+                }} else {{
+                    setJsonldStatus(`Invalid JSON: ${{msg}}`, "error");
+                }}
+                return;
+            }}
+
+            try {{
+                const nextGraphData = buildGraphDataFromJsonld(parsed, validationLookupById);
+                sourceIndex = buildSourceIndexFromText(text);
+                applyGraphData(nextGraphData, activeDataTab);
+                if (selectedNode && isJsonldEditorOpen()) {{
+                    highlightSourceForNode(selectedNode, false);
+                }}
+                setJsonldStatus(
+                    `Applied JSON-LD successfully: ${{nextGraphData.metadata.nodeCount}} nodes, ${{nextGraphData.metadata.edgeCount}} edges.`,
+                    "success",
+                );
+            }} catch (err) {{
+                const message = err && err.message ? err.message : "Failed to apply JSON-LD.";
+                setJsonldStatus(message, "error");
+            }}
+        }}
+
+        function downloadJsonldText() {{
+            const blob = new Blob([getJsonldText()], {{ type: "application/ld+json;charset=utf-8" }});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "jsonld_output.edited.json";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+            setJsonldStatus("Downloaded edited JSON-LD file.", "success");
+        }}
+
+        function initJsonldEditor() {{
+            if (typeof CodeMirror === "undefined") {{
+                jsonldTextarea.value = INITIAL_JSONLD_TEXT;
+                sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
+                setJsonldStatus("CodeMirror failed to load; using plain textarea editor.", "error");
+                return;
+            }}
+
+            jsonldEditor = CodeMirror.fromTextArea(jsonldTextarea, {{
+                mode: {{ name: "javascript", json: true }},
+                lineNumbers: true,
+                lineWrapping: false,
+                tabSize: 2,
+                viewportMargin: 20,
+            }});
+            jsonldEditor.setValue(INITIAL_JSONLD_TEXT);
+            sourceIndex = buildSourceIndexFromText(INITIAL_JSONLD_TEXT);
+            jsonldEditor.on("changes", () => {{
+                sourceIndex = buildSourceIndexFromText(jsonldEditor.getValue());
+            }});
+            setJsonldStatus("Editor ready. Select a node and click 'Edit in JSON-LD'.", "info");
+        }}
+
+        jsonldEditorToggle.addEventListener("click", () => {{
+            toggleJsonldEditor();
+        }});
+
+        openJsonldEditorBtn.addEventListener("click", () => {{
+            openJsonldEditor();
+            if (selectedNode) {{
+                highlightSourceForNode(selectedNode, true);
+            }}
+        }});
+
+        editNodeJsonldBtn.addEventListener("click", () => {{
+            const nodeId = editNodeJsonldBtn.dataset.nodeId;
+            if (!nodeId) return;
+            openJsonldEditor();
+            highlightSourceForNode(nodeId, true);
+        }});
+
+        jsonldApplyBtn.addEventListener("click", () => {{
+            applyJsonldChanges();
+        }});
+
+        jsonldDownloadBtn.addEventListener("click", () => {{
+            downloadJsonldText();
+        }});
 
         // Search functionality
         const searchInput = document.getElementById("search-input");
@@ -2374,6 +3298,8 @@ def generate_html(graph_data: dict) -> str:
 
         // Node selection and highlighting
         function selectNode(nodeId) {{
+            if (!graph.hasNode(nodeId)) return;
+
             // Reset previous selection
             resetHighlight();
 
@@ -2413,6 +3339,10 @@ def generate_html(graph_data: dict) -> str:
 
             // Show node details
             showNodeDetails(nodeId);
+            setNodeEditButtonState(nodeId);
+            if (isJsonldEditorOpen()) {{
+                highlightSelectedNodeSource();
+            }}
 
             sigma.refresh();
         }}
@@ -2433,6 +3363,8 @@ def generate_html(graph_data: dict) -> str:
                 graph.setEdgeAttribute(id, "zIndex", 0);
             }});
 
+            setNodeEditButtonState(null);
+            clearSourceHighlights();
             sigma.refresh();
         }}
 
@@ -2459,6 +3391,7 @@ def generate_html(graph_data: dict) -> str:
             typeSpan.textContent = attrs.nodeType;
             typeSpan.style.background = attrs.originalColor + "20";
             typeSpan.style.color = attrs.originalColor;
+            setNodeEditButtonState(nodeId);
 
             const propsDiv = document.getElementById("node-properties");
             propsDiv.innerHTML = "";
@@ -2528,6 +3461,7 @@ def generate_html(graph_data: dict) -> str:
         function hideNodeDetails() {{
             document.getElementById("details-placeholder").style.display = "block";
             document.getElementById("node-details").classList.remove("active");
+            setNodeEditButtonState(null);
         }}
 
         // Sigma event handlers
@@ -2731,46 +3665,49 @@ def generate_html(graph_data: dict) -> str:
             dataPanel.classList.toggle("collapsed");
         }});
 
-        // Group nodes by type for tables
-        const nodesByType = {{}};
-        GRAPH_DATA.nodes.forEach(node => {{
-            if (!nodesByType[node.nodeType]) {{
-                nodesByType[node.nodeType] = [];
+        function rebuildDataTabs(preferredType = null) {{
+            dataPanelTabs.innerHTML = "";
+            let firstTab = null;
+
+            Object.entries(nodesByType).forEach(([type, nodes]) => {{
+                const config = ENTITY_CONFIG[type] || {{ color: "#64748b" }};
+                const tab = document.createElement("div");
+                tab.className = "data-tab";
+                tab.dataset.type = type;
+                tab.innerHTML = `
+                    <span class="data-tab-dot" style="background: ${{config.color}}"></span>
+                    <span>${{type}}</span>
+                    <span class="data-tab-count">${{nodes.length}}</span>
+                `;
+                tab.addEventListener("click", () => switchTab(type));
+                dataPanelTabs.appendChild(tab);
+                if (!firstTab) firstTab = type;
+            }});
+
+            const valMeta = graphData.metadata.validation || {{}};
+            if (valMeta.total > 0) {{
+                const valTab = document.createElement("div");
+                valTab.className = "data-tab";
+                valTab.dataset.type = "__validation__";
+                const allValid = valMeta.invalid === 0;
+                valTab.innerHTML = `
+                    <span class="data-tab-dot" style="background: ${{allValid ? '#22c55e' : '#ef4444'}}"></span>
+                    <span>Validation</span>
+                    <span class="data-tab-count">${{valMeta.valid}}/${{valMeta.total}}</span>
+                `;
+                valTab.addEventListener("click", () => switchTab("__validation__"));
+                dataPanelTabs.appendChild(valTab);
             }}
-            nodesByType[node.nodeType].push(node);
-        }});
 
-        // Build tabs
-        let firstTab = null;
-        Object.entries(nodesByType).forEach(([type, nodes]) => {{
-            const config = ENTITY_CONFIG[type] || {{ color: "#64748b" }};
-            const tab = document.createElement("div");
-            tab.className = "data-tab";
-            tab.dataset.type = type;
-            tab.innerHTML = `
-                <span class="data-tab-dot" style="background: ${{config.color}}"></span>
-                <span>${{type}}</span>
-                <span class="data-tab-count">${{nodes.length}}</span>
-            `;
-            tab.addEventListener("click", () => switchTab(type));
-            dataPanelTabs.appendChild(tab);
-            if (!firstTab) firstTab = type;
-        }});
+            const nextTab = preferredType && dataPanelTabs.querySelector(`[data-type="${{preferredType}}"]`)
+                ? preferredType
+                : (firstTab || "__validation__");
 
-        // Add Validation tab
-        const valMeta = GRAPH_DATA.metadata.validation || {{}};
-        if (valMeta.total > 0) {{
-            const valTab = document.createElement("div");
-            valTab.className = "data-tab";
-            valTab.dataset.type = "__validation__";
-            const allValid = valMeta.invalid === 0;
-            valTab.innerHTML = `
-                <span class="data-tab-dot" style="background: ${{allValid ? '#22c55e' : '#ef4444'}}"></span>
-                <span>Validation</span>
-                <span class="data-tab-count">${{valMeta.valid}}/${{valMeta.total}}</span>
-            `;
-            valTab.addEventListener("click", () => switchTab("__validation__"));
-            dataPanelTabs.appendChild(valTab);
+            if (nextTab && dataPanelTabs.querySelector(`[data-type="${{nextTab}}"]`)) {{
+                switchTab(nextTab);
+            }} else {{
+                dataPanelContent.innerHTML = "<p style='padding: 20px; color: #94a3b8;'>No data available</p>";
+            }}
         }}
 
         // Build validation table
@@ -2779,7 +3716,7 @@ def generate_html(graph_data: dict) -> str:
             html += '<th>Entity</th><th>Type</th><th>Shape</th><th>Strict</th><th>Agent</th><th>Errors</th>';
             html += '</tr></thead><tbody>';
 
-            GRAPH_DATA.nodes.forEach(node => {{
+            graphData.nodes.forEach(node => {{
                 const v = node.validation;
                 const strictOk = v ? v.strict : null;
                 const agentOk = v ? v.agent : null;
@@ -2863,6 +3800,7 @@ def generate_html(graph_data: dict) -> str:
 
         // Switch active tab
         function switchTab(type) {{
+            activeDataTab = type;
             document.querySelectorAll(".data-tab").forEach(tab => {{
                 tab.classList.toggle("active", tab.dataset.type === type);
             }});
@@ -2898,8 +3836,20 @@ def generate_html(graph_data: dict) -> str:
             }});
         }}
 
-        // Initialize first tab
-        if (firstTab) switchTab(firstTab);
+        function rebuildSidebarAndTables(preferredTab = null) {{
+            regroupNodesByType();
+            rebuildFilters();
+            rebuildDataTabs(preferredTab || activeDataTab);
+            updateStats();
+            updateVisibility();
+        }}
+
+        // Initial UI/data setup
+        buildEdgeLegend();
+        rebuildSidebarAndTables();
+        initJsonldEditor();
+        setNodeEditButtonState(null);
+        syncJsonldEditorToggleState();
 
         // Info modal
         const infoOverlay = document.getElementById('info-modal-overlay');
@@ -2943,7 +3893,7 @@ def main():
         sys.exit(1)
 
     # Load JSON-LD
-    jsonld = load_jsonld()
+    jsonld, jsonld_text = load_jsonld()
 
     # Load validation results
     validation_lookup = load_validation()
@@ -2966,7 +3916,7 @@ def main():
 
     # Generate HTML
     print("Generating HTML visualization...")
-    html = generate_html(graph_data)
+    html = generate_html(graph_data, jsonld_text)
 
     # Ensure output directory exists
     TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

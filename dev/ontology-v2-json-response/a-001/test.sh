@@ -17,13 +17,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to print to both console and summary file
-log() {
-    echo -e "$1"
-    # Strip color codes for the file
-    echo -e "$1" | sed 's/\x1b\[[0-9;]*m//g' >> "$SUMMARY_FILE"
-}
-
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Open Pulse Ontology v2 - Test Suite  ${NC}"
 echo -e "${BLUE}========================================${NC}"
