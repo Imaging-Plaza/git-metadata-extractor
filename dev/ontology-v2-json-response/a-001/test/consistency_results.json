@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-02-10T12:11:00.214463",
+  "timestamp": "2026-02-10T14:28:19.794128",
   "summary": {
-    "total_instances": 27,
-    "valid_references": 50,
+    "total_instances": 33,
+    "valid_references": 65,
     "invalid_references": 0,
     "id_format_warnings": 0,
     "bidirectional_warnings": 0
@@ -85,6 +85,22 @@
         "status": "valid"
       },
       {
+        "source_id": "0000-0003-4567-8901",
+        "field": "pulse:hasContribution",
+        "reference": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "target_shape": "Contribution",
+        "resolved_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901",
+        "field": "pulse:owns",
+        "reference": "jdupont/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "jdupont/geodata-toolkit",
+        "status": "valid"
+      },
+      {
         "source_id": "mweber",
         "field": "org:hasMembership",
         "reference": "mweber_https://ror.org/05a28rw58",
@@ -114,6 +130,22 @@
         "reference": "mweber/data-pipeline",
         "target_shape": "Repository",
         "resolved_id": "mweber/data-pipeline",
+        "status": "valid"
+      },
+      {
+        "source_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "field": "org:hasMembership",
+        "reference": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+        "target_shape": "Membership",
+        "resolved_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+        "status": "valid"
+      },
+      {
+        "source_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "field": "pulse:hasContribution",
+        "reference": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Contribution",
+        "resolved_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
         "status": "valid"
       }
     ],
@@ -164,6 +196,30 @@
         "reference": "mweber",
         "target_shape": "Person",
         "resolved_id": "mweber",
+        "status": "valid"
+      },
+      {
+        "source_id": "jdupont/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0003-4567-8901",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "jdupont/geodata-toolkit",
+        "field": "pulse:ownedBy",
+        "reference": "0000-0003-4567-8901",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "jdupont/geodata-toolkit",
+        "field": "pulse:isForkOf",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
         "status": "valid"
       }
     ],
@@ -240,6 +296,14 @@
         "reference": "numpy",
         "target_shape": "Organization",
         "resolved_id": "numpy",
+        "status": "valid"
+      },
+      {
+        "source_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+        "field": "org:organization",
+        "reference": "https://ror.org/01ggx4157",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/01ggx4157",
         "status": "valid"
       }
     ],
@@ -355,6 +419,38 @@
         "target_shape": "Person",
         "resolved_id": "mweber",
         "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "field": "pulse:contributionTo",
+        "reference": "jdupont/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "jdupont/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "0000-0003-4567-8901",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+        "field": "pulse:contributionTo",
+        "reference": "EPFL-ENAC/geodata-toolkit",
+        "target_shape": "Repository",
+        "resolved_id": "EPFL-ENAC/geodata-toolkit",
+        "status": "valid"
+      },
+      {
+        "source_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+        "field": "schema:author",
+        "reference": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "target_shape": "Person",
+        "resolved_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "status": "valid"
       }
     ],
     "Article": [
@@ -420,6 +516,30 @@
         "reference": "https://ror.org/05a28rw58",
         "target_shape": "Organization",
         "resolved_id": "https://ror.org/05a28rw58",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1145/3597503.3639187",
+        "field": "schema:author",
+        "reference": "0000-0003-4567-8901",
+        "target_shape": "Person",
+        "resolved_id": "0000-0003-4567-8901",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1145/3597503.3639187",
+        "field": "schema:author",
+        "reference": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "target_shape": "Person",
+        "resolved_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+        "status": "valid"
+      },
+      {
+        "source_id": "10.1145/3597503.3639187",
+        "field": "schema:sourceOrganization",
+        "reference": "https://ror.org/01ggx4157",
+        "target_shape": "Organization",
+        "resolved_id": "https://ror.org/01ggx4157",
         "status": "valid"
       }
     ]

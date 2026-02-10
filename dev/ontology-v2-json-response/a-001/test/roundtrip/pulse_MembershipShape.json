@@ -34,5 +34,12 @@
     "org:organization": "numpy",
     "org:role": "Contributor",
     "time:hasBeginning": "2023-05-10"
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+    "type": "org:Membership",
+    "org:organization": "https://ror.org/01ggx4157",
+    "org:role": "Research Physicist",
+    "time:hasBeginning": "2023-01-15"
   }
 ]

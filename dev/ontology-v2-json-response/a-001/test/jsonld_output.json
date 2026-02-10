@@ -326,9 +326,12 @@
         "0000-0003-4567-8901_https://ror.org/01ggx4157"
       ],
       "pulse:hasContribution": [
-        "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit"
+        "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "0000-0003-4567-8901_jdupont/geodata-toolkit"
       ],
-      "pulse:owns": []
+      "pulse:owns": [
+        "jdupont/geodata-toolkit"
+      ]
     },
     {
       "@id": "mweber",
@@ -346,6 +349,19 @@
       "pulse:owns": [
         "mweber/data-pipeline"
       ]
+    },
+    {
+      "@id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+      "@type": "schema:Person",
+      "schema:name": "Luca Rossi",
+      "schema:email": "luca.rossi@cern.ch",
+      "org:hasMembership": [
+        "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157"
+      ],
+      "pulse:hasContribution": [
+        "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit"
+      ],
+      "pulse:owns": []
     },
     {
       "@id": "EPFL-ENAC/geodata-toolkit",
@@ -415,6 +431,30 @@
       "pulse:ownedBy": "mweber"
     },
     {
+      "@id": "jdupont/geodata-toolkit",
+      "@type": "schema:SoftwareSourceCode",
+      "schema:name": "Geodata Toolkit (Fork)",
+      "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+      "pulse:repositoryType": "pulse:Software",
+      "pulse:discipline": [
+        "wd:Q21201",
+        "wd:Q8434"
+      ],
+      "schema:author": [
+        "0000-0003-4567-8901"
+      ],
+      "pulse:githubRepoStars": 2,
+      "pulse:githubRepoForks": 0,
+      "schema:dateCreated": "2024-02-01T13:00:00Z",
+      "schema:license": "https://spdx.org/licenses/MIT.html",
+      "schema:programmingLanguage": [
+        "Python",
+        "TypeScript"
+      ],
+      "pulse:ownedBy": "0000-0003-4567-8901",
+      "pulse:isForkOf": "EPFL-ENAC/geodata-toolkit"
+    },
+    {
       "@id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
       "@type": "org:Organization",
       "schema:name": "EPFL School of Architecture, Civil and Environmental Engineering",
@@ -435,7 +475,9 @@
       "schema:name": "\u00c9cole Polytechnique F\u00e9d\u00e9rale de Lausanne",
       "schema:identifier": "https://ror.org/02s376052",
       "pulse:infoscienceOrganizationIdentifier": "41674f42-ba15-4612-9817-2a6f60985c01",
+      "pulse:githubOrganizationHandle": "epaboratories",
       "pulse:OrganizationType": "pulse:University",
+      "pulse:githubOrgFollowers": 89,
       "org:hasUnit": [
         "95372c6b-7d45-432e-a84e-660c9fa54e05"
       ],
@@ -506,6 +548,13 @@
       "time:hasBeginning": "2023-05-10"
     },
     {
+      "@id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+      "@type": "org:Membership",
+      "org:organization": "https://ror.org/01ggx4157",
+      "org:role": "Research Physicist",
+      "time:hasBeginning": "2023-01-15"
+    },
+    {
       "@id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
       "@type": "pulse:Contribution",
       "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
@@ -569,6 +618,24 @@
       "schema:author": "mweber"
     },
     {
+      "@id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+      "@type": "pulse:Contribution",
+      "pulse:contributionTo": "jdupont/geodata-toolkit",
+      "pulse:contributionCount": 23,
+      "pulse:firstContributionDate": "2024-02-05T10:00:00Z",
+      "pulse:lastContributionDate": "2024-08-15T16:30:00Z",
+      "schema:author": "0000-0003-4567-8901"
+    },
+    {
+      "@id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+      "@type": "pulse:Contribution",
+      "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+      "pulse:contributionCount": 8,
+      "pulse:firstContributionDate": "2024-09-01T09:00:00Z",
+      "pulse:lastContributionDate": "2025-01-10T15:20:00Z",
+      "schema:author": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+    },
+    {
       "@id": "10.1038/s41586-024-07856-z",
       "@type": "schema:ScholarlyArticle",
       "schema:name": "Open Pulse: A Framework for Tracking Scientific Software Contributions",
@@ -578,7 +645,7 @@
         "0000-0001-2345-6789",
         "0000-0003-4567-8901"
       ],
-      "pulse:infoscienceArticleIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+      "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
       "schema:sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
     },
     {
@@ -605,6 +672,18 @@
       ],
       "pulse:infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
       "schema:sourceOrganization": "https://ror.org/05a28rw58"
+    },
+    {
+      "@id": "10.1145/3597503.3639187",
+      "@type": "schema:ScholarlyArticle",
+      "schema:name": "Reproducible Workflows for Large-Scale Particle Physics Simulations",
+      "schema:identifier": "10.1145/3597503.3639187",
+      "schema:datePublished": "2024-04-22",
+      "schema:author": [
+        "0000-0003-4567-8901",
+        "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+      ],
+      "schema:sourceOrganization": "https://ror.org/01ggx4157"
     }
   ]
 }

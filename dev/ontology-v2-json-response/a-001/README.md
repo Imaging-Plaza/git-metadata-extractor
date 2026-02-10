@@ -68,9 +68,9 @@ composite (personId_repoId) → uuid
 
 ## Files
 
-- `pulse_PersonShape.json` - 4 persons
-- `pulse_RepositoryShape.json` - 3 repositories
+- `pulse_PersonShape.json` - 5 persons
+- `pulse_RepositoryShape.json` - 4 repositories
 - `pulse_OrganizationShape.json` - 5 organizations
-- `pulse_MembershipShape.json` - 5 memberships
-- `pulse_ContributionShape.json` - 7 contributions
-- `pulse_ArticleShape.json` - 3 articles
+- `pulse_MembershipShape.json` - 6 memberships
+- `pulse_ContributionShape.json` - 9 contributions
+- `pulse_ArticleShape.json` - 4 articles

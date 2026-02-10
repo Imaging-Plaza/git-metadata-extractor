@@ -5,7 +5,7 @@
     "shacl": "pulse:ArticleShape",
     "identifiers": {
       "schema:identifier": "10.1038/s41586-024-07856-z",
-      "pulse:infoscienceArticleIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+      "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
       "uuid": "f8a3b2c1-4d5e-4f6a-8b9c-1d2e3f4a5b6c"
     },
     "idSource": "schema:identifier",
@@ -16,7 +16,7 @@
       "0000-0001-2345-6789",
       "0000-0003-4567-8901"
     ],
-    "pulse:infoscienceArticleIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
     "schema:sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
   },
   {
@@ -57,5 +57,25 @@
     ],
     "pulse:infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
     "schema:sourceOrganization": "https://ror.org/05a28rw58"
+  },
+  {
+    "id": "10.1145/3597503.3639187",
+    "type": "schema:ScholarlyArticle",
+    "shacl": "pulse:ArticleShape",
+    "identifiers": {
+      "schema:identifier": "10.1145/3597503.3639187",
+      "pulse:infoscienceArticleIdentifier": null,
+      "uuid": "f5d4c3b2-1a0e-4f9d-8c7b-6a5e4d3c2b1a"
+    },
+    "idSource": "schema:identifier",
+    "schema:name": "Reproducible Workflows for Large-Scale Particle Physics Simulations",
+    "schema:identifier": "10.1145/3597503.3639187",
+    "schema:datePublished": "2024-04-22",
+    "schema:author": [
+      "0000-0003-4567-8901",
+      "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+    ],
+    "pulse:infoscienceArticleIdentifier": null,
+    "schema:sourceOrganization": "https://ror.org/01ggx4157"
   }
 ]

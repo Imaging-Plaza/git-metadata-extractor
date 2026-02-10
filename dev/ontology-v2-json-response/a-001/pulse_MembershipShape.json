@@ -68,5 +68,19 @@
     "org:role": "Contributor",
     "time:hasBeginning": "2023-05-10",
     "time:hasEnd": null
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+      "uuid": "c6f7a8b9-0c1d-4e2f-9a4b-5c6d7e8f9a0c"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/01ggx4157",
+    "org:role": "Research Physicist",
+    "time:hasBeginning": "2023-01-15",
+    "time:hasEnd": null
   }
 ]

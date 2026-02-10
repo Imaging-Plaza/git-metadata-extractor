@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-02-10T12:11:00.103211",
+  "timestamp": "2026-02-10T14:28:19.684948",
   "schema_type": "strict",
   "summary": {
     "total_files": 6,
     "valid_files": 6,
-    "total_instances": 27,
-    "valid_instances": 27
+    "total_instances": 33,
+    "valid_instances": 33
   },
   "results": {
     "pulse_PersonShape": {
       "json_file": "pulse_PersonShape.json",
       "schema_file": "pulse_PersonShape.schema.json",
-      "valid_count": 4,
+      "valid_count": 5,
       "invalid_count": 0,
-      "total_count": 4,
+      "total_count": 5,
       "instances": [
         {
           "id": "0000-0001-2345-6789",
@@ -42,15 +42,22 @@
           "valid": true,
           "error_count": 0,
           "errors": []
+        },
+        {
+          "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+          "index": 4,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
         }
       ]
     },
     "pulse_RepositoryShape": {
       "json_file": "pulse_RepositoryShape.json",
       "schema_file": "pulse_RepositoryShape.schema.json",
-      "valid_count": 3,
+      "valid_count": 4,
       "invalid_count": 0,
-      "total_count": 3,
+      "total_count": 4,
       "instances": [
         {
           "id": "EPFL-ENAC/geodata-toolkit",
@@ -69,6 +76,13 @@
         {
           "id": "mweber/data-pipeline",
           "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "jdupont/geodata-toolkit",
+          "index": 3,
           "valid": true,
           "error_count": 0,
           "errors": []
@@ -122,9 +136,9 @@
     "pulse_MembershipShape": {
       "json_file": "pulse_MembershipShape.json",
       "schema_file": "pulse_MembershipShape.schema.json",
-      "valid_count": 5,
+      "valid_count": 6,
       "invalid_count": 0,
-      "total_count": 5,
+      "total_count": 6,
       "instances": [
         {
           "id": "0000-0001-2345-6789_https://ror.org/02s376052",
@@ -160,15 +174,22 @@
           "valid": true,
           "error_count": 0,
           "errors": []
+        },
+        {
+          "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+          "index": 5,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
         }
       ]
     },
     "pulse_ContributionShape": {
       "json_file": "pulse_ContributionShape.json",
       "schema_file": "pulse_ContributionShape.schema.json",
-      "valid_count": 7,
+      "valid_count": 9,
       "invalid_count": 0,
-      "total_count": 7,
+      "total_count": 9,
       "instances": [
         {
           "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
@@ -218,15 +239,29 @@
           "valid": true,
           "error_count": 0,
           "errors": []
+        },
+        {
+          "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+          "index": 7,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+          "index": 8,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
         }
       ]
     },
     "pulse_ArticleShape": {
       "json_file": "pulse_ArticleShape.json",
       "schema_file": "pulse_ArticleShape.schema.json",
-      "valid_count": 3,
+      "valid_count": 4,
       "invalid_count": 0,
-      "total_count": 3,
+      "total_count": 4,
       "instances": [
         {
           "id": "10.1038/s41586-024-07856-z",
@@ -245,6 +280,13 @@
         {
           "id": "10.1109/TBME.2024.3123456",
           "index": 2,
+          "valid": true,
+          "error_count": 0,
+          "errors": []
+        },
+        {
+          "id": "10.1145/3597503.3639187",
+          "index": 3,
           "valid": true,
           "error_count": 0,
           "errors": []

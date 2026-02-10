@@ -70,5 +70,29 @@
     "schema:programmingLanguage": ["R", "Python"],
     "pulse:ownedBy": "mweber",
     "pulse:isForkOf": null
+  },
+  {
+    "id": "jdupont/geodata-toolkit",
+    "type": "schema:SoftwareSourceCode",
+    "shacl": "pulse:RepositoryShape",
+    "identifiers": {
+      "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+      "schema:identifier": null,
+      "uuid": "b4f5a6b7-8c9d-4e0f-a1b2-3c4d5e6f7a8b"
+    },
+    "idSource": "pulse:githubRepositoryHandle",
+    "schema:name": "Geodata Toolkit (Fork)",
+    "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+    "pulse:repositoryType": "pulse:Software",
+    "pulse:discipline": ["wd:Q21201", "wd:Q8434"],
+    "schema:author": ["0000-0003-4567-8901"],
+    "pulse:githubRepoStars": 2,
+    "pulse:githubRepoForks": 0,
+    "schema:dateCreated": "2024-02-01T13:00:00Z",
+    "schema:license": "https://spdx.org/licenses/MIT.html",
+    "schema:citation": null,
+    "schema:programmingLanguage": ["Python", "TypeScript"],
+    "pulse:ownedBy": "0000-0003-4567-8901",
+    "pulse:isForkOf": "EPFL-ENAC/geodata-toolkit"
   }
 ]

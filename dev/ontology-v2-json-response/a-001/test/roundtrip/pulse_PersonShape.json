@@ -45,7 +45,11 @@
       "0000-0003-4567-8901_https://ror.org/01ggx4157"
     ],
     "pulse:hasContribution": [
-      "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit"
+      "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+      "0000-0003-4567-8901_jdupont/geodata-toolkit"
+    ],
+    "pulse:owns": [
+      "jdupont/geodata-toolkit"
     ]
   },
   {
@@ -63,6 +67,18 @@
     ],
     "pulse:owns": [
       "mweber/data-pipeline"
+    ]
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+    "type": "schema:Person",
+    "schema:name": "Luca Rossi",
+    "schema:email": "luca.rossi@cern.ch",
+    "org:hasMembership": [
+      "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157"
+    ],
+    "pulse:hasContribution": [
+      "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit"
     ]
   }
 ]

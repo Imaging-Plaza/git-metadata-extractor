@@ -1,5 +1,5 @@
 # Open Pulse Ontology v2 - Validation Summary
-# Generated: 2026-02-10T11:10:58Z
+# Generated: 2026-02-10T13:28:18Z
 
 
 ## JSON Schema Validation
@@ -20,35 +20,35 @@ VALIDATION SUMMARY
 
 STRICT SCHEMAS:
   Files: 6/6 valid
-  Instances: 27/27 valid
+  Instances: 33/33 valid
 
-  ✓ pulse_PersonShape: 4 instances valid
+  ✓ pulse_PersonShape: 5 instances valid
 
-  ✓ pulse_RepositoryShape: 3 instances valid
+  ✓ pulse_RepositoryShape: 4 instances valid
 
   ✓ pulse_OrganizationShape: 5 instances valid
 
-  ✓ pulse_MembershipShape: 5 instances valid
+  ✓ pulse_MembershipShape: 6 instances valid
 
-  ✓ pulse_ContributionShape: 7 instances valid
+  ✓ pulse_ContributionShape: 9 instances valid
 
-  ✓ pulse_ArticleShape: 3 instances valid
+  ✓ pulse_ArticleShape: 4 instances valid
 
 AGENT SCHEMAS:
   Files: 6/6 valid
-  Instances: 27/27 valid
+  Instances: 33/33 valid
 
-  ✓ pulse_PersonShape: 4 instances valid
+  ✓ pulse_PersonShape: 5 instances valid
 
-  ✓ pulse_RepositoryShape: 3 instances valid
+  ✓ pulse_RepositoryShape: 4 instances valid
 
   ✓ pulse_OrganizationShape: 5 instances valid
 
-  ✓ pulse_MembershipShape: 5 instances valid
+  ✓ pulse_MembershipShape: 6 instances valid
 
-  ✓ pulse_ContributionShape: 7 instances valid
+  ✓ pulse_ContributionShape: 9 instances valid
 
-  ✓ pulse_ArticleShape: 3 instances valid
+  ✓ pulse_ArticleShape: 4 instances valid
 
 ✅ All validations passed!
 ```
@@ -60,7 +60,7 @@ AGENT SCHEMAS:
 ```
 Loading JSON files from: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001
 Output directory: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test
-Loaded 27 instances across 6 shapes
+Loaded 33 instances across 6 shapes
 
 JSON-LD saved to: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/jsonld_output.json
 Consistency results saved to: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/consistency_results.json
@@ -70,7 +70,7 @@ CONSISTENCY VALIDATION SUMMARY
 ============================================================
 
 Cross-References:
-  ✓ Valid: 50
+  ✓ Valid: 65
   ✗ Invalid: 0
 
 ✓ Bidirectional references are consistent
@@ -94,7 +94,7 @@ Loading ontology definitions...
   Loaded 642 triples (for enumeration class membership)
 
 Loading JSON-LD data...
-  Loaded 190 triples
+  Loaded 237 triples
 
 Running SHACL validation...
 
@@ -157,15 +157,15 @@ JSON-LD input: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metada
 Roundtrip output: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/roundtrip
 
 Parsing JSON-LD into RDF graph...
-  190 triples
+  237 triples
 Reconstructing JSON from RDF triples...
-  27 entities reconstructed across 6 types
-  Saved: pulse_PersonShape.json (4 entities)
-  Saved: pulse_RepositoryShape.json (3 entities)
+  33 entities reconstructed across 6 types
+  Saved: pulse_PersonShape.json (5 entities)
+  Saved: pulse_RepositoryShape.json (4 entities)
   Saved: pulse_OrganizationShape.json (5 entities)
-  Saved: pulse_MembershipShape.json (5 entities)
-  Saved: pulse_ContributionShape.json (7 entities)
-  Saved: pulse_ArticleShape.json (3 entities)
+  Saved: pulse_MembershipShape.json (6 entities)
+  Saved: pulse_ContributionShape.json (9 entities)
+  Saved: pulse_ArticleShape.json (4 entities)
 
 Comparing against original JSON files...
 
@@ -175,7 +175,7 @@ Results saved to: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-met
 ROUND-TRIP TEST SUMMARY
 ============================================================
 
-  Entities matched perfectly: 27
+  Entities matched perfectly: 33
   Entities missing from round-trip: 0
   Properties lost: 0
   Unexpected extra properties: 0
@@ -191,8 +191,8 @@ ROUND-TRIP TEST SUMMARY
 ```
 Loading JSON-LD from: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/jsonld_output.json
 Building graph data...
-  Nodes: 27
-  Edges: 50
+  Nodes: 33
+  Edges: 65
 Generating HTML visualization...
 
 ✅ Visualization saved to: /Users/carlosvivarrios/pro/imaging-plaza/microservices/git-metadata-extractor/dev/ontology-v2-json-response/a-001/test/visualization.html

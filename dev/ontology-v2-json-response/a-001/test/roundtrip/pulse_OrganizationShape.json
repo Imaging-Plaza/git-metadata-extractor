@@ -19,7 +19,9 @@
     "schema:name": "École Polytechnique Fédérale de Lausanne",
     "schema:identifier": "https://ror.org/02s376052",
     "pulse:infoscienceOrganizationIdentifier": "41674f42-ba15-4612-9817-2a6f60985c01",
+    "pulse:githubOrganizationHandle": "epaboratories",
     "pulse:OrganizationType": "pulse:University",
+    "pulse:githubOrgFollowers": 89,
     "org:hasUnit": [
       "95372c6b-7d45-432e-a84e-660c9fa54e05"
     ]

@@ -103,5 +103,35 @@
     "pulse:firstContributionDate": "2024-06-20T14:15:00Z",
     "pulse:lastContributionDate": "2025-01-28T11:30:00Z",
     "schema:author": "mweber"
+  },
+  {
+    "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+      "uuid": "d8b9c0d1-2e3f-4a4b-8c6d-7e8f9a0b1c2d"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "jdupont/geodata-toolkit",
+    "pulse:contributionCount": 23,
+    "pulse:firstContributionDate": "2024-02-05T10:00:00Z",
+    "pulse:lastContributionDate": "2024-08-15T16:30:00Z",
+    "schema:author": "0000-0003-4567-8901"
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "shacl": "pulse:ContributionShape",
+    "identifiers": {
+      "pulse:composite": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+      "uuid": "d9c0d1e2-3f4a-4b5c-8d7e-8f9a0b1c2d3e"
+    },
+    "idSource": "pulse:composite",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 8,
+    "pulse:firstContributionDate": "2024-09-01T09:00:00Z",
+    "pulse:lastContributionDate": "2025-01-10T15:20:00Z",
+    "schema:author": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
   }
 ]

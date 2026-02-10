@@ -61,5 +61,23 @@
     "pulse:firstContributionDate": "2024-06-20T14:15:00+00:00",
     "pulse:lastContributionDate": "2025-01-28T11:30:00+00:00",
     "schema:author": "mweber"
+  },
+  {
+    "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "jdupont/geodata-toolkit",
+    "pulse:contributionCount": 23,
+    "pulse:firstContributionDate": "2024-02-05T10:00:00+00:00",
+    "pulse:lastContributionDate": "2024-08-15T16:30:00+00:00",
+    "schema:author": "0000-0003-4567-8901"
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 8,
+    "pulse:firstContributionDate": "2024-09-01T09:00:00+00:00",
+    "pulse:lastContributionDate": "2025-01-10T15:20:00+00:00",
+    "schema:author": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
   }
 ]

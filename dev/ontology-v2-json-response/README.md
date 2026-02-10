@@ -81,12 +81,12 @@ The mock data is organized into separate JSON files, one per SHACL shape. Each f
 
 | File | Entities | Description |
 |------|----------|-------------|
-| `pulse:PersonShape.json` | 4 | Researchers with ORCID/GitHub identifiers |
-| `pulse:RepositoryShape.json` | 3 | Software repositories owned by persons/orgs |
+| `pulse:PersonShape.json` | 5 | Researchers with ORCID/GitHub/email-only identifiers |
+| `pulse:RepositoryShape.json` | 4 | Software repositories owned by persons/orgs (incl. fork) |
 | `pulse:OrganizationShape.json` | 5 | Universities, research institutions, projects |
-| `pulse:MembershipShape.json` | 5 | Person-organization affiliations |
-| `pulse:ContributionShape.json` | 7 | Person-repository contribution records |
-| `pulse:ArticleShape.json` | 2 | Scholarly articles with DOI/Infoscience IDs |
+| `pulse:MembershipShape.json` | 6 | Person-organization affiliations |
+| `pulse:ContributionShape.json` | 9 | Person-repository contribution records |
+| `pulse:ArticleShape.json` | 4 | Scholarly articles with DOI/Infoscience IDs |
 
 ##### Validation Scripts
 
