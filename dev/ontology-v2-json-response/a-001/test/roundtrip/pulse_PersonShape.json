@@ -1,0 +1,68 @@
+[
+  {
+    "id": "0000-0001-2345-6789",
+    "type": "schema:Person",
+    "schema:name": "Carlos Vivar Rios",
+    "schema:email": "carlos.vivar@epfl.ch",
+    "schema:url": "https://people.epfl.ch/carlos.vivar",
+    "pulse:githubUsername": "caviri",
+    "pulse:orcidIdentifier": "0000-0001-2345-6789",
+    "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "org:hasMembership": [
+      "0000-0001-2345-6789_https://ror.org/02s376052",
+      "0000-0001-2345-6789_numpy"
+    ],
+    "pulse:hasContribution": [
+      "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+      "0000-0001-2345-6789_EPFL-ENAC/structural-analysis"
+    ]
+  },
+  {
+    "id": "0000-0002-3456-7890",
+    "type": "schema:Person",
+    "schema:name": "Alice Morin",
+    "schema:email": "alice.morin@epfl.ch",
+    "schema:url": "https://people.epfl.ch/alice.morin",
+    "pulse:githubUsername": "amorin",
+    "pulse:orcidIdentifier": "0000-0002-3456-7890",
+    "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+    "org:hasMembership": [
+      "0000-0002-3456-7890_https://ror.org/02s376052"
+    ],
+    "pulse:hasContribution": [
+      "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+      "0000-0002-3456-7890_EPFL-ENAC/structural-analysis"
+    ]
+  },
+  {
+    "id": "0000-0003-4567-8901",
+    "type": "schema:Person",
+    "schema:name": "Jean Dupont",
+    "schema:email": "jean.dupont@cern.ch",
+    "pulse:githubUsername": "jdupont",
+    "pulse:orcidIdentifier": "0000-0003-4567-8901",
+    "org:hasMembership": [
+      "0000-0003-4567-8901_https://ror.org/01ggx4157"
+    ],
+    "pulse:hasContribution": [
+      "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit"
+    ]
+  },
+  {
+    "id": "mweber",
+    "type": "schema:Person",
+    "schema:name": "Marie Weber",
+    "schema:email": "marie.weber@eth.ch",
+    "pulse:githubUsername": "mweber",
+    "org:hasMembership": [
+      "mweber_https://ror.org/05a28rw58"
+    ],
+    "pulse:hasContribution": [
+      "mweber_EPFL-ENAC/structural-analysis",
+      "mweber_mweber/data-pipeline"
+    ],
+    "pulse:owns": [
+      "mweber/data-pipeline"
+    ]
+  }
+]

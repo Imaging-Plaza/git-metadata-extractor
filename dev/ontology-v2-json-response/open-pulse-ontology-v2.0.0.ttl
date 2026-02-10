@@ -194,7 +194,7 @@ pulse:GithubRepositoryHandleShape
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:pattern "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_]+$" ;
+    sh:pattern "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$" ;
     sh:description "The GitHub repository handle in the format 'owner/repository'." .
 
 pulse:DisciplineShape
@@ -216,6 +216,7 @@ pulse:DoiPropertyShape
     a sh:PropertyShape ;
     sh:path schema:identifier ;
     sh:datatype xsd:string ;
+    sh:minCount 1 ;
     sh:pattern "^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$" ;
     sh:description "Standard DOI validation." .
 

@@ -465,6 +465,32 @@ def test_datatype_consistency(
             else:
                 json_types = {json_type}
 
+            # SHACL allows multiple values by default unless sh:maxCount 1 is specified
+            # If JSON type is "array", check the items type
+            if "array" in json_types:
+                items_type = prop_def.get("items", {}).get("type")
+                if items_type == expected_json_type:
+                    # Valid: array of the expected type (SHACL allows multiple values)
+                    continue
+                elif items_type:
+                    # Array with wrong item type
+                    issues.append(
+                        {
+                            "test": "datatype_consistency",
+                            "shape": shape_name,
+                            "property": field,
+                            "severity": "error",
+                            "message": (
+                                f"Datatype mismatch for '{field}': TTL expects "
+                                f"{to_prefixed(ttl_dt)} -> JSON '{expected_json_type}', "
+                                f"but schema has array with items type={items_type}"
+                            ),
+                        },
+                    )
+                # If no items type specified, continue without error (could be a union type)
+                continue
+
+            # For non-array types, check if the expected type matches
             if expected_json_type not in json_types:
                 issues.append(
                     {

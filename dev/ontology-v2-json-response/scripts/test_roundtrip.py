@@ -40,6 +40,33 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Properties that should always be arrays (even with single element)
+# Organized by entity type since some properties (like schema:author) are
+# arrays for some entities but scalars for others.
+# ---------------------------------------------------------------------------
+ARRAY_PROPERTIES_BY_TYPE = {
+    "schema:SoftwareSourceCode": {
+        "schema:author",
+        "pulse:discipline",
+        "schema:programmingLanguage",
+    },
+    "schema:ScholarlyArticle": {"schema:author"},
+    "org:Organization": {"org:hasUnit", "pulse:owns"},
+    "schema:Person": {"org:hasMembership", "pulse:hasContribution"},
+}
+
+# Flatten for quick lookup regardless of type (used as fallback)
+ARRAY_PROPERTIES = {
+    "pulse:discipline",
+    "schema:programmingLanguage",
+    "org:hasUnit",
+    "pulse:owns",
+    "pulse:hasContribution",
+    "org:hasMembership",
+}
+
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).parent
@@ -85,14 +112,53 @@ def to_prefixed(iri: str) -> str:
 def shorten_id(iri: str) -> str:
     """Extract the short ID from a full IRI used as a node @id.
 
-    The JSON-LD context sets @vocab to pulse namespace, so rdflib expands
-    bare IDs like "caviri" to "https://open-pulse.epfl.ch/ontology#caviri".
+    The JSON-LD context sets @vocab to pulse namespace and @base to data namespace.
+    rdflib expands IDs based on these contexts:
+    - Relative IDs like "0000-0001-2345-6789" → "https://open-pulse.epfl.ch/data/0000-0001-2345-6789"
+    - Bare ontology terms → "https://open-pulse.epfl.ch/ontology#..."
     IDs that are already full IRIs (like ROR URLs) stay as-is.
     """
     pulse_ns = "https://open-pulse.epfl.ch/ontology#"
-    if iri.startswith(pulse_ns):
+    data_ns = "https://open-pulse.epfl.ch/data/"
+
+    if iri.startswith(data_ns):
+        return iri[len(data_ns) :]
+    elif iri.startswith(pulse_ns):
         return iri[len(pulse_ns) :]
     return iri
+
+
+def to_prefixed(iri: str, use_pulse_prefix: bool = True) -> str:
+    """Convert full IRI to prefixed form (e.g., pulse:University, wd:Q123).
+
+    This is used for reconstructing values from RDF where we want to preserve
+    the namespace prefix (e.g., for enum values like pulse:University).
+
+    Args:
+        iri: Full IRI string
+        use_pulse_prefix: Whether to include prefix for ontology terms (default: True)
+
+    Returns:
+        Prefixed form if namespace matches, otherwise original IRI
+    """
+    # Namespace mappings from build_jsonld.py
+    namespaces = {
+        "https://open-pulse.epfl.ch/ontology#": "pulse:",
+        "http://www.wikidata.org/entity/": "wd:",
+        "http://schema.org/": "schema:",
+        "http://www.w3.org/ns/org#": "org:",
+        "http://www.w3.org/2006/time#": "time:",  # Time ontology namespace
+        "https://open-pulse.epfl.ch/data/": "",  # Data namespace - no prefix
+    }
+
+    for ns, prefix in namespaces.items():
+        if iri.startswith(ns):
+            local_name = iri[len(ns) :]
+            if prefix == "" or not use_pulse_prefix:
+                return local_name
+            return prefix + local_name
+
+    return iri  # Return as-is if no namespace match
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +211,18 @@ def reconstruct_from_graph(g: Graph) -> dict[str, list[dict]]:
                 else:
                     entities[s_str][prefixed_prop] = [existing, value]
             else:
-                entities[s_str][prefixed_prop] = value
+                # Check if this property should always be an array
+                # First check entity-type-specific array properties
+                entity_type = entity_types.get(s_str)
+                type_specific_arrays = ARRAY_PROPERTIES_BY_TYPE.get(entity_type, set())
+
+                if (
+                    prefixed_prop in type_specific_arrays
+                    or prefixed_prop in ARRAY_PROPERTIES
+                ):
+                    entities[s_str][prefixed_prop] = [value]
+                else:
+                    entities[s_str][prefixed_prop] = value
 
     # Group by type and build output
     by_type: dict[str, list[dict]] = defaultdict(list)
@@ -170,7 +247,9 @@ def _rdf_value(obj):
             return str(obj)
         return str(obj)
     if isinstance(obj, URIRef):
-        return shorten_id(str(obj))
+        # Use to_prefixed() to preserve namespace prefixes for enum values
+        # (e.g., pulse:University) while shortening data namespace IRIs
+        return to_prefixed(str(obj), use_pulse_prefix=True)
     return str(obj)
 
 
@@ -186,7 +265,17 @@ def normalise_for_comparison(obj: dict) -> dict:
     - Remove null values
     - Remove empty arrays
     - Sort array values for order-independent comparison
+    - Normalise datetime timezone format (Z vs +00:00)
     """
+
+    def normalise_value(v):
+        """Normalise a single value for comparison."""
+        if isinstance(v, str):
+            # Normalise datetime timezone: +00:00 → Z
+            if v.endswith("+00:00"):
+                return v[:-6] + "Z"
+        return v
+
     result = {}
     for k, v in obj.items():
         if k in ENVELOPE_FIELDS:
@@ -196,9 +285,9 @@ def normalise_for_comparison(obj: dict) -> dict:
         if isinstance(v, list):
             if len(v) == 0:
                 continue
-            result[k] = sorted(str(x) for x in v)
+            result[k] = sorted(str(normalise_value(x)) for x in v)
         else:
-            result[k] = v
+            result[k] = normalise_value(v)
     return result
 
 

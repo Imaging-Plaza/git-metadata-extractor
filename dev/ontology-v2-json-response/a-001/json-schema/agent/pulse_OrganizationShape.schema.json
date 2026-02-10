@@ -52,6 +52,7 @@
     },
     "schema:identifier": {
       "type": ["string", "null"],
+      "pattern": "^https://ror\\.org/[0-9a-z]{9}$",
       "description": "Canonical identifier (typically ROR URL). Example: 'https://ror.org/02s376052'"
     },
     "pulse:githubOrganizationHandle": {
@@ -60,6 +61,7 @@
     },
     "pulse:infoscienceOrganizationIdentifier": {
       "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
       "description": "Infoscience organization identifier (UUID format). Example: '41674f42-ba15-4612-9817-2a6f60985c01'"
     },
     "pulse:OrganizationType": {

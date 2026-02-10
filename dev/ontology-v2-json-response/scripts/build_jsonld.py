@@ -35,6 +35,7 @@ SHAPE_FILES = {
 
 # JSON-LD Context
 JSONLD_CONTEXT = {
+    "@base": "https://open-pulse.epfl.ch/data/",
     "@vocab": "https://open-pulse.epfl.ch/ontology#",
     "schema": "http://schema.org/",
     "org": "http://www.w3.org/ns/org#",
@@ -53,18 +54,18 @@ JSONLD_CONTEXT = {
     "name": "schema:name",
     "email": "schema:email",
     "url": "schema:url",
-    "author": {"@id": "schema:author", "@type": "@id"},
+    "author": {"@id": "schema:author", "@type": "@id", "@container": "@set"},
     "dateCreated": {"@id": "schema:dateCreated", "@type": "xsd:dateTime"},
     "datePublished": {"@id": "schema:datePublished", "@type": "xsd:date"},
     "license": {"@id": "schema:license", "@type": "@id"},
     "citation": {"@id": "schema:citation", "@type": "@id"},
-    "programmingLanguage": "schema:programmingLanguage",
+    "programmingLanguage": {"@id": "schema:programmingLanguage", "@container": "@set"},
     "sourceOrganization": {"@id": "schema:sourceOrganization", "@type": "@id"},
     "identifier": "schema:identifier",
     # Org ontology
     "organization": {"@id": "org:organization", "@type": "@id"},
     "hasMembership": {"@id": "org:hasMembership", "@type": "@id"},
-    "hasUnit": {"@id": "org:hasUnit", "@type": "@id"},
+    "hasUnit": {"@id": "org:hasUnit", "@type": "@id", "@container": "@set"},
     "unitOf": {"@id": "org:unitOf", "@type": "@id"},
     "role": "org:role",
     # Time ontology
@@ -79,11 +80,15 @@ JSONLD_CONTEXT = {
     "infoscienceArticleIdentifier": "pulse:infoscienceArticleIdentifier",
     "repositoryType": {"@id": "pulse:repositoryType", "@type": "@id"},
     "OrganizationType": {"@id": "pulse:OrganizationType", "@type": "@id"},
-    "discipline": {"@id": "pulse:discipline", "@type": "@id"},
-    "owns": {"@id": "pulse:owns", "@type": "@id"},
+    "discipline": {"@id": "pulse:discipline", "@type": "@id", "@container": "@set"},
+    "owns": {"@id": "pulse:owns", "@type": "@id", "@container": "@set"},
     "ownedBy": {"@id": "pulse:ownedBy", "@type": "@id"},
     "isForkOf": {"@id": "pulse:isForkOf", "@type": "@id"},
-    "hasContribution": {"@id": "pulse:hasContribution", "@type": "@id"},
+    "hasContribution": {
+        "@id": "pulse:hasContribution",
+        "@type": "@id",
+        "@container": "@set",
+    },
     "contributionTo": {"@id": "pulse:contributionTo", "@type": "@id"},
     "contributionCount": {"@id": "pulse:contributionCount", "@type": "xsd:integer"},
     "firstContributionDate": {
@@ -100,7 +105,11 @@ JSONLD_CONTEXT = {
     # Prefixed property mappings (for source JSON that uses pulse: prefix)
     "pulse:repositoryType": {"@id": "pulse:repositoryType", "@type": "@id"},
     "pulse:OrganizationType": {"@id": "pulse:OrganizationType", "@type": "@id"},
-    "pulse:discipline": {"@id": "pulse:discipline", "@type": "@id"},
+    "pulse:discipline": {
+        "@id": "pulse:discipline",
+        "@type": "@id",
+        "@container": "@set",
+    },
     "pulse:owns": {"@id": "pulse:owns", "@type": "@id"},
     "pulse:ownedBy": {"@id": "pulse:ownedBy", "@type": "@id"},
     "pulse:isForkOf": {"@id": "pulse:isForkOf", "@type": "@id"},
@@ -137,7 +146,7 @@ JSONLD_CONTEXT = {
     "schema:name": "schema:name",
     "schema:email": "schema:email",
     "schema:url": {"@id": "schema:url", "@type": "@id"},
-    "schema:author": {"@id": "schema:author", "@type": "@id"},
+    "schema:author": {"@id": "schema:author", "@type": "@id", "@container": "@set"},
     "schema:identifier": "schema:identifier",
     "schema:dateCreated": {"@id": "schema:dateCreated", "@type": "xsd:dateTime"},
     "schema:datePublished": {"@id": "schema:datePublished", "@type": "xsd:date"},
@@ -145,11 +154,14 @@ JSONLD_CONTEXT = {
     "schema:license": {"@id": "schema:license", "@type": "@id"},
     "schema:citation": {"@id": "schema:citation", "@type": "@id"},
     "schema:sourceOrganization": {"@id": "schema:sourceOrganization", "@type": "@id"},
-    "schema:programmingLanguage": "schema:programmingLanguage",
+    "schema:programmingLanguage": {
+        "@id": "schema:programmingLanguage",
+        "@container": "@set",
+    },
     # Org ontology prefixed mappings
     "org:organization": {"@id": "org:organization", "@type": "@id"},
     "org:hasMembership": {"@id": "org:hasMembership", "@type": "@id"},
-    "org:hasUnit": {"@id": "org:hasUnit", "@type": "@id"},
+    "org:hasUnit": {"@id": "org:hasUnit", "@type": "@id", "@container": "@set"},
     "org:unitOf": {"@id": "org:unitOf", "@type": "@id"},
     "org:role": "org:role",
     # Time ontology prefixed mappings

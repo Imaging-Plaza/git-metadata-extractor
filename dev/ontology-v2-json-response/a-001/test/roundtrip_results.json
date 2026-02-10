@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-02-10T12:11:04.329232",
+  "jsonld_file": "jsonld_output.json",
+  "triples": 190,
+  "reconstructed_entities": 27,
+  "summary": {
+    "matched": 27,
+    "unmatched": 0,
+    "total_differences": 0
+  },
+  "differences": []
+}
