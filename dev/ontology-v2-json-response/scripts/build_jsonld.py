@@ -9,6 +9,146 @@ Usage:
 Output:
     - a-001/test/jsonld_output.json - Combined JSON-LD document
     - a-001/test/consistency_results.json - Cross-reference validation results
+
+===============================================================================
+MAINTENANCE GUIDE: Updating this script when modifying the TTL ontology
+===============================================================================
+
+When you modify open-pulse-ontology-v2.0.0.ttl, update this script to keep
+the JSON-LD context synchronized with the ontology. Here's what to check:
+
+1. ADDING A NEW PROPERTY (sh:property in TTL)
+   ═══════════════════════════════════════════════════════════════════════════
+   Example: Adding pulse:keywords to RepositoryShape
+
+   TTL:
+     pulse:RepositoryShape
+       sh:property [ sh:path pulse:keywords ; sh:datatype xsd:string ] ;
+
+   Steps:
+   a) Add to JSONLD_CONTEXT (~line 75):
+      "keywords": "pulse:keywords",
+
+   b) If it's an array property (NO sh:maxCount 1), add @container:
+      "keywords": {"@id": "pulse:keywords", "@container": "@set"},
+
+   c) Add prefixed version if needed:
+      "pulse:keywords": {"@id": "pulse:keywords", "@container": "@set"},
+
+   Why @container: Ensures arrays are preserved during RDF round-trip
+   instead of collapsing to scalars.
+
+2. ADDING A NEW NAMESPACE/VOCABULARY (new @prefix in TTL)
+   ═══════════════════════════════════════════════════════════════════════════
+   Example: Adding Dublin Core (DCTERMS) vocabulary
+
+   TTL:
+     @prefix dcterms: <http://purl.org/dc/terms/> .
+
+   Update JSONLD_CONTEXT (~line 40):
+     "dcterms": "http://purl.org/dc/terms/",
+
+   Then add property mappings as needed:
+     "title": "dcterms:title",
+     "created": {"@id": "dcterms:created", "@type": "xsd:dateTime"},
+
+3. PROPERTY TYPE ANNOTATIONS (@type in JSON-LD)
+   ═══════════════════════════════════════════════════════════════════════════
+   Use @type when property values should be treated as specific types:
+
+   @type: "@id" - Value is a reference to another entity
+   Example: "author": {"@id": "schema:author", "@type": "@id"}
+   → Links to Person/Organization entities
+
+   @type: "xsd:dateTime" - Value is a datetime
+   Example: "dateCreated": {"@id": "schema:dateCreated", "@type": "xsd:dateTime"}
+   → Ensures proper datetime literal type in RDF
+
+   @type: "xsd:integer" - Value is an integer
+   Example: "count": {"@id": "pulse:count", "@type": "xsd:integer"}
+   → Ensures numeric type preservation
+
+4. ARRAY PROPERTIES (@container directive)
+   ═══════════════════════════════════════════════════════════════════════════
+   Add @container: "@set" for properties that should always be arrays.
+
+   TTL cardinality → JSON-LD @container:
+   - NO sh:maxCount (0..*) → "@container": "@set" (array)
+   - sh:maxCount 1 (0..1) → No @container (scalar/null)
+
+   Example properties needing @container:
+     "author": {"@id": "schema:author", "@type": "@id", "@container": "@set"},
+     "discipline": {"@id": "pulse:discipline", "@type": "@id", "@container": "@set"},
+     "programmingLanguage": {"@id": "schema:programmingLanguage", "@container": "@set"},
+
+   Context-dependent: schema:author
+   - Has @container in context because Repository uses it as array
+   - Contribution entities will ignore @container and use scalar
+   - This is handled in test_roundtrip.py via ARRAY_PROPERTIES_BY_TYPE
+
+5. ADDING CROSS-REFERENCES (entity relationships)
+   ═══════════════════════════════════════════════════════════════════════════
+   Example: Adding pulse:reviewedBy linking Article → Person
+
+   Update CROSS_REFERENCES dict (~line 165):
+     ("Article", "pulse:reviewedBy"): "Person",
+
+   This ensures the validation check confirms that all referenced Person
+   IDs actually exist in the dataset.
+
+6. ENUM PROPERTIES (properties with controlled vocabularies)
+   ═══════════════════════════════════════════════════════════════════════════
+   Enum values should use @type: "@id" to preserve namespace prefixes.
+
+   Example: pulse:repositoryType with values like pulse:Software
+
+   Configuration:
+     "repositoryType": {"@id": "pulse:repositoryType", "@type": "@id"},
+
+   Why: Without @type: "@id", enum values might lose their pulse: prefix
+   during round-trip, becoming "Software" instead of "pulse:Software".
+
+7. CHANGING PROPERTY CARDINALITY IN TTL
+   ═══════════════════════════════════════════════════════════════════════════
+   Single → Multiple (removing sh:maxCount 1):
+   - Add @container: "@set" to property definition
+   - Update test_roundtrip.py ARRAY_PROPERTIES_BY_TYPE
+
+   Multiple → Single (adding sh:maxCount 1):
+   - Remove @container from property definition
+   - Remove from test_roundtrip.py ARRAY_PROPERTIES_BY_TYPE
+
+COMMON PATTERNS:
+
+  Simple string property:
+    "name": "schema:name"
+
+  Reference to another entity:
+    "author": {"@id": "schema:author", "@type": "@id"}
+
+  Array of references:
+    "author": {"@id": "schema:author", "@type": "@id", "@container": "@set"}
+
+  Datetime property:
+    "dateCreated": {"@id": "schema:dateCreated", "@type": "xsd:dateTime"}
+
+  Integer property:
+    "stars": {"@id": "pulse:githubRepoStars", "@type": "xsd:integer"}
+
+  Enum value (with namespace prefix):
+    "repositoryType": {"@id": "pulse:repositoryType", "@type": "@id"}
+
+TESTING YOUR CHANGES:
+  1. Run: python scripts/build_jsonld.py
+  2. Run: python scripts/test_roundtrip.py
+  3. Check for consistency errors and round-trip failures
+  4. Verify jsonld_output.json has correct structure
+
+RELATED FILES TO UPDATE:
+  - test_roundtrip.py: Update ARRAY_PROPERTIES_BY_TYPE for new arrays
+  - JSON schemas: Ensure type/array definitions match TTL cardinality
+  - test_ttl_alignment.py: Will validate TTL ↔ JSON schema consistency
+===============================================================================
 """
 
 import json

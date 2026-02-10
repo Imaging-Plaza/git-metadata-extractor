@@ -23,6 +23,117 @@ Usage:
 
 Requirements:
     pip install rdflib
+
+===============================================================================
+MAINTENANCE GUIDE: Updating this script when modifying the TTL ontology
+===============================================================================
+
+When you modify open-pulse-ontology-v2.0.0.ttl, you may need to update this
+script. Here's what to check and how to fix common issues:
+
+1. ADDING A NEW ENTITY TYPE (new sh:NodeShape in TTL)
+   ═══════════════════════════════════════════════════════════════════════════
+   Example: Adding pulse:DatasetShape
+
+   Steps:
+   a) Add to SHAPE_FILES dict (~line 70):
+      "pulse:Dataset": "pulse_DatasetShape.json",
+
+   b) Check if the entity has array properties in its JSON schema
+
+   c) If yes, add to ARRAY_PROPERTIES_BY_TYPE (~line 50):
+      "pulse:Dataset": {"pulse:creators", "pulse:keywords"},
+
+2. ADDING/MODIFYING PROPERTIES (sh:property in TTL)
+   ═══════════════════════════════════════════════════════════════════════════
+   SHACL Cardinality Rules:
+   - NO sh:maxCount specified → allows 0..* values → JSON array
+   - sh:maxCount 1 → allows 0..1 values → JSON scalar/null
+
+   Example: Adding pulse:keywords to RepositoryShape
+
+   TTL:
+     pulse:RepositoryShape
+       sh:property [ sh:path pulse:keywords ; sh:datatype xsd:string ] ;
+
+   → This allows multiple keywords, so update ARRAY_PROPERTIES_BY_TYPE:
+
+     "schema:SoftwareSourceCode": {
+         "schema:author",
+         "pulse:discipline",
+         "schema:programmingLanguage",
+         "pulse:keywords"  # ← ADD HERE
+     },
+
+   Symptom if missing: Round-trip test shows value_mismatch errors where
+   single-element arrays collapse to scalars.
+
+3. ADDING A NEW NAMESPACE (new vocabulary in TTL)
+   ═══════════════════════════════════════════════════════════════════════════
+   Example: Adding FOAF (Friend of a Friend) vocabulary
+
+   TTL:
+     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+
+   Update to_prefixed() function (~line 130):
+     namespaces = {
+         "https://open-pulse.epfl.ch/ontology#": "pulse:",
+         "http://www.wikidata.org/entity/": "wd:",
+         "http://xmlns.com/foaf/0.1/": "foaf:",  # ← ADD HERE
+         ...
+     }
+
+   Why: Ensures properties/values are reconstructed with correct prefix
+   (e.g., "foaf:Person" not "http://xmlns.com/foaf/0.1/Person").
+
+4. CONTEXT-DEPENDENT PROPERTIES
+   ═══════════════════════════════════════════════════════════════════════════
+   Some properties are arrays in some entity types but scalars in others.
+   Example: schema:author
+   - Array in Repository (multiple authors)
+   - Scalar in Contribution (single contributor)
+
+   Solution: Use ARRAY_PROPERTIES_BY_TYPE (entity-specific), NOT the global
+   ARRAY_PROPERTIES set.
+
+   Configuration:
+     ARRAY_PROPERTIES_BY_TYPE = {
+         "schema:SoftwareSourceCode": {"schema:author"},  # Array
+         "pulse:Contribution": {},  # Scalar (omit schema:author)
+     }
+
+5. CHANGING PROPERTY CARDINALITY
+   ═══════════════════════════════════════════════════════════════════════════
+   Scenario: Changing pulse:maintainer from single to multiple
+
+   Before (TTL):
+     sh:property [ sh:path pulse:maintainer ; sh:maxCount 1 ]
+
+   After (TTL):
+     sh:property [ sh:path pulse:maintainer ]  # Removed maxCount
+
+   Action: Add to ARRAY_PROPERTIES_BY_TYPE for affected entity types
+
+   Opposite change (multiple → single):
+   - Remove from ARRAY_PROPERTIES_BY_TYPE
+   - Add sh:maxCount 1 to TTL
+
+TESTING YOUR CHANGES:
+  1. Run: python scripts/test_roundtrip.py
+  2. Look for "value_mismatch" errors (array/scalar mismatches)
+  3. Compare original vs reconstructed values in the output
+  4. If test fails, review ARRAY_PROPERTIES_BY_TYPE configuration
+
+DEBUGGING TIPS:
+  - Check test/roundtrip/*.json to see reconstructed entities
+  - Compare with original a-001/pulse_*Shape.json files
+  - Array mismatches mean property needs to be in ARRAY_PROPERTIES_BY_TYPE
+  - Prefix mismatches mean namespace needs to be in to_prefixed()
+
+RELATED FILES TO UPDATE:
+  - build_jsonld.py: Add @container: "@set" for new array properties
+  - JSON schemas: Update to match TTL cardinality constraints
+===============================================================================
 """
 
 import json
