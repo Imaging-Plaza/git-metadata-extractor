@@ -2,21 +2,74 @@
 """
 Generate an interactive HTML visualization of JSON-LD graph data using Sigma.js.
 
-This script reads the JSON-LD output from build_jsonld.py and creates a standalone
-HTML file with:
-- Hierarchical radial layout (organized by entity type)
-- Curved edges for better visual distinction
-- Interactive features: search, filter, click-to-highlight, tooltips
+This script reads the JSON-LD output produced by build_jsonld.py and, optionally,
+the validation results from validate_schemas.py, then generates a self-contained
+HTML file that visualises the Open Pulse ontology graph in the browser.
 
-Usage:
-    python scripts/visualize_jsonld.py
+Inputs (read from a-001/test/):
+    - jsonld_output.json        — JSON-LD graph built by build_jsonld.py  (required)
+    - validation_results.json   — Schema validation report from
+                                  validate_schemas.py                     (optional)
 
 Output:
-    - a-001/test/visualization.html - Interactive graph visualization
+    - a-001/test/visualization.html — Standalone interactive visualisation
+
+Features:
+    Layout
+        - Four switchable layouts: Force Atlas (animated force-directed),
+          Circular, Radial (hierarchical rings by entity type), and Grid.
+        - Nodes are sized proportionally to their connection count.
+
+    Interaction
+        - Search bar with instant filtering across node labels and IDs.
+        - Entity-type checkboxes to show/hide node categories.
+        - Click a node to highlight it and its direct neighbours; click the
+          stage background to reset.
+        - Hover tooltips with truncated property previews.
+        - Drag mode (toggle) to reposition individual nodes.
+        - Zoom, fit-to-view, and full reset controls.
+
+    Validation overlay (when validation_results.json is present)
+        - Per-node badge: green ✓ (all schemas pass), red ✗ (failure),
+          or grey ? (no validation data).
+        - Tooltip and sidebar detail panels show Strict / Agent pass/fail
+          status with full error messages.
+        - Dedicated "Validation" tab in the bottom data-panel table listing
+          every entity with its schema, status, and error count.
+        - Stats bar displays the overall valid/total count colour-coded
+          green or red.
+
+    Data tables
+        - Bottom panel with per-type tabs showing entity properties in a
+          sortable, scrollable table. Clicking a row selects and zooms to
+          the corresponding node.
+
+    Edge rendering
+        - Bidirectional relationships are rendered with curvature so both
+          directions remain visible.
+        - Edge legend in the sidebar maps colours to relationship types.
+
+Dependencies (loaded from CDN at runtime inside the HTML):
+    - graphology  0.25.4
+    - sigma.js    2.4.0
+
+Usage:
+    # Activate the project virtual environment first
+    source .venv/bin/activate
+
+    # Generate the JSON-LD (prerequisite)
+    python3 scripts/build_jsonld.py
+
+    # Optionally generate validation results
+    python3 scripts/validate_schemas.py
+
+    # Produce the visualisation
+    python3 scripts/visualize_jsonld.py
 """
 
 import json
 import math
+import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +79,7 @@ SCRIPT_DIR = Path(__file__).parent
 BASE_DIR = SCRIPT_DIR.parent
 TEST_OUTPUT_DIR = BASE_DIR / "a-001" / "test"
 JSONLD_FILE = TEST_OUTPUT_DIR / "jsonld_output.json"
+VALIDATION_FILE = TEST_OUTPUT_DIR / "validation_results.json"
 OUTPUT_FILE = TEST_OUTPUT_DIR / "visualization.html"
 
 # Entity type configuration
@@ -103,6 +157,44 @@ def load_jsonld() -> dict:
     """Load JSON-LD file."""
     with open(JSONLD_FILE, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_validation() -> dict[str, dict]:
+    """
+    Load validation results and build a lookup by instance ID.
+
+    Returns a dict mapping instance_id -> {
+        "strict": bool, "agent": bool,
+        "strict_errors": list, "agent_errors": list,
+        "shape": str
+    }
+    """
+    if not VALIDATION_FILE.exists():
+        return {}
+
+    with open(VALIDATION_FILE, encoding="utf-8") as f:
+        data = json.load(f)
+
+    lookup: dict[str, dict] = {}
+    for mode in ("strict", "agent"):
+        mode_data = data.get(mode, {})
+        for shape_name, shape_result in mode_data.items():
+            for instance in shape_result.get("instances", []):
+                inst_id = instance.get("id", "")
+                if inst_id not in lookup:
+                    lookup[inst_id] = {
+                        "strict": True,
+                        "agent": True,
+                        "strict_errors": [],
+                        "agent_errors": [],
+                        "shape": shape_name,
+                    }
+                key_valid = f"{mode}"
+                key_errors = f"{mode}_errors"
+                lookup[inst_id][key_valid] = instance.get("valid", True)
+                lookup[inst_id][key_errors] = instance.get("errors", [])
+
+    return lookup
 
 
 def build_id_index(graph: list[dict]) -> dict[str, dict]:
@@ -213,7 +305,10 @@ def extract_edges(graph: list[dict], id_index: dict) -> list[dict]:
     """Extract edges from cross-reference fields."""
     edges = []
     edge_set = set()  # Track unique edges
+    # Collect all (source, target) pairs first for bidirectional detection
+    directed_pairs: set[tuple[str, str]] = set()
 
+    # First pass: collect all unique edges and directed pairs
     for node in graph:
         source_id = node.get("@id", "")
 
@@ -242,13 +337,7 @@ def extract_edges(graph: list[dict], id_index: dict) -> list[dict]:
                 if edge_key in edge_set:
                     continue
                 edge_set.add(edge_key)
-
-                # Check for bidirectional edge (for curved rendering)
-                reverse_key = (target_id, source_id)
-                has_reverse = any(
-                    (reverse_key[0], reverse_key[1], f) in edge_set
-                    for f in CROSS_REF_FIELDS
-                )
+                directed_pairs.add((source_id, target_id))
 
                 edge_config = EDGE_CONFIG.get(
                     field,
@@ -262,17 +351,41 @@ def extract_edges(graph: list[dict], id_index: dict) -> list[dict]:
                         "label": edge_config["label"],
                         "color": edge_config["color"],
                         "type": field,
-                        "curvature": 0.3 if has_reverse else 0,
                     },
                 )
+
+    # Second pass: set curvature for bidirectional edges
+    for edge in edges:
+        has_reverse = (edge["target"], edge["source"]) in directed_pairs
+        edge["curvature"] = 0.3 if has_reverse else 0
 
     return edges
 
 
-def build_graph_data(jsonld: dict) -> dict:
+def _match_validation(
+    node_id: str,
+    validation_lookup: dict[str, dict],
+) -> dict | None:
+    """Match a graph node ID to its validation result."""
+    # Try full ID
+    if node_id in validation_lookup:
+        return validation_lookup[node_id]
+    # Try short ID (after last /)
+    if "/" in node_id:
+        short_id = node_id.split("/", 1)[-1]
+        if short_id in validation_lookup:
+            return validation_lookup[short_id]
+    return None
+
+
+def build_graph_data(
+    jsonld: dict,
+    validation_lookup: dict[str, dict] | None = None,
+) -> dict:
     """Build the graph data structure for Sigma.js."""
     graph = jsonld.get("@graph", [])
     id_index = build_id_index(graph)
+    validation_lookup = validation_lookup or {}
 
     # Group nodes by type
     nodes_by_type: dict[str, list] = defaultdict(list)
@@ -293,6 +406,11 @@ def build_graph_data(jsonld: dict) -> dict:
     for edge in edges:
         connection_counts[edge["source"]] += 1
         connection_counts[edge["target"]] += 1
+
+    # Validation counters
+    valid_count = 0
+    invalid_count = 0
+    no_validation_count = 0
 
     # Second pass: build node objects
     for node in graph:
@@ -318,6 +436,24 @@ def build_graph_data(jsonld: dict) -> dict:
                 display_key = key.split(":")[-1] if ":" in key else key
                 properties[display_key] = value
 
+        # Match validation results
+        val_result = _match_validation(node_id, validation_lookup)
+        if val_result is not None:
+            validation_status = {
+                "strict": val_result["strict"],
+                "agent": val_result["agent"],
+                "strict_errors": val_result["strict_errors"],
+                "agent_errors": val_result["agent_errors"],
+                "shape": val_result["shape"],
+            }
+            if val_result["strict"] and val_result["agent"]:
+                valid_count += 1
+            else:
+                invalid_count += 1
+        else:
+            validation_status = None
+            no_validation_count += 1
+
         nodes.append(
             {
                 "id": node_id,
@@ -326,11 +462,10 @@ def build_graph_data(jsonld: dict) -> dict:
                 "y": pos[1],
                 "size": size,
                 "color": config["color"],
-                "nodeType": config[
-                    "label"
-                ],  # Use nodeType instead of type (Sigma reserves 'type' for renderers)
+                "nodeType": config["label"],
                 "entityType": node_type,
                 "properties": properties,
+                "validation": validation_status,
             },
         )
 
@@ -342,6 +477,12 @@ def build_graph_data(jsonld: dict) -> dict:
             "nodeCount": len(nodes),
             "edgeCount": len(edges),
             "entityTypes": list(ENTITY_CONFIG.keys()),
+            "validation": {
+                "valid": valid_count,
+                "invalid": invalid_count,
+                "noData": no_validation_count,
+                "total": valid_count + invalid_count + no_validation_count,
+            },
         },
     }
 
@@ -745,6 +886,7 @@ def generate_html(graph_data: dict) -> str:
             display: flex;
             flex-direction: column;
             gap: 8px;
+            z-index: 60;
         }}
 
         .control-btn {{
@@ -773,22 +915,31 @@ def generate_html(graph_data: dict) -> str:
             border-color: #3b82f6;
         }}
 
-        /* Layout selector */
-        #layout-selector {{
+        /* Layout dropdown menu — anchored to layout-toggle button */
+        #layout-toggle-wrapper {{
+            position: relative;
+        }}
+
+        #layout-menu {{
             position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 4px;
+            top: 0;
+            right: 48px;
             background: white;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 4px;
             z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }}
 
-        .layout-btn {{
+        #layout-menu.visible {{
+            display: flex;
+        }}
+
+        .layout-menu-item {{
             padding: 8px 14px;
             font-size: 12px;
             font-weight: 500;
@@ -798,16 +949,19 @@ def generate_html(graph_data: dict) -> str:
             cursor: pointer;
             color: #64748b;
             transition: all 0.2s;
+            text-align: left;
+            white-space: nowrap;
         }}
 
-        .layout-btn:hover {{
+        .layout-menu-item:hover {{
             background: #f1f5f9;
             color: #1e293b;
         }}
 
-        .layout-btn.active {{
-            background: #3b82f6;
-            color: white;
+        .layout-menu-item.active {{
+            background: #dbeafe;
+            color: #3b82f6;
+            font-weight: 600;
         }}
 
         /* Drag indicator */
@@ -851,19 +1005,25 @@ def generate_html(graph_data: dict) -> str:
         /* Tooltip */
         #tooltip {{
             position: absolute;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 12px 14px;
+            box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.55), 0 8px 16px -12px rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(6px);
             pointer-events: none;
-            display: none;
-            max-width: 350px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(4px);
+            transition: opacity 0.14s ease, transform 0.14s ease;
+            max-width: 360px;
             z-index: 1000;
         }}
 
         #tooltip.visible {{
-            display: block;
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }}
 
         #tooltip-title {{
@@ -910,6 +1070,36 @@ def generate_html(graph_data: dict) -> str:
         .tooltip-prop-value {{
             color: #1e293b;
             word-break: break-word;
+        }}
+
+        /* Tooltip for graph control buttons */
+        #ui-tooltip {{
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.65), 0 6px 16px -14px rgba(15, 23, 42, 0.4);
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.35;
+            padding: 7px 10px;
+            max-width: 280px;
+            white-space: normal;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(2px);
+            transition: opacity 0.12s ease, transform 0.12s ease;
+            z-index: 1200;
+        }}
+
+        #ui-tooltip.visible {{
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }}
 
         /* Data Panel (Bottom) - inside graph area */
@@ -1051,9 +1241,177 @@ def generate_html(graph_data: dict) -> str:
         .data-table tr.selected {{
             background: #dbeafe;
         }}
+
+        /* Info modal overlay */
+        #info-modal-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.25s ease;
+        }}
+
+        #info-modal-overlay.hidden {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+
+        #info-modal {{
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 520px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 32px;
+            position: relative;
+        }}
+
+        #info-modal h2 {{
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }}
+
+        #info-modal .modal-subtitle {{
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 20px;
+        }}
+
+        #info-modal .feature-list {{
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }}
+
+        #info-modal .feature-list li {{
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+        }}
+
+        #info-modal .feature-icon {{
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+        }}
+
+        #info-modal .feature-title {{
+            font-weight: 600;
+            color: #0f172a;
+        }}
+
+        #info-close-btn {{
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #64748b;
+            transition: all 0.2s;
+        }}
+
+        #info-close-btn:hover {{
+            background: #f1f5f9;
+            color: #0f172a;
+        }}
+
+        #info-dismiss-btn {{
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+
+        #info-dismiss-btn:hover {{
+            background: #2563eb;
+        }}
+
+        .kbd {{
+            display: inline-block;
+            padding: 1px 5px;
+            font-size: 11px;
+            font-family: monospace;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            color: #475569;
+        }}
     </style>
 </head>
 <body>
+    <!-- Info modal -->
+    <div id="info-modal-overlay">
+        <div id="info-modal">
+            <button id="info-close-btn" title="Close">✕</button>
+            <h2>Open Pulse Ontology</h2>
+            <p class="modal-subtitle">Interactive JSON-LD Graph Visualization</p>
+            <ul class="feature-list">
+                <li>
+                    <span class="feature-icon">⊞</span>
+                    <span><span class="feature-title">Layouts</span> — Switch between Force Atlas, Circular, Radial, and Grid layouts using the <span class="kbd">⊞</span> button (top-right).</span>
+                </li>
+                <li>
+                    <span class="feature-icon">🔍</span>
+                    <span><span class="feature-title">Search &amp; Filter</span> — Use the sidebar search to find nodes by name. Toggle entity types on/off with the checkboxes.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">✓</span>
+                    <span><span class="feature-title">Validation Badges</span> — Each node shows a green ✓ (pass) or red ✗ (fail) badge for schema validation. Click a node to see full details.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">✋</span>
+                    <span><span class="feature-title">Drag Mode</span> — Enable with the <span class="kbd">✋</span> button, then click and drag nodes to reposition them.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">🔗</span>
+                    <span><span class="feature-title">Table Sync</span> — When enabled (top-left <span class="kbd">🔗</span>), clicking a node auto-opens the matching data table tab and highlights the row.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">💬</span>
+                    <span><span class="feature-title">Tooltips</span> — Hover any node or edge for a quick property preview. Toggle with the <span class="kbd">💬</span> button.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">📊</span>
+                    <span><span class="feature-title">Data Tables</span> — Expand the bottom panel to browse all entities by type, or switch to the Validation tab for a full status overview.</span>
+                </li>
+            </ul>
+            <button id="info-dismiss-btn">Got it, explore the graph</button>
+        </div>
+    </div>
+
     <div id="app">
         <div id="main-content">
             <div id="sidebar-wrapper">
@@ -1110,28 +1468,33 @@ def generate_html(graph_data: dict) -> str:
                 <div id="graph-container">
                     <div id="sigma-container"></div>
 
-                    <!-- Layout selector -->
-                    <div id="layout-selector">
-                        <button class="layout-btn active" data-layout="force" title="Force-directed layout with animation">Force Atlas</button>
-                        <button class="layout-btn" data-layout="circular" title="Arrange nodes in a circle by type">Circular</button>
-                        <button class="layout-btn" data-layout="radial" title="Hierarchical rings by entity type">Radial</button>
-                        <button class="layout-btn" data-layout="grid" title="Arrange nodes in a grid">Grid</button>
-                    </div>
-
                     <div id="controls">
                         <button class="control-btn" id="zoom-in" title="Zoom In">+</button>
                         <button class="control-btn" id="zoom-out" title="Zoom Out">−</button>
                         <button class="control-btn" id="zoom-fit" title="Fit to View">⊡</button>
-                        <button class="control-btn" id="reset-view" title="Reset">↺</button>
-                        <button class="control-btn" id="toggle-drag" title="Toggle Drag Mode">✋</button>
-                        <button class="control-btn active" id="toggle-tooltip" title="Toggle Tooltips">💬</button>
-                        <button class="control-btn" id="stop-layout" title="Stop Animation" style="display:none;">⏹</button>
+                        <button class="control-btn" id="reset-view" title="Reset view and filters">↺</button>
+                        <button class="control-btn" id="toggle-drag" title="Toggle Drag Mode — click and drag nodes to reposition">✋</button>
+                        <button class="control-btn active" id="toggle-tooltip" title="Toggle Tooltips — show property previews on hover">💬</button>
+                        <button class="control-btn active" id="toggle-sync" title="Toggle table sync — auto-switch tab and highlight row on node click">🔗</button>
+                        <div id="layout-toggle-wrapper">
+                            <button class="control-btn" id="layout-toggle" title="Change graph layout">⊞</button>
+                            <div id="layout-menu">
+                                <button class="layout-menu-item active" data-layout="force" title="Animated force-directed layout">Force Atlas</button>
+                                <button class="layout-menu-item" data-layout="circular" title="Arrange nodes in a circle grouped by type">Circular</button>
+                                <button class="layout-menu-item" data-layout="radial" title="Hierarchical rings by entity type">Radial</button>
+                                <button class="layout-menu-item" data-layout="grid" title="Arrange nodes in a grid sorted by type">Grid</button>
+                            </div>
+                        </div>
+                        <button class="control-btn" id="stop-layout" title="Stop layout animation" style="display:none;">⏹</button>
+                        <button class="control-btn" id="info-btn" title="Show help and feature guide">ⓘ</button>
                     </div>
+
+                    <div id="ui-tooltip"></div>
 
                     <div id="drag-hint">Drag mode: Click and drag nodes to reposition them</div>
 
                     <div id="stats">
-                        <span id="node-count">0</span> nodes · <span id="edge-count">0</span> edges
+                        <span id="node-count">0</span> nodes · <span id="edge-count">0</span> edges · <span id="validation-count"></span>
                     </div>
 
                     <div id="tooltip">
@@ -1176,6 +1539,7 @@ def generate_html(graph_data: dict) -> str:
         let hiddenTypes = new Set();
         let layoutRunning = false;
         let tooltipsEnabled = true;
+        let tableSyncEnabled = true;
 
         // Add nodes
         GRAPH_DATA.nodes.forEach(node => {{
@@ -1188,6 +1552,7 @@ def generate_html(graph_data: dict) -> str:
                 nodeType: node.nodeType,
                 entityType: node.entityType,
                 properties: node.properties,
+                validation: node.validation,
                 originalColor: node.color,
                 originalSize: node.size,
             }});
@@ -1279,6 +1644,40 @@ def generate_html(graph_data: dict) -> str:
 
             context.fillStyle = fontColor;
             context.fillText(displayLabel, x, y + size + 5);
+
+            // Draw validation badge (top-right of node)
+            const validation = data.validation;
+            if (validation !== undefined) {{
+                const badgeR = Math.max(4, size * 0.3);
+                const bx = x + size * 0.7;
+                const by = y - size * 0.7;
+                context.beginPath();
+                context.arc(bx, by, badgeR, 0, 2 * Math.PI);
+                if (validation === null) {{
+                    context.fillStyle = "#94a3b8"; // gray - no data
+                }} else if (validation.strict && validation.agent) {{
+                    context.fillStyle = "#22c55e"; // green - all pass
+                }} else {{
+                    context.fillStyle = "#ef4444"; // red - failures
+                }}
+                context.fill();
+                context.strokeStyle = "white";
+                context.lineWidth = 1.5;
+                context.stroke();
+
+                // Draw checkmark or X
+                context.fillStyle = "white";
+                context.font = `bold ${{Math.max(6, badgeR)}}px sans-serif`;
+                context.textAlign = "center";
+                context.textBaseline = "middle";
+                if (validation === null) {{
+                    context.fillText("?", bx, by);
+                }} else if (validation.strict && validation.agent) {{
+                    context.fillText("✓", bx, by);
+                }} else {{
+                    context.fillText("✗", bx, by);
+                }}
+            }}
         }}
 
         // Initialize Sigma with custom settings
@@ -1587,17 +1986,101 @@ def generate_html(graph_data: dict) -> str:
                 sigma.refresh();
             }}
 
-            // Update active button
-            document.querySelectorAll('.layout-btn').forEach(btn => {{
+            // Update active menu item
+            document.querySelectorAll('.layout-menu-item').forEach(btn => {{
                 btn.classList.toggle('active', btn.dataset.layout === layoutName);
             }});
         }}
 
-        // Layout button handlers
-        document.querySelectorAll('.layout-btn').forEach(btn => {{
-            btn.addEventListener('click', () => {{
+        // Layout dropdown toggle
+        const layoutMenu = document.getElementById('layout-menu');
+        const layoutToggleBtn = document.getElementById('layout-toggle');
+        const graphContainer = document.getElementById('graph-container');
+        const controlTooltip = document.getElementById('ui-tooltip');
+        const CONTROL_TOOLTIP_DELAY_MS = 250;
+        let controlTooltipTimer = null;
+        let controlTooltipTarget = null;
+
+        function hideControlTooltip() {{
+            clearTimeout(controlTooltipTimer);
+            controlTooltip.classList.remove('visible');
+            controlTooltipTarget = null;
+        }}
+
+        function positionControlTooltip(target) {{
+            const containerRect = graphContainer.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            const tooltipWidth = controlTooltip.offsetWidth;
+            const tooltipHeight = controlTooltip.offsetHeight;
+
+            let left = targetRect.left - containerRect.left - tooltipWidth - 10;
+            if (left < 8) {{
+                left = targetRect.right - containerRect.left + 10;
+            }}
+
+            let top = targetRect.top - containerRect.top + (targetRect.height - tooltipHeight) / 2;
+            top = Math.max(8, Math.min(top, containerRect.height - tooltipHeight - 8));
+
+            controlTooltip.style.left = `${{left}}px`;
+            controlTooltip.style.top = `${{top}}px`;
+        }}
+
+        function scheduleControlTooltip(target) {{
+            const tooltipText = target.dataset.tooltip;
+            if (!tooltipText) return;
+
+            clearTimeout(controlTooltipTimer);
+            controlTooltipTimer = setTimeout(() => {{
+                controlTooltip.textContent = tooltipText;
+                controlTooltip.classList.add('visible');
+                positionControlTooltip(target);
+                controlTooltipTarget = target;
+            }}, CONTROL_TOOLTIP_DELAY_MS);
+        }}
+
+        // Replace native browser tooltips on graph controls with a styled tooltip.
+        document.querySelectorAll('#graph-container .control-btn[title], #graph-container .layout-menu-item[title]').forEach(el => {{
+            const tooltipText = el.getAttribute('title');
+            if (tooltipText) {{
+                el.dataset.tooltip = tooltipText;
+                el.setAttribute('aria-label', tooltipText);
+                el.removeAttribute('title');
+            }}
+        }});
+
+        document.querySelectorAll('#graph-container .control-btn, #graph-container .layout-menu-item').forEach(el => {{
+            el.addEventListener('mouseenter', () => scheduleControlTooltip(el));
+            el.addEventListener('mouseleave', hideControlTooltip);
+            el.addEventListener('focus', () => scheduleControlTooltip(el));
+            el.addEventListener('blur', hideControlTooltip);
+            el.addEventListener('click', hideControlTooltip);
+        }});
+
+        window.addEventListener('resize', () => {{
+            if (controlTooltip.classList.contains('visible') && controlTooltipTarget) {{
+                positionControlTooltip(controlTooltipTarget);
+            }}
+        }});
+
+        layoutToggleBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            hideControlTooltip();
+            layoutMenu.classList.toggle('visible');
+        }});
+
+        // Layout menu item handlers
+        document.querySelectorAll('.layout-menu-item').forEach(btn => {{
+            btn.addEventListener('click', (e) => {{
+                e.stopPropagation();
                 applyLayout(btn.dataset.layout);
+                layoutMenu.classList.remove('visible');
             }});
+        }});
+
+        // Close layout menu when clicking elsewhere
+        document.addEventListener('click', () => {{
+            hideControlTooltip();
+            layoutMenu.classList.remove('visible');
         }});
 
         // Run initial layout
@@ -1630,6 +2113,13 @@ def generate_html(graph_data: dict) -> str:
             if (!tooltipsEnabled) {{
                 tooltip.classList.remove('visible');
             }}
+        }});
+
+        // Toggle table sync
+        const toggleSyncBtn = document.getElementById('toggle-sync');
+        toggleSyncBtn.addEventListener('click', () => {{
+            tableSyncEnabled = !tableSyncEnabled;
+            toggleSyncBtn.classList.toggle('active', tableSyncEnabled);
         }});
 
         // Drag start
@@ -1681,6 +2171,16 @@ def generate_html(graph_data: dict) -> str:
         // Update stats
         document.getElementById("node-count").textContent = graph.order;
         document.getElementById("edge-count").textContent = graph.size;
+
+        // Update validation count in stats
+        const valStats = GRAPH_DATA.metadata.validation || {{}};
+        if (valStats.total > 0) {{
+            const valSpan = document.getElementById("validation-count");
+            const allValid = valStats.invalid === 0;
+            valSpan.style.color = allValid ? "#22c55e" : "#ef4444";
+            valSpan.style.fontWeight = "600";
+            valSpan.textContent = `${{valStats.valid}}/${{valStats.total}} valid`;
+        }}
 
         // Build filters
         const filtersContainer = document.getElementById("filters");
@@ -1963,6 +2463,36 @@ def generate_html(graph_data: dict) -> str:
             const propsDiv = document.getElementById("node-properties");
             propsDiv.innerHTML = "";
 
+            // Validation section
+            if (attrs.validation) {{
+                const v = attrs.validation;
+                const strictOk = v.strict;
+                const agentOk = v.agent;
+                const allOk = strictOk && agentOk;
+                const valDiv = document.createElement("div");
+                valDiv.style.cssText = `padding: 10px; margin-bottom: 12px; border-radius: 8px; background: ${{allOk ? "#f0fdf4" : "#fef2f2"}}; border: 1px solid ${{allOk ? "#bbf7d0" : "#fecaca"}};`;
+                let valHtml = `<div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; color: ${{allOk ? "#166534" : "#991b1b"}};">${{allOk ? "✓ Validation Passed" : "✗ Validation Failed"}}</div>`;
+                valHtml += `<div style="font-size: 12px;"><span style="color: ${{strictOk ? "#22c55e" : "#ef4444"}};">Strict: ${{strictOk ? "Pass" : "Fail"}}</span> · <span style="color: ${{agentOk ? "#22c55e" : "#ef4444"}};">Agent: ${{agentOk ? "Pass" : "Fail"}}</span></div>`;
+                if (v.shape) {{
+                    valHtml += `<div style="font-size: 11px; color: #64748b; margin-top: 4px;">Shape: ${{v.shape}}</div>`;
+                }}
+                const allErrors = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                if (allErrors.length > 0) {{
+                    valHtml += `<div style="font-size: 12px; color: #991b1b; margin-top: 8px; font-weight: 500;">Errors (${{allErrors.length}}):</div>`;
+                    allErrors.forEach(err => {{
+                        const msg = typeof err === "string" ? err : (err.message || JSON.stringify(err));
+                        valHtml += `<div style="font-size: 11px; color: #991b1b; padding: 2px 0;">&bull; ${{msg}}</div>`;
+                    }});
+                }}
+                valDiv.innerHTML = valHtml;
+                propsDiv.appendChild(valDiv);
+            }} else if (attrs.validation === null) {{
+                const valDiv = document.createElement("div");
+                valDiv.style.cssText = "padding: 10px; margin-bottom: 12px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;";
+                valDiv.innerHTML = '<div style="font-size: 12px; color: #94a3b8;">No validation data available</div>';
+                propsDiv.appendChild(valDiv);
+            }}
+
             // Add ID
             addPropertyItem(propsDiv, "ID", nodeId);
 
@@ -2003,7 +2533,16 @@ def generate_html(graph_data: dict) -> str:
         // Sigma event handlers
         sigma.on("clickNode", ({{ node }}) => {{
             selectNode(node);
-            highlightTableRow(node);
+
+            // Auto-expand data panel, switch tab, and highlight row (if sync enabled)
+            if (tableSyncEnabled) {{
+                const nodeType = graph.getNodeAttribute(node, "nodeType");
+                if (dataPanel.classList.contains("collapsed")) {{
+                    dataPanel.classList.remove("collapsed");
+                }}
+                switchTab(nodeType);
+                highlightTableRow(node);
+            }}
         }});
 
         sigma.on("clickStage", () => {{
@@ -2035,6 +2574,26 @@ def generate_html(graph_data: dict) -> str:
 
                 // Build properties HTML
                 let propsHtml = "";
+
+                // Validation status line
+                if (attrs.validation) {{
+                    const v = attrs.validation;
+                    const strictIcon = v.strict ? "✓" : "✗";
+                    const agentIcon = v.agent ? "✓" : "✗";
+                    const strictColor = v.strict ? "#22c55e" : "#ef4444";
+                    const agentColor = v.agent ? "#22c55e" : "#ef4444";
+                    propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key">Validation:</span><span class="tooltip-prop-value"><span style="color:${{strictColor}}">Strict ${{strictIcon}}</span> · <span style="color:${{agentColor}}">Agent ${{agentIcon}}</span></span></div>`;
+                    const allErrors = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                    if (allErrors.length > 0) {{
+                        allErrors.slice(0, 3).forEach(err => {{
+                            const msg = typeof err === "string" ? err : (err.message || JSON.stringify(err));
+                            propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key" style="color:#ef4444">Error:</span><span class="tooltip-prop-value" style="color:#ef4444">${{msg.slice(0, 60)}}</span></div>`;
+                        }});
+                    }}
+                }} else if (attrs.validation === null) {{
+                    propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key">Validation:</span><span class="tooltip-prop-value" style="color:#94a3b8">No data</span></div>`;
+                }}
+
                 if (attrs.properties) {{
                     const propEntries = Object.entries(attrs.properties)
                         .filter(([key]) => !hiddenProps.has(key))
@@ -2198,6 +2757,61 @@ def generate_html(graph_data: dict) -> str:
             if (!firstTab) firstTab = type;
         }});
 
+        // Add Validation tab
+        const valMeta = GRAPH_DATA.metadata.validation || {{}};
+        if (valMeta.total > 0) {{
+            const valTab = document.createElement("div");
+            valTab.className = "data-tab";
+            valTab.dataset.type = "__validation__";
+            const allValid = valMeta.invalid === 0;
+            valTab.innerHTML = `
+                <span class="data-tab-dot" style="background: ${{allValid ? '#22c55e' : '#ef4444'}}"></span>
+                <span>Validation</span>
+                <span class="data-tab-count">${{valMeta.valid}}/${{valMeta.total}}</span>
+            `;
+            valTab.addEventListener("click", () => switchTab("__validation__"));
+            dataPanelTabs.appendChild(valTab);
+        }}
+
+        // Build validation table
+        function buildValidationTable() {{
+            let html = '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
+            html += '<th>Entity</th><th>Type</th><th>Shape</th><th>Strict</th><th>Agent</th><th>Errors</th>';
+            html += '</tr></thead><tbody>';
+
+            GRAPH_DATA.nodes.forEach(node => {{
+                const v = node.validation;
+                const strictOk = v ? v.strict : null;
+                const agentOk = v ? v.agent : null;
+                const errCount = v ? (v.strict_errors || []).length + (v.agent_errors || []).length : 0;
+                const rowBg = v === null ? "" : (strictOk && agentOk ? 'style="background: #f0fdf430;"' : 'style="background: #fef2f230;"');
+
+                html += `<tr data-node-id="${{node.id}}" ${{rowBg}}>`;
+                html += `<td title="${{node.id}}">${{node.label}}</td>`;
+                html += `<td>${{node.nodeType}}</td>`;
+                html += `<td>${{v ? v.shape : "-"}}</td>`;
+
+                if (v === null) {{
+                    html += '<td style="color:#94a3b8">-</td><td style="color:#94a3b8">-</td><td>-</td>';
+                }} else {{
+                    html += `<td style="color:${{strictOk ? '#22c55e' : '#ef4444'}}; font-weight:600;">${{strictOk ? "Pass" : "Fail"}}</td>`;
+                    html += `<td style="color:${{agentOk ? '#22c55e' : '#ef4444'}}; font-weight:600;">${{agentOk ? "Pass" : "Fail"}}</td>`;
+                    if (errCount > 0) {{
+                        const allErrs = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                        const firstErr = allErrs[0];
+                        const msg = typeof firstErr === "string" ? firstErr : (firstErr.message || JSON.stringify(firstErr));
+                        html += `<td style="color:#ef4444" title="${{msg.replace(/"/g, '&quot;')}}">${{errCount}} error${{errCount > 1 ? "s" : ""}}</td>`;
+                    }} else {{
+                        html += '<td style="color:#22c55e">None</td>';
+                    }}
+                }}
+                html += '</tr>';
+            }});
+
+            html += '</tbody></table></div>';
+            return html;
+        }}
+
         // Build table for a type
         function buildTable(type) {{
             const nodes = nodesByType[type] || [];
@@ -2252,7 +2866,7 @@ def generate_html(graph_data: dict) -> str:
             document.querySelectorAll(".data-tab").forEach(tab => {{
                 tab.classList.toggle("active", tab.dataset.type === type);
             }});
-            dataPanelContent.innerHTML = buildTable(type);
+            dataPanelContent.innerHTML = type === "__validation__" ? buildValidationTable() : buildTable(type);
 
             // Add click handlers to table rows
             document.querySelectorAll(".data-table tr[data-node-id]").forEach(row => {{
@@ -2286,6 +2900,32 @@ def generate_html(graph_data: dict) -> str:
 
         // Initialize first tab
         if (firstTab) switchTab(firstTab);
+
+        // Info modal
+        const infoOverlay = document.getElementById('info-modal-overlay');
+        const infoCloseBtn = document.getElementById('info-close-btn');
+        const infoDismissBtn = document.getElementById('info-dismiss-btn');
+        const infoBtn = document.getElementById('info-btn');
+
+        function closeInfoModal() {{
+            infoOverlay.classList.add('hidden');
+        }}
+
+        function openInfoModal() {{
+            infoOverlay.classList.remove('hidden');
+        }}
+
+        infoCloseBtn.addEventListener('click', closeInfoModal);
+        infoDismissBtn.addEventListener('click', closeInfoModal);
+        infoOverlay.addEventListener('click', (e) => {{
+            if (e.target === infoOverlay) closeInfoModal();
+        }});
+        document.addEventListener('keydown', (e) => {{
+            if (e.key === 'Escape' && !infoOverlay.classList.contains('hidden')) {{
+                closeInfoModal();
+            }}
+        }});
+        infoBtn.addEventListener('click', openInfoModal);
     </script>
 </body>
 </html>
@@ -2300,17 +2940,29 @@ def main():
     if not JSONLD_FILE.exists():
         print(f"Error: JSON-LD file not found at {JSONLD_FILE}")
         print("Run 'python scripts/build_jsonld.py' first to generate it.")
-        exit(1)
+        sys.exit(1)
 
     # Load JSON-LD
     jsonld = load_jsonld()
 
+    # Load validation results
+    validation_lookup = load_validation()
+    if validation_lookup:
+        print(f"  Loaded validation results for {len(validation_lookup)} instances")
+    else:
+        print("  No validation results found (run validate_schemas.py first)")
+
     # Build graph data
     print("Building graph data...")
-    graph_data = build_graph_data(jsonld)
+    graph_data = build_graph_data(jsonld, validation_lookup)
 
+    val_meta = graph_data["metadata"]["validation"]
     print(f"  Nodes: {graph_data['metadata']['nodeCount']}")
     print(f"  Edges: {graph_data['metadata']['edgeCount']}")
+    print(
+        f"  Validation: {val_meta['valid']}/{val_meta['total']} valid"
+        + (f", {val_meta['invalid']} invalid" if val_meta["invalid"] else ""),
+    )
 
     # Generate HTML
     print("Generating HTML visualization...")

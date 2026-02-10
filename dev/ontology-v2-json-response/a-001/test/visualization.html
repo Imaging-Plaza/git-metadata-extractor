@@ -395,6 +395,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            z-index: 60;
         }
 
         .control-btn {
@@ -423,22 +424,31 @@
             border-color: #3b82f6;
         }
 
-        /* Layout selector */
-        #layout-selector {
+        /* Layout dropdown menu — anchored to layout-toggle button */
+        #layout-toggle-wrapper {
+            position: relative;
+        }
+
+        #layout-menu {
             position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 4px;
+            top: 0;
+            right: 48px;
             background: white;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 4px;
             z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        .layout-btn {
+        #layout-menu.visible {
+            display: flex;
+        }
+
+        .layout-menu-item {
             padding: 8px 14px;
             font-size: 12px;
             font-weight: 500;
@@ -448,16 +458,19 @@
             cursor: pointer;
             color: #64748b;
             transition: all 0.2s;
+            text-align: left;
+            white-space: nowrap;
         }
 
-        .layout-btn:hover {
+        .layout-menu-item:hover {
             background: #f1f5f9;
             color: #1e293b;
         }
 
-        .layout-btn.active {
-            background: #3b82f6;
-            color: white;
+        .layout-menu-item.active {
+            background: #dbeafe;
+            color: #3b82f6;
+            font-weight: 600;
         }
 
         /* Drag indicator */
@@ -501,19 +514,25 @@
         /* Tooltip */
         #tooltip {
             position: absolute;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 12px 14px;
+            box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.55), 0 8px 16px -12px rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(6px);
             pointer-events: none;
-            display: none;
-            max-width: 350px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(4px);
+            transition: opacity 0.14s ease, transform 0.14s ease;
+            max-width: 360px;
             z-index: 1000;
         }
 
         #tooltip.visible {
-            display: block;
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
 
         #tooltip-title {
@@ -560,6 +579,36 @@
         .tooltip-prop-value {
             color: #1e293b;
             word-break: break-word;
+        }
+
+        /* Tooltip for graph control buttons */
+        #ui-tooltip {
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.65), 0 6px 16px -14px rgba(15, 23, 42, 0.4);
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.35;
+            padding: 7px 10px;
+            max-width: 280px;
+            white-space: normal;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(2px);
+            transition: opacity 0.12s ease, transform 0.12s ease;
+            z-index: 1200;
+        }
+
+        #ui-tooltip.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
 
         /* Data Panel (Bottom) - inside graph area */
@@ -701,9 +750,177 @@
         .data-table tr.selected {
             background: #dbeafe;
         }
+
+        /* Info modal overlay */
+        #info-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.25s ease;
+        }
+
+        #info-modal-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #info-modal {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 520px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 32px;
+            position: relative;
+        }
+
+        #info-modal h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        #info-modal .modal-subtitle {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 20px;
+        }
+
+        #info-modal .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+
+        #info-modal .feature-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+        }
+
+        #info-modal .feature-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+        }
+
+        #info-modal .feature-title {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        #info-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+
+        #info-close-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        #info-dismiss-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #info-dismiss-btn:hover {
+            background: #2563eb;
+        }
+
+        .kbd {
+            display: inline-block;
+            padding: 1px 5px;
+            font-size: 11px;
+            font-family: monospace;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            color: #475569;
+        }
     </style>
 </head>
 <body>
+    <!-- Info modal -->
+    <div id="info-modal-overlay">
+        <div id="info-modal">
+            <button id="info-close-btn" title="Close">✕</button>
+            <h2>Open Pulse Ontology</h2>
+            <p class="modal-subtitle">Interactive JSON-LD Graph Visualization</p>
+            <ul class="feature-list">
+                <li>
+                    <span class="feature-icon">⊞</span>
+                    <span><span class="feature-title">Layouts</span> — Switch between Force Atlas, Circular, Radial, and Grid layouts using the <span class="kbd">⊞</span> button (top-right).</span>
+                </li>
+                <li>
+                    <span class="feature-icon">🔍</span>
+                    <span><span class="feature-title">Search &amp; Filter</span> — Use the sidebar search to find nodes by name. Toggle entity types on/off with the checkboxes.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">✓</span>
+                    <span><span class="feature-title">Validation Badges</span> — Each node shows a green ✓ (pass) or red ✗ (fail) badge for schema validation. Click a node to see full details.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">✋</span>
+                    <span><span class="feature-title">Drag Mode</span> — Enable with the <span class="kbd">✋</span> button, then click and drag nodes to reposition them.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">🔗</span>
+                    <span><span class="feature-title">Table Sync</span> — When enabled (top-left <span class="kbd">🔗</span>), clicking a node auto-opens the matching data table tab and highlights the row.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">💬</span>
+                    <span><span class="feature-title">Tooltips</span> — Hover any node or edge for a quick property preview. Toggle with the <span class="kbd">💬</span> button.</span>
+                </li>
+                <li>
+                    <span class="feature-icon">📊</span>
+                    <span><span class="feature-title">Data Tables</span> — Expand the bottom panel to browse all entities by type, or switch to the Validation tab for a full status overview.</span>
+                </li>
+            </ul>
+            <button id="info-dismiss-btn">Got it, explore the graph</button>
+        </div>
+    </div>
+
     <div id="app">
         <div id="main-content">
             <div id="sidebar-wrapper">
@@ -760,28 +977,33 @@
                 <div id="graph-container">
                     <div id="sigma-container"></div>
 
-                    <!-- Layout selector -->
-                    <div id="layout-selector">
-                        <button class="layout-btn active" data-layout="force" title="Force-directed layout with animation">Force Atlas</button>
-                        <button class="layout-btn" data-layout="circular" title="Arrange nodes in a circle by type">Circular</button>
-                        <button class="layout-btn" data-layout="radial" title="Hierarchical rings by entity type">Radial</button>
-                        <button class="layout-btn" data-layout="grid" title="Arrange nodes in a grid">Grid</button>
-                    </div>
-
                     <div id="controls">
                         <button class="control-btn" id="zoom-in" title="Zoom In">+</button>
                         <button class="control-btn" id="zoom-out" title="Zoom Out">−</button>
                         <button class="control-btn" id="zoom-fit" title="Fit to View">⊡</button>
-                        <button class="control-btn" id="reset-view" title="Reset">↺</button>
-                        <button class="control-btn" id="toggle-drag" title="Toggle Drag Mode">✋</button>
-                        <button class="control-btn active" id="toggle-tooltip" title="Toggle Tooltips">💬</button>
-                        <button class="control-btn" id="stop-layout" title="Stop Animation" style="display:none;">⏹</button>
+                        <button class="control-btn" id="reset-view" title="Reset view and filters">↺</button>
+                        <button class="control-btn" id="toggle-drag" title="Toggle Drag Mode — click and drag nodes to reposition">✋</button>
+                        <button class="control-btn active" id="toggle-tooltip" title="Toggle Tooltips — show property previews on hover">💬</button>
+                        <button class="control-btn active" id="toggle-sync" title="Toggle table sync — auto-switch tab and highlight row on node click">🔗</button>
+                        <div id="layout-toggle-wrapper">
+                            <button class="control-btn" id="layout-toggle" title="Change graph layout">⊞</button>
+                            <div id="layout-menu">
+                                <button class="layout-menu-item active" data-layout="force" title="Animated force-directed layout">Force Atlas</button>
+                                <button class="layout-menu-item" data-layout="circular" title="Arrange nodes in a circle grouped by type">Circular</button>
+                                <button class="layout-menu-item" data-layout="radial" title="Hierarchical rings by entity type">Radial</button>
+                                <button class="layout-menu-item" data-layout="grid" title="Arrange nodes in a grid sorted by type">Grid</button>
+                            </div>
+                        </div>
+                        <button class="control-btn" id="stop-layout" title="Stop layout animation" style="display:none;">⏹</button>
+                        <button class="control-btn" id="info-btn" title="Show help and feature guide">ⓘ</button>
                     </div>
+
+                    <div id="ui-tooltip"></div>
 
                     <div id="drag-hint">Drag mode: Click and drag nodes to reposition them</div>
 
                     <div id="stats">
-                        <span id="node-count">0</span> nodes · <span id="edge-count">0</span> edges
+                        <span id="node-count">0</span> nodes · <span id="edge-count">0</span> edges · <span id="validation-count"></span>
                     </div>
 
                     <div id="tooltip">
@@ -834,6 +1056,13 @@
           "0000-0001-2345-6789_EPFL-ENAC/structural-analysis"
         ],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_PersonShape"
       }
     },
     {
@@ -860,13 +1089,20 @@
           "0000-0002-3456-7890_EPFL-ENAC/structural-analysis"
         ],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_PersonShape"
       }
     },
     {
       "id": "0000-0003-4567-8901",
       "label": "Jean Dupont",
-      "x": 88.16778784387098,
-      "y": 121.3525491562421,
+      "x": 88.16778784387097,
+      "y": 121.35254915624212,
       "size": 22,
       "color": "#3b82f6",
       "nodeType": "Person",
@@ -886,6 +1122,13 @@
         "owns": [
           "jdupont/geodata-toolkit"
         ]
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_PersonShape"
       }
     },
     {
@@ -911,6 +1154,13 @@
         "owns": [
           "mweber/data-pipeline"
         ]
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_PersonShape"
       }
     },
     {
@@ -932,6 +1182,13 @@
           "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit"
         ],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_PersonShape"
       }
     },
     {
@@ -964,6 +1221,13 @@
           "TypeScript"
         ],
         "ownedBy": "95372c6b-7d45-432e-a84e-660c9fa54e05"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_RepositoryShape"
       }
     },
     {
@@ -993,6 +1257,13 @@
           "Python"
         ],
         "ownedBy": "95372c6b-7d45-432e-a84e-660c9fa54e05"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_RepositoryShape"
       }
     },
     {
@@ -1023,6 +1294,13 @@
           "Python"
         ],
         "ownedBy": "mweber"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_RepositoryShape"
       }
     },
     {
@@ -1055,6 +1333,13 @@
         ],
         "ownedBy": "0000-0003-4567-8901",
         "isForkOf": "EPFL-ENAC/geodata-toolkit"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_RepositoryShape"
       }
     },
     {
@@ -1078,6 +1363,13 @@
           "EPFL-ENAC/geodata-toolkit",
           "EPFL-ENAC/structural-analysis"
         ]
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_OrganizationShape"
       }
     },
     {
@@ -1100,6 +1392,13 @@
           "95372c6b-7d45-432e-a84e-660c9fa54e05"
         ],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_OrganizationShape"
       }
     },
     {
@@ -1117,6 +1416,13 @@
         "OrganizationType": "pulse:ResearchInstitution",
         "hasUnit": [],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_OrganizationShape"
       }
     },
     {
@@ -1134,6 +1440,13 @@
         "OrganizationType": "pulse:University",
         "hasUnit": [],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_OrganizationShape"
       }
     },
     {
@@ -1152,6 +1465,13 @@
         "githubOrgFollowers": 1250,
         "hasUnit": [],
         "owns": []
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_OrganizationShape"
       }
     },
     {
@@ -1167,12 +1487,19 @@
         "organization": "https://ror.org/02s376052",
         "role": "Research Engineer",
         "hasBeginning": "2020-09-01"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
       "id": "0000-0002-3456-7890_https://ror.org/02s376052",
       "label": "02s376052",
-      "x": 183.03148938411007,
+      "x": 183.0314893841101,
       "y": -411.0954559391704,
       "size": 12,
       "color": "#a855f7",
@@ -1182,6 +1509,13 @@
         "organization": "https://ror.org/02s376052",
         "role": "Postdoctoral Researcher",
         "hasBeginning": "2022-01-15"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
@@ -1198,6 +1532,13 @@
         "role": "Software Engineer",
         "hasBeginning": "2019-03-01",
         "hasEnd": "2024-02-28"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
@@ -1213,6 +1554,13 @@
         "organization": "https://ror.org/05a28rw58",
         "role": "PhD Student",
         "hasBeginning": "2021-10-01"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
@@ -1228,6 +1576,13 @@
         "organization": "numpy",
         "role": "Contributor",
         "hasBeginning": "2023-05-10"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
@@ -1243,13 +1598,20 @@
         "organization": "https://ror.org/01ggx4157",
         "role": "Research Physicist",
         "hasBeginning": "2023-01-15"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_MembershipShape"
       }
     },
     {
       "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
       "label": "geodata-toolkit",
       "x": 264.50336353161293,
-      "y": 364.0576474687263,
+      "y": 364.0576474687264,
       "size": 14,
       "color": "#06b6d4",
       "nodeType": "Contribution",
@@ -1260,6 +1622,13 @@
         "firstContributionDate": "2023-03-15T10:30:00Z",
         "lastContributionDate": "2025-01-20T14:45:00Z",
         "author": "0000-0001-2345-6789"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1277,6 +1646,13 @@
         "firstContributionDate": "2022-05-10T09:00:00Z",
         "lastContributionDate": "2024-11-30T16:20:00Z",
         "author": "0000-0001-2345-6789"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1294,6 +1670,13 @@
         "firstContributionDate": "2023-06-01T11:30:00Z",
         "lastContributionDate": "2025-01-15T10:00:00Z",
         "author": "0000-0002-3456-7890"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1311,6 +1694,13 @@
         "firstContributionDate": "2022-01-10T08:00:00Z",
         "lastContributionDate": "2024-12-01T17:30:00Z",
         "author": "0000-0002-3456-7890"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1328,6 +1718,13 @@
         "firstContributionDate": "2024-02-01T13:00:00Z",
         "lastContributionDate": "2024-06-15T09:45:00Z",
         "author": "0000-0003-4567-8901"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1345,6 +1742,13 @@
         "firstContributionDate": "2022-03-20T10:15:00Z",
         "lastContributionDate": "2024-10-10T14:00:00Z",
         "author": "mweber"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1362,12 +1766,19 @@
         "firstContributionDate": "2024-06-20T14:15:00Z",
         "lastContributionDate": "2025-01-28T11:30:00Z",
         "author": "mweber"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
       "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
       "label": "geodata-toolkit",
-      "x": -334.4151714648273,
+      "x": -334.41517146482727,
       "y": -301.10877286148633,
       "size": 14,
       "color": "#06b6d4",
@@ -1379,6 +1790,13 @@
         "firstContributionDate": "2024-02-05T10:00:00Z",
         "lastContributionDate": "2024-08-15T16:30:00Z",
         "author": "0000-0003-4567-8901"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1396,6 +1814,13 @@
         "firstContributionDate": "2024-09-01T09:00:00Z",
         "lastContributionDate": "2025-01-10T15:20:00Z",
         "author": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ContributionShape"
       }
     },
     {
@@ -1417,6 +1842,13 @@
         ],
         "infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
         "sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ArticleShape"
       }
     },
     {
@@ -1438,6 +1870,13 @@
         ],
         "infoscienceArticleIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
         "sourceOrganization": "https://ror.org/02s376052"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ArticleShape"
       }
     },
     {
@@ -1458,6 +1897,13 @@
         ],
         "infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
         "sourceOrganization": "https://ror.org/05a28rw58"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ArticleShape"
       }
     },
     {
@@ -1478,6 +1924,13 @@
           "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
         ],
         "sourceOrganization": "https://ror.org/01ggx4157"
+      },
+      "validation": {
+        "strict": true,
+        "agent": true,
+        "strict_errors": [],
+        "agent_errors": [],
+        "shape": "pulse_ArticleShape"
       }
     }
   ],
@@ -1504,7 +1957,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0001-2345-6789",
@@ -1512,7 +1965,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0002-3456-7890",
@@ -1528,7 +1981,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0002-3456-7890",
@@ -1536,7 +1989,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0003-4567-8901",
@@ -1552,7 +2005,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0003-4567-8901",
@@ -1560,7 +2013,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "0000-0003-4567-8901",
@@ -1568,7 +2021,7 @@
       "label": "owns",
       "color": "#22c55e",
       "type": "pulse:owns",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "mweber",
@@ -1584,7 +2037,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "mweber",
@@ -1592,7 +2045,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "mweber",
@@ -1600,7 +2053,7 @@
       "label": "owns",
       "color": "#22c55e",
       "type": "pulse:owns",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
@@ -1616,7 +2069,7 @@
       "label": "has contribution",
       "color": "#06b6d4",
       "type": "pulse:hasContribution",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "EPFL-ENAC/geodata-toolkit",
@@ -1624,7 +2077,7 @@
       "label": "owned by",
       "color": "#22c55e",
       "type": "pulse:ownedBy",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "EPFL-ENAC/geodata-toolkit",
@@ -1640,7 +2093,7 @@
       "label": "owned by",
       "color": "#22c55e",
       "type": "pulse:ownedBy",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "EPFL-ENAC/structural-analysis",
@@ -1712,7 +2165,7 @@
       "label": "unit of",
       "color": "#f97316",
       "type": "org:unitOf",
-      "curvature": 0
+      "curvature": 0.3
     },
     {
       "source": "https://ror.org/02s376052",
@@ -2004,7 +2457,7 @@
     }
   ],
   "metadata": {
-    "generated": "2026-02-10T14:28:21.612707",
+    "generated": "2026-02-10T16:19:35.364102",
     "nodeCount": 33,
     "edgeCount": 65,
     "entityTypes": [
@@ -2014,7 +2467,13 @@
       "org:Membership",
       "pulse:Contribution",
       "schema:ScholarlyArticle"
-    ]
+    ],
+    "validation": {
+      "valid": 33,
+      "invalid": 0,
+      "noData": 0,
+      "total": 33
+    }
   }
 };
 
@@ -2088,6 +2547,7 @@
         let hiddenTypes = new Set();
         let layoutRunning = false;
         let tooltipsEnabled = true;
+        let tableSyncEnabled = true;
 
         // Add nodes
         GRAPH_DATA.nodes.forEach(node => {
@@ -2100,6 +2560,7 @@
                 nodeType: node.nodeType,
                 entityType: node.entityType,
                 properties: node.properties,
+                validation: node.validation,
                 originalColor: node.color,
                 originalSize: node.size,
             });
@@ -2191,6 +2652,40 @@
 
             context.fillStyle = fontColor;
             context.fillText(displayLabel, x, y + size + 5);
+
+            // Draw validation badge (top-right of node)
+            const validation = data.validation;
+            if (validation !== undefined) {
+                const badgeR = Math.max(4, size * 0.3);
+                const bx = x + size * 0.7;
+                const by = y - size * 0.7;
+                context.beginPath();
+                context.arc(bx, by, badgeR, 0, 2 * Math.PI);
+                if (validation === null) {
+                    context.fillStyle = "#94a3b8"; // gray - no data
+                } else if (validation.strict && validation.agent) {
+                    context.fillStyle = "#22c55e"; // green - all pass
+                } else {
+                    context.fillStyle = "#ef4444"; // red - failures
+                }
+                context.fill();
+                context.strokeStyle = "white";
+                context.lineWidth = 1.5;
+                context.stroke();
+
+                // Draw checkmark or X
+                context.fillStyle = "white";
+                context.font = `bold ${Math.max(6, badgeR)}px sans-serif`;
+                context.textAlign = "center";
+                context.textBaseline = "middle";
+                if (validation === null) {
+                    context.fillText("?", bx, by);
+                } else if (validation.strict && validation.agent) {
+                    context.fillText("✓", bx, by);
+                } else {
+                    context.fillText("✗", bx, by);
+                }
+            }
         }
 
         // Initialize Sigma with custom settings
@@ -2499,17 +2994,101 @@
                 sigma.refresh();
             }
 
-            // Update active button
-            document.querySelectorAll('.layout-btn').forEach(btn => {
+            // Update active menu item
+            document.querySelectorAll('.layout-menu-item').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.layout === layoutName);
             });
         }
 
-        // Layout button handlers
-        document.querySelectorAll('.layout-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+        // Layout dropdown toggle
+        const layoutMenu = document.getElementById('layout-menu');
+        const layoutToggleBtn = document.getElementById('layout-toggle');
+        const graphContainer = document.getElementById('graph-container');
+        const controlTooltip = document.getElementById('ui-tooltip');
+        const CONTROL_TOOLTIP_DELAY_MS = 250;
+        let controlTooltipTimer = null;
+        let controlTooltipTarget = null;
+
+        function hideControlTooltip() {
+            clearTimeout(controlTooltipTimer);
+            controlTooltip.classList.remove('visible');
+            controlTooltipTarget = null;
+        }
+
+        function positionControlTooltip(target) {
+            const containerRect = graphContainer.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            const tooltipWidth = controlTooltip.offsetWidth;
+            const tooltipHeight = controlTooltip.offsetHeight;
+
+            let left = targetRect.left - containerRect.left - tooltipWidth - 10;
+            if (left < 8) {
+                left = targetRect.right - containerRect.left + 10;
+            }
+
+            let top = targetRect.top - containerRect.top + (targetRect.height - tooltipHeight) / 2;
+            top = Math.max(8, Math.min(top, containerRect.height - tooltipHeight - 8));
+
+            controlTooltip.style.left = `${left}px`;
+            controlTooltip.style.top = `${top}px`;
+        }
+
+        function scheduleControlTooltip(target) {
+            const tooltipText = target.dataset.tooltip;
+            if (!tooltipText) return;
+
+            clearTimeout(controlTooltipTimer);
+            controlTooltipTimer = setTimeout(() => {
+                controlTooltip.textContent = tooltipText;
+                controlTooltip.classList.add('visible');
+                positionControlTooltip(target);
+                controlTooltipTarget = target;
+            }, CONTROL_TOOLTIP_DELAY_MS);
+        }
+
+        // Replace native browser tooltips on graph controls with a styled tooltip.
+        document.querySelectorAll('#graph-container .control-btn[title], #graph-container .layout-menu-item[title]').forEach(el => {
+            const tooltipText = el.getAttribute('title');
+            if (tooltipText) {
+                el.dataset.tooltip = tooltipText;
+                el.setAttribute('aria-label', tooltipText);
+                el.removeAttribute('title');
+            }
+        });
+
+        document.querySelectorAll('#graph-container .control-btn, #graph-container .layout-menu-item').forEach(el => {
+            el.addEventListener('mouseenter', () => scheduleControlTooltip(el));
+            el.addEventListener('mouseleave', hideControlTooltip);
+            el.addEventListener('focus', () => scheduleControlTooltip(el));
+            el.addEventListener('blur', hideControlTooltip);
+            el.addEventListener('click', hideControlTooltip);
+        });
+
+        window.addEventListener('resize', () => {
+            if (controlTooltip.classList.contains('visible') && controlTooltipTarget) {
+                positionControlTooltip(controlTooltipTarget);
+            }
+        });
+
+        layoutToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideControlTooltip();
+            layoutMenu.classList.toggle('visible');
+        });
+
+        // Layout menu item handlers
+        document.querySelectorAll('.layout-menu-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 applyLayout(btn.dataset.layout);
+                layoutMenu.classList.remove('visible');
             });
+        });
+
+        // Close layout menu when clicking elsewhere
+        document.addEventListener('click', () => {
+            hideControlTooltip();
+            layoutMenu.classList.remove('visible');
         });
 
         // Run initial layout
@@ -2542,6 +3121,13 @@
             if (!tooltipsEnabled) {
                 tooltip.classList.remove('visible');
             }
+        });
+
+        // Toggle table sync
+        const toggleSyncBtn = document.getElementById('toggle-sync');
+        toggleSyncBtn.addEventListener('click', () => {
+            tableSyncEnabled = !tableSyncEnabled;
+            toggleSyncBtn.classList.toggle('active', tableSyncEnabled);
         });
 
         // Drag start
@@ -2593,6 +3179,16 @@
         // Update stats
         document.getElementById("node-count").textContent = graph.order;
         document.getElementById("edge-count").textContent = graph.size;
+
+        // Update validation count in stats
+        const valStats = GRAPH_DATA.metadata.validation || {};
+        if (valStats.total > 0) {
+            const valSpan = document.getElementById("validation-count");
+            const allValid = valStats.invalid === 0;
+            valSpan.style.color = allValid ? "#22c55e" : "#ef4444";
+            valSpan.style.fontWeight = "600";
+            valSpan.textContent = `${valStats.valid}/${valStats.total} valid`;
+        }
 
         // Build filters
         const filtersContainer = document.getElementById("filters");
@@ -2875,6 +3471,36 @@
             const propsDiv = document.getElementById("node-properties");
             propsDiv.innerHTML = "";
 
+            // Validation section
+            if (attrs.validation) {
+                const v = attrs.validation;
+                const strictOk = v.strict;
+                const agentOk = v.agent;
+                const allOk = strictOk && agentOk;
+                const valDiv = document.createElement("div");
+                valDiv.style.cssText = `padding: 10px; margin-bottom: 12px; border-radius: 8px; background: ${allOk ? "#f0fdf4" : "#fef2f2"}; border: 1px solid ${allOk ? "#bbf7d0" : "#fecaca"};`;
+                let valHtml = `<div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; color: ${allOk ? "#166534" : "#991b1b"};">${allOk ? "✓ Validation Passed" : "✗ Validation Failed"}</div>`;
+                valHtml += `<div style="font-size: 12px;"><span style="color: ${strictOk ? "#22c55e" : "#ef4444"};">Strict: ${strictOk ? "Pass" : "Fail"}</span> · <span style="color: ${agentOk ? "#22c55e" : "#ef4444"};">Agent: ${agentOk ? "Pass" : "Fail"}</span></div>`;
+                if (v.shape) {
+                    valHtml += `<div style="font-size: 11px; color: #64748b; margin-top: 4px;">Shape: ${v.shape}</div>`;
+                }
+                const allErrors = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                if (allErrors.length > 0) {
+                    valHtml += `<div style="font-size: 12px; color: #991b1b; margin-top: 8px; font-weight: 500;">Errors (${allErrors.length}):</div>`;
+                    allErrors.forEach(err => {
+                        const msg = typeof err === "string" ? err : (err.message || JSON.stringify(err));
+                        valHtml += `<div style="font-size: 11px; color: #991b1b; padding: 2px 0;">&bull; ${msg}</div>`;
+                    });
+                }
+                valDiv.innerHTML = valHtml;
+                propsDiv.appendChild(valDiv);
+            } else if (attrs.validation === null) {
+                const valDiv = document.createElement("div");
+                valDiv.style.cssText = "padding: 10px; margin-bottom: 12px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;";
+                valDiv.innerHTML = '<div style="font-size: 12px; color: #94a3b8;">No validation data available</div>';
+                propsDiv.appendChild(valDiv);
+            }
+
             // Add ID
             addPropertyItem(propsDiv, "ID", nodeId);
 
@@ -2915,7 +3541,16 @@
         // Sigma event handlers
         sigma.on("clickNode", ({ node }) => {
             selectNode(node);
-            highlightTableRow(node);
+
+            // Auto-expand data panel, switch tab, and highlight row (if sync enabled)
+            if (tableSyncEnabled) {
+                const nodeType = graph.getNodeAttribute(node, "nodeType");
+                if (dataPanel.classList.contains("collapsed")) {
+                    dataPanel.classList.remove("collapsed");
+                }
+                switchTab(nodeType);
+                highlightTableRow(node);
+            }
         });
 
         sigma.on("clickStage", () => {
@@ -2947,6 +3582,26 @@
 
                 // Build properties HTML
                 let propsHtml = "";
+
+                // Validation status line
+                if (attrs.validation) {
+                    const v = attrs.validation;
+                    const strictIcon = v.strict ? "✓" : "✗";
+                    const agentIcon = v.agent ? "✓" : "✗";
+                    const strictColor = v.strict ? "#22c55e" : "#ef4444";
+                    const agentColor = v.agent ? "#22c55e" : "#ef4444";
+                    propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key">Validation:</span><span class="tooltip-prop-value"><span style="color:${strictColor}">Strict ${strictIcon}</span> · <span style="color:${agentColor}">Agent ${agentIcon}</span></span></div>`;
+                    const allErrors = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                    if (allErrors.length > 0) {
+                        allErrors.slice(0, 3).forEach(err => {
+                            const msg = typeof err === "string" ? err : (err.message || JSON.stringify(err));
+                            propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key" style="color:#ef4444">Error:</span><span class="tooltip-prop-value" style="color:#ef4444">${msg.slice(0, 60)}</span></div>`;
+                        });
+                    }
+                } else if (attrs.validation === null) {
+                    propsHtml += `<div class="tooltip-prop"><span class="tooltip-prop-key">Validation:</span><span class="tooltip-prop-value" style="color:#94a3b8">No data</span></div>`;
+                }
+
                 if (attrs.properties) {
                     const propEntries = Object.entries(attrs.properties)
                         .filter(([key]) => !hiddenProps.has(key))
@@ -3110,6 +3765,61 @@
             if (!firstTab) firstTab = type;
         });
 
+        // Add Validation tab
+        const valMeta = GRAPH_DATA.metadata.validation || {};
+        if (valMeta.total > 0) {
+            const valTab = document.createElement("div");
+            valTab.className = "data-tab";
+            valTab.dataset.type = "__validation__";
+            const allValid = valMeta.invalid === 0;
+            valTab.innerHTML = `
+                <span class="data-tab-dot" style="background: ${allValid ? '#22c55e' : '#ef4444'}"></span>
+                <span>Validation</span>
+                <span class="data-tab-count">${valMeta.valid}/${valMeta.total}</span>
+            `;
+            valTab.addEventListener("click", () => switchTab("__validation__"));
+            dataPanelTabs.appendChild(valTab);
+        }
+
+        // Build validation table
+        function buildValidationTable() {
+            let html = '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
+            html += '<th>Entity</th><th>Type</th><th>Shape</th><th>Strict</th><th>Agent</th><th>Errors</th>';
+            html += '</tr></thead><tbody>';
+
+            GRAPH_DATA.nodes.forEach(node => {
+                const v = node.validation;
+                const strictOk = v ? v.strict : null;
+                const agentOk = v ? v.agent : null;
+                const errCount = v ? (v.strict_errors || []).length + (v.agent_errors || []).length : 0;
+                const rowBg = v === null ? "" : (strictOk && agentOk ? 'style="background: #f0fdf430;"' : 'style="background: #fef2f230;"');
+
+                html += `<tr data-node-id="${node.id}" ${rowBg}>`;
+                html += `<td title="${node.id}">${node.label}</td>`;
+                html += `<td>${node.nodeType}</td>`;
+                html += `<td>${v ? v.shape : "-"}</td>`;
+
+                if (v === null) {
+                    html += '<td style="color:#94a3b8">-</td><td style="color:#94a3b8">-</td><td>-</td>';
+                } else {
+                    html += `<td style="color:${strictOk ? '#22c55e' : '#ef4444'}; font-weight:600;">${strictOk ? "Pass" : "Fail"}</td>`;
+                    html += `<td style="color:${agentOk ? '#22c55e' : '#ef4444'}; font-weight:600;">${agentOk ? "Pass" : "Fail"}</td>`;
+                    if (errCount > 0) {
+                        const allErrs = [...(v.strict_errors || []), ...(v.agent_errors || [])];
+                        const firstErr = allErrs[0];
+                        const msg = typeof firstErr === "string" ? firstErr : (firstErr.message || JSON.stringify(firstErr));
+                        html += `<td style="color:#ef4444" title="${msg.replace(/"/g, '&quot;')}">${errCount} error${errCount > 1 ? "s" : ""}</td>`;
+                    } else {
+                        html += '<td style="color:#22c55e">None</td>';
+                    }
+                }
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            return html;
+        }
+
         // Build table for a type
         function buildTable(type) {
             const nodes = nodesByType[type] || [];
@@ -3164,7 +3874,7 @@
             document.querySelectorAll(".data-tab").forEach(tab => {
                 tab.classList.toggle("active", tab.dataset.type === type);
             });
-            dataPanelContent.innerHTML = buildTable(type);
+            dataPanelContent.innerHTML = type === "__validation__" ? buildValidationTable() : buildTable(type);
 
             // Add click handlers to table rows
             document.querySelectorAll(".data-table tr[data-node-id]").forEach(row => {
@@ -3198,6 +3908,32 @@
 
         // Initialize first tab
         if (firstTab) switchTab(firstTab);
+
+        // Info modal
+        const infoOverlay = document.getElementById('info-modal-overlay');
+        const infoCloseBtn = document.getElementById('info-close-btn');
+        const infoDismissBtn = document.getElementById('info-dismiss-btn');
+        const infoBtn = document.getElementById('info-btn');
+
+        function closeInfoModal() {
+            infoOverlay.classList.add('hidden');
+        }
+
+        function openInfoModal() {
+            infoOverlay.classList.remove('hidden');
+        }
+
+        infoCloseBtn.addEventListener('click', closeInfoModal);
+        infoDismissBtn.addEventListener('click', closeInfoModal);
+        infoOverlay.addEventListener('click', (e) => {
+            if (e.target === infoOverlay) closeInfoModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !infoOverlay.classList.contains('hidden')) {
+                closeInfoModal();
+            }
+        });
+        infoBtn.addEventListener('click', openInfoModal);
     </script>
 </body>
 </html>
