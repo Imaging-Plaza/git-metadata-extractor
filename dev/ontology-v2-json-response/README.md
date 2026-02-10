@@ -155,6 +155,9 @@ python scripts/visualize_jsonld.py
 | **Entity Type Filters** | Toggle visibility of different entity types (Person, Repository, etc.) |
 | **Search** | Search nodes by name or identifier |
 | **Node Details Panel** | Click a node to see full details in the sidebar |
+| **JSON-LD Editor Panel** | Collapsible editor between sidebar and graph (collapsed by default) for direct JSON-LD editing |
+| **Node-to-Source Jump** | From Node Details, use **Edit in JSON-LD** to open the editor and highlight the node block plus all reference lines |
+| **Apply + Download** | Apply edited JSON-LD to rebuild graph/tables in-browser and download edited JSON-LD as a file |
 | **Data Tables** | Collapsible panel with tabbed tables for each entity type |
 | **Collapsible Sidebar** | Toggle button to collapse/expand the sidebar for more graph space |
 | **Collapsible Sections** | Each sidebar section (filters, legend, details) can be collapsed |
@@ -172,7 +175,10 @@ python scripts/visualize_jsonld.py
 3. Use filters to show/hide entity types
 4. Hover nodes for property details, click for full details
 5. Toggle drag mode to manually arrange nodes
-6. Use the sidebar toggle (◀) to maximize graph space
+6. Open **Edit JSON-LD** to inspect or edit source JSON-LD, then click **Apply** to rebuild
+7. Click **Edit in JSON-LD** from Node Details to jump to highlighted node-related lines
+8. Use **Download** in the editor to export the edited JSON-LD file
+9. Use the sidebar toggle (◀) to maximize graph space
 
 **Serve locally:**
 
