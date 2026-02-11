@@ -88,6 +88,50 @@ The mock data is organized into separate JSON files, one per SHACL shape. Each f
 | `pulse:ContributionShape.json` | 9 | Person-repository contribution records |
 | `pulse:ArticleShape.json` | 4 | Scholarly articles with DOI/Infoscience IDs |
 
+##### Mock Data Generator
+
+Generates cross-reference-consistent mock datasets for all 6 entity shapes. Every reference points to a valid entity, composite IDs are correctly formed, and bidirectional relationships (`owns` / `ownedBy`) are consistent.
+
+```bash
+cd dev/ontology-v2-json-response
+
+# Default: 6 persons, 4 repos, 4+2 orgs, 3 articles -> a-002/
+python scripts/generate_mockup.py
+
+# Custom counts and output directory
+python scripts/generate_mockup.py --persons 10 --repos 6 --orgs 8 \
+    --github-orgs 3 --articles 4 --output a-003
+
+# Reproducible with a fixed seed
+python scripts/generate_mockup.py --seed 42
+
+# Include boundary-value edge cases (UUID-only person, zero-count
+# contribution, fork repo with no DOI/license, etc.)
+python scripts/generate_mockup.py --seed 42 --edge-cases --output a-003
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--persons` | 6 | Number of Person entities |
+| `--repos` | 4 | Number of Repository entities |
+| `--orgs` | 4 | Number of institutional Organizations (with ROR) |
+| `--github-orgs` | 2 | Number of GitHub-based Organizations |
+| `--articles` | 3 | Number of Article entities |
+| `--output` | `a-002` | Output directory name |
+| `--seed` | random | Random seed for reproducibility |
+| `--edge-cases` | off | Append one boundary-value entity per shape |
+
+**Edge cases** (when `--edge-cases` is set):
+
+| Shape | Scenario |
+|-------|----------|
+| PersonShape | UUID-only (no ORCID, GitHub, or Infoscience ID) |
+| OrganizationShape | GitHub-only org, zero followers |
+| RepositoryShape | Fork, zero stars/forks, no DOI/license, empty arrays |
+| MembershipShape | No role, no dates |
+| ContributionShape | Zero contribution count, no dates |
+| ArticleShape | No Infoscience ID, no source org, single author |
+
 ##### Validation Scripts
 
 Two validation scripts are provided in the `scripts/` folder to ensure data quality and consistency.

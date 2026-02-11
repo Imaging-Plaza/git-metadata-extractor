@@ -767,6 +767,168 @@ def generate_articles(
 
 
 # ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+def generate_edge_cases(
+    persons: list[dict],
+    repos: list[dict],
+    orgs: list[dict],
+) -> dict[str, list[dict]]:
+    """Generate one boundary-value edge-case entity per shape.
+
+    Returns a dict keyed by shape name with lists of extra entities to append.
+    Also mutates the edge-case person's cross-reference arrays.
+    """
+
+    # --- PersonShape: UUID-only (no ORCID, no GitHub, no infoscience) ---
+    person_uuid = make_uuid4()
+    edge_person = {
+        "id": person_uuid,
+        "type": "schema:Person",
+        "shacl": "pulse:PersonShape",
+        "identifiers": {
+            "pulse:orcid": None,
+            "pulse:infosciencePersonIdentifier": None,
+            "pulse:githubUsername": None,
+            "uuid": person_uuid,
+        },
+        "idSource": "uuid",
+        "schema:name": "Edge Case Person",
+        "schema:email": "edge.case@example.org",
+        "schema:url": None,
+        "pulse:githubUsername": None,
+        "pulse:orcidIdentifier": None,
+        "pulse:infosciencePersonIdentifier": None,
+        "org:hasMembership": [],
+        "pulse:hasContribution": [],
+        "pulse:owns": [],
+    }
+
+    # --- OrganizationShape: GitHub-only, zero followers ---
+    edge_org_handle = "edge-case-org"
+    edge_org = {
+        "id": edge_org_handle,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            "pulse:ror": None,
+            "pulse:infoscienceOrganizationIdentifier": None,
+            "pulse:githubOrganizationHandle": edge_org_handle,
+            "uuid": make_uuid4(),
+        },
+        "idSource": "pulse:githubOrganizationHandle",
+        "schema:name": "Edge Case Org",
+        "schema:identifier": None,
+        "pulse:githubOrganizationHandle": edge_org_handle,
+        "pulse:infoscienceOrganizationIdentifier": None,
+        "pulse:OrganizationType": "pulse:SoftwareProject",
+        "pulse:githubOrgFollowers": 0,
+        "org:hasUnit": [],
+        "org:unitOf": None,
+        "pulse:owns": [],
+    }
+
+    # --- RepositoryShape: fork, zero stars/forks, no DOI/license, empty arrays ---
+    fork_parent = repos[0]["id"] if repos else "unknown/repo"
+    edge_repo_handle = f"{edge_person['identifiers']['uuid'][:8]}/edge-fork"
+    # Use person ownership (not org)
+    edge_person["pulse:owns"].append(edge_repo_handle)
+
+    edge_repo = {
+        "id": edge_repo_handle,
+        "type": "schema:SoftwareSourceCode",
+        "shacl": "pulse:RepositoryShape",
+        "identifiers": {
+            "pulse:githubRepositoryHandle": edge_repo_handle,
+            "schema:identifier": None,
+            "uuid": make_uuid4(),
+        },
+        "idSource": "pulse:githubRepositoryHandle",
+        "schema:name": "Edge Fork",
+        "pulse:githubRepositoryHandle": edge_repo_handle,
+        "pulse:repositoryType": "pulse:Software",
+        "pulse:discipline": [],
+        "schema:author": [edge_person["id"]],
+        "pulse:githubRepoStars": 0,
+        "pulse:githubRepoForks": 0,
+        "schema:dateCreated": None,
+        "schema:license": None,
+        "schema:citation": None,
+        "schema:programmingLanguage": [],
+        "pulse:ownedBy": edge_person["id"],
+        "pulse:isForkOf": fork_parent,
+    }
+
+    # --- MembershipShape: no role, no dates ---
+    membership_composite = f"{edge_person['id']}_{edge_org['id']}"
+    edge_membership = {
+        "id": membership_composite,
+        "type": "org:Membership",
+        "shacl": "pulse:MembershipShape",
+        "identifiers": {
+            "pulse:composite": membership_composite,
+            "uuid": make_uuid4(),
+        },
+        "idSource": "pulse:composite",
+        "org:organization": edge_org["id"],
+        "org:role": None,
+        "time:hasBeginning": None,
+        "time:hasEnd": None,
+    }
+    edge_person["org:hasMembership"].append(membership_composite)
+
+    # --- ContributionShape: zero count, no dates ---
+    contrib_composite = f"{edge_person['id']}_{edge_repo['id']}"
+    edge_contribution = {
+        "id": contrib_composite,
+        "type": "pulse:Contribution",
+        "shacl": "pulse:ContributionShape",
+        "identifiers": {
+            "pulse:composite": contrib_composite,
+            "uuid": make_uuid4(),
+        },
+        "idSource": "pulse:composite",
+        "pulse:contributionTo": edge_repo["id"],
+        "pulse:contributionCount": 0,
+        "pulse:firstContributionDate": None,
+        "pulse:lastContributionDate": None,
+        "schema:author": edge_person["id"],
+    }
+    edge_person["pulse:hasContribution"].append(contrib_composite)
+
+    # --- ArticleShape: no infoscience, no source org, single author ---
+    edge_doi = "10.5281/edge00000001"
+    edge_article = {
+        "id": edge_doi,
+        "type": "schema:ScholarlyArticle",
+        "shacl": "pulse:ArticleShape",
+        "identifiers": {
+            "schema:identifier": edge_doi,
+            "pulse:infoscienceArticleIdentifier": None,
+            "uuid": make_uuid4(),
+        },
+        "idSource": "schema:identifier",
+        "schema:name": "Edge Case: Boundary Value Testing in Ontology Schemas",
+        "schema:identifier": edge_doi,
+        "schema:datePublished": "2025-01-01",
+        "schema:author": [edge_person["id"]],
+        "pulse:infoscienceArticleIdentifier": None,
+        "schema:sourceOrganization": None,
+    }
+
+    return {
+        "persons": [edge_person],
+        "repos": [edge_repo],
+        "orgs": [edge_org],
+        "memberships": [edge_membership],
+        "contributions": [edge_contribution],
+        "articles": [edge_article],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -817,6 +979,13 @@ def main():
         default=None,
         help="Random seed for reproducibility",
     )
+    parser.add_argument(
+        "--edge-cases",
+        action="store_true",
+        default=False,
+        help="Append boundary-value edge-case entities (UUID-only person, "
+        "zero-count contribution, fork repo, etc.)",
+    )
 
     args = parser.parse_args()
     rng = random.Random(args.seed)
@@ -855,6 +1024,18 @@ def main():
     print("6. Generating articles...")
     articles = generate_articles(args.articles, persons, orgs, rng)
     print(f"   {len(articles)} articles")
+
+    if args.edge_cases:
+        print("\n7. Generating edge-case entities...")
+        edge = generate_edge_cases(persons, repos, orgs)
+        persons.extend(edge["persons"])
+        repos.extend(edge["repos"])
+        orgs.extend(edge["orgs"])
+        memberships.extend(edge["memberships"])
+        contributions.extend(edge["contributions"])
+        articles.extend(edge["articles"])
+        edge_total = sum(len(v) for v in edge.values())
+        print(f"   {edge_total} edge-case entities added")
 
     # Write output files
     shape_data = {
