@@ -18,6 +18,7 @@ from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..context import prepare_repository_context
 from ..data_models import Affiliation, Organization, SoftwareSourceCode
 from ..gimie_utils.gimie_methods import extract_gimie
+from ..utils.url_validation import normalize_orcid_id
 from ..utils.utils import enrich_authors_with_orcid
 
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +56,29 @@ class Repository:
             logger.error(
                 f"Cannot process repository: {full_path} is not public or not accessible",
             )
+
+    @staticmethod
+    def _normalize_orcid(orcid_value):
+        """Normalize ORCID to canonical ID format, dropping invalid values."""
+        return normalize_orcid_id(orcid_value)
+
+    @classmethod
+    def _sanitize_person_payload(cls, payload: dict, context: str) -> dict:
+        """Sanitize a Person payload dict before Person model validation."""
+        if not isinstance(payload, dict):
+            return payload
+
+        sanitized_payload = payload.copy()
+        if "orcid" in sanitized_payload:
+            original_orcid = sanitized_payload.get("orcid")
+            normalized_orcid = cls._normalize_orcid(original_orcid)
+            if original_orcid and normalized_orcid is None:
+                logger.warning(
+                    f"Dropping invalid ORCID in {context}: {original_orcid}",
+                )
+            sanitized_payload["orcid"] = normalized_orcid
+
+        return sanitized_payload
 
     def run_gimie_analysis(self):
         def fetch_gimie_data():
@@ -809,7 +833,13 @@ class Repository:
                 or entity.get("md4i:orcidId"),
             )
             if orcid:
-                person_data["orcid"] = orcid
+                normalized_orcid = self._normalize_orcid(orcid)
+                if normalized_orcid:
+                    person_data["orcid"] = normalized_orcid
+                else:
+                    logger.warning(
+                        f"Dropping invalid ORCID extracted from GIMIE for {person_data.get('name')}: {orcid}",
+                    )
 
             # Extract affiliations and resolve them
             affiliations_raw = entity.get(
@@ -989,7 +1019,13 @@ class Repository:
 
             # ORCIDs - prefer full URLs
             if person.orcid:
-                all_orcids.append(person.orcid)
+                normalized_orcid = self._normalize_orcid(person.orcid)
+                if normalized_orcid:
+                    all_orcids.append(normalized_orcid)
+                else:
+                    logger.warning(
+                        f"Dropping invalid ORCID while merging duplicate author {person.name}: {person.orcid}",
+                    )
 
             # Affiliations
             if person.affiliations:
@@ -1060,21 +1096,8 @@ class Repository:
             {email.lower(): email for email in all_emails if email}.values(),
         )
 
-        # ORCID: Always store as ID format (xxxx-xxxx-xxxx-xxxx), not URL
-        merged_orcid = None
-        for orcid in all_orcids:
-            if not orcid:
-                continue
-            # Extract ID from URL if it's a URL
-            if orcid.startswith("https://orcid.org/"):
-                orcid_id = orcid.replace("https://orcid.org/", "")
-                if orcid_id:
-                    merged_orcid = orcid_id
-                    break
-            else:
-                # Already in ID format
-                merged_orcid = orcid
-                break
+        # ORCID: Keep canonical ID format (xxxx-xxxx-xxxx-xxxx)
+        merged_orcid = all_orcids[0] if all_orcids else None
 
         # Affiliations: Deduplicate by name (case-insensitive)
         # Keep the one with the most information (non-empty organizationId preferred)
@@ -1287,10 +1310,19 @@ class Repository:
             if not isinstance(model_dict, dict):
                 return model_dict
 
+            cleaned_dict = model_dict.copy()
+
+            # Normalize ORCID for Person payloads to avoid hard validation failures.
+            if getattr(model_type, "__name__", "") == "Person":
+                cleaned_dict = self._sanitize_person_payload(
+                    cleaned_dict,
+                    "union reconciliation",
+                )
+
             # Check if model_type has model_fields
             if hasattr(model_type, "model_fields"):
                 for field_name, field_info in model_type.model_fields.items():
-                    if field_name in model_dict and model_dict[field_name] is None:
+                    if field_name in cleaned_dict and cleaned_dict[field_name] is None:
                         # Check if field has default_factory and it's callable
                         if (
                             hasattr(field_info, "default_factory")
@@ -1299,8 +1331,8 @@ class Repository:
                             and callable(field_info.default_factory)
                         ):
                             # Convert None to empty value from default_factory
-                            model_dict[field_name] = field_info.default_factory()
-            return model_dict
+                            cleaned_dict[field_name] = field_info.default_factory()
+            return cleaned_dict
 
         # Handle Union fields first
         for original_field, union_info_list in union_metadata.items():
@@ -1328,7 +1360,14 @@ class Repository:
                                 if isinstance(value, dict):
                                     # Clean None values before instantiation
                                     value = clean_model_dict(value, target_type)
-                                    reconciled_values.append(target_type(**value))
+                                    try:
+                                        reconciled_values.append(target_type(**value))
+                                    except Exception as e:
+                                        logger.warning(
+                                            f"Failed to instantiate {target_type.__name__} during union reconciliation: {e}",
+                                        )
+                                        # Keep raw dict so a single bad record does not abort the full request.
+                                        reconciled_values.append(value)
                                 else:
                                     reconciled_values.append(
                                         value,
@@ -1380,7 +1419,13 @@ class Repository:
 
                 # Add ORCID if available
                 if gimie_author.get("orcid"):
-                    person_data["orcid"] = gimie_author["orcid"]
+                    normalized_orcid = self._normalize_orcid(gimie_author["orcid"])
+                    if normalized_orcid:
+                        person_data["orcid"] = normalized_orcid
+                    else:
+                        logger.warning(
+                            f"Dropping invalid ORCID from GIMIE author {gimie_author.get('name')}: {gimie_author.get('orcid')}",
+                        )
 
                 # Add identifier if available
                 if gimie_author.get("identifier"):
@@ -1451,6 +1496,10 @@ class Repository:
                     person_data["affiliations"] = affiliations
 
                 try:
+                    person_data = self._sanitize_person_payload(
+                        person_data,
+                        "GIMIE author conversion",
+                    )
                     new_person = Person(**person_data)
                     gimie_authors.append(new_person)
                     logger.debug(
@@ -1473,6 +1522,10 @@ class Repository:
                     try:
                         # Clean None values before creating Person
                         author = clean_model_dict(author, Person)
+                        author = self._sanitize_person_payload(
+                            author,
+                            "existing author conversion",
+                        )
                         existing_person_objects.append(Person(**author))
                     except Exception as e:
                         logger.warning(f"Failed to convert author dict to Person: {e}")
@@ -1491,7 +1544,7 @@ class Repository:
                 if isinstance(author, Person):
                     name = author.name.lower() if author.name else None
                     author_id = author.id if author.id else None
-                    orcid = author.orcid if author.orcid else None
+                    orcid = self._normalize_orcid(author.orcid) if author.orcid else None
 
                     if name:
                         existing_by_name[name] = idx
@@ -1504,7 +1557,7 @@ class Repository:
                         author.get("name", "").lower() if author.get("name") else None
                     )
                     author_id = author.get("id")
-                    orcid = author.get("orcid")
+                    orcid = self._normalize_orcid(author.get("orcid"))
 
                     if name:
                         existing_by_name[name] = idx
@@ -1520,7 +1573,11 @@ class Repository:
             for gimie_author in gimie_authors:
                 author_name = gimie_author.name.lower() if gimie_author.name else None
                 author_id = gimie_author.id if gimie_author.id else None
-                author_orcid = gimie_author.orcid if gimie_author.orcid else None
+                author_orcid = (
+                    self._normalize_orcid(gimie_author.orcid)
+                    if gimie_author.orcid
+                    else None
+                )
 
                 # Try to find matching existing author by ORCID (most reliable), then ID, then name
                 matched_idx = None
@@ -1558,8 +1615,10 @@ class Repository:
 
                         # Update ORCID if missing
                         if not updated_data.get("orcid") and gimie_author.orcid:
-                            updated_data["orcid"] = gimie_author.orcid
-                            updated = True
+                            normalized_orcid = self._normalize_orcid(gimie_author.orcid)
+                            if normalized_orcid:
+                                updated_data["orcid"] = normalized_orcid
+                                updated = True
 
                         # Merge affiliations
                         if gimie_author.affiliations:
@@ -1587,6 +1646,10 @@ class Repository:
 
                         if updated:
                             try:
+                                updated_data = self._sanitize_person_payload(
+                                    updated_data,
+                                    "merged author update",
+                                )
                                 merged_authors[matched_idx] = Person(**updated_data)
                             except Exception as e:
                                 logger.warning(f"Failed to update Person object: {e}")
@@ -1607,8 +1670,10 @@ class Repository:
                             existing_author["githubId"] = gimie_author.githubId
                             updated = True
                         if not existing_author.get("orcid") and gimie_author.orcid:
-                            existing_author["orcid"] = gimie_author.orcid
-                            updated = True
+                            normalized_orcid = self._normalize_orcid(gimie_author.orcid)
+                            if normalized_orcid:
+                                existing_author["orcid"] = normalized_orcid
+                                updated = True
                         # Merge affiliations
                         if gimie_author.affiliations:
                             existing_affs = existing_author.get("affiliations", [])
@@ -1646,6 +1711,10 @@ class Repository:
                     final_authors.append(author)
                 elif isinstance(author, dict):
                     try:
+                        author = self._sanitize_person_payload(
+                            author,
+                            "final merged author conversion",
+                        )
                         final_authors.append(Person(**author))
                     except Exception as e:
                         logger.warning(

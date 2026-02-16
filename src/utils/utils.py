@@ -12,6 +12,7 @@ from pyld import jsonld
 
 from ..data_models import Affiliation, Person, SoftwareSourceCode
 from ..parsers.users_parser import GitHubUsersParser
+from .url_validation import normalize_orcid_id, normalize_orcid_url
 
 logger = logging.getLogger(__name__)
 
@@ -250,17 +251,7 @@ def extract_orcid_id(orcid_url: str) -> Optional[str]:
         >>> extract_orcid_id("0000-0002-1126-1535")
         '0000-0002-1126-1535'
     """
-    if not orcid_url:
-        return None
-
-    # If it's already just the ID format, return it
-    orcid_pattern = r"\b(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\b"
-    match = re.search(orcid_pattern, str(orcid_url))
-
-    if match:
-        return match.group(1)
-
-    return None
+    return normalize_orcid_id(orcid_url)
 
 
 def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
@@ -279,25 +270,10 @@ def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
         >>> normalize_orcid_to_url("https://orcid.org/0000-0002-1126-1535")
         'https://orcid.org/0000-0002-1126-1535'
     """
-    if not orcid_input:
-        return None
-
-    # If it's already a URL, validate and return
-    if orcid_input.startswith("http"):
-        orcid_url_pattern = r"^https://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])$"
-        match = re.match(orcid_url_pattern, orcid_input)
-        if match:
-            return orcid_input
-        logger.warning(f"Invalid ORCID URL format: {orcid_input}")
-        return None
-
-    # If it's an ID, validate and convert to URL
-    orcid_id_pattern = r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$"
-    if re.match(orcid_id_pattern, orcid_input):
-        return f"https://orcid.org/{orcid_input}"
-
-    logger.warning(f"Invalid ORCID format: {orcid_input}")
-    return None
+    normalized = normalize_orcid_url(orcid_input)
+    if not normalized:
+        logger.warning(f"Invalid ORCID format: {orcid_input}")
+    return normalized
 
 
 def get_orcid_affiliations(orcid_id: str) -> List[Affiliation]:
