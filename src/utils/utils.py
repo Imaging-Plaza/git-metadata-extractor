@@ -1,12 +1,85 @@
-import json
-import requests
-from pyld import jsonld
-from rdflib import Graph
 import ast
+import inspect
+import json
 import logging
-from pprint import pprint
+import os
+import re
+from typing import List, Optional, Union, get_args, get_origin
+
+import requests
+from pydantic import BaseModel, HttpUrl, create_model
+from pyld import jsonld
+
+from ..data_models import Affiliation, Person, SoftwareSourceCode
+from ..parsers.users_parser import GitHubUsersParser
+from .url_validation import normalize_orcid_id, normalize_orcid_url
 
 logger = logging.getLogger(__name__)
+
+
+def is_github_repo_public(repo_url: str) -> bool:
+    """
+    Check if a GitHub repository is public by making a request to the GitHub API.
+
+    Args:
+        repo_url: The GitHub repository URL (e.g., 'https://github.com/owner/repo')
+
+    Returns:
+        bool: True if the repository is public, False otherwise
+    """
+    # Extract owner and repo name from the URL
+    match = re.match(
+        r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$",
+        repo_url.strip(),
+    )
+    if not match:
+        logger.error(f"Invalid GitHub URL format: {repo_url}")
+        return False
+
+    owner, repo = match.groups()
+    api_url = f"https://api.github.com/repos/{owner}/{repo}"
+
+    # Use GitHub token if available for higher rate limits
+    headers = {}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
+
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            repo_data = response.json()
+            is_private = repo_data.get("private", True)
+            if is_private:
+                logger.warning(f"Repository {repo_url} is private")
+                return False
+            logger.info(f"Repository {repo_url} is public")
+            return True
+        if response.status_code == 404:
+            logger.error(f"Repository not found or not accessible: {repo_url}")
+            return False
+        if response.status_code == 403:
+            # Check if it's a rate limit issue
+            rate_limit_remaining = response.headers.get(
+                "X-RateLimit-Remaining",
+                "unknown",
+            )
+            rate_limit_reset = response.headers.get("X-RateLimit-Reset", "unknown")
+            logger.error(
+                f"GitHub API rate limit or access issue for {repo_url}. "
+                f"Rate limit remaining: {rate_limit_remaining}, reset at: {rate_limit_reset}",
+            )
+            return False
+        logger.error(
+            f"GitHub API returned status {response.status_code} for {repo_url}",
+        )
+        return False
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to check repository visibility: {e}")
+        return False
+
 
 def fetch_jsonld(url):
     """Fetch JSON-LD data from a given URL."""
@@ -14,9 +87,11 @@ def fetch_jsonld(url):
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return ast.literal_eval(response.json().get("output", "{}"))
-    else:
-        raise Exception(f"Error fetching data: {response.status_code} - {response.text}")
-    
+    raise Exception(
+        f"Error fetching data: {response.status_code} - {response.text}",
+    )
+
+
 def clean_json_string(raw_text):
     """Remove triple backticks and 'json' from the response."""
     if raw_text.startswith("```json"):
@@ -26,7 +101,8 @@ def clean_json_string(raw_text):
 
     return raw_text.strip()
 
-def json_to_jsonLD(json_data, file_path): 
+
+def json_to_jsonLD(json_data, file_path):
     """Convert json to jsonLD using context file. Returns a jsonLD dictionary"""
     with open(file_path) as context:
         context_data = json.load(context)
@@ -34,6 +110,7 @@ def json_to_jsonLD(json_data, file_path):
     expanded_data = jsonld.expand({**context_data, **json_data})
 
     return expanded_data[0]
+
 
 def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
     """Merge a GIMIE JSON-LD graph (list of nodes) with a flat LLM JSON-LD object,
@@ -43,10 +120,13 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
 
     # Identify the SoftwareSourceCode node in GIMIE
 
-
     software_node = next(
-        (node for node in gimie_graph if "http://schema.org/SoftwareSourceCode" in node.get("@type", [])),
-        None
+        (
+            node
+            for node in gimie_graph
+            if "http://schema.org/SoftwareSourceCode" in node.get("@type", [])
+        ),
+        None,
     )
 
     if software_node is None:
@@ -59,15 +139,14 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
             software_node[key] = value
             added_fields.append(key)
 
-    logger.info(f"Merged {len(added_fields)} fields from LLM into SoftwareSourceCode node.")
+    logger.info(
+        f"Merged {len(added_fields)} fields from LLM into SoftwareSourceCode node.",
+    )
     if added_fields:
         logger.debug(f"Fields added: {added_fields}")
 
     # Reconstruct the final JSON-LD
-    merged_jsonld = {
-        "@context": "https://schema.org",
-        "@graph": gimie_graph
-    }
+    merged_jsonld = {"@context": "https://schema.org", "@graph": gimie_graph}
 
     if output_path:
         # Save to file
@@ -76,12 +155,10 @@ def merge_jsonld(gimie_graph: list, llm_jsonld: dict, output_path: str = None):
 
         logger.info(f"✅ Merged JSON-LD written to {output_path}")
     else:
-        logger.info(f"✅ Merged JSON-LD")
+        logger.info("✅ Merged JSON-LD")
 
         return merged_jsonld
-    
-from pydantic import HttpUrl, BaseModel
-from typing import Any
+
 
 # def convert_httpurl_to_str(obj: Any) -> Any:
 #     """
@@ -99,10 +176,6 @@ from typing import Any
 #     else:
 #         return obj
 
-import json
-from pydantic import create_model, HttpUrl, BaseModel
-from typing import get_origin, get_args, Union, List, Any, get_type_hints
-import inspect
 
 def convert_httpurl_to_str(schema_class):
     """
@@ -110,55 +183,317 @@ def convert_httpurl_to_str(schema_class):
     """
     if not issubclass(schema_class, BaseModel):
         return schema_class
-    
+
     # Get the original fields
     original_fields = schema_class.model_fields
     new_fields = {}
-    
+
     for field_name, field_info in original_fields.items():
         annotation = field_info.annotation
         converted_annotation = _convert_annotation(annotation)
         new_fields[field_name] = (converted_annotation, field_info.default)
-    
+
     # Create new model class with converted fields
-    converted_model = create_model(
-        f"{schema_class.__name__}Converted",
-        **new_fields
-    )
-    
+    converted_model = create_model(f"{schema_class.__name__}Converted", **new_fields)
+
     return converted_model
+
 
 def _convert_annotation(annotation):
     """
     Recursively convert annotations, replacing HttpUrl with str and handling nested models.
     """
     origin = get_origin(annotation)
-    
+
     # Handle Union types (Optional, etc.)
     if origin is Union:
         args = get_args(annotation)
         new_args = tuple(_convert_annotation(arg) for arg in args)
         return Union[new_args]
-    
+
     # Handle List types
-    elif origin is list or origin is List:
+    if origin is list or origin is List:
         args = get_args(annotation)
         if args:
             new_args = tuple(_convert_annotation(arg) for arg in args)
             return List[new_args[0]] if len(new_args) == 1 else List[new_args]
         return annotation
-    
+
     # Handle HttpUrl -> str conversion
-    elif annotation is HttpUrl:
+    if annotation is HttpUrl:
         return str
-    
+
     # Handle nested BaseModel classes
-    elif (inspect.isclass(annotation) and 
-          issubclass(annotation, BaseModel) and 
-          annotation is not BaseModel):
+    if (
+        inspect.isclass(annotation)
+        and issubclass(annotation, BaseModel)
+        and annotation is not BaseModel
+    ):
         return convert_httpurl_to_str(annotation)
-    
+
     # Return unchanged for all other types
-    else:
-        return annotation
-    
+    return annotation
+
+
+def extract_orcid_id(orcid_url: str) -> Optional[str]:
+    """
+    Extract ORCID ID from ORCID URL.
+
+    Args:
+        orcid_url: ORCID URL (e.g., "https://orcid.org/0000-0002-1126-1535")
+
+    Returns:
+        ORCID ID (e.g., "0000-0002-1126-1535") or None if invalid
+
+    Examples:
+        >>> extract_orcid_id("https://orcid.org/0000-0002-1126-1535")
+        '0000-0002-1126-1535'
+        >>> extract_orcid_id("0000-0002-1126-1535")
+        '0000-0002-1126-1535'
+    """
+    return normalize_orcid_id(orcid_url)
+
+
+def normalize_orcid_to_url(orcid_input: str) -> Optional[str]:
+    """
+    Normalize ORCID input to URL format, validating the format.
+
+    Args:
+        orcid_input: ORCID as either ID (0000-0000-0000-0000) or URL
+
+    Returns:
+        ORCID URL (e.g., "https://orcid.org/0000-0002-1126-1535") or None if invalid
+
+    Examples:
+        >>> normalize_orcid_to_url("0000-0002-1126-1535")
+        'https://orcid.org/0000-0002-1126-1535'
+        >>> normalize_orcid_to_url("https://orcid.org/0000-0002-1126-1535")
+        'https://orcid.org/0000-0002-1126-1535'
+    """
+    normalized = normalize_orcid_url(orcid_input)
+    if not normalized:
+        logger.warning(f"Invalid ORCID format: {orcid_input}")
+    return normalized
+
+
+def get_orcid_affiliations(orcid_id: str) -> List[Affiliation]:
+    """
+    Fetch affiliations from ORCID with provenance tracking.
+
+    Args:
+        orcid_id: ORCID identifier (e.g., "0000-0002-1126-1535")
+
+    Returns:
+        List of Affiliation objects from ORCID employment history
+
+    Examples:
+        >>> get_orcid_affiliations("0000-0002-1126-1535")
+        [Affiliation(name='EPFL - École Polytechnique Fédérale de Lausanne', organizationId=None, source='orcid')]
+    """
+
+    if not orcid_id:
+        return []
+
+    # Normalize ORCID ID (remove URL if present)
+    orcid_id = extract_orcid_id(orcid_id)
+    if not orcid_id:
+        logger.warning("Invalid ORCID ID format")
+        return []
+
+    def fetch_affiliations():
+        """Fetch affiliations from ORCID"""
+        parser = GitHubUsersParser()
+        orcid_activities = parser._scrape_orcid_activities(orcid_id)
+
+        if not orcid_activities or not orcid_activities.employment:
+            return []
+
+        # Extract organization names and create Affiliation objects
+        affiliations = []
+        seen = set()
+
+        for employment in orcid_activities.employment:
+            org_name = employment.organization
+            # Clean up the organization name - remove location suffixes like ": Lausanne"
+            if org_name and ":" in org_name:
+                org_name = org_name.split(":")[0].strip()
+
+            if org_name and org_name not in seen:
+                affiliations.append(
+                    Affiliation(
+                        name=org_name,
+                        organizationId=None,  # ORCID doesn't provide ROR IDs directly
+                        source="orcid",
+                    ),
+                )
+                seen.add(org_name)
+
+        return affiliations
+
+    return fetch_affiliations()
+
+
+def enrich_author_with_orcid(author: Person) -> Person:
+    """
+    Enrich a Person object with ORCID affiliations if orcid is present.
+    Also validates and normalizes ORCID ID to URL format.
+
+    Args:
+        author: Person object with optional orcid field
+
+    Returns:
+        Person object enriched with affiliations from ORCID and normalized ORCID URL
+
+    Examples:
+        >>> author = Person(name="Cyril Matthey-Doret", orcid="0000-0002-1126-1535")
+        >>> enriched = enrich_author_with_orcid(author)
+        >>> enriched.orcid
+        'https://orcid.org/0000-0002-1126-1535'
+        >>> enriched.affiliations
+        ['EPFL - École Polytechnique Fédérale de Lausanne', 'Swiss Data Science Center']
+    """
+
+    # Skip if no ORCID ID
+    if not author.orcid:
+        return author
+
+    # Convert HttpUrl to string if needed
+    orcid_input = str(author.orcid) if author.orcid else None
+    if not orcid_input:
+        return author
+
+    # Normalize ORCID to URL format and validate
+    normalized_orcid_url = normalize_orcid_to_url(orcid_input)
+    if not normalized_orcid_url:
+        logger.warning(f"Invalid ORCID format for author {author.name}: {orcid_input}")
+        return author
+
+    # Update with normalized URL (store as string, validator handles format validation)
+    author.orcid = normalized_orcid_url
+
+    # Extract ORCID ID from normalized URL for API calls
+    orcid_id = extract_orcid_id(normalized_orcid_url)
+    if not orcid_id:
+        logger.warning(
+            f"Could not extract ORCID ID from normalized URL: {normalized_orcid_url}",
+        )
+        return author
+
+    # Get affiliations from ORCID
+    orcid_affiliations = get_orcid_affiliations(orcid_id)
+
+    if not orcid_affiliations:
+        logger.warning(
+            f"No ORCID affiliations found for {orcid_id} (author: {author.name})",
+        )
+        return author
+
+    logger.info(
+        f"Found {len(orcid_affiliations)} ORCID affiliations for {orcid_id}: {[aff.name for aff in orcid_affiliations]}",
+    )
+
+    # Merge affiliations by name (case-insensitive)
+    existing_affiliations = author.affiliations or []
+    existing_names = {aff.name.lower(): aff for aff in existing_affiliations}
+
+    added_count = 0
+    for orcid_aff in orcid_affiliations:
+        if orcid_aff.name.lower() not in existing_names:
+            existing_affiliations.append(orcid_aff)
+            added_count += 1
+
+    author.affiliations = existing_affiliations
+
+    if added_count > 0:
+        logger.info(
+            f"Enriched author {author.name} with {added_count} new affiliations "
+            f"from ORCID (total: {len(author.affiliations)})",
+        )
+
+    return author
+
+
+def enrich_authors_with_orcid(
+    repositoryObject: SoftwareSourceCode,
+) -> SoftwareSourceCode:
+    """
+    Enrich Person author objects with ORCID affiliations if orcid is present.
+    Always enriches authors who have ORCID IDs, merging with existing affiliations.
+
+    Args:
+        repositoryObject: SoftwareSourceCode object with author list
+
+    Returns:
+        SoftwareSourceCode with enriched author affiliations
+    """
+    if not repositoryObject.author:
+        return repositoryObject
+
+    enriched_authors = []
+
+    for i, author in enumerate(repositoryObject.author):
+        # Only enrich Person objects (skip Organization objects)
+        if not isinstance(author, Person):
+            enriched_authors.append(author)
+            continue
+
+        # Skip if no ORCID ID
+        if not author.orcid:
+            enriched_authors.append(author)
+            continue
+
+        logger.info(
+            f"Processing author {i + 1}: {author.name} (ORCID: {author.orcid})",
+        )
+
+        try:
+            # Enrich directly - no dict conversion needed
+            enriched_person = enrich_author_with_orcid(author)
+            enriched_authors.append(enriched_person)
+
+            # Log affiliations count
+            affiliation_count = (
+                len(enriched_person.affiliations) if enriched_person.affiliations else 0
+            )
+            logger.info(f"  Result: {affiliation_count} affiliations")
+
+        except Exception as e:
+            logger.error(f"  Error enriching {author.name}: {e}")
+            enriched_authors.append(author)  # Keep original on error
+
+    repositoryObject.author = enriched_authors
+    logger.info(
+        f"ORCID enrichment completed. Processed {len(enriched_authors)} authors",
+    )
+
+    return repositoryObject
+
+
+def sanitize_special_tokens(text: str) -> str:
+    """
+    Remove special tokens by replacing them with safe placeholders.
+    This prevents encoding errors when sending to OpenAI API.
+
+    Args:
+        text: Input text to sanitize
+
+    Returns:
+        Sanitized text
+    """
+    import re
+
+    # List of known special tokens that can cause issues
+    special_tokens_patterns = [
+        r"<\|endoftext\|>",
+        r"<\|startoftext\|>",
+        r"<\|fim_prefix\|>",
+        r"<\|fim_suffix\|>",
+        r"<\|fim_middle\|>",
+    ]
+
+    # Replace all special tokens with safe placeholders
+    clean_text = text
+    for pattern in special_tokens_patterns:
+        clean_text = re.sub(pattern, "[SPECIAL_TOKEN]", clean_text, flags=re.IGNORECASE)
+
+    return clean_text

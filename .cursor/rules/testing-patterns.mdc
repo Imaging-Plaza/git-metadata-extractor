@@ -1,0 +1,357 @@
+---
+alwaysApply: true
+---
+# Testing Patterns and Best Practices
+
+## Testing Framework
+
+### Pytest Configuration
+- **Framework**: Pytest >=7.0.0
+- **Coverage**: pytest-cov >=4.0.0
+- **Location**: `tests/` and `src/test/`
+- **Execution**: `just test` or `pytest`
+
+### Running Tests
+```bash
+# Run all tests
+just test
+
+# Run with coverage
+just test-coverage
+
+# Run specific file
+just test-file tests/test_example.py
+
+# Watch mode (requires pytest-watch)
+just test-watch
+```
+
+## Test Organization
+
+### Directory Structure
+```
+tests/
+├── test_models.py           # Data model tests
+├── test_api.py             # API endpoint tests
+├── test_agents.py          # Agent tests
+├── test_conversion.py      # Conversion tests
+└── test_integration.py     # Integration tests
+
+src/test/
+└── test_conversion.py      # Legacy location
+```
+
+### File Naming
+- Prefix test files with `test_`
+- Match module names: `test_<module_name>.py`
+- Use descriptive names for test functions: `test_<what>_<condition>_<expected>`
+
+## Test Patterns
+
+### Data Model Testing
+```python
+import pytest
+from src.data_models import Person, Organization
+
+def test_person_model_valid():
+    """Test Person model with valid data"""
+    person = Person(
+        name="John Doe",
+        orcidId="https://orcid.org/0000-0000-0000-0000",
+        affiliation=["EPFL"]
+    )
+    assert person.name == "John Doe"
+    assert person.affiliation == ["EPFL"]
+
+def test_person_model_optional_fields():
+    """Test Person model with only required fields"""
+    person = Person(name="Jane Doe")
+    assert person.orcidId is None
+    assert person.affiliation is None
+
+def test_person_model_invalid_url():
+    """Test Person model with invalid ORCID URL"""
+    with pytest.raises(ValueError):
+        Person(
+            name="John Doe",
+            orcidId="not-a-url"
+        )
+```
+
+### API Endpoint Testing
+```python
+from fastapi.testclient import TestClient
+from src.api import app
+
+client = TestClient(app)
+
+def test_health_endpoint():
+    """Test health check endpoint"""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+
+def test_extract_endpoint_with_cache():
+    """Test repository extraction with caching"""
+    url = "https://github.com/test/repo"
+    response = client.get(f"/v1/extract/json/{url}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "metadata" in data
+
+def test_extract_endpoint_force_refresh():
+    """Test repository extraction with force refresh"""
+    url = "https://github.com/test/repo"
+    response = client.get(f"/v1/extract/json/{url}?force_refresh=true")
+    assert response.status_code == 200
+```
+
+### Agent Testing
+```python
+from unittest.mock import Mock, patch
+from src.agents.user_enrichment import enrich_users
+
+@patch('src.agents.tools.search_orcid')
+def test_user_enrichment_with_orcid(mock_search):
+    """Test user enrichment with ORCID data"""
+    mock_search.return_value = {
+        "orcid": "0000-0000-0000-0000",
+        "name": "John Doe"
+    }
+
+    result = enrich_users(["john.doe@epfl.ch"])
+    assert result[0].orcidId is not None
+    mock_search.assert_called_once()
+```
+
+### Conversion Testing
+```python
+from src.data_models import convert_jsonld_to_pydantic
+
+def test_jsonld_to_pydantic_conversion():
+    """Test JSON-LD to Pydantic conversion"""
+    jsonld = {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": "John Doe"
+    }
+
+    person = convert_jsonld_to_pydantic(jsonld)
+    assert person.name == "John Doe"
+```
+
+## Fixtures
+
+### Common Fixtures
+```python
+import pytest
+
+@pytest.fixture
+def sample_repository_data():
+    """Sample repository data for testing"""
+    return {
+        "url": "https://github.com/test/repo",
+        "name": "test-repo",
+        "description": "A test repository"
+    }
+
+@pytest.fixture
+def sample_user_context():
+    """Sample user analysis context"""
+    from src.data_models import UserAnalysisContext, GitAuthor
+    return UserAnalysisContext(
+        git_authors=[
+            GitAuthor(name="John Doe", email="john@epfl.ch")
+        ],
+        existing_authors=[]
+    )
+
+@pytest.fixture
+def mock_llm_response():
+    """Mock LLM response for testing"""
+    return {
+        "discipline": ["Computer Science"],
+        "confidence": 0.9
+    }
+```
+
+## Mocking
+
+### External API Calls
+- Mock all external API calls (GitHub, ORCID, web search)
+- Use `unittest.mock.patch` or `pytest-mock`
+- Provide realistic mock data
+- Test both success and failure cases
+
+### LLM Calls
+- Mock LLM responses for deterministic tests
+- Test prompt generation separately
+- Validate response parsing
+- Test error handling
+
+## Test Coverage
+
+### Coverage Goals
+- Aim for >80% code coverage
+- Focus on critical paths
+- Test edge cases and error conditions
+- Don't test external libraries
+
+### Viewing Coverage
+```bash
+# Generate HTML coverage report
+just test-coverage
+
+# View in browser
+open htmlcov/index.html
+```
+
+### Coverage Configuration
+```python
+# In pyproject.toml or pytest.ini
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+```
+
+## CI/CD Integration
+
+### ⚠️ Pre-commit Checks (MANDATORY)
+
+**ALL code proposals MUST pass pre-commit checks before being committed or submitted.**
+
+```bash
+# REQUIRED: Run pre-commit hooks
+just pre-commit
+
+# This verifies:
+# - Code formatting (Ruff)
+# - Linting (all Ruff rules)
+# - Type checking (mypy)
+# - Import sorting
+# - File formatting
+
+# Full CI pipeline (includes pre-commit + tests)
+just ci
+
+# Individual checks (for debugging)
+just lint
+just type-check
+just test-coverage
+```
+
+### Pre-commit Installation
+
+Set up pre-commit hooks for automatic checking:
+```bash
+# Install hooks
+just pre-commit-install
+
+# Install commit message hooks
+just pre-commit-install-msg
+```
+
+After installation, hooks run automatically on `git commit`.
+
+### GitHub Actions / CI
+
+All pull requests must pass:
+- ✅ Pre-commit hooks (formatting, linting, type checking)
+- ✅ All tests (pytest)
+- ✅ Code coverage thresholds
+- ✅ No linting violations
+- ✅ No type checking errors
+
+**Do not bypass pre-commit hooks with `--no-verify` except in emergencies.**
+
+## Best Practices
+
+### Test Independence
+- Each test should be independent
+- Use fixtures for setup/teardown
+- Don't rely on test execution order
+- Clean up resources after tests
+
+### Descriptive Names
+- Use descriptive test names that explain what's being tested
+- Include the condition and expected outcome
+- Example: `test_user_enrichment_with_invalid_email_returns_error`
+
+### Arrange-Act-Assert Pattern
+```python
+def test_example():
+    # Arrange - set up test data
+    user = create_test_user()
+
+    # Act - perform the action
+    result = enrich_user(user)
+
+    # Assert - verify the outcome
+    assert result.confidence > 0.5
+    assert result.affiliation is not None
+```
+
+### Parameterized Tests
+```python
+import pytest
+
+@pytest.mark.parametrize("input,expected", [
+    ("john@epfl.ch", "EPFL"),
+    ("jane@ethz.ch", "ETH Zurich"),
+    ("bob@mit.edu", "MIT"),
+])
+def test_email_to_affiliation(input, expected):
+    """Test email domain to affiliation mapping"""
+    result = extract_affiliation(input)
+    assert result == expected
+```
+
+### Skip and Conditional Tests
+```python
+import os
+import pytest
+
+@pytest.mark.skipif(
+    not os.getenv("GITHUB_TOKEN"),
+    reason="GitHub token not available"
+)
+def test_github_api_integration():
+    """Test GitHub API integration"""
+    # Test that requires GitHub token
+    pass
+
+@pytest.mark.slow
+def test_long_running_analysis():
+    """Test that takes a long time"""
+    # Long-running test
+    pass
+```
+
+## Error Testing
+
+### Exception Testing
+```python
+import pytest
+
+def test_invalid_repository_url_raises_error():
+    """Test that invalid URL raises ValueError"""
+    with pytest.raises(ValueError, match="Invalid repository URL"):
+        analyze_repository("not-a-url")
+
+def test_missing_required_field_raises_error():
+    """Test Pydantic validation error"""
+    with pytest.raises(ValidationError):
+        Person()  # Missing required 'name' field
+```
+
+### Error Message Validation
+```python
+def test_error_message_content():
+    """Test specific error message content"""
+    try:
+        process_invalid_data()
+    except ValueError as e:
+        assert "expected format" in str(e).lower()
+```

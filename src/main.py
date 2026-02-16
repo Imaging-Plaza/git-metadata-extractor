@@ -1,9 +1,10 @@
 import argparse
-from pathlib import Path
-from utils.utils import fetch_jsonld, merge_jsonld
-from core.genai_model import llm_request_repo_infos
 import logging
+from pathlib import Path
+
+from core.genai_model import llm_request_repo_infos
 from utils.logging_config import setup_logging
+from utils.utils import fetch_jsonld, merge_jsonld
 
 # Environment variables
 GIMIE_ENDPOINT = "http://imagingplazadev.epfl.ch:7511/gimie/jsonld/"
@@ -33,10 +34,16 @@ def main(url: str, output_path: Path) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch and process repository information.")
+    parser = argparse.ArgumentParser(
+        description="Fetch and process repository information.",
+    )
     parser.add_argument("--url", default=DEFAULT_REPO, help="GitHub repository URL")
-    parser.add_argument("--output_path", default=DEFAULT_OUTPUT_PATH, help="Path to save the output jsonLD file")
-    
+    parser.add_argument(
+        "--output_path",
+        default=DEFAULT_OUTPUT_PATH,
+        help="Path to save the output jsonLD file",
+    )
+
     args = parser.parse_args()
     output_path = Path(args.output_path)
     url = args.url

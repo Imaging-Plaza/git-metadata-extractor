@@ -12,11 +12,11 @@ jobs:
     permissions:
       contents: write # needed to create the release
       packages: write # needed to publish the image
-    
-    # Skip building images for draft PRs or very old branches
+
+    # Skip building images for draft PRs
     if: |
-      github.event_name == 'push' || 
-      (github.event_name == 'pull_request' && 
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
        github.event.pull_request.draft == false)
 
     steps:
@@ -26,8 +26,46 @@ jobs:
       - name: Extract version from pyproject.toml
         id: project_version
         run: |
-          VERSION=$(grep 'version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
+          VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog section for version
+        id: changelog
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          VERSION="${{ steps.project_version.outputs.version }}"
+
+          # Extract the section for this version from CHANGELOG.md
+          # This awk script finds the section between [VERSION] and the next [VERSION] or end of file
+          CHANGELOG_SECTION=$(awk -v version="[$VERSION]" '
+            BEGIN { found=0; content="" }
+            $0 ~ "^## \\[" {
+              if (found) exit
+              if ($0 ~ version) {
+                found=1
+                content = $0 "\n"
+                next
+              }
+            }
+            found { content = content $0 "\n" }
+            END { print content }
+          ' CHANGELOG.md)
+
+          # If no section found, use a default message
+          if [ -z "$CHANGELOG_SECTION" ]; then
+            CHANGELOG_SECTION="## Release v${VERSION}\n\nNo changelog entry found for this version."
+          fi
+
+          # Save to file and output
+          echo "$CHANGELOG_SECTION" > release_notes.md
+          echo "changelog_file=release_notes.md" >> $GITHUB_OUTPUT
+
+          # Also output as multiline string for debugging
+          {
+            echo 'content<<EOF'
+            echo "$CHANGELOG_SECTION"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -47,10 +85,8 @@ jobs:
             type=raw,value=${{ steps.project_version.outputs.version }},enable={{is_default_branch}}
             # For develop branch: develop tag
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
-            # For PRs: pr-{number} tag
+            # For PRs only: pr-{number} tag
             type=ref,event=pr,prefix=pr-
-            # For feature branches: branch name (sanitized)
-            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
           labels: |
             org.opencontainers.image.title=${{ github.repository }}
             org.opencontainers.image.description=${{ github.event.repository.description }}
@@ -58,11 +94,14 @@ jobs:
             org.opencontainers.image.source=${{ github.event.repository.clone_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
+            # Add cleanup hint for PR images
+            io.github.pr-image=${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: tools/image/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -75,5 +114,54 @@ jobs:
         with:
           tag_name: v${{ steps.project_version.outputs.version }}
           name: Release v${{ steps.project_version.outputs.version }}
-          body_path: CHANGELOG.md
-          fail_on_unmatched_files: true
+          body_path: ${{ steps.changelog.outputs.changelog_file }}
+          fail_on_unmatched_files: false
+
+  # Clean up PR images when PR is closed
+  cleanup-pr-image:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete PR image
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const packageName = `${owner}/${repo}`;
+            const prNumber = context.payload.pull_request.number;
+            const prTag = `pr-${prNumber}`;
+
+            try {
+              // Get all package versions
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                package_type: 'container',
+                package_name: packageName,
+                org: owner,
+                per_page: 100
+              });
+
+              // Find the PR image version
+              const prVersion = versions.find(version =>
+                version.metadata.container.tags.includes(prTag)
+              );
+
+              if (prVersion) {
+                console.log(`Deleting PR image: ${prTag} (version ID: ${prVersion.id})`);
+                await github.rest.packages.deletePackageVersionForOrg({
+                  package_type: 'container',
+                  package_name: packageName,
+                  org: owner,
+                  package_version_id: prVersion.id
+                });
+                console.log(`Successfully deleted PR image: ${prTag}`);
+              } else {
+                console.log(`No image found for PR: ${prTag}`);
+              }
+            } catch (error) {
+              console.log(`Error cleaning up PR image (this is normal if no image was built): ${error.message}`);
+            }

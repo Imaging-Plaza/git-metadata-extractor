@@ -1,0 +1,609 @@
+---
+alwaysApply: true
+---
+# Simplified Model Generation
+
+## Overview
+
+Simplified models are lightweight Pydantic models that use only primitive types (strings, numbers, lists, dicts) to be compatible with LLM agents that don't support complex Pydantic types like `HttpUrl`, `date`, or `Enum`.
+
+**Purpose:**
+- Enable LLM agents to work with structured data without complex type validation
+- Automatically extract field descriptions from source models
+- Maintain consistency between source and simplified models
+- Reduce code duplication through automatic generation
+
+## Architecture
+
+### Source Models
+- **Location**: `src/data_models/repository.py`
+- **Main Models**: `SoftwareSourceCode`, `Person`, `GitAuthor`, `Organization`
+- **Key Feature**: All fields use `Field(description=...)` for automatic extraction
+
+### Simplified Models
+- **Location**: `src/agents/atomic_agents/models.py`
+- **Models**: `SimplifiedRepositoryOutput`, `SimplifiedAuthor`, `SimplifiedGitAuthor`
+- **Usage**: Used by the structured output agent in the atomic agent pipeline
+
+### Generator Utility
+- **Location**: `src/data_models/simplified_generator.py` (to be created)
+- **Purpose**: Automatically generate simplified models from source models
+- **Approach**: Hybrid (code generation + runtime creation support)
+
+## Type Transformations
+
+### Automatic Type Simplification
+
+The generator automatically transforms complex types to primitives:
+
+| Source Type | Simplified Type | Notes |
+|------------|----------------|-------|
+| `HttpUrl` | `str` | URLs as plain strings |
+| `date` | `str` | ISO format (YYYY-MM-DD) |
+| `datetime` | `str` | ISO format with time |
+| `Enum` | `str` | Enum value as string |
+| `Optional[HttpUrl]` | `Optional[str]` | Preserves Optional wrapper |
+| `List[HttpUrl]` | `List[str]` | Preserves List wrapper |
+| `Union[Person, Organization]` | `Dict[str, Any]` | Complex unions become dicts |
+| Nested `BaseModel` | Simplified version | Recursive simplification |
+
+### Field Filtering
+
+Only selected fields are included in simplified models:
+
+**SimplifiedRepositoryOutput** includes:
+- `name`, `applicationCategory`, `codeRepository`, `dateCreated`
+- `license`, `author`, `gitAuthors`
+- `discipline`, `disciplineJustification`
+- `repositoryType`, `repositoryTypeJustification`
+
+**SimplifiedAuthor** includes:
+- `name`, `emails`, `orcid`, `affiliations`
+
+**SimplifiedGitAuthor** includes:
+- `name`, `email`, `commits`
+
+**SimplifiedOrganization** includes:
+- `name`: Organization name (uses `name` not `legalName` for LLM compatibility)
+- `organizationType`: Required - type of organization (Research Institute, University, Company, etc.)
+- `id`: Optional - organization identifier (GitHub URL, website, etc.)
+- `attributionConfidence`: Optional - confidence score (0.0-1.0) for the organization's relationship
+
+**Important**: `SimplifiedOrganization` uses `name` (not `legalName`) because LLMs naturally produce `name` fields. The conversion code in `repositories.py` maps `name` → `legalName` when creating full `Organization` objects.
+
+## Implementation Pattern
+
+### Generator Function
+
+```python
+from pydantic import BaseModel, Field, create_model
+from typing import get_origin, get_args, Optional, List, Dict, Any
+from datetime import date
+from pydantic import HttpUrl
+from enum import Enum
+
+def simplify_type(annotation):
+    """Convert complex types to primitive types."""
+    origin = get_origin(annotation)
+
+    if origin is None:
+        # Handle non-generic types
+        if annotation == HttpUrl or annotation == date:
+            return str
+        if isinstance(annotation, type) and issubclass(annotation, Enum):
+            return str
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            # Return a simplified version (recursive)
+            return create_simplified_model(annotation)
+        return annotation
+
+    # Handle generic types (List, Optional, etc.)
+    if origin is Optional:
+        args = get_args(annotation)
+        if args:
+            return Optional[simplify_type(args[0])]
+        return Optional[str]
+
+    if origin is list or origin is List:
+        args = get_args(annotation)
+        if args:
+            return List[simplify_type(args[0])]
+        return List[str]
+
+    return annotation
+
+def create_simplified_model(
+    source_model: type[BaseModel],
+    field_filter: list[str] = None
+):
+    """Create a simplified version of a Pydantic model."""
+    if not issubclass(source_model, BaseModel):
+        raise ValueError("Source must be a Pydantic BaseModel")
+
+    new_fields = {}
+    source_fields = source_model.model_fields
+
+    for field_name, field_info in source_fields.items():
+        # Filter fields if specified
+        if field_filter and field_name not in field_filter:
+            continue
+
+        # Simplify the type annotation
+        simplified_type = simplify_type(field_info.annotation)
+
+        # Preserve Field description and default
+        field_kwargs = {}
+        if field_info.description:
+            field_kwargs['description'] = field_info.description
+        if field_info.default is not ...:
+            field_kwargs['default'] = field_info.default
+        elif field_info.default_factory is not ...:
+            field_kwargs['default_factory'] = field_info.default_factory
+
+        new_fields[field_name] = (
+            simplified_type,
+            Field(**field_kwargs) if field_kwargs else ...
+        )
+
+    # Create the simplified model
+    simplified_model = create_model(
+        f"Simplified{source_model.__name__}",
+        **new_fields
+    )
+
+    return simplified_model
+```
+
+### Usage Example
+
+```python
+from src.data_models.repository import SoftwareSourceCode, Person, GitAuthor
+from src.data_models.simplified_generator import create_simplified_model
+
+# Define field filters
+REPO_FIELDS = [
+    "name", "applicationCategory", "codeRepository",
+    "dateCreated", "license", "author", "gitAuthors",
+    "discipline", "disciplineJustification",
+    "repositoryType", "repositoryTypeJustification"
+]
+
+AUTHOR_FIELDS = ["name", "emails", "orcid", "affiliations"]
+GIT_AUTHOR_FIELDS = ["name", "email", "commits"]
+
+# Generate simplified models
+SimplifiedRepositoryOutput = create_simplified_model(
+    SoftwareSourceCode,
+    field_filter=REPO_FIELDS
+)
+
+SimplifiedAuthor = create_simplified_model(
+    Person,
+    field_filter=AUTHOR_FIELDS
+)
+
+SimplifiedGitAuthor = create_simplified_model(
+    GitAuthor,
+    field_filter=GIT_AUTHOR_FIELDS
+)
+```
+
+## Code Generation Approach
+
+### Generating Python Code
+
+For better IDE support and type checking, generate actual Python code:
+
+```python
+def generate_simplified_model_code(
+    source_model: type[BaseModel],
+    field_filter: list[str] = None,
+    class_name: str = None
+) -> str:
+    """Generate Python code for simplified models."""
+    if class_name is None:
+        class_name = f"Simplified{source_model.__name__}"
+
+    source_fields = source_model.model_fields
+    code_lines = [
+        f"class {class_name}(BaseModel):",
+        f'    """Simplified {source_model.__name__} model with only primitive types."""',
+        ""
+    ]
+
+    for field_name, field_info in source_fields.items():
+        if field_filter and field_name not in field_filter:
+            continue
+
+        # Determine simplified type string
+        simplified_type = get_simplified_type_string(field_info.annotation)
+
+        # Build field definition
+        field_parts = [f"    {field_name}: {simplified_type}"]
+
+        # Add Field() if there's a description or default
+        field_kwargs = []
+        if field_info.description:
+            field_kwargs.append(f'description="{field_info.description}"')
+        if field_info.default is not ...:
+            field_kwargs.append(f"default={repr(field_info.default)}")
+        elif field_info.default_factory is not ...:
+            field_kwargs.append(f"default_factory={field_info.default_factory.__name__}")
+
+        if field_kwargs:
+            field_parts.append(f" = Field({', '.join(field_kwargs)})")
+        elif field_info.is_required():
+            pass  # Required field, no default
+        else:
+            field_parts.append(" = None")
+
+        code_lines.append("".join(field_parts))
+
+    return "\n".join(code_lines)
+```
+
+### Running the Generator
+
+Create a script to regenerate simplified models:
+
+```python
+# scripts/generate_simplified_models.py
+from src.data_models.simplified_generator import generate_simplified_model_code
+from src.data_models.repository import SoftwareSourceCode, Person, GitAuthor
+
+REPO_FIELDS = [...]
+AUTHOR_FIELDS = [...]
+GIT_AUTHOR_FIELDS = [...]
+
+# Generate code
+repo_code = generate_simplified_model_code(SoftwareSourceCode, REPO_FIELDS)
+author_code = generate_simplified_model_code(Person, AUTHOR_FIELDS)
+git_author_code = generate_simplified_model_code(GitAuthor, GIT_AUTHOR_FIELDS)
+
+# Write to file
+with open("src/agents/atomic_agents/models.py", "w") as f:
+    f.write("# Auto-generated from source models\n")
+    f.write(repo_code)
+    f.write("\n\n")
+    f.write(author_code)
+    f.write("\n\n")
+    f.write(git_author_code)
+```
+
+## Integration with Atomic Agents
+
+### Structured Output Agent
+
+The structured output agent uses simplified models:
+
+```python
+# src/agents/atomic_agents/structured_output.py
+from .models import SimplifiedRepositoryOutput
+
+async def generate_structured_output(
+    compiled_context: CompiledContext,
+    schema: Dict[str, Any],
+    example: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    # ...
+    result = await run_agent_with_fallback(
+        STRUCTURED_OUTPUT_CONFIGS,
+        prompt,
+        agent_context,
+        SimplifiedRepositoryOutput,  # ✅ Uses simplified model
+        STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+        tools,
+    )
+    # ...
+```
+
+### Schema Generation
+
+The `to_simplified_schema()` method extracts descriptions automatically:
+
+```python
+# src/data_models/repository.py
+def to_simplified_schema(self) -> dict:
+    """Generate simplified schema with auto-extracted descriptions."""
+    model_fields = self.model_fields
+
+    def get_field_description(field_name: str, default: str = "") -> str:
+        if field_name in model_fields:
+            field_info = model_fields[field_name]
+            if field_info.description:
+                return field_info.description
+        return default
+
+    schema = {
+        "name": {
+            "type": "string",
+            "description": get_field_description("name", "Repository name"),
+            "required": get_field_required("name"),
+        },
+        # ... more fields
+    }
+    return schema
+```
+
+## Handling List Fields with default_factory
+
+### Problem: LLMs Returning None for List Fields
+
+LLMs sometimes return `None` for list fields instead of empty lists, causing validation errors:
+
+```
+pydantic_core._pydantic_core.ValidationError:
+affiliationHistory
+  Input should be a valid array [type=list_type, input_value=None, input_type=NoneType]
+```
+
+### Solution: Optional Fields in Simplified Models
+
+**File**: `src/data_models/conversion.py`
+
+When creating simplified models, fields with `default_factory` are converted to `Optional[type]` with `default=None`:
+
+```python
+def create_simplified_model(source_model: type[BaseModel], ...):
+    for field_name, field_info in source_fields.items():
+        simplified_type = simplify_type(field_info.annotation)
+        description = field_info.description or ""
+        default_factory = field_info.default_factory if hasattr(field_info, 'default_factory') else None
+
+        if default_factory is not None:
+            # Handle default_factory (e.g., default_factory=list)
+            # For LLM compatibility, convert to Optional with default=None
+            # This allows LLMs to return None instead of empty lists
+            # We'll convert None back to empty lists when reconstructing the full model
+            new_fields[field_name] = (
+                Optional[simplified_type],
+                Field(default=None, description=description),
+            )
+        elif field_info.default is not ...:
+            # Field has explicit default value
+            new_fields[field_name] = (
+                simplified_type,
+                Field(default=field_info.default, description=description),
+            )
+        else:
+            # Required field
+            new_fields[field_name] = (
+                simplified_type,
+                Field(description=description),
+            )
+```
+
+**Example transformation:**
+
+```python
+# Source model
+class Person(BaseModel):
+    affiliationHistory: List[str] = Field(
+        default_factory=list,
+        description="Temporal affiliation information with dates",
+    )
+
+# Simplified model (for LLM)
+class SimplifiedPerson(BaseModel):
+    affiliationHistory: Optional[List[str]] = Field(
+        default=None,  # LLM can return None
+        description="Temporal affiliation information with dates",
+    )
+```
+
+### Reconstructing Full Models: clean_model_dict
+
+**File**: `src/analysis/repositories.py`
+
+When converting simplified LLM output back to full Pydantic models, `None` values are converted back to empty lists/dicts:
+
+```python
+def clean_model_dict(model_dict: dict, model_type: type) -> dict:
+    """Convert None to empty lists for fields with default_factory=list"""
+    if not isinstance(model_dict, dict):
+        return model_dict
+
+    # Check if model_type has model_fields
+    if hasattr(model_type, "model_fields"):
+        for field_name, field_info in model_type.model_fields.items():
+            if field_name in model_dict and model_dict[field_name] is None:
+                # Check if field has default_factory and it's callable
+                if (
+                    hasattr(field_info, "default_factory")
+                    and field_info.default_factory is not ...
+                    and field_info.default_factory is not None
+                    and callable(field_info.default_factory)
+                ):
+                    # Convert None to empty value from default_factory
+                    model_dict[field_name] = field_info.default_factory()
+    return model_dict
+```
+
+**Usage in reconstruction:**
+
+```python
+def _convert_simplified_to_full(self, simplified_data: dict) -> SoftwareSourceCode:
+    # Clean up None values before model creation
+    cleaned_data = clean_model_dict(simplified_data, SoftwareSourceCode)
+
+    # Convert nested objects (authors)
+    if "authorPerson" in cleaned_data:
+        author_persons = []
+        for author_dict in cleaned_data.get("authorPerson", []):
+            # Clean author dict before creating Person object
+            cleaned_author = clean_model_dict(author_dict, Person)
+            person = Person(**cleaned_author)
+            author_persons.append(person)
+        cleaned_data["author"] = author_persons
+
+    # Create full model
+    return SoftwareSourceCode(**cleaned_data)
+```
+
+### Benefits
+
+1. **LLM Compatibility**: LLMs can return `None` without validation errors
+2. **Automatic Cleanup**: `clean_model_dict` handles None → empty list conversion
+3. **Type Safety**: Full models still enforce list types
+4. **Graceful Handling**: No crashes from missing list fields
+
+### Example Flow
+
+```python
+# 1. LLM receives simplified model schema
+# affiliationHistory: Optional[List[str]] = None
+
+# 2. LLM returns simplified output with None
+{
+    "name": "John Doe",
+    "affiliationHistory": None,  # LLM didn't provide affiliations
+}
+
+# 3. clean_model_dict converts None to empty list
+{
+    "name": "John Doe",
+    "affiliationHistory": [],  # Converted based on default_factory
+}
+
+# 4. Full model validation succeeds
+Person(
+    name="John Doe",
+    affiliationHistory=[],  # List as expected
+)
+```
+
+### Critical Checks in clean_model_dict
+
+The function includes multiple safety checks:
+
+```python
+# 1. Verify default_factory exists
+hasattr(field_info, "default_factory")
+
+# 2. Ensure it's not ellipsis (...)
+field_info.default_factory is not ...
+
+# 3. Ensure it's not None
+field_info.default_factory is not None
+
+# 4. Ensure it's callable
+callable(field_info.default_factory)
+```
+
+Without these checks, calling `field_info.default_factory()` could raise `TypeError: 'NoneType' object is not callable`.
+
+## Best Practices
+
+### 1. Always Use Field Descriptions
+
+**CRITICAL**: All fields in source models must have `Field(description=...)`:
+
+```python
+# ✅ CORRECT
+name: Optional[str] = Field(
+    default=None,
+    description="Repository name",
+)
+
+# ❌ WRONG - No description
+name: Optional[str] = None
+```
+
+### 2. Keep Field Filters Updated
+
+When adding new fields to source models that should be in simplified models:
+
+1. Update the field filter list
+2. Regenerate simplified models
+3. Update `to_simplified_schema()` if needed
+
+### 3. Test Type Transformations
+
+Verify that complex types are correctly simplified:
+
+```python
+def test_type_simplification():
+    """Test that types are correctly simplified."""
+    assert simplify_type(HttpUrl) == str
+    assert simplify_type(date) == str
+    assert simplify_type(Optional[HttpUrl]) == Optional[str]
+    assert simplify_type(List[HttpUrl]) == List[str]
+```
+
+### 4. Preserve Required Fields
+
+Ensure required fields remain required in simplified models:
+
+```python
+# Source model
+repositoryType: RepositoryType = Field(description="Repository type")
+
+# Simplified model (auto-generated)
+repositoryType: str = Field(description="Repository type")  # Still required
+```
+
+### 5. Handle Nested Models Recursively
+
+When a field contains a nested model, generate a simplified version:
+
+```python
+# Source: author: Optional[List[Person]]
+# Simplified: author: Optional[List[SimplifiedAuthor]]
+```
+
+## Migration Guide
+
+### When to Regenerate
+
+Regenerate simplified models when:
+- Adding new fields to source models
+- Changing field descriptions in source models
+- Modifying field types in source models
+- Adding new simplified model types
+
+### Regeneration Process
+
+1. Update source model fields with descriptions
+2. Update field filter lists if needed
+3. Run generator script: `python scripts/generate_simplified_models.py`
+4. Review generated code
+5. Test with atomic agents
+6. Commit changes
+
+### Backward Compatibility
+
+- Simplified models should remain backward compatible
+- Adding new optional fields is safe
+- Removing fields requires migration
+- Changing field types requires validation updates
+
+## Common Issues
+
+### Issue: Missing Field Descriptions
+
+**Symptom**: Generated models have no descriptions
+**Solution**: Add `Field(description=...)` to source model fields
+
+### Issue: Type Not Simplified
+
+**Symptom**: Complex types remain in simplified model
+**Solution**: Update `simplify_type()` function to handle the type
+
+### Issue: Nested Model Not Simplified
+
+**Symptom**: Nested models still use complex types
+**Solution**: Ensure recursive simplification in `create_simplified_model()`
+
+### Issue: Required Fields Become Optional
+
+**Symptom**: Required fields in source become optional in simplified
+**Solution**: Check `field_info.is_required()` and preserve in Field definition
+
+## Future Enhancements
+
+Potential improvements:
+- [ ] Automatic field filter detection based on usage
+- [ ] Validation that simplified models match source models
+- [ ] Integration with CI/CD for automatic regeneration
+- [ ] Support for more complex type transformations
+- [ ] Documentation generation from simplified models

@@ -1,0 +1,714 @@
+# Academic Catalog Enrichment System
+
+## Overview
+
+The Academic Catalog Enrichment system provides integration with academic repositories (Infoscience, OpenAlex, EPFL Graph, etc.) to enrich repositories, users, and organizations with academic metadata like publications, person profiles, and organizational unit information.
+
+## Architecture
+
+### Core Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Academic Catalog Agent                         │
+│  (Searches catalogs, returns structured results)                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              linkedEntitiesEnrichmentResult                     │
+│  ┌────────────────┬──────────────────┬──────────────────────┐  │
+│  │ repository_    │ author_relations │ organization_        │  │
+│  │ relations      │ Dict[str, List]  │ relations           │  │
+│  │ List[...]      │                  │ Dict[str, List]     │  │
+│  └────────────────┴──────────────────┴──────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Direct Assignment                             │
+│  • Repository gets repository_relations                          │
+│  • Each author gets author_relations[author.name]               │
+│  • Each org gets organization_relations[org.name]               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Data Models
+
+### Location
+- **Path**: `src/data_models/linked_entities.py`
+
+### Key Models
+
+#### 1. linkedEntitiesRelation
+```python
+class linkedEntitiesRelation(BaseModel):
+    """A single relation to an academic catalog entity."""
+
+    catalogType: CatalogType  # "infoscience", "openalex", "epfl_graph"
+    entityType: EntityType    # "publication", "person", "orgunit"
+    entity: Union[dict, BaseModel]  # Full entity details
+    confidence: float         # 0.0-1.0
+    justification: str        # Why this relation exists
+    matchedOn: Optional[List[str]]  # Fields used for matching
+    # Note: externalId field has been removed
+```
+
+#### 2. linkedEntitiesEnrichmentResult (Structured Output)
+```python
+class linkedEntitiesEnrichmentResult(BaseModel):
+    """Organized results by what was searched for."""
+
+    # Publications about the repository/project itself
+    repository_relations: List[linkedEntitiesRelation] = []
+
+    # Keyed by exact author name provided
+    author_relations: Dict[str, List[linkedEntitiesRelation]] = {}
+
+    # Keyed by exact organization name provided
+    organization_relations: Dict[str, List[linkedEntitiesRelation]] = {}
+
+    # Metadata
+    searchStrategy: Optional[str] = None
+    catalogsSearched: List[CatalogType] = []
+    totalSearches: int = 0
+```
+
+**IMPORTANT**: The `author_relations` and `organization_relations` are **dictionaries keyed by exact names** provided to the agent. This enables direct assignment without name matching.
+
+## Agent Pattern: Option B (Structured Results)
+
+### Design Philosophy
+
+**DON'T**: Return flat list and try to match afterward
+```python
+# ❌ OLD APPROACH - Complex name matching
+relations = [all_relations_mixed_together]
+for author in authors:
+    # Try to match "Alexander Mathis" with "Mathis, Alexander"
+    if complex_name_matching_logic(author.name, relation.entity.name):
+        assign_relation()
+```
+
+**DO**: Agent searches individually and returns organized by name
+```python
+# ✅ NEW APPROACH - Direct dictionary lookup
+result = agent.run(prompt, authors=["Alexander Mathis", ...])
+# Returns:
+{
+  "author_relations": {
+    "Alexander Mathis": [person_profile, publications, ...],
+    "Mackenzie Weygandt Mathis": [person_profile, ...]
+  }
+}
+# Direct assignment:
+author.linkedEntities = result.author_relations[author.name]
+```
+
+### Agent Responsibilities
+
+The agent is responsible for:
+1. **Individual searches**: Search for each author/org by the exact name provided
+2. **Handling name variations**: Infoscience may store "Mathis, Alexander" but search for "Alexander Mathis" works
+3. **Organizing results**: Return results keyed by the **exact input names**
+4. **Full entity details**: Include complete entity objects (not just references)
+
+### Python Code Responsibilities
+
+Python code is responsible for:
+1. **Extracting names**: Get author names and org names to pass to agent
+2. **Direct assignment**: Look up by exact name in result dictionaries
+3. **Handling empty results**: Authors with no results get empty list
+
+## Implementation Pattern
+
+### 1. Agent Call
+```python
+# src/agents/linked_entities_enrichment.py
+async def enrich_repository_linked_entities(
+    repository_url: str,
+    repository_name: str,
+    description: str,
+    readme_excerpt: str,
+    authors: list = None,          # ["Alexander Mathis", "Mackenzie Mathis"]
+    organizations: list = None,    # ["DeepLabCut", "EPFL"]
+) -> dict:
+    """
+    Enrich repository with academic catalog relations.
+
+    Returns organized results:
+    - repository_relations: About the repository
+    - author_relations: Dict keyed by author name
+    - organization_relations: Dict keyed by org name
+    """
+```
+
+### 2. Agent Behavior
+```python
+# Agent searches:
+# 1. Repository: search_infoscience_publications_tool("DeepLabCut")
+#    → Add to repository_relations
+#
+# 2. Each author individually:
+#    search_infoscience_authors_tool("Alexander Mathis")
+#    → Add to author_relations["Alexander Mathis"]
+#
+# 3. Each org individually:
+#    search_infoscience_labs_tool("DeepLabCut")
+#    → Add to organization_relations["DeepLabCut"]
+```
+
+### 3. Direct Assignment
+```python
+# src/analysis/repositories.py
+async def run_linked_entities_enrichment(self):
+    # Call agent
+    result = await enrich_repository_linked_entities(
+        repository_url=self.full_path,
+        repository_name=repository_name,
+        authors=author_names,           # ["Alexander Mathis", ...]
+        organizations=organization_names  # ["DeepLabCut", ...]
+    )
+
+    enrichment_data = result.get("data")
+
+    # 1. Repository-level
+    self.data.linkedEntities = enrichment_data.repository_relations
+
+    # 2. Author-level (direct lookup by name)
+    for author in self.data.author:
+        if author.name in enrichment_data.author_relations:
+            author.linkedEntities = enrichment_data.author_relations[author.name]
+        else:
+            author.linkedEntities = []
+
+    # 3. Organization-level (direct lookup by name)
+    for org in self.data.author:
+        if org.legalName in enrichment_data.organization_relations:
+            org.linkedEntities = enrichment_data.organization_relations[org.legalName]
+        else:
+            org.linkedEntities = []
+```
+
+**Key Points**:
+- ✅ **No name matching logic** in Python code
+- ✅ **Direct dictionary lookup** by exact name
+- ✅ **Simple and explicit** - either the key exists or it doesn't
+- ✅ **Debuggable** - clear 1:1 relationship between search and assignment
+
+## Infoscience API Integration
+
+### Location
+- **Path**: `src/context/infoscience.py`
+
+### Search Endpoints
+
+#### Publications Search
+```python
+# Use configuration=researchoutputs
+params = {
+    "query": "DeepLabCut",
+    "size": 10,
+    "configuration": "researchoutputs"
+}
+```
+
+#### Person Search
+```python
+# Use configuration=person (like web UI)
+params = {
+    "query": "Alexander Mathis",
+    "size": 10,
+    "configuration": "person"
+}
+```
+
+#### Organizational Unit Search
+```python
+# Use configuration=orgunit (like web UI)
+params = {
+    "query": "Mathis Lab",
+    "size": 10,
+    "configuration": "orgunit"
+}
+```
+
+### Parser Functions
+
+**REQUIRED**: Every search type needs a parser function to convert DSpace items to our models.
+
+```python
+def _parse_publication(item: Dict[str, Any]) -> InfosciencePublication:
+    """Parse DSpace item into InfosciencePublication."""
+    metadata = item.get("metadata", {})
+    uuid = item.get("uuid")
+    # ... extract fields from metadata ...
+    return InfosciencePublication(...)
+
+def _parse_author(item: Dict[str, Any]) -> Optional[InfoscienceAuthor]:
+    """Parse DSpace person entity into InfoscienceAuthor."""
+    metadata = item.get("metadata", {})
+    # Handle multiple name formats:
+    # - dc.title (full name)
+    # - eperson.firstname + eperson.lastname
+    # Return None if name can't be extracted
+    return InfoscienceAuthor(...) or None
+
+def _parse_lab(item: Dict[str, Any]) -> Optional[InfoscienceLab]:
+    """Parse DSpace orgunit entity into InfoscienceLab."""
+    metadata = item.get("metadata", {})
+    # Handle multiple name formats:
+    # - dc.title
+    # - organization.legalName
+    # - organization.name
+    # Return None if name can't be extracted
+    return InfoscienceLab(...) or None
+```
+
+### Critical Parser Patterns
+
+#### 1. Field Name Matching
+**CRITICAL**: Ensure parser field names match Pydantic model fields exactly!
+
+```python
+# ❌ WRONG - Field name mismatch causes silent data loss
+return InfoscienceAuthor(
+    uuid=uuid,
+    url=url,  # Model expects 'profile_url', not 'url'!
+)
+
+# ✅ CORRECT - Field names match model
+return InfoscienceAuthor(
+    uuid=uuid,
+    profile_url=url,  # Matches InfoscienceAuthor.profile_url
+)
+```
+
+**Why this matters**: Pydantic will silently ignore unknown fields, causing data loss. This is especially critical for UUIDs and URLs which are needed for proper catalog links.
+
+#### 2. UUID Extraction and Preservation
+**CRITICAL**: Extract and preserve UUIDs at every step:
+
+1. **Extract from API response**:
+   ```python
+   uuid = item.get("uuid")  # DSpace entity UUID
+   handle = item.get("handle")  # Alternative identifier
+   ```
+
+2. **Pass to Pydantic model**:
+   ```python
+   return InfoscienceAuthor(uuid=uuid, ...)
+   ```
+
+3. **Include in markdown output**:
+   ```python
+   def to_markdown(self) -> str:
+       if self.uuid:
+           md_parts.append(f"*UUID:* {self.uuid}")  # REQUIRED for agent extraction
+   ```
+
+4. **Agent extracts from markdown**:
+   - Agent prompt explicitly instructs: "Extract UUID from '*UUID:* <uuid>' in markdown"
+   - Agent populates `linkedEntitiesRelation.uuid` field
+   - Agent populates `entity.uuid` in the full entity object
+
+**Chain of custody**: API → Parser → Pydantic Model → Markdown → Agent → linkedEntitiesRelation
+
+#### 3. Markdown as Transport Layer
+Since tools return markdown (not structured data), markdown must include ALL critical fields:
+
+```python
+def to_markdown(self) -> str:
+    """Convert to markdown - include ALL fields agent needs to extract."""
+    md_parts = []
+
+    # Name with clickable link
+    if self.profile_url:
+        md_parts.append(f"**[{self.name}]({self.profile_url})**")
+
+    # UUID - CRITICAL for catalog relations
+    if self.uuid:
+        md_parts.append(f"*UUID:* {self.uuid}")
+
+    # All other fields agent might need
+    if self.orcid:
+        md_parts.append(f"*ORCID:* {self.orcid}")
+
+    return "\n".join(md_parts)
+```
+
+### API Patterns to AVOID
+
+❌ **DON'T use** `/eperson/profiles/search/byName` - Returns 404 (doesn't exist)
+❌ **DON'T use** `dsoType=community` or `dsoType=collection` - Returns empty results
+❌ **DON'T search** without `configuration` parameter - Returns mixed types
+❌ **DON'T mismatch** field names between parser and Pydantic model
+
+✅ **DO use** `configuration=person|orgunit|researchoutputs` - Like the web UI
+✅ **DO handle** name variations in the parser (e.g., "Mathis, Alexander" vs "Alexander Mathis")
+✅ **DO provide** fallback strategies if direct search fails
+✅ **DO verify** field names match Pydantic model exactly
+✅ **DO include** UUIDs and URLs in markdown outputs
+
+## Token Usage Tracking
+
+### Pattern
+
+**EVERY agent must track both actual and estimated tokens**:
+
+```python
+# 1. Extract actual tokens from result
+input_tokens = 0
+output_tokens = 0
+if hasattr(result, "usage"):
+    usage = result.usage
+    input_tokens = getattr(usage, "input_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", 0) or 0
+
+    # Fallback to details if needed
+    if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+        details = usage.details
+        if isinstance(details, dict):
+            input_tokens = details.get("input_tokens", 0)
+            output_tokens = details.get("output_tokens", 0)
+
+# 2. Calculate estimated tokens
+from ..utils.token_counter import estimate_tokens_from_messages
+
+response_text = result.output.model_dump_json() if hasattr(result.output, "model_dump_json") else ""
+estimated = estimate_tokens_from_messages(
+    system_prompt=system_prompt,
+    user_prompt=prompt,
+    response=response_text,
+)
+
+# 3. Return both
+usage_data = {
+    "input_tokens": input_tokens,
+    "output_tokens": output_tokens,
+    "estimated_input_tokens": estimated.get("input_tokens", 0),  # ✅ CORRECT key
+    "estimated_output_tokens": estimated.get("output_tokens", 0),  # ✅ CORRECT key
+}
+```
+
+### Common Mistakes
+
+❌ **WRONG key names**:
+```python
+# estimate_tokens_from_messages() returns "input_tokens", not "prompt_tokens"
+usage_data["estimated_input_tokens"] = estimated.get("prompt_tokens", 0)  # ❌
+usage_data["estimated_output_tokens"] = estimated.get("completion_tokens", 0)  # ❌
+```
+
+❌ **Hardcoded to 0**:
+```python
+"estimated_input_tokens": 0,  # ❌ Should be calculated!
+"estimated_output_tokens": 0,  # ❌ Should be calculated!
+```
+
+✅ **Correct pattern**:
+```python
+usage_data["estimated_input_tokens"] = estimated.get("input_tokens", 0)  # ✅
+usage_data["estimated_output_tokens"] = estimated.get("output_tokens", 0)  # ✅
+```
+
+## Model Configuration
+
+### Location
+- **Path**: `src/llm/model_config.py`
+
+### Adding New Agent Config
+
+```python
+MODEL_CONFIGS = {
+    # ... existing configs ...
+
+    "run_your_new_agent": [
+        {
+            "provider": "openai",
+            "model": "o4-mini",
+            "max_retries": 2,
+            "temperature": 0.1,
+            "max_tokens": 8000,
+            "timeout": 300.0,
+        },
+        {
+            "provider": "openrouter",
+            "model": "google/gemini-2.5-flash",
+            "max_retries": 3,
+            "temperature": 0.2,
+            "max_tokens": 16000,
+            "timeout": 300.0,
+        },
+    ],
+}
+
+# Add environment variable mapping
+ENV_VAR_MAPPINGS = {
+    # ... existing mappings ...
+    "run_your_new_agent": "YOUR_NEW_AGENT_MODELS",
+}
+```
+
+### Guidelines for Agent Configs
+
+| Agent Type | Max Retries | Temperature | Max Tokens | Rationale |
+|-----------|-------------|-------------|------------|-----------|
+| **Tool-heavy** (searches) | 3 | 0.1 | 12000-16000 | More retries for API calls, low temp for factual |
+| **Analysis** (reasoning) | 2-3 | 0.2 | 16000 | Higher tokens for complex reasoning |
+| **Assessment** (judgment) | 2 | 0.1 | 8000 | Low temp for consistent results |
+| **Enrichment** (structured) | 2 | 0.1 | 8000 | Low temp for deterministic output |
+
+### Current Agent Configs
+
+| Agent | Config Key | Primary Model | Notes |
+|-------|-----------|---------------|-------|
+| LLM Analysis | `run_llm_analysis` | o4-mini | Main repository analysis |
+| User Enrichment | `run_user_enrichment` | o4-mini | Author enrichment with ORCID |
+| Org Enrichment | `run_organization_enrichment` | o4-mini | ROR matching |
+| Academic Catalog | `run_linked_entities_searcher` | o4-mini | Infoscience searches (tool-heavy, repository-level only) |
+| EPFL Assessment | `run_epfl_assessment` | o4-mini | Final holistic assessment |
+| Repository Classifier | `run_repository_classifier` | o4-mini | Repository type and discipline classification |
+| Organization Identifier | `run_organization_identifier` | o4-mini | Organization identification |
+
+## Integration into Analysis Pipeline
+
+### Repository Analysis Flow
+
+```python
+# src/analysis/repositories.py
+async def run_analysis(self, run_author_linked_entities: bool = False):
+    # 1. Extract metadata with GIMIE
+    await self.run_gimie()
+
+    # 2. Atomic LLM pipeline (stages 1-5)
+    await self.run_atomic_llm_pipeline()
+    # Stage 1: Context compiler
+    # Stage 2: Structured output
+    # Stage 3: Repository classifier
+    # Stage 4: Organization identifier
+    # Stage 5: Linked entities searcher (repository-level only)
+
+    # 3. ORCID enrichment (no LLM)
+    self.run_authors_enrichment()
+
+    # 4. User enrichment (optional)
+    await self.run_user_enrichment()
+
+    # 5. Organization enrichment (optional)
+    await self.run_organization_enrichment()
+
+    # 6. Academic catalog enrichment (repository-level - runs in atomic pipeline)
+    # Already completed in Stage 5 of atomic pipeline
+
+    # 7. Optional: Author-level linked entities enrichment
+    if run_author_linked_entities:
+        await self.run_author_linked_entities_enrichment()
+
+    # 8. Final EPFL assessment (holistic)
+    await self.run_epfl_final_assessment()
+```
+
+**Order matters**:
+- Academic catalog enrichment (repository-level) runs in Stage 5 of atomic pipeline
+- Author-level linked entities enrichment is optional and runs separately
+- EPFL assessment runs LAST (reviews all collected data)
+
+### Linked Entities Enrichment Scope
+
+**Repository-Level (Default)**:
+- Runs automatically in Stage 5 of atomic pipeline
+- Searches Infoscience for publications about the repository/tool name
+- Stores results in `repository.linkedEntities`
+- Uses `search_infoscience_publications_tool` with repository name as query
+
+**Author-Level (Optional)**:
+- Controlled by `run_author_linked_entities` parameter
+- Separate method: `run_author_linked_entities_enrichment()`
+- Searches Infoscience for each author individually
+- Assigns results to `author.linkedEntities` for each Person
+- Only runs when explicitly requested (default: `False`)
+
+### Estimated Token Accumulation
+
+**EVERY agent must accumulate estimated tokens**:
+
+```python
+# In each run_* method:
+if usage and "estimated_input_tokens" in usage:
+    self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+    self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+```
+
+**Check all these methods**:
+- ✅ `run_llm_analysis()`
+- ✅ `run_organization_enrichment()`
+- ✅ `run_user_enrichment()`
+- ✅ `run_linked_entities_enrichment()`
+- ✅ `run_epfl_final_assessment()`
+
+## Testing Guidelines
+
+### Test Data
+
+Use **DeepLabCut** as the canonical test case:
+
+```bash
+curl "http://0.0.0.0:1234/v1/extract/json/https://github.com/DeepLabCut/DeepLabCut?force_refresh=true&enrich_orgs=true&enrich_users=true"
+```
+
+**Expected results**:
+- **Repository relations**: Publications about DeepLabCut project
+- **Author relations**:
+  - "Alexander Mathis" → person profile + publications
+  - "Mackenzie Weygandt Mathis" → person profile + publications
+- **Organization relations**: EPFL organizational units
+
+### Verification Checklist
+
+- [ ] Repository `linkedEntities` populated
+- [ ] Each author has `linkedEntities` (may be empty)
+- [ ] Relations include full entity objects (not just UUIDs)
+- [ ] **UUIDs are populated** (not null) for all matched entities
+- [ ] **URLs/profile_urls are populated** for all matched entities
+- [ ] Confidence scores between 0.0-1.0
+- [ ] Justifications are clear
+- [ ] External IDs (DOI, ORCID) extracted when available
+- [ ] Estimated tokens > 0 for all agents
+- [ ] Total estimated tokens vary by complexity
+
+## Common Issues & Solutions
+
+### Issue: UUID is null in linkedEntities
+**Cause**: Field name mismatch in parser (e.g., `url=` instead of `profile_url=`)
+**Symptoms**:
+```json
+{
+  "entity": {
+    "uuid": null,  // ❌ Should have UUID
+    "name": "Carlos Vivar Rios",
+    "profile_url": null  // ❌ Also missing
+  }
+}
+```
+
+**Solution**:
+1. **Check parser field names** match Pydantic model exactly:
+   ```python
+   # ✅ Correct
+   return InfoscienceAuthor(
+       uuid=uuid,
+       profile_url=url,  # Not 'url'!
+   )
+   ```
+
+2. **Include UUID in markdown** output:
+   ```python
+   if self.uuid:
+       md_parts.append(f"*UUID:* {self.uuid}")
+   ```
+
+3. **Update agent prompt** to extract UUIDs from markdown
+4. **Verify UUID chain**: API → Parser → Model → Markdown → Agent → Relation
+
+### Issue: Relations not assigned to authors
+**Cause**: Agent returning flat list instead of organized dict
+**Solution**: Ensure agent uses structured output with author_relations dict
+
+### Issue: Name matching fails
+**Cause**: Trying to match "Alexander Mathis" with "Mathis, Alexander"
+**Solution**: Let agent handle name variations; use exact names as dict keys
+
+### Issue: Estimated tokens always similar
+**Cause**: Missing token accumulation in some agents
+**Solution**: Check all run_* methods accumulate estimated tokens
+
+### Issue: Infoscience search returns 0 results
+**Cause**: Using wrong endpoint or missing configuration parameter
+**Solution**: Use `configuration=person|orgunit|researchoutputs`
+
+### Issue: Profile URLs are missing
+**Cause**: Parser passing wrong field name to Pydantic model
+**Solution**: Pydantic silently ignores unknown fields - verify field names match model definition
+
+### Issue: Validation errors for union fields (entityInfosciencePublication, entityInfoscienceAuthor, entityInfoscienceLab)
+**Cause**: LLM populating all three union fields with the same data, or wrong entity type in wrong field
+**Symptoms**:
+```json
+{
+  "entityType": "publication",
+  "entityInfosciencePublication": {...},  // ✅ Correct
+  "entityInfoscienceAuthor": {...},       // ❌ Should be None/omitted
+  "entityInfoscienceLab": {...}           // ❌ Should be None/omitted
+}
+```
+
+**Solution**:
+1. **System prompt**: Explicitly instruct LLM to populate ONLY the field matching `entityType`
+2. **Reconciliation method**: `_reconcile_entity_union()` in `repositories.py`:
+   - Checks `entityType` to select correct union variant
+   - Removes other two fields
+   - Converts `None` to empty lists for list fields (`subjects`, `authors`, `keywords`)
+3. **List field handling**: Convert `None` to `[]` for list fields before validation
+
+## Future Extensions
+
+### Adding New Catalogs
+
+```python
+# 1. Add to CatalogType enum
+class CatalogType(str, Enum):
+    INFOSCIENCE = "infoscience"
+    OPENALEX = "openalex"        # NEW
+    EPFL_GRAPH = "epfl_graph"    # NEW
+
+# 2. Create search functions
+async def search_openalex_authors(name: str) -> List[OpenAlexAuthor]:
+    ...
+
+# 3. Add tools to agent
+openalex_tools = [
+    search_openalex_authors_tool,
+    search_openalex_publications_tool,
+]
+
+# 4. Update agent to search multiple catalogs
+agent = Agent(
+    model=model,
+    tools=[...infoscience_tools, ...openalex_tools],
+    ...
+)
+```
+
+### Cross-Catalog Matching
+
+Future enhancement: Match same entities across catalogs using:
+- DOI matching (publications)
+- ORCID matching (persons)
+- ROR matching (organizations)
+
+```python
+# Example future feature
+def deduplicate_across_catalogs(relations: List[linkedEntitiesRelation]):
+    """Merge same entities from different catalogs."""
+    # Group by DOI, ORCID, or other stable identifiers
+    # Provide unified view across catalogs
+```
+
+## Key Principles
+
+1. **Structured Output Over Matching**: Agent returns organized results, Python does direct lookup
+2. **Individual Searches**: Search each entity separately, return keyed by exact name
+3. **Full Entity Details**: Include complete objects, not just references
+4. **Token Tracking**: All agents must track estimated tokens
+5. **Catalog Abstraction**: Design for multiple catalogs from the start
+6. **Clear Separation**: Agent handles search/matching, Python handles assignment
+7. **Debuggability**: Explicit relationships, no magic matching logic
+
+## References
+
+- Implementation: `src/agents/linked_entities_enrichment.py`
+- Data Models: `src/data_models/linked_entities.py`
+- Infoscience Client: `src/context/infoscience.py`
+- Integration: `src/analysis/repositories.py`
+- Documentation: `linked_entities_OPTION_B_IMPLEMENTATION.md` (if exists)

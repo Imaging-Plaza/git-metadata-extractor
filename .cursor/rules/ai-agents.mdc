@@ -1,0 +1,1209 @@
+---
+alwaysApply: true
+---
+# AI Agents and LLM Integration
+
+## PydanticAI Framework
+
+### Version
+- Using `pydantic-ai>=1.0.15`
+- Follow PydanticAI patterns and conventions
+- Use proper provider classes
+
+### Model Configuration
+
+#### Configuration System
+- Centralized in `src/llm/model_config.py`
+- Multiple model support with fallback
+- Environment variable overrides supported
+
+#### Model Types
+Multiple analysis types with separate configs:
+- `run_llm_analysis` - Repository analysis
+- `run_user_enrichment` - User metadata enrichment
+- `run_organization_enrichment` - Organization metadata enrichment
+- `run_linked_entities_enrichment` - Academic catalog searches (Infoscience, etc.)
+- `run_epfl_assessment` - Final EPFL relationship assessment
+- `run_repository_classifier` - Repository type and discipline classification (atomic agent)
+- `run_organization_identifier` - Organization identification (atomic agent)
+- `run_structured_output` - Structured metadata extraction (atomic agent)
+- `run_context_compiler` - Repository context compilation (atomic agent)
+- `run_linked_entities_searcher` - Academic catalog search with tools (atomic agent)
+
+#### Provider Support
+- **OpenAI**: Direct OpenAI API
+- **OpenRouter**: Multi-model routing
+- **Ollama**: Local and remote Ollama instances
+- **OpenAI-compatible**: Custom endpoints
+
+#### Configuration Pattern
+```python
+from src.llm.model_config import load_model_config, create_pydantic_ai_model
+
+# Load config for analysis type
+configs = load_model_config("run_llm_analysis")
+
+# Create model from config
+model = create_pydantic_ai_model(configs[0])
+```
+
+### Retry Logic
+- Use `max_retries` from config
+- Exponential backoff: `get_retry_delay(attempt)`
+- Handle API failures gracefully
+- Log retry attempts
+
+## Agent Organization
+
+### Directory Structure
+- Agent implementations: `src/agents/`
+- Agent management: `src/agents/agents_management.py`
+- **Main LLM Analysis Agents:**
+  - Repository agent: `src/agents/repository.py` (uses `SoftwareSourceCode` schema)
+  - User agent: `src/agents/user.py` (uses `UserLLMAnalysisResult` schema)
+  - Organization agent: `src/agents/organization.py` (uses `OrganizationLLMAnalysisResult` schema)
+- **Enrichment Agents:**
+  - User enrichment: `src/agents/user_enrichment.py` (uses `UserEnrichmentResult` schema)
+  - Organization enrichment: `src/agents/organization_enrichment.py` (uses `OrganizationEnrichmentResult` schema)
+  - **ORCID enrichment**: `src/utils/utils.py` (functions: `enrich_authors_with_orcid`, `enrich_author_with_orcid`)
+- **Atomic Agents** (multi-stage pipeline):
+  - Context compiler: `src/agents/atomic_agents/context_compiler.py` (uses `CompiledContext` schema)
+  - Structured output: `src/agents/atomic_agents/structured_output.py` (uses dynamically generated simplified model)
+  - Repository classifier: `src/agents/atomic_agents/repository_classifier.py` (uses `RepositoryClassification` schema)
+  - Organization identifier: `src/agents/atomic_agents/organization_identifier.py` (uses `OrganizationIdentification` schema)
+  - Linked entities searcher: `src/agents/atomic_agents/linked_entities_searcher.py` (uses `LinkedEntitiesContext` and `linkedEntitiesEnrichmentResult` schemas)
+- **Final Assessment Agent:**
+  - EPFL assessment: `src/agents/epfl_assessment.py` (uses `EPFLAssessmentResult` schema)
+
+### Prompt Files
+- Repository prompts: `src/agents/repository_prompts.py`
+- User prompts: `src/agents/user_prompts.py`
+- Organization prompts: `src/agents/organization_prompts.py`
+- EPFL assessment prompts: `src/agents/epfl_assessment_prompts.py`
+- Generic prompts: `src/agents/prompts.py`
+
+### Agent Tools
+
+#### General Tools (`src/agents/tools.py`)
+- `search_web`: DuckDuckGo web search
+- `search_orcid`: ORCID author search
+- Use PydanticAI tool decorator
+- Provide clear tool descriptions
+
+#### Infoscience Tools (`src/context/infoscience.py`)
+EPFL's Infoscience repository integration for publications, authors, and labs:
+
+**Available Tool Functions:**
+- `search_infoscience_publications_tool(query: str, max_results: int)` - Search publications by title, DOI, keywords
+- `search_infoscience_authors_tool(name: str, max_results: int)` - Search for EPFL authors/researchers
+- `search_infoscience_labs_tool(name: str, max_results: int)` - Search for labs/organizational units
+- `get_author_publications_tool(author_name: str, max_results: int)` - Get all publications by specific author
+
+**Tool Features:**
+- Return markdown-formatted results for LLM consumption
+- Include structured Pydantic models (`InfosciencePublication`, `InfoscienceAuthor`, `InfoscienceLab`)
+- In-memory caching to prevent duplicate API calls within a session
+- Default max_results: 10, capped at 50
+- Graceful error handling with informative messages
+- Authentication support via `INFOSCIENCE_TOKEN` environment variable
+
+**Tool Integration:**
+- **Repository Agent**: Search for publications related to the repository/tool name
+- **User Agent**: Search for authors and their publications
+- **Organization Agent**: Search for labs, organizational units, and affiliated publications
+
+#### Organization Enrichment Optimizations
+
+**Pre-Searched ROR Data** (`_pre_search_ror_for_organizations`):
+- Proactively searches ROR for organizations from ORCID affiliations and existing mentions
+- **Optimized Data Structure**: Only includes essential fields to reduce token usage:
+  - `name`: Organization display name
+  - `ror_id`: ROR identifier
+  - `country`: Country location
+  - `website`: Official website (extracted from links)
+  - `aliases`: Limited to 3 most important aliases
+  - `parent_organizations`: Only parent relationships (max 2), excludes child/sibling relationships
+- **Removed Fields**: `types`, `acronyms`, `links` array, `names` array, `locations` array, all non-parent relationships
+- **Token Reduction**: ~80% reduction in pre-searched ROR data size (from ~32K tokens to ~5-8K tokens)
+
+**Simplified Prompt Instructions**:
+- Reduced from 11 verbose numbered points to 5 concise tasks
+- Removed redundant explanations and verbose instructions
+- **Token Reduction**: ~70% reduction in prompt instruction size (from ~32K tokens to ~8-10K tokens)
+
+**Token Breakdown Logging**:
+- Added detailed token breakdown in `get_organization_enrichment_prompt()`:
+  - System prompt tokens
+  - Git authors JSON tokens (with author count)
+  - ORCID authors JSON tokens (with author count)
+  - Pre-searched ROR data tokens (with organization count)
+  - Rest of prompt tokens
+  - Total estimated tokens
+- Logged at INFO level for debugging and monitoring
+
+#### URL Validation (`src/agents/url_validation.py`)
+
+**ROR URL Validation**:
+- Uses ROR API v2 endpoint (`https://api.ror.org/v2/organizations/{ror_id}`) instead of HTML scraping
+- Fetches structured JSON data directly from API
+- Extracts essential fields: name, country, website, aliases, parent relationships
+- **Organization Type**: NOT considered in validation - accepts organizations with ANY type
+  - Type is not a validation criterion
+  - Only validates: name, country, website, aliases
+- Handles 404 errors explicitly when ROR IDs don't exist
+- Provides structured JSON data to validation agent instead of HTML/markdown
+
+**Infoscience URL Validation**:
+- Normalizes incomplete URLs (UUIDs, partial URLs) to full format
+- Validates content matches expected entity (publication, person, orgunit)
+- Uses HTML content fetching with markdown conversion for LLM analysis
+
+**Strategic Tool Usage Guidelines:**
+Tools should be used strategically (instructed in system prompts):
+- Search for repository/tool name FIRST to find related publications
+- ONE search per subject - avoid repetition
+- Cache automatically stores results (including empty results)
+- Maximum 2 attempts per subject
+- Accept when information is not found rather than keep searching
+
+#### URL Validation Agents (`src/agents/url_validation.py`)
+Specialized agents for validating URLs by fetching and analyzing content:
+
+**Available Validation Functions:**
+- `validate_ror_url(ror_id: str, expected_org: Dict[str, Any])` - Validate ROR IDs by fetching JSON from ROR API
+- `validate_infoscience_url(url: str, expected_entity: Dict[str, Any], entity_type: str)` - Validate Infoscience URLs by fetching HTML
+
+**Validation Agent Architecture:**
+- **Generic System Prompt**: Contains only general validation instructions
+- **Specific User Prompts**: Each validation function includes validation-type-specific instructions in the user prompt
+- **Shared Agent Infrastructure**: Single reusable agent with context-specific prompts
+
+**Pattern: Generic System + Specific User Prompts**
+```python
+# Generic system prompt (reusable)
+validation_system_prompt = """
+You are an expert at validating URLs by analyzing content...
+Follow the specific validation instructions provided in the user prompt for this validation type.
+"""
+
+# ROR-specific validation (in validate_ror_url function)
+prompt = f"""Validate if this ROR ID matches the expected organization.
+
+**Validation Type:** ROR (Research Organization Registry) - JSON API validation
+
+**ROR Validation Instructions:**
+- Check if the organization name matches (exact or partial matches are acceptable)
+- Verify country matches expectations
+- Verify website matches (if provided)
+- Look for aliases and alternate names in the names array
+...
+"""
+
+# Infoscience-specific validation (in validate_infoscience_url function)
+prompt = f"""Validate if this Infoscience publication URL matches the expected publication.
+
+**Validation Type:** Infoscience (EPFL repository) - HTML/Markdown validation for publications
+
+**Infoscience Publication Validation Instructions:**
+- Verify title matches (exact or close match acceptable)
+- Verify expected authors are present in the author list
+...
+"""
+```
+
+**Benefits of This Pattern:**
+- ✅ Clear separation: Each validation type has its own instructions
+- ✅ No mixing: ROR logic won't apply to Infoscience and vice versa
+- ✅ Single reusable agent: One agent infrastructure, context-specific prompts
+- ✅ Easier maintenance: Update validation logic in one place per type
+- ✅ Better clarity: Instructions are explicit and contextual
+
+**Validation Results:**
+- Returns `ValidationResult` with `is_valid`, `confidence`, `justification`, and `validation_errors`
+- For Infoscience: Also includes `normalized_url` if URL was normalized from UUID or handle
+
+## Prompt Engineering
+
+### System Prompts
+- Define expert roles clearly
+- Specify data sources to analyze
+- Include confidence scoring guidelines
+- Provide output format instructions
+
+### Confidence Scoring Guidelines
+Include in prompts:
+- 0.9-1.0: Strong evidence (multiple high-quality sources)
+- 0.7-0.89: Good evidence (verified sources)
+- 0.5-0.69: Moderate evidence (partial information)
+- 0.3-0.49: Weak evidence (limited information)
+- 0.0-0.29: Very weak/speculative evidence
+
+### User Prompts
+- Use structured data in prompts (JSON format)
+- Include context from multiple sources
+- Provide clear instructions
+- Request specific output fields
+
+### Example Pattern
+```python
+def get_user_enrichment_agent_prompt(repository_url: str, context: UserAnalysisContext):
+    prompt = f"""Analyze the following repository authors...
+
+    Repository: {repository_url}
+
+    Git Authors: {json.dumps([...], indent=2)}
+
+    Please:
+    1. [Specific instruction]
+    2. [Specific instruction]
+    ...
+    """
+    return prompt
+```
+
+## Pydantic Schema Enforcement
+
+### CRITICAL: Always Use Pydantic Schemas for LLM Output
+
+**DO NOT** use generic `Dict` as output type - this bypasses schema enforcement:
+
+```python
+# ❌ WRONG - No schema enforcement, LLM can return anything
+result = await run_agent_with_fallback(
+    configs,
+    prompt,
+    context,
+    Dict,  # Generic dict - BAD!
+    system_prompt,
+    tools,
+)
+
+# ✅ CORRECT - Schema enforced by PydanticAI
+result = await run_agent_with_fallback(
+    configs,
+    prompt,
+    context,
+    UserLLMAnalysisResult,  # Pydantic model - GOOD!
+    system_prompt,
+    tools,
+)
+```
+
+### Schema Benefits
+1. **Field Enforcement**: LLM must return all specified fields
+2. **Type Validation**: Fields validated against Pydantic types
+3. **Default Values**: Missing fields get proper defaults
+4. **Documentation**: Schema serves as LLM instruction
+5. **Type Safety**: End-to-end type checking
+
+### Agent-Specific Schemas
+- **Repository Agent**: `SoftwareSourceCode` (from `data_models/repository.py`)
+- **User Agent**: `UserLLMAnalysisResult` (from `data_models/user.py`)
+- **Organization Agent**: `OrganizationLLMAnalysisResult` (from `data_models/organization.py`)
+- **User Enrichment**: `UserEnrichmentResult`
+- **Organization Enrichment**: `OrganizationEnrichmentResult`
+- **EPFL Assessment**: `EPFLAssessmentResult` (from `data_models/epfl_assessment.py`)
+- **Atomic Agents**:
+  - Context Compiler: `CompiledContext` (from `atomic_agents/models.py`)
+  - Structured Output: Dynamically generated simplified model (from `SoftwareSourceCode`)
+  - Repository Classifier: `RepositoryClassification` (from `atomic_agents/models.py`) - uses `Literal` types for `discipline` and `repositoryType` with enum constraints
+  - Organization Identifier: `OrganizationIdentification` (from `atomic_agents/models.py`) - uses `SimplifiedOrganization` with `name` (not `legalName`) for LLM compatibility
+  - Linked Entities Searcher: `LinkedEntitiesContext` and `linkedEntitiesEnrichmentResult` (from `data_models/linked_entities.py`)
+
+## ORCID Enrichment Integration
+
+### Overview
+ORCID enrichment automatically fetches affiliation data from ORCID API for authors who have ORCID identifiers. This runs after the atomic LLM pipeline completes and before optional user/organization enrichments.
+
+**Location**: `src/utils/utils.py`
+
+### Key Functions
+
+#### `enrich_authors_with_orcid(repositoryObject: SoftwareSourceCode)`
+Enriches all Person authors in a repository who have ORCID IDs:
+- Skips Organization objects (only enriches Person)
+- Skips authors without ORCID IDs
+- Fetches employment history from ORCID API
+- Creates `Affiliation` objects with `source="orcid"`
+- Merges with existing affiliations (no duplicates, case-insensitive)
+
+#### `enrich_author_with_orcid(author: Person)`
+Enriches a single Person with ORCID affiliations:
+- Validates and normalizes ORCID ID to URL format
+- Calls `get_orcid_affiliations()` to fetch data
+- Returns enriched Person object
+
+#### `get_orcid_affiliations(orcid_id: str) -> List[Affiliation]`
+Fetches affiliations from ORCID API:
+- Returns list of `Affiliation` objects with `source="orcid"`
+- Cleans organization names (removes location suffixes)
+- Uses ORCID web scraping via Selenium
+- Cached to prevent duplicate API calls
+
+### Integration in Analysis Pipeline
+
+**File**: `src/analysis/repositories.py`
+
+ORCID enrichment runs automatically in `run_analysis()`:
+
+```python
+async def run_analysis(
+    self,
+    run_gimie: bool = True,
+    run_llm: bool = True,
+    run_user_enrichment: bool = True,
+    run_organization_enrichment: bool = True,
+):
+    # 1. GIMIE analysis
+    if run_gimie:
+        self.run_gimie_analysis()
+
+    # 2. Atomic LLM pipeline (stages 1-3)
+    if run_llm:
+        await self.run_llm_analysis()
+
+        # 3. ORCID enrichment (NEW - runs automatically after LLM)
+        if self.data is not None:
+            logging.info(f"ORCID enrichment for {self.full_path}")
+            self.run_authors_enrichment()
+            logging.info(f"ORCID enrichment completed for {self.full_path}")
+
+    # 4. User enrichment (optional)
+    if run_user_enrichment and self.data is not None:
+        await self.run_user_enrichment()
+
+    # 5. Organization enrichment (optional)
+    if run_organization_enrichment and self.data is not None:
+        await self.run_organization_enrichment()
+```
+
+### Execution Order
+1. Cache check
+2. GIMIE analysis (if `run_gimie=True`)
+3. Atomic LLM pipeline (if `run_llm=True`)
+4. **ORCID enrichment** (always runs if `self.data` exists after LLM)
+5. User enrichment (if `run_user_enrichment=True`)
+6. Organization enrichment (if `run_organization_enrichment=True`)
+7. Validation and caching
+
+### Benefits
+- ✅ **Automatic enrichment** for authors with ORCID IDs
+- ✅ **Provenance tracking** via `source="orcid"` in Affiliation objects
+- ✅ **No duplicates** - merges with existing affiliations intelligently
+- ✅ **No LLM tokens** consumed - uses ORCID API directly
+- ✅ **Runs before other enrichments** so they can utilize ORCID data
+
+### Example
+```python
+# Before ORCID enrichment
+person = Person(
+    name="John Doe",
+    orcid="0000-0002-1234-5678",
+    affiliations=[],
+)
+
+# After ORCID enrichment
+person = Person(
+    name="John Doe",
+    orcid="https://orcid.org/0000-0002-1234-5678",  # Normalized to URL
+    affiliations=[
+        Affiliation(
+            name="EPFL - École Polytechnique Fédérale de Lausanne",
+            organizationId=None,
+            source="orcid",
+        ),
+        Affiliation(
+            name="Swiss Data Science Center",
+            organizationId=None,
+            source="orcid",
+        ),
+    ],
+)
+```
+
+## Agent Configuration
+
+### Agent Creation with Retries
+
+**File**: `src/agents/agents_management.py`
+
+Agents are created with retry configuration for validation errors:
+
+```python
+agent = Agent(
+    model=model,
+    output_type=output_type,
+    system_prompt=system_prompt,
+    tools=agent_tools,
+    retries=3,  # Allow model to retry up to 3 times on validation errors
+)
+```
+
+**Parameter**: `retries` (not `result_retries` or `output_retries`)
+- Controls retry attempts for tool calls and output validation
+- Default: 1 (only one attempt)
+- Recommended: 3 (gives LLM multiple chances to correct validation errors)
+
+### Validation Error Handling
+
+When LLMs produce output that doesn't match the schema:
+1. PydanticAI validates output against `output_type` schema
+2. If validation fails, LLM gets error message and can retry
+3. Up to `retries` attempts before raising `UnexpectedModelBehavior`
+4. Each retry includes the validation error details for correction
+
+### Enhanced Error Logging
+
+Detailed exception chain logging for debugging:
+
+```python
+if "validation" in error_msg.lower() or "retries" in error_msg.lower():
+    logger.error(f"Agent run failed with validation error: {e}", exc_info=True)
+
+    # Traverse nested exception chains
+    if hasattr(e, "__cause__") and e.__cause__:
+        logger.error(f"Underlying cause: {e.__cause__}")
+        cause = e.__cause__
+        depth = 0
+        while hasattr(cause, "__cause__") and cause.__cause__ and depth < 5:
+            cause = cause.__cause__
+            logger.error(f"Nested cause (depth {depth + 1}): {cause}")
+            depth += 1
+```
+
+Benefits:
+- See exact validation errors (field names, types, expected vs actual)
+- Identify which fields are causing issues
+- Debug LLM output format problems
+- Trace through pydantic_core.ValidationError chains
+
+## Analysis Context
+
+### Context Objects
+- `UserAnalysisContext`: Git authors + existing ORCID data
+- `OrganizationAnalysisContext`: Organization metadata
+- Include temporal data (commit dates, affiliation periods)
+- Provide comprehensive context for AI analysis
+
+### Data Sources
+- **GIMIE**: Basic repository metadata
+- **GitHub/GitLab**: Repository and user data
+- **ORCID**: Author affiliations and credentials
+- **Infoscience**: EPFL's research repository (publications, authors, labs)
+- **Web Search**: Supplementary information (DuckDuckGo)
+- **Email Domains**: Institutional affiliation inference
+
+## Model Parameters
+
+### Temperature Settings
+- Repository analysis: 0.2 (more deterministic)
+- User enrichment: 0.1 (very deterministic)
+- Organization enrichment: 0.1 (very deterministic)
+
+### Token Limits
+- Repository analysis: 16000 max_tokens
+- User enrichment: 8000 max_tokens
+- Organization enrichment: 8000 max_tokens
+
+### Special Cases
+- OpenAI reasoning models (o3, o4): Use `max_completion_tokens`, no temperature
+- Ollama: Use `num_predict` instead of `max_tokens`
+
+## Error Handling
+
+### Timeout Management
+- Set appropriate timeouts per analysis type
+- Repository analysis: 600s (long-running)
+- User/Org enrichment: 300s
+- Handle timeout errors gracefully
+
+### Validation
+- Validate configs before use: `validate_config(config)`
+- Check required API keys for providers
+- Log configuration issues
+- Fall back to alternative models on failure
+
+## Token Usage Tracking
+
+### Dual Token Tracking System
+The system tracks tokens using two methods:
+
+#### 1. Official API-Reported Usage
+- Extract from `result.usage.input_tokens` and `result.usage.output_tokens`
+- **Important**: For OpenAI reasoning models (o3, o4) and Anthropic models, tokens are in `result.usage.details` dict
+- See: [pydantic-ai issue #3223](https://github.com/pydantic/pydantic-ai/issues/3223)
+
+```python
+# Extract tokens from API response
+if hasattr(result, "usage"):
+    usage = result.usage
+    input_tokens = getattr(usage, "input_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", 0) or 0
+
+    # Fallback to details field for certain models
+    if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
+        details = usage.details
+        if isinstance(details, dict):
+            input_tokens = details.get("input_tokens", 0)
+            output_tokens = details.get("output_tokens", 0)
+```
+
+#### 2. Client-Side Token Estimation
+- Uses `tiktoken` with `cl100k_base` encoding (GPT-4/GPT-3.5-turbo compatible)
+- Provides fallback when API doesn't report usage
+- Useful for validation and cost estimation
+- Located in `src/utils/token_counter.py`
+
+```python
+from src.utils.token_counter import estimate_tokens_from_messages
+
+estimated = estimate_tokens_from_messages(
+    system_prompt=system_prompt,
+    user_prompt=user_prompt,
+    response=response_text,
+)
+```
+
+### Agent Return Format
+**CRITICAL**: All agents MUST return dictionaries with both data and usage:
+
+```python
+return {
+    "data": result_object,  # The actual analysis result
+    "usage": {
+        "input_tokens": 1234,              # Official API count
+        "output_tokens": 567,              # Official API count
+        "estimated_input_tokens": 1250,    # Client-side estimate
+        "estimated_output_tokens": 575,    # Client-side estimate
+    }
+}
+```
+
+**Common Mistake**: Returning just `json_data` directly causes `result.get("data")` to fail:
+```python
+# ❌ WRONG - Analysis code will get None
+return json_data
+
+# ✅ CORRECT - Wrap in standard format
+return {"data": json_data, "usage": usage_data}
+```
+
+This affects all main LLM analysis agents (repository, user, organization) and enrichment agents.
+
+### Repository-Level Aggregation
+The `Repository` class (`src/analysis/repositories.py`) accumulates tokens across all agents:
+
+```python
+# Initialize tracking variables in __init__
+self.total_input_tokens: int = 0
+self.total_output_tokens: int = 0
+self.estimated_input_tokens: int = 0
+self.estimated_output_tokens: int = 0
+
+# Track timing and status
+self.start_time: datetime = None  # Set in run_analysis()
+self.end_time: datetime = None    # Set at end of run_analysis()
+self.analysis_successful: bool = False  # Set to True on successful completion
+
+# Extract and accumulate from each agent call
+result = await llm_request_repo_infos(...)
+llm_data = result.get("data") if isinstance(result, dict) else result
+usage = result.get("usage") if isinstance(result, dict) else None
+
+if usage:
+    self.total_input_tokens += usage.get("input_tokens", 0)
+    self.total_output_tokens += usage.get("output_tokens", 0)
+    self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+    self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+    logger.info(f"Agent usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+```
+
+**Important Implementation Details**:
+1. **Timing**: `start_time` set at beginning of `run_analysis()`, `end_time` set at end (regardless of success/failure)
+2. **Success tracking**: `analysis_successful` set to `True` only after validation and caching succeed
+3. **Cache hits**: Still marked as successful with timing tracked
+4. **Error handling**: Organization enrichment wrapped in try-except to prevent cascading failures
+
+**Usage Stats Method**:
+```python
+def get_usage_stats(self) -> dict:
+    """
+    Get accumulated token usage and timing from all agents.
+
+    Returns dict with:
+    - input_tokens, output_tokens, total_tokens (official API counts)
+    - estimated_input_tokens, estimated_output_tokens, estimated_total_tokens
+    - duration (seconds), start_time, end_time
+    - status_code (200 for success, 500 for failure)
+    """
+    duration = None
+    if self.start_time and self.end_time:
+        duration = (self.end_time - self.start_time).total_seconds()
+
+    return {
+        "input_tokens": self.total_input_tokens,
+        "output_tokens": self.total_output_tokens,
+        "total_tokens": self.total_input_tokens + self.total_output_tokens,
+        "estimated_input_tokens": self.estimated_input_tokens,
+        "estimated_output_tokens": self.estimated_output_tokens,
+        "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+        "duration": duration,
+        "start_time": self.start_time,
+        "end_time": self.end_time,
+        "status_code": 200 if self.analysis_successful else 500,
+    }
+```
+
+**Integration Points**:
+- Called by `run_llm_analysis()` - extracts usage from LLM agent
+- Called by `run_user_enrichment()` - extracts usage from user agent
+- Called by `run_organization_enrichment()` - extracts usage from org agent (with error handling)
+- `run_analysis()` sets start_time at beginning, end_time at end, and analysis_successful flag
+- API endpoint calls `get_usage_stats()` to populate response stats
+
+### User-Level Token Tracking
+The `User` class (`src/analysis/user.py`) follows the same pattern as Repository for consistency:
+
+**Initialization Tracking Variables**:
+```python
+class User:
+    def __init__(self, username: str, force_refresh: bool = False):
+        self.username: str = username
+        self.data: GitHubUser = None
+        self.cache_manager: CacheManager = get_cache_manager()
+        self.force_refresh: bool = force_refresh
+
+        # Track official API-reported token usage across all agents
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+
+        # Track estimated token usage (client-side counts)
+        self.estimated_input_tokens: int = 0
+        self.estimated_output_tokens: int = 0
+
+        # Track timing and status
+        self.start_time: datetime = None
+        self.end_time: datetime = None
+        self.analysis_successful: bool = False
+```
+
+**Agent Method Pattern (run_llm_analysis example)**:
+```python
+async def run_llm_analysis(self):
+    """Run LLM analysis to populate discipline and position fields"""
+    # Prepare input data from GitHub metadata
+    github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+    llm_input_data = {
+        "username": self.username,
+        "name": github_metadata.get("name"),
+        "bio": github_metadata.get("bio"),
+        # ... other fields
+    }
+
+    try:
+        # Call LLM agent
+        result = await llm_request_user_infos(
+            username=self.username,
+            user_data=llm_input_data,
+            max_tokens=20000,
+        )
+
+        # Extract data and usage
+        llm_result = result.get("data") if isinstance(result, dict) else result
+        usage = result.get("usage") if isinstance(result, dict) else None
+
+        # Accumulate official API-reported usage
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            logger.info(f"LLM analysis usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output tokens")
+
+        # Accumulate estimated tokens
+        if usage and "estimated_input_tokens" in usage:
+            self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+            self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+        # Process llm_result...
+```
+
+**User Analysis Method**:
+```python
+async def run_analysis(
+    self,
+    run_llm: bool = True,
+    run_organization_enrichment: bool = False,
+    run_user_enrichment: bool = False,
+):
+    """Run the full analysis pipeline with optional steps."""
+    # Track start time
+    self.start_time = datetime.now()
+
+    # Check cache first
+    cache_params = {"username": self.username}
+    if not self.force_refresh and self.check_in_cache("user", cache_params):
+        self.load_from_cache("user", cache_params)
+        self.analysis_successful = True
+        self.end_time = datetime.now()
+        return
+
+    # Run analysis steps
+    self.run_github_parsing()
+
+    if run_llm:
+        await self.run_llm_analysis()
+
+    if run_organization_enrichment:
+        await self.run_organization_enrichment()
+
+    if run_user_enrichment:
+        await self.run_user_enrichment()
+
+    # Validate and cache
+    if self.data is not None:
+        self.run_validation()
+        self.save_in_cache()
+        self.analysis_successful = True
+    else:
+        self.analysis_successful = False
+
+    # Track end time
+    self.end_time = datetime.now()
+
+    # Log duration
+    if self.start_time and self.end_time:
+        duration = (self.end_time - self.start_time).total_seconds()
+        logging.info(f"Analysis completed in {duration:.2f} seconds")
+```
+
+**Usage Stats Method** (identical to Repository):
+```python
+def get_usage_stats(self) -> dict:
+    """Get accumulated token usage statistics and timing from all agents."""
+    duration = None
+    if self.start_time and self.end_time:
+        duration = (self.end_time - self.start_time).total_seconds()
+
+    return {
+        "input_tokens": self.total_input_tokens,
+        "output_tokens": self.total_output_tokens,
+        "total_tokens": self.total_input_tokens + self.total_output_tokens,
+        "estimated_input_tokens": self.estimated_input_tokens,
+        "estimated_output_tokens": self.estimated_output_tokens,
+        "estimated_total_tokens": self.estimated_input_tokens + self.estimated_output_tokens,
+        "duration": duration,
+        "start_time": self.start_time,
+        "end_time": self.end_time,
+        "status_code": 200 if self.analysis_successful else 500,
+    }
+```
+
+**Key Differences from Repository**:
+1. No GIMIE analysis (users don't have repositories)
+2. Accesses `self.data.githubUserMetadata` for GitHub data (not `self._github_metadata`)
+3. User enrichment doesn't have git authors (empty list)
+4. Uses `GitHubUser` data model instead of `SoftwareSourceCode`
+
+**Data Access Pattern**:
+```python
+# Always use githubUserMetadata from the GitHubUser model
+github_metadata = self.data.githubUserMetadata.model_dump() if self.data.githubUserMetadata else {}
+
+# Access fields safely
+name = github_metadata.get("name")
+bio = github_metadata.get("bio")
+organizations = github_metadata.get("organizations", [])
+```
+
+**Integration with Agents**:
+- `run_llm_analysis()`: Analyzes user profile for discipline and position
+- `run_organization_enrichment()`: Enriches organization affiliations from ORCID and README
+- `run_user_enrichment()`: Enriches user metadata (currently limited for user profiles)
+
+**Data Flow Example**:
+```python
+async def run_llm_analysis(self):
+    result = await llm_request_repo_infos(...)
+
+    # Extract data and usage separately
+    llm_data = result.get("data") if isinstance(result, dict) else result
+    usage = result.get("usage") if isinstance(result, dict) else None
+
+    # Accumulate official API tokens
+    if usage:
+        self.total_input_tokens += usage.get("input_tokens", 0)
+        self.total_output_tokens += usage.get("output_tokens", 0)
+        logger.info(f"LLM usage: {usage.get('input_tokens', 0)} input, {usage.get('output_tokens', 0)} output")
+
+    # Accumulate estimated tokens (if available)
+    if usage and "estimated_input_tokens" in usage:
+        self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+        self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+    # Process llm_data normally...
+```
+
+### APIStats Response
+The API returns comprehensive statistics in the `stats` field:
+
+```json
+{
+  "stats": {
+    "agent_input_tokens": 1234,
+    "agent_output_tokens": 567,
+    "total_tokens": 1801,
+    "estimated_input_tokens": 1250,
+    "estimated_output_tokens": 575,
+    "estimated_total_tokens": 1825,
+    "duration": 45.23,
+    "start_time": "2025-10-29T07:35:00",
+    "end_time": "2025-10-29T07:35:45",
+    "status_code": 200
+  }
+}
+```
+
+**API Endpoint Integration** (Repository example):
+```python
+@app.get("/v1/repository/llm/json/{full_path:path}")
+async def llm_json(full_path: str, force_refresh: bool = False,
+                   enrich_orgs: bool = False, enrich_users: bool = False) -> APIOutput:
+    repository = Repository(full_path, force_refresh=force_refresh)
+
+    await repository.run_analysis(
+        run_gimie=True,
+        run_llm=True,
+        run_user_enrichment=enrich_users,
+        run_organization_enrichment=enrich_orgs,
+    )
+
+    output = repository.dump_results(output_type="pydantic")
+
+    # Get usage statistics
+    usage_stats = repository.get_usage_stats()
+
+    # Create APIStats with token usage data, timing, and status
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    stats.calculate_total_tokens()
+
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.REPOSITORY,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include stats in response
+    )
+
+    return response
+```
+
+**API Endpoint Integration** (User example):
+```python
+@app.get("/v1/user/llm/json/{full_path:path}")
+async def get_user_json(full_path: str, force_refresh: bool = False,
+                        enrich_orgs: bool = False, enrich_users: bool = False) -> APIOutput:
+    username = full_path.split("/")[-1]
+    user = User(username, force_refresh=force_refresh)
+
+    await user.run_analysis(
+        run_organization_enrichment=enrich_orgs,
+        run_user_enrichment=enrich_users,
+    )
+
+    output = user.dump_results(output_type="pydantic")
+
+    # Get usage statistics (same pattern as Repository)
+    usage_stats = user.get_usage_stats()
+
+    # Create APIStats
+    from .data_models.api import APIStats
+    stats = APIStats(
+        agent_input_tokens=usage_stats["input_tokens"],
+        agent_output_tokens=usage_stats["output_tokens"],
+        estimated_input_tokens=usage_stats["estimated_input_tokens"],
+        estimated_output_tokens=usage_stats["estimated_output_tokens"],
+        duration=usage_stats["duration"],
+        start_time=usage_stats["start_time"],
+        end_time=usage_stats["end_time"],
+        status_code=usage_stats["status_code"],
+    )
+    stats.calculate_total_tokens()
+
+    response = APIOutput(
+        link=full_path,
+        type=ResourceType.USER,
+        parsedTimestamp=datetime.now(),
+        output=output,
+        stats=stats,  # Include stats in response
+    )
+
+    return response
+```
+
+### Structured Agent Output Pattern (Option B)
+
+For agents that search for multiple entities (e.g., academic catalog enrichment), use **structured dictionaries** keyed by exact input names instead of flat lists requiring post-processing.
+
+#### Pattern: Organized Results
+```python
+class linkedEntitiesEnrichmentResult(BaseModel):
+    """Results organized by what was searched for."""
+
+    # Repository-level results
+    repository_relations: List[linkedEntitiesRelation] = []
+
+    # Author-level results (keyed by exact name provided)
+    author_relations: Dict[str, List[linkedEntitiesRelation]] = {}
+
+    # Organization-level results (keyed by exact name provided)
+    organization_relations: Dict[str, List[linkedEntitiesRelation]] = {}
+```
+
+#### Agent Responsibilities
+- Search for each entity **individually** using the exact names provided
+- Handle name variations internally (e.g., "Alexander Mathis" finds "Mathis, Alexander")
+- Return results **keyed by the exact input names**
+- Include full entity details (not just references)
+
+#### Python Code Responsibilities
+- Extract names to pass to agent
+- Perform **direct dictionary lookup** (no matching logic needed)
+- Assign results to appropriate objects
+- Handle missing keys (entities with no results)
+
+#### Example Implementation
+```python
+# Call agent with exact names
+result = await enrich_repository_linked_entities(
+    repository_name="DeepLabCut",
+    authors=["Alexander Mathis", "Mackenzie Weygandt Mathis"],
+    organizations=["DeepLabCut"],
+)
+
+# Direct assignment (no name matching!)
+enrichment_data = result.get("data")
+
+# Repository level
+self.data.linkedEntities = enrichment_data.repository_relations
+
+# Author level (direct lookup)
+for author in self.data.author:
+    if author.name in enrichment_data.author_relations:
+        author.linkedEntities = enrichment_data.author_relations[author.name]
+    else:
+        author.linkedEntities = []
+```
+
+**Benefits**:
+- ✅ No complex name matching in Python code
+- ✅ Explicit 1:1 relationship between search and result
+- ✅ Agent handles all name variations
+- ✅ Simple, debuggable, maintainable
+
+**When to Use**:
+- Searching for multiple entities of the same type
+- Need to assign results back to specific source objects
+- Name variations exist in the target system
+
+## Atomic Agents Pipeline
+
+### Overview
+The atomic agents pipeline is a multi-stage LLM-based system for repository metadata extraction. It breaks down the complex task of repository analysis into smaller, focused stages that can be optimized independently.
+
+### Pipeline Stages
+
+**Location**: `src/agents/atomic_agents/`
+
+#### Stage 1: Context Compiler
+- **File**: `context_compiler.py`
+- **Purpose**: Compiles repository information (GIMIE data, git authors, README) into structured markdown
+- **Output**: `CompiledContext` with markdown content and repository metadata
+- **Tools**: None (pure compilation)
+
+#### Stage 2: Structured Output
+- **File**: `structured_output.py`
+- **Purpose**: Extracts structured metadata from compiled context
+- **Output**: Simplified repository model with core fields (description, applicationCategory, authors, etc.)
+- **Tools**: None (structured extraction)
+- **Note**: Does NOT extract `discipline`, `repositoryType`, or `relatedToOrganizations` (handled by later stages)
+
+#### Stage 3: Repository Classifier
+- **File**: `repository_classifier.py`
+- **Purpose**: Classifies repository type and scientific disciplines
+- **Output**: `RepositoryClassification` with:
+  - `repositoryType`: Required, from `RepositoryType` enum (software, educational resource, documentation, data, webpage, other)
+  - `discipline`: Required list, from `Discipline` enum (at least one discipline required)
+  - Justifications for each classification
+- **Schema Enforcement**: Uses `Literal` types derived from enums to enforce valid values
+- **Tools**: None (classification only)
+
+#### Stage 4: Organization Identifier
+- **File**: `organization_identifier.py`
+- **Purpose**: Identifies institutional organizations directly related to the software
+- **Output**: `OrganizationIdentification` with:
+  - `relatedToOrganizations`: List of `SimplifiedOrganization` objects
+  - `relatedToOrganizationJustification`: List of justifications
+- **Key Requirements**:
+  - Focus on **direct institutional relationships** (developers, maintainers, sponsors, hosts)
+  - **NOT** just author affiliations - organization must be directly involved with the software
+  - `organizationType` is **required** for each organization
+  - `attributionConfidence` is optional but recommended
+- **Simplified Model**: Uses `name` (not `legalName`) for LLM compatibility, converted to `legalName` during reconciliation
+- **Tools**: None (identification only)
+
+#### Stage 5: Linked Entities Searcher (Academic Catalog)
+- **File**: `linked_entities_searcher.py`
+- **Purpose**: Searches academic catalogs (Infoscience) for publications related to the repository
+- **Output**: `linkedEntitiesEnrichmentResult` with `repository_relations` only
+- **Tools**: `search_infoscience_publications_tool`
+- **Scope**: Repository-level searches only (searches for publications about the repository/tool name)
+- **Author-level searches**: Handled separately in optional `run_author_linked_entities_enrichment()` method
+
+### Pipeline Execution Order
+
+```python
+# In src/analysis/repositories.py - run_atomic_llm_pipeline()
+# Stage 1: Compile context
+compiled_context = await compile_repository_context(...)
+
+# Stage 2: Generate structured output
+structured_output = await generate_structured_output(compiled_context, ...)
+
+# Stage 3: Classify repository (overrides Stage 2 values)
+classification = await classify_repository_type_and_discipline(compiled_context)
+# Override: repositoryType, discipline, justifications
+
+# Stage 4: Identify organizations
+organizations = await identify_related_organizations(compiled_context)
+# Set: relatedToOrganizations, relatedToOrganizationJustification
+
+# Stage 5: Search academic catalogs (repository-level only)
+linked_entities = await search_academic_catalogs(repository_name)
+# Set: repository.linkedEntities
+```
+
+### Key Design Principles
+
+1. **Stage Independence**: Each stage can be optimized independently
+2. **Schema Enforcement**: All stages use Pydantic models with strict validation
+3. **Field Override Pattern**: Later stages can override earlier stage values (e.g., Stage 3 overrides Stage 2's classification)
+4. **Simplified Models**: Use intuitive field names for LLMs (`name` not `legalName`), convert during reconciliation
+5. **Union Field Reconciliation**: Handle split union fields (e.g., `entityInfosciencePublication`, `entityInfoscienceAuthor`, `entityInfoscienceLab`) based on `entityType`
+
+### Repository Classification Schema
+
+**Critical**: The `RepositoryClassification` model uses `Literal` types to enforce enum constraints:
+
+```python
+# In src/agents/atomic_agents/models.py
+from ...data_models.models import Discipline, RepositoryType
+
+# Extract values from enums (avoid duplication)
+ValidDiscipline = Literal["Social sciences", "Anthropology", ...]  # All Discipline enum values
+ValidRepositoryType = Literal["software", "educational resource", ...]  # All RepositoryType enum values
+
+# Runtime verification ensures Literal values match enum values
+assert set(get_args(ValidDiscipline)) == {d.value for d in Discipline}
+assert set(get_args(ValidRepositoryType)) == {rt.value for rt in RepositoryType}
+
+class RepositoryClassification(BaseModel):
+    repositoryType: ValidRepositoryType  # Required, enforced by enum
+    discipline: List[ValidDiscipline]  # Required, at least one, enforced by enum
+    # ... justifications
+```
+
+**Benefits**:
+- LLM receives JSON schema with `enum` constraints
+- Pydantic validates against `Literal` types
+- Runtime assertions ensure synchronization with source enums
+- Fail-fast if values drift out of sync
+
+### Organization Identifier Requirements
+
+**System Prompt Emphasis**:
+- **Direct relationship required**: Organization must be directly involved with software (development, funding, hosting, partnership)
+- **NOT sufficient**: Side affiliation of an author (unless organization is directly involved)
+- **Required fields**: `organizationType` (required), `attributionConfidence` (optional)
+- **Field naming**: Use `name` in simplified model, convert to `legalName` in full model
+
+### Linked Entities Enrichment
+
+**Repository-Level Only (Default)**:
+- Searches Infoscience for publications about the repository/tool name
+- Stores results in `repository.linkedEntities`
+- Runs automatically in main pipeline
+
+**Author-Level (Optional)**:
+- Separate method: `run_author_linked_entities_enrichment()`
+- Controlled by `run_author_linked_entities` parameter in `run_analysis()`
+- Searches Infoscience for each author individually
+- Assigns results to `author.linkedEntities` for each Person
+
+**Union Field Handling**:
+- Entity union fields are split into three fields: `entityInfosciencePublication`, `entityInfoscienceAuthor`, `entityInfoscienceLab`
+- Reconciliation method (`_reconcile_entity_union`) selects correct field based on `entityType`
+- Converts `None` to empty lists for list fields (`subjects`, `authors`, `keywords`)
+- Only one union variant should be populated per relation
+
+### Best Practices
+1. **Always extract usage**: Check both direct attributes and `details` field
+2. **Provide estimates**: Use `estimate_tokens_from_messages()` for client-side token counting as fallback
+   - ⚠️ Use correct keys: `estimated.get("input_tokens")` NOT `estimated.get("prompt_tokens")`
+   - ⚠️ Use correct keys: `estimated.get("output_tokens")` NOT `estimated.get("completion_tokens")`
+3. **Log token usage**: Help with debugging and cost monitoring at INFO level
+4. **Accumulate across ALL agents**: Sum tokens from all agent runs
+   - ✅ `run_llm_analysis()` - Repository analysis
+   - ✅ `run_organization_enrichment()` - ROR matching
+   - ✅ `run_user_enrichment()` - Author enrichment
+   - ✅ `run_linked_entities_enrichment()` - Infoscience searches
+   - ✅ `run_epfl_final_assessment()` - Final assessment
+   - Each must accumulate both `self.total_*_tokens` AND `self.estimated_*_tokens`
+5. **Track timing**: Record start/end times in `run_analysis()`, calculate duration in `get_usage_stats()`
+6. **Status codes**: 200 for success, 500 for failures
+7. **Graceful degradation**: Wrap enrichment calls in try-except to prevent cascading failures
+8. **Separate data from usage**: Use `result.get("data")` and `result.get("usage")` pattern consistently
+9. **Handle legacy returns**: Support both dict format `{"data": ..., "usage": ...}` and direct object returns
+10. **Filter input data**: Remove inappropriate objects (e.g., Organization from user enrichment author list)
+11. **Never hardcode estimated tokens to 0**: Always calculate them using `estimate_tokens_from_messages()`
+12. **Optimize prompt size**: Reduce token usage by including only essential data:
+    - Pre-searched ROR data: Only essential fields (name, ror_id, country, website, 3 aliases, parent orgs)
+    - Prompt instructions: Concise and focused, avoid verbose explanations
+    - Token breakdown logging: Helps identify which sections consume most tokens
+13. **Token accumulation verification**:
+    - All agents accumulate tokens in `Repository` class instance variables
+    - `get_usage_stats()` returns accumulated totals from all agents
+    - `APIStats.calculate_total_tokens()` calculates both official and estimated totals
+    - If official API tokens are 0 (models don't report usage), estimated tokens provide fallback
+    - Both `total_tokens` and `estimated_total_tokens` are calculated and included in API response
+
+## Integration Patterns
+
+### Analysis Workflow
+1. Load model configuration
+2. Create PydanticAI model instance
+3. Prepare analysis context (filter inappropriate objects)
+4. Generate appropriate prompt
+5. Execute agent with retry logic
+6. **Extract token usage (official + estimated)**
+7. **Accumulate tokens at Repository level**
+8. Validate and return results with usage data
+
+### Result Processing
+- Parse structured outputs (JSON)
+- Validate against Pydantic models
+- **Extract and log token usage** (INFO level)
+- **Accumulate token counts across agents** (repo → user → org)
+- **Replace (not append) enriched data** to avoid duplicates
+- Merge with existing data appropriately
+- Include confidence scores
+- Log analysis outcomes and timing
+- Handle errors gracefully (don't let one enrichment failure break the chain)
