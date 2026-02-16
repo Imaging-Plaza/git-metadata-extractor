@@ -60,7 +60,7 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
 - **Organization Endpoints**: Process GitHub organization data
 - **Cache Management**: Monitor and control the caching system
     """,
-    version="2.0.0",
+    version="2.0.1",
     contact={
         "name": "EPFL Center for Imaging / SDSC",
         "url": "https://imaging-plaza.epfl.ch",
@@ -174,7 +174,7 @@ def index():
     Returns basic information about the API version, GIMIE version, and configured LLM model.
     """
     return {
-        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.0. Gimie Version 0.7.2. LLM Model {os.environ.get('MODEL', 'N/A (configured via model configs)')}",
+        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.1. Gimie Version 0.7.2. LLM Model {os.environ.get('MODEL', 'N/A (configured via model configs)')}",
     }
 
 

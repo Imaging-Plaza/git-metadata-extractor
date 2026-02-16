@@ -177,6 +177,34 @@ docs:
     @echo "Opening API documentation at http://localhost:{{PORT}}/docs"
     @if command -v xdg-open > /dev/null; then xdg-open http://localhost:{{PORT}}/docs; elif command -v open > /dev/null; then open http://localhost:{{PORT}}/docs; else echo "Please open http://localhost:{{PORT}}/docs in your browser"; fi
 
+# ============================================================================
+# Project Documentation Site (MkDocs + Mike)
+# ============================================================================
+
+# Serve project documentation locally with live reload
+docs-serve:
+    mkdocs serve
+
+# Build project documentation and fail on warnings
+docs-build:
+    mkdocs build --strict
+
+# List published documentation versions and aliases
+docs-version-list:
+    mike list
+
+# Deploy docs from current branch as dev + latest aliases
+docs-deploy-dev:
+    mike deploy --push --branch gh-pages --update-aliases dev latest
+
+# Deploy docs for a specific release version and update stable alias
+docs-deploy-release VERSION:
+    mike deploy --push --branch gh-pages --update-aliases {{VERSION}} stable
+
+# Set the default docs version/alias
+docs-set-default VERSION:
+    mike set-default --push --branch gh-pages {{VERSION}}
+
 # Test the main extract endpoint
 api-test-extract:
     curl -X GET "http://localhost:{{PORT}}/v1/extract/json/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
