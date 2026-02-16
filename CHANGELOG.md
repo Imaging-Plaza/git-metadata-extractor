@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 
 
+## [2.0.1] - 2026-02-16
+
+### Added
+- Documentation and CI for github-pages
+
+### Changed
+- Bumped project version to `2.0.1`.
+- Updated API version metadata and root welcome message to `v2.0.1`.
+
+
+
 ## [2.0.0] - 2025-10-07
 
 ### Added

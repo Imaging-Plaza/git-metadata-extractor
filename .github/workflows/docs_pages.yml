@@ -1,0 +1,51 @@
+name: Publish Documentation
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs]"
+
+      - name: Validate documentation build
+        run: mkdocs build --strict
+
+      - name: Configure git identity for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy dev and latest aliases from main
+        if: github.ref == 'refs/heads/main'
+        run: mike deploy --push --branch gh-pages --update-aliases dev latest
+
+      - name: Deploy release version from tag and update stable alias
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mike deploy --push --branch gh-pages --update-aliases "${VERSION}" stable
+          mike set-default --push --branch gh-pages stable
