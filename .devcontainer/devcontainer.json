@@ -11,13 +11,12 @@
   ],
   "remoteUser": "vscode",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-
   "customizations": {
     "vscode": {
-    "settings": {
-      "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-      "python.envFile": "${workspaceFolder}/.env"
-    },
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.envFile": "${workspaceFolder}/.env"
+      },
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
@@ -27,7 +26,8 @@
       ]
     }
   },
-
-  "forwardPorts": [1234],
+  "forwardPorts": [
+    1234
+  ],
   "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc"
 }

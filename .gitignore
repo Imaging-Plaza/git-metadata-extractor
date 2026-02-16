@@ -2,6 +2,7 @@
 .ruff_cache
 data
 api_cache.db
+.env2
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -167,3 +168,7 @@ cython_debug/
 #.idea/
 
 else/
+DeepLabCutDeepLabCut.json
+MalloryWittwer.json
+output.jsonld
+sdsc-ordes.json

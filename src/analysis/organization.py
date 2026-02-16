@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 
 from ..agents import llm_request_org_infos
-from ..agents.academic_catalog_enrichment import enrich_organization_academic_catalog
 from ..agents.epfl_assessment import assess_epfl_relationship
+from ..agents.linked_entities_enrichment import enrich_organization_linked_entities
 from ..agents.organization_enrichment import enrich_organizations_from_dict
 from ..cache.cache_manager import CacheManager, get_cache_manager
 from ..data_models import GitHubOrganization
@@ -47,6 +47,7 @@ class Organization:
         # Map GitHubOrganizationMetadata fields to GitHubOrganization model
         self.data = GitHubOrganization(
             # Basic fields
+            id=f"https://github.com/{self.org_name}",  # Full GitHub organization URL
             name=org_data_dict.get("name"),
             githubOrganizationMetadata=github_metadata,
             # Enrichment fields (will be populated by analysis steps)
@@ -62,6 +63,340 @@ class Organization:
             relatedToEPFLConfidence=None,
             infoscienceEntities=None,
         )
+
+    async def run_atomic_llm_pipeline(self):
+        """
+        Run atomic LLM pipeline for organization analysis.
+
+        Stages:
+        1. Context Compilation - Gather organization info using tools (Infoscience, web search)
+        2. Structured Output - Extract basic identity fields (name, description)
+        3. Classification - Classify organizationType and discipline with justifications
+        4. Organization Identifier - Identify related organizations (parent, partner, affiliated orgs)
+        5. Linked Entities - Search Infoscience for orgunit and related publications
+        6. EPFL Assessment - Final holistic EPFL relationship assessment
+        """
+        logger.info(f"Starting atomic LLM pipeline for {self.org_name}")
+
+        if self.data is None:
+            logger.error("Cannot run atomic LLM pipeline: no data available")
+            return
+
+        # Prepare GitHub metadata
+        github_metadata = (
+            self.data.githubOrganizationMetadata.model_dump()
+            if self.data.githubOrganizationMetadata
+            else {}
+        )
+
+        org_url = f"https://github.com/{self.org_name}"
+
+        # Stage 1: Compile organization context
+        logger.info("Stage 1: Compiling organization context...")
+        from ..agents.atomic_agents.organization_context_compiler import (
+            compile_organization_context,
+        )
+
+        compiled_result = await compile_organization_context(
+            org_name=self.org_name,
+            org_url=org_url,
+            github_metadata=github_metadata,
+        )
+
+        compiled_context = compiled_result.get("data")
+        usage = compiled_result.get("usage")
+
+        if not compiled_context:
+            logger.error("Organization context compilation failed")
+            return
+
+        # Accumulate usage from context compiler
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+            # Log Stage 1 token usage
+            logger.info("=" * 80)
+            logger.info("STAGE 1 (Organization Context Compiler) Token Usage:")
+            logger.info(
+                f"  Input tokens:  {usage.get('input_tokens', 0):,} (official) | {usage.get('estimated_input_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Output tokens: {usage.get('output_tokens', 0):,} (official) | {usage.get('estimated_output_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Total tokens:  {usage.get('input_tokens', 0) + usage.get('output_tokens', 0):,}",
+            )
+            logger.info("=" * 80)
+
+        # Stage 2: Generate structured output
+        logger.info("Stage 2: Generating structured output...")
+        # Import the simplified model (it's generated at module level in organization_structured_output)
+        from ..agents.atomic_agents.organization_structured_output import (
+            _SIMPLIFIED_MODEL,
+            generate_organization_structured_output,
+        )
+
+        # Generate schema from the simplified model's JSON schema
+        schema = _SIMPLIFIED_MODEL.model_json_schema()
+        # Create a minimal example for reference
+        example = {
+            "name": "Example Organization",
+            "description": "Example organization description",
+        }
+
+        structured_result = await generate_organization_structured_output(
+            compiled_context=compiled_context,
+            schema=schema,
+            example=example,
+        )
+
+        structured_output = structured_result.get("data")
+        usage = structured_result.get("usage")
+
+        if not structured_output:
+            logger.error("Organization structured output generation failed")
+            return
+
+        # Accumulate usage from structured output
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+            # Log Stage 2 token usage
+            logger.info("=" * 80)
+            logger.info("STAGE 2 (Organization Structured Output) Token Usage:")
+            logger.info(
+                f"  Input tokens:  {usage.get('input_tokens', 0):,} (official) | {usage.get('estimated_input_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Output tokens: {usage.get('output_tokens', 0):,} (official) | {usage.get('estimated_output_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Total tokens:  {usage.get('input_tokens', 0) + usage.get('output_tokens', 0):,}",
+            )
+            logger.info("=" * 80)
+
+        # Convert simplified output to dict
+        if hasattr(structured_output, "model_dump"):
+            simplified_dict = structured_output.model_dump()
+        else:
+            simplified_dict = structured_output
+
+        # Merge basic fields into self.data
+        if simplified_dict.get("name"):
+            self.data.name = simplified_dict.get("name")
+        if simplified_dict.get("description"):
+            self.data.description = simplified_dict.get("description")
+
+        # Stage 3: Classify organization type and discipline
+        logger.info("Stage 3: Classifying organization type and discipline...")
+        from ..agents.atomic_agents.organization_classifier import (
+            classify_organization_type_and_discipline,
+        )
+
+        classification_result = await classify_organization_type_and_discipline(
+            compiled_context=compiled_context,
+        )
+
+        classification = classification_result.get("data")
+        usage = classification_result.get("usage")
+
+        if not classification:
+            logger.error("Organization classification failed")
+            return
+
+        # Accumulate usage from classification
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+            # Log Stage 3 token usage
+            logger.info("=" * 80)
+            logger.info("STAGE 3 (Organization Classifier) Token Usage:")
+            logger.info(
+                f"  Input tokens:  {usage.get('input_tokens', 0):,} (official) | {usage.get('estimated_input_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Output tokens: {usage.get('output_tokens', 0):,} (official) | {usage.get('estimated_output_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Total tokens:  {usage.get('input_tokens', 0) + usage.get('output_tokens', 0):,}",
+            )
+            logger.info("=" * 80)
+
+        # Convert classification to dict
+        if hasattr(classification, "model_dump"):
+            classification_dict = classification.model_dump()
+        else:
+            classification_dict = classification
+
+        # Update organizationType and discipline fields
+        if classification_dict.get("organizationType"):
+            self.data.organizationType = classification_dict.get("organizationType")
+        if classification_dict.get("organizationTypeJustification"):
+            self.data.organizationTypeJustification = classification_dict.get(
+                "organizationTypeJustification",
+            )
+        if classification_dict.get("discipline"):
+            # Convert discipline strings to Discipline enum values
+            from ..data_models.models import Discipline
+
+            discipline_strings = classification_dict.get("discipline", [])
+            discipline_enums = []
+            for disc_str in discipline_strings:
+                try:
+                    # Try to find matching Discipline enum by value
+                    discipline_enum = Discipline(disc_str)
+                    discipline_enums.append(discipline_enum)
+                except ValueError:
+                    logger.warning(f"Unknown discipline value: {disc_str}, skipping")
+                    continue
+
+            if discipline_enums:
+                self.data.discipline = discipline_enums
+        if classification_dict.get("disciplineJustification"):
+            self.data.disciplineJustification = classification_dict.get(
+                "disciplineJustification",
+                [],
+            )
+
+        logger.info(
+            f"Organization classified as '{classification_dict.get('organizationType', 'unknown')}' "
+            f"with {len(classification_dict.get('discipline', []))} discipline(s)",
+        )
+
+        # Stage 4: Identify related organizations
+        logger.info("Stage 4: Identifying related organizations...")
+        from ..agents.atomic_agents.organization_identifier import (
+            identify_related_organizations,
+        )
+        from ..data_models.models import Organization
+
+        organization_result = await identify_related_organizations(
+            compiled_context=compiled_context,
+            context_type="organization",
+        )
+
+        organization_data = organization_result.get("data")
+        usage = organization_result.get("usage")
+
+        if not organization_data:
+            logger.error("Organization identification failed")
+            return
+
+        # Accumulate usage from organization identification
+        if usage:
+            self.total_input_tokens += usage.get("input_tokens", 0)
+            self.total_output_tokens += usage.get("output_tokens", 0)
+            if "estimated_input_tokens" in usage:
+                self.estimated_input_tokens += usage.get("estimated_input_tokens", 0)
+                self.estimated_output_tokens += usage.get("estimated_output_tokens", 0)
+
+            # Log Stage 4 token usage
+            logger.info("=" * 80)
+            logger.info("STAGE 4 (Organization Identifier) Token Usage:")
+            logger.info(
+                f"  Input tokens:  {usage.get('input_tokens', 0):,} (official) | {usage.get('estimated_input_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Output tokens: {usage.get('output_tokens', 0):,} (official) | {usage.get('estimated_output_tokens', 0):,} (estimated)",
+            )
+            logger.info(
+                f"  Total tokens:  {usage.get('input_tokens', 0) + usage.get('output_tokens', 0):,}",
+            )
+            logger.info("=" * 80)
+
+        # Convert organization data to dict
+        if hasattr(organization_data, "model_dump"):
+            organization_dict = organization_data.model_dump()
+        else:
+            organization_dict = organization_data
+
+        # Convert SimplifiedOrganization objects to full Organization objects
+        organizations = []
+        for org_data in organization_dict.get("relatedToOrganizations", []):
+            # Convert dict to Organization if needed
+            if isinstance(org_data, dict):
+                # Map SimplifiedOrganization.name to Organization.legalName
+                if "name" in org_data and "legalName" not in org_data:
+                    org_data["legalName"] = org_data.pop("name")
+
+                # Ensure type is set
+                if "type" not in org_data:
+                    org_data["type"] = "Organization"
+                # Set source if not present
+                if "source" not in org_data:
+                    org_data["source"] = "atomic_agent"
+                # Ensure id is set (use legalName as fallback if no id)
+                if "id" not in org_data or not org_data["id"]:
+                    org_data["id"] = org_data.get("legalName", "")
+
+                try:
+                    org = Organization(**org_data)
+                    organizations.append(org)
+                except Exception as e:
+                    logger.warning(f"Failed to create Organization from dict: {e}")
+                    continue
+            elif isinstance(org_data, Organization):
+                organizations.append(org_data)
+            else:
+                logger.warning(
+                    f"Unexpected organization data type: {type(org_data)}",
+                )
+
+        if organizations:
+            # Merge with existing organizations (avoid duplicates)
+            existing_orgs = self.data.relatedToOrganization or []
+            existing_names = set()
+            for org in existing_orgs:
+                if isinstance(org, Organization):
+                    existing_names.add(org.legalName.lower() if org.legalName else "")
+                elif isinstance(org, str):
+                    existing_names.add(org.lower())
+
+            for org in organizations:
+                org_name = org.legalName.lower() if org.legalName else ""
+                if org_name not in existing_names:
+                    existing_orgs.append(org)
+                    existing_names.add(org_name)
+
+            self.data.relatedToOrganization = existing_orgs
+            logger.info(
+                f"Identified {len(organizations)} related organizations (total: {len(existing_orgs)})",
+            )
+
+        # Update justifications
+        if organization_dict.get("relatedToOrganizationJustification"):
+            existing_justifications = self.data.relatedToOrganizationJustification or []
+            new_justifications = organization_dict.get(
+                "relatedToOrganizationJustification",
+                [],
+            )
+            # Merge justifications (avoid duplicates)
+            for justification in new_justifications:
+                if justification not in existing_justifications:
+                    existing_justifications.append(justification)
+            self.data.relatedToOrganizationJustification = existing_justifications
+
+        # Stage 5: Linked entities enrichment
+        logger.info("Stage 5: Searching linked entities (orgunit and publications)...")
+        await self.run_linked_entities_enrichment()
+
+        # Stage 6: EPFL assessment
+        logger.info("Stage 6: Running EPFL final assessment...")
+        await self.run_epfl_final_assessment()
+
+        logger.info("Atomic LLM pipeline completed successfully")
 
     async def run_llm_analysis(self):
         """Run LLM analysis to populate organizationType and discipline fields"""
@@ -96,7 +431,7 @@ class Organization:
             result = await llm_request_org_infos(
                 org_name=self.org_name,
                 org_data=llm_input_data,
-                max_tokens=20000,
+                max_tokens=10000,
             )
 
             # Extract data and usage
@@ -359,7 +694,7 @@ class Organization:
 
         logger.info(f"Organization enrichment completed for {self.org_name}")
 
-    async def run_academic_catalog_enrichment(self):
+    async def run_linked_entities_enrichment(self):
         """Enrich organization with academic catalog relations (Infoscience, etc.)"""
         logger.info(f"Academic catalog enrichment for {self.org_name}")
 
@@ -384,11 +719,12 @@ class Organization:
             website = github_metadata.get("blog", "")
             members = github_metadata.get("public_members", [])
 
-            result = await enrich_organization_academic_catalog(
+            result = await enrich_organization_linked_entities(
                 org_name=self.org_name,
                 description=description,
                 website=website,
                 members=members,
+                force_refresh=self.force_refresh,
             )
 
             # Extract data and usage
@@ -410,7 +746,7 @@ class Organization:
 
             # Store the academic catalog relations
             if enrichment_data and hasattr(enrichment_data, "relations"):
-                self.data.academicCatalogRelations = enrichment_data.relations
+                self.data.linkedEntities = enrichment_data.relations
                 logger.info(
                     f"Stored {len(enrichment_data.relations)} academic catalog relations",
                 )
@@ -562,9 +898,9 @@ class Organization:
         if output_type == "pydantic":
             return self.data
         elif output_type == "json":
-            return self.data.model_dump_json(indent=2)
+            return self.data.model_dump_json(indent=2, exclude_none=True)
         elif output_type == "dict":
-            return self.data.model_dump()
+            return self.data.model_dump(exclude_none=True)
         else:
             logging.error(f"Unsupported output type: {output_type}")
             return None
@@ -599,11 +935,11 @@ class Organization:
         self.run_github_parsing()
         logging.info(f"GitHub parsing completed for {self.org_name}")
 
-        # Run LLM analysis
+        # Run atomic LLM pipeline
         if run_llm:
-            logging.info(f"LLM analysis for {self.org_name}")
-            await self.run_llm_analysis()
-            logging.info(f"LLM analysis completed for {self.org_name}")
+            logging.info(f"Atomic LLM pipeline for {self.org_name}")
+            await self.run_atomic_llm_pipeline()
+            logging.info(f"Atomic LLM pipeline completed for {self.org_name}")
 
         # Run organization enrichment
         if run_organization_enrichment:
@@ -611,17 +947,8 @@ class Organization:
             await self.run_organization_enrichment()
             logging.info(f"Organization enrichment completed for {self.org_name}")
 
-        # Run academic catalog enrichment
-        if self.data is not None:
-            logging.info(f"Academic catalog enrichment for {self.org_name}")
-            await self.run_academic_catalog_enrichment()
-            logging.info(f"Academic catalog enrichment completed for {self.org_name}")
-
-        # Run final EPFL assessment after all enrichments complete
-        if self.data is not None:
-            logging.info(f"Final EPFL assessment for {self.org_name}")
-            await self.run_epfl_final_assessment()
-            logging.info(f"Final EPFL assessment completed for {self.org_name}")
+        # Note: Linked entities enrichment and EPFL assessment are already included
+        # in the atomic LLM pipeline (Stages 5 and 6), so we don't need to run them again here
 
         # Validate and cache if we have data
         if self.data is not None:

@@ -80,7 +80,9 @@ async def fetch_html_content(url: str, use_selenium: bool = True) -> str:
                     # Convert to markdown to preserve structure
                     markdown_content = md(str(soup), heading_style="ATX", bullets="-")
 
-                    logger.info(f"✓ Fetched HTML content from {url} using Selenium (converted to markdown)")
+                    logger.info(
+                        f"✓ Fetched HTML content from {url} using Selenium (converted to markdown)",
+                    )
                     return markdown_content
 
                 finally:
@@ -111,7 +113,9 @@ async def fetch_html_content(url: str, use_selenium: bool = True) -> str:
             # Convert to markdown to preserve structure
             markdown_content = md(str(soup), heading_style="ATX", bullets="-")
 
-            logger.info(f"✓ Fetched HTML content from {url} using httpx (converted to markdown)")
+            logger.info(
+                f"✓ Fetched HTML content from {url} using httpx (converted to markdown)",
+            )
             return markdown_content
 
     except Exception as e:
@@ -141,7 +145,11 @@ def normalize_infoscience_url(url_or_uuid: str, entity_type: str) -> Optional[st
         uuid = uuid_match.group(1)
     else:
         # Check if it's just a UUID
-        if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", url_or_uuid, re.IGNORECASE):
+        if re.match(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            url_or_uuid,
+            re.IGNORECASE,
+        ):
             uuid = url_or_uuid
         else:
             # Not a valid UUID format
@@ -175,4 +183,3 @@ def normalize_infoscience_author_url(url_or_uuid: str) -> Optional[str]:
 def normalize_infoscience_lab_url(url_or_uuid: str) -> Optional[str]:
     """Normalize an Infoscience lab/orgunit URL."""
     return normalize_infoscience_url(url_or_uuid, "orgunit")
-

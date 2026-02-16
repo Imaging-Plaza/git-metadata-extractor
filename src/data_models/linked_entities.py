@@ -8,11 +8,11 @@ Unified models for academic catalog relationships across multiple catalogs
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, List, Optional, Union
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .infoscience import InfoscienceAuthor, InfoscienceLab, InfosciencePublication
+from .infoscience import InfoscienceAuthor, InfoscienceOrgUnit, InfosciencePublication
 
 
 class CatalogType(str, Enum):
@@ -31,7 +31,7 @@ class EntityType(str, Enum):
     ORGUNIT = "orgunit"
 
 
-class AcademicCatalogRelation(BaseModel):
+class linkedEntitiesRelation(BaseModel):
     """
     Relationship to an entity in an academic catalog.
 
@@ -49,15 +49,50 @@ class AcademicCatalogRelation(BaseModel):
         description="Type of entity (publication, person, orgunit)",
     )
 
-    entity: Union[
-        InfosciencePublication,
-        InfoscienceAuthor,
-        InfoscienceLab,
-        dict[str, Any],
+    entity: Optional[
+        Union[
+            InfosciencePublication,
+            InfoscienceAuthor,
+            InfoscienceOrgUnit,
+        ]
     ] = Field(
-        description="Full entity details. For Infoscience: InfosciencePublication, "
-        "InfoscienceAuthor, or InfoscienceLab. For other catalogs: structured dict.",
+        default=None,
+        description="Full entity details. Can be InfosciencePublication, InfoscienceAuthor, "
+        "or InfoscienceOrgUnit depending on entityType. Can be None if only URL/UUID available.",
     )
+
+    entityInfosciencePublication: Optional[InfosciencePublication] = Field(
+        default=None,
+        description="Full entity details for an Infoscience publication. Required if entityType is 'publication'.",
+    )
+
+    entityInfoscienceAuthor: Optional[InfoscienceAuthor] = Field(
+        default=None,
+        description="Full entity details for an Infoscience author. Required if entityType is 'person'.",
+    )
+
+    entityInfoscienceOrgUnit: Optional[InfoscienceOrgUnit] = Field(
+        default=None,
+        description="Full entity details for an Infoscience organizational unit. Required if entityType is 'orgunit'.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.entity:
+            if isinstance(self.entity, InfosciencePublication):
+                self.entityInfosciencePublication = self.entity
+            elif isinstance(self.entity, InfoscienceAuthor):
+                self.entityInfoscienceAuthor = self.entity
+            elif isinstance(self.entity, InfoscienceOrgUnit):
+                self.entityInfoscienceOrgUnit = self.entity
+        return super().model_post_init(__context)
+
+    def model_dump(self, *args, **kwargs):
+        kwargs["exclude"] = {
+            "entityInfosciencePublication",
+            "entityInfoscienceAuthor",
+            "entityInfoscienceOrgUnit",
+        }
+        return super().model_dump(*args, **kwargs)
 
     confidence: float = Field(
         description="Confidence score (0.0-1.0) for this relationship",
@@ -70,58 +105,51 @@ class AcademicCatalogRelation(BaseModel):
         description="Explanation of why this entity is related and how it was found",
     )
 
-    matchedOn: Optional[List[str]] = Field(
-        description="Fields used to match this entity (e.g., ['name', 'email'], ['doi'])",
-        default_factory=list,
-    )
-
-    def get_display_name(self) -> str:
-        """Get a display name for this entity."""
-        if isinstance(
-            self.entity,
-            (InfosciencePublication, InfoscienceLab, InfoscienceAuthor),
-        ):
-            return getattr(self.entity, "title", None) or getattr(
-                self.entity,
-                "name",
-                "Unknown",
-            )
-        if isinstance(self.entity, dict):
-            return self.entity.get("title") or self.entity.get("name", "Unknown")
-        return "Unknown"
-
-    def get_url(self) -> Optional[str]:
-        """Get the URL for this entity if available."""
-        if isinstance(self.entity, InfosciencePublication):
-            return self.entity.url
-        if isinstance(self.entity, InfoscienceAuthor):
-            return self.entity.profile_url
-        if isinstance(self.entity, InfoscienceLab):
-            return self.entity.url
-        if isinstance(self.entity, dict):
-            return self.entity.get("url") or self.entity.get("profile_url")
-        return None
-
     def to_markdown(self) -> str:
         """Convert relation to markdown format for logging/display."""
+        entity = None
+        if self.entityType == EntityType.PUBLICATION:
+            entity = self.entityInfosciencePublication
+        elif self.entityType == EntityType.PERSON:
+            entity = self.entityInfoscienceAuthor
+        elif self.entityType == EntityType.ORGUNIT:
+            entity = self.entityInfoscienceOrgUnit
+
+        def get_display_name() -> str:
+            """Get a display name for this entity."""
+            if entity is None:
+                return "Unknown"
+            if hasattr(entity, "title"):
+                return entity.title or "Unknown"
+            if hasattr(entity, "name"):
+                return entity.name or "Unknown"
+            return "Unknown"
+
+        def get_url() -> Optional[str]:
+            """Get the URL for this entity if available."""
+            if entity is None:
+                return None
+            if hasattr(entity, "url"):
+                return str(entity.url) if entity.url else None
+            if hasattr(entity, "profile_url"):
+                return str(entity.profile_url) if entity.profile_url else None
+            return None
+
         lines = []
         lines.append(f"**{self.catalogType.value}** - {self.entityType.value}")
-        lines.append(f"*Entity:* {self.get_display_name()}")
+        lines.append(f"*Entity:* {get_display_name()}")
 
-        url = self.get_url()
+        url = get_url()
         if url:
             lines.append(f"*URL:* {url}")
 
         lines.append(f"*Confidence:* {self.confidence:.2f}")
         lines.append(f"*Justification:* {self.justification}")
 
-        if self.matchedOn:
-            lines.append(f"*Matched on:* {', '.join(self.matchedOn)}")
-
         return "\n".join(lines)
 
 
-class AcademicCatalogEnrichmentResult(BaseModel):
+class linkedEntitiesEnrichmentResult(BaseModel):
     """
     Result from academic catalog enrichment agent.
 
@@ -131,17 +159,17 @@ class AcademicCatalogEnrichmentResult(BaseModel):
     - organization_relations: Relations for each organization (orgunit profiles, publications)
     """
 
-    repository_relations: list[AcademicCatalogRelation] = Field(
+    repository_relations: list[linkedEntitiesRelation] = Field(
         description="Relations found for the repository itself (publications about the repository name/project)",
         default_factory=list,
     )
 
-    author_relations: dict[str, list[AcademicCatalogRelation]] = Field(
+    author_relations: dict[str, list[linkedEntitiesRelation]] = Field(
         description="Relations found for each author, keyed by author name as provided",
         default_factory=dict,
     )
 
-    organization_relations: dict[str, list[AcademicCatalogRelation]] = Field(
+    organization_relations: dict[str, list[linkedEntitiesRelation]] = Field(
         description="Relations found for each organization, keyed by organization name as provided",
         default_factory=dict,
     )
@@ -174,7 +202,7 @@ class AcademicCatalogEnrichmentResult(BaseModel):
 
     # Backward compatibility - aggregates all relations
     @property
-    def relations(self) -> list[AcademicCatalogRelation]:
+    def relations(self) -> list[linkedEntitiesRelation]:
         """Get all relations combined (for backward compatibility)."""
         all_relations = list(self.repository_relations)
         for author_rels in self.author_relations.values():
@@ -186,26 +214,26 @@ class AcademicCatalogEnrichmentResult(BaseModel):
     def get_by_catalog(
         self,
         catalog_type: CatalogType,
-    ) -> list[AcademicCatalogRelation]:
+    ) -> list[linkedEntitiesRelation]:
         """Get relations from a specific catalog."""
         return [r for r in self.relations if r.catalogType == catalog_type]
 
     def get_by_entity_type(
         self,
         entity_type: EntityType,
-    ) -> list[AcademicCatalogRelation]:
+    ) -> list[linkedEntitiesRelation]:
         """Get relations of a specific entity type."""
         return [r for r in self.relations if r.entityType == entity_type]
 
-    def get_publications(self) -> list[AcademicCatalogRelation]:
+    def get_publications(self) -> list[linkedEntitiesRelation]:
         """Get all publication relations."""
         return self.get_by_entity_type(EntityType.PUBLICATION)
 
-    def get_persons(self) -> list[AcademicCatalogRelation]:
+    def get_persons(self) -> list[linkedEntitiesRelation]:
         """Get all person relations."""
         return self.get_by_entity_type(EntityType.PERSON)
 
-    def get_orgunits(self) -> list[AcademicCatalogRelation]:
+    def get_orgunits(self) -> list[linkedEntitiesRelation]:
         """Get all organizational unit relations."""
         return self.get_by_entity_type(EntityType.ORGUNIT)
 
@@ -226,7 +254,22 @@ class AcademicCatalogEnrichmentResult(BaseModel):
         if self.relations:
             lines.append("### Relations\n")
             for idx, relation in enumerate(self.relations, 1):
-                lines.append(f"#### {idx}. {relation.get_display_name()}")
+                entity = None
+                if relation.entityType == EntityType.PUBLICATION:
+                    entity = relation.entityInfosciencePublication
+                elif relation.entityType == EntityType.PERSON:
+                    entity = relation.entityInfoscienceAuthor
+                elif relation.entityType == EntityType.ORGUNIT:
+                    entity = relation.entityInfoscienceOrgUnit
+
+                display_name = "Unknown"
+                if entity:
+                    if hasattr(entity, "title"):
+                        display_name = entity.title or "Unknown"
+                    elif hasattr(entity, "name"):
+                        display_name = entity.name or "Unknown"
+
+                lines.append(f"#### {idx}. {display_name}")
                 lines.append(relation.to_markdown())
                 lines.append("")  # Empty line between relations
         else:

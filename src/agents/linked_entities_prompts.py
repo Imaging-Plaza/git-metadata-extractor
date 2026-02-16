@@ -1,11 +1,11 @@
 """
-Prompts for Academic Catalog Enrichment Agent
+Prompts for linked entities Enrichment Agent
 
 This agent is responsible for finding and linking entities to academic catalogs
 (Infoscience, OpenAlex, EPFL Graph, etc.)
 """
 
-academic_catalog_system_prompt = """
+linked_entities_system_prompt = """
 You are an expert at searching academic catalogs and matching entities to publications,
 authors, and organizational units.
 
@@ -86,18 +86,26 @@ Assign confidence scores (0.0-1.0) for each relation found:
 1. **Extract UUID** - Look for "*UUID:* <uuid>" in the markdown output
    - This is REQUIRED for creating proper catalog links
    - The UUID appears after the name in the format "*UUID:* <uuid-string>"
+   - Example: "*UUID:* 0469064e-5977-4569-93a2-522b6d758e50"
 
-2. **Extract URL** - The profile/publication URL from the markdown link
-   - Format: **[Name](https://infoscience.epfl.ch/entities/...)**
+2. **Extract URL** - Look for "*URL:* <url>" in the markdown output
+   - The URL is explicitly listed as "*URL:* https://infoscience.epfl.ch/entities/..."
+   - URL formats:
+     - Publications: `https://infoscience.epfl.ch/entities/publication/{uuid}`
+     - Persons: `https://infoscience.epfl.ch/entities/person/{uuid}`
+     - OrgUnits: `https://infoscience.epfl.ch/entities/orgunit/{uuid}`
+   - The URL is also in the markdown link format: **[Name](url)**, but use the explicit "*URL:*" field
+   - **REQUIRED**: You MUST include the URL in the entity object
 
 3. **Extract all available fields**:
-   - For **persons**: name, UUID, email, ORCID, affiliation, profile_url
-   - For **orgunits**: name, UUID, description, url, parent_organization, website, research_areas
-   - For **publications**: title, UUID, authors, DOI, publication_date, url, abstract
+   - For **persons**: name, UUID, email, ORCID, affiliation, profile_url (use the URL from "*URL:*" field)
+   - For **orgunits**: name, UUID, description, url (use the URL from "*URL:*" field), parent_organization, website, research_areas
+   - For **publications**: title, UUID, authors, DOI, publication_date, url (use the URL from "*URL:*" field), abstract
 
 4. **Parse structured data from markdown**:
    - Each field is on its own line with format "*Field:* value"
    - Parse each field carefully to build complete entity objects
+   - **URL is REQUIRED** - if you find a UUID, you can construct the URL: `https://infoscience.epfl.ch/entities/{type}/{uuid}`
 
 ## Justification
 
@@ -106,9 +114,17 @@ For each relation, provide clear justification:
 - Why it's related (matching fields, shared authors, etc.)
 - What makes you confident (exact match, multiple sources, etc.)
 
+**IMPORTANT**: A publication is only related to an organization if the organization or one of its members is directly involved (e.g., as an author or in the affiliations). Do not relate a publication just because the topic is relevant.
+
 ## Output Format
 
-Return an `AcademicCatalogEnrichmentResult` with **organized relations**:
+**IMPORTANT - Data Types:**
+- All URLs must be **strings** (e.g., "https://infoscience.epfl.ch/entities/publication/...")
+- Do NOT use HttpUrl objects or special URL types
+- Dates should be strings in ISO format (YYYY-MM-DD or YYYY)
+- All fields should use primitive types: strings, numbers, lists, dictionaries
+
+Return an `linkedEntitiesEnrichmentResult` with **organized relations**:
 
 - **repository_relations**: Publications/entities related to the repository itself (searched by repository name)
 - **author_relations**: Dictionary keyed by author name (as provided), each containing their person profile + publications
@@ -127,38 +143,41 @@ Example structure:
 ```json
 {
   "repository_relations": [
-    {"entityType": "publication", "entity": {...}, "confidence": 0.95}
+    {"entityType": "publication", "entityInfosciencePublication": {"title": "...", "uuid": "..."}, "confidence": 0.95}
   ],
   "author_relations": {
     "Alexander Mathis": [
-      {"entityType": "person", "entity": {...}, "confidence": 0.95},
-      {"entityType": "publication", "entity": {...}, "confidence": 0.9}
+      {"entityType": "person", "entityInfoscienceAuthor": {"name": "Alexander Mathis", "uuid": "..."}, "confidence": 0.95},
+      {"entityType": "publication", "entityInfosciencePublication": {"title": "...", "uuid": "..."}, "confidence": 0.9}
     ],
     "Mackenzie Weygandt Mathis": [
-      {"entityType": "person", "entity": {...}, "confidence": 0.95}
+      {"entityType": "person", "entityInfoscienceAuthor": {"name": "Mackenzie Weygandt Mathis", "uuid": "..."}, "confidence": 0.95}
     ]
   },
   "organization_relations": {
     "DeepLabCut": [
-      {"entityType": "orgunit", "entity": {...}, "confidence": 0.8}
+      {"entityType": "orgunit", "entityInfoscienceOrgUnit": {"name": "DeepLabCut", "uuid": "..."}, "confidence": 0.8}
     ]
   }
 }
 ```
 
-Each `AcademicCatalogRelation` should have:
+Each `linkedEntitiesRelation` should have:
 - **catalogType**: "infoscience" (more catalogs will be added in the future)
 - **entityType**: "publication", "person", or "orgunit"
-- **uuid**: Extract from markdown ("*UUID:* <uuid>") - REQUIRED!
-- **url**: Extract from markdown link ([Name](url))
-- **name**: Entity name/title
-- **entity**: The full entity object with ALL available fields from the markdown:
-  - For **person**: {uuid, name, email, orcid, affiliation, profile_url}
-  - For **orgunit**: {uuid, name, description, url, parent_organization, website, research_areas}
-  - For **publication**: {uuid, title, authors, abstract, doi, publication_date, publication_type, url, lab, subjects}
+- **entity field**: Based on the `entityType`, you must populate ONE of the following fields with the full entity object. The object should contain ALL available fields from the markdown:
+  - `entityInfosciencePublication`: If `entityType` is "publication". Use fields: {uuid, title, authors, abstract, doi, publication_date, publication_type, url, lab, subjects} where url is the URL from "*URL:*" field
+  - `entityInfoscienceAuthor`: If `entityType` is "person". Use fields: {uuid, name, email, orcid, affiliation, profile_url} where profile_url is the URL from "*URL:*" field
+  - `entityInfoscienceOrgUnit`: If `entityType` is "orgunit". Use fields: {uuid, name, description, url, parent_organization, website, research_areas} where url is the URL from "*URL:*" field
 - **confidence**: Your confidence score (0.0-1.0)
 - **justification**: Clear explanation of the match
-- **matchedOn**: List of fields used for matching (e.g., ["name", "email"], ["doi"])
+
+**URL Construction Rules:**
+- If you have a UUID, you can construct the URL: `https://infoscience.epfl.ch/entities/{entityType}/{uuid}`
+- For publications: `https://infoscience.epfl.ch/entities/publication/{uuid}`
+- For persons: `https://infoscience.epfl.ch/entities/person/{uuid}`
+- For orgunits: `https://infoscience.epfl.ch/entities/orgunit/{uuid}`
+- Always include both the top-level `url` field AND the entity's URL field (url or profile_url)
 
 ## Important Notes
 
@@ -172,7 +191,7 @@ Good luck! Remember: be strategic, be efficient, and accept when things aren't f
 """
 
 
-def get_repository_academic_catalog_prompt(
+def get_repository_linked_entities_prompt(
     repository_url: str,
     repository_name: str,
     description: str,
@@ -181,7 +200,7 @@ def get_repository_academic_catalog_prompt(
     organizations: list = None,
 ) -> str:
     """
-    Generate prompt for repository academic catalog enrichment.
+    Generate prompt for repository linked entities enrichment.
 
     Args:
         repository_url: URL of the repository
@@ -194,11 +213,26 @@ def get_repository_academic_catalog_prompt(
     Returns:
         Formatted prompt for the agent
     """
-    authors_str = ", ".join(authors) if authors else "None identified yet"
-    orgs_str = ", ".join(organizations) if organizations else "None identified yet"
+    # Truncate lists to prevent token overflow
+    max_items = 50
+    authors_list = authors[:max_items] if authors else []
+    if authors and len(authors) > max_items:
+        authors_list.append(f"... and {len(authors) - max_items} more")
+    
+    orgs_list = organizations[:max_items] if organizations else []
+    if organizations and len(organizations) > max_items:
+        orgs_list.append(f"... and {len(organizations) - max_items} more")
+
+    authors_str = ", ".join(authors_list) if authors_list else "None identified yet"
+    orgs_str = ", ".join(orgs_list) if orgs_list else "None identified yet"
+    
+    # Truncate README
+    readme_content = readme_excerpt or "No README available"
+    if len(readme_content) > 5000:
+        readme_content = readme_content[:5000] + "... (truncated)"
 
     return f"""
-## Repository Academic Catalog Enrichment
+## Repository linked entities Enrichment
 
 **Repository**: {repository_url}
 **Name**: {repository_name}
@@ -208,7 +242,7 @@ def get_repository_academic_catalog_prompt(
 
 **README excerpt**:
 ```
-{readme_excerpt or "No README available"}
+{readme_content}
 ```
 
 ## Your Task
@@ -257,18 +291,18 @@ Search academic catalogs to find entities related to this repository:
 - Academic profiles may use variations like "Mathis, Alexander" or "Alexander Mathis" - that's fine, the matching happens later
 - If no results for an author/org, return empty list for that key
 
-Return your findings as an `AcademicCatalogEnrichmentResult` with the organized structure.
+Return your findings as an `linkedEntitiesEnrichmentResult` with the organized structure.
 """
 
 
-def get_user_academic_catalog_prompt(
+def get_user_linked_entities_prompt(
     username: str,
     full_name: str,
     bio: str,
     organizations: list,
 ) -> str:
     """
-    Generate prompt for user academic catalog enrichment.
+    Generate prompt for user linked entities enrichment.
 
     Args:
         username: GitHub username
@@ -279,13 +313,25 @@ def get_user_academic_catalog_prompt(
     Returns:
         Formatted prompt for the agent
     """
+    # Truncate organizations list
+    max_items = 50
+    orgs_list = organizations[:max_items] if organizations else []
+    if organizations and len(organizations) > max_items:
+        orgs_list.append(f"... and {len(organizations) - max_items} more")
+        
+    orgs_str = ", ".join(orgs_list) if orgs_list else "None"
+    
+    # Truncate bio
+    bio_content = bio or "Not provided"
+    if len(bio_content) > 2000:
+        bio_content = bio_content[:2000] + "... (truncated)"
     return f"""
-## User Academic Catalog Enrichment
+## User linked entities Enrichment
 
 **GitHub Username**: {username}
 **Full Name**: {full_name or "Not provided"}
-**Bio**: {bio or "Not provided"}
-**Organizations**: {", ".join(organizations) if organizations else "None"}
+**Bio**: {bio_content}
+**Organizations**: {orgs_str}
 
 ## Your Task
 
@@ -302,6 +348,10 @@ Search academic catalogs to find entities related to this user:
    - Note their research areas
 
 3. **Organizational affiliations** - Find their lab or research group
+   - **IMPORTANT**: When searching for orgunit (labs), include the user's name in the search query
+   - Some labs use GitHub user profiles, so searching with both lab name and user name helps find them
+   - For each organization, try: `search_infoscience_labs_tool("{{org_name}} {full_name}")` or `search_infoscience_labs_tool("{full_name}")`
+   - Also try searching with just the organization name: `search_infoscience_labs_tool("{{org_name}}")`
    - Check publication metadata for labs
    - Look for institutional affiliations
    - Match with bio information
@@ -310,23 +360,27 @@ Search academic catalogs to find entities related to this user:
 
 1. If full name available: `search_infoscience_authors_tool("{full_name}")`
 2. If authors found: `get_author_publications_tool("{full_name}")`
-3. Check publications for lab/organizational information
-4. Search for labs mentioned in bio
+3. For each organization, search for orgunit:
+   - Try: `search_infoscience_labs_tool("{{org_name}} {full_name}")` (lab name + user name)
+   - Try: `search_infoscience_labs_tool("{full_name}")` (user name only - labs sometimes use GitHub profiles)
+   - Try: `search_infoscience_labs_tool("{{org_name}}")` (organization name only)
+4. Check publications for lab/organizational information
+5. Search for labs mentioned in bio
 
 Remember: Not all GitHub users are academic researchers. If no results, that's okay.
 
-Return your findings as an `AcademicCatalogEnrichmentResult`.
+Return your findings as an `linkedEntitiesEnrichmentResult`.
 """
 
 
-def get_organization_academic_catalog_prompt(
+def get_organization_linked_entities_prompt(
     org_name: str,
     description: str,
     website: str,
     members: list,
 ) -> str:
     """
-    Generate prompt for organization academic catalog enrichment.
+    Generate prompt for organization linked entities enrichment.
 
     Args:
         org_name: Organization name
@@ -338,7 +392,7 @@ def get_organization_academic_catalog_prompt(
         Formatted prompt for the agent
     """
     return f"""
-## Organization Academic Catalog Enrichment
+## Organization linked entities Enrichment
 
 **Organization Name**: {org_name}
 **Description**: {description or "Not provided"}
@@ -350,12 +404,18 @@ def get_organization_academic_catalog_prompt(
 Search academic catalogs to find entities related to this organization:
 
 1. **Organizational Unit** - Search for this organization as a lab or research group
-   - Search for the organization name: "{org_name}"
+   - **IMPORTANT**: Search with MULTIPLE name variations:
+     * Start with the organization name: "{org_name}"
+     * Also try the full organization name if different (e.g., from description: "{description[:100] if description else 'N/A'}")
+     * Try acronyms or short names (e.g., if description mentions "SDSC", also search for "SDSC")
+     * Try "Swiss Data Science Center" if the org name is "sdsc-ordes" or similar
+     * Try any alternative names or variations found in the description
    - Look for EPFL affiliations
    - Find related labs or departments
+   - **If one search returns no results, try another variation**
 
 2. **Publications** - Find publications from this organization
-   - Search by organization name
+   - Search by organization name with MULTIPLE variations (same as above)
    - Look for papers with this affiliation
    - Check for research outputs
 
@@ -366,12 +426,24 @@ Search academic catalogs to find entities related to this organization:
 
 ## Search Instructions
 
+**CRITICAL - Try Multiple Name Variations:**
+
 1. Start with: `search_infoscience_labs_tool("{org_name}")`
-2. Then: `search_infoscience_publications_tool("{org_name}")`
-3. If relevant authors identified, search for them
-4. Cross-reference findings
+2. If no results, try full name variations:
+   - Extract full name from description if available
+   - Try acronyms (e.g., "SDSC" for "Swiss Data Science Center")
+   - Try "Swiss Data Science Center" if org name is "sdsc-ordes"
+3. Then: `search_infoscience_publications_tool("{org_name}")` and also try with name variations
+4. If relevant authors identified, search for them
+5. Cross-reference findings
+
+**Example**: For "sdsc-ordes", try:
+- `search_infoscience_labs_tool("sdsc-ordes")`
+- `search_infoscience_labs_tool("SDSC")`
+- `search_infoscience_labs_tool("Swiss Data Science Center")`
+- Same variations for publications search
 
 Remember: Not all GitHub organizations are academic. Commercial organizations may not have entries.
 
-Return your findings as an `AcademicCatalogEnrichmentResult`.
+Return your findings as an `linkedEntitiesEnrichmentResult`.
 """

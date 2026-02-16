@@ -12,7 +12,9 @@ from ..llm.model_config import (
     load_model_config,
     validate_config,
 )
-from ..utils.token_counter import estimate_tokens_from_messages
+from ..utils.token_counter import (
+    estimate_tokens_with_tools,
+)
 from .agents_management import run_agent_with_fallback
 from .epfl_assessment_prompts import (
     epfl_assessment_system_prompt,
@@ -102,26 +104,40 @@ async def assess_epfl_relationship(
             if hasattr(assessment_data, "model_dump_json")
             else ""
         )
-        estimated = estimate_tokens_from_messages(
-            system_prompt=epfl_assessment_system_prompt,
-            user_prompt=prompt,
-            response=response_text,
-        )
-
         # Extract actual token usage from result
         input_tokens = 0
         output_tokens = 0
+        tool_calls_count = 0
+
         if hasattr(result, "usage"):
             usage = result.usage
             input_tokens = getattr(usage, "input_tokens", 0) or 0
             output_tokens = getattr(usage, "output_tokens", 0) or 0
+            tool_calls_count = getattr(usage, "tool_calls", 0) or 0
 
             # Fallback to details if needed
             if input_tokens == 0 and output_tokens == 0 and hasattr(usage, "details"):
                 details = usage.details
                 if isinstance(details, dict):
-                    input_tokens = details.get("input_tokens", 0)
-                    output_tokens = details.get("output_tokens", 0)
+                    input_tokens = details.get("input_tokens", 0) or 0
+                    output_tokens = details.get("output_tokens", 0) or 0
+
+        # Calculate estimates with tool call support (always, for validation/fallback)
+        estimated = estimate_tokens_with_tools(
+            system_prompt=epfl_assessment_system_prompt,
+            user_prompt=prompt,
+            response=response_text,
+            tool_calls=tool_calls_count,
+            tool_results_text=None,
+        )
+
+        # Use estimates as primary when API returns 0
+        if input_tokens == 0 and output_tokens == 0:
+            logger.warning(
+                "API returned 0 tokens, using tiktoken estimates as primary counts",
+            )
+            input_tokens = estimated.get("input_tokens", 0)
+            output_tokens = estimated.get("output_tokens", 0)
 
         # Return with usage statistics
         return {

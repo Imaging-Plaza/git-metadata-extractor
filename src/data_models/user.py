@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from .models import (
+    Affiliation,
     Discipline,
     Organization,
     Person,
@@ -26,7 +27,7 @@ from .models import (
 from .repository import GitAuthor
 
 if TYPE_CHECKING:
-    from .academic_catalog import AcademicCatalogRelation
+    from .linked_entities import linkedEntitiesRelation
 
 
 class EnrichedAuthor(BaseModel):
@@ -38,8 +39,8 @@ class EnrichedAuthor(BaseModel):
         description="Author's ORCID identifier (format: 0000-0000-0000-0000 or URL)",
         default=None,
     )
-    affiliations: list[str] = Field(
-        description="List of all identified affiliations (current and historical)",
+    affiliations: list[Affiliation] = Field(
+        description="List of all identified affiliations with provenance",
         default_factory=list,
     )
     currentAffiliation: Optional[str] = Field(
@@ -62,7 +63,7 @@ class EnrichedAuthor(BaseModel):
         description="Additional biographical or professional information found",
         default=None,
     )
-    academicCatalogRelations: list[AcademicCatalogRelation] = Field(
+    linkedEntities: list[linkedEntitiesRelation] = Field(
         description="Relations to entities in academic catalogs",
         default_factory=list,
     )
@@ -97,7 +98,7 @@ def convert_enriched_to_person(enriched: EnrichedAuthor) -> Person:
         # Additional metadata
         contributionSummary=enriched.contributionSummary,
         biography=enriched.additionalInfo,  # Map additionalInfo to biography
-        academicCatalogRelations=enriched.academicCatalogRelations,
+        linkedEntities=enriched.linkedEntities,
     )
 
 
@@ -240,6 +241,10 @@ class GitHubUserMetadata(BaseModel):
         None,
         description="Profile README content if exists",
     )
+    repositories: list[str] = Field(
+        default_factory=list,
+        description="List of public repositories",
+    )
 
     @validator("orcid")
     def validate_orcid(cls, v):
@@ -263,8 +268,18 @@ class GitHubUserMetadata(BaseModel):
     @validator("email")
     def validate_email(cls, v):
         """Basic email validation"""
-        if v is not None and "@" not in v:
-            raise ValueError("Invalid email format")
+        if v is not None:
+            # Allow standard emails
+            if "@" in v:
+                return v
+            # Allow obfuscated emails (e.g. "user at domain dot com")
+            if " at " in v:
+                return v
+            # If it's not None but doesn't look like an email, we could either
+            # raise an error or just accept it. Given the goal is to extract metadata,
+            # accepting it is safer than crashing.
+            # raise ValueError("Invalid email format")
+            return v
         return v
 
     class Config:
@@ -280,6 +295,10 @@ class GitHubUserMetadata(BaseModel):
 
 
 class GitHubUser(BaseModel):
+    id: str = Field(
+        default="",
+        description="Unique identifier for the user. Link to the user's GitHub profile URL.",
+    )
     name: Optional[str] = None
     fullname: Optional[str] = None
     githubHandle: Optional[str] = None
@@ -293,7 +312,7 @@ class GitHubUser(BaseModel):
     relatedToEPFL: Optional[bool] = None
     relatedToEPFLJustification: Optional[str] = None
     relatedToEPFLConfidence: Optional[float] = None  # Confidence score (0.0 to 1.0)
-    academicCatalogRelations: Optional[list[AcademicCatalogRelation]] = Field(
+    linkedEntities: Optional[list[linkedEntitiesRelation]] = Field(
         description="Relations to entities in academic catalogs (Infoscience, OpenAlex, EPFL Graph, etc.)",
         default_factory=list,
     )

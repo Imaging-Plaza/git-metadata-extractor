@@ -4,10 +4,87 @@ URL validation utilities for LLM-generated content.
 
 import logging
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+
+ORCID_ID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
+ORCID_URL_PATTERN = re.compile(
+    r"^https?://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])/?$",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_valid_orcid_checksum(orcid_id: str) -> bool:
+    """
+    Validate ORCID checksum using ISO 7064 MOD 11-2.
+
+    Args:
+        orcid_id: ORCID identifier in canonical form (XXXX-XXXX-XXXX-XXXX)
+
+    Returns:
+        True if checksum is valid, False otherwise
+    """
+    digits = orcid_id.replace("-", "")
+    if len(digits) != 16:
+        return False
+
+    total = 0
+    for char in digits[:15]:
+        if not char.isdigit():
+            return False
+        total = (total + int(char)) * 2
+
+    remainder = total % 11
+    result = (12 - remainder) % 11
+    expected_check_digit = "X" if result == 10 else str(result)
+
+    return digits[-1] == expected_check_digit
+
+
+def normalize_orcid_id(orcid: Any) -> Optional[str]:
+    """
+    Normalize ORCID to canonical ID form (XXXX-XXXX-XXXX-XXXX).
+
+    Accepts both ID and URL input, validates pattern and checksum, and
+    returns None for invalid values.
+    """
+    if not orcid:
+        return None
+
+    if hasattr(orcid, "__str__"):
+        value = str(orcid).strip()
+    elif isinstance(orcid, str):
+        value = orcid.strip()
+    else:
+        return None
+
+    if not value:
+        return None
+
+    match = ORCID_URL_PATTERN.match(value)
+    if match:
+        candidate = match.group(1).upper()
+    else:
+        candidate = value.upper()
+
+    if not ORCID_ID_PATTERN.match(candidate):
+        return None
+
+    if not _is_valid_orcid_checksum(candidate):
+        return None
+
+    return candidate
+
+
+def normalize_orcid_url(orcid: Any) -> Optional[str]:
+    """Normalize ORCID input to canonical URL form."""
+    normalized_id = normalize_orcid_id(orcid)
+    if not normalized_id:
+        return None
+    return f"https://orcid.org/{normalized_id}"
 
 
 def is_valid_url(url: Any) -> bool:
@@ -99,27 +176,7 @@ def is_valid_orcid_url(url: Any) -> bool:
     Returns:
         True if valid ORCID URL, False otherwise
     """
-    if not url:
-        return False
-
-    # Handle Pydantic HttpUrl objects
-    if hasattr(url, "__str__"):
-        url = str(url)
-    elif not isinstance(url, str):
-        return False
-
-    url = url.strip()
-
-    # Check if it's a full ORCID URL
-    if url.startswith(("https://orcid.org/", "http://orcid.org/")):
-        orcid_id = url.replace("https://orcid.org/", "").replace(
-            "http://orcid.org/",
-            "",
-        )
-        return bool(re.match(r"^\d{4}-\d{4}-\d{4}-\d{4}$", orcid_id))
-
-    # Check if it's just the ORCID ID
-    return bool(re.match(r"^\d{4}-\d{4}-\d{4}-\d{4}$", url))
+    return normalize_orcid_id(url) is not None
 
 
 def is_valid_ror_url(url: Any) -> bool:
@@ -237,7 +294,7 @@ def validate_and_clean_urls(data: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(url_value, str) and url_value.strip() == "":
                 cleaned_data[field] = None
                 continue
-                
+
             if not is_valid_url(url_value):
                 logger.warning(f"Invalid URL in {field}: {url_value!r}")
                 cleaned_data[field] = None
@@ -277,24 +334,15 @@ def validate_author_urls(author: Dict[str, Any]) -> Dict[str, Any]:
     """
     cleaned_author = author.copy()
 
-    # Validate ORCID (validator in Person model handles format conversion)
+    # Validate ORCID and normalize to canonical ID format.
     if "orcid" in cleaned_author and cleaned_author["orcid"] is not None:
-        orcid = cleaned_author["orcid"]
-
-        # Convert to string if needed
-        if hasattr(orcid, "__str__"):
-            orcid = str(orcid)
-
-        if isinstance(orcid, str) and orcid.strip():
-            orcid = orcid.strip()
-            # Basic validation - Person model validator will handle format conversion
-            if not (re.match(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$", orcid) or is_valid_orcid_url(orcid)):
-                logger.warning(f"Invalid ORCID format: {orcid}")
-                cleaned_author["orcid"] = None
-            else:
-                cleaned_author["orcid"] = orcid
-        else:
+        original_orcid = cleaned_author["orcid"]
+        normalized_orcid = normalize_orcid_id(original_orcid)
+        if normalized_orcid is None:
+            logger.warning(f"Invalid ORCID format: {original_orcid}")
             cleaned_author["orcid"] = None
+        else:
+            cleaned_author["orcid"] = normalized_orcid
 
     return cleaned_author
 
