@@ -174,7 +174,7 @@ def index():
     Returns basic information about the API version, GIMIE version, and configured LLM model.
     """
     return {
-        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.0. Gimie Version 0.7.2. LLM Model {os.environ['MODEL']}",
+        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.0. Gimie Version 0.7.2. LLM Model {os.environ.get('MODEL', 'N/A (configured via model configs)')}",
     }
 
 
