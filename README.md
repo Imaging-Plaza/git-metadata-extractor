@@ -79,6 +79,48 @@ python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_p
 
 If no arguments are provided, it will use the default repository and output path.
 
+## Versioned documentation (GitHub Pages)
+
+The repository includes a versioned documentation site under `docs/` powered by MkDocs Material + Mike.
+
+Install docs dependencies:
+
+```bash
+uv pip install -e ".[docs]"
+```
+
+Local docs preview:
+
+```bash
+just docs-serve
+```
+
+Strict docs build:
+
+```bash
+just docs-build
+```
+
+Manual publish commands:
+
+```bash
+# Publish dev/latest from current branch
+just docs-deploy-dev
+
+# Publish a release version and update stable alias
+just docs-deploy-release 2.0.0
+
+# Set default version in selector
+just docs-set-default stable
+```
+
+Automation:
+
+- `.github/workflows/docs_pages.yml` publishes docs on:
+  - Pushes to `main` (`dev` + `latest`)
+  - Pushes of tags matching `v*` (release version + `stable`)
+- Configure GitHub Pages to serve from the `gh-pages` branch root.
+
 ## How to run the tool using Docker?
 
 1. You need to build the image.

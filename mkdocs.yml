@@ -1,0 +1,62 @@
+site_name: Git Metadata Extractor Documentation
+site_url: https://imaging-plaza.github.io/git-metadata-extractor/
+repo_url: https://github.com/Imaging-Plaza/git-metadata-extractor
+repo_name: Imaging-Plaza/git-metadata-extractor
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+
+plugins:
+  - search
+
+extra:
+  version:
+    provider: mike
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js
+  - assets/javascripts/mermaid-init.js
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - API and CLI: api-and-cli.md
+  - Architecture:
+      - Design Notes: architecture/design-notes.md
+      - Repository Analysis Strategy: AGENT_STRATEGY.md
+  - Integrations:
+      - Infoscience Integration: INFOSCIENCE_INTEGRATION.md
+      - Infoscience API Findings: INFOSCIENCE_API_FINDINGS.md
+  - JSON-LD:
+      - Conversion Guide: JSONLD_CONVERSION.md
+      - Mapping Documentation: PYDANTIC_JSONLD_MAPPING.md
+      - Conversion Summary: JSONLD_CONVERSION_SUMMARY.md
+      - Mapping Update: JSONLD_MAPPING_UPDATE.md
+      - JSON and JSON-LD CLI: JSON_JSONLD_CONVERSION_CLI.md
+  - Academic Catalog:
+      - Option B Implementation: ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md
+      - Refactor Summary: ACADEMIC_CATALOG_REFACTOR_SUMMARY.md
+  - Updates:
+      - Affiliation Changes: AFFILIATION_CHANGES.md
+      - Estimated Tokens Fix: ESTIMATED_TOKENS_FIX.md
+      - Updates Summary: UPDATES_SUMMARY.md
+  - Releases:
+      - Legacy Releases: releases/legacy-releases.md
