@@ -108,7 +108,7 @@ Manual publish commands:
 just docs-deploy-dev
 
 # Publish a release version and update stable alias
-just docs-deploy-release 2.0.0
+just docs-deploy-release 2.0.1
 
 # Set default version in selector
 just docs-set-default stable
