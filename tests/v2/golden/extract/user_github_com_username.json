@@ -1,0 +1,21 @@
+{
+  "source_url": "github.com/username",
+  "detected_type": "user",
+  "output_format": "json",
+  "output": {
+    "id": "username",
+    "type": "schema:Person",
+    "schema:name": "username"
+  },
+  "warnings": [],
+  "stats": {
+    "entities_count": 1,
+    "triples_count": 0,
+    "run_id": "golden-user-stub",
+    "duration_ms": 0,
+    "stages_completed": [
+      "classify",
+      "extract"
+    ]
+  }
+}

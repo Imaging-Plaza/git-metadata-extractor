@@ -1,0 +1,38 @@
+{
+  "graph_jsonld": {
+    "@context": {
+      "schema": "http://schema.org/",
+      "pulse": "https://open-pulse.epfl.ch/ontology#"
+    },
+    "@graph": [
+      {
+        "@id": "owner/repo",
+        "@type": "schema:SoftwareSourceCode",
+        "schema:name": "Graph Repository",
+        "source_url": "https://github.com/owner/repo"
+      },
+      {
+        "@id": "0000-0002-1825-0097_owner/repo",
+        "@type": "pulse:Contribution",
+        "source_url": "https://github.com/owner/repo"
+      }
+    ]
+  },
+  "intermediates": [
+    {
+      "stage": "graph_export",
+      "filters": {
+        "source_url": "https://github.com/owner/repo"
+      }
+    }
+  ],
+  "stats": {
+    "entities_count": 2,
+    "triples_count": 0,
+    "run_id": "golden-filtered-source-stub",
+    "duration_ms": 0,
+    "stages_completed": [
+      "graph_export"
+    ]
+  }
+}

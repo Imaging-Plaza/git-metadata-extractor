@@ -1,0 +1,61 @@
+{
+  "graph_jsonld": {
+    "@context": {
+      "schema": "http://schema.org/",
+      "org": "http://www.w3.org/ns/org#",
+      "pulse": "https://open-pulse.epfl.ch/ontology#"
+    },
+    "@graph": [
+      {
+        "@id": "0000-0002-1825-0097",
+        "@type": "schema:Person",
+        "schema:name": "Graph Person"
+      },
+      {
+        "@id": "owner/repo",
+        "@type": "schema:SoftwareSourceCode",
+        "schema:name": "Graph Repository"
+      },
+      {
+        "@id": "https://ror.org/02s376052",
+        "@type": "org:Organization",
+        "schema:name": "Graph Organization"
+      },
+      {
+        "@id": "0000-0002-1825-0097_https://ror.org/02s376052",
+        "@type": "org:Membership"
+      },
+      {
+        "@id": "0000-0002-1825-0097_owner/repo",
+        "@type": "pulse:Contribution"
+      },
+      {
+        "@id": "10.5281/example0001",
+        "@type": "schema:ScholarlyArticle",
+        "schema:name": "Graph Article"
+      }
+    ]
+  },
+  "intermediates": [
+    {
+      "stage": "graph_export",
+      "entity_ids": [
+        "0000-0002-1825-0097",
+        "owner/repo",
+        "https://ror.org/02s376052",
+        "0000-0002-1825-0097_https://ror.org/02s376052",
+        "0000-0002-1825-0097_owner/repo",
+        "10.5281/example0001"
+      ]
+    }
+  ],
+  "stats": {
+    "entities_count": 6,
+    "triples_count": 0,
+    "run_id": "golden-full-graph-stub",
+    "duration_ms": 0,
+    "stages_completed": [
+      "graph_export"
+    ]
+  }
+}

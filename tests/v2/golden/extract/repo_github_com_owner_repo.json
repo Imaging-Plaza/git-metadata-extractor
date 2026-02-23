@@ -1,0 +1,29 @@
+{
+  "source_url": "github.com/owner/repo",
+  "detected_type": "repository",
+  "output_format": "jsonld",
+  "output": {
+    "@context": {
+      "schema": "http://schema.org/",
+      "pulse": "https://open-pulse.epfl.ch/ontology#"
+    },
+    "@graph": [
+      {
+        "@id": "github.com/owner/repo",
+        "@type": "schema:SoftwareSourceCode",
+        "schema:name": "repo"
+      }
+    ]
+  },
+  "warnings": [],
+  "stats": {
+    "entities_count": 1,
+    "triples_count": 0,
+    "run_id": "golden-repo-stub",
+    "duration_ms": 0,
+    "stages_completed": [
+      "classify",
+      "extract"
+    ]
+  }
+}
