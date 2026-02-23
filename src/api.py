@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
+from src.v2.api import v2_router
+
 from .analysis import Organization, Repository, User
 from .cache import get_cache_manager
 from .data_models import (
@@ -89,6 +91,8 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
         {"name": "System", "description": "System information and health checks"},
     ],
 )
+
+app.include_router(v2_router)
 
 
 # Startup and shutdown events for resource management
