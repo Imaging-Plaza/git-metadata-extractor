@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:OrganizationShape.schema.json",
+  "title": "OrganizationShape",
+  "description": "Schema for validating Organization entities following Open Pulse Ontology v2.0.0. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier (first non-null in priority: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid)"
+    },
+    "type": {
+      "type": "string",
+      "const": "org:Organization"
+    },
+    "shacl": {
+      "type": "string",
+      "const": "pulse:OrganizationShape"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uuid"],
+      "properties": {
+        "pulse:ror": {
+          "type": ["string", "null"],
+          "pattern": "^https://ror\\.org/[0-9a-z]{9}$"
+        },
+        "pulse:infoscienceOrganizationIdentifier": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "pulse:githubOrganizationHandle": {
+          "type": ["string", "null"]
+        },
+        "uuid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "enum": ["pulse:ror", "pulse:infoscienceOrganizationIdentifier", "pulse:githubOrganizationHandle", "uuid"]
+    },
+    "schema:name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema:identifier": {
+      "type": ["string", "null"],
+      "pattern": "^https://ror\\.org/[0-9a-z]{9}$",
+      "description": "Canonical identifier (typically ROR URL). Optional per SHACL."
+    },
+    "pulse:githubOrganizationHandle": {
+      "type": ["string", "null"]
+    },
+    "pulse:infoscienceOrganizationIdentifier": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Infoscience organization identifier (UUID4 format)."
+    },
+    "pulse:OrganizationType": {
+      "type": "string",
+      "enum": [
+        "pulse:University",
+        "pulse:ResearchInstitution",
+        "pulse:GovernmentAgency",
+        "pulse:SoftwareProject",
+        "pulse:PrivateCompany",
+        "pulse:NonProfitOrganization",
+        "pulse:CommunitySpace",
+        "pulse:OtherOrganizationType"
+      ]
+    },
+    "pulse:githubOrgFollowers": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "org:hasUnit": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Reference to child OrganizationShape ID (hierarchical)"
+      }
+    },
+    "org:unitOf": {
+      "type": ["string", "null"],
+      "description": "Reference to parent OrganizationShape ID (hierarchical)"
+    },
+    "pulse:owns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Reference to RepositoryShape ID (GitHub handle)"
+      }
+    }
+  }
+}

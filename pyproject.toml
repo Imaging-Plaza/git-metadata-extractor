@@ -87,3 +87,8 @@ ignore = ["S101","T201", "G004", "E501", "FA100"]
 "examples/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
 "src/test/*.py" = ["E402"]
+
+[tool.pytest.ini_options]
+markers = [
+    "v2: tests for the v2 extraction pipeline and schema validation track",
+]

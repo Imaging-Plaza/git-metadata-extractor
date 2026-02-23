@@ -24,6 +24,22 @@ All notable changes to this project will be documented in this file.
     - `membership.schema.json`
     - `contribution.schema.json`
     - `article.schema.json`
+- **V2 Phase 0 test infrastructure (`P0-03`)**:
+  - Added `tests/v2/conftest.py` with shared session fixtures:
+    - `v2_test_config`
+    - `load_schema()`
+    - `load_fixture()`
+    - `load_golden()`
+  - Added v2 fixture/golden scaffold directories:
+    - `tests/v2/fixtures/schema/{strict,agent}/`
+    - `tests/v2/fixtures/providers/{github,orcid,infoscience,ror}/`
+    - `tests/v2/fixtures/scenarios/`
+    - `tests/v2/golden/{extract,graph}/`
+  - Added schema fixture copies in:
+    - `tests/v2/fixtures/schema/strict/*.schema.json`
+    - `tests/v2/fixtures/schema/agent/*.schema.json`
+  - Added infrastructure smoke tests:
+    - `tests/v2/test_test_infrastructure.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -34,6 +50,14 @@ All notable changes to this project will be documented in this file.
     - `python -m json.tool src/v2/schemas/agent/*.json`
     - `just test-file tests/v2/test_promoted_strict_schemas.py`
     - `just test-file tests/v2/test_promoted_agent_schemas.py`
+- **Pytest configuration**:
+  - Registered the `v2` marker in `pyproject.toml` under `[tool.pytest.ini_options]`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P0-04-strict-schema-valid-tests.md` after completing `P0-03`.
+  - Added explicit v2 infrastructure check commands:
+    - `pytest tests/v2/ --collect-only`
+    - `pytest tests/v2 -m v2 --collect-only`
+    - `just test-file tests/v2/test_test_infrastructure.py`
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -45,6 +69,10 @@ All notable changes to this project will be documented in this file.
   - promoted files are byte-identical to source artifacts in `dev/`,
   - each promoted schema passes `jsonschema` meta-schema validation,
   - each agent schema preserves all property names present in its strict counterpart.
+- Added `tests/v2/test_test_infrastructure.py` to verify:
+  - `load_schema("strict", "person")` returns a parsed JSON object,
+  - `load_fixture("schema/strict", "person.schema")` resolves nested fixture groups,
+  - `v2_test_config` points to expected test fixture/golden roots.
 
 
 ## [2.0.1] - 2026-02-16
