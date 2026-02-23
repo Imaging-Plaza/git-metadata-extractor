@@ -1,0 +1,17 @@
+{
+  "query": "alice smith",
+  "total_results": 1,
+  "results": [
+    {
+      "infosciencePersonIdentifier": "1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d",
+      "name": "Alice Smith",
+      "orcid": "0000-0002-1825-0097",
+      "affiliations": [
+        "EPFL School of Engineering",
+        "Laboratory of Intelligent Systems"
+      ],
+      "profileUrl": "https://infoscience.epfl.ch/entities/person/1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d",
+      "score": 99.8
+    }
+  ]
+}

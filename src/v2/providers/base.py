@@ -42,3 +42,31 @@ class GitHubProvider(ABC):
     @abstractmethod
     def get_languages(self, full_name: str) -> dict[str, int]:
         """Return language byte counts for ``owner/repo``."""
+
+
+class InfoscienceProvider(ABC):
+    """Adapter interface for Infoscience metadata retrieval."""
+
+    @abstractmethod
+    def search_person(self, query: str) -> list[dict[str, Any]]:
+        """Search Infoscience person profiles by query string."""
+
+    @abstractmethod
+    def search_orgunit(self, query: str) -> list[dict[str, Any]]:
+        """Search Infoscience organization units by query string."""
+
+    @abstractmethod
+    def search_publications(self, query: str) -> list[dict[str, Any]]:
+        """Search Infoscience publications by query string."""
+
+
+class RORProvider(ABC):
+    """Adapter interface for Research Organization Registry (ROR) lookups."""
+
+    @abstractmethod
+    def get_organization(self, ror_id: str) -> dict[str, Any]:
+        """Fetch a ROR organization by identifier."""
+
+    @abstractmethod
+    def search_organizations(self, query: str) -> list[dict[str, Any]]:
+        """Search ROR organizations by free-text query."""

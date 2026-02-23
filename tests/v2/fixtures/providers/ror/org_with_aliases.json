@@ -1,0 +1,45 @@
+{
+  "organization": {
+    "id": "https://ror.org/03yrm5c26",
+    "name": "Institute for Multilingual Intelligence",
+    "aliases": [
+      "Institut d'intelligence multilingue",
+      "Istituto per l'intelligenza multilingue"
+    ],
+    "acronyms": [
+      "IMI",
+      "I2M"
+    ],
+    "labels": [
+      {
+        "label": "Institute for Multilingual Intelligence",
+        "iso639": "en"
+      },
+      {
+        "label": "Institut d'intelligence multilingue",
+        "iso639": "fr"
+      },
+      {
+        "label": "Istituto per l'intelligenza multilingue",
+        "iso639": "it"
+      }
+    ],
+    "types": [
+      "Research"
+    ],
+    "country": {
+      "country_name": "Switzerland",
+      "country_code": "CH"
+    },
+    "links": [
+      "https://example.org/imi"
+    ],
+    "relationships": {
+      "parent": {
+        "id": "https://ror.org/02s376052",
+        "name": "Ecole Polytechnique Federale de Lausanne"
+      },
+      "children": []
+    }
+  }
+}
