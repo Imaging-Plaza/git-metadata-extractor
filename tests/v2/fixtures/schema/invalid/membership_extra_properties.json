@@ -1,0 +1,15 @@
+{
+  "id": "0000-0001-2345-6789_https://ror.org/02s376052",
+  "type": "org:Membership",
+  "shacl": "pulse:MembershipShape",
+  "identifiers": {
+    "pulse:composite": "0000-0001-2345-6789_https://ror.org/02s376052",
+    "uuid": "c1a2b3c4-5d6e-4f7a-8b9c-0d1e2f3a4b5c"
+  },
+  "idSource": "pulse:composite",
+  "org:organization": "https://ror.org/02s376052",
+  "org:role": "Research Engineer",
+  "time:hasBeginning": "2020-09-01",
+  "time:hasEnd": null,
+  "pulse:extraProperty": "not-allowed"
+}

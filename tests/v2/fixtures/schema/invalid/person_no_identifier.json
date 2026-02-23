@@ -1,0 +1,22 @@
+{
+  "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+  "type": "schema:Person",
+  "shacl": "pulse:PersonShape",
+  "identifiers": {
+    "pulse:orcid": null,
+    "pulse:infosciencePersonIdentifier": null,
+    "pulse:githubUsername": null,
+    "uuid": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+  },
+  "idSource": "uuid",
+  "schema:name": "Luca Rossi",
+  "schema:url": null,
+  "pulse:orcidIdentifier": null,
+  "org:hasMembership": [
+    "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157"
+  ],
+  "pulse:hasContribution": [
+    "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit"
+  ],
+  "pulse:owns": []
+}

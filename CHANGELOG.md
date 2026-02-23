@@ -53,6 +53,18 @@ All notable changes to this project will be documented in this file.
 - **V2 Phase 0 agent schema valid fixtures/tests (`P0-05`)**:
   - Added agent schema validation tests:
     - `tests/v2/test_schema_validation_agent.py`
+- **V2 Phase 0 strict schema negative fixtures/tests (`P0-06`)**:
+  - Added strict-invalid schema fixtures in `tests/v2/fixtures/schema/invalid/`:
+    - `person_missing_name.json`
+    - `person_bad_orcid.json`
+    - `person_no_identifier.json`
+    - `repo_bad_github_handle.json`
+    - `org_unknown_type.json`
+    - `membership_extra_properties.json`
+    - `contribution_negative_count.json`
+    - `article_bad_doi.json`
+  - Added strict negative schema validation tests:
+    - `tests/v2/test_schema_validation_negative.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -75,6 +87,8 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P0-05-agent-schema-valid-tests.md` after completing `P0-04`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P0-06-negative-schema-tests.md` after completing `P0-05`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P0-07-mock-github-provider.md` after completing `P0-06`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -97,6 +111,9 @@ All notable changes to this project will be documented in this file.
 - Added `tests/v2/test_schema_validation_agent.py` to verify:
   - each strict valid fixture group has at least one instance for all six entity types,
   - every valid strict fixture instance passes `jsonschema.validate()` against promoted agent schemas.
+- Added `tests/v2/test_schema_validation_negative.py` to verify:
+  - each invalid fixture is rejected by its corresponding strict schema with `jsonschema.ValidationError`,
+  - coverage includes at least 8 distinct invalid fixtures spanning required fields, patterns, enums, `anyOf`, `additionalProperties`, and numeric minimum constraints.
 
 
 ## [2.0.1] - 2026-02-16

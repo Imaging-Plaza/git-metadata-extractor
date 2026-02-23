@@ -1,0 +1,24 @@
+{
+  "id": "0000-0001-2345-6789",
+  "type": "schema:Person",
+  "shacl": "pulse:PersonShape",
+  "identifiers": {
+    "pulse:orcid": "0000-0001-2345-6789",
+    "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "pulse:githubUsername": "caviri",
+    "uuid": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e"
+  },
+  "idSource": "pulse:orcid",
+  "schema:email": "carlos.vivar@epfl.ch",
+  "schema:url": "https://people.epfl.ch/carlos.vivar",
+  "pulse:githubUsername": "caviri",
+  "pulse:orcidIdentifier": "0000-0001-2345-6789",
+  "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+  "org:hasMembership": [
+    "0000-0001-2345-6789_https://ror.org/02s376052"
+  ],
+  "pulse:hasContribution": [
+    "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit"
+  ],
+  "pulse:owns": []
+}
