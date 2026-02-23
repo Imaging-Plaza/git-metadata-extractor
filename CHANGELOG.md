@@ -224,10 +224,35 @@ All notable changes to this project will be documented in this file.
     - `github_token` (healthy/degraded)
   - Added health endpoint coverage:
     - `tests/v2/test_api_health.py`
+- **V2 Phase 2 provider interfaces (`P2-01`)**:
+  - Added production provider implementations:
+    - `src/v2/providers/github_provider.py`
+    - `src/v2/providers/orcid_provider.py`
+    - `src/v2/providers/infoscience_provider.py`
+    - `src/v2/providers/ror_provider.py`
+  - Extended provider exports and factory wiring in:
+    - `src/v2/providers/__init__.py`
+    - `src/v2/providers/base.py`
+  - Added provider interface coverage:
+    - `tests/v2/test_provider_interfaces.py`
+- **V2 Phase 2 agent wrappers (`P2-02`, `P2-03`, `P2-04`)**:
+  - Added shared v2 agent result/provider models:
+    - `src/v2/agents/models.py`
+  - Added permissive-schema wrappers:
+    - `src/v2/agents/repository_agent.py`
+    - `src/v2/agents/person_agent.py`
+    - `src/v2/agents/organization_agent.py`
+    - `src/v2/agents/__init__.py`
+  - Added focused v2 agent coverage:
+    - `tests/v2/test_repository_agent.py`
+    - `tests/v2/test_person_agent.py`
+    - `tests/v2/test_organization_agent.py`
 
 ### Changed
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P2-01-provider-interfaces.md` after completing `P1-09` and `P1-10`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P2-05-agent-retry-soft-failure.md` after completing `P2-01`, `P2-02`, `P2-03`, and `P2-04`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P1-09-mount-v2-router.md` after completing `P1-05`, `P1-06`, `P1-07`, and `P1-08`.
 - **Agent workflow documentation**:
@@ -288,6 +313,14 @@ All notable changes to this project will be documented in this file.
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- Ran task-focused checks for `P2-01` to `P2-04` with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/providers/base.py src/v2/providers/__init__.py src/v2/providers/github_provider.py src/v2/providers/infoscience_provider.py src/v2/providers/orcid_provider.py src/v2/providers/ror_provider.py src/v2/agents/__init__.py src/v2/agents/models.py src/v2/agents/repository_agent.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py tests/v2/test_provider_interfaces.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py`
+  - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/agents src/v2/providers`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_provider_interfaces.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py -v`
   - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
   - promoted schema files exist and parse as JSON,
