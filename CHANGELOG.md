@@ -40,6 +40,16 @@ All notable changes to this project will be documented in this file.
     - `tests/v2/fixtures/schema/agent/*.schema.json`
   - Added infrastructure smoke tests:
     - `tests/v2/test_test_infrastructure.py`
+- **V2 Phase 0 strict schema valid fixtures/tests (`P0-04`)**:
+  - Added valid strict fixture copies in `tests/v2/fixtures/schema/strict/`:
+    - `pulse_PersonShape.json`
+    - `pulse_RepositoryShape.json`
+    - `pulse_OrganizationShape.json`
+    - `pulse_MembershipShape.json`
+    - `pulse_ContributionShape.json`
+    - `pulse_ArticleShape.json`
+  - Added strict schema validation tests:
+    - `tests/v2/test_schema_validation_strict.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -58,6 +68,8 @@ All notable changes to this project will be documented in this file.
     - `pytest tests/v2/ --collect-only`
     - `pytest tests/v2 -m v2 --collect-only`
     - `just test-file tests/v2/test_test_infrastructure.py`
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P0-05-agent-schema-valid-tests.md` after completing `P0-04`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -73,6 +85,10 @@ All notable changes to this project will be documented in this file.
   - `load_schema("strict", "person")` returns a parsed JSON object,
   - `load_fixture("schema/strict", "person.schema")` resolves nested fixture groups,
   - `v2_test_config` points to expected test fixture/golden roots.
+- Added `tests/v2/test_schema_validation_strict.py` to verify:
+  - strict fixtures meet minimum instance coverage per entity:
+    - Person (>=5), Repository (>=4), Organization (>=5), Membership (>=6), Contribution (>=9), Article (>=4),
+  - every valid fixture instance passes `jsonschema.validate()` against promoted strict schemas.
 
 
 ## [2.0.1] - 2026-02-16
