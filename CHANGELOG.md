@@ -178,8 +178,42 @@ All notable changes to this project will be documented in this file.
     - URL-decoded owner/repo path segments
     - configurable GitHub Enterprise base URL (`V2_GITHUB_BASE_URL`)
   - Added `tests/v2/test_url_classifier_edge_cases.py`.
+- **V2 Phase 1 response contracts (`P1-05`)**:
+  - Added `src/v2/models/contracts.py` with:
+    - `V2ExtractResponse`
+    - `V2GraphResponse`
+    - `V2Stats`
+    - `V2GraphUpdate`
+  - Added exports in `src/v2/models/__init__.py`.
+  - Added `tests/v2/test_response_contracts.py`.
+- **V2 Phase 1 error models (`P1-06`)**:
+  - Added `src/v2/models/errors.py` with:
+    - `V2ErrorType`
+    - `V2FieldError`
+    - `V2ErrorResponse`
+  - Added exports in `src/v2/models/__init__.py`.
+  - Added `tests/v2/test_error_models.py`.
+- **V2 Phase 1 stub extract endpoint (`P1-07`)**:
+  - Implemented `src/v2/api.py` router with `GET /v2/extract/{full_path:path}`.
+  - Added query parameter handling for:
+    - `output_format`
+    - `force_refresh`
+    - `include_intermediates`
+  - Added typed `422` error payloads for unsupported URLs.
+  - Added `tests/v2/test_api_extract_stub.py`.
+- **V2 Phase 1 stub graph endpoint (`P1-08`)**:
+  - Added `GET /v2/graph` to `src/v2/api.py`.
+  - Added query parameter handling for:
+    - `source_url`
+    - repeated `entity_type`
+    - `include_intermediates`
+    - `intermediate_limit`
+  - Stub response returns JSON-LD envelope with empty `@graph` and zeroed stats.
+  - Added `tests/v2/test_api_graph_stub.py`.
 
 ### Changed
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P1-09-mount-v2-router.md` after completing `P1-05`, `P1-06`, `P1-07`, and `P1-08`.
 - **Agent workflow documentation**:
   - Updated `AGENTS.md` with a dedicated `V2 Phase 0 TDD Track` section.
   - Advanced the phase entry task to `P0-03-test-infrastructure.md` after completing `P0-02`.
@@ -221,6 +255,14 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
+- Ran task-focused checks for `P1-05` to `P1-08` with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/contracts.py src/v2/models/errors.py src/v2/models/__init__.py tests/v2/test_response_contracts.py tests/v2/test_error_models.py tests/v2/test_api_extract_stub.py tests/v2/test_api_graph_stub.py`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_response_contracts.py tests/v2/test_error_models.py tests/v2/test_api_extract_stub.py tests/v2/test_api_graph_stub.py -v`
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
   - promoted schema files exist and parse as JSON,
   - promoted files are byte-identical to source artifacts in `dev/`,
