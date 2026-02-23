@@ -79,6 +79,37 @@ All notable changes to this project will be documented in this file.
     - `not_found_response.json`
   - Added mock provider tests:
     - `tests/v2/test_mock_github_provider.py`
+- **V2 Phase 0 mock Infoscience provider fixtures/interface (`P0-09`)**:
+  - Added Infoscience provider interface + fixture-backed mock:
+    - `src/v2/providers/base.py` (new `InfoscienceProvider`)
+    - `src/v2/providers/mock_infoscience.py`
+  - Added Infoscience provider fixtures in `tests/v2/fixtures/providers/infoscience/`:
+    - `person_single_hit.json`
+    - `person_multi_hit.json`
+    - `orgunit_result.json`
+    - `publication_result.json`
+    - `empty_result.json`
+  - Added mock provider tests:
+    - `tests/v2/test_mock_infoscience_provider.py`
+- **V2 Phase 0 mock ROR provider fixtures/interface (`P0-10`)**:
+  - Added ROR provider interface + fixture-backed mock:
+    - `src/v2/providers/base.py` (new `RORProvider`)
+    - `src/v2/providers/mock_ror.py`
+  - Added ROR provider fixtures in `tests/v2/fixtures/providers/ror/`:
+    - `org_detail.json`
+    - `search_results.json`
+    - `org_with_aliases.json`
+    - `parent_org.json`
+    - `not_found.json`
+  - Added mock provider tests:
+    - `tests/v2/test_mock_ror_provider.py`
+- **V2 Phase 0 seed-based mock data generator (`P0-11`)**:
+  - Promoted deterministic mock data generation tooling:
+    - `scripts/v2/generate_mock_data.py`
+    - `src/v2/testing/__init__.py`
+    - `src/v2/testing/mock_generator.py`
+  - Added mock generator tests:
+    - `tests/v2/test_mock_generator.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -105,6 +136,8 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P0-07-mock-github-provider.md` after completing `P0-06`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P0-08-mock-orcid-provider.md` after completing `P0-07`.
+- **Agent workflow documentation**:
+  - Kept the phase entry task at `P0-08-mock-orcid-provider.md` as the earliest remaining dependency before `P0-12`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -135,6 +168,22 @@ All notable changes to this project will be documented in this file.
   - repository lookup returns a GitHub REST-shaped payload for `octocat/Hello-World`,
   - provider error paths raise typed exceptions for not found, rate limit, and private repository access,
   - GitHub provider fixture files exist with valid JSON and include both REST and GraphQL mock response shapes.
+- Added `tests/v2/test_mock_infoscience_provider.py` to verify:
+  - `MockInfoscienceProvider` implements the abstract `InfoscienceProvider` interface methods,
+  - person search returns single-hit and multi-hit fixtures (ambiguous candidate scenario),
+  - empty-result queries return an empty list without raising provider errors,
+  - fixture catalog/JSON validity checks for Infoscience payloads.
+- Added `tests/v2/test_mock_ror_provider.py` to verify:
+  - `MockRORProvider` implements the abstract `RORProvider` interface methods,
+  - organization detail fixtures include names, aliases, types, country data, and parent/child relationships,
+  - search fixtures return ranked candidate organizations,
+  - alias fixtures include alternate names, acronyms, and multilingual labels.
+- Added `tests/v2/test_mock_generator.py` to verify:
+  - `generate_dataset(seed=42)` is deterministic and `seed=99` yields different output,
+  - generated entities validate against promoted strict schemas,
+  - cross-reference integrity across persons, repositories, organizations, memberships, contributions, and articles,
+  - `--edge-cases` generation includes UUID-only identities, zero-count contributions, and forked repositories,
+  - CLI `scripts/v2/generate_mock_data.py` writes expected `pulse_*` JSON files to disk.
 
 
 ## [2.0.1] - 2026-02-16
