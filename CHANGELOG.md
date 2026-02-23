@@ -50,6 +50,9 @@ All notable changes to this project will be documented in this file.
     - `pulse_ArticleShape.json`
   - Added strict schema validation tests:
     - `tests/v2/test_schema_validation_strict.py`
+- **V2 Phase 0 agent schema valid fixtures/tests (`P0-05`)**:
+  - Added agent schema validation tests:
+    - `tests/v2/test_schema_validation_agent.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -70,6 +73,8 @@ All notable changes to this project will be documented in this file.
     - `just test-file tests/v2/test_test_infrastructure.py`
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P0-05-agent-schema-valid-tests.md` after completing `P0-04`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P0-06-negative-schema-tests.md` after completing `P0-05`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -89,6 +94,9 @@ All notable changes to this project will be documented in this file.
   - strict fixtures meet minimum instance coverage per entity:
     - Person (>=5), Repository (>=4), Organization (>=5), Membership (>=6), Contribution (>=9), Article (>=4),
   - every valid fixture instance passes `jsonschema.validate()` against promoted strict schemas.
+- Added `tests/v2/test_schema_validation_agent.py` to verify:
+  - each strict valid fixture group has at least one instance for all six entity types,
+  - every valid strict fixture instance passes `jsonschema.validate()` against promoted agent schemas.
 
 
 ## [2.0.1] - 2026-02-16
