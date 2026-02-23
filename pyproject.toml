@@ -46,7 +46,8 @@ dependencies = [
     "uvicorn-worker==0.3.0",
     "pydantic-ai>=1.0.15",
     "httpx",
-    "markdownify==1.2.0"
+    "markdownify==1.2.0",
+    "logfire>=4.14.2",
 ]
 
 [project.urls]

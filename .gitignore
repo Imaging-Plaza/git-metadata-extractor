@@ -1,8 +1,11 @@
 .cursor/mcp.json
+.cursor/plans
+.internal
 .ruff_cache
 data
 api_cache.db
 .env2
+dev/ontology-v2-json-response/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
