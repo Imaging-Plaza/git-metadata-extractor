@@ -110,6 +110,38 @@ All notable changes to this project will be documented in this file.
     - `src/v2/testing/mock_generator.py`
   - Added mock generator tests:
     - `tests/v2/test_mock_generator.py`
+- **V2 Phase 0 mock ORCID provider fixtures/interface (`P0-08`)**:
+  - Added ORCID provider interface and fixture-backed mock:
+    - `src/v2/providers/base.py` (new `ORCIDRecord` + `ORCIDProvider`)
+    - `src/v2/providers/mock_orcid.py`
+    - `src/v2/providers/__init__.py` (ORCID exports)
+  - Added ORCID provider fixtures in `tests/v2/fixtures/providers/orcid/`:
+    - `valid_record.json`
+    - `no_affiliations.json`
+    - `multiple_employment.json`
+    - `invalid_checksum.json`
+  - Added mock provider tests:
+    - `tests/v2/test_mock_orcid_provider.py`
+- **V2 Phase 0 cross-reference consistency validation (`P0-12`)**:
+  - Added cross-reference validation module:
+    - `src/v2/validation/__init__.py`
+    - `src/v2/validation/crossref.py`
+  - Added cross-reference consistency tests:
+    - `tests/v2/test_crossref_consistency.py`
+- **V2 Phase 0 golden extract contract tests (red phase) (`P0-13`)**:
+  - Added extract golden tests:
+    - `tests/v2/test_extract_golden.py`
+  - Added extract golden fixtures:
+    - `tests/v2/golden/extract/repo_github_com_owner_repo.json`
+    - `tests/v2/golden/extract/user_github_com_username.json`
+    - `tests/v2/golden/extract/org_github_com_orgname.json`
+- **V2 Phase 0 golden graph contract tests (red phase) (`P0-14`)**:
+  - Added graph golden tests:
+    - `tests/v2/test_graph_golden.py`
+  - Added graph golden fixtures:
+    - `tests/v2/golden/graph/full_graph.json`
+    - `tests/v2/golden/graph/filtered_by_type.json`
+    - `tests/v2/golden/graph/filtered_by_source.json`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -138,6 +170,8 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P0-08-mock-orcid-provider.md` after completing `P0-07`.
 - **Agent workflow documentation**:
   - Kept the phase entry task at `P0-08-mock-orcid-provider.md` as the earliest remaining dependency before `P0-12`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P1-01-package-skeleton.md` after completing Phase 0 tasks `P0-08`, `P0-12`, `P0-13`, and `P0-14`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -184,6 +218,27 @@ All notable changes to this project will be documented in this file.
   - cross-reference integrity across persons, repositories, organizations, memberships, contributions, and articles,
   - `--edge-cases` generation includes UUID-only identities, zero-count contributions, and forked repositories,
   - CLI `scripts/v2/generate_mock_data.py` writes expected `pulse_*` JSON files to disk.
+- Added `tests/v2/test_mock_orcid_provider.py` to verify:
+  - `MockORCIDProvider` implements abstract `ORCIDProvider`,
+  - fixture-backed valid/no-affiliation/multi-employment ORCID responses are returned with normalized structure,
+  - invalid checksum and malformed ORCID formats are rejected at provider level.
+- Added `tests/v2/test_crossref_consistency.py` to verify:
+  - seed-generated dataset (`seed=42`) passes cross-reference checks with zero invalid references,
+  - orphaned contribution author references are detected,
+  - ownership symmetry (`pulse:owns` ↔ `pulse:ownedBy`) mismatches are detected,
+  - membership composite IDs resolve to valid person+organization pairs.
+- Added `tests/v2/test_extract_golden.py` (`xfail`, red phase) to define `/v2/extract` contract expectations for:
+  - repository URL input,
+  - user URL input,
+  - organization URL input.
+- Added `tests/v2/test_graph_golden.py` (`xfail`, red phase) to define `/v2/graph` contract expectations for:
+  - full graph envelope,
+  - filtering by entity type,
+  - filtering by source URL.
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
 
 
 ## [2.0.1] - 2026-02-16
