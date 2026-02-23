@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from src.v2.models.contracts import V2ExtractResponse, V2GraphResponse, V2Stats
+
+
+def _sample_stats() -> V2Stats:
+    return V2Stats(
+        entities_count=1,
+        triples_count=2,
+        run_id="run-test",
+        duration_ms=3,
+        stages_completed=["extract"],
+    )
+
+
+def test_extract_response_can_be_instantiated_with_required_fields() -> None:
+    response = V2ExtractResponse(
+        source_url="https://github.com/owner/repo",
+        detected_type="repository",
+        output_format="jsonld",
+        output={"@context": {}, "@graph": []},
+        stats=_sample_stats(),
+    )
+
+    assert response.source_url == "https://github.com/owner/repo"
+    assert response.detected_type == "repository"
+
+
+def test_extract_response_serializes_to_expected_contract_shape() -> None:
+    response = V2ExtractResponse(
+        source_url="https://github.com/owner/repo",
+        detected_type="repository",
+        output_format="json",
+        output={"status": "ok"},
+        stats=_sample_stats(),
+    )
+    payload = response.model_dump(mode="json")
+
+    assert payload["source_url"] == "https://github.com/owner/repo"
+    assert payload["detected_type"] == "repository"
+    assert payload["output_format"] == "json"
+    assert payload["output"] == {"status": "ok"}
+    assert payload["warnings"] == []
+    assert payload["stats"]["entities_count"] == 1
+
+
+def test_extract_response_output_format_rejects_unsupported_values() -> None:
+    with pytest.raises(ValidationError, match="output_format"):
+        V2ExtractResponse(
+            source_url="https://github.com/owner/repo",
+            detected_type="repository",
+            output_format="xml",
+            output={},
+            stats=_sample_stats(),
+        )
+
+
+def test_extract_response_warnings_default_to_empty_list() -> None:
+    response = V2ExtractResponse(
+        source_url="https://github.com/owner/repo",
+        detected_type="repository",
+        output_format="jsonld",
+        output={"@context": {}, "@graph": []},
+        stats=_sample_stats(),
+    )
+
+    assert response.warnings == []
+
+
+def test_extract_response_intermediates_default_to_none() -> None:
+    response = V2ExtractResponse(
+        source_url="https://github.com/owner/repo",
+        detected_type="repository",
+        output_format="jsonld",
+        output={"@context": {}, "@graph": []},
+        stats=_sample_stats(),
+    )
+
+    assert response.intermediates is None
+    assert "intermediates" not in response.model_dump(mode="json", exclude_none=True)
+
+
+def test_graph_response_requires_context_and_graph_keys() -> None:
+    with pytest.raises(ValidationError, match="@context"):
+        V2GraphResponse(
+            graph_jsonld={"@graph": []},
+            stats=_sample_stats(),
+        )
+
+    response = V2GraphResponse(
+        graph_jsonld={"@context": {}, "@graph": []},
+        stats=_sample_stats(),
+    )
+    assert "@context" in response.graph_jsonld
+    assert "@graph" in response.graph_jsonld
