@@ -154,6 +154,30 @@ All notable changes to this project will be documented in this file.
     - `src/v2/observability/`
     - `src/v2/pipeline/`
     - `src/v2/pipeline/stages/`
+- **V2 Phase 1 config module (`P1-02`)**:
+  - Added `src/v2/config.py` with `V2Config` environment loading and defaults:
+    - `V2_GRAPH_DB_PATH` (default: `data/v2_graph.db`)
+    - `V2_INTERMEDIATE_HISTORY_LIMIT` (default: `5`)
+    - `V2_ENABLE_LOGFIRE` (default: `true`)
+    - `LOGFIRE_TOKEN` (optional)
+    - `GITHUB_TOKEN` (required via `validate_preflight()`)
+  - Added `tests/v2/test_config.py`.
+- **V2 Phase 1 GitHub URL classifier (`P1-03`)**:
+  - Added URL detection models in `src/v2/detection/models.py`:
+    - `GitHubURLType`
+    - `GitHubURLClassification`
+    - `UnsupportedGitHubURL`
+  - Added `classify_github_url()` implementation in `src/v2/detection/github_url_classifier.py`.
+  - Added exports in `src/v2/detection/__init__.py`.
+  - Added `tests/v2/test_url_classifier.py`.
+- **V2 Phase 1 classifier edge-case handling (`P1-04`)**:
+  - Extended classifier rejection logic for unsupported GitHub subresource URLs:
+    - `issues`, `pull`, `blob`, `tree`, `commit`/`commits`, `actions`, `releases`, `wiki`, `settings`, `security`
+  - Added support for:
+    - HTTP to HTTPS normalization
+    - URL-decoded owner/repo path segments
+    - configurable GitHub Enterprise base URL (`V2_GITHUB_BASE_URL`)
+  - Added `tests/v2/test_url_classifier_edge_cases.py`.
 
 ### Changed
 - **Agent workflow documentation**:
@@ -186,6 +210,15 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-01-package-skeleton.md` after completing Phase 0 tasks `P0-08`, `P0-12`, `P0-13`, and `P0-14`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P1-02-config-module.md` after completing `P1-01`.
+- **Environment example configuration**:
+  - Extended `.env.example` with v2-related keys:
+    - `GITHUB_TOKEN`
+    - `V2_GRAPH_DB_PATH`
+    - `V2_INTERMEDIATE_HISTORY_LIMIT`
+    - `V2_ENABLE_LOGFIRE`
+    - `LOGFIRE_TOKEN`
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -256,6 +289,31 @@ All notable changes to this project will be documented in this file.
 - Ran additional phase-scoped v2 checks with repo venv:
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_promoted_agent_schemas.py -v`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_test_infrastructure.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
+- Added `tests/v2/test_config.py` to verify:
+  - valid config creation with required environment variables,
+  - descriptive `ValueError` on missing `GITHUB_TOKEN`,
+  - default `V2_GRAPH_DB_PATH`,
+  - `V2_ENABLE_LOGFIRE=false` behavior,
+  - optional `LOGFIRE_TOKEN` behavior when Logfire is enabled.
+- Added `tests/v2/test_url_classifier.py` to verify:
+  - repository/user/organization detection,
+  - `.git` stripping,
+  - default user classification for ambiguous `https://github.com/<name>`,
+  - normalization of trailing slashes, query params, fragments,
+  - non-GitHub URL rejection via `ValueError`.
+- Added `tests/v2/test_url_classifier_edge_cases.py` to verify:
+  - at least 10 unsupported subresource rejection cases with specific reasons,
+  - HTTP to HTTPS upgrade,
+  - URL-encoded path segment handling,
+  - configurable GitHub Enterprise base URL behavior.
+- Ran task-focused checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/config.py src/v2/detection/__init__.py src/v2/detection/models.py src/v2/detection/github_url_classifier.py tests/v2/test_config.py tests/v2/test_url_classifier.py tests/v2/test_url_classifier_edge_cases.py`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_config.py tests/v2/test_url_classifier.py tests/v2/test_url_classifier_edge_cases.py -q`
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
   - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
 
 
