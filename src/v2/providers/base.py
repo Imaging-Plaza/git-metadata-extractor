@@ -20,7 +20,11 @@ class ProviderPermissionError(ProviderError):
     """Raised when a provider denies access to a resource."""
 
 
-class GitHubProvider(ABC):
+class BaseProvider:
+    """Base abstraction for all v2 provider adapters."""
+
+
+class GitHubProvider(BaseProvider, ABC):
     """Adapter interface for GitHub metadata retrieval."""
 
     @abstractmethod
@@ -44,7 +48,7 @@ class GitHubProvider(ABC):
         """Return language byte counts for ``owner/repo``."""
 
 
-class InfoscienceProvider(ABC):
+class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""
 
     @abstractmethod
@@ -60,7 +64,7 @@ class InfoscienceProvider(ABC):
         """Search Infoscience publications by query string."""
 
 
-class RORProvider(ABC):
+class RORProvider(BaseProvider, ABC):
     """Adapter interface for Research Organization Registry (ROR) lookups."""
 
     @abstractmethod
@@ -92,7 +96,7 @@ class ORCIDRecord(TypedDict):
     affiliations: list[str]
 
 
-class ORCIDProvider(ABC):
+class ORCIDProvider(BaseProvider, ABC):
     """Adapter interface for ORCID person record lookups."""
 
     @abstractmethod
