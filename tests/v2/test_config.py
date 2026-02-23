@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import pytest
+
+from src.v2.config import V2Config
+
+V2_CONFIG_ENV_KEYS = {
+    "GITHUB_TOKEN",
+    "LOGFIRE_TOKEN",
+    "V2_ENABLE_LOGFIRE",
+    "V2_GRAPH_DB_PATH",
+    "V2_INTERMEDIATE_HISTORY_LIMIT",
+}
+
+
+def _clear_v2_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in V2_CONFIG_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_v2_config_with_required_env_is_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+
+    config = V2Config()
+    config.validate_preflight()
+
+    assert config.GITHUB_TOKEN
+
+
+def test_v2_config_missing_github_token_raises_descriptive_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+
+    config = V2Config()
+    with pytest.raises(ValueError, match="Missing required environment variable: GITHUB_TOKEN"):
+        config.validate_preflight()
+
+
+def test_v2_graph_db_path_has_expected_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+
+    config = V2Config()
+
+    assert config.V2_GRAPH_DB_PATH == "data/v2_graph.db"
+
+
+def test_v2_enable_logfire_false_disables_logfire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("V2_ENABLE_LOGFIRE", "false")
+
+    config = V2Config()
+    config.validate_preflight()
+
+    assert config.V2_ENABLE_LOGFIRE is False
+
+
+def test_logfire_token_absent_with_logfire_enabled_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("V2_ENABLE_LOGFIRE", "true")
+
+    config = V2Config()
+    config.validate_preflight()
+
+    assert config.V2_ENABLE_LOGFIRE is True
+    assert config.LOGFIRE_TOKEN is None
