@@ -33,7 +33,7 @@ FIRST_NAMES = [
     "Carlos",
     "Diana",
     "Elena",
-    "François",
+    "Francois",
     "Giulia",
     "Hans",
     "Ines",
@@ -57,7 +57,7 @@ FIRST_NAMES = [
 ]
 
 LAST_NAMES = [
-    "Müller",
+    "Muller",
     "Dupont",
     "Rossi",
     "Garcia",
@@ -81,7 +81,7 @@ LAST_NAMES = [
 
 ORG_NAMES = [
     ("EPFL", "https://ror.org/02s376052", "pulse:University"),
-    ("ETH Zürich", "https://ror.org/05a28rw58", "pulse:University"),
+    ("ETH Zurich", "https://ror.org/05a28rw58", "pulse:University"),
     ("CERN", "https://ror.org/01ggx4157", "pulse:ResearchInstitution"),
     ("MIT", "https://ror.org/042nb2s44", "pulse:University"),
     ("Max Planck Society", "https://ror.org/01hhn8329", "pulse:ResearchInstitution"),
