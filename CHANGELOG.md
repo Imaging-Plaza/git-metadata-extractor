@@ -210,8 +210,24 @@ All notable changes to this project will be documented in this file.
     - `intermediate_limit`
   - Stub response returns JSON-LD envelope with empty `@graph` and zeroed stats.
   - Added `tests/v2/test_api_graph_stub.py`.
+- **V2 Phase 1 mount v2 router in main app (`P1-09`)**:
+  - Mounted `v2_router` in `src/api.py` so `/v2/*` routes are served via the main API app.
+  - Added main-app routing coverage:
+    - `tests/v2/test_api_mount_v2_router.py`
+- **V2 Phase 1 v2 health check endpoint (`P1-10`)**:
+  - Added `V2HealthResponse` to `src/v2/models/contracts.py`.
+  - Exported `V2HealthResponse` from `src/v2/models/__init__.py`.
+  - Added `GET /v2/health` in `src/v2/api.py` with component-level statuses for:
+    - `python`
+    - `config`
+    - `graph_store` (stubbed healthy)
+    - `github_token` (healthy/degraded)
+  - Added health endpoint coverage:
+    - `tests/v2/test_api_health.py`
 
 ### Changed
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P2-01-provider-interfaces.md` after completing `P1-09` and `P1-10`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P1-09-mount-v2-router.md` after completing `P1-05`, `P1-06`, `P1-07`, and `P1-08`.
 - **Agent workflow documentation**:
@@ -255,6 +271,16 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
+- Ran task-focused checks for `P1-09` and `P1-10` with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/contracts.py src/v2/models/__init__.py tests/v2/test_api_mount_v2_router.py tests/v2/test_api_health.py`
+  - `PYTHONPATH=. .venv/bin/ruff check --select I src/api.py`
+  - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/models/contracts.py src/v2/api.py`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_mount_v2_router.py tests/v2/test_api_health.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_mount_v2_router.py tests/v2/test_api_health.py tests/v2/test_api_extract_stub.py tests/v2/test_api_graph_stub.py -v`
 - Ran task-focused checks for `P1-05` to `P1-08` with repo venv:
   - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/contracts.py src/v2/models/errors.py src/v2/models/__init__.py tests/v2/test_response_contracts.py tests/v2/test_error_models.py tests/v2/test_api_extract_stub.py tests/v2/test_api_graph_stub.py`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_response_contracts.py tests/v2/test_error_models.py tests/v2/test_api_extract_stub.py tests/v2/test_api_graph_stub.py -v`
