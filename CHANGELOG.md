@@ -142,6 +142,18 @@ All notable changes to this project will be documented in this file.
     - `tests/v2/golden/graph/full_graph.json`
     - `tests/v2/golden/graph/filtered_by_type.json`
     - `tests/v2/golden/graph/filtered_by_source.json`
+- **V2 Phase 1 package skeleton (`P1-01`)**:
+  - Added `src/v2/api.py` placeholder module.
+  - Added package skeleton `__init__.py` files for:
+    - `src/v2/agents/`
+    - `src/v2/canonicalization/`
+    - `src/v2/detection/`
+    - `src/v2/generated/`
+    - `src/v2/graph/`
+    - `src/v2/models/`
+    - `src/v2/observability/`
+    - `src/v2/pipeline/`
+    - `src/v2/pipeline/stages/`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -172,6 +184,8 @@ All notable changes to this project will be documented in this file.
   - Kept the phase entry task at `P0-08-mock-orcid-provider.md` as the earliest remaining dependency before `P0-12`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P1-01-package-skeleton.md` after completing Phase 0 tasks `P0-08`, `P0-12`, `P0-13`, and `P0-14`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P1-02-config-module.md` after completing `P1-01`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -239,6 +253,10 @@ All notable changes to this project will be documented in this file.
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
   - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- Ran additional phase-scoped v2 checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_promoted_agent_schemas.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_test_infrastructure.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
 
 
 ## [2.0.1] - 2026-02-16

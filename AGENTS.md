@@ -21,7 +21,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## V2 Phase 0 TDD Track
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- Current entry task: `P1-01-package-skeleton.md` (Phase 0 complete; first scaffold task).
+- Current entry task: `P1-02-config-module.md` (P1-01 complete; continue scaffold dependencies in order).
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 
 ## Environment & Prerequisites
