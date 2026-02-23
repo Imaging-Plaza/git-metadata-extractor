@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from typing import Annotated, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -14,10 +17,18 @@ from src.v2.models import (
     V2ErrorType,
     V2ExtractResponse,
     V2GraphResponse,
+    V2HealthResponse,
     V2Stats,
 )
 
 DEFAULT_INTERMEDIATE_LIMIT = V2Config().V2_INTERMEDIATE_HISTORY_LIMIT
+MIN_SUPPORTED_PYTHON = (3, 10)
+PACKAGE_NAME = "git-metadata-extractor"
+try:
+    PACKAGE_VERSION = package_version(PACKAGE_NAME)
+except PackageNotFoundError:
+    PACKAGE_VERSION = "unknown"
+
 MIN_SUBRESOURCE_PATH_SEGMENTS = 3
 SUBRESOURCE_SEGMENT_INDEX = 2
 
@@ -141,4 +152,44 @@ async def graph(
         graph_jsonld={"@context": {}, "@graph": []},
         intermediates=response_intermediates,
         stats=_build_stats(stage_name="graph"),
+    )
+
+
+@v2_router.get(
+    "/health",
+    response_model=V2HealthResponse,
+)
+async def health() -> V2HealthResponse:
+    component_statuses: dict[str, Literal["healthy", "degraded", "unhealthy"]] = {
+        "python": (
+            "healthy"
+            if sys.version_info[:2] >= MIN_SUPPORTED_PYTHON
+            else "unhealthy"
+        ),
+        "graph_store": "healthy",
+    }
+
+    config: V2Config | None = None
+    try:
+        config = V2Config()
+        component_statuses["config"] = "healthy"
+    except ValueError:
+        component_statuses["config"] = "unhealthy"
+
+    component_statuses["github_token"] = (
+        "healthy" if config and config.GITHUB_TOKEN else "degraded"
+    )
+
+    overall_status: Literal["healthy", "degraded", "unhealthy"]
+    if "unhealthy" in component_statuses.values():
+        overall_status = "unhealthy"
+    elif "degraded" in component_statuses.values():
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
+
+    return V2HealthResponse(
+        status=overall_status,
+        components=component_statuses,
+        version=PACKAGE_VERSION,
     )

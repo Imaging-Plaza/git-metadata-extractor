@@ -46,3 +46,9 @@ class V2GraphResponse(BaseModel):
             message = "graph_jsonld must contain '@context' and '@graph' keys"
             raise ValueError(message)
         return value
+
+
+class V2HealthResponse(BaseModel):
+    status: Literal["healthy", "degraded", "unhealthy"]
+    components: dict[str, Literal["healthy", "degraded", "unhealthy"]]
+    version: str
