@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unpublished]
+
+### Added
+- **V2 Phase 0 strict schema promotion (`P0-01`)**:
+  - Promoted 6 strict JSON Schemas from `dev/ontology-v2-json-response/a-001/json-schema/strict/` to `src/v2/schemas/strict/`:
+    - `person.schema.json`
+    - `repository.schema.json`
+    - `organization.schema.json`
+    - `membership.schema.json`
+    - `contribution.schema.json`
+    - `article.schema.json`
+  - Added new v2 package markers:
+    - `src/v2/__init__.py`
+    - `src/v2/schemas/__init__.py`
+- **V2 Phase 0 agent schema promotion (`P0-02`)**:
+  - Promoted 6 agent JSON Schemas from `dev/ontology-v2-json-response/a-001/json-schema/agent/` to `src/v2/schemas/agent/`:
+    - `person.schema.json`
+    - `repository.schema.json`
+    - `organization.schema.json`
+    - `membership.schema.json`
+    - `contribution.schema.json`
+    - `article.schema.json`
+
+### Changed
+- **Agent workflow documentation**:
+  - Updated `AGENTS.md` with a dedicated `V2 Phase 0 TDD Track` section.
+  - Advanced the phase entry task to `P0-03-test-infrastructure.md` after completing `P0-02`.
+  - Added explicit validation commands for promoted schemas:
+    - `python -m json.tool src/v2/schemas/strict/*.json`
+    - `python -m json.tool src/v2/schemas/agent/*.json`
+    - `just test-file tests/v2/test_promoted_strict_schemas.py`
+    - `just test-file tests/v2/test_promoted_agent_schemas.py`
+
+### Testing
+- Added `tests/v2/test_promoted_strict_schemas.py` to verify:
+  - promoted schema files exist and parse as JSON,
+  - promoted files are byte-identical to source artifacts in `dev/`,
+  - each promoted schema passes `jsonschema` meta-schema validation.
+- Added `tests/v2/test_promoted_agent_schemas.py` to verify:
+  - promoted agent schema files exist and parse as JSON,
+  - promoted files are byte-identical to source artifacts in `dev/`,
+  - each promoted schema passes `jsonschema` meta-schema validation,
+  - each agent schema preserves all property names present in its strict counterpart.
+
 
 ## [2.0.1] - 2026-02-16
 

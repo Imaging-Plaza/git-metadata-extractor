@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:ContributionShape.schema.json",
+  "title": "ContributionShape",
+  "description": "Schema for Contribution entities following Open Pulse Ontology v2.0.0. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: composite (personId_repoId) → uuid. SHACL requires: pulse:contributionTo, pulse:contributionCount, schema:author. Dates are optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "pulse:contributionTo", "pulse:contributionCount", "schema:author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier. Composite format: personId_repoId, or uuid (fallback). Example: '0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit'"
+    },
+    "type": {
+      "type": "string",
+      "description": "RDF type. Must be 'pulse:Contribution'"
+    },
+    "shacl": {
+      "type": "string",
+      "description": "SHACL shape reference. Must be 'pulse:ContributionShape'"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "All available identifiers for this contribution. Contains pulse:composite and uuid",
+      "properties": {
+        "pulse:composite": {
+          "type": "string",
+          "description": "Composite identifier. Format: personId_repoId (uses underscore separator). Example: '0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit'"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "UUID4 fallback identifier. Always present. Example: 'd1a2b3c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d'"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:composite' or 'uuid'"
+    },
+    "pulse:contributionTo": {
+      "type": "string",
+      "description": "Reference to RepositoryShape ID (GitHub handle). REQUIRED per SHACL. Example: 'EPFL-ENAC/geodata-toolkit'"
+    },
+    "pulse:contributionCount": {
+      "type": "integer",
+      "description": "Number of commits/contributions. REQUIRED per SHACL. Must be zero or positive. Example: 156"
+    },
+    "pulse:firstContributionDate": {
+      "type": ["string", "null"],
+      "description": "First contribution datetime. OPTIONAL per SHACL. Format: ISO 8601 datetime (YYYY-MM-DDTHH:MM:SSZ). Example: '2023-03-15T10:30:00Z'"
+    },
+    "pulse:lastContributionDate": {
+      "type": ["string", "null"],
+      "description": "Last contribution datetime. OPTIONAL per SHACL. Format: ISO 8601 datetime (YYYY-MM-DDTHH:MM:SSZ). Example: '2025-01-20T14:45:00Z'"
+    },
+    "schema:author": {
+      "type": "string",
+      "description": "Reference to PersonShape ID (hierarchical). REQUIRED per SHACL. Example: '0000-0001-2345-6789'"
+    }
+  }
+}

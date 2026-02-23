@@ -21,7 +21,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## V2 Phase 0 TDD Track
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- Current entry task: `P0-01-promote-strict-schemas.md`.
+- Current entry task: `P0-03-test-infrastructure.md`.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 
 ## Environment & Prerequisites
@@ -64,7 +64,9 @@ Rules:
   - `just ci`
 - V2 schema validation checks:
   - `python -m json.tool src/v2/schemas/strict/*.json`
+  - `python -m json.tool src/v2/schemas/agent/*.json`
   - `just test-file tests/v2/test_promoted_strict_schemas.py`
+  - `just test-file tests/v2/test_promoted_agent_schemas.py`
 
 ## Architecture Map For Agents
 - Repository analysis flow entrypoints: `src/analysis/repositories.py`
