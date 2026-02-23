@@ -65,6 +65,20 @@ All notable changes to this project will be documented in this file.
     - `article_bad_doi.json`
   - Added strict negative schema validation tests:
     - `tests/v2/test_schema_validation_negative.py`
+- **V2 Phase 0 mock GitHub provider fixtures/interface (`P0-07`)**:
+  - Added provider package scaffolding:
+    - `src/v2/providers/__init__.py`
+    - `src/v2/providers/base.py`
+    - `src/v2/providers/mock_github.py`
+  - Added GitHub provider fixtures in `tests/v2/fixtures/providers/github/`:
+    - `repo_payload.json`
+    - `user_payload.json`
+    - `org_payload.json`
+    - `contributors_payload.json`
+    - `rate_limited_response.json`
+    - `not_found_response.json`
+  - Added mock provider tests:
+    - `tests/v2/test_mock_github_provider.py`
 
 ### Changed
 - **Agent workflow documentation**:
@@ -89,6 +103,8 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P0-06-negative-schema-tests.md` after completing `P0-05`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P0-07-mock-github-provider.md` after completing `P0-06`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P0-08-mock-orcid-provider.md` after completing `P0-07`.
 
 ### Testing
 - Added `tests/v2/test_promoted_strict_schemas.py` to verify:
@@ -114,6 +130,11 @@ All notable changes to this project will be documented in this file.
 - Added `tests/v2/test_schema_validation_negative.py` to verify:
   - each invalid fixture is rejected by its corresponding strict schema with `jsonschema.ValidationError`,
   - coverage includes at least 8 distinct invalid fixtures spanning required fields, patterns, enums, `anyOf`, `additionalProperties`, and numeric minimum constraints.
+- Added `tests/v2/test_mock_github_provider.py` to verify:
+  - `MockGitHubProvider` implements the abstract `GitHubProvider` interface methods,
+  - repository lookup returns a GitHub REST-shaped payload for `octocat/Hello-World`,
+  - provider error paths raise typed exceptions for not found, rate limit, and private repository access,
+  - GitHub provider fixture files exist with valid JSON and include both REST and GraphQL mock response shapes.
 
 
 ## [2.0.1] - 2026-02-16
