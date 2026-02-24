@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Switched v2 intermediates response assembly to a shared stage (`assemble_intermediates`) and reused it in both `/v2/extract` and `/v2/graph`.
+- Switched v2 stats generation to a shared stage (`compute_stats`) and reused it in both `/v2/extract` and `/v2/graph`, including run-aware duration/stage metadata and graph-derived triple counts.
+- Updated agent handoff in `AGENTS.md` to set the next entry task to `.internal/v2-plan/phase-6-observability/P6-01-logfire-bootstrap.md` after completing Phase 5.
 - Replaced the `/v2/graph` stub with a graph-store-backed implementation that exports JSON-LD, applies `source_url`/`entity_type` filters, supports optional intermediate snapshots, and reports computed graph stats.
 - Updated v2 graph serialization behavior by expanding namespace-prefix resolution in RDF sync and moving JSON-LD context loading to a versioned context file.
 - Updated agent handoff in `AGENTS.md` to set the next entry task to `.internal/v2-plan/phase-5-export/P5-05-intermediates-envelope.md` after completing `P5-01` through `P5-04`.
@@ -21,6 +24,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_intermediates_envelope.py tests/v2/test_stats_computation.py tests/v2/test_api_graph.py tests/v2/test_api_extract_stub.py tests/v2/test_extract_golden.py tests/v2/test_response_contracts.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/__init__.py src/v2/models/contracts.py src/v2/pipeline/stages/__init__.py src/v2/pipeline/stages/intermediates.py src/v2/pipeline/stages/stats.py tests/v2/test_intermediates_envelope.py tests/v2/test_stats_computation.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_jsonld_export.py tests/v2/test_context_versioning.py tests/v2/test_filtered_subgraph.py tests/v2/test_api_graph.py tests/v2/test_graph_golden.py -q`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_org_alias_canonicalization.py tests/v2/test_concurrent_writes.py -v`
@@ -48,6 +55,13 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added intermediates envelope contracts and assembly stage:
+  - `src/v2/models/contracts.py` (`IntermediateEnvelope`)
+  - `src/v2/pipeline/stages/intermediates.py`
+  - `tests/v2/test_intermediates_envelope.py`
+- Added shared stats computation stage for v2 API responses:
+  - `src/v2/pipeline/stages/stats.py`
+  - `tests/v2/test_stats_computation.py`
 - Added v2 graph export primitives and context assets:
   - `src/v2/graph/export.py`
   - `src/v2/schemas/context/v2.0.jsonld`

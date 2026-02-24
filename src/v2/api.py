@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -25,9 +24,9 @@ from src.v2.models import (
     V2ExtractResponse,
     V2GraphResponse,
     V2HealthResponse,
-    V2Stats,
 )
 from src.v2.pipeline import PipelineOrchestrator
+from src.v2.pipeline.stages import assemble_intermediates, compute_stats
 
 DEFAULT_INTERMEDIATE_LIMIT = V2Config().V2_INTERMEDIATE_HISTORY_LIMIT
 MIN_SUPPORTED_PYTHON = (3, 10)
@@ -48,109 +47,38 @@ JSONLD_CONTEXT = {
 v2_router = APIRouter(prefix="/v2")
 
 
-def _build_stats(*, stage_name: str) -> V2Stats:
-    return V2Stats(
-        entities_count=0,
-        triples_count=0,
-        run_id=f"stub-{stage_name}-{uuid4().hex}",
-        duration_ms=0,
-        stages_completed=[stage_name],
-    )
+def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
+    try:
+        graph = RDFGraph()
+        graph.parse(data=json.dumps(payload), format="json-ld")
+    except Exception:  # noqa: BLE001
+        return None
+    else:
+        return graph
 
 
-def _count_jsonld_triples(graph_jsonld: dict[str, Any]) -> int:
-    graph = RDFGraph()
-    graph.parse(data=json.dumps(graph_jsonld), format="json-ld")
-    return len(graph)
-
-
-def _load_intermediates(
-    *,
-    db_path: str,
-    source_url: str | None,
-    limit_per_agent: int,
-) -> list[dict[str, Any]]:
-    if limit_per_agent <= 0:
+def _cap_intermediates_per_agent(
+    intermediates: list[Any],
+    per_agent_limit: int,
+) -> list[Any]:
+    if per_agent_limit <= 0:
         return []
 
-    query_for_all_sources = """
-        WITH ranked AS (
-            SELECT
-                id,
-                source_url,
-                agent_name,
-                run_id,
-                data,
-                created_at,
-                ROW_NUMBER() OVER (
-                    PARTITION BY source_url, agent_name
-                    ORDER BY created_at DESC, id DESC
-                ) AS row_number
-            FROM intermediates
-        )
-        SELECT
-            source_url,
-            agent_name,
-            run_id,
-            data,
-            created_at
-        FROM ranked
-        WHERE row_number <= ?
-        ORDER BY source_url ASC, agent_name ASC, created_at DESC;
-    """
-    query_for_source = """
-        WITH ranked AS (
-            SELECT
-                id,
-                source_url,
-                agent_name,
-                run_id,
-                data,
-                created_at,
-                ROW_NUMBER() OVER (
-                    PARTITION BY source_url, agent_name
-                    ORDER BY created_at DESC, id DESC
-                ) AS row_number
-            FROM intermediates
-            WHERE source_url = ?
-        )
-        SELECT
-            source_url,
-            agent_name,
-            run_id,
-            data,
-            created_at
-        FROM ranked
-        WHERE row_number <= ?
-        ORDER BY source_url ASC, agent_name ASC, created_at DESC;
-    """
+    capped: list[Any] = []
+    counts_by_agent: dict[str, int] = {}
+    for envelope in intermediates:
+        agent_name = getattr(envelope, "agent_name", None)
+        if not isinstance(agent_name, str):
+            continue
 
-    with sqlite3.connect(db_path) as connection:
-        connection.row_factory = sqlite3.Row
-        if source_url is None:
-            rows = connection.execute(
-                query_for_all_sources,
-                (limit_per_agent,),
-            ).fetchall()
-        else:
-            rows = connection.execute(
-                query_for_source,
-                (source_url, limit_per_agent),
-            ).fetchall()
+        current_count = counts_by_agent.get(agent_name, 0)
+        if current_count >= per_agent_limit:
+            continue
 
-    intermediates: list[dict[str, Any]] = []
-    for row in rows:
-        payload = json.loads(str(row["data"]))
-        intermediates.append(
-            {
-                "source_url": str(row["source_url"]),
-                "agent_name": str(row["agent_name"]),
-                "run_id": str(row["run_id"]) if row["run_id"] is not None else None,
-                "data": payload,
-                "created_at": str(row["created_at"]),
-            },
-        )
-    return intermediates
+        counts_by_agent[agent_name] = current_count + 1
+        capped.append(envelope)
+
+    return capped
 
 
 def _extract_path_kind(source_url: str) -> str | None:
@@ -262,17 +190,33 @@ async def extract(  # noqa: PLR0913
         pipeline_agent_results=pipeline_result.agent_results,
     )
 
+    config = V2Config()
+    store = GraphStore(config.V2_GRAPH_DB_PATH)
+    run_id = f"pipeline-{classification.detected_type}-{uuid4().hex}"
+
     response_intermediates = None
     if include_intermediates:
-        response_intermediates = [
-            {"stage": "execution_plan", "plan": execution_plan.to_dict()},
-            {"stage": "pipeline_result", "result": pipeline_result.to_dict()},
-        ]
+        response_intermediates = assemble_intermediates(
+            source_url=classification.normalized_url,
+            store=store,
+            limit=DEFAULT_INTERMEDIATE_LIMIT,
+        )
 
     entity_count = sum(
         1
         for result in pipeline_result.agent_results.values()
         if isinstance(result.data, dict) and result.data
+    )
+    extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
+    stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
+    stats = stats.model_copy(
+        update={
+            "run_id": run_id,
+            "entities_count": entity_count,
+            "triples_count": stats.triples_count if extract_graph is not None else 0,
+            "duration_ms": pipeline_result.duration_ms,
+            "stages_completed": list(pipeline_result.stages_completed),
+        },
     )
 
     return V2ExtractResponse(
@@ -281,13 +225,7 @@ async def extract(  # noqa: PLR0913
         output_format=output_format,
         output=output_payload,
         warnings=warnings,
-        stats=V2Stats(
-            entities_count=entity_count,
-            triples_count=0,
-            run_id=f"pipeline-{classification.detected_type}-{uuid4().hex}",
-            duration_ms=pipeline_result.duration_ms,
-            stages_completed=pipeline_result.stages_completed,
-        ),
+        stats=stats,
         intermediates=response_intermediates,
     )
 
@@ -316,22 +254,29 @@ async def graph(
 
     response_intermediates = None
     if include_intermediates:
-        response_intermediates = _load_intermediates(
-            db_path=config.V2_GRAPH_DB_PATH,
+        all_intermediates = assemble_intermediates(
             source_url=source_url,
-            limit_per_agent=intermediate_limit,
+            store=store,
+            limit=None,
+        )
+        response_intermediates = _cap_intermediates_per_agent(
+            all_intermediates,
+            intermediate_limit,
         )
 
-    entities_count = len(graph_jsonld.get("@graph", []))
+    filtered_graph = _jsonld_to_graph(graph_jsonld)
+    stats = compute_stats(
+        store=store,
+        run_id="graph-export",
+        graph=filtered_graph,
+    )
     return V2GraphResponse(
         graph_jsonld=graph_jsonld,
         intermediates=response_intermediates,
-        stats=V2Stats(
-            entities_count=entities_count,
-            triples_count=_count_jsonld_triples(graph_jsonld),
-            run_id="graph-export",
-            duration_ms=0,
-            stages_completed=["graph_export"],
+        stats=stats.model_copy(
+            update={
+                "stages_completed": ["graph_export"],
+            },
         ),
     )
 

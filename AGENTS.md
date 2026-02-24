@@ -22,7 +22,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## V2 Progress Track
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- Current entry task: `.internal/v2-plan/phase-5-export/P5-05-intermediates-envelope.md` (Phase 3 tasks `P3-01` through `P3-08` complete; Phase 4 tasks `P4-01` through `P4-11` complete; Phase 5 tasks `P5-01` through `P5-04` complete and validated in scoped `tests/v2` runs).
+- Current entry task: `.internal/v2-plan/phase-6-observability/P6-01-logfire-bootstrap.md` (Phase 3 tasks `P3-01` through `P3-08` complete; Phase 4 tasks `P4-01` through `P4-11` complete; Phase 5 tasks `P5-01` through `P5-06` complete and validated in scoped `tests/v2` runs).
 - Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.

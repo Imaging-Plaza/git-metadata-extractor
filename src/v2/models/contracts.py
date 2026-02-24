@@ -5,6 +5,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+class IntermediateEnvelope(BaseModel):
+    agent_name: str
+    run_id: str | None = None
+    timestamp: str
+    data: dict[str, Any]
+
+
 class V2Stats(BaseModel):
     entities_count: int
     triples_count: int
@@ -27,12 +34,12 @@ class V2ExtractResponse(BaseModel):
     graph_update: V2GraphUpdate | None = None
     warnings: list[str] = Field(default_factory=list)
     stats: V2Stats
-    intermediates: list[dict[str, Any]] | None = None
+    intermediates: list[IntermediateEnvelope] | None = None
 
 
 class V2GraphResponse(BaseModel):
     graph_jsonld: dict[str, Any]
-    intermediates: list[dict[str, Any]] | None = None
+    intermediates: list[IntermediateEnvelope] | None = None
     stats: V2Stats
 
     @field_validator("graph_jsonld")
