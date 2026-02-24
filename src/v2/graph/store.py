@@ -4,12 +4,26 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
+from src.v2.graph.merge import MergePolicy, MergeResult
 from src.v2.graph.migrations import MigrationRunner
-from src.v2.graph.models import Alias, AliasMatch, AliasSource, Edge, Entity
+from src.v2.graph.models import (
+    Alias,
+    AliasMatch,
+    AliasSource,
+    Edge,
+    Entity,
+    ProvenanceEntry,
+    Run,
+)
+from src.v2.graph.provenance import ProvenanceTracker
+from src.v2.graph.rdf_sync import RDFGraphSync
 from src.v2.graph.schema import VALID_ALIAS_SOURCES
+
+if TYPE_CHECKING:
+    from rdflib import Graph
 
 
 def _utcnow_iso() -> str:
@@ -27,6 +41,20 @@ def _parse_json_object(value: str) -> dict[str, Any]:
         message = "Expected JSON object payload"
         raise TypeError(message)
     return parsed
+
+
+def _parse_json_value(value: str) -> Any:
+    return json.loads(value)
+
+
+def _parse_entity_provenance(value: str) -> list[dict[str, Any]]:
+    parsed = _parse_json_value(value)
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict):
+        return [parsed] if parsed else []
+    message = "Expected provenance payload to be a JSON object or list"
+    raise TypeError(message)
 
 
 def _normalize_alias(value: str) -> str:
@@ -48,6 +76,131 @@ class GraphStore:
         )
         if auto_migrate:
             self._migration_runner.apply_pending()
+
+        self._provenance_tracker = ProvenanceTracker(self._connect)
+        self._rdf_sync = RDFGraphSync()
+        self._graph = self._rdf_sync.load_from_store(self)
+
+    def get_rdf_graph(self) -> Graph:
+        return self._graph
+
+    def create_run(self, source_url: str, detected_type: str) -> str:
+        run_id = str(uuid4())
+        now = _utcnow_iso()
+        with self._connect() as connection, connection:
+            connection.execute(
+                """
+                INSERT INTO runs (
+                    id,
+                    source_url,
+                    detected_type,
+                    status,
+                    stats,
+                    started_at,
+                    completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    run_id,
+                    source_url,
+                    detected_type,
+                    "running",
+                    json.dumps({}),
+                    now,
+                    None,
+                ),
+            )
+        return run_id
+
+    def complete_run(self, run_id: str, stats: dict[str, Any]) -> bool:
+        completed_at = _utcnow_iso()
+        with self._connect() as connection, connection:
+            cursor = connection.execute(
+                """
+                UPDATE runs
+                SET status = ?, stats = ?, completed_at = ?
+                WHERE id = ?;
+                """,
+                (
+                    "completed",
+                    json.dumps(stats),
+                    completed_at,
+                    run_id,
+                ),
+            )
+        return cursor.rowcount > 0
+
+    def fail_run(self, run_id: str, error_detail: str) -> bool:
+        completed_at = _utcnow_iso()
+        with self._connect() as connection, connection:
+            row = connection.execute(
+                "SELECT stats FROM runs WHERE id = ?;",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                return False
+
+            stats = _parse_json_object(str(row["stats"]))
+            stats["error_detail"] = error_detail
+            cursor = connection.execute(
+                """
+                UPDATE runs
+                SET status = ?, stats = ?, completed_at = ?
+                WHERE id = ?;
+                """,
+                (
+                    "failed",
+                    json.dumps(stats),
+                    completed_at,
+                    run_id,
+                ),
+            )
+        return cursor.rowcount > 0
+
+    def get_run(self, run_id: str) -> Run | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    source_url,
+                    detected_type,
+                    status,
+                    stats,
+                    started_at,
+                    completed_at
+                FROM runs
+                WHERE id = ?;
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_run(row)
+
+    def get_runs_by_source(self, source_url: str, limit: int = 10) -> list[Run]:
+        if limit <= 0:
+            return []
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    source_url,
+                    detected_type,
+                    status,
+                    stats,
+                    started_at,
+                    completed_at
+                FROM runs
+                WHERE source_url = ?
+                ORDER BY started_at DESC, id DESC
+                LIMIT ?;
+                """,
+                (source_url, limit),
+            ).fetchall()
+        return [self._row_to_run(row) for row in rows]
 
     def insert_entity(
         self,
@@ -78,11 +231,23 @@ class GraphStore:
                     json.dumps(data),
                     json.dumps(identifiers),
                     id_source,
-                    json.dumps({}),
+                    json.dumps([]),
                     now,
                     now,
                 ),
             )
+
+        self._rdf_sync.apply_entity_delta(
+            graph=self._graph,
+            entity_type=entity_type,
+            entity_data=self._build_entity_rdf_payload(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                data=data,
+                identifiers=identifiers,
+            ),
+            action="upsert",
+        )
         return entity_id
 
     def get_entity(self, entity_id: str) -> Entity | None:
@@ -170,15 +335,160 @@ class GraphStore:
                     """,
                     (json.dumps(data), json.dumps(identifiers), now, entity_id),
                 )
-        return cursor.rowcount > 0
+
+        updated = cursor.rowcount > 0
+        if not updated:
+            return False
+
+        refreshed = self.get_entity(entity_id)
+        if refreshed is not None:
+            self._rdf_sync.apply_entity_delta(
+                graph=self._graph,
+                entity_type=refreshed.type,
+                entity_data=self._build_entity_rdf_payload(
+                    entity_type=refreshed.type,
+                    entity_id=refreshed.id,
+                    data=refreshed.data,
+                    identifiers=refreshed.identifiers,
+                ),
+                action="upsert",
+            )
+
+        return True
+
+    def upsert_entity(  # noqa: PLR0913
+        self,
+        entity_type: str,
+        entity_id: str,
+        data: dict[str, Any],
+        identifiers: dict[str, Any],
+        id_source: str,
+        *,
+        source: str = "unknown",
+        run_id: str | None = None,
+    ) -> MergeResult:
+        existing = self.get_entity(entity_id)
+        if existing is None:
+            self.insert_entity(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                data=data,
+                identifiers=identifiers,
+                id_source=id_source,
+            )
+            return MergeResult(
+                merged_data={
+                    "id": entity_id,
+                    "type": entity_type,
+                    "data": data,
+                    "identifiers": identifiers,
+                    "id_source": id_source,
+                },
+                changed_fields=[],
+                provenance_updates=[],
+            )
+
+        policy = MergePolicy(source=source, run_id=run_id)
+        merge_result = policy.merge_entities(
+            existing={
+                "data": existing.data,
+                "identifiers": existing.identifiers,
+                "id_source": existing.id_source,
+            },
+            incoming={
+                "data": data,
+                "identifiers": identifiers,
+                "id_source": id_source,
+            },
+            entity_type=entity_type,
+        )
+
+        merged_data = cast("dict[str, Any]", merge_result.merged_data.get("data", {}))
+        merged_identifiers = cast(
+            "dict[str, Any]",
+            merge_result.merged_data.get("identifiers", {}),
+        )
+        merged_id_source = str(merge_result.merged_data.get("id_source", existing.id_source))
+
+        if merge_result.changed_fields:
+            now = _utcnow_iso()
+            with self._connect() as connection, connection:
+                connection.execute(
+                    """
+                    UPDATE entities
+                    SET data = ?, identifiers = ?, id_source = ?, last_seen = ?
+                    WHERE id = ?;
+                    """,
+                    (
+                        json.dumps(merged_data),
+                        json.dumps(merged_identifiers),
+                        merged_id_source,
+                        now,
+                        entity_id,
+                    ),
+                )
+
+            for update in merge_result.provenance_updates:
+                self._provenance_tracker.record_change(
+                    entity_id=entity_id,
+                    field=str(update["field"]),
+                    old_value=update.get("old_value"),
+                    new_value=update.get("new_value"),
+                    source=source,
+                    run_id=run_id,
+                )
+
+            self._rdf_sync.apply_entity_delta(
+                graph=self._graph,
+                entity_type=entity_type,
+                entity_data=self._build_entity_rdf_payload(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    data=merged_data,
+                    identifiers=merged_identifiers,
+                ),
+                action="upsert",
+            )
+
+        return MergeResult(
+            merged_data={
+                "id": entity_id,
+                "type": entity_type,
+                "data": merged_data,
+                "identifiers": merged_identifiers,
+                "id_source": merged_id_source,
+            },
+            changed_fields=merge_result.changed_fields,
+            provenance_updates=merge_result.provenance_updates,
+        )
+
+    def get_provenance(self, entity_id: str) -> list[ProvenanceEntry]:
+        return self._provenance_tracker.get_provenance(entity_id)
+
+    def get_provenance_for_field(
+        self,
+        entity_id: str,
+        field: str,
+    ) -> list[ProvenanceEntry]:
+        return self._provenance_tracker.get_provenance_for_field(entity_id, field)
 
     def delete_entity(self, entity_id: str) -> bool:
+        existing = self.get_entity(entity_id)
         with self._connect() as connection, connection:
             cursor = connection.execute(
                 "DELETE FROM entities WHERE id = ?;",
                 (entity_id,),
             )
-        return cursor.rowcount > 0
+
+        deleted = cursor.rowcount > 0
+        if deleted and existing is not None:
+            self._rdf_sync.apply_entity_delta(
+                graph=self._graph,
+                entity_type=existing.type,
+                entity_data={"id": existing.id},
+                action="delete",
+            )
+        return deleted
 
     def insert_edge(
         self,
@@ -213,7 +523,54 @@ class GraphStore:
                     now,
                 ),
             )
+
+        inserted = self.get_edge(edge_id)
+        if inserted is not None:
+            self._rdf_sync.apply_edge_delta(
+                graph=self._graph,
+                edge=inserted,
+                action="upsert",
+            )
+
         return edge_id
+
+    def get_edge(self, edge_id: str) -> Edge | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    source_id,
+                    target_id,
+                    relation_type,
+                    data,
+                    provenance,
+                    created_at
+                FROM edges
+                WHERE id = ?;
+                """,
+                (edge_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_edge(row)
+
+    def get_all_edges(self) -> list[Edge]:
+        return self._fetch_edges(
+            """
+            SELECT
+                id,
+                source_id,
+                target_id,
+                relation_type,
+                data,
+                provenance,
+                created_at
+            FROM edges
+            ORDER BY created_at ASC, id ASC;
+            """,
+            (),
+        )
 
     def get_edges_by_source(self, entity_id: str) -> list[Edge]:
         return self._fetch_edges(
@@ -270,12 +627,21 @@ class GraphStore:
         )
 
     def delete_edge(self, edge_id: str) -> bool:
+        existing = self.get_edge(edge_id)
         with self._connect() as connection, connection:
             cursor = connection.execute(
                 "DELETE FROM edges WHERE id = ?;",
                 (edge_id,),
             )
-        return cursor.rowcount > 0
+
+        deleted = cursor.rowcount > 0
+        if deleted and existing is not None:
+            self._rdf_sync.apply_edge_delta(
+                graph=self._graph,
+                edge=existing,
+                action="delete",
+            )
+        return deleted
 
     def insert_alias(
         self,
@@ -416,6 +782,21 @@ class GraphStore:
         return [self._row_to_edge(row) for row in rows]
 
     @staticmethod
+    def _build_entity_rdf_payload(
+        *,
+        entity_type: str,
+        entity_id: str,
+        data: dict[str, Any],
+        identifiers: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "id": entity_id,
+            "type": entity_type,
+            **data,
+            "identifiers": identifiers,
+        }
+
+    @staticmethod
     def _row_to_entity(row: sqlite3.Row) -> Entity:
         return Entity(
             id=str(row["id"]),
@@ -423,9 +804,33 @@ class GraphStore:
             data=_parse_json_object(str(row["data"])),
             identifiers=_parse_json_object(str(row["identifiers"])),
             id_source=str(row["id_source"]),
-            provenance=_parse_json_object(str(row["provenance"])),
+            provenance=_parse_entity_provenance(str(row["provenance"])),
             last_seen=_parse_timestamp(str(row["last_seen"])),
             created_at=_parse_timestamp(str(row["created_at"])),
+        )
+
+    @staticmethod
+    def _row_to_run(row: sqlite3.Row) -> Run:
+        stats = _parse_json_object(str(row["stats"]))
+        completed_at_raw = row["completed_at"]
+        completed_at = (
+            _parse_timestamp(str(completed_at_raw))
+            if completed_at_raw is not None
+            else None
+        )
+        error_detail = stats.get("error_detail")
+        if error_detail is not None:
+            error_detail = str(error_detail)
+
+        return Run(
+            id=str(row["id"]),
+            source_url=str(row["source_url"]),
+            detected_type=str(row["detected_type"]),
+            status=str(row["status"]),
+            stats=stats,
+            started_at=_parse_timestamp(str(row["started_at"])),
+            completed_at=completed_at,
+            error_detail=error_detail,
         )
 
     @staticmethod

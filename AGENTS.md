@@ -22,7 +22,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## V2 Progress Track
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- Current entry task: `.internal/v2-plan/phase-4-graph-store/P4-05-runs-table.md` (Phase 3 tasks `P3-01` through `P3-08` complete; `P4-01` through `P4-04` complete).
+- Current entry task: `.internal/v2-plan/phase-4-graph-store/P4-09-intermediate-snapshots.md` (Phase 3 tasks `P3-01` through `P3-08` complete; `P4-01` through `P4-08` complete).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 

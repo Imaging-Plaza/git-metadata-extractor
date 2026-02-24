@@ -16,7 +16,7 @@ class Entity:
     data: dict[str, Any]
     identifiers: dict[str, Any]
     id_source: str
-    provenance: dict[str, Any]
+    provenance: list[dict[str, Any]]
     last_seen: datetime
     created_at: datetime
 
@@ -49,3 +49,26 @@ class AliasMatch:
     canonical_entity_id: str
     confidence: float
     source: AliasSource
+
+
+@dataclass(frozen=True, slots=True)
+class Run:
+    id: str
+    source_url: str
+    detected_type: str
+    status: str
+    stats: dict[str, Any]
+    started_at: datetime
+    completed_at: datetime | None
+    error_detail: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProvenanceEntry:
+    entity_id: str
+    field: str
+    old_value: Any
+    new_value: Any
+    source: str
+    run_id: str | None
+    timestamp: datetime

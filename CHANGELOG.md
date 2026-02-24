@@ -5,10 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Extended `GraphStore` with run tracking (`create_run`, `complete_run`, `fail_run`, `get_run`, `get_runs_by_source`) and entity upsert behavior powered by merge policy + field-level provenance.
+- Integrated in-memory RDF synchronization into graph-store lifecycle:
+  - bootstraps RDF graph from SQLite on startup
+  - applies entity/edge deltas on insert/update/upsert/delete
+  - exposes `get_rdf_graph()` for query/serialization surfaces.
+- Updated v2 progress handoff in `AGENTS.md` to set the next entry task to `.internal/v2-plan/phase-4-graph-store/P4-09-intermediate-snapshots.md`.
 - Clarified the v2 progress handoff in `AGENTS.md` by pointing the entry task to `.internal/v2-plan/phase-4-graph-store/P4-05-runs-table.md` after completing `P4-01` through `P4-04`.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_entity_crud.py tests/v2/test_edge_crud.py tests/v2/test_alias_crud.py tests/v2/test_runs_crud.py tests/v2/test_upsert_merge.py tests/v2/test_provenance.py tests/v2/test_rdf_sync.py -v`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/graph/__init__.py src/v2/graph/models.py src/v2/graph/store.py src/v2/graph/merge.py src/v2/graph/provenance.py src/v2/graph/rdf_sync.py tests/v2/test_runs_crud.py tests/v2/test_upsert_merge.py tests/v2/test_provenance.py tests/v2/test_rdf_sync.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
@@ -18,6 +29,23 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- **V2 Phase 4 graph-store execution metadata + merge/provenance/RDF sync (`P4-05` to `P4-08`)**:
+  - Added merge-policy primitive and result contract:
+    - `src/v2/graph/merge.py`
+  - Added provenance tracking primitive:
+    - `src/v2/graph/provenance.py`
+  - Added RDF bootstrap/delta synchronization primitive:
+    - `src/v2/graph/rdf_sync.py`
+  - Extended graph-store data contracts:
+    - `src/v2/graph/models.py` (`Run`, `ProvenanceEntry`)
+  - Extended graph-store integration:
+    - `src/v2/graph/store.py`
+    - `src/v2/graph/__init__.py`
+  - Added focused v2 coverage:
+    - `tests/v2/test_runs_crud.py`
+    - `tests/v2/test_upsert_merge.py`
+    - `tests/v2/test_provenance.py`
+    - `tests/v2/test_rdf_sync.py`
 - **V2 Phase 4 graph-store foundation and CRUD (`P4-01` to `P4-04`)**:
   - Added SQLite schema constants and migration runner:
     - `src/v2/graph/schema.py`

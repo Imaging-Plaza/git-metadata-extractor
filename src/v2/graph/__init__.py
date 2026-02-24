@@ -1,7 +1,18 @@
 """SQLite-backed graph store and migration primitives for v2."""
 
+from src.v2.graph.merge import MergePolicy, MergeResult
 from src.v2.graph.migrations import MigrationRunner
-from src.v2.graph.models import Alias, AliasMatch, AliasSource, Edge, Entity
+from src.v2.graph.models import (
+    Alias,
+    AliasMatch,
+    AliasSource,
+    Edge,
+    Entity,
+    ProvenanceEntry,
+    Run,
+)
+from src.v2.graph.provenance import ProvenanceTracker
+from src.v2.graph.rdf_sync import RDFGraphSync
 from src.v2.graph.store import GraphStore
 
 __all__ = [
@@ -11,5 +22,11 @@ __all__ = [
     "Edge",
     "Entity",
     "GraphStore",
+    "MergePolicy",
+    "MergeResult",
     "MigrationRunner",
+    "ProvenanceEntry",
+    "ProvenanceTracker",
+    "RDFGraphSync",
+    "Run",
 ]
