@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 
+from src.v2.graph.concurrency import with_write_retry
 from src.v2.graph.models import ProvenanceEntry
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ class ProvenanceTracker:
     def __init__(self, connect: Callable[[], sqlite3.Connection]) -> None:
         self._connect = connect
 
+    @with_write_retry()
     def record_change(  # noqa: PLR0913
         self,
         entity_id: str,

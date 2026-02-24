@@ -4,9 +4,10 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 from uuid import uuid4
 
+from src.v2.graph.concurrency import with_write_retry
 from src.v2.graph.merge import MergePolicy, MergeResult
 from src.v2.graph.migrations import MigrationRunner
 from src.v2.graph.models import (
@@ -24,6 +25,12 @@ from src.v2.graph.schema import VALID_ALIAS_SOURCES
 
 if TYPE_CHECKING:
     from rdflib import Graph
+
+DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000
+DEFAULT_WRITE_RETRY_COUNT = 3
+DEFAULT_WRITE_RETRY_BACKOFF_SECONDS = 0.1
+
+T = TypeVar("T")
 
 
 def _utcnow_iso() -> str:
@@ -76,6 +83,10 @@ class GraphStore:
         )
         if auto_migrate:
             self._migration_runner.apply_pending()
+        self._busy_timeout_ms = DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+        self._max_write_retries = DEFAULT_WRITE_RETRY_COUNT
+        self._write_retry_backoff = DEFAULT_WRITE_RETRY_BACKOFF_SECONDS
+        self._initialize_sqlite_pragmas()
 
         self._provenance_tracker = ProvenanceTracker(self._connect)
         self._rdf_sync = RDFGraphSync()
@@ -87,75 +98,84 @@ class GraphStore:
     def create_run(self, source_url: str, detected_type: str) -> str:
         run_id = str(uuid4())
         now = _utcnow_iso()
-        with self._connect() as connection, connection:
-            connection.execute(
-                """
-                INSERT INTO runs (
-                    id,
-                    source_url,
-                    detected_type,
-                    status,
-                    stats,
-                    started_at,
-                    completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    run_id,
-                    source_url,
-                    detected_type,
-                    "running",
-                    json.dumps({}),
-                    now,
-                    None,
-                ),
-            )
+        def _write() -> None:
+            with self._connect() as connection, connection:
+                connection.execute(
+                    """
+                    INSERT INTO runs (
+                        id,
+                        source_url,
+                        detected_type,
+                        status,
+                        stats,
+                        started_at,
+                        completed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        run_id,
+                        source_url,
+                        detected_type,
+                        "running",
+                        json.dumps({}),
+                        now,
+                        None,
+                    ),
+                )
+
+        self._run_write_with_retry(_write)
         return run_id
 
     def complete_run(self, run_id: str, stats: dict[str, Any]) -> bool:
         completed_at = _utcnow_iso()
-        with self._connect() as connection, connection:
-            cursor = connection.execute(
-                """
-                UPDATE runs
-                SET status = ?, stats = ?, completed_at = ?
-                WHERE id = ?;
-                """,
-                (
-                    "completed",
-                    json.dumps(stats),
-                    completed_at,
-                    run_id,
-                ),
-            )
-        return cursor.rowcount > 0
+        def _write() -> int:
+            with self._connect() as connection, connection:
+                cursor = connection.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, stats = ?, completed_at = ?
+                    WHERE id = ?;
+                    """,
+                    (
+                        "completed",
+                        json.dumps(stats),
+                        completed_at,
+                        run_id,
+                    ),
+                )
+            return cursor.rowcount
+
+        return self._run_write_with_retry(_write) > 0
 
     def fail_run(self, run_id: str, error_detail: str) -> bool:
         completed_at = _utcnow_iso()
-        with self._connect() as connection, connection:
-            row = connection.execute(
-                "SELECT stats FROM runs WHERE id = ?;",
-                (run_id,),
-            ).fetchone()
-            if row is None:
-                return False
+        def _write() -> bool:
+            with self._connect() as connection, connection:
+                row = connection.execute(
+                    "SELECT stats FROM runs WHERE id = ?;",
+                    (run_id,),
+                ).fetchone()
+                if row is None:
+                    return False
 
-            stats = _parse_json_object(str(row["stats"]))
-            stats["error_detail"] = error_detail
-            cursor = connection.execute(
-                """
-                UPDATE runs
-                SET status = ?, stats = ?, completed_at = ?
-                WHERE id = ?;
-                """,
-                (
-                    "failed",
-                    json.dumps(stats),
-                    completed_at,
-                    run_id,
-                ),
-            )
-        return cursor.rowcount > 0
+                stats = _parse_json_object(str(row["stats"]))
+                stats["error_detail"] = error_detail
+                cursor = connection.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, stats = ?, completed_at = ?
+                    WHERE id = ?;
+                    """,
+                    (
+                        "failed",
+                        json.dumps(stats),
+                        completed_at,
+                        run_id,
+                    ),
+                )
+            return cursor.rowcount > 0
+
+        return self._run_write_with_retry(_write)
 
     def get_run(self, run_id: str) -> Run | None:
         with self._connect() as connection:
@@ -211,31 +231,34 @@ class GraphStore:
         id_source: str,
     ) -> str:
         now = _utcnow_iso()
-        with self._connect() as connection, connection:
-            connection.execute(
-                """
-                INSERT INTO entities (
-                    id,
-                    type,
-                    data,
-                    identifiers,
-                    id_source,
-                    provenance,
-                    last_seen,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    entity_id,
-                    entity_type,
-                    json.dumps(data),
-                    json.dumps(identifiers),
-                    id_source,
-                    json.dumps([]),
-                    now,
-                    now,
-                ),
-            )
+        def _write() -> None:
+            with self._connect() as connection, connection:
+                connection.execute(
+                    """
+                    INSERT INTO entities (
+                        id,
+                        type,
+                        data,
+                        identifiers,
+                        id_source,
+                        provenance,
+                        last_seen,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        entity_id,
+                        entity_type,
+                        json.dumps(data),
+                        json.dumps(identifiers),
+                        id_source,
+                        json.dumps([]),
+                        now,
+                        now,
+                    ),
+                )
+
+        self._run_write_with_retry(_write)
 
         self._rdf_sync.apply_entity_delta(
             graph=self._graph,
@@ -316,27 +339,29 @@ class GraphStore:
         identifiers: dict[str, Any] | None = None,
     ) -> bool:
         now = _utcnow_iso()
-        with self._connect() as connection, connection:
-            if identifiers is None:
-                cursor = connection.execute(
-                    """
-                    UPDATE entities
-                    SET data = ?, last_seen = ?
-                    WHERE id = ?;
-                    """,
-                    (json.dumps(data), now, entity_id),
-                )
-            else:
-                cursor = connection.execute(
-                    """
-                    UPDATE entities
-                    SET data = ?, identifiers = ?, last_seen = ?
-                    WHERE id = ?;
-                    """,
-                    (json.dumps(data), json.dumps(identifiers), now, entity_id),
-                )
+        def _write() -> int:
+            with self._connect() as connection, connection:
+                if identifiers is None:
+                    cursor = connection.execute(
+                        """
+                        UPDATE entities
+                        SET data = ?, last_seen = ?
+                        WHERE id = ?;
+                        """,
+                        (json.dumps(data), now, entity_id),
+                    )
+                else:
+                    cursor = connection.execute(
+                        """
+                        UPDATE entities
+                        SET data = ?, identifiers = ?, last_seen = ?
+                        WHERE id = ?;
+                        """,
+                        (json.dumps(data), json.dumps(identifiers), now, entity_id),
+                    )
+            return cursor.rowcount
 
-        updated = cursor.rowcount > 0
+        updated = self._run_write_with_retry(_write) > 0
         if not updated:
             return False
 
@@ -412,21 +437,24 @@ class GraphStore:
 
         if merge_result.changed_fields:
             now = _utcnow_iso()
-            with self._connect() as connection, connection:
-                connection.execute(
-                    """
-                    UPDATE entities
-                    SET data = ?, identifiers = ?, id_source = ?, last_seen = ?
-                    WHERE id = ?;
-                    """,
-                    (
-                        json.dumps(merged_data),
-                        json.dumps(merged_identifiers),
-                        merged_id_source,
-                        now,
-                        entity_id,
-                    ),
-                )
+            def _write() -> None:
+                with self._connect() as connection, connection:
+                    connection.execute(
+                        """
+                        UPDATE entities
+                        SET data = ?, identifiers = ?, id_source = ?, last_seen = ?
+                        WHERE id = ?;
+                        """,
+                        (
+                            json.dumps(merged_data),
+                            json.dumps(merged_identifiers),
+                            merged_id_source,
+                            now,
+                            entity_id,
+                        ),
+                    )
+
+            self._run_write_with_retry(_write)
 
             for update in merge_result.provenance_updates:
                 self._provenance_tracker.record_change(
@@ -474,13 +502,15 @@ class GraphStore:
 
     def delete_entity(self, entity_id: str) -> bool:
         existing = self.get_entity(entity_id)
-        with self._connect() as connection, connection:
-            cursor = connection.execute(
-                "DELETE FROM entities WHERE id = ?;",
-                (entity_id,),
-            )
+        def _write() -> int:
+            with self._connect() as connection, connection:
+                cursor = connection.execute(
+                    "DELETE FROM entities WHERE id = ?;",
+                    (entity_id,),
+                )
+            return cursor.rowcount
 
-        deleted = cursor.rowcount > 0
+        deleted = self._run_write_with_retry(_write) > 0
         if deleted and existing is not None:
             self._rdf_sync.apply_entity_delta(
                 graph=self._graph,
@@ -500,29 +530,32 @@ class GraphStore:
         edge_id = str(uuid4())
         payload = data if data is not None else {}
         now = _utcnow_iso()
-        with self._connect() as connection, connection:
-            connection.execute(
-                """
-                INSERT INTO edges (
-                    id,
-                    source_id,
-                    target_id,
-                    relation_type,
-                    data,
-                    provenance,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    edge_id,
-                    source_id,
-                    target_id,
-                    relation_type,
-                    json.dumps(payload),
-                    json.dumps({}),
-                    now,
-                ),
-            )
+        def _write() -> None:
+            with self._connect() as connection, connection:
+                connection.execute(
+                    """
+                    INSERT INTO edges (
+                        id,
+                        source_id,
+                        target_id,
+                        relation_type,
+                        data,
+                        provenance,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        edge_id,
+                        source_id,
+                        target_id,
+                        relation_type,
+                        json.dumps(payload),
+                        json.dumps({}),
+                        now,
+                    ),
+                )
+
+        self._run_write_with_retry(_write)
 
         inserted = self.get_edge(edge_id)
         if inserted is not None:
@@ -628,13 +661,15 @@ class GraphStore:
 
     def delete_edge(self, edge_id: str) -> bool:
         existing = self.get_edge(edge_id)
-        with self._connect() as connection, connection:
-            cursor = connection.execute(
-                "DELETE FROM edges WHERE id = ?;",
-                (edge_id,),
-            )
+        def _write() -> int:
+            with self._connect() as connection, connection:
+                cursor = connection.execute(
+                    "DELETE FROM edges WHERE id = ?;",
+                    (edge_id,),
+                )
+            return cursor.rowcount
 
-        deleted = cursor.rowcount > 0
+        deleted = self._run_write_with_retry(_write) > 0
         if deleted and existing is not None:
             self._rdf_sync.apply_edge_delta(
                 graph=self._graph,
@@ -661,49 +696,52 @@ class GraphStore:
         alias_id = str(uuid4())
         now = _utcnow_iso()
 
-        with self._connect() as connection, connection:
-            existing = connection.execute(
-                """
-                SELECT id, canonical_entity_id
-                FROM aliases
-                WHERE alias_normalized = ?;
-                """,
-                (normalized_alias,),
-            ).fetchone()
-            if existing is not None:
-                existing_entity_id = str(existing["canonical_entity_id"])
-                if existing_entity_id != canonical_entity_id:
-                    message = (
-                        f"Alias '{alias_string}' already mapped to entity "
-                        f"'{existing_entity_id}'"
-                    )
-                    raise ValueError(message)
-                return str(existing["id"])
+        def _write() -> str:
+            with self._connect() as connection, connection:
+                existing = connection.execute(
+                    """
+                    SELECT id, canonical_entity_id
+                    FROM aliases
+                    WHERE alias_normalized = ?;
+                    """,
+                    (normalized_alias,),
+                ).fetchone()
+                if existing is not None:
+                    existing_entity_id = str(existing["canonical_entity_id"])
+                    if existing_entity_id != canonical_entity_id:
+                        message = (
+                            f"Alias '{alias_string}' already mapped to entity "
+                            f"'{existing_entity_id}'"
+                        )
+                        raise ValueError(message)
+                    return str(existing["id"])
 
-            connection.execute(
-                """
-                INSERT INTO aliases (
-                    id,
-                    alias_string,
-                    alias_normalized,
-                    canonical_entity_id,
-                    confidence,
-                    source,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    alias_id,
-                    alias_string,
-                    normalized_alias,
-                    canonical_entity_id,
-                    confidence,
-                    source,
-                    now,
-                ),
-            )
+                connection.execute(
+                    """
+                    INSERT INTO aliases (
+                        id,
+                        alias_string,
+                        alias_normalized,
+                        canonical_entity_id,
+                        confidence,
+                        source,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        alias_id,
+                        alias_string,
+                        normalized_alias,
+                        canonical_entity_id,
+                        confidence,
+                        source,
+                        now,
+                    ),
+                )
 
-        return alias_id
+            return alias_id
+
+        return self._run_write_with_retry(_write)
 
     def lookup_alias(self, alias_string: str) -> AliasMatch | None:
         normalized_alias = _normalize_alias(alias_string)
@@ -753,19 +791,41 @@ class GraphStore:
         return [self._row_to_alias(row) for row in rows]
 
     def delete_alias(self, alias_id: str) -> bool:
-        with self._connect() as connection, connection:
-            cursor = connection.execute(
-                "DELETE FROM aliases WHERE id = ?;",
-                (alias_id,),
-            )
-        return cursor.rowcount > 0
+        def _write() -> int:
+            with self._connect() as connection, connection:
+                cursor = connection.execute(
+                    "DELETE FROM aliases WHERE id = ?;",
+                    (alias_id,),
+                )
+            return cursor.rowcount
+
+        return self._run_write_with_retry(_write) > 0
 
     def _connect(self) -> sqlite3.Connection:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self._db_path)
+        connection = sqlite3.connect(
+            self._db_path,
+            timeout=self._busy_timeout_ms / 1000,
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("PRAGMA journal_mode = WAL;")
+        connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms};")
+        connection.execute("PRAGMA synchronous = NORMAL;")
         return connection
+
+    def _initialize_sqlite_pragmas(self) -> None:
+        with self._connect() as connection:
+            connection.execute("PRAGMA journal_mode = WAL;")
+            connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms};")
+            connection.execute("PRAGMA synchronous = NORMAL;")
+
+    def _run_write_with_retry(self, operation: Callable[[], T]) -> T:
+        retrying_operation = with_write_retry(
+            max_retries=self._max_write_retries,
+            backoff_base=self._write_retry_backoff,
+        )(operation)
+        return retrying_operation()
 
     def _fetch_entities(
         self,

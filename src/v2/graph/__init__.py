@@ -1,5 +1,6 @@
 """SQLite-backed graph store and migration primitives for v2."""
 
+from src.v2.graph.concurrency import GraphStoreBusyError, with_write_retry
 from src.v2.graph.merge import MergePolicy, MergeResult
 from src.v2.graph.migrations import MigrationRunner
 from src.v2.graph.models import (
@@ -22,6 +23,7 @@ __all__ = [
     "Edge",
     "Entity",
     "GraphStore",
+    "GraphStoreBusyError",
     "MergePolicy",
     "MergeResult",
     "MigrationRunner",
@@ -29,4 +31,5 @@ __all__ = [
     "ProvenanceTracker",
     "RDFGraphSync",
     "Run",
+    "with_write_retry",
 ]
