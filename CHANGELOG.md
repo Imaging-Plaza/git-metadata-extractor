@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added v2 Logfire bootstrap integration notes to `AGENTS.md` and advanced the current entry task to `.internal/v2-plan/phase-6-observability/P6-02-fastapi-instrumentation.md`.
 - Switched v2 intermediates response assembly to a shared stage (`assemble_intermediates`) and reused it in both `/v2/extract` and `/v2/graph`.
 - Switched v2 stats generation to a shared stage (`compute_stats`) and reused it in both `/v2/extract` and `/v2/graph`, including run-aware duration/stage metadata and graph-derived triple counts.
 - Updated agent handoff in `AGENTS.md` to set the next entry task to `.internal/v2-plan/phase-6-observability/P6-01-logfire-bootstrap.md` after completing Phase 5.
@@ -24,6 +25,9 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_logfire_bootstrap.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/observability/__init__.py src/v2/observability/bootstrap.py tests/v2/test_logfire_bootstrap.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_intermediates_envelope.py tests/v2/test_stats_computation.py tests/v2/test_api_graph.py tests/v2/test_api_extract_stub.py tests/v2/test_extract_golden.py tests/v2/test_response_contracts.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/__init__.py src/v2/models/contracts.py src/v2/pipeline/stages/__init__.py src/v2/pipeline/stages/intermediates.py src/v2/pipeline/stages/stats.py tests/v2/test_intermediates_envelope.py tests/v2/test_stats_computation.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/`
@@ -55,6 +59,11 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added v2 observability bootstrap primitives:
+  - `src/v2/observability/bootstrap.py` (`initialize_logfire`)
+  - `src/v2/observability/__init__.py` (bootstrap export)
+- Added focused Logfire bootstrap coverage:
+  - `tests/v2/test_logfire_bootstrap.py`
 - Added intermediates envelope contracts and assembly stage:
   - `src/v2/models/contracts.py` (`IntermediateEnvelope`)
   - `src/v2/pipeline/stages/intermediates.py`
