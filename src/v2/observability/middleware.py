@@ -10,6 +10,8 @@ from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
+from src.v2.observability.context import RunContext
+
 RUN_ID_HEADER = "X-Run-Id"
 
 
@@ -62,6 +64,7 @@ class V2TracingMiddleware(APIRoute):
         async def traced_route_handler(request: Request) -> Response:
             run_id = str(uuid4())
             request.state.v2_run_id = run_id
+            context_token = RunContext.set_run_id(run_id)
             started_at = perf_counter()
 
             logfire_module = _get_logfire_module()
@@ -70,7 +73,6 @@ class V2TracingMiddleware(APIRoute):
                     "v2.request",
                     path=request.url.path,
                     method=request.method,
-                    run_id=run_id,
                 )
                 if logfire_module is not None
                 else nullcontext()
@@ -78,23 +80,30 @@ class V2TracingMiddleware(APIRoute):
 
             with span_context as span:
                 try:
-                    response = await original_handler(request)
-                except HTTPException as exc:
-                    response = JSONResponse(
-                        status_code=exc.status_code,
-                        content={"detail": exc.detail},
-                        headers=exc.headers,
-                    )
-                duration_ms = int((perf_counter() - started_at) * 1000)
-                response.headers[RUN_ID_HEADER] = run_id
+                    try:
+                        response = await original_handler(request)
+                    except HTTPException as exc:
+                        response = JSONResponse(
+                            status_code=exc.status_code,
+                            content={"detail": exc.detail},
+                            headers=exc.headers,
+                        )
+                    final_run_id = getattr(request.state, "v2_run_id", None)
+                    if not isinstance(final_run_id, str) or not final_run_id:
+                        final_run_id = RunContext.get_run_id()
+                    response.headers[RUN_ID_HEADER] = final_run_id
 
-                if logfire_module is not None and span is not None:
-                    _set_span_attributes(
-                        span,
-                        status_code=response.status_code,
-                        duration_ms=duration_ms,
-                        response_size=_response_size(response),
-                    )
-                return response
+                    duration_ms = int((perf_counter() - started_at) * 1000)
+                    if logfire_module is not None and span is not None:
+                        _set_span_attributes(
+                            span,
+                            run_id=final_run_id,
+                            status_code=response.status_code,
+                            duration_ms=duration_ms,
+                            response_size=_response_size(response),
+                        )
+                    return response
+                finally:
+                    RunContext.reset(context_token)
 
         return traced_route_handler

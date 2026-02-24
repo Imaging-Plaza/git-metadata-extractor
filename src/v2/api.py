@@ -6,7 +6,6 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -25,6 +24,8 @@ from src.v2.models import (
     V2GraphResponse,
     V2HealthResponse,
 )
+from src.v2.observability.context import RunContext
+from src.v2.observability.error_events import record_error
 from src.v2.observability.middleware import V2TracingMiddleware
 from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline import PipelineOrchestrator
@@ -114,8 +115,10 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
 
 def _get_pipeline_tracer(request: Request) -> PipelineTracer:
     run_id = getattr(request.state, "v2_run_id", None)
-    if isinstance(run_id, str) and run_id:
-        return PipelineTracer(run_id=run_id)
+    if not isinstance(run_id, str) or not run_id:
+        run_id = RunContext.get_run_id()
+    if run_id:
+        return PipelineTracer(run_id=str(run_id))
     return PipelineTracer()
 
 
@@ -149,14 +152,18 @@ async def extract(  # noqa: PLR0913
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
-    tracer = _get_pipeline_tracer(request)
+    store = GraphStore(V2Config().V2_GRAPH_DB_PATH)
+    run_id: str | None = None
 
     try:
-        with tracer.trace_stage(STAGE_CLASSIFY_URL, source_url=full_path) as stage_span:
-            classification = classify_github_url(full_path)
-            stage_span.set_attribute("detected_type", classification.detected_type.value)
-            stage_span.set_attribute("normalized_url", classification.normalized_url)
+        classification = classify_github_url(full_path)
     except UnsupportedGitHubURL as exc:
+        record_error(
+            STAGE_CLASSIFY_URL,
+            exc,
+            run_id=RunContext.get_run_id() or None,
+            source_url=exc.normalized_url,
+        )
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=exc.reason,
@@ -168,6 +175,12 @@ async def extract(  # noqa: PLR0913
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except ValueError as exc:
+        record_error(
+            STAGE_CLASSIFY_URL,
+            exc,
+            run_id=RunContext.get_run_id() or None,
+            source_url=full_path,
+        )
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=str(exc),
@@ -179,6 +192,18 @@ async def extract(  # noqa: PLR0913
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
 
+    run_id = store.create_run(
+        classification.normalized_url,
+        classification.detected_type.value,
+    )
+    request.state.v2_run_id = run_id
+    RunContext.set_run_id(run_id)
+    tracer = _get_pipeline_tracer(request)
+
+    with tracer.trace_stage(STAGE_CLASSIFY_URL, source_url=full_path) as stage_span:
+        stage_span.set_attribute("detected_type", classification.detected_type.value)
+        stage_span.set_attribute("normalized_url", classification.normalized_url)
+
     try:
         orchestrator = _get_orchestrator(request)
         execution_plan = orchestrator.get_execution_plan(classification.detected_type)
@@ -189,11 +214,19 @@ async def extract(  # noqa: PLR0913
                 "source_url": classification.normalized_url,
                 "url_info": classification,
                 "force_refresh": force_refresh,
-                "run_id": getattr(request.state, "v2_run_id", None),
+                "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
             },
         )
     except Exception as exc:  # noqa: BLE001
+        store.fail_run(run_id, str(exc))
+        record_error(
+            "pipeline_execute",
+            exc,
+            run_id=run_id,
+            source_url=classification.normalized_url,
+            detected_type=classification.detected_type.value,
+        )
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
             detail=str(exc),
@@ -247,10 +280,6 @@ async def extract(  # noqa: PLR0913
         )
         stage_span.set_attribute("entity_count", entity_count)
 
-    config = V2Config()
-    store = GraphStore(config.V2_GRAPH_DB_PATH)
-    run_id = f"pipeline-{classification.detected_type}-{uuid4().hex}"
-
     response_intermediates = None
     if include_intermediates:
         response_intermediates = assemble_intermediates(
@@ -268,6 +297,24 @@ async def extract(  # noqa: PLR0913
             "triples_count": stats.triples_count if extract_graph is not None else 0,
             "duration_ms": pipeline_result.duration_ms,
             "stages_completed": list(pipeline_result.stages_completed),
+        },
+    )
+    entity_ids = [
+        entity_id
+        for entity_id in (
+            result.data.get("id")
+            for result in pipeline_result.agent_results.values()
+            if isinstance(result.data, dict)
+        )
+        if isinstance(entity_id, str) and entity_id
+    ]
+    store.complete_run(
+        run_id,
+        {
+            "duration_ms": pipeline_result.duration_ms,
+            "stages_completed": list(pipeline_result.stages_completed),
+            "entity_ids": entity_ids,
+            "entities_count": entity_count,
         },
     )
 

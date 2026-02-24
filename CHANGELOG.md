@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added v2 run-id correlation via `contextvars` so request traces, pipeline/agent spans, structured error events, and response headers share the same `run_id` per request.
+- Changed `/v2/extract` run lifecycle handling to persist a run row up-front, propagate that run identifier through stats and response headers, and finalize run status with completion/failure metadata.
+- Changed `/v2/extract` stats run-id format from synthetic `pipeline-*` strings to canonical UUID run identifiers.
+- Added v2 structured error event emission (`record_error`) alongside standard Python logging for classified and pipeline execution failures.
+- Added v2 observability metrics primitives for token usage, stage latency, validation failure counts, alias lookup hit/miss tracking, and graph upsert counters.
+- Updated `AGENTS.md` handoff to advance the current v2 entry task to `.internal/v2-plan/phase-7-ci-migration/P7-01-codegen-setup.md`.
 - Added v2 FastAPI request tracing middleware on `/v2/*` routes that emits `X-Run-Id` response headers and records request span attributes (`path`, `method`, `status_code`, `duration_ms`, `response_size`) without affecting non-v2 routes.
 - Added v2 pipeline-stage span instrumentation for URL classification, context gather, agent-stage execution, permissive/strict validation, reconciliation, graph-write, and output assembly; strict/reconciliation/graph-write are currently emitted as explicit `status=skipped` spans where execution is not yet wired.
 - Added v2 agent-run span instrumentation around retry-wrapped agent execution, including status (`success`/`retry`/`failure`/`error`), model/provider metadata, token usage, and retry count attributes.
@@ -35,6 +41,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_metrics.py tests/v2/test_error_events.py tests/v2/test_runid_correlation.py tests/v2/test_extract_golden.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/observability/context.py src/v2/observability/log_filter.py src/v2/observability/metrics.py src/v2/observability/error_events.py src/v2/observability/middleware.py src/v2/observability/agent_instrumentation.py src/v2/observability/pipeline_spans.py src/v2/api.py src/v2/observability/__init__.py tests/v2/test_metrics.py tests/v2/test_error_events.py tests/v2/test_runid_correlation.py tests/v2/test_extract_golden.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/observability/context.py src/v2/observability/log_filter.py src/v2/observability/metrics.py src/v2/observability/error_events.py src/v2/observability/middleware.py src/v2/observability/agent_instrumentation.py src/v2/observability/pipeline_spans.py src/v2/observability/__init__.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_fastapi_instrumentation.py tests/v2/test_agent_instrumentation.py tests/v2/test_pipeline_spans.py -q`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_extract_stub.py tests/v2/test_api_graph.py tests/v2/test_api_health.py tests/v2/test_api_mount_v2_router.py tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_graph_golden.py tests/v2/test_orchestrator_execution.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/models.py src/v2/api.py src/v2/observability/__init__.py src/v2/observability/agent_instrumentation.py src/v2/observability/middleware.py src/v2/observability/pipeline_spans.py src/v2/pipeline/models.py src/v2/pipeline/orchestrator.py tests/v2/test_agent_instrumentation.py tests/v2/test_fastapi_instrumentation.py tests/v2/test_pipeline_spans.py`
@@ -76,6 +86,15 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added v2 observability primitives for phase-6 completion:
+  - `src/v2/observability/context.py` (`RunContext`)
+  - `src/v2/observability/log_filter.py` (`RunIdLogFilter`)
+  - `src/v2/observability/metrics.py` (`V2Metrics`)
+  - `src/v2/observability/error_events.py` (`record_error`)
+- Added focused coverage for phase-6 completion:
+  - `tests/v2/test_metrics.py`
+  - `tests/v2/test_error_events.py`
+  - `tests/v2/test_runid_correlation.py`
 - Added v2 observability primitives and wiring for Phase 6 request/agent/pipeline tracing:
   - `src/v2/observability/middleware.py`
   - `src/v2/observability/agent_instrumentation.py`

@@ -4,6 +4,9 @@ from contextlib import nullcontext
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from src.v2.observability.context import RunContext
+from src.v2.observability.metrics import V2Metrics
+
 if TYPE_CHECKING:
     from src.v2.agents import ProviderSet
     from src.v2.agents.models import AgentResult
@@ -152,17 +155,19 @@ def instrument_agent(
     provider: str | None = None,
 ) -> AgentRunner:
     """Wrap an agent call with a structured Logfire span."""
+    metrics = V2Metrics()
 
     async def _instrumented(
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult | dict[str, Any]:
         logfire_module = _get_logfire_module()
+        resolved_run_id = run_id or RunContext.get_run_id() or None
         span_context = (
             logfire_module.span(
                 f"agent:{agent_name}",
                 agent_name=agent_name,
-                run_id=run_id,
+                run_id=resolved_run_id,
             )
             if logfire_module is not None
             else nullcontext()
@@ -210,6 +215,12 @@ def instrument_agent(
                         span,
                         error_message=getattr(result, "failure_reason", None),
                     )
+
+            metrics.record_tokens(
+                agent_name=agent_name,
+                prompt_tokens=tokens_prompt,
+                completion_tokens=tokens_completion,
+            )
 
             return result
 

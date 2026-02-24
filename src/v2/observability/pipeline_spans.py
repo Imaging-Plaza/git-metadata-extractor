@@ -6,6 +6,9 @@ from importlib import import_module
 from time import perf_counter
 from typing import Any, Callable, Generator, TypeVar, cast
 
+from src.v2.observability.context import RunContext
+from src.v2.observability.metrics import V2Metrics
+
 T = TypeVar("T")
 
 
@@ -64,7 +67,8 @@ class _SpanProxy:
 
 class PipelineTracer:
     def __init__(self, *, run_id: str | None = None) -> None:
-        self._run_id = run_id
+        self._run_id = run_id or RunContext.get_run_id() or None
+        self._metrics = V2Metrics()
 
     @contextmanager
     def trace_stage(self, stage_name: str, **attributes: Any) -> Generator[_SpanProxy]:
@@ -87,15 +91,18 @@ class PipelineTracer:
             try:
                 yield proxy
             except Exception as exc:
+                duration_ms = int((perf_counter() - started_at) * 1000)
+                self._metrics.record_stage_latency(stage_name, duration_ms)
                 proxy.set_attributes(
                     status="error",
-                    duration_ms=int((perf_counter() - started_at) * 1000),
+                    duration_ms=duration_ms,
                     error_class=exc.__class__.__name__,
                     error_message=str(exc),
                 )
                 raise
             else:
                 duration_ms = int((perf_counter() - started_at) * 1000)
+                self._metrics.record_stage_latency(stage_name, duration_ms)
                 if proxy._status_explicit:  # noqa: SLF001
                     proxy.set_attribute("duration_ms", duration_ms)
                 else:

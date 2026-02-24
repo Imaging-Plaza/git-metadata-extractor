@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any, Callable
+from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -89,4 +90,4 @@ def test_extract_endpoint_matches_golden_contract(
     assert actual_payload["stats"]["stages_completed"] == expected["stats"]["stages_completed"]
     assert isinstance(actual_payload["warnings"], list)
     assert isinstance(actual_payload["stats"]["duration_ms"], int)
-    assert actual_payload["stats"]["run_id"].startswith("pipeline-")
+    assert str(UUID(actual_payload["stats"]["run_id"])) == actual_payload["stats"]["run_id"]
