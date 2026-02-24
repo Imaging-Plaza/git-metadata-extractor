@@ -15,6 +15,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
   - Tests: `tests/`
 - Core references:
   - `README.md`
+  - `.internal/RISKS.md`
   - `docs/AGENT_STRATEGY.md`
   - `.internal/v2-plan/README.md`
 
@@ -94,6 +95,7 @@ Rules:
 - Do not modify `.env`, `.env2`, or other secret-bearing files unless explicitly requested.
 - Never run destructive git/file operations unless explicitly requested.
 - If unrelated local changes exist, do not revert them; work around them and report context in the completion summary.
+- Record newly discovered high-impact operational risks in `.internal/RISKS.md`.
 
 ## Task Playbooks
 ### Bug Fix Playbook

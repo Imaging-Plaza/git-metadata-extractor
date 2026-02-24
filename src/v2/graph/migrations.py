@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from pathlib import Path
 from src.v2.graph.schema import DROP_ALL_TABLES_STATEMENTS, SCHEMA_VERSION_TABLE_SQL
 
 _MIGRATION_FILENAME_PATTERN = re.compile(r"^(?P<version>\d{3})_.+\.sql$")
+_DESTRUCTIVE_ROLLBACK_ENV_FLAG = "V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK"
+_TRUTHY_VALUES = {"1", "true", "t", "yes", "y", "on"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,10 +20,19 @@ class Migration:
 
 
 class MigrationRunner:
-    def __init__(self, db_path: str, migrations_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str,
+        migrations_dir: Path | None = None,
+        *,
+        allow_destructive_rollback: bool | None = None,
+    ) -> None:
         self._db_path = Path(db_path)
         default_dir = Path(__file__).resolve().parent / "migrations"
         self._migrations_dir = migrations_dir if migrations_dir is not None else default_dir
+        if allow_destructive_rollback is None:
+            allow_destructive_rollback = _env_flag_enabled(_DESTRUCTIVE_ROLLBACK_ENV_FLAG)
+        self._allow_destructive_rollback = allow_destructive_rollback
 
     def apply_pending(self) -> int:
         migrations = self._discover_migrations()
@@ -58,6 +70,14 @@ class MigrationRunner:
             current_version = self._get_current_version(connection)
             if version >= current_version:
                 return current_version
+            if not self._allow_destructive_rollback:
+                message = (
+                    "Destructive rollback is disabled. "
+                    f"Set {_DESTRUCTIVE_ROLLBACK_ENV_FLAG}=1 or pass "
+                    "allow_destructive_rollback=True to MigrationRunner "
+                    "to enable rollback_to()."
+                )
+                raise PermissionError(message)
 
             with connection:
                 for drop_statement in DROP_ALL_TABLES_STATEMENTS:
@@ -121,3 +141,8 @@ class MigrationRunner:
                 "INSERT INTO schema_version (version) VALUES (?);",
                 (migration.version,),
             )
+
+
+def _env_flag_enabled(name: str) -> bool:
+    raw_value = os.getenv(name, "")
+    return raw_value.strip().lower() in _TRUTHY_VALUES

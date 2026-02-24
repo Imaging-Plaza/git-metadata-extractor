@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from src.v2.graph.migrations import MigrationRunner
 
 EXPECTED_MIGRATION_COUNT = 2
@@ -154,3 +156,67 @@ def test_migration_runner_detects_and_applies_new_migration_files(tmp_path: Path
     assert applied_count == EXPECTED_MIGRATION_COUNT
     assert runner.get_current_version() == EXPECTED_MIGRATION_COUNT
     assert "migration_probe" in _table_names(db_path)
+
+
+def test_rollback_is_blocked_by_default_for_destructive_changes(tmp_path: Path) -> None:
+    db_path = tmp_path / "graph_schema_blocked_rollback.db"
+    migrations_dir = tmp_path / "migrations_guarded"
+    migrations_dir.mkdir(parents=True, exist_ok=True)
+
+    initial_sql = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "v2"
+        / "graph"
+        / "migrations"
+        / "001_initial.sql"
+    )
+    (migrations_dir / "001_initial.sql").write_text(
+        initial_sql.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (migrations_dir / "002_probe.sql").write_text(
+        "CREATE TABLE IF NOT EXISTS migration_probe (id TEXT PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+
+    runner = MigrationRunner(str(db_path), migrations_dir=migrations_dir)
+    runner.apply_pending()
+
+    with pytest.raises(PermissionError, match="Destructive rollback is disabled"):
+        runner.rollback_to(1)
+
+
+def test_rollback_is_allowed_when_explicitly_enabled(tmp_path: Path) -> None:
+    db_path = tmp_path / "graph_schema_allowed_rollback.db"
+    migrations_dir = tmp_path / "migrations_enabled"
+    migrations_dir.mkdir(parents=True, exist_ok=True)
+
+    initial_sql = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "v2"
+        / "graph"
+        / "migrations"
+        / "001_initial.sql"
+    )
+    (migrations_dir / "001_initial.sql").write_text(
+        initial_sql.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (migrations_dir / "002_probe.sql").write_text(
+        "CREATE TABLE IF NOT EXISTS migration_probe (id TEXT PRIMARY KEY);\n",
+        encoding="utf-8",
+    )
+
+    runner = MigrationRunner(
+        str(db_path),
+        migrations_dir=migrations_dir,
+        allow_destructive_rollback=True,
+    )
+    runner.apply_pending()
+
+    rolled_back_version = runner.rollback_to(1)
+
+    assert rolled_back_version == 1
+    assert runner.get_current_version() == 1
