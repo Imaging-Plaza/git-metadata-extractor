@@ -6,6 +6,7 @@ data
 api_cache.db
 .env2
 dev/ontology-v2-json-response/
+.internal/RISKS.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -175,3 +176,4 @@ DeepLabCutDeepLabCut.json
 MalloryWittwer.json
 output.jsonld
 sdsc-ordes.json
+.internal/RISKS.md
