@@ -5,15 +5,31 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
-- Clarified the v2 progress handoff in `AGENTS.md` by pointing the entry task to `.internal/v2-plan/phase-4-graph-store/P4-01-sqlite-schema-migrations.md`.
+- Clarified the v2 progress handoff in `AGENTS.md` by pointing the entry task to `.internal/v2-plan/phase-4-graph-store/P4-05-runs-table.md` after completing `P4-01` through `P4-04`.
 
 ### Testing
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_graph_schema.py tests/v2/test_entity_crud.py tests/v2/test_edge_crud.py tests/v2/test_alias_crud.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- **V2 Phase 4 graph-store foundation and CRUD (`P4-01` to `P4-04`)**:
+  - Added SQLite schema constants and migration runner:
+    - `src/v2/graph/schema.py`
+    - `src/v2/graph/migrations.py`
+    - `src/v2/graph/migrations/001_initial.sql`
+  - Added typed graph-store models and package exports:
+    - `src/v2/graph/models.py`
+    - `src/v2/graph/__init__.py`
+  - Added `GraphStore` CRUD operations for entities, edges, and aliases:
+    - `src/v2/graph/store.py`
+  - Added graph-store schema and CRUD coverage:
+    - `tests/v2/test_graph_schema.py`
+    - `tests/v2/test_entity_crud.py`
+    - `tests/v2/test_edge_crud.py`
+    - `tests/v2/test_alias_crud.py`
 - Added a scoped Phase 3 completion checkpoint for repository canonicalization, reconciliation, partial-failure assembly, and enum-alignment validation.
 - **V2 Phase 3 reconciliation and enum alignment (`P3-05` to `P3-08`)**:
   - Added repository canonical ID resolution with prioritized source selection:
