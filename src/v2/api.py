@@ -3,14 +3,16 @@ from __future__ import annotations
 import sys
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
+from src.v2.agents import ProviderSet  # noqa: TC001
 from src.v2.config import V2Config
+from src.v2.dependencies import get_provider_set
 from src.v2.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.models import (
     V2ErrorResponse,
@@ -20,6 +22,7 @@ from src.v2.models import (
     V2HealthResponse,
     V2Stats,
 )
+from src.v2.pipeline import PipelineOrchestrator
 
 DEFAULT_INTERMEDIATE_LIMIT = V2Config().V2_INTERMEDIATE_HISTORY_LIMIT
 MIN_SUPPORTED_PYTHON = (3, 10)
@@ -31,6 +34,11 @@ except PackageNotFoundError:
 
 MIN_SUBRESOURCE_PATH_SEGMENTS = 3
 SUBRESOURCE_SEGMENT_INDEX = 2
+JSONLD_CONTEXT = {
+    "schema": "http://schema.org/",
+    "pulse": "https://open-pulse.epfl.ch/ontology#",
+    "org": "http://www.w3.org/ns/org#",
+}
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -57,17 +65,45 @@ def _extract_path_kind(source_url: str) -> str | None:
     return None
 
 
+def _get_orchestrator(request: Request) -> PipelineOrchestrator:
+    existing = getattr(request.app.state, "v2_orchestrator", None)
+    if isinstance(existing, PipelineOrchestrator):
+        return existing
+
+    orchestrator = PipelineOrchestrator()
+    request.app.state.v2_orchestrator = orchestrator
+    return orchestrator
+
+
+def _build_output_payload(
+    *,
+    output_format: Literal["jsonld", "json"],
+    pipeline_agent_results: dict[str, Any],
+) -> dict[str, Any]:
+    non_empty_entities = {
+        key: value.data
+        for key, value in pipeline_agent_results.items()
+        if isinstance(value.data, dict) and value.data
+    }
+
+    if output_format == "jsonld":
+        return {"@context": JSONLD_CONTEXT, "@graph": list(non_empty_entities.values())}
+    return {"entities": non_empty_entities}
+
+
 @v2_router.get(
     "/extract/{full_path:path}",
     response_model=V2ExtractResponse,
     response_model_exclude_none=True,
 )
-async def extract(
+async def extract(  # noqa: PLR0913
     full_path: str,
+    request: Request,
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     force_refresh: Annotated[bool, Query()] = False,
     include_intermediates: Annotated[bool, Query()] = False,
+    providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
     try:
         classification = classify_github_url(full_path)
@@ -94,33 +130,64 @@ async def extract(
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
 
-    response_warnings: list[str] = []
-    if force_refresh:
-        response_warnings.append("force_refresh is ignored in the stub implementation")
+    try:
+        orchestrator = _get_orchestrator(request)
+        execution_plan = orchestrator.get_execution_plan(classification.detected_type)
+        pipeline_result = await orchestrator.execute(
+            plan=execution_plan,
+            providers=providers,
+            context={
+                "source_url": classification.normalized_url,
+                "url_info": classification,
+                "force_refresh": force_refresh,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail=str(exc),
+            source_url=classification.normalized_url,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
 
-    output_payload: dict[str, object]
-    if output_format == "jsonld":
-        output_payload = {"@context": {}, "@graph": []}
-    else:
-        output_payload = {"status": "stub"}
+    warnings = list(pipeline_result.warnings)
+    if force_refresh:
+        warnings.append("force_refresh requested for provider-backed pipeline run")
+
+    output_payload = _build_output_payload(
+        output_format=output_format,
+        pipeline_agent_results=pipeline_result.agent_results,
+    )
 
     response_intermediates = None
     if include_intermediates:
         response_intermediates = [
-            {
-                "stage": "extract_stub",
-                "owner": classification.owner,
-                "repo": classification.repo,
-            },
+            {"stage": "execution_plan", "plan": execution_plan.to_dict()},
+            {"stage": "pipeline_result", "result": pipeline_result.to_dict()},
         ]
+
+    entity_count = sum(
+        1
+        for result in pipeline_result.agent_results.values()
+        if isinstance(result.data, dict) and result.data
+    )
 
     return V2ExtractResponse(
         source_url=classification.normalized_url,
         detected_type=classification.detected_type,
         output_format=output_format,
         output=output_payload,
-        warnings=response_warnings,
-        stats=_build_stats(stage_name="extract"),
+        warnings=warnings,
+        stats=V2Stats(
+            entities_count=entity_count,
+            triples_count=0,
+            run_id=f"pipeline-{classification.detected_type}-{uuid4().hex}",
+            duration_ms=pipeline_result.duration_ms,
+            stages_completed=pipeline_result.stages_completed,
+        ),
         intermediates=response_intermediates,
     )
 

@@ -21,7 +21,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## V2 Phase 0 TDD Track
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- Current entry task: `P2-05-agent-retry-soft-failure.md` (Phase 2 tasks `P2-01` through `P2-04` complete).
+- Current entry task: `P3-01-strict-json-schema-gate.md` (Phase 2 tasks `P2-01` through `P2-09` complete).
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 
 ## Environment & Prerequisites

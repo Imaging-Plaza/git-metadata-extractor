@@ -37,6 +37,9 @@ class AgentResult:
     data: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
     raw_output: dict[str, Any] = field(default_factory=dict)
+    is_partial: bool = False
+    failure_reason: str | None = None
+    stats: dict[str, Any] = field(default_factory=dict)
 
 
 def _warn_once(warnings: list[str], warning: str) -> None:

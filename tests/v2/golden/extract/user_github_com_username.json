@@ -1,21 +1,23 @@
 {
-  "source_url": "github.com/username",
+  "source_url": "https://github.com/octocat",
   "detected_type": "user",
   "output_format": "json",
   "output": {
-    "id": "username",
-    "type": "schema:Person",
-    "schema:name": "username"
+    "entities": {
+      "person_agent": {
+        "type": "schema:Person",
+        "pulse:githubUsername": "octocat"
+      }
+    }
   },
-  "warnings": [],
   "stats": {
     "entities_count": 1,
     "triples_count": 0,
-    "run_id": "golden-user-stub",
-    "duration_ms": 0,
     "stages_completed": [
-      "classify",
-      "extract"
+      "context_gather",
+      "person_agent",
+      "repo_agents",
+      "org_agents"
     ]
   }
 }

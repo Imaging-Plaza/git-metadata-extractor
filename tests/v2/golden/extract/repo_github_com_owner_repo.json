@@ -1,29 +1,32 @@
 {
-  "source_url": "github.com/owner/repo",
+  "source_url": "https://github.com/octocat/Hello-World",
   "detected_type": "repository",
   "output_format": "jsonld",
   "output": {
     "@context": {
+      "org": "http://www.w3.org/ns/org#",
       "schema": "http://schema.org/",
       "pulse": "https://open-pulse.epfl.ch/ontology#"
     },
     "@graph": [
       {
-        "@id": "github.com/owner/repo",
-        "@type": "schema:SoftwareSourceCode",
-        "schema:name": "repo"
+        "type": "schema:SoftwareSourceCode",
+        "pulse:githubRepositoryHandle": "octocat/Hello-World"
+      },
+      {
+        "type": "schema:Person",
+        "pulse:githubUsername": "octocat"
       }
     ]
   },
-  "warnings": [],
   "stats": {
-    "entities_count": 1,
+    "entities_count": 2,
     "triples_count": 0,
-    "run_id": "golden-repo-stub",
-    "duration_ms": 0,
     "stages_completed": [
-      "classify",
-      "extract"
+      "context_gather",
+      "repo_agent",
+      "person_agents",
+      "org_agents"
     ]
   }
 }
