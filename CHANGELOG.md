@@ -313,6 +313,14 @@ All notable changes to this project will be documented in this file.
     - `tests/v2/golden/extract/org_github_com_orgname.json`
 
 ### Changed
+- **V2 Infoscience canonical URI strategy**:
+  - Canonical Infoscience IDs for person/orgunit/publication now normalize to the single API endpoint form:
+    - `https://infoscience.epfl.ch/server/api/core/items/{uuid}`
+  - Kept support for legacy/alternate inputs during normalization:
+    - `https://infoscience.epfl.ch/entities/{person|orgunit|publication}/{uuid}`
+    - `https://infoscience.epfl.ch/server/api/entities/{person|orgunit|publication}/{uuid}/full`
+    - `https://infoscience.epfl.ch/server/api/core/items/{uuid}`
+  - Extended reconciliation to canonicalize article IDs and article cross-references (`schema:author`, `schema:sourceOrganization`) against resolved person/organization IDs.
 - **V2 export surfaces for reconciliation and enum alignment**:
   - Extended `src/v2/canonicalization/__init__.py` with repository ID resolution export.
   - Extended `src/v2/pipeline/stages/__init__.py` with reconciliation/output assembly exports.
@@ -376,6 +384,16 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
+- Ran task-focused canonicalization/reconciliation checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py tests/v2/test_canonical_id_article.py tests/v2/test_reconciliation.py -v`
+    - Result: `26 passed`
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+    - Result: `321 collected`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+    - Result: `39 passed`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+    - Result: `321 collected`
 - Ran task-focused checks for `P3-05` to `P3-08` with repo venv:
   - `PYTHONPATH=. .venv/bin/ruff check src/v2/canonicalization/__init__.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/__init__.py src/v2/pipeline/stages/models.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/models/__init__.py src/v2/models/enums.py scripts/v2/extract_enums_from_ttl.py tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py`
   - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/canonicalization src/v2/pipeline/stages src/v2/models/enums.py`
