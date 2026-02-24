@@ -4,6 +4,15 @@ Repository-level operational and implementation risks that require explicit awar
 
 ## Active Risks
 
+### Run failure diagnostics are embedded in untyped JSON stats
+- Area: `src/v2/graph/store.py`, `runs` table schema
+- Risk: `fail_run()` stores `error_detail` inside the `stats` JSON payload because `runs` has no dedicated `error_detail` column.
+- Impact: SQL-level analytics/filtering by failure reason is brittle and depends on JSON parsing conventions.
+- Current control:
+  - `get_run()` normalizes `error_detail` out of `stats` into the `Run` model for API-facing consumers.
+  - v2 run CRUD tests cover failed-run write/read behavior.
+- Operator guidance: Add a dedicated nullable `error_detail` column if production reporting needs indexed/typed failure diagnostics.
+
 ### In-memory RDF graph can drift in multi-process deployments
 - Area: `src/v2/graph/store.py`, `src/v2/graph/rdf_sync.py`
 - Risk: RDF deltas are applied in-process on each `GraphStore` instance, while SQLite remains the shared source of truth.

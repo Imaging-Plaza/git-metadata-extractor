@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Normalized RDF `rdf:type` generation for built-in v2 entity kinds so lowercase stored types (`person`, `repository`, etc.) emit ontology class URIs (`pulse:Person`, `pulse:Repository`, ...).
 - Extended `GraphStore` with run tracking (`create_run`, `complete_run`, `fail_run`, `get_run`, `get_runs_by_source`) and entity upsert behavior powered by merge policy + field-level provenance.
 - Integrated in-memory RDF synchronization into graph-store lifecycle:
   - bootstraps RDF graph from SQLite on startup
@@ -15,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_runs_crud.py tests/v2/test_upsert_merge.py tests/v2/test_provenance.py tests/v2/test_rdf_sync.py -v`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/graph/rdf_sync.py tests/v2/test_rdf_sync.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
@@ -29,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added RDF sync coverage for ontology class normalization from built-in lowercase entity kinds in `tests/v2/test_rdf_sync.py`.
 - **V2 Phase 4 graph-store execution metadata + merge/provenance/RDF sync (`P4-05` to `P4-08`)**:
   - Added merge-policy primitive and result contract:
     - `src/v2/graph/merge.py`

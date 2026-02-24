@@ -21,6 +21,14 @@ NAMESPACE_BY_PREFIX: dict[str, Namespace] = {
     "pulse": PULSE_NAMESPACE,
     "schema": SCHEMA_NAMESPACE,
 }
+ENTITY_TYPE_CLASS_MAP: dict[str, str] = {
+    "person": "pulse:Person",
+    "repository": "pulse:Repository",
+    "organization": "pulse:Organization",
+    "membership": "pulse:Membership",
+    "contribution": "pulse:Contribution",
+    "article": "pulse:Article",
+}
 
 
 class RDFGraphSync:
@@ -100,7 +108,9 @@ class RDFGraphSync:
             raise ValueError(message)
 
         subject = _entity_uri(str(entity_data["id"]))
-        type_value = entity_data.get("type", entity_type)
+        type_value = _normalize_entity_type(
+            entity_data.get("type", entity_type),
+        )
         triples: list[Triple] = [
             (subject, RDF.type, _coerce_uri_or_literal(type_value, for_type=True)),
         ]
@@ -190,3 +200,16 @@ def _uri_from_text(value: str) -> URIRef | None:
 
 def _looks_like_uri(value: str) -> bool:
     return value.startswith(("http://", "https://", "urn:"))
+
+
+def _normalize_entity_type(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    normalized = value.strip()
+    if not normalized:
+        return value
+    if _looks_like_uri(normalized) or ":" in normalized:
+        return normalized
+
+    return ENTITY_TYPE_CLASS_MAP.get(normalized.lower(), normalized)

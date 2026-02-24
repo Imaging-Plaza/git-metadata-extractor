@@ -186,6 +186,21 @@ def test_entity_to_triples_uses_ontology_namespace_mappings() -> None:
     assert URIRef("https://open-pulse.epfl.ch/ontology#Person") in type_values
 
 
+def test_entity_to_triples_normalizes_builtin_entity_types() -> None:
+    sync = RDFGraphSync()
+
+    triples = sync.entity_to_triples(
+        "person",
+        {
+            "id": "person-1",
+            "schema:name": "Ada",
+        },
+    )
+    type_values = {obj for _, predicate, obj in triples if predicate == RDF.type}
+
+    assert URIRef("https://open-pulse.epfl.ch/ontology#Person") in type_values
+
+
 def test_startup_load_with_mock_dataset_33_entities(tmp_path) -> None:
     db_path = tmp_path / "rdf_sync_realistic.db"
     store = GraphStore(str(db_path))
