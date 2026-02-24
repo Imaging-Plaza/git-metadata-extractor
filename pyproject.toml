@@ -37,7 +37,7 @@ dependencies = [
     "google-genai>=1.31.0",
     "repo-to-text>=0.7.0",
     "PyLD==2.0.4",
-    "rdflib==6.2.0",
+    "rdflib==6.3.2",
     "rdflib-jsonld==0.6.2",
     "PyYAML==6.0.2",
     "selenium==4.34.2",
@@ -45,10 +45,11 @@ dependencies = [
     "aiohttp==3.12.15",
     "uvicorn-worker==0.3.0",
     "pydantic-ai>=1.0.15",
+    "griffe<2",
     "httpx",
     "markdownify==1.2.0",
     "logfire>=4.14.2",
-    "pyshacl==0.22.2",
+    "pyshacl==0.28.1",
 ]
 
 [project.urls]

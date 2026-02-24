@@ -1068,6 +1068,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "gimie" },
     { name = "google-genai" },
+    { name = "griffe" },
     { name = "httpx" },
     { name = "logfire" },
     { name = "markdownify" },
@@ -1112,6 +1113,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.115.13" },
     { name = "gimie", specifier = "==0.7.2" },
     { name = "google-genai", specifier = ">=1.31.0" },
+    { name = "griffe", specifier = "<2" },
     { name = "httpx" },
     { name = "logfire", specifier = ">=4.14.2" },
     { name = "markdownify", specifier = "==1.2.0" },
@@ -1125,12 +1127,12 @@ requires-dist = [
     { name = "pydantic-ai", specifier = ">=1.0.15" },
     { name = "pyld", specifier = "==2.0.4" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.14.0" },
-    { name = "pyshacl", specifier = "==0.22.2" },
+    { name = "pyshacl", specifier = "==0.28.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "python-dotenv", specifier = "==0.21.1" },
     { name = "pyyaml", specifier = "==6.0.2" },
-    { name = "rdflib", specifier = "==6.2.0" },
+    { name = "rdflib", specifier = "==6.3.2" },
     { name = "rdflib-jsonld", specifier = "==0.6.2" },
     { name = "repo-to-text", specifier = ">=0.7.0" },
     { name = "requests", specifier = "==2.32.4" },
@@ -1463,11 +1465,14 @@ wheels = [
 
 [[package]]
 name = "isodate"
-version = "0.7.2"
+version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/54/4d/e940025e2ce31a8ce1202635910747e5a87cc3a6a6bb2d00973375014749/isodate-0.7.2.tar.gz", hash = "sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6", size = 29705, upload-time = "2024-10-08T23:04:11.5Z" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/db/7a/c0a56c7d56c7fa723988f122fa1f1ccf8c5c4ccc48efad0d214b49e5b1af/isodate-0.6.1.tar.gz", hash = "sha256:48c5881de7e8b0a0d648cb024c8062dc84e7b840ed81e864c7614fd3c127bde9", size = 28443, upload-time = "2021-12-13T20:28:31.525Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/aa/0aca39a37d3c7eb941ba736ede56d689e7be91cab5d9ca846bde3999eba6/isodate-0.7.2-py3-none-any.whl", hash = "sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15", size = 22320, upload-time = "2024-10-08T23:04:09.501Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/85/7882d311924cbcfc70b1890780763e36ff0b140c7e51c110fc59a532f087/isodate-0.6.1-py2.py3-none-any.whl", hash = "sha256:0751eece944162659049d35f4f549ed815792b38793f07cf73381c1c87cbed96", size = 41722, upload-time = "2021-12-13T20:28:29.073Z" },
 ]
 
 [[package]]
@@ -2581,14 +2586,14 @@ wheels = [
 
 [[package]]
 name = "prettytable"
-version = "2.5.0"
+version = "3.17.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "wcwidth" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/35/21bf22e21b29102bbe81730caf498dfb3e1eed2642ac71f323472ead673a/prettytable-2.5.0.tar.gz", hash = "sha256:f7da57ba63d55116d65e5acb147bfdfa60dceccabf0d607d6817ee2888a05f2c", size = 50015, upload-time = "2021-12-20T15:37:08.478Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/45/b0847d88d6cfeb4413566738c8bbf1e1995fad3d42515327ff32cc1eb578/prettytable-3.17.0.tar.gz", hash = "sha256:59f2590776527f3c9e8cf9fe7b66dd215837cca96a9c39567414cbc632e8ddb0", size = 67892, upload-time = "2025-11-14T17:33:20.212Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/6d/40a24eaa03ea4418129708fd3f0f17eda73d568f16d4d4fd412566168b4c/prettytable-2.5.0-py3-none-any.whl", hash = "sha256:1411c65d21dca9eaa505ba1d041bed75a6d629ae22f5109a923f4e719cfecba4", size = 24774, upload-time = "2021-12-20T15:36:48.767Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl", hash = "sha256:aad69b294ddbe3e1f95ef8886a060ed1666a0b83018bbf56295f6f226c43d287", size = 34433, upload-time = "2025-11-14T17:33:19.093Z" },
 ]
 
 [[package]]
@@ -3080,18 +3085,18 @@ wheels = [
 
 [[package]]
 name = "pyshacl"
-version = "0.22.2"
+version = "0.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "html5lib" },
+    { name = "importlib-metadata", marker = "python_full_version < '3.12'" },
     { name = "owlrl" },
     { name = "packaging" },
     { name = "prettytable" },
-    { name = "rdflib" },
+    { name = "rdflib", extra = ["html"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/51/fee5fab38df6583ad877d240a8c352415fcb511d396e731fb946c0237f01/pyshacl-0.22.2.tar.gz", hash = "sha256:a9cbba8048438410eca0ee437df2cc55612cf5ed14574dc9524713063d10d3e4", size = 1290281, upload-time = "2023-04-27T01:59:44.195Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/55/370d2bae6eb2d6302caac1eba2c1ad365fbb43c4d4805d00367839b3089c/pyshacl-0.28.1.tar.gz", hash = "sha256:c98e1927541f0cbeb0ba27f3fbe585d638281d6e63f314462dcc32282b3c8353", size = 1399231, upload-time = "2024-10-25T11:42:22.459Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/82/2e416c88b94dc8c4b843bd145f86e6925f000d3e59aa71ceb53e7141e188/pyshacl-0.22.2-py3-none-any.whl", hash = "sha256:d7188d955c52bb37c4be25d46ce0e57a41e6e3fcf47265117a4f734b5788ca5f", size = 1217860, upload-time = "2023-04-27T01:59:41.752Z" },
+    { url = "https://files.pythonhosted.org/packages/47/17/57f5e48a856b70715b86b228ed4211fa0447e38c32eec6fd7c30239d5ea9/pyshacl-0.28.1-py3-none-any.whl", hash = "sha256:345fe96fb2f38218c53a0f977329ed0aa1a54256526bf6de62243ac7ae823d6b", size = 1321044, upload-time = "2024-10-25T11:42:19.285Z" },
 ]
 
 [[package]]
@@ -3263,16 +3268,20 @@ wheels = [
 
 [[package]]
 name = "rdflib"
-version = "6.2.0"
+version = "6.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "isodate" },
     { name = "pyparsing" },
-    { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/8d/2d1c8a08471b4333657c98a3048642095f844f10cd1d4e28f9b08725c7bd/rdflib-6.2.0.tar.gz", hash = "sha256:62dc3c86d1712db0f55785baf8047f63731fa59b2682be03219cb89262065942", size = 4755909, upload-time = "2022-07-26T15:43:59.891Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c8/28/4d1f27c5d73f58e567ca1a14a4eab7d7978a09c4e117687f9f6c216d3366/rdflib-6.3.2.tar.gz", hash = "sha256:72af591ff704f4caacea7ecc0c5a9056b8553e0489dd4f35a9bc52dbd41522e0", size = 4749592, upload-time = "2023-03-26T11:52:54.891Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/50/fb/a0f8b6ab6598b49871a48a189dc1942fb0b0543ab4c84f689486233ef1ec/rdflib-6.2.0-py3-none-any.whl", hash = "sha256:85c34a86dfc517a41e5f2425a41a0aceacc23983462b32e68610b9fad1383bca", size = 500261, upload-time = "2022-07-26T15:43:56.513Z" },
+    { url = "https://files.pythonhosted.org/packages/af/92/d7fb1d7fb70c9f7003fa50b7a3880ebcb311cc3f8552b3595e7c8f75aeeb/rdflib-6.3.2-py3-none-any.whl", hash = "sha256:36b4e74a32aa1e4fa7b8719876fb192f19ecd45ff932ea5ebbd2e417a0247e63", size = 528122, upload-time = "2023-03-26T11:52:52.393Z" },
+]
+
+[package.optional-dependencies]
+html = [
+    { name = "html5lib" },
 ]
 
 [[package]]
