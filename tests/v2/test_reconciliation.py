@@ -42,6 +42,28 @@ def _repository(handle: str, authors: list[str], *, fork_of: str | None = None) 
     }
 
 
+def _article(
+    *,
+    doi: str | None,
+    infoscience_id: str | None,
+    authors: list[str],
+    source_organization: str | None = None,
+) -> dict:
+    return {
+        "schema:name": "Sample Article",
+        "schema:datePublished": "2025-01-01",
+        "identifiers": {
+            "schema:identifier": doi,
+            "pulse:infoscienceArticleIdentifier": infoscience_id,
+            "uuid": "5a2ad6f9-0fcf-4fc4-bfc8-7f8c8924eca5",
+        },
+        "schema:identifier": doi,
+        "pulse:infoscienceArticleIdentifier": infoscience_id,
+        "schema:author": authors,
+        "schema:sourceOrganization": source_organization,
+    }
+
+
 def test_reconcile_updates_repository_author_references_to_canonical_person_ids() -> None:
     entities = {
         "persons": [_person("johndoe")],
@@ -114,3 +136,36 @@ def test_reconcile_detects_circular_repository_references_with_warning() -> None
     reconciled = reconcile_entities(entities)
 
     assert any("Circular repository fork reference detected" in w for w in reconciled.link_warnings)
+
+
+def test_reconcile_normalizes_article_ids_and_article_relationship_references() -> None:
+    entities = {
+        "persons": [_person("johndoe")],
+        "organizations": [_organization("EPFL", "05gzmn429")],
+        "repositories": [],
+        "articles": [
+            _article(
+                doi=None,
+                infoscience_id=(
+                    "https://infoscience.epfl.ch/server/api/entities/publication/"
+                    "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9/full"
+                ),
+                authors=["johndoe"],
+                source_organization="EPFL",
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    article = reconciled.entities["articles"][0]
+    person_id = reconciled.entities["persons"][0]["id"]
+    organization_id = reconciled.entities["organizations"][0]["id"]
+
+    assert article["id"] == (
+        "https://infoscience.epfl.ch/server/api/core/items/"
+        "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
+    )
+    assert article["idSource"] == "infoscienceArticleIdentifier"
+    assert article["schema:author"] == [person_id]
+    assert article["schema:sourceOrganization"] == organization_id

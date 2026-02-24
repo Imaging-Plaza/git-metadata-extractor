@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.v2.canonicalization import (
+    resolve_article_id,
     resolve_organization_id,
     resolve_person_id,
     resolve_repository_id,
@@ -199,6 +200,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     persons = reconciled_entities.setdefault("persons", [])
     organizations = reconciled_entities.setdefault("organizations", [])
     repositories = reconciled_entities.setdefault("repositories", [])
+    articles = reconciled_entities.setdefault("articles", [])
 
     person_lookup: dict[str, str] = {}
     organization_lookup: dict[str, str] = {}
@@ -221,6 +223,11 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         repository["id"] = canonical_id
         repository["idSource"] = id_source
         _register_repository_lookup_tokens(repository_lookup, repository)
+
+    for article in articles:
+        canonical_id, id_source = resolve_article_id(article)
+        article["id"] = canonical_id
+        article["idSource"] = id_source
 
     membership_pairs: set[tuple[str, str]] = set()
     contribution_pairs: set[tuple[str, str]] = set()
@@ -283,6 +290,37 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                 )
             else:
                 repository["pulse:isForkOf"] = canonical_fork_of
+
+    for article in articles:
+        article_id = article["id"]
+        author_refs_value = article.get("schema:author")
+        if isinstance(author_refs_value, list):
+            canonical_authors: list[str] = []
+            for author_ref in author_refs_value:
+                canonical_author = _resolve_lookup_token(person_lookup, author_ref)
+                if canonical_author is None:
+                    link_warnings.append(
+                        (
+                            "Orphan person reference from article author list: "
+                            f"article={article_id}, author={author_ref}"
+                        ),
+                    )
+                    continue
+                canonical_authors.append(canonical_author)
+            article["schema:author"] = _dedupe_preserve_order(canonical_authors)
+
+        source_org_ref = article.get("schema:sourceOrganization")
+        if isinstance(source_org_ref, str):
+            canonical_source_org = _resolve_lookup_token(organization_lookup, source_org_ref)
+            if canonical_source_org is None:
+                link_warnings.append(
+                    (
+                        "Orphan organization reference from article source organization: "
+                        f"article={article_id}, organization={source_org_ref}"
+                    ),
+                )
+            else:
+                article["schema:sourceOrganization"] = canonical_source_org
 
     for person in persons:
         person_id = person["id"]

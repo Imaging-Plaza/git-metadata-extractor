@@ -33,7 +33,49 @@ def test_resolve_organization_id_uses_infoscience_when_ror_missing() -> None:
 
     canonical_id, id_source = resolve_organization_id(organization)
 
-    assert canonical_id == "https://infoscience.epfl.ch/organization/12345"
+    assert canonical_id == "https://infoscience.epfl.ch/server/api/core/items/12345"
+    assert id_source == "infoscienceOrganizationIdentifier"
+
+
+def test_resolve_organization_id_normalizes_infoscience_api_url_with_full_suffix() -> None:
+    organization = {
+        "identifiers": {
+            "pulse:ror": None,
+            "pulse:infoscienceOrganizationIdentifier": (
+                "https://infoscience.epfl.ch/server/api/entities/orgunit/"
+                "6a95499f-7def-427d-ba0a-1ff2a27f58f6/full"
+            ),
+            "pulse:githubOrganizationHandle": "epfl-center-imaging",
+        },
+    }
+
+    canonical_id, id_source = resolve_organization_id(organization)
+
+    assert canonical_id == (
+        "https://infoscience.epfl.ch/server/api/core/items/"
+        "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
+    )
+    assert id_source == "infoscienceOrganizationIdentifier"
+
+
+def test_resolve_organization_id_normalizes_infoscience_core_items_url() -> None:
+    organization = {
+        "identifiers": {
+            "pulse:ror": None,
+            "pulse:infoscienceOrganizationIdentifier": (
+                "https://infoscience.epfl.ch/server/api/core/items/"
+                "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
+            ),
+            "pulse:githubOrganizationHandle": "epfl-center-imaging",
+        },
+    }
+
+    canonical_id, id_source = resolve_organization_id(organization)
+
+    assert canonical_id == (
+        "https://infoscience.epfl.ch/server/api/core/items/"
+        "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
+    )
     assert id_source == "infoscienceOrganizationIdentifier"
 
 
