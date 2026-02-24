@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added Phase 7 CI gating workflow (`.github/workflows/ci.yml`) that runs generated-model freshness checks and the TTL-schema alignment test within scoped `tests/v2` execution.
+- Added `just v2-models-generate` / `just v2-models-check` commands and wired deterministic schema-bundle generation so codegen freshness checks fail with schema-specific drift messages.
+- Added `datamodel-code-generator` dev dependency and shared `[tool.datamodel-codegen]` defaults in `pyproject.toml`.
+- Updated `AGENTS.md` handoff to advance the current v2 entry task to `.internal/v2-plan/phase-7-ci-migration/P7-04-ci-roundtrip.md`.
 - Added v2 run-id correlation via `contextvars` so request traces, pipeline/agent spans, structured error events, and response headers share the same `run_id` per request.
 - Changed `/v2/extract` run lifecycle handling to persist a run row up-front, propagate that run identifier through stats and response headers, and finalize run status with completion/failure metadata.
 - Changed `/v2/extract` stats run-id format from synthetic `pipeline-*` strings to canonical UUID run identifiers.
@@ -41,6 +45,14 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py`
+- `just v2-models-generate`
+- `just v2-models-check`
+- `PYTHONPATH=. .venv/bin/ruff check scripts/v2/generate_v2_models.py tests/v2/test_generated_models.py tests/v2/test_ttl_schema_alignment.py`
+- `PYTHONPATH=. .venv/bin/mypy scripts/v2/generate_v2_models.py tests/v2/test_generated_models.py tests/v2/test_ttl_schema_alignment.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_generated_models.py tests/v2/test_ttl_schema_alignment.py -q`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_metrics.py tests/v2/test_error_events.py tests/v2/test_runid_correlation.py tests/v2/test_extract_golden.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/observability/context.py src/v2/observability/log_filter.py src/v2/observability/metrics.py src/v2/observability/error_events.py src/v2/observability/middleware.py src/v2/observability/agent_instrumentation.py src/v2/observability/pipeline_spans.py src/v2/api.py src/v2/observability/__init__.py tests/v2/test_metrics.py tests/v2/test_error_events.py tests/v2/test_runid_correlation.py tests/v2/test_extract_golden.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/observability/context.py src/v2/observability/log_filter.py src/v2/observability/metrics.py src/v2/observability/error_events.py src/v2/observability/middleware.py src/v2/observability/agent_instrumentation.py src/v2/observability/pipeline_spans.py src/v2/observability/__init__.py`
@@ -86,6 +98,10 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added committed generated v2 models module at `src/v2/generated/entities.py` (with datamodel-code-generator header and embedded strict-schema SHA metadata) plus package exports in `src/v2/generated/__init__.py`.
+- Added `scripts/v2/generate_v2_models.py` to produce/check generated models from strict schemas and detect stale codegen output.
+- Added generated-model smoke coverage in `tests/v2/test_generated_models.py` for `PersonModel` and `RepositoryModel` fixture validation.
+- Added promoted TTL↔schema CI gate coverage in `tests/v2/test_ttl_schema_alignment.py` for property/enum/pattern/required/datatype consistency and drift detection.
 - Added v2 observability primitives for phase-6 completion:
   - `src/v2/observability/context.py` (`RunContext`)
   - `src/v2/observability/log_filter.py` (`RunIdLogFilter`)

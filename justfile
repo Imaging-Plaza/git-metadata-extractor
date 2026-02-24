@@ -132,6 +132,14 @@ test-live:
 test-offline:
     PYTHONPATH=. pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
 
+# Generate committed v2 Pydantic models from strict schemas
+v2-models-generate:
+    PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py
+
+# Check committed v2 generated models are in sync with strict schemas
+v2-models-check:
+    PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py --check
+
 # ============================================================================
 # Cache Management (via API)
 # ============================================================================
