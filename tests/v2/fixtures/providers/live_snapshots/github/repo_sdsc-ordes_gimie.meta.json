@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-02-24T14:18:28Z",
+  "case": "repo_sdsc-ordes_gimie",
+  "provider": "github",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {},
+    "url": "https://api.github.com/repos/sdsc-ordes/gimie"
+  },
+  "response": {
+    "elapsed_ms": 372,
+    "headers": {
+      "cache-control": "private, max-age=60, s-maxage=60",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Tue, 24 Feb 2026 14:18:28 GMT",
+      "etag": "W/\"b4ac2e7219daed53e8552c756182590102a097e637a32e377cde3631be308e1f\"",
+      "last-modified": "Mon, 12 Jan 2026 19:30:11 GMT",
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "4984",
+      "x-ratelimit-reset": "1771945475",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-used": "16"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}

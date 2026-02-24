@@ -116,6 +116,22 @@ test-file FILE:
 test-watch:
     PYTHONPATH=src ptw tests/
 
+# Run Phase 8 preflight connectivity checks against live providers
+preflight-live:
+    python scripts/v2/check_provider_connectivity.py
+
+# Capture sanitized live provider snapshots and promote them into the live fixture namespace
+capture-live:
+    python scripts/v2/capture_provider_snapshots.py --promote-to tests/v2/fixtures/providers/live_snapshots
+
+# Run opt-in live provider smoke tests
+test-live:
+    PYTHONPATH=. pytest tests/v2/test_live_provider_connectivity.py -m live_provider -v
+
+# Run offline Phase 8 fixture/sanitizer checks
+test-offline:
+    PYTHONPATH=. pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
+
 # ============================================================================
 # Cache Management (via API)
 # ============================================================================

@@ -93,4 +93,5 @@ ignore = ["S101","T201", "G004", "E501", "FA100"]
 [tool.pytest.ini_options]
 markers = [
     "v2: tests for the v2 extraction pipeline and schema validation track",
+    "live_provider: opt-in tests that hit live external provider APIs",
 ]

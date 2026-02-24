@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-02-24T14:18:28Z",
+  "case": "languages_sdsc-ordes_gimie",
+  "provider": "github",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {},
+    "url": "https://api.github.com/repos/sdsc-ordes/gimie/languages"
+  },
+  "response": {
+    "elapsed_ms": 237,
+    "headers": {
+      "cache-control": "private, max-age=60, s-maxage=60",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Tue, 24 Feb 2026 14:18:29 GMT",
+      "etag": "W/\"c3ac12e58fa31a59cb2bd8eb29b37584b00be66ef8d978eb68722bf01c354240\"",
+      "last-modified": "Mon, 12 Jan 2026 19:30:11 GMT",
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "4994",
+      "x-ratelimit-reset": "1771945475",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-used": "6"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}

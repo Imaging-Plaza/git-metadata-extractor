@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-02-24T14:18:31Z",
+  "case": "search_publications_metadata",
+  "provider": "infoscience",
+  "request": {
+    "auth_fallback_used": true,
+    "headers": {},
+    "method": "GET",
+    "query": {
+      "configuration": "researchoutputs",
+      "query": "metadata",
+      "size": "10"
+    },
+    "url": "https://infoscience.epfl.ch/server/api/discover/search/objects"
+  },
+  "response": {
+    "elapsed_ms": 19552,
+    "headers": {
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "content-type": "application/json;charset=UTF-8",
+      "date": "Tue, 24 Feb 2026 14:18:50 GMT"
+    },
+    "initial_status_code": 403,
+    "ok": true,
+    "status_code": 200
+  }
+}

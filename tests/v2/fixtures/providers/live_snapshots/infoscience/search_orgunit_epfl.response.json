@@ -1,0 +1,2962 @@
+{
+  "_embedded": {
+    "facets": [
+      {
+        "_embedded": {
+          "values": [
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.types=lab,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 467,
+              "label": "lab",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.types=central%20service,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 146,
+              "label": "central service",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.types=group,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 79,
+              "label": "group",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.types=center,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 68,
+              "label": "center",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.types=section,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 68,
+              "label": "section",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            }
+          ]
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/types?query=EPFL&configuration=orgunit&f.types=%5B*%20TO%20*%5D,notequals"
+          },
+          "next": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/types?query=EPFL&configuration=orgunit&page=1&size=5"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/types?query=EPFL&configuration=orgunit&size=5"
+          }
+        },
+        "facetLimit": 5,
+        "facetType": "text",
+        "missing": "437",
+        "name": "types",
+        "page": {
+          "number": 0,
+          "size": 5
+        },
+        "uniqueType": "discover.discover"
+      },
+      {
+        "_embedded": {
+          "values": [
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.parentOrganization=isic,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 77,
+              "label": "isic",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.parentOrganization=iinfcom,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 76,
+              "label": "iinfcom",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.parentOrganization=iphys,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 76,
+              "label": "iphys",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.parentOrganization=iem,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 67,
+              "label": "iem",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.parentOrganization=ia,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 55,
+              "label": "ia",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            }
+          ]
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/parentOrganization?query=EPFL&configuration=orgunit&f.parentOrganization=%5B*%20TO%20*%5D,notequals"
+          },
+          "next": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/parentOrganization?query=EPFL&configuration=orgunit&page=1&size=5"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/parentOrganization?query=EPFL&configuration=orgunit&size=5"
+          }
+        },
+        "facetLimit": 5,
+        "facetType": "text",
+        "missing": "55",
+        "name": "parentOrganization",
+        "page": {
+          "number": 0,
+          "size": 5
+        },
+        "uniqueType": "discover.discover"
+      },
+      {
+        "_embedded": {
+          "values": [
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.ouActive=true,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 926,
+              "label": "true",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            },
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.ouActive=false,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 398,
+              "label": "false",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            }
+          ]
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/ouActive?query=EPFL&configuration=orgunit&f.ouActive=%5B*%20TO%20*%5D,notequals"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/ouActive?query=EPFL&configuration=orgunit&size=2"
+          }
+        },
+        "facetLimit": 2,
+        "facetType": "text",
+        "missing": "88",
+        "name": "ouActive",
+        "page": {
+          "number": 0,
+          "size": 2
+        },
+        "uniqueType": "discover.discover"
+      },
+      {
+        "_embedded": {
+          "values": [
+            {
+              "_links": {
+                "search": {
+                  "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&f.entityType=orgunit,equals"
+                }
+              },
+              "authorityKey": null,
+              "count": 1412,
+              "label": "orgunit",
+              "type": "discover",
+              "uniqueType": "discover.discover"
+            }
+          ]
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/entityType?query=EPFL&configuration=orgunit&f.entityType=%5B*%20TO%20*%5D,notequals"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/entityType?query=EPFL&configuration=orgunit&size=5"
+          }
+        },
+        "facetLimit": 5,
+        "facetType": "text",
+        "missing": "0",
+        "name": "entityType",
+        "page": {
+          "number": 0,
+          "size": 5
+        },
+        "uniqueType": "discover.discover"
+      }
+    ],
+    "searchResult": {
+      "_embedded": {
+        "objects": [
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/240616",
+                "id": "937f0b8f-dd0b-4e51-9cae-a53d1375f248",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:43:27.593+00:00",
+                "metadata": {
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "40346af7-a1eb-4e00-8572-d05eea5f95a2"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "40346af7-a1eb-4e00-8572-d05eea5f95a2"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-08-06T14:16:24Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-08-06T14:16:24Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-08-06"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:43:27.593746Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/240616"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "Middle East EPFL Section"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "SECTION"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "3"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:43:27Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "50344"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EME-S"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "40346af7-a1eb-4e00-8572-d05eea5f95a2",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "ETU"
+                    }
+                  ]
+                },
+                "name": "Section EPFL Middle EAST",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "937f0b8f-dd0b-4e51-9cae-a53d1375f248",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/937f0b8f-dd0b-4e51-9cae-a53d1375f248"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/1970",
+                "id": "0ab681e4-8e62-4cc0-af87-fe30065e9ff4",
+                "inArchive": true,
+                "lastModified": "2024-10-17T17:48:36.354+00:00",
+                "metadata": {
+                  "cris.legacyId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "252176"
+                    }
+                  ],
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "41674f42-ba15-4612-9817-2a6f60985c01"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "655b8d7c-b9a6-4806-923d-649a67bee1a9",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Bolay, Jean-Claude"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:06:11Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:06:11Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-10-17T17:48:36.354955Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/1970"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "cooperation@epfl"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "false"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "10552"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U10552"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:06:11.715Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "CODEV"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://cooperation.epfl.ch/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "EPFL"
+                    }
+                  ]
+                },
+                "name": "cooperation@epfl",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "0ab681e4-8e62-4cc0-af87-fe30065e9ff4",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/0ab681e4-8e62-4cc0-af87-fe30065e9ff4"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/233",
+                "id": "91acea30-1912-45f4-ac52-09f2e28d0561",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:43:16.972+00:00",
+                "metadata": {
+                  "cris.legacyId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "252402"
+                    }
+                  ],
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "ENAC"
+                    },
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 1,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "f5a2327d-ca6f-4f51-89c1-0d5cfc8242fa"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "f5a2327d-ca6f-4f51-89c1-0d5cfc8242fa"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "f5a2327d-ca6f-4f51-89c1-0d5cfc8242fa"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "2ade9c95-59ba-410e-8ce4-651eb2e556d5",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Beyer, Katrin"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:27:17Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:27:17Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:43:16.972814Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/233"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EPFL Laboratory Basel"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "LABO"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "0920"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "4"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:43:16Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "11188"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U11188"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:27:17.302Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "LABA"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://laba.epfl.ch/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "f5a2327d-ca6f-4f51-89c1-0d5cfc8242fa",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "IA"
+                    }
+                  ]
+                },
+                "name": "EPFL Laboratoire B\u00e2le",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "91acea30-1912-45f4-ac52-09f2e28d0561",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/91acea30-1912-45f4-ac52-09f2e28d0561"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/101",
+                "id": "16f03b22-c7d0-44e9-8772-93b6bc636069",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:32:01.147+00:00",
+                "metadata": {
+                  "cris.legacyId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "252428"
+                    }
+                  ],
+                  "cris.sourceId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "ACRONYM::SFI"
+                    }
+                  ],
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "151ffc57-40e2-4212-a397-0f187292024f"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "151ffc57-40e2-4212-a397-0f187292024f"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "cf670696-75ac-4af4-ac3b-2c77c160111b",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Morellec, Erwan"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:24:00Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:24:00Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:32:01.147788Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/101"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "Swiss Finance Institute at EPFL"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "INSTITUT"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "22121"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "3"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:32:01Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "12063"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U12063"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "SFI"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://www.epfl.ch/schools/cdm/college-of-management-of-technology/swiss-finance-institute/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "151ffc57-40e2-4212-a397-0f187292024f",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "CDM"
+                    }
+                  ]
+                },
+                "name": "Institut suisse de la finance \u00e0 l'EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "16f03b22-c7d0-44e9-8772-93b6bc636069",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/16f03b22-c7d0-44e9-8772-93b6bc636069"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/1033",
+                "id": "551b2d9f-df3e-4e24-8cad-2a2eda8e80f5",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:37:46.602+00:00",
+                "metadata": {
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "d17e46c3-3a7c-43bd-a4b4-e75745c57379",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPS"
+                    },
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 1,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "5dce0a69-20b8-44da-b3a9-7439efe99204"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "5dce0a69-20b8-44da-b3a9-7439efe99204"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "5dce0a69-20b8-44da-b3a9-7439efe99204"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "a27040df-2a73-46f2-b2d5-f645f57ed67c",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Le Tiec, Agn\u00e8s"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:46:24Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:46:24Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:37:46.602297Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/1033"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EPFL Sustainability"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "SERVICE-CENTRAL"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "1953"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "4"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:37:45Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "11882"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U11882"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:46:25.033Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "DURABILITE"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://www.epfl.ch/about/sustainability/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "5dce0a69-20b8-44da-b3a9-7439efe99204",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPS-VP"
+                    }
+                  ]
+                },
+                "name": "Durabilit\u00e9 EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "551b2d9f-df3e-4e24-8cad-2a2eda8e80f5",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/551b2d9f-df3e-4e24-8cad-2a2eda8e80f5"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/1280",
+                "id": "b89ab908-b0bf-4b15-a1a2-e874579275cd",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:46:57.732+00:00",
+                "metadata": {
+                  "cris.legacyId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "252566"
+                    }
+                  ],
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "202ff980-089b-481f-b59c-65564e830ffa",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA"
+                    },
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 1,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "64273f8e-31d3-476b-8890-110594b386a4"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "64273f8e-31d3-476b-8890-110594b386a4"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "64273f8e-31d3-476b-8890-110594b386a4"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "1cd1ec2f-de15-459a-bf1f-8caf82738515",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Kneib, Jean-Paul"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:51:48Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:51:48Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:46:57.732534Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/1280"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EPFL Space centre"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "CENTRE"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "10674"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "4"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:46:57Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "12893"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U12893"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:51:48.868Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "ESC"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://space.epfl.ch/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "64273f8e-31d3-476b-8890-110594b386a4",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA-AVP-CP"
+                    }
+                  ]
+                },
+                "name": "Centre spatial EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "b89ab908-b0bf-4b15-a1a2-e874579275cd",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/b89ab908-b0bf-4b15-a1a2-e874579275cd"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/1299",
+                "id": "a5c3cb3c-1d38-4b65-82bc-bf3779faa646",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:44:59.806+00:00",
+                "metadata": {
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "e241245b-0e63-4d9e-806e-b766e62006ef"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "e241245b-0e63-4d9e-806e-b766e62006ef"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "38c59fb4-4c6a-41ae-94da-f65cb0f12dbb",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Paolone, Mario"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:52:11Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:52:11Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:44:59.806639Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/1299"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "SCCER - Future Swiss Electrical Infrastructure - Leading House EPFL"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "CENTRE"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "19171"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "3"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:44:59Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "12919"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U12919"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:52:11.302Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "SCCER-FURIES"
+                    }
+                  ],
+                  "oairecerif.identifier.url": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://sccer-furies.epfl.ch/"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "e241245b-0e63-4d9e-806e-b766e62006ef",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "STI"
+                    }
+                  ]
+                },
+                "name": "SCCER - Future Swiss Electrical Infrastructure - Leading House EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "a5c3cb3c-1d38-4b65-82bc-bf3779faa646",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/a5c3cb3c-1d38-4b65-82bc-bf3779faa646"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/992",
+                "id": "597c17db-8dcb-4117-ad82-ccf93b866300",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:38:19.654+00:00",
+                "metadata": {
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "202ff980-089b-481f-b59c-65564e830ffa",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA"
+                    },
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 1,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "3eb11ab1-c536-4b4d-a14a-232b91b80d56",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Olhede, Sofia Charlotta"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:45:34Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:45:34Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:38:19.654874Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/992"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EPFL Committee of Academic Evaluation"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "SERVICE-CENTRAL"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "3003"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "4"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:38:19Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "14316"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U14316"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:45:34.086Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "CEAE"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "2340fd48-a1c6-41c9-9acc-654e568e4c19",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA-FAC"
+                    }
+                  ]
+                },
+                "name": "Comit\u00e9 d'\u00e9valuation acad\u00e9mique EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "597c17db-8dcb-4117-ad82-ccf93b866300",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/597c17db-8dcb-4117-ad82-ccf93b866300"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/933",
+                "id": "e07d442e-643d-4387-b891-0ca12d811f46",
+                "inArchive": true,
+                "lastModified": "2026-02-23T19:50:28.814+00:00",
+                "metadata": {
+                  "cris.virtual.parent-organization": [
+                    {
+                      "authority": "202ff980-089b-481f-b59c-65564e830ffa",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA"
+                    },
+                    {
+                      "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 1,
+                      "value": "EPFL"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#"
+                    }
+                  ],
+                  "cris.virtualsource.parent-organization": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 1,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    },
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 2,
+                      "value": "2340fd48-a1c6-41c9-9acc-654e568e4c19"
+                    }
+                  ],
+                  "crisou.director": [
+                    {
+                      "authority": "62ec68a7-ac46-4aa5-b084-00866d798524",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "Buffa, Annalisa"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:44:17Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:44:17Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:50:28.814108Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/933"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "EPFL Academic strategic committee"
+                    }
+                  ],
+                  "dc.type": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "SERVICE-CENTRAL"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "value": "true"
+                    }
+                  ],
+                  "epfl.orgUnit.cf": [
+                    {
+                      "authority": null,
+                      "confidence": 0,
+                      "language": null,
+                      "place": 0,
+                      "securityLevel": 0,
+                      "value": "3000"
+                    }
+                  ],
+                  "epfl.orgUnit.level": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "4"
+                    }
+                  ],
+                  "epfl.synchronization.date": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2026-02-23T19:50:28Z"
+                    }
+                  ],
+                  "epfl.unit.code": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "14393"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "U14393"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T17:44:17.388Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "ASC"
+                    }
+                  ],
+                  "organization.parentOrganization": [
+                    {
+                      "authority": "2340fd48-a1c6-41c9-9acc-654e568e4c19",
+                      "confidence": 600,
+                      "language": null,
+                      "place": 0,
+                      "value": "VPA-FAC"
+                    }
+                  ]
+                },
+                "name": "Comit\u00e9 strat\u00e9gique acad\u00e9mique de l'EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "e07d442e-643d-4387-b891-0ca12d811f46",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/e07d442e-643d-4387-b891-0ca12d811f46"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          },
+          {
+            "_embedded": {
+              "indexableObject": {
+                "_links": {
+                  "accessStatus": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/accessStatus"
+                  },
+                  "bundles": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/bundles"
+                  },
+                  "identifiers": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/identifiers"
+                  },
+                  "mappedCollections": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/mappedCollections"
+                  },
+                  "metrics": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/metrics"
+                  },
+                  "owningCollection": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/owningCollection"
+                  },
+                  "relationships": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/relationships"
+                  },
+                  "self": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c"
+                  },
+                  "submitter": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/submitter"
+                  },
+                  "templateItemOf": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/templateItemOf"
+                  },
+                  "thumbnail": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/thumbnail"
+                  },
+                  "version": {
+                    "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c/version"
+                  }
+                },
+                "discoverable": true,
+                "entityType": "OrgUnit",
+                "handle": "20.500.14299/2080",
+                "id": "ae86071e-d406-4ecc-bed2-13c88178775c",
+                "inArchive": true,
+                "lastModified": "2024-07-08T18:08:10.940+00:00",
+                "metadata": {
+                  "cris.legacyId": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "252620"
+                    }
+                  ],
+                  "datacite.rights": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "metadata-only"
+                    }
+                  ],
+                  "dc.date.accessioned": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:08:10Z"
+                    }
+                  ],
+                  "dc.date.available": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:08:10Z"
+                    }
+                  ],
+                  "dc.date.created": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08"
+                    }
+                  ],
+                  "dc.date.modified": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:08:10.940718Z"
+                    }
+                  ],
+                  "dc.identifier.uri": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "https://infoscience.epfl.ch/handle/20.500.14299/2080"
+                    }
+                  ],
+                  "dc.title": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": "en",
+                      "place": 1,
+                      "value": "Cooperation EPFL"
+                    }
+                  ],
+                  "dspace.entity.type": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "OrgUnit"
+                    }
+                  ],
+                  "epfl.orgUnit.active": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "false"
+                    }
+                  ],
+                  "epfl.unit.infoscienceCode": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "US01241"
+                    }
+                  ],
+                  "epfl.workflow.startDateTime": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "2024-07-08T18:08:10.939Z"
+                    }
+                  ],
+                  "oairecerif.acronym": [
+                    {
+                      "authority": null,
+                      "confidence": -1,
+                      "language": null,
+                      "place": 0,
+                      "value": "CO"
+                    }
+                  ]
+                },
+                "name": "Cooperation EPFL",
+                "type": "item",
+                "uniqueType": "core.item",
+                "uuid": "ae86071e-d406-4ecc-bed2-13c88178775c",
+                "withdrawn": false
+              }
+            },
+            "_links": {
+              "indexableObject": {
+                "href": "https://infoscience.epfl.ch/server/api/core/items/ae86071e-d406-4ecc-bed2-13c88178775c"
+              }
+            },
+            "hitHighlights": null,
+            "type": "discover",
+            "uniqueType": "discover.discover"
+          }
+        ]
+      },
+      "_links": {
+        "last": {
+          "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&page=141&size=10"
+        },
+        "next": {
+          "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&page=1&size=10"
+        },
+        "self": {
+          "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit&size=10"
+        }
+      },
+      "page": {
+        "number": 0,
+        "size": 10,
+        "totalElements": 1412,
+        "totalPages": 142
+      }
+    }
+  },
+  "_links": {
+    "self": {
+      "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=EPFL&configuration=orgunit"
+    }
+  },
+  "appliedFilters": null,
+  "configuration": "orgunit",
+  "id": null,
+  "query": "EPFL",
+  "scope": null,
+  "sort": null,
+  "type": "discover",
+  "uniqueType": "discover.discover"
+}

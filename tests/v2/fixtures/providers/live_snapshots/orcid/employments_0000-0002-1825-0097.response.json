@@ -1,0 +1,140 @@
+{
+  "affiliation-group": [
+    {
+      "external-ids": {
+        "external-id": []
+      },
+      "last-modified-date": {
+        "value": 1405895110316
+      },
+      "summaries": [
+        {
+          "employment-summary": {
+            "created-date": {
+              "value": 1386356790112
+            },
+            "department-name": "Psychoceramics",
+            "display-index": "0",
+            "end-date": null,
+            "external-ids": null,
+            "last-modified-date": {
+              "value": 1405895110316
+            },
+            "organization": {
+              "address": {
+                "city": "Middletown",
+                "country": "US",
+                "region": "CT"
+              },
+              "disambiguated-organization": {
+                "disambiguated-organization-identifier": "5468",
+                "disambiguation-source": "RINGGOLD"
+              },
+              "name": "Wesleyan University"
+            },
+            "path": "/0000-0002-1825-0097/employment/4288",
+            "put-code": 4288,
+            "role-title": "Professor",
+            "source": {
+              "assertion-origin-client-id": null,
+              "assertion-origin-name": null,
+              "assertion-origin-orcid": null,
+              "source-client-id": null,
+              "source-name": {
+                "value": "Josiah Carberry"
+              },
+              "source-orcid": {
+                "host": "orcid.org",
+                "path": "0000-0002-1825-0097",
+                "uri": "https://orcid.org/0000-0002-1825-0097"
+              }
+            },
+            "start-date": {
+              "day": {
+                "value": "29"
+              },
+              "month": {
+                "value": "02"
+              },
+              "year": {
+                "value": "1930"
+              }
+            },
+            "url": null,
+            "visibility": "public"
+          }
+        }
+      ]
+    },
+    {
+      "external-ids": {
+        "external-id": []
+      },
+      "last-modified-date": {
+        "value": 1405895110316
+      },
+      "summaries": [
+        {
+          "employment-summary": {
+            "created-date": {
+              "value": 1386356645400
+            },
+            "department-name": "Psychoceramics",
+            "display-index": "0",
+            "end-date": null,
+            "external-ids": null,
+            "last-modified-date": {
+              "value": 1405895110316
+            },
+            "organization": {
+              "address": {
+                "city": "Providence",
+                "country": "US",
+                "region": "RI"
+              },
+              "disambiguated-organization": {
+                "disambiguated-organization-identifier": "6752",
+                "disambiguation-source": "RINGGOLD"
+              },
+              "name": "Brown University"
+            },
+            "path": "/0000-0002-1825-0097/employment/4278",
+            "put-code": 4278,
+            "role-title": "Professor",
+            "source": {
+              "assertion-origin-client-id": null,
+              "assertion-origin-name": null,
+              "assertion-origin-orcid": null,
+              "source-client-id": null,
+              "source-name": {
+                "value": "Josiah Carberry"
+              },
+              "source-orcid": {
+                "host": "orcid.org",
+                "path": "0000-0002-1825-0097",
+                "uri": "https://orcid.org/0000-0002-1825-0097"
+              }
+            },
+            "start-date": {
+              "day": {
+                "value": "29"
+              },
+              "month": {
+                "value": "02"
+              },
+              "year": {
+                "value": "1929"
+              }
+            },
+            "url": null,
+            "visibility": "public"
+          }
+        }
+      ]
+    }
+  ],
+  "last-modified-date": {
+    "value": 1405895110316
+  },
+  "path": "/0000-0002-1825-0097/employments"
+}

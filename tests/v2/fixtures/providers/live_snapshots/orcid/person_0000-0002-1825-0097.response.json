@@ -1,0 +1,310 @@
+{
+  "addresses": {
+    "address": [],
+    "last-modified-date": null,
+    "path": "/0000-0002-1825-0097/address"
+  },
+  "biography": {
+    "content": "Josiah Carberry is a fictitious person. This account is used as a demonstration account by ORCID, CrossRef and others who wish to demonstrate the interaction of ORCID with other scholarly communication systems without having to use a real-person's account.\r\n\r\nJosiah Stinkney Carberry is a fictional professor, created as a joke in 1929. He is said to still teach at Brown University, and to be known for his work in \"psychoceramics\", the supposed study of \"cracked pots\". See his Wikipedia entry for more details.",
+    "created-date": {
+      "value": 1460757617080
+    },
+    "last-modified-date": {
+      "value": 1460757617080
+    },
+    "path": "/0000-0002-1825-0097/biography",
+    "visibility": "public"
+  },
+  "emails": {
+    "email": [],
+    "last-modified-date": null,
+    "path": "/0000-0002-1825-0097/email"
+  },
+  "external-identifiers": {
+    "external-identifier": [
+      {
+        "created-date": {
+          "value": 1494016313820
+        },
+        "display-index": 0,
+        "external-id-relationship": "self",
+        "external-id-type": "Scopus Author ID",
+        "external-id-url": {
+          "value": "http://www.scopus.com/inward/authorDetails.url?authorID=7007156898&partnerID=MN8TOARS"
+        },
+        "external-id-value": "7007156898",
+        "last-modified-date": {
+          "value": 1494016313820
+        },
+        "path": "/0000-0002-1825-0097/external-identifiers/698979",
+        "put-code": 698979,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": {
+            "value": "Josiah Carberry"
+          },
+          "assertion-origin-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          },
+          "source-client-id": {
+            "host": "orcid.org",
+            "path": "0000-0002-5982-8983",
+            "uri": "https://orcid.org/client/0000-0002-5982-8983"
+          },
+          "source-name": {
+            "value": "Scopus - Elsevier"
+          },
+          "source-orcid": null
+        },
+        "visibility": "public"
+      }
+    ],
+    "last-modified-date": {
+      "value": 1494016313820
+    },
+    "path": "/0000-0002-1825-0097/external-identifiers"
+  },
+  "keywords": {
+    "keyword": [
+      {
+        "content": "psychoceramics",
+        "created-date": {
+          "value": 1462157617244
+        },
+        "display-index": 3,
+        "last-modified-date": {
+          "value": 1462157635636
+        },
+        "path": "/0000-0002-1825-0097/keywords/434187",
+        "put-code": 434187,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "visibility": "public"
+      },
+      {
+        "content": "ionian philology",
+        "created-date": {
+          "value": 1462157414545
+        },
+        "display-index": 2,
+        "last-modified-date": {
+          "value": 1462157635636
+        },
+        "path": "/0000-0002-1825-0097/keywords/434184",
+        "put-code": 434184,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "visibility": "public"
+      }
+    ],
+    "last-modified-date": {
+      "value": 1462157635636
+    },
+    "path": "/0000-0002-1825-0097/keywords"
+  },
+  "last-modified-date": {
+    "value": 1494016313820
+  },
+  "name": {
+    "created-date": {
+      "value": 1460757617078
+    },
+    "credit-name": null,
+    "family-name": {
+      "value": "Carberry"
+    },
+    "given-names": {
+      "value": "Josiah"
+    },
+    "last-modified-date": {
+      "value": 1504850007188
+    },
+    "path": "0000-0002-1825-0097",
+    "source": null,
+    "visibility": "public"
+  },
+  "other-names": {
+    "last-modified-date": {
+      "value": 1462157547720
+    },
+    "other-name": [
+      {
+        "content": "Josiah Stinkney Carberry",
+        "created-date": {
+          "value": 1462157351411
+        },
+        "display-index": 3,
+        "last-modified-date": {
+          "value": 1462157547720
+        },
+        "path": "/0000-0002-1825-0097/other-names/732317",
+        "put-code": 732317,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "visibility": "public"
+      },
+      {
+        "content": "J. Carberry",
+        "created-date": {
+          "value": 1446663146889
+        },
+        "display-index": 2,
+        "last-modified-date": {
+          "value": 1462157547720
+        },
+        "path": "/0000-0002-1825-0097/other-names/565981",
+        "put-code": 565981,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "visibility": "public"
+      },
+      {
+        "content": "J. S. Carberry",
+        "created-date": {
+          "value": 1462157351418
+        },
+        "display-index": 1,
+        "last-modified-date": {
+          "value": 1462157547720
+        },
+        "path": "/0000-0002-1825-0097/other-names/732318",
+        "put-code": 732318,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "visibility": "public"
+      }
+    ],
+    "path": "/0000-0002-1825-0097/other-names"
+  },
+  "path": "/0000-0002-1825-0097/person",
+  "researcher-urls": {
+    "last-modified-date": {
+      "value": 1462157645967
+    },
+    "path": "/0000-0002-1825-0097/researcher-urls",
+    "researcher-url": [
+      {
+        "created-date": {
+          "value": 1446663146890
+        },
+        "display-index": 2,
+        "last-modified-date": {
+          "value": 1462157645967
+        },
+        "path": "/0000-0002-1825-0097/researcher-urls/568395",
+        "put-code": 568395,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "url": {
+          "value": "http://library.brown.edu/about/hay/carberry.php"
+        },
+        "url-name": "Brown University Page",
+        "visibility": "public"
+      },
+      {
+        "created-date": {
+          "value": 1446663146889
+        },
+        "display-index": 1,
+        "last-modified-date": {
+          "value": 1462157645967
+        },
+        "path": "/0000-0002-1825-0097/researcher-urls/568394",
+        "put-code": 568394,
+        "source": {
+          "assertion-origin-client-id": null,
+          "assertion-origin-name": null,
+          "assertion-origin-orcid": null,
+          "source-client-id": null,
+          "source-name": {
+            "value": "Josiah Carberry"
+          },
+          "source-orcid": {
+            "host": "orcid.org",
+            "path": "0000-0002-1825-0097",
+            "uri": "https://orcid.org/0000-0002-1825-0097"
+          }
+        },
+        "url": {
+          "value": "http://en.wikipedia.org/wiki/Josiah_Carberry"
+        },
+        "url-name": "Wikipedia Entry",
+        "visibility": "public"
+      }
+    ]
+  }
+}

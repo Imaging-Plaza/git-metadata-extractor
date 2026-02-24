@@ -23,6 +23,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
 - Current entry task: `.internal/v2-plan/phase-5-export/P5-01-jsonld-export.md` (Phase 3 tasks `P3-01` through `P3-08` complete; Phase 4 tasks `P4-01` through `P4-11` complete and validated in scoped `tests/v2` runs).
+- Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 
@@ -45,6 +46,8 @@ Rules:
 - Never print, log, or commit secrets.
 - Never modify secret-bearing files (`.env`, `.env2`, similar secret files) unless explicitly asked.
 - If required variables are missing for the requested task, fail fast and report exactly which variables are missing.
+- For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
+- Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
 
 ## Canonical Commands
 `justfile` is the source of truth for routine operations. Prefer `just` commands over ad-hoc shell commands when equivalent recipes exist.
@@ -72,6 +75,12 @@ Rules:
   - `just test-file tests/v2/test_test_infrastructure.py`
   - `just test-file tests/v2/test_promoted_strict_schemas.py`
   - `just test-file tests/v2/test_promoted_agent_schemas.py`
+- Phase 8 live-provider checks:
+  - `just preflight-live` (defaults to `github`, `ror`, `orcid`, `infoscience`, `selenium`)
+  - `just capture-live`
+  - `just test-live` (runs `pytest -m live_provider`)
+  - `just test-offline`
+  - `python scripts/v2/check_provider_connectivity.py --providers github ror orcid infoscience` (optional: skip Selenium)
 
 ## Architecture Map For Agents
 - Repository analysis flow entrypoints: `src/analysis/repositories.py`

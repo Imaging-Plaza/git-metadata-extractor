@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-02-24T14:18:29Z",
+  "case": "org_02s376052",
+  "provider": "ror",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {},
+    "url": "https://api.ror.org/v2/organizations/02s376052"
+  },
+  "response": {
+    "elapsed_ms": 169,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Tue, 24 Feb 2026 14:18:29 GMT"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}

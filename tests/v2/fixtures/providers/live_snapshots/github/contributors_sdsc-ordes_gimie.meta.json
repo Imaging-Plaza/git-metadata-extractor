@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-02-24T14:18:28Z",
+  "case": "contributors_sdsc-ordes_gimie",
+  "provider": "github",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {},
+    "url": "https://api.github.com/repos/sdsc-ordes/gimie/contributors"
+  },
+  "response": {
+    "elapsed_ms": 229,
+    "headers": {
+      "cache-control": "private, max-age=60, s-maxage=60",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Tue, 24 Feb 2026 14:18:28 GMT",
+      "etag": "W/\"236a1711104162026bd11d474034eaf4d0220baef5301bc74cca3003f2182bf6\"",
+      "last-modified": "Mon, 12 Jan 2026 19:30:11 GMT",
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "4983",
+      "x-ratelimit-reset": "1771945475",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-used": "17"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}
