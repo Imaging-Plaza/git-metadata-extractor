@@ -9,9 +9,11 @@ INFOSCIENCE_ORGANIZATION_BASE_URI = "https://infoscience.epfl.ch/organization/"
 GITHUB_BASE_URI = "https://github.com/"
 ORCID_BASE_URI = "https://orcid.org/"
 ROR_BASE_URI = "https://ror.org/"
+DOI_BASE_URI = "https://doi.org/"
 
 PERSON_UUID_NAMESPACE = uuid.UUID("bfc0a4f9-2ef5-59eb-9bf8-76ef425de91e")
 ORGANIZATION_UUID_NAMESPACE = uuid.UUID("4f7f847a-8d6e-56b3-9164-2668e51f040f")
+REPOSITORY_UUID_NAMESPACE = uuid.UUID("c5b462e3-9cf5-5b59-b2df-bdbfd9bd0ac5")
 
 PERSON_ID_SOURCES = {"orcid", "infosciencePersonIdentifier", "githubUsername", "uuid"}
 ORGANIZATION_ID_SOURCES = {
@@ -20,6 +22,8 @@ ORGANIZATION_ID_SOURCES = {
     "githubOrganizationHandle",
     "uuid",
 }
+REPOSITORY_ID_SOURCES = {"githubRepositoryHandle", "doi", "uuid"}
+REPOSITORY_HANDLE_PARTS = 2
 
 
 def _clean_text(value: Any) -> str | None:
@@ -87,6 +91,42 @@ def _normalize_github_handle(handle: str | None) -> str | None:
     if candidate.startswith("@"):
         candidate = candidate[1:]
     return _clean_text(candidate)
+
+
+def _normalize_repository_handle(handle: str | None) -> str | None:
+    if handle is None:
+        return None
+
+    candidate = handle.strip()
+    lower_candidate = candidate.lower()
+    if lower_candidate.startswith(GITHUB_BASE_URI):
+        candidate = candidate[len(GITHUB_BASE_URI) :]
+
+    handle_parts = [part for part in candidate.split("/") if part]
+    if len(handle_parts) != REPOSITORY_HANDLE_PARTS:
+        return None
+
+    owner, repository = handle_parts
+    if not owner or not repository:
+        return None
+
+    return f"{owner}/{repository}"
+
+
+def _normalize_doi(doi: str | None) -> str | None:
+    if doi is None:
+        return None
+
+    candidate = doi.strip()
+    lower_candidate = candidate.lower()
+    for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "http://dx.doi.org/"):
+        if lower_candidate.startswith(prefix):
+            candidate = candidate[len(prefix) :]
+            break
+
+    if not candidate or "/" not in candidate:
+        return None
+    return candidate
 
 
 def _deterministic_uuid(
@@ -186,5 +226,36 @@ def resolve_organization_id(organization: dict[str, Any]) -> tuple[str, str]:
         ORGANIZATION_UUID_NAMESPACE,
         organization,
         ("schema:name", "name"),
+    )
+    return fallback_uuid, "uuid"
+
+
+def resolve_repository_id(repository: dict[str, Any]) -> tuple[str, str]:
+    existing = _existing_resolution(repository, REPOSITORY_ID_SOURCES)
+    if existing is not None:
+        return existing
+
+    github_handle = _normalize_repository_handle(
+        _lookup_identifier(
+            repository,
+            ("pulse:githubRepositoryHandle", "githubRepositoryHandle"),
+        ),
+    )
+    if github_handle is not None:
+        return f"{GITHUB_BASE_URI}{github_handle}", "githubRepositoryHandle"
+
+    doi = _normalize_doi(
+        _lookup_identifier(
+            repository,
+            ("schema:identifier", "doi"),
+        ),
+    )
+    if doi is not None:
+        return f"{DOI_BASE_URI}{doi}", "doi"
+
+    fallback_uuid = _deterministic_uuid(
+        REPOSITORY_UUID_NAMESPACE,
+        repository,
+        ("schema:name", "name", "pulse:githubRepositoryHandle", "schema:identifier"),
     )
     return fallback_uuid, "uuid"

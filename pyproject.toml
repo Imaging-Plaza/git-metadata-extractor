@@ -48,6 +48,7 @@ dependencies = [
     "httpx",
     "markdownify==1.2.0",
     "logfire>=4.14.2",
+    "pyshacl==0.22.2",
 ]
 
 [project.urls]

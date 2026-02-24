@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Added
+- **V2 Phase 3 reconciliation and enum alignment (`P3-05` to `P3-08`)**:
+  - Added repository canonical ID resolution with prioritized source selection:
+    - `src/v2/canonicalization/id_resolution.py`
+    - `tests/v2/test_canonical_id_repository.py`
+  - Added cross-entity reconciliation for canonical link normalization plus membership/contribution generation:
+    - `src/v2/pipeline/stages/reconciliation.py`
+    - `src/v2/pipeline/stages/models.py`
+    - `tests/v2/test_reconciliation.py`
+  - Added partial-failure output assembly that excludes strict-invalid non-root entities and preserves root success semantics:
+    - `src/v2/pipeline/stages/output_assembly.py`
+    - `src/v2/pipeline/stages/models.py`
+    - `tests/v2/test_partial_failure.py`
+  - Added v2 enum alignment against the TTL ontology and extraction utility:
+    - `src/v2/models/enums.py`
+    - `scripts/v2/extract_enums_from_ttl.py`
+    - `tests/v2/test_enum_alignment.py`
 - **V2 validation gates and canonical ID resolution**:
   - Added strict JSON Schema gate module and batch result contracts:
     - `src/v2/validation/schema_validation.py`
@@ -297,6 +313,16 @@ All notable changes to this project will be documented in this file.
     - `tests/v2/golden/extract/org_github_com_orgname.json`
 
 ### Changed
+- **V2 export surfaces for reconciliation and enum alignment**:
+  - Extended `src/v2/canonicalization/__init__.py` with repository ID resolution export.
+  - Extended `src/v2/pipeline/stages/__init__.py` with reconciliation/output assembly exports.
+  - Extended `src/v2/models/__init__.py` with v2 enum exports.
+- **Dependency management**:
+  - Pinned `pyshacl` to `==0.22.2` in `pyproject.toml` for deterministic SHACL validation environments.
+- **SHACL validation behavior**:
+  - Updated `src/v2/validation/shacl_validation.py` to validate against a merged data+ontology graph so `sh:class` checks resolve ontology enum instances consistently with installed `pyshacl`.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P4-01-sqlite-schema-migrations.md` after completing `P3-05` through `P3-08`.
 - **Validation and canonicalization package exports**:
   - Extended `src/v2/validation/__init__.py` exports with strict/SHACL validators and ontology loader helpers.
 - **Agent workflow documentation**:
@@ -350,6 +376,19 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
+- Ran task-focused checks for `P3-05` to `P3-08` with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/canonicalization/__init__.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/__init__.py src/v2/pipeline/stages/models.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/models/__init__.py src/v2/models/enums.py scripts/v2/extract_enums_from_ttl.py tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py`
+  - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/canonicalization src/v2/pipeline/stages src/v2/models/enums.py`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
+- Ran SHACL dependency validation checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/validation/shacl_validation.py`
+  - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/validation/shacl_validation.py`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_shacl_validation.py -v`
 - Ran task-focused checks for strict validation gates and canonical ID resolution with repo venv:
   - `PYTHONPATH=. .venv/bin/ruff check src/v2/validation/__init__.py src/v2/validation/schema_validation.py src/v2/validation/ontology.py src/v2/validation/shacl_validation.py src/v2/canonicalization/__init__.py src/v2/canonicalization/id_resolution.py tests/v2/test_strict_validation_gate.py tests/v2/test_shacl_validation.py tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py`
   - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/validation src/v2/canonicalization`

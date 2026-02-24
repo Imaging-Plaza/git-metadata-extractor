@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from rdflib import Graph
 
 try:
-    from pyshacl import validate as pyshacl_validate  # type: ignore[import-not-found]
+    from pyshacl import validate as pyshacl_validate  # type: ignore[import-untyped]
 except ModuleNotFoundError:  # pragma: no cover - runtime dependency
     pyshacl_validate = None
 
@@ -52,8 +52,12 @@ class SHACLValidator:
             message = "pyshacl is required for SHACL validation"
             raise RuntimeError(message)
 
+        # Include ontology triples in the data graph so sh:class checks can resolve
+        # enum instances defined in the ontology itself.
+        validation_graph = graph + shapes_graph
+
         conforms, results_graph, _ = pyshacl_validate(
-            graph,
+            validation_graph,
             shacl_graph=shapes_graph,
             ont_graph=shapes_graph,
             inference="rdfs",
