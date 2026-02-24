@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unpublished]
 
+### Changed
+- Clarified the v2 progress handoff in `AGENTS.md` by pointing the entry task to `.internal/v2-plan/phase-4-graph-store/P4-01-sqlite-schema-migrations.md`.
+
+### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
+
 ### Added
+- Added a scoped Phase 3 completion checkpoint for repository canonicalization, reconciliation, partial-failure assembly, and enum-alignment validation.
 - **V2 Phase 3 reconciliation and enum alignment (`P3-05` to `P3-08`)**:
   - Added repository canonical ID resolution with prioritized source selection:
     - `src/v2/canonicalization/id_resolution.py`
