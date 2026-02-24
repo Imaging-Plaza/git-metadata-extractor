@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Removed hardcoded US Logfire base-url fallback in preflight; base URL now resolves from `LOGFIRE_BASE_URL`, `.logfire` credentials, or token inference, otherwise fails explicitly.
+- Changed Logfire preflight credential precedence to accept token from `.logfire/logfire_credentials.json` (from `logfire projects use`) and prefer it over `LOGFIRE_TOKEN` when both are present.
+- Changed Logfire preflight behavior to validate connectivity/auth directly against `GET /v1/info` instead of SDK flush heuristics.
+- Extended Phase 8 live preflight provider selection to include `logfire` by default.
 - Added v2 Logfire bootstrap integration notes to `AGENTS.md` and advanced the current entry task to `.internal/v2-plan/phase-6-observability/P6-02-fastapi-instrumentation.md`.
 - Switched v2 intermediates response assembly to a shared stage (`assemble_intermediates`) and reused it in both `/v2/extract` and `/v2/graph`.
 - Switched v2 stats generation to a shared stage (`compute_stats`) and reused it in both `/v2/extract` and `/v2/graph`, including run-aware duration/stage metadata and graph-derived triple counts.
@@ -25,6 +29,8 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_provider_connectivity_preflight.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check scripts/v2/check_provider_connectivity.py tests/v2/test_provider_connectivity_preflight.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_logfire_bootstrap.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/observability/__init__.py src/v2/observability/bootstrap.py tests/v2/test_logfire_bootstrap.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/`
@@ -59,6 +65,11 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added a Logfire connectivity branch in `scripts/v2/check_provider_connectivity.py`:
+  - validates Logfire credentials via `LOGFIRE_TOKEN` or `.logfire/logfire_credentials.json`
+  - validates token + region with direct `GET /v1/info` checks against the resolved Logfire API base URL
+- Added warning output when `LOGFIRE_TOKEN` and `.logfire` credentials both exist but differ.
+- Added Logfire preflight coverage in `tests/v2/test_provider_connectivity_preflight.py`.
 - Added v2 observability bootstrap primitives:
   - `src/v2/observability/bootstrap.py` (`initialize_logfire`)
   - `src/v2/observability/__init__.py` (bootstrap export)

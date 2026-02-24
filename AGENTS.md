@@ -76,11 +76,11 @@ Rules:
   - `just test-file tests/v2/test_promoted_strict_schemas.py`
   - `just test-file tests/v2/test_promoted_agent_schemas.py`
 - Phase 8 live-provider checks:
-  - `just preflight-live` (defaults to `github`, `ror`, `orcid`, `infoscience`, `selenium`)
+  - `just preflight-live` (defaults to `github`, `ror`, `orcid`, `infoscience`, `logfire`, `selenium`)
   - `just capture-live`
   - `just test-live` (runs `pytest -m live_provider`)
   - `just test-offline`
-  - `python scripts/v2/check_provider_connectivity.py --providers github ror orcid infoscience` (optional: skip Selenium)
+  - `python scripts/v2/check_provider_connectivity.py --providers github ror orcid infoscience logfire` (optional: skip Selenium)
 
 ## Architecture Map For Agents
 - Repository analysis flow entrypoints: `src/analysis/repositories.py`
