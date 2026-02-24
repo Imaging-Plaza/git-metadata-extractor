@@ -14,8 +14,9 @@ from typing import (
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
-    validator,
+    field_validator,
 )
 
 from .models import (
@@ -246,8 +247,9 @@ class GitHubUserMetadata(BaseModel):
         description="List of public repositories",
     )
 
-    @validator("orcid")
-    def validate_orcid(cls, v):
+    @field_validator("orcid")
+    @classmethod
+    def validate_orcid(cls, v: Optional[str]) -> Optional[str]:
         """Validate ORCID format and convert ID to URL"""
         if v is not None:
             # If it's already a URL, validate and return
@@ -265,8 +267,9 @@ class GitHubUserMetadata(BaseModel):
             raise ValueError(f"Invalid ORCID format: {v}")
         return v
 
-    @validator("email")
-    def validate_email(cls, v):
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
         """Basic email validation"""
         if v is not None:
             # Allow standard emails
@@ -282,11 +285,7 @@ class GitHubUserMetadata(BaseModel):
             return v
         return v
 
-    class Config:
-        """Pydantic configuration"""
-
-        validate_assignment = True
-        extra = "forbid"
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
 
 ############################################################

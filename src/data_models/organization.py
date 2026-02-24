@@ -13,8 +13,9 @@ from typing import (
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
-    validator,
+    field_validator,
 )
 
 from .models import Discipline, Organization, Person
@@ -147,18 +148,15 @@ class GitHubOrganizationMetadata(BaseModel):
         description="Pinned repositories",
     )
 
-    @validator("email")
-    def validate_email(cls, v):
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
         """Basic email validation"""
         if v is not None and v != "" and "@" not in v:
             raise ValueError("Invalid email format")
         return v
 
-    class Config:
-        """Pydantic configuration"""
-
-        validate_assignment = True
-        extra = "forbid"
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
 
 #######################################################

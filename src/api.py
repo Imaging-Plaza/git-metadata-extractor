@@ -2,6 +2,7 @@
 API
 """
 
+from contextlib import asynccontextmanager
 import logging
 import os
 from datetime import datetime
@@ -29,6 +30,58 @@ setup_logging(level=log_level, use_colors=True)
 
 
 logger = logging.getLogger(__name__)
+
+
+async def startup_event():
+    """Initialize resources on application startup"""
+    logger.info("🚀 Application startup - initializing resources")
+
+
+async def shutdown_event():
+    """Cleanup resources on application shutdown"""
+    logger.info("🛑 Application shutdown - cleaning up resources")
+
+    # Cleanup PydanticAI agents
+    try:
+        from .agents.agents_management import cleanup_agents
+
+        await cleanup_agents()
+        logger.info("✅ Cleaned up PydanticAI agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up PydanticAI agents: {e}")
+
+    # Cleanup user enrichment agents
+    try:
+        from .agents.user_enrichment import cleanup_user_agents
+
+        await cleanup_user_agents()
+        logger.info("✅ Cleaned up user enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up user enrichment agents: {e}")
+
+    # Cleanup organization enrichment agents
+    try:
+        from .agents.organization_enrichment import cleanup_org_agents
+
+        await cleanup_org_agents()
+        logger.info("✅ Cleaned up organization enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up organization enrichment agents: {e}")
+
+    # Run garbage collection
+    import gc
+
+    gc.collect()
+    logger.info("✅ Garbage collection completed")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await startup_event()
+    try:
+        yield
+    finally:
+        await shutdown_event()
 
 
 app = FastAPI(
@@ -90,55 +143,10 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
         },
         {"name": "System", "description": "System information and health checks"},
     ],
+    lifespan=lifespan,
 )
 
 app.include_router(v2_router)
-
-
-# Startup and shutdown events for resource management
-@app.on_event("startup")
-async def startup_event():
-    """Initialize resources on application startup"""
-    logger.info("🚀 Application startup - initializing resources")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup resources on application shutdown"""
-    logger.info("🛑 Application shutdown - cleaning up resources")
-
-    # Cleanup PydanticAI agents
-    try:
-        from .agents.agents_management import cleanup_agents
-
-        await cleanup_agents()
-        logger.info("✅ Cleaned up PydanticAI agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up PydanticAI agents: {e}")
-
-    # Cleanup user enrichment agents
-    try:
-        from .agents.user_enrichment import cleanup_user_agents
-
-        await cleanup_user_agents()
-        logger.info("✅ Cleaned up user enrichment agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up user enrichment agents: {e}")
-
-    # Cleanup organization enrichment agents
-    try:
-        from .agents.organization_enrichment import cleanup_org_agents
-
-        await cleanup_org_agents()
-        logger.info("✅ Cleaned up organization enrichment agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up organization enrichment agents: {e}")
-
-    # Run garbage collection
-    import gc
-
-    gc.collect()
-    logger.info("✅ Garbage collection completed")
 
 
 # Add middleware to automatically set request context for all endpoints
