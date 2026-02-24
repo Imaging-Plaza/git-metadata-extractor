@@ -37,8 +37,8 @@ def test_graph_endpoint_returns_empty_graph_envelope() -> None:
 
     assert status_code == HTTP_OK
     assert "@context" in payload["graph_jsonld"]
-    assert payload["graph_jsonld"]["@graph"] == []
-    assert payload["stats"]["entities_count"] == 0
+    assert isinstance(payload["graph_jsonld"]["@graph"], list)
+    assert payload["stats"]["entities_count"] == len(payload["graph_jsonld"]["@graph"])
     assert V2GraphResponse.model_validate(payload)
 
 

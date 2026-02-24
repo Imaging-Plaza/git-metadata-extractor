@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Replaced the `/v2/graph` stub with a graph-store-backed implementation that exports JSON-LD, applies `source_url`/`entity_type` filters, supports optional intermediate snapshots, and reports computed graph stats.
+- Updated v2 graph serialization behavior by expanding namespace-prefix resolution in RDF sync and moving JSON-LD context loading to a versioned context file.
+- Updated agent handoff in `AGENTS.md` to set the next entry task to `.internal/v2-plan/phase-5-export/P5-05-intermediates-envelope.md` after completing `P5-01` through `P5-04`.
 - Added SQLite concurrent-write safeguards in `GraphStore` by enabling WAL mode, configuring `busy_timeout`/`synchronous`, and applying bounded retry handling for transient busy/locked write failures.
 - Updated agent handoff in `AGENTS.md` so the next entry task advances to `.internal/v2-plan/phase-5-export/P5-01-jsonld-export.md` after completing Phase 4.
 - Normalized RDF `rdf:type` generation for built-in v2 entity kinds so lowercase stored types (`person`, `repository`, etc.) emit ontology class URIs (`pulse:Person`, `pulse:Repository`, ...).
@@ -18,6 +21,8 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_jsonld_export.py tests/v2/test_context_versioning.py tests/v2/test_filtered_subgraph.py tests/v2/test_api_graph.py tests/v2/test_graph_golden.py -q`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_org_alias_canonicalization.py tests/v2/test_concurrent_writes.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
@@ -43,6 +48,15 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added v2 graph export primitives and context assets:
+  - `src/v2/graph/export.py`
+  - `src/v2/schemas/context/v2.0.jsonld`
+- Added run-scoped entity ID lookup for graph filtering in `src/v2/graph/store.py`.
+- Added Phase 5 coverage for JSON-LD export, context versioning, filtered subgraphs, and the `/v2/graph` API:
+  - `tests/v2/test_jsonld_export.py`
+  - `tests/v2/test_context_versioning.py`
+  - `tests/v2/test_filtered_subgraph.py`
+  - `tests/v2/test_api_graph.py`
 - Added organization alias canonicalization primitives:
   - `src/v2/canonicalization/string_utils.py`
   - `src/v2/canonicalization/organization_alias_map.py`

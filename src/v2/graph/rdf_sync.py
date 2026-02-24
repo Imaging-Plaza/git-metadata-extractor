@@ -16,10 +16,28 @@ Triple = tuple[URIRef, URIRef, Node]
 
 PULSE_NAMESPACE = Namespace("https://open-pulse.epfl.ch/ontology#")
 SCHEMA_NAMESPACE = Namespace("http://schema.org/")
+ORG_NAMESPACE = Namespace("http://www.w3.org/ns/org#")
+TIME_NAMESPACE = Namespace("http://www.w3.org/2006/time#")
+DCT_NAMESPACE = Namespace("http://purl.org/dc/terms/")
+RDFS_NAMESPACE = Namespace("http://www.w3.org/2000/01/rdf-schema#")
+OWL_NAMESPACE = Namespace("http://www.w3.org/2002/07/owl#")
+SKOS_NAMESPACE = Namespace("http://www.w3.org/2004/02/skos/core#")
+SH_NAMESPACE = Namespace("http://www.w3.org/ns/shacl#")
+WD_NAMESPACE = Namespace("http://www.wikidata.org/entity/")
 ENTITY_NAMESPACE = Namespace("urn:git-metadata-extractor:entity:")
 NAMESPACE_BY_PREFIX: dict[str, Namespace] = {
     "pulse": PULSE_NAMESPACE,
     "schema": SCHEMA_NAMESPACE,
+    "org": ORG_NAMESPACE,
+    "time": TIME_NAMESPACE,
+    "dct": DCT_NAMESPACE,
+    "rdfs": RDFS_NAMESPACE,
+    "rdf": RDF,
+    "owl": OWL_NAMESPACE,
+    "skos": SKOS_NAMESPACE,
+    "sh": SH_NAMESPACE,
+    "wd": WD_NAMESPACE,
+    "xsd": XSD,
 }
 ENTITY_TYPE_CLASS_MAP: dict[str, str] = {
     "person": "pulse:Person",

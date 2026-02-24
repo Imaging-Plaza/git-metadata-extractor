@@ -1,34 +1,35 @@
 {
   "graph_jsonld": {
     "@context": {
+      "dct": "http://purl.org/dc/terms/",
+      "org": "http://www.w3.org/ns/org#",
+      "owl": "http://www.w3.org/2002/07/owl#",
+      "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
       "schema": "http://schema.org/",
-      "pulse": "https://open-pulse.epfl.ch/ontology#"
+      "sh": "http://www.w3.org/ns/shacl#",
+      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "time": "http://www.w3.org/2006/time#",
+      "wd": "http://www.wikidata.org/entity/",
+      "xsd": "http://www.w3.org/2001/XMLSchema#"
     },
     "@graph": [
       {
-        "@id": "0000-0002-1825-0097",
+        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097",
         "@type": "schema:Person",
+        "pulse:identifiers": "{}",
         "schema:name": "Graph Person"
       }
     ]
   },
-  "intermediates": [
-    {
-      "stage": "graph_export",
-      "filters": {
-        "entity_type": [
-          "Person"
-        ]
-      }
-    }
-  ],
   "stats": {
-    "entities_count": 1,
-    "triples_count": 0,
-    "run_id": "golden-filtered-type-stub",
     "duration_ms": 0,
+    "entities_count": 1,
+    "run_id": "graph-export",
     "stages_completed": [
       "graph_export"
-    ]
+    ],
+    "triples_count": 3
   }
 }

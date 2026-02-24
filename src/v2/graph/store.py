@@ -54,6 +54,26 @@ def _parse_json_value(value: str) -> Any:
     return json.loads(value)
 
 
+def _extract_entity_ids_from_stats(stats: dict[str, Any]) -> set[str]:
+    entity_ids: set[str] = set()
+    raw_entity_ids = stats.get("entity_ids")
+    if isinstance(raw_entity_ids, list):
+        for raw_entity_id in raw_entity_ids:
+            if isinstance(raw_entity_id, str) and raw_entity_id:
+                entity_ids.add(raw_entity_id)
+
+    raw_entities = stats.get("entities")
+    if isinstance(raw_entities, list):
+        for raw_entity in raw_entities:
+            if not isinstance(raw_entity, dict):
+                continue
+            entity_id = raw_entity.get("id")
+            if isinstance(entity_id, str) and entity_id:
+                entity_ids.add(entity_id)
+
+    return entity_ids
+
+
 def _parse_entity_provenance(value: str) -> list[dict[str, Any]]:
     parsed = _parse_json_value(value)
     if isinstance(parsed, list):
@@ -221,6 +241,23 @@ class GraphStore:
                 (source_url, limit),
             ).fetchall()
         return [self._row_to_run(row) for row in rows]
+
+    def get_entity_ids_by_run(self, source_url: str) -> set[str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT stats
+                FROM runs
+                WHERE source_url = ?;
+                """,
+                (source_url,),
+            ).fetchall()
+
+        entity_ids: set[str] = set()
+        for row in rows:
+            stats = _parse_json_object(str(row["stats"]))
+            entity_ids.update(_extract_entity_ids_from_stats(stats))
+        return entity_ids
 
     def insert_entity(
         self,

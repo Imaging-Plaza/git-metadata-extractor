@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 import sys
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -9,11 +11,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from rdflib import Graph as RDFGraph
 
 from src.v2.agents import ProviderSet  # noqa: TC001
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
 from src.v2.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.graph.export import JSONLDExporter
+from src.v2.graph.store import GraphStore
 from src.v2.models import (
     V2ErrorResponse,
     V2ErrorType,
@@ -51,6 +56,101 @@ def _build_stats(*, stage_name: str) -> V2Stats:
         duration_ms=0,
         stages_completed=[stage_name],
     )
+
+
+def _count_jsonld_triples(graph_jsonld: dict[str, Any]) -> int:
+    graph = RDFGraph()
+    graph.parse(data=json.dumps(graph_jsonld), format="json-ld")
+    return len(graph)
+
+
+def _load_intermediates(
+    *,
+    db_path: str,
+    source_url: str | None,
+    limit_per_agent: int,
+) -> list[dict[str, Any]]:
+    if limit_per_agent <= 0:
+        return []
+
+    query_for_all_sources = """
+        WITH ranked AS (
+            SELECT
+                id,
+                source_url,
+                agent_name,
+                run_id,
+                data,
+                created_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY source_url, agent_name
+                    ORDER BY created_at DESC, id DESC
+                ) AS row_number
+            FROM intermediates
+        )
+        SELECT
+            source_url,
+            agent_name,
+            run_id,
+            data,
+            created_at
+        FROM ranked
+        WHERE row_number <= ?
+        ORDER BY source_url ASC, agent_name ASC, created_at DESC;
+    """
+    query_for_source = """
+        WITH ranked AS (
+            SELECT
+                id,
+                source_url,
+                agent_name,
+                run_id,
+                data,
+                created_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY source_url, agent_name
+                    ORDER BY created_at DESC, id DESC
+                ) AS row_number
+            FROM intermediates
+            WHERE source_url = ?
+        )
+        SELECT
+            source_url,
+            agent_name,
+            run_id,
+            data,
+            created_at
+        FROM ranked
+        WHERE row_number <= ?
+        ORDER BY source_url ASC, agent_name ASC, created_at DESC;
+    """
+
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        if source_url is None:
+            rows = connection.execute(
+                query_for_all_sources,
+                (limit_per_agent,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                query_for_source,
+                (source_url, limit_per_agent),
+            ).fetchall()
+
+    intermediates: list[dict[str, Any]] = []
+    for row in rows:
+        payload = json.loads(str(row["data"]))
+        intermediates.append(
+            {
+                "source_url": str(row["source_url"]),
+                "agent_name": str(row["agent_name"]),
+                "run_id": str(row["run_id"]) if row["run_id"] is not None else None,
+                "data": payload,
+                "created_at": str(row["created_at"]),
+            },
+        )
+    return intermediates
 
 
 def _extract_path_kind(source_url: str) -> str | None:
@@ -204,21 +304,35 @@ async def graph(
     include_intermediates: Annotated[bool, Query()] = True,
     intermediate_limit: Annotated[int, Query(ge=0)] = DEFAULT_INTERMEDIATE_LIMIT,
 ) -> V2GraphResponse:
+    config = V2Config()
+    store = GraphStore(config.V2_GRAPH_DB_PATH)
+    exporter = JSONLDExporter()
+    graph_jsonld = exporter.export_filtered(
+        store.get_rdf_graph(),
+        source_url=source_url,
+        entity_types=entity_type,
+        store=store,
+    )
+
     response_intermediates = None
     if include_intermediates:
-        response_intermediates = [
-            {
-                "stage": "graph_stub",
-                "source_url": source_url,
-                "entity_type": entity_type or [],
-                "intermediate_limit": intermediate_limit,
-            },
-        ]
+        response_intermediates = _load_intermediates(
+            db_path=config.V2_GRAPH_DB_PATH,
+            source_url=source_url,
+            limit_per_agent=intermediate_limit,
+        )
 
+    entities_count = len(graph_jsonld.get("@graph", []))
     return V2GraphResponse(
-        graph_jsonld={"@context": {}, "@graph": []},
+        graph_jsonld=graph_jsonld,
         intermediates=response_intermediates,
-        stats=_build_stats(stage_name="graph"),
+        stats=V2Stats(
+            entities_count=entities_count,
+            triples_count=_count_jsonld_triples(graph_jsonld),
+            run_id="graph-export",
+            duration_ms=0,
+            stages_completed=["graph_export"],
+        ),
     )
 
 
