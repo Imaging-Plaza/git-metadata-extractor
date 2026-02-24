@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added v2 FastAPI request tracing middleware on `/v2/*` routes that emits `X-Run-Id` response headers and records request span attributes (`path`, `method`, `status_code`, `duration_ms`, `response_size`) without affecting non-v2 routes.
+- Added v2 pipeline-stage span instrumentation for URL classification, context gather, agent-stage execution, permissive/strict validation, reconciliation, graph-write, and output assembly; strict/reconciliation/graph-write are currently emitted as explicit `status=skipped` spans where execution is not yet wired.
+- Added v2 agent-run span instrumentation around retry-wrapped agent execution, including status (`success`/`retry`/`failure`/`error`), model/provider metadata, token usage, and retry count attributes.
+- Extended `AgentResult`/pipeline serialization with optional model/provider/token fields to support observability payloads.
+- Updated v2 observability probes to be true no-ops unless Logfire is both importable and initialized via bootstrap (`logfire.configure(...)`), avoiding unconfigured-runtime warnings.
+- Updated `AGENTS.md` handoff to advance the current v2 entry task to `.internal/v2-plan/phase-6-observability/P6-05-token-latency-metrics.md`.
 - Removed hardcoded US Logfire base-url fallback in preflight; base URL now resolves from `LOGFIRE_BASE_URL`, `.logfire` credentials, or token inference, otherwise fails explicitly.
 - Changed Logfire preflight credential precedence to accept token from `.logfire/logfire_credentials.json` (from `logfire projects use`) and prefer it over `LOGFIRE_TOKEN` when both are present.
 - Changed Logfire preflight behavior to validate connectivity/auth directly against `GET /v1/info` instead of SDK flush heuristics.
@@ -29,6 +35,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_fastapi_instrumentation.py tests/v2/test_agent_instrumentation.py tests/v2/test_pipeline_spans.py -q`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_extract_stub.py tests/v2/test_api_graph.py tests/v2/test_api_health.py tests/v2/test_api_mount_v2_router.py tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_graph_golden.py tests/v2/test_orchestrator_execution.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/models.py src/v2/api.py src/v2/observability/__init__.py src/v2/observability/agent_instrumentation.py src/v2/observability/middleware.py src/v2/observability/pipeline_spans.py src/v2/pipeline/models.py src/v2/pipeline/orchestrator.py tests/v2/test_agent_instrumentation.py tests/v2/test_fastapi_instrumentation.py tests/v2/test_pipeline_spans.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/pipeline/orchestrator.py src/v2/observability/agent_instrumentation.py src/v2/observability/middleware.py src/v2/observability/pipeline_spans.py src/v2/agents/models.py src/v2/pipeline/models.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_provider_connectivity_preflight.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check scripts/v2/check_provider_connectivity.py tests/v2/test_provider_connectivity_preflight.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_logfire_bootstrap.py -q`
@@ -65,6 +76,14 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added v2 observability primitives and wiring for Phase 6 request/agent/pipeline tracing:
+  - `src/v2/observability/middleware.py`
+  - `src/v2/observability/agent_instrumentation.py`
+  - `src/v2/observability/pipeline_spans.py`
+- Added focused observability test coverage:
+  - `tests/v2/test_fastapi_instrumentation.py`
+  - `tests/v2/test_agent_instrumentation.py`
+  - `tests/v2/test_pipeline_spans.py`
 - Added a Logfire connectivity branch in `scripts/v2/check_provider_connectivity.py`:
   - validates Logfire credentials via `LOGFIRE_TOKEN` or `.logfire/logfire_credentials.json`
   - validates token + region with direct `GET /v1/info` checks against the resolved Logfire API base URL

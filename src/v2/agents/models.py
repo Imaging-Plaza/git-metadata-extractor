@@ -39,6 +39,10 @@ class AgentResult:
     raw_output: dict[str, Any] = field(default_factory=dict)
     is_partial: bool = False
     failure_reason: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    tokens_prompt: int | None = None
+    tokens_completion: int | None = None
     stats: dict[str, Any] = field(default_factory=dict)
 
 

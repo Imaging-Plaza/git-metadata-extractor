@@ -25,6 +25,8 @@ from src.v2.models import (
     V2GraphResponse,
     V2HealthResponse,
 )
+from src.v2.observability.middleware import V2TracingMiddleware
+from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import assemble_intermediates, compute_stats
 
@@ -44,7 +46,14 @@ JSONLD_CONTEXT = {
     "org": "http://www.w3.org/ns/org#",
 }
 
-v2_router = APIRouter(prefix="/v2")
+STAGE_CLASSIFY_URL = "classify_url"
+STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
+STAGE_STRICT_VALIDATION = "strict_validation"
+STAGE_RECONCILIATION = "reconciliation"
+STAGE_GRAPH_WRITE = "graph_write"
+STAGE_OUTPUT_ASSEMBLY = "output_assembly"
+
+v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
 
 
 def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
@@ -103,6 +112,13 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     return orchestrator
 
 
+def _get_pipeline_tracer(request: Request) -> PipelineTracer:
+    run_id = getattr(request.state, "v2_run_id", None)
+    if isinstance(run_id, str) and run_id:
+        return PipelineTracer(run_id=run_id)
+    return PipelineTracer()
+
+
 def _build_output_payload(
     *,
     output_format: Literal["jsonld", "json"],
@@ -133,8 +149,13 @@ async def extract(  # noqa: PLR0913
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
+    tracer = _get_pipeline_tracer(request)
+
     try:
-        classification = classify_github_url(full_path)
+        with tracer.trace_stage(STAGE_CLASSIFY_URL, source_url=full_path) as stage_span:
+            classification = classify_github_url(full_path)
+            stage_span.set_attribute("detected_type", classification.detected_type.value)
+            stage_span.set_attribute("normalized_url", classification.normalized_url)
     except UnsupportedGitHubURL as exc:
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.UNSUPPORTED_URL,
@@ -168,6 +189,8 @@ async def extract(  # noqa: PLR0913
                 "source_url": classification.normalized_url,
                 "url_info": classification,
                 "force_refresh": force_refresh,
+                "run_id": getattr(request.state, "v2_run_id", None),
+                "pipeline_tracer": tracer.child(),
             },
         )
     except Exception as exc:  # noqa: BLE001
@@ -185,10 +208,44 @@ async def extract(  # noqa: PLR0913
     if force_refresh:
         warnings.append("force_refresh requested for provider-backed pipeline run")
 
-    output_payload = _build_output_payload(
-        output_format=output_format,
-        pipeline_agent_results=pipeline_result.agent_results,
+    entity_count = sum(
+        1
+        for result in pipeline_result.agent_results.values()
+        if isinstance(result.data, dict) and result.data
     )
+    with tracer.trace_stage(
+        STAGE_PERMISSIVE_VALIDATION,
+        detected_type=classification.detected_type.value,
+    ) as stage_span:
+        stage_span.set_attribute("entity_count", entity_count)
+
+    with tracer.trace_stage(
+        STAGE_STRICT_VALIDATION,
+        detected_type=classification.detected_type.value,
+    ) as stage_span:
+        stage_span.set_attributes(status="skipped", entity_count=entity_count)
+
+    with tracer.trace_stage(
+        STAGE_RECONCILIATION,
+        detected_type=classification.detected_type.value,
+    ) as stage_span:
+        stage_span.set_attributes(status="skipped", entity_count=entity_count)
+
+    with tracer.trace_stage(
+        STAGE_GRAPH_WRITE,
+        detected_type=classification.detected_type.value,
+    ) as stage_span:
+        stage_span.set_attributes(status="skipped", entity_count=entity_count)
+
+    with tracer.trace_stage(
+        STAGE_OUTPUT_ASSEMBLY,
+        output_format=output_format,
+    ) as stage_span:
+        output_payload = _build_output_payload(
+            output_format=output_format,
+            pipeline_agent_results=pipeline_result.agent_results,
+        )
+        stage_span.set_attribute("entity_count", entity_count)
 
     config = V2Config()
     store = GraphStore(config.V2_GRAPH_DB_PATH)
@@ -202,11 +259,6 @@ async def extract(  # noqa: PLR0913
             limit=DEFAULT_INTERMEDIATE_LIMIT,
         )
 
-    entity_count = sum(
-        1
-        for result in pipeline_result.agent_results.values()
-        if isinstance(result.data, dict) and result.data
-    )
     extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
     stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
     stats = stats.model_copy(
@@ -221,7 +273,7 @@ async def extract(  # noqa: PLR0913
 
     return V2ExtractResponse(
         source_url=classification.normalized_url,
-        detected_type=classification.detected_type,
+        detected_type=classification.detected_type.value,
         output_format=output_format,
         output=output_payload,
         warnings=warnings,

@@ -90,6 +90,10 @@ class PipelineResult:
                 "raw_output": result.raw_output,
                 "is_partial": result.is_partial,
                 "failure_reason": result.failure_reason,
+                "model": result.model,
+                "provider": result.provider,
+                "tokens_prompt": result.tokens_prompt,
+                "tokens_completion": result.tokens_completion,
                 "stats": dict(result.stats),
             }
 
