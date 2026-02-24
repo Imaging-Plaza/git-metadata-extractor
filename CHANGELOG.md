@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Added
+- **V2 validation gates and canonical ID resolution**:
+  - Added strict JSON Schema gate module and batch result contracts:
+    - `src/v2/validation/schema_validation.py`
+    - `tests/v2/test_strict_validation_gate.py`
+  - Added SHACL validation support with ontology loading cache:
+    - `src/v2/validation/shacl_validation.py`
+    - `src/v2/validation/ontology.py`
+    - `tests/v2/test_shacl_validation.py`
+  - Added canonical ID resolution for people and organizations:
+    - `src/v2/canonicalization/id_resolution.py`
+    - `src/v2/canonicalization/__init__.py`
+    - `tests/v2/test_canonical_id_person.py`
+    - `tests/v2/test_canonical_id_organization.py`
 - **V2 Phase 0 strict schema promotion (`P0-01`)**:
   - Promoted 6 strict JSON Schemas from `dev/ontology-v2-json-response/a-001/json-schema/strict/` to `src/v2/schemas/strict/`:
     - `person.schema.json`
@@ -284,6 +297,10 @@ All notable changes to this project will be documented in this file.
     - `tests/v2/golden/extract/org_github_com_orgname.json`
 
 ### Changed
+- **Validation and canonicalization package exports**:
+  - Extended `src/v2/validation/__init__.py` exports with strict/SHACL validators and ontology loader helpers.
+- **Agent workflow documentation**:
+  - Advanced the phase entry task to `P3-05-canonical-id-repository.md` after completing `P3-01` through `P3-04`.
 - **Agent workflow documentation**:
   - Advanced the phase entry task to `P3-01-strict-json-schema-gate.md` after completing `P2-05` through `P2-09`.
 - **Agent workflow documentation**:
@@ -333,6 +350,15 @@ All notable changes to this project will be documented in this file.
   - Advanced the phase entry task to `P1-05-response-contracts.md` after completing `P1-02`, `P1-03`, and `P1-04`.
 
 ### Testing
+- Ran task-focused checks for strict validation gates and canonical ID resolution with repo venv:
+  - `PYTHONPATH=. .venv/bin/ruff check src/v2/validation/__init__.py src/v2/validation/schema_validation.py src/v2/validation/ontology.py src/v2/validation/shacl_validation.py src/v2/canonicalization/__init__.py src/v2/canonicalization/id_resolution.py tests/v2/test_strict_validation_gate.py tests/v2/test_shacl_validation.py tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py`
+  - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/validation src/v2/canonicalization`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_strict_validation_gate.py tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py tests/v2/test_shacl_validation.py -v`
+- Ran scoped reliability checks with repo venv:
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/ --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_schema_validation_strict.py -v`
+  - `PYTHONPATH=. .venv/bin/pytest tests/v2 -m v2 --collect-only`
+  - `PYTHONPATH=. .venv/bin/pytest -m v2 --collect-only`
 - Ran task-focused checks for `P2-05` to `P2-09` with repo venv:
   - `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/models.py src/v2/agents/retry.py src/v2/agents/__init__.py src/v2/pipeline/__init__.py src/v2/pipeline/models.py src/v2/pipeline/orchestrator.py src/v2/pipeline/stages/__init__.py src/v2/pipeline/stages/context_gather.py src/v2/pipeline/stages/models.py src/v2/dependencies.py src/v2/api.py tests/v2/test_agent_retry.py tests/v2/test_orchestrator_graph.py tests/v2/test_orchestrator_execution.py tests/v2/test_context_gather.py tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py`
   - `PYTHONPATH=. .venv/bin/mypy --follow-imports=skip src/v2/agents/retry.py src/v2/pipeline src/v2/dependencies.py src/v2/api.py`
