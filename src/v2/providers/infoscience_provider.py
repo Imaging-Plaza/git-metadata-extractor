@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from src.v2.providers.base import InfoscienceProvider
+
+if TYPE_CHECKING:
+    from src.v2.providers.rate_limiter import RateLimiter
 
 JSONMapping = dict[str, Any]
 InfoscienceSearch = Callable[[str, int], Awaitable[Any]]
@@ -49,7 +52,9 @@ class RealInfoscienceProvider(InfoscienceProvider):
         search_authors_func: InfoscienceSearch | None = None,
         search_labs_func: InfoscienceSearch | None = None,
         search_publications_func: InfoscienceSearch | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
+        super().__init__(provider_name="infoscience", rate_limiter=rate_limiter)
         self._max_results = max_results
         self._search_authors_func = search_authors_func
         self._search_labs_func = search_labs_func
@@ -80,7 +85,9 @@ class RealInfoscienceProvider(InfoscienceProvider):
         return search_publications
 
     def search_person(self, query: str) -> list[dict[str, Any]]:
-        result = _run_async(self._resolve_search_authors()(query, self._max_results))
+        result = self._run_with_rate_limit(
+            lambda: _run_async(self._resolve_search_authors()(query, self._max_results)),
+        )
         payload = _to_dict(result)
         authors = _ensure_list(payload.get("authors"))
         return [
@@ -99,7 +106,9 @@ class RealInfoscienceProvider(InfoscienceProvider):
         ]
 
     def search_orgunit(self, query: str) -> list[dict[str, Any]]:
-        result = _run_async(self._resolve_search_labs()(query, self._max_results))
+        result = self._run_with_rate_limit(
+            lambda: _run_async(self._resolve_search_labs()(query, self._max_results)),
+        )
         payload = _to_dict(result)
         labs = _ensure_list(payload.get("labs"))
         return [
@@ -113,8 +122,10 @@ class RealInfoscienceProvider(InfoscienceProvider):
         ]
 
     def search_publications(self, query: str) -> list[dict[str, Any]]:
-        result = _run_async(
-            self._resolve_search_publications()(query, self._max_results),
+        result = self._run_with_rate_limit(
+            lambda: _run_async(
+                self._resolve_search_publications()(query, self._max_results),
+            ),
         )
         payload = _to_dict(result)
         publications = _ensure_list(payload.get("publications"))

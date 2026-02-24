@@ -39,6 +39,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - API and CLI: api-and-cli.md
+  - V2 API Reference: v2-api-reference.md
+  - Migration:
+      - V1 to V2: migration-v1-to-v2.md
   - Architecture:
       - Design Notes: architecture/design-notes.md
       - Repository Analysis Strategy: AGENT_STRATEGY.md

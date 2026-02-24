@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
 
@@ -10,6 +10,9 @@ from src.v2.providers.base import (
     ProviderRateLimitError,
     RORProvider,
 )
+
+if TYPE_CHECKING:
+    from src.v2.providers.rate_limiter import RateLimiter
 
 HTTP_NOT_FOUND = 404
 HTTP_FORBIDDEN = 403
@@ -122,7 +125,9 @@ class RealRORProvider(RORProvider):
         session: requests.Session | None = None,
         base_url: str = "https://api.ror.org/v2",
         timeout: int = 20,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
+        super().__init__(provider_name="ror", rate_limiter=rate_limiter)
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
@@ -138,10 +143,12 @@ class RealRORProvider(RORProvider):
         *,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = self._http_client().get(
-            f"{self._base_url}{endpoint}",
-            params=params,
-            timeout=self._timeout,
+        response = self._run_with_rate_limit(
+            lambda: self._http_client().get(
+                f"{self._base_url}{endpoint}",
+                params=params,
+                timeout=self._timeout,
+            ),
         )
         if response.status_code == HTTP_NOT_FOUND:
             message = "ROR organization not found"

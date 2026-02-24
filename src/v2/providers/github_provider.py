@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from src.v2.providers.base import (
     GitHubProvider,
     ProviderNotFoundError,
 )
+
+if TYPE_CHECKING:
+    from src.v2.providers.rate_limiter import RateLimiter
 
 JSONMapping = dict[str, Any]
 GimieExtractor = Callable[[str, str], Any]
@@ -111,7 +114,7 @@ def _run_async(sync_or_async: Awaitable[Any] | Any) -> Any:
 class RealGitHubProvider(GitHubProvider):
     """Production GitHub provider backed by existing GIMIE and v1 parser utilities."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         force_refresh: bool = False,
@@ -119,7 +122,9 @@ class RealGitHubProvider(GitHubProvider):
         user_lookup: UserLookup | None = None,
         organization_lookup: OrganizationLookup | None = None,
         repository_context_loader: RepositoryContextLoader | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
+        super().__init__(provider_name="github", rate_limiter=rate_limiter)
         self._force_refresh = force_refresh
         self._gimie_extractor = gimie_extractor
         self._user_lookup = user_lookup
@@ -203,7 +208,9 @@ class RealGitHubProvider(GitHubProvider):
 
     def get_repository(self, full_name: str) -> dict[str, Any]:
         repository_url = _normalize_repo_url(full_name)
-        gimie_payload = self._resolve_gimie_extractor()(repository_url, "json-ld")
+        gimie_payload = self._run_with_rate_limit(
+            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
+        )
         node = _extract_repository_node(gimie_payload)
 
         normalized_full_name = _normalize_full_name(full_name, node)
@@ -242,20 +249,26 @@ class RealGitHubProvider(GitHubProvider):
 
     def get_user(self, username: str) -> dict[str, Any]:
         try:
-            return self._resolve_user_lookup()(username)
+            return self._run_with_rate_limit(
+                lambda: self._resolve_user_lookup()(username),
+            )
         except ValueError as exc:
             raise ProviderNotFoundError(str(exc)) from exc
 
     def get_organization(self, org_name: str) -> dict[str, Any]:
         try:
-            return self._resolve_organization_lookup()(org_name)
+            return self._run_with_rate_limit(
+                lambda: self._resolve_organization_lookup()(org_name),
+            )
         except ValueError as exc:
             raise ProviderNotFoundError(str(exc)) from exc
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
         context_loader = self._resolve_context_loader()
         repository_url = _normalize_repo_url(full_name)
-        context_result = _run_async(context_loader(repository_url))
+        context_result = self._run_with_rate_limit(
+            lambda: _run_async(context_loader(repository_url)),
+        )
 
         if not isinstance(context_result, dict):
             return []
@@ -277,6 +290,8 @@ class RealGitHubProvider(GitHubProvider):
 
     def get_languages(self, full_name: str) -> dict[str, int]:
         repository_url = _normalize_repo_url(full_name)
-        gimie_payload = self._resolve_gimie_extractor()(repository_url, "json-ld")
+        gimie_payload = self._run_with_rate_limit(
+            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
+        )
         node = _extract_repository_node(gimie_payload)
         return _extract_languages_from_node(node)

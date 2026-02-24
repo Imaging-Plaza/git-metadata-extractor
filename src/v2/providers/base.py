@@ -1,7 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, TypedDict
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, TypedDict, TypeVar
+
+if TYPE_CHECKING:
+    from src.v2.providers.rate_limiter import RateLimiter
+
+ResponseT = TypeVar("ResponseT")
+
+
+def _run_awaitable(value: Coroutine[Any, Any, ResponseT]) -> ResponseT:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(value)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(asyncio.run, value)
+        return future.result()
 
 
 class ProviderError(RuntimeError):
@@ -22,6 +40,29 @@ class ProviderPermissionError(ProviderError):
 
 class BaseProvider:
     """Base abstraction for all v2 provider adapters."""
+
+    provider_name = "provider"
+
+    def __init__(
+        self,
+        *,
+        provider_name: str | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ) -> None:
+        from src.v2.providers.rate_limiter import RateLimiter  # noqa: PLC0415
+
+        if provider_name is None:
+            provider_name = self.provider_name
+        self._provider_name = provider_name
+        self._rate_limiter = rate_limiter or RateLimiter()
+
+    def _run_with_rate_limit(
+        self,
+        request_func: Callable[[], ResponseT | Coroutine[Any, Any, ResponseT]],
+    ) -> ResponseT:
+        return _run_awaitable(
+            self._rate_limiter.with_rate_limit(self._provider_name, request_func),
+        )
 
 
 class GitHubProvider(BaseProvider, ABC):

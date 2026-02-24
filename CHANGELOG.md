@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added CI migration gates for Phase 7 completion:
+  - JSON-LD roundtrip regression gate (`tests/v2/test_roundtrip.py`)
+  - v1 parity regression gate (`tests/test_v1_parity.py` plus legacy v1 suites in CI)
+  - TTL/schema alignment and generated-model freshness gates remain enforced.
+- Added v2 privacy parity stage with deterministic v1-compatible email anonymization (`sha256(local_part)[:12]@domain`) and reconciliation-stage application for person entities.
+- Added provider-level rate-limit handling with per-provider tracking, proactive throttling near quota exhaustion, and exponential backoff + jitter retry on 429/`ProviderRateLimitError`.
+- Changed `BaseProvider` initialization to remain backward-compatible for existing mock/dummy providers by defaulting `provider_name` when omitted.
+- Changed v1 parity CI execution to force a writable cache path (`CACHE_DB_PATH=.tmp/cache.db`) for deterministic test runs.
+- Added migration documentation for v1-to-v2 endpoint mapping, response-shape differences, environment variables, and deprecation timeline.
+- Updated `AGENTS.md` handoff to advance the current entry task to `.internal/phase-8/P8-01-basic-live-connectivity.md`.
 - Added Phase 7 CI gating workflow (`.github/workflows/ci.yml`) that runs generated-model freshness checks and the TTL-schema alignment test within scoped `tests/v2` execution.
 - Added `just v2-models-generate` / `just v2-models-check` commands and wired deterministic schema-bundle generation so codegen freshness checks fail with schema-specific drift messages.
 - Added `datamodel-code-generator` dev dependency and shared `[tool.datamodel-codegen]` defaults in `pyproject.toml`.
@@ -45,6 +55,12 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/stages/privacy.py src/v2/pipeline/stages/reconciliation.py src/v2/providers/base.py src/v2/providers/rate_limiter.py src/v2/providers/github_provider.py src/v2/providers/infoscience_provider.py src/v2/providers/orcid_provider.py src/v2/providers/ror_provider.py src/v2/providers/__init__.py tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py tests/test_v1_parity.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/stages/privacy.py src/v2/pipeline/stages/reconciliation.py src/v2/providers/base.py src/v2/providers/rate_limiter.py src/v2/providers/github_provider.py src/v2/providers/infoscience_provider.py src/v2/providers/orcid_provider.py src/v2/providers/ror_provider.py tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py tests/test_v1_parity.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py -q`
+- `CACHE_DB_PATH=.tmp/cache.db PYTHONPATH=. .venv/bin/pytest tests/test_cache.py tests/test_orcid_validation_pipeline.py tests/test_v1_parity.py -q`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
 - `PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py`
 - `just v2-models-generate`
 - `just v2-models-check`
@@ -98,6 +114,15 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added Phase 7 CI and migration artifacts:
+  - `tests/v2/test_roundtrip.py`
+  - `tests/test_v1_parity.py`
+  - `tests/v2/test_email_anonymization.py`
+  - `tests/v2/test_rate_limiter.py`
+  - `src/v2/pipeline/stages/privacy.py`
+  - `src/v2/providers/rate_limiter.py`
+  - `docs/migration-v1-to-v2.md`
+  - `docs/v2-api-reference.md`
 - Added committed generated v2 models module at `src/v2/generated/entities.py` (with datamodel-code-generator header and embedded strict-schema SHA metadata) plus package exports in `src/v2/generated/__init__.py`.
 - Added `scripts/v2/generate_v2_models.py` to produce/check generated models from strict schemas and detect stale codegen output.
 - Added generated-model smoke coverage in `tests/v2/test_generated_models.py` for `PersonModel` and `RepositoryModel` fixture validation.

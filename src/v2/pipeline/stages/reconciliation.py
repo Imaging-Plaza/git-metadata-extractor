@@ -11,6 +11,7 @@ from src.v2.canonicalization import (
     resolve_repository_id,
 )
 from src.v2.pipeline.stages.models import ReconciledEntities
+from src.v2.pipeline.stages.privacy import anonymize_email
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -211,6 +212,9 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         person["id"] = canonical_id
         person["idSource"] = id_source
         _register_person_lookup_tokens(person_lookup, person)
+        email = person.get("schema:email")
+        if isinstance(email, str):
+            person["schema:email"] = anonymize_email(email)
 
     for organization in organizations:
         canonical_id, id_source = resolve_organization_id(organization)
@@ -295,7 +299,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         article_id = article["id"]
         author_refs_value = article.get("schema:author")
         if isinstance(author_refs_value, list):
-            canonical_authors: list[str] = []
+            canonical_article_authors: list[str] = []
             for author_ref in author_refs_value:
                 canonical_author = _resolve_lookup_token(person_lookup, author_ref)
                 if canonical_author is None:
@@ -306,8 +310,8 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                         ),
                     )
                     continue
-                canonical_authors.append(canonical_author)
-            article["schema:author"] = _dedupe_preserve_order(canonical_authors)
+                canonical_article_authors.append(canonical_author)
+            article["schema:author"] = _dedupe_preserve_order(canonical_article_authors)
 
         source_org_ref = article.get("schema:sourceOrganization")
         if isinstance(source_org_ref, str):

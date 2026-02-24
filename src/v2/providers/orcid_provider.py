@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
 
@@ -13,6 +13,9 @@ from src.v2.providers.base import (
     ProviderPermissionError,
     ProviderRateLimitError,
 )
+
+if TYPE_CHECKING:
+    from src.v2.providers.rate_limiter import RateLimiter
 
 ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 HTTP_NOT_FOUND = 404
@@ -99,7 +102,9 @@ class RealORCIDProvider(ORCIDProvider):
         session: requests.Session | None = None,
         base_url: str = "https://pub.orcid.org/v3.0",
         timeout: int = 20,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
+        super().__init__(provider_name="orcid", rate_limiter=rate_limiter)
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
@@ -110,10 +115,12 @@ class RealORCIDProvider(ORCIDProvider):
         return self._session
 
     def _request(self, endpoint: str) -> dict[str, Any]:
-        response = self._http_client().get(
-            f"{self._base_url}{endpoint}",
-            headers={"Accept": "application/json"},
-            timeout=self._timeout,
+        response = self._run_with_rate_limit(
+            lambda: self._http_client().get(
+                f"{self._base_url}{endpoint}",
+                headers={"Accept": "application/json"},
+                timeout=self._timeout,
+            ),
         )
         if response.status_code == HTTP_NOT_FOUND:
             message = "ORCID record not found"

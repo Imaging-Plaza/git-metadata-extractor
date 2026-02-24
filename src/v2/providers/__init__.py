@@ -19,6 +19,7 @@ from src.v2.providers.mock_infoscience import MockInfoscienceProvider
 from src.v2.providers.mock_orcid import MockORCIDProvider
 from src.v2.providers.mock_ror import MockRORProvider
 from src.v2.providers.orcid_provider import RealORCIDProvider
+from src.v2.providers.rate_limiter import RateLimiter
 from src.v2.providers.ror_provider import RealRORProvider
 
 _ALIASES = {
@@ -71,6 +72,7 @@ __all__ = [
     "ProviderPermissionError",
     "ProviderRateLimitError",
     "RORProvider",
+    "RateLimiter",
     "RealGitHubProvider",
     "RealInfoscienceProvider",
     "RealORCIDProvider",

@@ -34,5 +34,13 @@ jobs:
       - name: Run TTL schema alignment gate
         run: PYTHONPATH=. pytest tests/v2/test_ttl_schema_alignment.py -q
 
+      - name: Run JSON-LD roundtrip gate
+        run: PYTHONPATH=. pytest tests/v2/test_roundtrip.py -q
+
       - name: Run scoped v2 test suite
         run: PYTHONPATH=. pytest tests/v2/
+
+      - name: Run v1 parity regression tests
+        run: |
+          mkdir -p .tmp
+          CACHE_DB_PATH=.tmp/cache.db PYTHONPATH=. pytest tests/test_cache.py tests/test_orcid_validation_pipeline.py tests/test_v1_parity.py
