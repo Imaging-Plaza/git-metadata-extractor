@@ -6,9 +6,53 @@ from typing import Any, Callable
 from jsonschema import validate
 
 from src.v2.agents import OrganizationAgentV2, ProviderSet
+from src.v2.providers.base import GitHubProvider
 from src.v2.providers.mock_github import MockGitHubProvider
 from src.v2.providers.mock_infoscience import MockInfoscienceProvider
 from src.v2.providers.mock_ror import MockRORProvider
+
+
+class _FailingGitHubProvider(GitHubProvider):
+    def get_repository(self, full_name: str) -> dict[str, Any]:
+        raise AssertionError(full_name)
+
+    def get_user(self, username: str) -> dict[str, Any]:
+        raise AssertionError(username)
+
+    def get_organization(self, org_name: str) -> dict[str, Any]:
+        raise AssertionError(org_name)
+
+    def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
+        raise AssertionError(full_name)
+
+    def get_languages(self, full_name: str) -> dict[str, int]:
+        raise AssertionError(full_name)
+
+
+class _GitHubOrganizationWithRepositoriesProvider(GitHubProvider):
+    def get_repository(self, full_name: str) -> dict[str, Any]:
+        del full_name
+        return {}
+
+    def get_user(self, username: str) -> dict[str, Any]:
+        del username
+        return {}
+
+    def get_organization(self, org_name: str) -> dict[str, Any]:
+        return {
+            "login": org_name,
+            "name": "GitHub",
+            "followers": 200000,
+            "repositories": ["repo-a", "repo-b"],
+        }
+
+    def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
+        del full_name
+        return []
+
+    def get_languages(self, full_name: str) -> dict[str, int]:
+        del full_name
+        return {}
 
 
 def test_organization_agent_output_validates_against_agent_schema(
@@ -93,3 +137,48 @@ def test_organization_agent_permissive_validation_warns_on_malformed_optional_fi
     assert result.warnings
     assert "pulse:OrganizationType" not in result.data
     assert result.raw_output["pulse:OrganizationType"] == "invalid-type"
+
+
+def test_organization_agent_skips_github_lookup_when_disabled() -> None:
+    agent = OrganizationAgentV2()
+    providers = ProviderSet(
+        github=_FailingGitHubProvider(),
+        ror=MockRORProvider(),
+        infoscience=MockInfoscienceProvider(),
+    )
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "org_name": "EPFL",
+                "github_lookup_enabled": False,
+                "ror_id": "https://ror.org/02s376052",
+            },
+            providers,
+        ),
+    )
+
+    assert result.data["idSource"] == "pulse:ror"
+    assert result.data["id"] == "https://ror.org/02s376052"
+    assert result.data["identifiers"].get("pulse:githubOrganizationHandle") is None
+
+
+def test_organization_agent_repository_mode_owns_only_source_repo() -> None:
+    agent = OrganizationAgentV2()
+    providers = ProviderSet(
+        github=_GitHubOrganizationWithRepositoriesProvider(),
+        ror=MockRORProvider(),
+        infoscience=MockInfoscienceProvider(),
+    )
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "org_name": "github",
+                "source_repositories": ["owner-org/source-repo"],
+            },
+            providers,
+        ),
+    )
+
+    assert result.data["pulse:owns"] == ["owner-org/source-repo"]

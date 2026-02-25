@@ -51,7 +51,13 @@ class OrganizationAgentV2:
     ) -> AgentResult:
         warnings: list[str] = []
         org_name = _resolve_org_name(context)
-        github_org = providers.github.get_organization(org_name)
+        github_lookup_enabled = context.get("github_lookup_enabled")
+        if not isinstance(github_lookup_enabled, bool):
+            github_lookup_enabled = True
+
+        github_org: dict[str, Any] = {}
+        if github_lookup_enabled:
+            github_org = providers.github.get_organization(org_name)
 
         ror_record: dict[str, Any] | None = None
         if providers.ror:
@@ -88,7 +94,12 @@ class OrganizationAgentV2:
             if isinstance(infoscience_match, dict)
             else None
         )
-        github_handle = github_org.get("login") if isinstance(github_org.get("login"), str) else org_name
+        github_handle: str | None = None
+        github_login = github_org.get("login")
+        if isinstance(github_login, str) and github_login:
+            github_handle = github_login
+        elif github_lookup_enabled:
+            github_handle = org_name
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = str(uuid4())
@@ -138,10 +149,13 @@ class OrganizationAgentV2:
                 parent_org = parent_candidate
 
         repositories = context.get("repositories")
+        source_repositories = context.get("source_repositories")
         owns: list[str] = []
-        if isinstance(repositories, list):
+        if isinstance(source_repositories, list):
+            owns = [value for value in source_repositories if isinstance(value, str) and value]
+        elif isinstance(repositories, list):
             owns = [value for value in repositories if isinstance(value, str) and value]
-        elif isinstance(github_org.get("repositories"), list):
+        elif github_lookup_enabled and isinstance(github_org.get("repositories"), list) and github_handle:
             owns = [
                 f"{github_handle}/{repo_name}"
                 for repo_name in github_org["repositories"]
@@ -165,7 +179,7 @@ class OrganizationAgentV2:
                 (ror_record or {}).get("name")
                 or (infoscience_match or {}).get("name")
                 or github_org.get("name")
-                or github_handle
+                or org_name
             ),
             "schema:identifier": ror_id if isinstance(ror_id, str) else None,
             "pulse:githubOrganizationHandle": github_handle,

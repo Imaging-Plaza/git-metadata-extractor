@@ -18,6 +18,13 @@ curl -s http://localhost:1234/v2/health | jq
 
 Runs the v2 extraction pipeline for a GitHub URL path.
 
+Repository-mode traversal contract:
+
+- GitHub traversal is direct-only: source repository, direct owner, and direct contributors.
+- GitHub repo-list expansion (`/users/{u}/repos`, `/orgs/{o}/repos`) is disabled.
+- ORCID, Infoscience, and ROR enrichment remain enabled for discovered people/organizations.
+- `pulse:owns` references emitted during repository runs are constrained to the source repository handle when present.
+
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`

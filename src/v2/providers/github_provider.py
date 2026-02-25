@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -17,6 +19,12 @@ GimieExtractor = Callable[[str, str], Any]
 UserLookup = Callable[[str], JSONMapping]
 OrganizationLookup = Callable[[str], JSONMapping]
 RepositoryContextLoader = Callable[[str], Awaitable[JSONMapping] | JSONMapping]
+GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
+GITHUB_NOREPLY_PATTERN = re.compile(
+    r"^(?:\d+\+)?([A-Za-z\d-]{1,39})@users\.noreply\.github\.com$",
+    flags=re.IGNORECASE,
+)
+logger = logging.getLogger(__name__)
 
 
 def _first_non_empty_string(value: Any) -> str | None:
@@ -60,6 +68,37 @@ def _normalize_full_name(full_name: str, repository_payload: JSONMapping) -> str
         if "/" in candidate_value:
             return candidate_value
     return full_name
+
+
+def _normalize_github_login(candidate: Any) -> str | None:
+    if not isinstance(candidate, str):
+        return None
+    normalized = candidate.strip().lstrip("@")
+    if not normalized:
+        return None
+    return normalized if GITHUB_LOGIN_PATTERN.fullmatch(normalized) else None
+
+
+def _extract_login_from_email(email: Any) -> str | None:
+    if not isinstance(email, str):
+        return None
+    match = GITHUB_NOREPLY_PATTERN.fullmatch(email.strip())
+    if not match:
+        return None
+    return _normalize_github_login(match.group(1))
+
+
+def _resolve_contributor_login(author: Any) -> str | None:
+    author_id = getattr(author, "id", None)
+    login_from_id = _normalize_github_login(author_id)
+    if login_from_id:
+        return login_from_id
+
+    login_from_email = _extract_login_from_email(getattr(author, "email", None))
+    if login_from_email:
+        return login_from_email
+
+    return _normalize_github_login(getattr(author, "name", None))
 
 
 def _extract_repository_node(gimie_payload: Any) -> JSONMapping:
@@ -118,6 +157,8 @@ class RealGitHubProvider(GitHubProvider):
         self,
         *,
         force_refresh: bool = False,
+        include_user_repositories: bool = True,
+        include_organization_repositories: bool = True,
         gimie_extractor: GimieExtractor | None = None,
         user_lookup: UserLookup | None = None,
         organization_lookup: OrganizationLookup | None = None,
@@ -126,6 +167,8 @@ class RealGitHubProvider(GitHubProvider):
     ) -> None:
         super().__init__(provider_name="github", rate_limiter=rate_limiter)
         self._force_refresh = force_refresh
+        self._include_user_repositories = include_user_repositories
+        self._include_organization_repositories = include_organization_repositories
         self._gimie_extractor = gimie_extractor
         self._user_lookup = user_lookup
         self._organization_lookup = organization_lookup
@@ -137,6 +180,14 @@ class RealGitHubProvider(GitHubProvider):
     @property
     def force_refresh(self) -> bool:
         return self._force_refresh
+
+    @property
+    def include_user_repositories(self) -> bool:
+        return self._include_user_repositories
+
+    @property
+    def include_organization_repositories(self) -> bool:
+        return self._include_organization_repositories
 
     @staticmethod
     def _model_dump(value: Any) -> JSONMapping:
@@ -181,6 +232,7 @@ class RealGitHubProvider(GitHubProvider):
             user = parser.get_user_metadata_cached(
                 username,
                 force_refresh=self._force_refresh,
+                include_repositories=self._include_user_repositories,
             )
             return self._model_dump(user)
 
@@ -204,6 +256,7 @@ class RealGitHubProvider(GitHubProvider):
             org = parser.get_organization_metadata_cached(
                 org_name,
                 force_refresh=self._force_refresh,
+                include_repositories=self._include_organization_repositories,
             )
             return self._model_dump(org)
 
@@ -282,8 +335,17 @@ class RealGitHubProvider(GitHubProvider):
         for author in git_authors:
             commits = getattr(author, "commits", None)
             total_commits = getattr(commits, "total", None)
+            login = _resolve_contributor_login(author)
+            if login is None:
+                logger.debug(
+                    "Contributor login unresolved; skipping GitHub username fanout "
+                    "(author_id=%s, name=%s, email=%s)",
+                    getattr(author, "id", None),
+                    getattr(author, "name", None),
+                    getattr(author, "email", None),
+                )
             contributor = {
-                "login": getattr(author, "id", None) or getattr(author, "name", None),
+                "login": login,
                 "name": getattr(author, "name", None),
                 "email": getattr(author, "email", None),
                 "contributions": total_commits,

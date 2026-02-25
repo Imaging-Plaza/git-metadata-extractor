@@ -34,12 +34,17 @@ class GitHubOrganizationsParser:
         if self.github_token:
             self.headers["Authorization"] = f"token {self.github_token}"
 
-    def get_organization_metadata(self, org_name: str) -> GitHubOrganizationMetadata:
+    def get_organization_metadata(
+        self,
+        org_name: str,
+        include_repositories: bool = True,
+    ) -> GitHubOrganizationMetadata:
         """
         Retrieve comprehensive organization metadata from GitHub
 
         Args:
             org_name: GitHub organization name
+            include_repositories: Include repository list from /orgs/{org}/repos
 
         Returns:
             GitHubOrganizationMetadata object with all available organization information
@@ -58,7 +63,11 @@ class GitHubOrganizationsParser:
         public_members = self._get_organization_public_members(org_name)
 
         # Get repositories (limited to first 100 for performance)
-        repositories = self._get_organization_repositories(org_name)
+        repositories = (
+            self._get_organization_repositories(org_name)
+            if include_repositories
+            else []
+        )
 
         # Get teams (if accessible)
         teams = self._get_organization_teams(org_name)

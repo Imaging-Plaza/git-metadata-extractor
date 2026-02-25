@@ -234,3 +234,152 @@ def test_execute_collects_partial_failures_without_blocking_siblings() -> None:
     assert result.agent_results["person_agent:alice"].is_partial is True
     assert result.agent_results["person_agent:bob"].is_partial is False
     assert result.duration_ms > 0
+
+
+def test_repository_org_fanout_marks_direct_and_membership_contexts() -> None:
+    captured_org_contexts: list[dict[str, Any]] = []
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner-org/source-repo",
+                    "metadata": {"owner": {"login": "owner-org", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        del context
+        return AgentResult(
+            data={
+                "id": "alice",
+                "org:hasMembership": [
+                    "alice_EPFL",
+                    "alice_owner-org",
+                ],
+            },
+        )
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        captured_org_contexts.append(dict(context))
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={"url_info": _classification(), "source_url": "https://github.com/octocat/Hello-World"},
+        ),
+    )
+
+    contexts_by_org = {
+        context["org_name"]: context
+        for context in captured_org_contexts
+    }
+    owner_context = contexts_by_org["owner-org"]
+    assert owner_context["github_lookup_enabled"] is True
+    assert owner_context["source_repositories"] == ["owner-org/source-repo"]
+
+    epfl_context = contexts_by_org["EPFL"]
+    assert epfl_context["github_lookup_enabled"] is False
+    assert "source_repositories" not in epfl_context
+
+
+def test_repository_person_fanout_ignores_non_github_hash_logins() -> None:
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [
+                        {
+                            "login": "0b3f69f4d1e5bdc420e7bea74e3e037ab841e385aefc2c37097f40edd13f8cd4",
+                        },
+                        {"login": "octocat"},
+                    ],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["username"]})
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={"url_info": _classification(), "source_url": "https://github.com/octocat/Hello-World"},
+        ),
+    )
+
+    assert "person_agent:octocat" in result.agent_results
+    assert (
+        "person_agent:0b3f69f4d1e5bdc420e7bea74e3e037ab841e385aefc2c37097f40edd13f8cd4"
+        not in result.agent_results
+    )

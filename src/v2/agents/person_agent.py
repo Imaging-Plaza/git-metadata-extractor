@@ -64,7 +64,7 @@ def _resolve_username(context: dict[str, Any]) -> str:
 class PersonAgentV2:
     """Person agent wrapper with permissive output validation."""
 
-    async def run(  # noqa: C901
+    async def run(  # noqa: C901, PLR0912, PLR0915
         self,
         context: dict[str, Any],
         providers: ProviderSet,
@@ -140,8 +140,15 @@ class PersonAgentV2:
 
         membership_ids = [f"{resolved_id}_{affiliation}" for affiliation in affiliations]
         repository_ownership = []
+        source_repositories = context.get("source_repositories")
+        if isinstance(source_repositories, list):
+            repository_ownership = [
+                repository
+                for repository in source_repositories
+                if isinstance(repository, str) and repository
+            ]
         repositories = github_user.get("repositories")
-        if isinstance(repositories, list) and isinstance(github_username, str):
+        if not repository_ownership and isinstance(repositories, list) and isinstance(github_username, str):
             repository_ownership = [
                 f"{github_username}/{repo_name}"
                 for repo_name in repositories

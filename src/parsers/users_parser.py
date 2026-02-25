@@ -53,12 +53,17 @@ class GitHubUsersParser:
         if self.github_token:
             self.headers["Authorization"] = f"token {self.github_token}"
 
-    def get_user_metadata(self, username: str) -> GitHubUserMetadata:
+    def get_user_metadata(
+        self,
+        username: str,
+        include_repositories: bool = True,
+    ) -> GitHubUserMetadata:
         """
         Retrieve comprehensive user metadata from GitHub
 
         Args:
             username: GitHub username
+            include_repositories: Include repository list from /users/{user}/repos
 
         Returns:
             GitHubUserMetadata object with all available user information
@@ -88,7 +93,7 @@ class GitHubUsersParser:
             orcid_activities = self._scrape_orcid_activities(orcid)
 
         # Get repositories
-        repositories = self._get_user_repositories(username)
+        repositories = self._get_user_repositories(username) if include_repositories else []
 
         # Combine all data and create Pydantic model
         user_data = {

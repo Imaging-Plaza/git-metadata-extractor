@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Awaitable, Callable
@@ -37,6 +38,7 @@ STAGE_PERSON_AGENTS = "person_agents"
 STAGE_REPO_AGENTS = "repo_agents"
 STAGE_ORG_AGENTS = "org_agents"
 STAGE_AGENTS = "agents"
+GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
 
 PLAN_BY_TYPE: dict[str, list[str]] = {
     "repository": [
@@ -93,6 +95,12 @@ def _to_detected_type(value: Any) -> str:
     if hasattr(value, "value"):
         return str(value.value)
     return str(value)
+
+
+def _is_valid_github_login(candidate: Any) -> bool:
+    return isinstance(candidate, str) and bool(
+        GITHUB_LOGIN_PATTERN.fullmatch(candidate.strip()),
+    )
 
 
 class PipelineOrchestrator:
@@ -463,7 +471,30 @@ class PipelineOrchestrator:
             "organization_context": organization_context,
         }
 
-    def _person_fanout_contexts(
+    def _repository_source_full_name(self, runtime_context: dict[str, Any]) -> str | None:
+        bundle = runtime_context.get("context_bundle")
+        repository_context = (
+            bundle.context.get("repository", {})
+            if isinstance(bundle, ContextBundle)
+            else {}
+        )
+        full_name = repository_context.get("full_name")
+        if isinstance(full_name, str) and "/" in full_name:
+            return full_name
+
+        url_info = self._require_url_info(runtime_context)
+        if isinstance(url_info.repo, str) and url_info.repo:
+            return f"{url_info.owner}/{url_info.repo}"
+        return None
+
+    def _repository_source_repositories(
+        self,
+        runtime_context: dict[str, Any],
+    ) -> list[str]:
+        full_name = self._repository_source_full_name(runtime_context)
+        return [full_name] if isinstance(full_name, str) and full_name else []
+
+    def _person_fanout_contexts(  # noqa: C901
         self,
         runtime_context: dict[str, Any],
         detected_type: str,
@@ -480,10 +511,11 @@ class PipelineOrchestrator:
                 for contributor in contributors:
                     if isinstance(contributor, dict):
                         login = contributor.get("login")
-                        if isinstance(login, str) and login:
-                            usernames.append(login)
+                        if _is_valid_github_login(login):
+                            usernames.append(str(login).strip())
                     elif isinstance(contributor, str) and contributor:
-                        usernames.append(contributor)
+                        if _is_valid_github_login(contributor):
+                            usernames.append(contributor.strip())
         if detected_type == "organization":
             organization_context = bundle.context.get("organization", {})
             members = organization_context.get("members", [])
@@ -492,10 +524,21 @@ class PipelineOrchestrator:
                     [member for member in members if isinstance(member, str) and member],
                 )
 
-        return [
-            {"username": username, "source_url": runtime_context.get("source_url")}
-            for username in _deduplicate(usernames)
-        ]
+        source_repositories = (
+            self._repository_source_repositories(runtime_context)
+            if detected_type == "repository"
+            else []
+        )
+        contexts: list[dict[str, Any]] = []
+        for username in _deduplicate(usernames):
+            context: dict[str, Any] = {
+                "username": username,
+                "source_url": runtime_context.get("source_url"),
+            }
+            if source_repositories:
+                context["source_repositories"] = list(source_repositories)
+            contexts.append(context)
+        return contexts
 
     def _repository_fanout_contexts(
         self,
@@ -539,7 +582,41 @@ class PipelineOrchestrator:
         if not isinstance(bundle, ContextBundle):
             return []
 
-        organization_names: list[str] = []
+        source_url = runtime_context.get("source_url")
+        source_repositories = (
+            self._repository_source_repositories(runtime_context)
+            if detected_type == "repository"
+            else []
+        )
+        contexts_by_org_name: dict[str, dict[str, Any]] = {}
+
+        def _set_context(
+            org_name: str,
+            *,
+            github_lookup_enabled: bool,
+            include_source_repositories: bool = False,
+        ) -> None:
+            if not org_name:
+                return
+            existing_context = contexts_by_org_name.get(org_name)
+            if existing_context is not None:
+                existing_lookup = existing_context.get("github_lookup_enabled")
+                if github_lookup_enabled and existing_lookup is False:
+                    existing_context["github_lookup_enabled"] = True
+                    if include_source_repositories and source_repositories:
+                        existing_context["source_repositories"] = list(
+                            source_repositories,
+                        )
+                return
+
+            next_context: dict[str, Any] = {
+                "org_name": org_name,
+                "source_url": source_url,
+                "github_lookup_enabled": github_lookup_enabled,
+            }
+            if include_source_repositories and source_repositories:
+                next_context["source_repositories"] = list(source_repositories)
+            contexts_by_org_name[org_name] = next_context
 
         if detected_type == "repository":
             repository_context = bundle.context.get("repository", {})
@@ -550,7 +627,11 @@ class PipelineOrchestrator:
                     owner_login = owner.get("login")
                     owner_type = str(owner.get("type", "")).lower()
                     if isinstance(owner_login, str) and "organization" in owner_type:
-                        organization_names.append(owner_login)
+                        _set_context(
+                            owner_login,
+                            github_lookup_enabled=True,
+                            include_source_repositories=True,
+                        )
 
         if detected_type == "user":
             user_context = bundle.context.get("user", {})
@@ -558,7 +639,7 @@ class PipelineOrchestrator:
             if isinstance(profile, dict):
                 company = profile.get("company")
                 if isinstance(company, str) and company:
-                    organization_names.append(company)
+                    _set_context(company, github_lookup_enabled=True)
 
         pipeline_outputs = runtime_context.get("pipeline_outputs", {})
         if isinstance(pipeline_outputs, dict):
@@ -573,9 +654,9 @@ class PipelineOrchestrator:
                         continue
                     _, organization = membership.split("_", maxsplit=1)
                     if organization:
-                        organization_names.append(organization)
+                        _set_context(
+                            organization,
+                            github_lookup_enabled=detected_type != "repository",
+                        )
 
-        return [
-            {"org_name": organization_name, "source_url": runtime_context.get("source_url")}
-            for organization_name in _deduplicate(organization_names)
-        ]
+        return list(contexts_by_org_name.values())

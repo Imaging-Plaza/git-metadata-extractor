@@ -22,6 +22,7 @@ class CachedGitHubUsersParser(GitHubUsersParser):
         self,
         username: str,
         force_refresh: bool = False,
+        include_repositories: bool = True,
     ) -> GitHubUserMetadata:
         """
         Get user metadata with caching support.
@@ -35,12 +36,18 @@ class CachedGitHubUsersParser(GitHubUsersParser):
         """
 
         def fetch_user_data():
-            return self.get_user_metadata(username)
+            return self.get_user_metadata(
+                username,
+                include_repositories=include_repositories,
+            )
 
         # Get from cache or fetch fresh
         user_data = self.cache_manager.get_cached_or_fetch(
             api_type="github_user",
-            params={"username": username},
+            params={
+                "username": username,
+                "include_repositories": include_repositories,
+            },
             fetch_func=fetch_user_data,
             force_refresh=force_refresh,
         )
@@ -59,6 +66,7 @@ class CachedGitHubOrganizationsParser(GitHubOrganizationsParser):
         self,
         org_name: str,
         force_refresh: bool = False,
+        include_repositories: bool = True,
     ) -> GitHubOrganizationMetadata:
         """
         Get organization metadata with caching support.
@@ -72,12 +80,18 @@ class CachedGitHubOrganizationsParser(GitHubOrganizationsParser):
         """
 
         def fetch_org_data():
-            return self.get_organization_metadata(org_name)
+            return self.get_organization_metadata(
+                org_name,
+                include_repositories=include_repositories,
+            )
 
         # Get from cache or fetch fresh
         org_data = self.cache_manager.get_cached_or_fetch(
             api_type="github_org",
-            params={"org_name": org_name},
+            params={
+                "org_name": org_name,
+                "include_repositories": include_repositories,
+            },
             fetch_func=fetch_org_data,
             force_refresh=force_refresh,
         )
@@ -89,16 +103,26 @@ class CachedGitHubOrganizationsParser(GitHubOrganizationsParser):
 def parse_github_user_cached(
     username: str,
     force_refresh: bool = False,
+    include_repositories: bool = True,
 ) -> GitHubUserMetadata:
     """Parse GitHub user with caching support."""
     parser = CachedGitHubUsersParser()
-    return parser.get_user_metadata_cached(username, force_refresh)
+    return parser.get_user_metadata_cached(
+        username,
+        force_refresh=force_refresh,
+        include_repositories=include_repositories,
+    )
 
 
 def parse_github_organization_cached(
     org_name: str,
     force_refresh: bool = False,
+    include_repositories: bool = True,
 ) -> GitHubOrganizationMetadata:
     """Parse GitHub organization with caching support."""
     parser = CachedGitHubOrganizationsParser()
-    return parser.get_organization_metadata_cached(org_name, force_refresh)
+    return parser.get_organization_metadata_cached(
+        org_name,
+        force_refresh=force_refresh,
+        include_repositories=include_repositories,
+    )

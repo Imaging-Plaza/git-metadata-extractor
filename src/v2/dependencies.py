@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import Request  # noqa: TC002
 
 from src.v2.agents import ProviderSet
+from src.v2.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.providers.base import (
     GitHubProvider,
     InfoscienceProvider,
@@ -42,6 +43,8 @@ def _default_provider_set(
     *,
     use_mock_providers: bool,
     force_refresh: bool = False,
+    include_user_repositories: bool = True,
+    include_organization_repositories: bool = True,
 ) -> ProviderSet:
     if use_mock_providers:
         return ProviderSet(
@@ -51,11 +54,29 @@ def _default_provider_set(
             ror=MockRORProvider(),
         )
     return ProviderSet(
-        github=RealGitHubProvider(force_refresh=force_refresh),
+        github=RealGitHubProvider(
+            force_refresh=force_refresh,
+            include_user_repositories=include_user_repositories,
+            include_organization_repositories=include_organization_repositories,
+        ),
         orcid=RealORCIDProvider(),
         infoscience=RealInfoscienceProvider(),
         ror=RealRORProvider(),
     )
+
+
+def _is_repository_extract_request(request: Request) -> bool:
+    full_path = request.path_params.get("full_path")
+    if not isinstance(full_path, str) or not full_path.strip():
+        return False
+
+    try:
+        classification = classify_github_url(full_path)
+    except (UnsupportedGitHubURL, ValueError):
+        return False
+
+    detected_type = classification.detected_type
+    return str(getattr(detected_type, "value", detected_type)) == "repository"
 
 
 async def get_provider_set(request: Request) -> ProviderSet:
@@ -70,9 +91,12 @@ async def get_provider_set(request: Request) -> ProviderSet:
         request.query_params.get(FORCE_REFRESH_QUERY_PARAM),
     )
     disable_cache_for_run = _is_truthy_env(os.getenv(DISABLE_CACHE_ENV_VAR))
+    repository_extract_scope = _is_repository_extract_request(request)
     default_provider_set = _default_provider_set(
         use_mock_providers=use_mock_providers,
         force_refresh=request_force_refresh or disable_cache_for_run,
+        include_user_repositories=not repository_extract_scope,
+        include_organization_repositories=not repository_extract_scope,
     )
 
     github_provider = _resolve_provider_override(app_state, "v2_github_provider")

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Restricted v2 repository-mode GitHub expansion to direct entities only:
+  - Disabled GitHub repo-list expansion for user/org lookups in repository extracts.
+  - Scoped organization fanout so only direct repository owner org keeps GitHub lookup; membership-derived orgs use non-GitHub enrichment paths.
+  - Kept ORCID/Infoscience/ROR enrichment active for person/org entities in repository mode.
+  - Constrained repository-mode `pulse:owns` emission to source repository context where provided.
 - Added v2 cache-bypass controls for testing runs:
   - `/v2/extract?force_refresh=true` now propagates to real-provider dependency wiring.
   - New env switch `V2_DISABLE_CACHE=true` disables v1-backed provider cache for all v2 runs.
@@ -59,6 +64,8 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/dependencies.py src/v2/providers/github_provider.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py src/cache/cached_parsers.py src/parsers/users_parser.py src/parsers/orgs_parser.py tests/v2/test_dependencies.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_execution.py tests/v2/test_extract_e2e.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_dependencies.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_execution.py tests/v2/test_extract_e2e.py -v`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/dependencies.py src/v2/providers/github_provider.py tests/v2/test_dependencies.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_dependencies.py -v`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_extract_stub.py -v`

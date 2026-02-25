@@ -37,9 +37,51 @@ class CacheConfig:
 class CacheManager:
     """High-level cache management for API endpoints."""
 
+    SAFE_DEBUG_PARAM_KEYS = {
+        "github_user": ("username", "include_repositories"),
+        "github_org": ("org_name", "include_repositories"),
+        "orcid": ("orcid_id",),
+        "gimie": ("source_url", "output_format"),
+    }
+
     def __init__(self, cache_db_path: str = "api_cache.db"):
         self.cache = APICache(cache_db_path)
         self.config = CacheConfig()
+
+    @staticmethod
+    def _format_debug_value(value: Any) -> str:
+        if value is None:
+            return "None"
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, str):
+            return value if len(value) <= 100 else f"{value[:97]}..."
+        if isinstance(value, list):
+            return f"list(len={len(value)})"
+        if isinstance(value, dict):
+            return f"dict(keys={len(value)})"
+        return type(value).__name__
+
+    def _build_debug_context(
+        self,
+        api_type: str,
+        params: Dict[str, Any],
+        force_refresh: bool,
+    ) -> str:
+        safe_keys = self.SAFE_DEBUG_PARAM_KEYS.get(api_type, ())
+        details: list[str] = []
+
+        for key in safe_keys:
+            if key in params:
+                details.append(f"{key}={self._format_debug_value(params[key])}")
+
+        if not details and params:
+            details.append(f"param_keys={sorted(params.keys())}")
+
+        details.append(f"force_refresh={str(force_refresh).lower()}")
+        return ", ".join(details)
 
     # Deprecated: in future versions
     def get_cached_or_fetch(
@@ -63,8 +105,14 @@ class CacheManager:
         Returns:
             Cached or freshly fetched data
         """
+        debug_context = self._build_debug_context(api_type, params, force_refresh)
+
         if not self.config.CACHE_ENABLED:
-            logger.info(f"Cache disabled, fetching fresh data for {api_type}")
+            logger.info(
+                "Cache disabled, fetching fresh data for %s (%s)",
+                api_type,
+                debug_context,
+            )
             return fetch_func()
 
         # Try to get from cache first
@@ -74,13 +122,15 @@ class CacheManager:
                 return cached_result
 
         # Fetch fresh data
-        logger.info(f"Fetching fresh data for {api_type}")
+        logger.info("Fetching fresh data for %s (%s)", api_type, debug_context)
         fresh_data = fetch_func()
 
         # Don't cache coroutines - return them to be awaited by the caller
         if hasattr(fresh_data, "__await__"):
             logger.info(
-                "Fetch function returned a coroutine, returning without caching",
+                "Fetch function returned a coroutine for %s (%s), returning without caching",
+                api_type,
+                debug_context,
             )
             return fresh_data
 
@@ -91,7 +141,12 @@ class CacheManager:
                 self.config.DEFAULT_TTL_DAYS,
             )
             self.cache.set(api_type, params, fresh_data, ttl)
-            logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
+            logger.info(
+                "Cached fresh data for %s (ttl_days=%s, %s)",
+                api_type,
+                ttl,
+                debug_context,
+            )
 
         return fresh_data
 
@@ -118,8 +173,14 @@ class CacheManager:
         Returns:
             Cached or freshly fetched data (awaited if it was a coroutine)
         """
+        debug_context = self._build_debug_context(api_type, params, force_refresh)
+
         if not self.config.CACHE_ENABLED:
-            logger.info(f"Cache disabled, fetching fresh data for {api_type}")
+            logger.info(
+                "Cache disabled, fetching fresh data for %s (%s)",
+                api_type,
+                debug_context,
+            )
             fresh_data = fetch_func()
             # Handle coroutines even when cache is disabled
             if hasattr(fresh_data, "__await__"):
@@ -133,12 +194,12 @@ class CacheManager:
                 return cached_result
 
         # Fetch fresh data
-        logger.info(f"Fetching fresh data for {api_type}")
+        logger.info("Fetching fresh data for %s (%s)", api_type, debug_context)
         fresh_data = fetch_func()
 
         # Handle coroutines automatically
         if hasattr(fresh_data, "__await__"):
-            logger.info(f"Awaiting coroutine for {api_type}")
+            logger.info("Awaiting coroutine for %s (%s)", api_type, debug_context)
             fresh_data = await fresh_data
 
         # Cache the result if successful
@@ -148,7 +209,12 @@ class CacheManager:
                 self.config.DEFAULT_TTL_DAYS,
             )
             self.cache.set(api_type, params, fresh_data, ttl)
-            logger.info(f"Cached fresh data for {api_type} with TTL {ttl} days")
+            logger.info(
+                "Cached fresh data for %s (ttl_days=%s, %s)",
+                api_type,
+                ttl,
+                debug_context,
+            )
 
         return fresh_data
 

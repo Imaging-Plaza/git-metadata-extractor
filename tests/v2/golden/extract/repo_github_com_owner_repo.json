@@ -16,11 +16,15 @@
       {
         "type": "schema:Person",
         "pulse:githubUsername": "octocat"
+      },
+      {
+        "type": "org:Organization",
+        "schema:name": "GitHub"
       }
     ]
   },
   "stats": {
-    "entities_count": 2,
+    "entities_count": 3,
     "triples_count": 0,
     "stages_completed": [
       "context_gather",
