@@ -13,6 +13,14 @@ from src.v2.providers.mock_github import MockGitHubProvider
 
 EXPECTED_PARALLEL_AGENT_COUNT = 2
 MAX_PARALLEL_START_DELTA_SECONDS = 0.04
+EXPECTED_TYPED_BUCKET_KEYS = {
+    "repositories",
+    "persons",
+    "organizations",
+    "articles",
+    "memberships",
+    "contributions",
+}
 
 
 def _classification() -> GitHubURLClassification:
@@ -101,6 +109,18 @@ def test_execute_pipeline_completes_full_repository_plan() -> None:
     assert "person_agent:bob" in result.agent_results
     assert "org_agent:github" in result.agent_results
     assert result.agent_results["person_agent:alice"].data["repo_visible"] is True
+
+    typed_buckets = result.resolved_typed_entity_buckets().to_dict()
+    assert set(typed_buckets) == EXPECTED_TYPED_BUCKET_KEYS
+    assert [entity["id"] for entity in typed_buckets["repositories"]] == ["repo-root"]
+    assert [entity["id"] for entity in typed_buckets["persons"]] == ["alice", "bob"]
+    assert [entity["id"] for entity in typed_buckets["organizations"]] == ["github"]
+    assert typed_buckets["articles"] == []
+    assert typed_buckets["memberships"] == []
+    assert typed_buckets["contributions"] == []
+
+    serialized_result = result.to_dict()
+    assert serialized_result["typed_entity_buckets"] == typed_buckets
 
 
 def test_execute_runs_agents_within_stage_concurrently() -> None:

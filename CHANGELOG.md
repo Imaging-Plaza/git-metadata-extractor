@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Expanded the v2 Infoscience publication provider contract to include normalized article-linking fields (`authors`, `publicationDate`, `doi`, `url`, and optional `sourceOrganization`) with consistent `None`/empty-list fallback semantics.
+- Updated `AGENTS.md` v2 handoff to the v2b continuation entry task `.internal/v2b-plan/phase-1-class-agents/P2B-05-article-agent-skeleton.md` after phase-0 foundations completion.
 - Restricted v2 repository-mode GitHub expansion to direct entities only:
   - Disabled GitHub repo-list expansion for user/org lookups in repository extracts.
   - Scoped organization fanout so only direct repository owner org keeps GitHub lookup; membership-derived orgs use non-GitHub enrichment paths.
@@ -64,6 +66,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_orchestrator_execution.py tests/v2/test_provider_interfaces.py tests/v2/test_mock_infoscience_provider.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/models.py src/v2/agents/__init__.py src/v2/pipeline/models.py src/v2/providers/base.py src/v2/providers/infoscience_provider.py src/v2/providers/mock_infoscience.py tests/v2/test_orchestrator_execution.py tests/v2/test_provider_interfaces.py tests/v2/test_mock_infoscience_provider.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/agents/models.py src/v2/pipeline/models.py src/v2/providers/base.py src/v2/providers/infoscience_provider.py src/v2/providers/mock_infoscience.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json&force_refresh=true" | jq '{source_url, detected_type, output_keys: (.output.entities | keys), entities_count: .stats.entities_count, stages_completed: .stats.stages_completed, warnings_count: (.warnings | length)}'`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/dependencies.py src/v2/providers/github_provider.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py src/cache/cached_parsers.py src/parsers/users_parser.py src/parsers/orgs_parser.py tests/v2/test_dependencies.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_execution.py tests/v2/test_extract_e2e.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_dependencies.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_execution.py tests/v2/test_extract_e2e.py -v`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/dependencies.py src/v2/providers/github_provider.py tests/v2/test_dependencies.py`
@@ -128,6 +135,7 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added six-class runtime typed entity bucket primitives in v2 pipeline/agent models and serialization (`repositories`, `persons`, `organizations`, `articles`, `memberships`, `contributions`) for downstream reconciliation/output stages.
 - Added focused v2 dependency coverage for cache-bypass toggles in `tests/v2/test_dependencies.py`.
 - Added Phase 7 CI and migration artifacts:
   - `tests/v2/test_roundtrip.py`

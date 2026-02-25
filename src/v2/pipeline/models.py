@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from src.v2.agents.models import AgentResult
+from src.v2.agents.models import AgentResult, TypedEntityBuckets, infer_entity_bucket
 
 
 @dataclass(slots=True)
@@ -77,9 +76,24 @@ class ExecutionPlan:
 class PipelineResult:
     stages_completed: list[str] = field(default_factory=list)
     agent_results: dict[str, AgentResult] = field(default_factory=dict)
+    typed_entity_buckets: TypedEntityBuckets = field(default_factory=TypedEntityBuckets)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     duration_ms: int = 0
+
+    def resolved_typed_entity_buckets(self) -> TypedEntityBuckets:
+        resolved = TypedEntityBuckets()
+        resolved.merge(self.typed_entity_buckets)
+
+        for result_key, result in self.agent_results.items():
+            if not isinstance(result.data, dict) or not result.data:
+                continue
+            bucket_name = infer_entity_bucket(agent_key=result_key, data=result.data)
+            if bucket_name is None:
+                continue
+            resolved.add(bucket_name, result.data)
+
+        return resolved
 
     def to_dict(self) -> dict[str, Any]:
         serialized_results: dict[str, dict[str, Any]] = {}
@@ -97,9 +111,11 @@ class PipelineResult:
                 "stats": dict(result.stats),
             }
 
+        typed_entity_buckets = self.resolved_typed_entity_buckets().to_dict()
         return {
             "stages_completed": list(self.stages_completed),
             "agent_results": serialized_results,
+            "typed_entity_buckets": typed_entity_buckets,
             "warnings": list(self.warnings),
             "errors": list(self.errors),
             "duration_ms": self.duration_ms,

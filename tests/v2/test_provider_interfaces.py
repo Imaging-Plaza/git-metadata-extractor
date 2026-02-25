@@ -23,6 +23,10 @@ from src.v2.providers import (
     RORProvider,
     get_provider,
 )
+from src.v2.providers.base import (
+    INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
+    INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
+)
 from src.v2.providers.github_provider import RealGitHubProvider
 from src.v2.providers.infoscience_provider import RealInfoscienceProvider
 from src.v2.providers.orcid_provider import RealORCIDProvider
@@ -351,7 +355,14 @@ def _build_real_infoscience_provider() -> RealInfoscienceProvider:
                     "uuid": "123",
                     "title": "Metadata at Scale",
                     "doi": "10.1234/example",
+                    "authors": ["Alice Example", "Bob Example"],
+                    "publication_date": "2025-01-15",
+                    "lab": "EPFL ENAC",
                     "url": "https://infoscience.epfl.ch/entities/publication/123",
+                },
+                {
+                    "uuid": "456",
+                    "title": "Metadata Without Extras",
                 },
             ],
         }
@@ -419,6 +430,57 @@ def test_real_providers_execute_all_interface_methods_without_notimplementederro
     ror_matches = real_ror.search_organizations("epfl")
     assert ror_organization["id"] == "https://ror.org/02s376052"
     assert ror_matches
+
+
+def _assert_publication_contract(publication: dict[str, Any]) -> None:
+    for field_name in INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS:
+        assert field_name in publication
+
+    for field_name in INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS:
+        if field_name in publication:
+            assert publication[field_name] is None or isinstance(publication[field_name], str)
+
+    assert isinstance(publication["authors"], list)
+    assert publication["authors"] == [
+        name
+        for name in publication["authors"]
+        if isinstance(name, str) and name
+    ]
+    assert publication["publicationDate"] is None or isinstance(
+        publication["publicationDate"],
+        str,
+    )
+    assert publication["doi"] is None or isinstance(publication["doi"], str)
+    assert publication["url"] is None or isinstance(publication["url"], str)
+    assert publication["title"] is None or isinstance(publication["title"], str)
+    assert publication["infosciencePublicationIdentifier"] is None or isinstance(
+        publication["infosciencePublicationIdentifier"],
+        str,
+    )
+
+
+def test_infoscience_publication_contract_is_enforced_for_real_and_mock_providers() -> None:
+    real_infoscience = _build_real_infoscience_provider()
+    mock_infoscience = MockInfoscienceProvider()
+
+    real_publications = real_infoscience.search_publications("metadata")
+    mock_publications = mock_infoscience.search_publications("geodata")
+
+    assert real_publications
+    assert mock_publications
+
+    for publication in [*real_publications, *mock_publications]:
+        _assert_publication_contract(publication)
+
+    assert real_publications[0]["authors"] == ["Alice Example", "Bob Example"]
+    assert real_publications[0]["publicationDate"] == "2025-01-15"
+    assert real_publications[0]["sourceOrganization"] == "EPFL ENAC"
+
+    # Missing upstream fields are normalized to contract defaults.
+    assert real_publications[1]["authors"] == []
+    assert real_publications[1]["publicationDate"] is None
+    assert real_publications[1]["doi"] is None
+    assert real_publications[1]["url"] is None
 
 
 def test_real_github_provider_infers_login_from_noreply_email() -> None:

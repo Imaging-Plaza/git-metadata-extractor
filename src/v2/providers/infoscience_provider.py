@@ -4,7 +4,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from src.v2.providers.base import InfoscienceProvider
+from src.v2.providers.base import InfoscienceProvider, InfosciencePublicationRecord
 
 if TYPE_CHECKING:
     from src.v2.providers.rate_limiter import RateLimiter
@@ -40,6 +40,39 @@ def _ensure_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _as_string(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _as_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
+def _normalize_publication(publication: dict[str, Any]) -> InfosciencePublicationRecord:
+    publication_date = _as_string(publication.get("publicationDate"))
+    if publication_date is None:
+        publication_date = _as_string(publication.get("publication_date"))
+
+    source_organization = _as_string(publication.get("sourceOrganization"))
+    if source_organization is None:
+        source_organization = _as_string(publication.get("lab"))
+
+    return {
+        "infosciencePublicationIdentifier": _as_string(
+            publication.get("infosciencePublicationIdentifier"),
+        )
+        or _as_string(publication.get("uuid")),
+        "title": _as_string(publication.get("title")),
+        "authors": _as_string_list(publication.get("authors")),
+        "publicationDate": publication_date,
+        "doi": _as_string(publication.get("doi")),
+        "url": _as_string(publication.get("url")),
+        "sourceOrganization": source_organization,
+    }
 
 
 class RealInfoscienceProvider(InfoscienceProvider):
@@ -121,7 +154,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
             for lab in labs
         ]
 
-    def search_publications(self, query: str) -> list[dict[str, Any]]:
+    def search_publications(self, query: str) -> list[InfosciencePublicationRecord]:
         result = self._run_with_rate_limit(
             lambda: _run_async(
                 self._resolve_search_publications()(query, self._max_results),
@@ -129,12 +162,4 @@ class RealInfoscienceProvider(InfoscienceProvider):
         )
         payload = _to_dict(result)
         publications = _ensure_list(payload.get("publications"))
-        return [
-            {
-                "infosciencePublicationIdentifier": publication.get("uuid"),
-                "title": publication.get("title"),
-                "doi": publication.get("doi"),
-                "url": publication.get("url"),
-            }
-            for publication in publications
-        ]
+        return [_normalize_publication(publication) for publication in publications]

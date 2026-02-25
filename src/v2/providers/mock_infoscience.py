@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.v2.providers.base import InfoscienceProvider
+from src.v2.providers.base import InfoscienceProvider, InfosciencePublicationRecord
 
 
 class MockInfoscienceProvider(InfoscienceProvider):
@@ -46,6 +46,39 @@ class MockInfoscienceProvider(InfoscienceProvider):
             return deepcopy(results)
         return []
 
+    @staticmethod
+    def _as_string(value: Any) -> str | None:
+        return value if isinstance(value, str) and value else None
+
+    @staticmethod
+    def _as_string_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, str) and item]
+
+    @classmethod
+    def _normalize_publication(cls, publication: dict[str, Any]) -> InfosciencePublicationRecord:
+        publication_date = cls._as_string(publication.get("publicationDate"))
+        if publication_date is None:
+            publication_date = cls._as_string(publication.get("publication_date"))
+
+        source_organization = cls._as_string(publication.get("sourceOrganization"))
+        if source_organization is None:
+            source_organization = cls._as_string(publication.get("lab"))
+
+        return {
+            "infosciencePublicationIdentifier": cls._as_string(
+                publication.get("infosciencePublicationIdentifier"),
+            )
+            or cls._as_string(publication.get("uuid")),
+            "title": cls._as_string(publication.get("title")),
+            "authors": cls._as_string_list(publication.get("authors")),
+            "publicationDate": publication_date,
+            "doi": cls._as_string(publication.get("doi")),
+            "url": cls._as_string(publication.get("url")),
+            "sourceOrganization": source_organization,
+        }
+
     def search_person(self, query: str) -> list[dict[str, Any]]:
         normalized_query = query.strip().lower()
 
@@ -58,16 +91,17 @@ class MockInfoscienceProvider(InfoscienceProvider):
     def search_orgunit(self, query: str) -> list[dict[str, Any]]:
         normalized_query = query.strip().lower()
 
-        if any(token in normalized_query for token in {"epfl", "enac", "laboratory"}):
+        if any(token in normalized_query for token in ("epfl", "enac", "laboratory")):
             return self._extract_results(self._orgunit_result)
         return self._extract_results(self._empty_result)
 
-    def search_publications(self, query: str) -> list[dict[str, Any]]:
+    def search_publications(self, query: str) -> list[InfosciencePublicationRecord]:
         normalized_query = query.strip().lower()
 
         if any(
             token in normalized_query
-            for token in {"geodata", "structural", "10.5075/epfl-geodata-2024"}
+            for token in ("geodata", "structural", "10.5075/epfl-geodata-2024")
         ):
-            return self._extract_results(self._publication_result)
-        return self._extract_results(self._empty_result)
+            publications = self._extract_results(self._publication_result)
+            return [self._normalize_publication(publication) for publication in publications]
+        return []

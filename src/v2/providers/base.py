@@ -3,12 +3,30 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, TypedDict, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Coroutine,
+    NotRequired,
+    Required,
+    TypedDict,
+    TypeVar,
+)
 
 if TYPE_CHECKING:
     from src.v2.providers.rate_limiter import RateLimiter
 
 ResponseT = TypeVar("ResponseT")
+INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS: tuple[str, ...] = (
+    "infosciencePublicationIdentifier",
+    "title",
+    "authors",
+    "publicationDate",
+    "doi",
+    "url",
+)
+INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS: tuple[str, ...] = ("sourceOrganization",)
 
 
 def _run_awaitable(value: Coroutine[Any, Any, ResponseT]) -> ResponseT:
@@ -101,8 +119,32 @@ class InfoscienceProvider(BaseProvider, ABC):
         """Search Infoscience organization units by query string."""
 
     @abstractmethod
-    def search_publications(self, query: str) -> list[dict[str, Any]]:
-        """Search Infoscience publications by query string."""
+    def search_publications(self, query: str) -> list[InfosciencePublicationRecord]:
+        """Search Infoscience publications by query string.
+
+        Required keys in each publication payload:
+        - ``infosciencePublicationIdentifier``
+        - ``title``
+        - ``authors``
+        - ``publicationDate``
+        - ``doi``
+        - ``url``
+
+        Optional keys:
+        - ``sourceOrganization``
+        """
+
+
+class InfosciencePublicationRecord(TypedDict, total=False):
+    """Normalized Infoscience publication payload contract for article generation."""
+
+    infosciencePublicationIdentifier: Required[str | None]
+    title: Required[str | None]
+    authors: Required[list[str]]
+    publicationDate: Required[str | None]
+    doi: Required[str | None]
+    url: Required[str | None]
+    sourceOrganization: NotRequired[str | None]
 
 
 class RORProvider(BaseProvider, ABC):
