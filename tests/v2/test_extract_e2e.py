@@ -26,6 +26,64 @@ if TYPE_CHECKING:
 
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422
+EXPECTED_JSON_ENTITY_BUCKETS = {
+    "repositories",
+    "persons",
+    "organizations",
+    "articles",
+    "memberships",
+    "contributions",
+}
+EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
+    "repository": [
+        "context_gather",
+        "repo_agent",
+        "person_agents",
+        "org_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+    "user": [
+        "context_gather",
+        "person_agent",
+        "repo_agents",
+        "org_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+    "organization": [
+        "context_gather",
+        "org_agent",
+        "person_agents",
+        "repo_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+}
 
 
 class _RepositoryModeScopeGitHubProvider(GitHubProvider):
@@ -124,9 +182,16 @@ def test_extract_endpoint_runs_pipeline_with_mock_providers(monkeypatch: Any) ->
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"
     assert payload["warnings"] == [] or isinstance(payload["warnings"], list)
-    assert payload["stats"]["stages_completed"]
+    assert payload["stats"]["stages_completed"] == EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE["repository"]
     assert "entities" not in payload["output"]
     assert payload["output"]["root_entity"]
+    assert set(payload["output"]) == {
+        "root_entity",
+        "related_entities",
+        "excluded_entities",
+        "entities_by_type",
+    }
+    assert set(payload["output"]["entities_by_type"]) == EXPECTED_JSON_ENTITY_BUCKETS
 
     entities = [
         entity
@@ -140,6 +205,7 @@ def test_extract_endpoint_runs_pipeline_with_mock_providers(monkeypatch: Any) ->
     )
     assert repository_entity["type"] == "schema:SoftwareSourceCode"
     assert repository_entity["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
+    assert payload["stats"]["entities_count"] == len(entities)
 
 
 def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichment() -> None:
@@ -190,6 +256,25 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
         if entity.get("pulse:githubOrganizationHandle") != "owner-org"
     )
     assert enriched_org.get("pulse:owns", []) == []
+
+
+def test_extract_json_contract_stage_sequence_for_user_and_org() -> None:
+    for path, detected_type in (
+        ("/v2/extract/github.com/octocat", "user"),
+        ("/v2/extract/github.com/orgs/github", "organization"),
+    ):
+        status_code, payload = _get_json(path, params={"output_format": "json"})
+
+        assert status_code == HTTP_OK
+        assert payload["detected_type"] == detected_type
+        assert set(payload["output"]) == {
+            "root_entity",
+            "related_entities",
+            "excluded_entities",
+            "entities_by_type",
+        }
+        assert set(payload["output"]["entities_by_type"]) == EXPECTED_JSON_ENTITY_BUCKETS
+        assert payload["stats"]["stages_completed"] == EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE[detected_type]
 
 
 def test_extract_returns_422_when_root_entity_fails_strict_validation() -> None:

@@ -17,6 +17,64 @@ from src.v2.providers.mock_ror import MockRORProvider
 
 GITHUB_FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "github"
 HTTP_OK = 200
+EXPECTED_JSON_ENTITY_BUCKETS = {
+    "repositories",
+    "persons",
+    "organizations",
+    "articles",
+    "memberships",
+    "contributions",
+}
+EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
+    "repository": [
+        "context_gather",
+        "repo_agent",
+        "person_agents",
+        "org_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+    "user": [
+        "context_gather",
+        "person_agent",
+        "repo_agents",
+        "org_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+    "organization": [
+        "context_gather",
+        "org_agent",
+        "person_agents",
+        "repo_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+        "permissive_validation",
+        "reconciliation",
+        "strict_validation",
+        "output_assembly",
+        "jsonld_build",
+        "shacl_gate",
+        "graph_write",
+    ],
+}
 
 
 @pytest.fixture
@@ -87,7 +145,29 @@ def test_extract_endpoint_matches_golden_contract(
     assert actual_payload["output_format"] == expected["output_format"]
     _assert_subset(expected["output"], actual_payload["output"])
     assert actual_payload["stats"]["entities_count"] == expected["stats"]["entities_count"]
+    assert actual_payload["stats"]["triples_count"] == expected["stats"]["triples_count"]
     assert actual_payload["stats"]["stages_completed"] == expected["stats"]["stages_completed"]
+    assert actual_payload["stats"]["stages_completed"] == EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE[
+        actual_payload["detected_type"]
+    ]
+
+    if actual_payload["output_format"] == "json":
+        assert set(actual_payload["output"]) == {
+            "root_entity",
+            "related_entities",
+            "excluded_entities",
+            "entities_by_type",
+        }
+        assert set(actual_payload["output"]["entities_by_type"]) == EXPECTED_JSON_ENTITY_BUCKETS
+    else:
+        assert "@context" in actual_payload["output"]
+        assert "@graph" in actual_payload["output"]
+        assert isinstance(actual_payload["output"]["@graph"], list)
+        for node in actual_payload["output"]["@graph"]:
+            assert isinstance(node, dict)
+            assert "@id" in node
+            assert "@type" in node
+
     assert isinstance(actual_payload["warnings"], list)
     assert isinstance(actual_payload["stats"]["duration_ms"], int)
     assert str(UUID(actual_payload["stats"]["run_id"])) == actual_payload["stats"]["run_id"]

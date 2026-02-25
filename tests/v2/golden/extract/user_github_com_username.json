@@ -4,18 +4,25 @@
   "output_format": "json",
   "output": {
     "root_entity": {
+      "id": "octocat",
       "type": "schema:Person",
       "pulse:githubUsername": "octocat"
     },
     "related_entities": [],
     "excluded_entities": [],
     "entities_by_type": {
+      "repositories": [],
       "persons": [
         {
+          "id": "octocat",
           "type": "schema:Person",
           "pulse:githubUsername": "octocat"
         }
-      ]
+      ],
+      "organizations": [],
+      "articles": [],
+      "memberships": [],
+      "contributions": []
     }
   },
   "stats": {

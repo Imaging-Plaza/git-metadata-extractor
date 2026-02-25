@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Updated v2b phase-6 regression coverage to lock extract output contracts and stage ordering across repository/user/organization flows (`tests/v2/test_extract_e2e.py`, `tests/v2/test_extract_golden.py`).
+- Updated extract golden fixtures to assert broader clean-break JSON envelope expectations (`id` coverage and full six-bucket `entities_by_type` shape for user/org payloads).
+- Updated graph regression coverage to assert source-scoped intermediate filtering behavior when secondary-source intermediates exist (`tests/v2/test_api_graph.py`).
+- Refreshed v2 API documentation with six-class runtime stage flow, JSON/JSON-LD output contract details, graph-write semantics, and corrected `/v2/graph` intermediate defaults.
+- Updated `AGENTS.md` handoff to `.internal/phase-8/P8-01-basic-live-connectivity.md` after completing v2b phase-6 tasks.
 - Implemented v2b phase-5 graph integration by wiring `/v2/extract` graph-write execution through `GraphStore.upsert_entity(...)` and persisting agent intermediates through new GraphStore intermediate APIs.
 - Refactored intermediates assembly to read from `GraphStore.get_intermediates(...)` instead of direct stage-layer SQLite access, with optional run scoping for extract responses.
 - Preserved source-scoped graph filtering correctness by persisting only final included entity IDs in `runs.stats.entity_ids` and excluding strict-invalid entities from graph writes.
@@ -83,6 +88,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_api_graph.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_api_graph.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
+- `curl -sS -m 30 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json"` (timed out with `curl: (28)`; no local server response during run)
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_intermediates_envelope.py tests/v2/test_api_graph.py tests/v2/test_extract_e2e.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/graph/store.py src/v2/pipeline/stages/intermediates.py tests/v2/test_intermediates_envelope.py tests/v2/test_api_graph.py tests/v2/test_extract_e2e.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/graph/store.py src/v2/pipeline/stages/intermediates.py`
@@ -178,6 +188,11 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added phase-6 extract regression assertions for:
+  - explicit clean-break JSON envelope keys and six-bucket output grouping.
+  - detected-type-specific stage sequence locking in integration and golden tests.
+  - JSON-LD node contract checks (`@id`/`@type`) in golden verification.
+- Added phase-6 graph regression assertion that source-scoped `/v2/graph` intermediate responses exclude secondary-source intermediates.
 - Added first-class GraphStore intermediate persistence/query APIs in `src/v2/graph/store.py` (`insert_intermediate`, `get_intermediates`) with deterministic ordering and optional source/run filtering.
 - Added phase-5 regression coverage for GraphStore-backed intermediates and extract-driven source graph filtering:
   - `tests/v2/test_intermediates_envelope.py`

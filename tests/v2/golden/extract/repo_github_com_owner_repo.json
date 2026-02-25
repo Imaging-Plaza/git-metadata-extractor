@@ -14,12 +14,14 @@
         "@type": "org:Organization"
       },
       {
+        "@id": "urn:git-metadata-extractor:entity:octocat",
         "@type": "schema:Person",
         "pulse:githubUsername": {
           "@id": "urn:git-metadata-extractor:entity:octocat"
         }
       },
       {
+        "@id": "urn:git-metadata-extractor:entity:octocat/Hello-World",
         "@type": "schema:SoftwareSourceCode"
       }
     ]

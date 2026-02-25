@@ -87,6 +87,14 @@ def _seed_graph_store(db_path) -> None:
             intermediate_id=f"repo-agent-{index}",
             created_at=timestamp,
         )
+    store.insert_intermediate(
+        source_url=SOURCE_URL_SECONDARY,
+        agent_name="repo_agent",
+        run_id=run_secondary,
+        data={"source": "secondary"},
+        intermediate_id="repo-agent-secondary",
+        created_at="2026-02-24T09:59:59Z",
+    )
 
 
 def _request_json(
@@ -165,6 +173,11 @@ def test_graph_endpoint_includes_intermediates_when_requested(tmp_path, monkeypa
     assert status_code == HTTP_OK
     assert isinstance(payload.get("intermediates"), list)
     assert len(payload["intermediates"]) > 0
+    assert all(
+        item.get("data", {}).get("source") != "secondary"
+        for item in payload["intermediates"]
+        if isinstance(item, dict) and isinstance(item.get("data"), dict)
+    )
 
 
 def test_graph_endpoint_excludes_intermediates_when_disabled(tmp_path, monkeypatch) -> None:
