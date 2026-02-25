@@ -204,8 +204,24 @@ class OrganizationAgentV2:
         )
         warnings.extend(validation_warnings)
 
+        derivation_stats = {
+            "organization_id": validated_payload.get("id"),
+            "organization_name": validated_payload.get("schema:name"),
+            "github_lookup_enabled": github_lookup_enabled,
+            "source_repositories": (
+                deepcopy(source_repositories)
+                if isinstance(source_repositories, list)
+                else []
+            ),
+            "owned_repositories": deepcopy(owns),
+            "parent_organization": parent_org,
+            "unit_ids": deepcopy(has_units),
+            "ror_types": deepcopy(ror_types),
+        }
+
         return AgentResult(
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
+            stats={"derivation": derivation_stats},
         )

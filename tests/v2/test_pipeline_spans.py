@@ -116,6 +116,19 @@ def test_extract_pipeline_emits_stage_spans_and_agent_children(
         assert span.attributes.get("status")
         assert span.attributes.get("stage")
 
+    agent_stage_spans = [span for span in fake_logfire.spans if span.name == "pipeline:agents"]
+    assert {
+        span.attributes.get("orchestrator_stage")
+        for span in agent_stage_spans
+    } >= {
+        "repo_agent",
+        "person_agents",
+        "org_agents",
+        "article_agents",
+        "membership_agents",
+        "contribution_agents",
+    }
+
     agent_spans = [span for span in fake_logfire.spans if span.name.startswith("agent:")]
     assert agent_spans
     assert all(span.parent == "pipeline:agents" for span in agent_spans)

@@ -28,6 +28,29 @@ def _to_list_of_strings(value: Any) -> list[str]:
     return []
 
 
+def _extract_contributor_logins(contributors: Any) -> list[str]:
+    if not isinstance(contributors, list):
+        return []
+
+    logins: list[str] = []
+    seen: set[str] = set()
+    for contributor in contributors:
+        login = None
+        if isinstance(contributor, dict):
+            login = contributor.get("login")
+        elif isinstance(contributor, str):
+            login = contributor
+
+        if not isinstance(login, str) or not login:
+            continue
+        normalized_login = login.strip()
+        if not normalized_login or normalized_login in seen:
+            continue
+        seen.add(normalized_login)
+        logins.append(normalized_login)
+    return logins
+
+
 def _ensure_repo_handle(context: dict[str, Any]) -> str:
     for key in ("full_name", "repository_handle", "github_repository_handle"):
         value = context.get(key)
@@ -245,8 +268,37 @@ class RepositoryAgentV2:
         )
         warnings.extend(validation_warnings)
 
+        repository_metadata = compiled_context.get("repository", {})
+        owner = repository_metadata.get("owner") if isinstance(repository_metadata, dict) else None
+        owner_login = owner.get("login") if isinstance(owner, dict) else None
+        owner_type = owner.get("type") if isinstance(owner, dict) else None
+        contributor_logins = _extract_contributor_logins(compiled_context.get("contributors"))
+        language_names = sorted(
+            [
+                language
+                for language in validated_payload.get("schema:programmingLanguage", [])
+                if isinstance(language, str) and language
+            ],
+        )
+        derivation_stats = {
+            "repository_full_name": validated_payload.get("pulse:githubRepositoryHandle"),
+            "source_repositories": [
+                validated_payload.get("pulse:githubRepositoryHandle"),
+            ]
+            if isinstance(validated_payload.get("pulse:githubRepositoryHandle"), str)
+            else [],
+            "owner_login": owner_login if isinstance(owner_login, str) else None,
+            "owner_type": owner_type if isinstance(owner_type, str) else None,
+            "contributor_logins": contributor_logins,
+            "contributors": deepcopy(compiled_context.get("contributors", []))
+            if isinstance(compiled_context.get("contributors"), list)
+            else [],
+            "language_names": language_names,
+        }
+
         return AgentResult(
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
+            stats={"derivation": derivation_stats},
         )

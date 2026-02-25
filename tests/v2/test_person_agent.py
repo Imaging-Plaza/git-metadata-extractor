@@ -72,6 +72,13 @@ def test_person_agent_output_validates_and_merges_affiliations(
     assert result.data["pulse:githubUsername"] == "octocat"
     assert result.data["schema:email"] == "2bd806c97f0e@example.org"
     assert len(result.data["org:hasMembership"]) >= MIN_EXPECTED_MEMBERSHIPS
+    assert "affiliations" not in result.data
+
+    derivation = result.stats.get("derivation")
+    assert isinstance(derivation, dict)
+    assert derivation["github_username"] == "octocat"
+    assert derivation["affiliation_names"]
+    assert isinstance(derivation["orcid_affiliations"], list)
 
 
 def test_person_agent_warns_and_falls_back_when_orcid_record_is_unavailable() -> None:

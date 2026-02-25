@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Awaitable, Callable
 
 from src.v2.agents import (
+    ArticleAgentV2,
+    ContributionAgentV2,
+    MembershipAgentV2,
     OrganizationAgentV2,
     PersonAgentV2,
     ProviderSet,
     RepositoryAgentV2,
+    TypedEntityBuckets,
+    infer_entity_bucket,
     with_retry,
 )
 from src.v2.agents.models import AgentResult
@@ -34,9 +40,15 @@ STAGE_CONTEXT_GATHER = "context_gather"
 STAGE_REPO_AGENT = "repo_agent"
 STAGE_PERSON_AGENT = "person_agent"
 STAGE_ORG_AGENT = "org_agent"
+STAGE_ARTICLE_AGENT = "article_agent"
+STAGE_MEMBERSHIP_AGENT = "membership_agent"
+STAGE_CONTRIBUTION_AGENT = "contribution_agent"
 STAGE_PERSON_AGENTS = "person_agents"
 STAGE_REPO_AGENTS = "repo_agents"
 STAGE_ORG_AGENTS = "org_agents"
+STAGE_ARTICLE_AGENTS = "article_agents"
+STAGE_MEMBERSHIP_AGENTS = "membership_agents"
+STAGE_CONTRIBUTION_AGENTS = "contribution_agents"
 STAGE_AGENTS = "agents"
 GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
 
@@ -46,18 +58,27 @@ PLAN_BY_TYPE: dict[str, list[str]] = {
         STAGE_REPO_AGENT,
         STAGE_PERSON_AGENTS,
         STAGE_ORG_AGENTS,
+        STAGE_ARTICLE_AGENTS,
+        STAGE_MEMBERSHIP_AGENTS,
+        STAGE_CONTRIBUTION_AGENTS,
     ],
     "user": [
         STAGE_CONTEXT_GATHER,
         STAGE_PERSON_AGENT,
         STAGE_REPO_AGENTS,
         STAGE_ORG_AGENTS,
+        STAGE_ARTICLE_AGENTS,
+        STAGE_MEMBERSHIP_AGENTS,
+        STAGE_CONTRIBUTION_AGENTS,
     ],
     "organization": [
         STAGE_CONTEXT_GATHER,
         STAGE_ORG_AGENT,
         STAGE_PERSON_AGENTS,
         STAGE_REPO_AGENTS,
+        STAGE_ARTICLE_AGENTS,
+        STAGE_MEMBERSHIP_AGENTS,
+        STAGE_CONTRIBUTION_AGENTS,
     ],
 }
 
@@ -111,6 +132,9 @@ class PipelineOrchestrator:
         repository_agent: RepositoryAgentV2 | None = None,
         person_agent: PersonAgentV2 | None = None,
         organization_agent: OrganizationAgentV2 | None = None,
+        article_agent: ArticleAgentV2 | None = None,
+        membership_agent: MembershipAgentV2 | None = None,
+        contribution_agent: ContributionAgentV2 | None = None,
         agent_runners: dict[str, AgentRunner] | None = None,
         retry_max_retries: int = 3,
         retry_backoff_base: float = 0.0,
@@ -120,11 +144,17 @@ class PipelineOrchestrator:
         self._repository_agent = repository_agent or RepositoryAgentV2()
         self._person_agent = person_agent or PersonAgentV2()
         self._organization_agent = organization_agent or OrganizationAgentV2()
+        self._article_agent = article_agent or ArticleAgentV2()
+        self._membership_agent = membership_agent or MembershipAgentV2()
+        self._contribution_agent = contribution_agent or ContributionAgentV2()
 
         self._agent_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
             STAGE_PERSON_AGENT: self._person_agent.run,
             STAGE_ORG_AGENT: self._organization_agent.run,
+            STAGE_ARTICLE_AGENT: self._article_agent.run,
+            STAGE_MEMBERSHIP_AGENT: self._membership_agent.run,
+            STAGE_CONTRIBUTION_AGENT: self._contribution_agent.run,
         }
         if agent_runners:
             self._agent_runners.update(agent_runners)
@@ -175,6 +205,8 @@ class PipelineOrchestrator:
         runtime_context["pipeline_tracer"] = pipeline_tracer
         runtime_context["run_id"] = run_id
         pipeline_outputs: dict[str, dict[str, Any]] = {}
+        pipeline_agent_results: dict[str, AgentResult] = {}
+        runtime_context["pipeline_agent_results"] = dict(pipeline_agent_results)
 
         for stage in plan.stages:
             if stage.name == STAGE_CONTEXT_GATHER:
@@ -225,7 +257,9 @@ class PipelineOrchestrator:
             for key, value in stage_results.items():
                 agent_results[key] = value
                 pipeline_outputs[key] = value.data
+                pipeline_agent_results[key] = value
                 runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
+                runtime_context["pipeline_agent_results"] = dict(pipeline_agent_results)
 
             for warning in stage_warnings:
                 _append_unique(warnings, warning)
@@ -244,8 +278,13 @@ class PipelineOrchestrator:
         )
 
     @staticmethod
-    def _build_group(stage_name: str) -> AgentGroup:
-        if stage_name in {STAGE_CONTEXT_GATHER, STAGE_REPO_AGENT, STAGE_PERSON_AGENT, STAGE_ORG_AGENT}:
+    def _build_group(stage_name: str) -> AgentGroup:  # noqa: PLR0911
+        if stage_name in {
+            STAGE_CONTEXT_GATHER,
+            STAGE_REPO_AGENT,
+            STAGE_PERSON_AGENT,
+            STAGE_ORG_AGENT,
+        }:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[stage_name],
@@ -267,6 +306,24 @@ class PipelineOrchestrator:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_ORG_AGENT],
+                parallelizable=True,
+            )
+        if stage_name == STAGE_ARTICLE_AGENTS:
+            return AgentGroup(
+                name=stage_name,
+                agent_keys=[STAGE_ARTICLE_AGENT],
+                parallelizable=True,
+            )
+        if stage_name == STAGE_MEMBERSHIP_AGENTS:
+            return AgentGroup(
+                name=stage_name,
+                agent_keys=[STAGE_MEMBERSHIP_AGENT],
+                parallelizable=True,
+            )
+        if stage_name == STAGE_CONTRIBUTION_AGENTS:
+            return AgentGroup(
+                name=stage_name,
+                agent_keys=[STAGE_CONTRIBUTION_AGENT],
                 parallelizable=True,
             )
         return AgentGroup(name=stage_name, agent_keys=[], parallelizable=False)
@@ -428,6 +485,45 @@ class PipelineOrchestrator:
                     context=context,
                 )
                 for context in org_contexts
+            ]
+
+        if stage_name == STAGE_ARTICLE_AGENTS:
+            article_contexts = self._article_fanout_contexts(runtime_context, normalized_type)
+            return [
+                _StageWorkItem(
+                    result_key=f"{STAGE_ARTICLE_AGENT}:{context['article_seed']}",
+                    runner_key=STAGE_ARTICLE_AGENT,
+                    context=context,
+                )
+                for context in article_contexts
+            ]
+
+        if stage_name == STAGE_MEMBERSHIP_AGENTS:
+            membership_contexts = self._membership_fanout_contexts(
+                runtime_context,
+                normalized_type,
+            )
+            return [
+                _StageWorkItem(
+                    result_key=f"{STAGE_MEMBERSHIP_AGENT}:{context['membership_seed']}",
+                    runner_key=STAGE_MEMBERSHIP_AGENT,
+                    context=context,
+                )
+                for context in membership_contexts
+            ]
+
+        if stage_name == STAGE_CONTRIBUTION_AGENTS:
+            contribution_contexts = self._contribution_fanout_contexts(
+                runtime_context,
+                normalized_type,
+            )
+            return [
+                _StageWorkItem(
+                    result_key=f"{STAGE_CONTRIBUTION_AGENT}:{context['contribution_seed']}",
+                    runner_key=STAGE_CONTRIBUTION_AGENT,
+                    context=context,
+                )
+                for context in contribution_contexts
             ]
 
         return []
@@ -660,3 +756,314 @@ class PipelineOrchestrator:
                         )
 
         return list(contexts_by_org_name.values())
+
+    @staticmethod
+    def _collect_stage_payloads(
+        runtime_context: dict[str, Any],
+        stage_prefix: str,
+    ) -> list[dict[str, Any]]:
+        pipeline_outputs = runtime_context.get("pipeline_outputs")
+        if not isinstance(pipeline_outputs, dict):
+            return []
+
+        payloads: list[dict[str, Any]] = []
+        for result_key in sorted(pipeline_outputs):
+            if not str(result_key).startswith(stage_prefix):
+                continue
+            payload = pipeline_outputs[result_key]
+            if isinstance(payload, dict) and payload:
+                payloads.append(payload)
+        return payloads
+
+    @staticmethod
+    def _collect_stage_derivations(
+        runtime_context: dict[str, Any],
+        stage_prefix: str,
+    ) -> list[dict[str, Any]]:
+        pipeline_agent_results = runtime_context.get("pipeline_agent_results")
+        if not isinstance(pipeline_agent_results, dict):
+            return []
+
+        derivations: list[dict[str, Any]] = []
+        for result_key in sorted(pipeline_agent_results):
+            if not str(result_key).startswith(stage_prefix):
+                continue
+            result = pipeline_agent_results[result_key]
+            if not isinstance(result, AgentResult):
+                continue
+            stats = result.stats
+            if not isinstance(stats, dict):
+                continue
+            derivation = stats.get("derivation")
+            if isinstance(derivation, dict):
+                derivations.append(derivation)
+        return derivations
+
+    @staticmethod
+    def _typed_entity_bucket_snapshot(
+        runtime_context: dict[str, Any],
+    ) -> dict[str, list[dict[str, Any]]]:
+        buckets = TypedEntityBuckets()
+        pipeline_outputs = runtime_context.get("pipeline_outputs")
+        if not isinstance(pipeline_outputs, dict):
+            return buckets.to_dict()
+
+        for result_key in sorted(pipeline_outputs):
+            payload = pipeline_outputs[result_key]
+            if not isinstance(payload, dict) or not payload:
+                continue
+            bucket_name = infer_entity_bucket(agent_key=str(result_key), data=payload)
+            if bucket_name is None:
+                continue
+            buckets.add(bucket_name, payload)
+
+        return buckets.to_dict()
+
+    def _class_agent_base_context(
+        self,
+        runtime_context: dict[str, Any],
+        detected_type: str,
+    ) -> dict[str, Any]:
+        known_persons = self._collect_stage_payloads(runtime_context, STAGE_PERSON_AGENT)
+        known_organizations = self._collect_stage_payloads(runtime_context, STAGE_ORG_AGENT)
+        known_repositories = self._collect_stage_payloads(runtime_context, STAGE_REPO_AGENT)
+
+        base_context: dict[str, Any] = {
+            "detected_type": detected_type,
+            "source_url": runtime_context.get("source_url"),
+            "known_persons": deepcopy(known_persons),
+            "known_organizations": deepcopy(known_organizations),
+            "known_repositories": deepcopy(known_repositories),
+            "person_derivations": self._collect_stage_derivations(
+                runtime_context,
+                STAGE_PERSON_AGENT,
+            ),
+            "organization_derivations": self._collect_stage_derivations(
+                runtime_context,
+                STAGE_ORG_AGENT,
+            ),
+            "repository_derivations": self._collect_stage_derivations(
+                runtime_context,
+                STAGE_REPO_AGENT,
+            ),
+            "typed_entity_buckets": self._typed_entity_bucket_snapshot(runtime_context),
+        }
+
+        if detected_type == "repository":
+            full_name = self._repository_source_full_name(runtime_context)
+            if isinstance(full_name, str) and full_name:
+                base_context["full_name"] = full_name
+            bundle = runtime_context.get("context_bundle")
+            if isinstance(bundle, ContextBundle):
+                repository_context = bundle.context.get("repository")
+                if isinstance(repository_context, dict):
+                    base_context["repository_context"] = deepcopy(repository_context)
+
+        if detected_type == "user":
+            base_context["username"] = self._require_url_info(runtime_context).owner
+
+        if detected_type == "organization":
+            base_context["org_name"] = self._require_url_info(runtime_context).owner
+
+        return base_context
+
+    @staticmethod
+    def _person_derivations_by_id(
+        runtime_context: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        derivations = PipelineOrchestrator._collect_stage_derivations(
+            runtime_context,
+            STAGE_PERSON_AGENT,
+        )
+        by_id: dict[str, dict[str, Any]] = {}
+        for derivation in derivations:
+            person_id = derivation.get("person_id")
+            if isinstance(person_id, str) and person_id:
+                by_id[person_id] = derivation
+        return by_id
+
+    @staticmethod
+    def _repository_derivations_by_id(
+        runtime_context: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        derivations = PipelineOrchestrator._collect_stage_derivations(
+            runtime_context,
+            STAGE_REPO_AGENT,
+        )
+        by_id: dict[str, dict[str, Any]] = {}
+        for derivation in derivations:
+            repository_id = derivation.get("repository_full_name")
+            if isinstance(repository_id, str) and repository_id:
+                by_id[repository_id] = derivation
+        return by_id
+
+    @staticmethod
+    def _merge_person_with_derivation(
+        person: dict[str, Any],
+        derivation: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = deepcopy(person)
+        if not isinstance(derivation, dict):
+            return merged
+
+        affiliation_names = derivation.get("affiliation_names")
+        if isinstance(affiliation_names, list):
+            merged["affiliations"] = [
+                value
+                for value in affiliation_names
+                if isinstance(value, str) and value
+            ]
+
+        orcid_affiliations = derivation.get("orcid_affiliations")
+        if isinstance(orcid_affiliations, list):
+            merged["orcid_affiliations"] = [
+                deepcopy(value)
+                for value in orcid_affiliations
+                if isinstance(value, dict)
+            ]
+
+        source_repositories = derivation.get("source_repositories")
+        if isinstance(source_repositories, list):
+            merged["source_repositories"] = [
+                value
+                for value in source_repositories
+                if isinstance(value, str) and value
+            ]
+
+        return merged
+
+    @staticmethod
+    def _merge_repository_with_derivation(
+        repository: dict[str, Any],
+        derivation: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = deepcopy(repository)
+        if not isinstance(derivation, dict):
+            return merged
+
+        contributors = derivation.get("contributors")
+        if isinstance(contributors, list):
+            merged["contributors"] = [
+                deepcopy(contributor)
+                for contributor in contributors
+                if isinstance(contributor, (dict, str))
+            ]
+        return merged
+
+    def _article_fanout_contexts(  # noqa: C901
+        self,
+        runtime_context: dict[str, Any],
+        detected_type: str,
+    ) -> list[dict[str, Any]]:
+        base_context = self._class_agent_base_context(runtime_context, detected_type)
+
+        seeds: list[str] = []
+        if detected_type == "repository":
+            full_name = base_context.get("full_name")
+            if isinstance(full_name, str) and full_name:
+                seeds.append(full_name)
+        if detected_type == "user":
+            username = base_context.get("username")
+            if isinstance(username, str) and username:
+                seeds.append(username)
+        if detected_type == "organization":
+            org_name = base_context.get("org_name")
+            if isinstance(org_name, str) and org_name:
+                seeds.append(org_name)
+
+        deduplicated_seeds = _deduplicate(seeds)
+        contexts: list[dict[str, Any]] = []
+        for seed in deduplicated_seeds:
+            context = deepcopy(base_context)
+            context["article_seed"] = seed
+            if detected_type == "repository":
+                context["full_name"] = seed
+            if detected_type == "user":
+                context["username"] = seed
+            if detected_type == "organization":
+                context["org_name"] = seed
+            contexts.append(context)
+        return contexts
+
+    def _membership_fanout_contexts(
+        self,
+        runtime_context: dict[str, Any],
+        detected_type: str,
+    ) -> list[dict[str, Any]]:
+        base_context = self._class_agent_base_context(runtime_context, detected_type)
+        known_persons = base_context.get("known_persons")
+        known_organizations = base_context.get("known_organizations")
+        if not isinstance(known_persons, list) or not isinstance(known_organizations, list):
+            return []
+        if not known_persons or not known_organizations:
+            return []
+
+        person_derivations = self._person_derivations_by_id(runtime_context)
+        contexts: list[dict[str, Any]] = []
+        seen_seeds: set[str] = set()
+
+        for person in sorted(
+            [item for item in known_persons if isinstance(item, dict)],
+            key=lambda item: str(item.get("id", "")),
+        ):
+            person_id = person.get("id")
+            if not isinstance(person_id, str) or not person_id or person_id in seen_seeds:
+                continue
+            seen_seeds.add(person_id)
+
+            merged_person = self._merge_person_with_derivation(
+                person,
+                person_derivations.get(person_id),
+            )
+            context = deepcopy(base_context)
+            context["membership_seed"] = person_id
+            context["known_persons"] = [merged_person]
+            context["known_organizations"] = deepcopy(known_organizations)
+            contexts.append(context)
+
+        return contexts
+
+    def _contribution_fanout_contexts(
+        self,
+        runtime_context: dict[str, Any],
+        detected_type: str,
+    ) -> list[dict[str, Any]]:
+        base_context = self._class_agent_base_context(runtime_context, detected_type)
+        known_persons = base_context.get("known_persons")
+        known_repositories = base_context.get("known_repositories")
+        if not isinstance(known_persons, list) or not isinstance(known_repositories, list):
+            return []
+        if not known_persons or not known_repositories:
+            return []
+
+        repository_derivations = self._repository_derivations_by_id(runtime_context)
+        contexts: list[dict[str, Any]] = []
+        seen_seeds: set[str] = set()
+
+        for repository in sorted(
+            [item for item in known_repositories if isinstance(item, dict)],
+            key=lambda item: str(
+                item.get("id")
+                or item.get("pulse:githubRepositoryHandle")
+                or item.get("full_name")
+                or "",
+            ),
+        ):
+            repository_id = repository.get("id")
+            if not isinstance(repository_id, str) or not repository_id:
+                continue
+            if repository_id in seen_seeds:
+                continue
+            seen_seeds.add(repository_id)
+
+            merged_repository = self._merge_repository_with_derivation(
+                repository,
+                repository_derivations.get(repository_id),
+            )
+            context = deepcopy(base_context)
+            context["contribution_seed"] = repository_id
+            context["known_persons"] = deepcopy(known_persons)
+            context["known_repositories"] = [merged_repository]
+            contexts.append(context)
+
+        return contexts

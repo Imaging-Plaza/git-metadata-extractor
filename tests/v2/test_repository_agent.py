@@ -44,6 +44,13 @@ def test_repository_agent_output_validates_against_agent_schema(
     assert result.data["schema:author"]
     assert result.data["pulse:repositoryType"]
     assert result.data["pulse:discipline"]
+    assert "contributors" not in result.data
+
+    derivation = result.stats.get("derivation")
+    assert isinstance(derivation, dict)
+    assert derivation["repository_full_name"] == "octocat/Hello-World"
+    assert derivation["owner_login"] == "octocat"
+    assert "octocat" in derivation["contributor_logins"]
 
 
 def test_repository_agent_uses_permissive_validation_for_malformed_optional_fields() -> None:

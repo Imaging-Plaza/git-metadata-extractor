@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Expanded v2 orchestration to a six-class stage graph (`repo/person/org/article/membership/contribution`) for repository/user/organization execution plans.
+- Added derivation metadata emission in `AgentResult.stats["derivation"]` for repository, person, and organization agents while keeping entity payloads schema-clean.
+- Updated `AGENTS.md` handoff to the next v2b entry task `.internal/v2b-plan/phase-3-validation-reconciliation/P2B-16-reconciliation-primary-class-outputs.md`.
 - Added v2 class-agent exports for `ArticleAgentV2`, `MembershipAgentV2`, and `ContributionAgentV2` in `src/v2/agents/__init__.py`.
 - Updated `AGENTS.md` v2 handoff to the next v2b orchestration entry task `.internal/v2b-plan/phase-2-orchestration/P2B-11-derivation-metadata-existing-agents.md` after phase-1 class-agent completion.
 - Expanded the v2 Infoscience publication provider contract to include normalized article-linking fields (`authors`, `publicationDate`, `doi`, `url`, and optional `sourceOrganization`) with consistent `None`/empty-list fallback semantics.
@@ -68,6 +71,12 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/repository_agent.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_graph.py tests/v2/test_orchestrator_execution.py tests/v2/test_pipeline_spans.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/agents/repository_agent.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_orchestrator_graph.py tests/v2/test_orchestrator_execution.py tests/v2/test_pipeline_spans.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py -q`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/` (fails only `tests/v2/test_extract_golden.py` fixture drift on `entities_count`/`stages_completed` now that six-class stages are active)
+- `PYTHONPATH=. .venv/bin/pytest -m v2` (same three `test_extract_golden.py` failures; no non-v2 collection/import failures)
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json&force_refresh=true" | jq '{source_url, detected_type, entities_count: .stats.entities_count, stages_completed: .stats.stages_completed, entity_keys: (.output.entities | keys)}'`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_article_agent.py tests/v2/test_membership_agent.py tests/v2/test_contribution_agent.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/__init__.py src/v2/agents/article_agent.py src/v2/agents/membership_agent.py src/v2/agents/contribution_agent.py tests/v2/test_article_agent.py tests/v2/test_membership_agent.py tests/v2/test_contribution_agent.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/agents/article_agent.py src/v2/agents/membership_agent.py src/v2/agents/contribution_agent.py`
@@ -142,6 +151,7 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added phase-2 orchestration coverage for class-stage fanout context propagation, deterministic root-type seeding, mixed-success retry behavior, and stage-span assertions (`tests/v2/test_orchestrator_execution.py`, `tests/v2/test_pipeline_spans.py`).
 - Added new v2 class-agent implementations and tests:
   - `src/v2/agents/article_agent.py`
   - `src/v2/agents/membership_agent.py`

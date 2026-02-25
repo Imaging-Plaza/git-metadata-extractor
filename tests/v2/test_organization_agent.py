@@ -82,6 +82,13 @@ def test_organization_agent_output_validates_against_agent_schema(
     assert result.data["pulse:OrganizationType"] == "pulse:University"
     assert result.data["idSource"] == "pulse:ror"
     assert result.data["id"] == "https://ror.org/02s376052"
+    assert "source_repositories" not in result.data
+
+    derivation = result.stats.get("derivation")
+    assert isinstance(derivation, dict)
+    assert derivation["organization_id"] == "https://ror.org/02s376052"
+    assert derivation["organization_name"] == "Ecole Polytechnique Federale de Lausanne"
+    assert isinstance(derivation["owned_repositories"], list)
 
 
 def test_organization_agent_falls_back_when_ror_is_unavailable() -> None:

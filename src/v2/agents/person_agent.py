@@ -59,6 +59,41 @@ def _deduplicate_preserve_order(values: list[str]) -> list[str]:
     return deduplicated
 
 
+def _normalize_affiliation_entries(entries: Any) -> list[dict[str, str | None]]:
+    if not isinstance(entries, list):
+        return []
+
+    normalized_entries: list[dict[str, str | None]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        organization = entry.get("organization")
+        if not isinstance(organization, str) or not organization:
+            continue
+        normalized_entries.append(
+            {
+                "organization": organization,
+                "department": (
+                    entry.get("department")
+                    if isinstance(entry.get("department"), str)
+                    else None
+                ),
+                "role": entry.get("role") if isinstance(entry.get("role"), str) else None,
+                "start_date": (
+                    entry.get("start_date")
+                    if isinstance(entry.get("start_date"), str)
+                    else None
+                ),
+                "end_date": (
+                    entry.get("end_date")
+                    if isinstance(entry.get("end_date"), str)
+                    else None
+                ),
+            },
+        )
+    return normalized_entries
+
+
 def _resolve_username(context: dict[str, Any]) -> str:
     for key in ("username", "github_username"):
         value = context.get(key)
@@ -212,8 +247,45 @@ class PersonAgentV2:
         )
         warnings.extend(validation_warnings)
 
+        derivation_stats = {
+            "person_id": validated_payload.get("id"),
+            "github_username": github_username,
+            "source_repositories": deepcopy(repository_ownership),
+            "affiliation_names": deepcopy(affiliations),
+            "orcid_affiliations": _normalize_affiliation_entries(
+                (orcid_record or {}).get("employment") if isinstance(orcid_record, dict) else [],
+            )
+            + _normalize_affiliation_entries(
+                (orcid_record or {}).get("education") if isinstance(orcid_record, dict) else [],
+            ),
+            "infoscience_affiliations": deepcopy(
+                [
+                    affiliation
+                    for affiliation in (infoscience_match or {}).get("affiliations", [])
+                    if isinstance(affiliation, str) and affiliation
+                ],
+            )
+            if isinstance(infoscience_match, dict)
+            else [],
+            "membership_ids": deepcopy(
+                [
+                    membership
+                    for membership in validated_payload.get("org:hasMembership", [])
+                    if isinstance(membership, str)
+                ],
+            ),
+            "contribution_ids": deepcopy(
+                [
+                    contribution
+                    for contribution in validated_payload.get("pulse:hasContribution", [])
+                    if isinstance(contribution, str)
+                ],
+            ),
+        }
+
         return AgentResult(
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
+            stats={"derivation": derivation_stats},
         )
