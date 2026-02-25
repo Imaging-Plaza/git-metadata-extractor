@@ -36,6 +36,20 @@ def _assert_context_covers_ttl_prefixes(
     assert not missing, f"Missing prefixes in context: {sorted(missing)}"
 
 
+def _assert_term_mapping(
+    context_payload: dict[str, object],
+    *,
+    term: str,
+    expected: dict[str, str],
+) -> None:
+    raw_context = context_payload.get("@context")
+    assert isinstance(raw_context, dict)
+    mapping = raw_context.get(term)
+    assert isinstance(mapping, dict), f"Missing object mapping for {term}"
+    for key, value in expected.items():
+        assert mapping.get(key) == value, f"{term} mapping {key} mismatch"
+
+
 def test_context_file_exists_and_is_valid_jsonld() -> None:
     context_path = _context_file_path()
 
@@ -82,3 +96,48 @@ def test_prefix_drift_detection_fails_when_ttl_adds_unmapped_prefix(tmp_path) ->
             ttl_path=ttl_with_new_prefix,
             context_payload=payload,
         )
+
+
+def test_context_file_promotes_relationship_term_mappings() -> None:
+    payload = json.loads(_context_file_path().read_text(encoding="utf-8"))
+
+    _assert_term_mapping(
+        payload,
+        term="schema:author",
+        expected={"@type": "@id", "@container": "@set"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="pulse:contributionTo",
+        expected={"@type": "@id"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="org:hasMembership",
+        expected={"@type": "@id", "@container": "@set"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="pulse:repositoryType",
+        expected={"@type": "@id"},
+    )
+
+
+def test_context_file_promotes_datatype_term_mappings() -> None:
+    payload = json.loads(_context_file_path().read_text(encoding="utf-8"))
+
+    _assert_term_mapping(
+        payload,
+        term="schema:dateCreated",
+        expected={"@type": "xsd:dateTime"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="schema:datePublished",
+        expected={"@type": "xsd:date"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="pulse:contributionCount",
+        expected={"@type": "xsd:integer"},
+    )

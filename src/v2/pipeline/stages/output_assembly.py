@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
@@ -30,13 +30,13 @@ SINGULAR_ENTITY_KEY_BY_PLURAL = {
     plural: singular
     for singular, plural in PLURAL_ENTITY_KEY_BY_SINGULAR.items()
 }
-LEGACY_KEY_BASE_BY_TYPE = {
-    "schema:SoftwareSourceCode": "repo_agent",
-    "schema:Person": "person_agent",
-    "org:Organization": "org_agent",
-    "schema:ScholarlyArticle": "article_agent",
-    "org:Membership": "membership_agent",
-    "pulse:Contribution": "contribution_agent",
+JSON_ENTITY_BUCKET_BY_TYPE = {
+    "schema:SoftwareSourceCode": "repositories",
+    "schema:Person": "persons",
+    "org:Organization": "organizations",
+    "schema:ScholarlyArticle": "articles",
+    "org:Membership": "memberships",
+    "pulse:Contribution": "contributions",
 }
 
 
@@ -98,68 +98,37 @@ def _clean_relationship_refs(entity: dict[str, Any], excluded_ids: set[str]) -> 
     return cleaned
 
 
-def _legacy_agent_key_base(entity: dict[str, Any]) -> str:
-    entity_type = entity.get("type")
-    if isinstance(entity_type, str):
-        return LEGACY_KEY_BASE_BY_TYPE.get(entity_type, "entity")
-    return "entity"
+def _entities_by_type(entities: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {
+        "repositories": [],
+        "persons": [],
+        "organizations": [],
+        "articles": [],
+        "memberships": [],
+        "contributions": [],
+    }
+    for entity in entities:
+        entity_type = entity.get("type")
+        if not isinstance(entity_type, str):
+            continue
+        bucket = JSON_ENTITY_BUCKET_BY_TYPE.get(entity_type)
+        if bucket is None:
+            continue
+        grouped[bucket].append(deepcopy(entity))
+    return grouped
 
 
-def _legacy_agent_key(
-    entity: dict[str, Any],
-    index: int,
-    counts_by_base: dict[str, int],
-) -> str:
-    base = _legacy_agent_key_base(entity)
-    next_count = counts_by_base.get(base, 0) + 1
-    counts_by_base[base] = next_count
-    if next_count == 1:
-        return base
-
-    for hint_key in (
-        "pulse:githubUsername",
-        "pulse:githubOrganizationHandle",
-        "pulse:githubRepositoryHandle",
-        "id",
-    ):
-        value = entity.get(hint_key)
-        if isinstance(value, str) and value:
-            return f"{base}:{value}"
-
-    return f"{base}:{index}"
-
-
-def build_extract_output(
-    *,
-    output_format: Literal["jsonld", "json"],
-    assembled: AssembledOutput,
-    jsonld_context: dict[str, Any],
-) -> dict[str, Any]:
-    graph_entities = [assembled.root_entity, *assembled.related_entities]
-    if output_format == "jsonld":
-        payload: dict[str, Any] = {
-            "@context": deepcopy(jsonld_context),
-            "@graph": deepcopy(graph_entities),
-        }
-        if assembled.excluded_entities:
-            payload["excluded_entities"] = deepcopy(assembled.excluded_entities)
-        return payload
-
-    entities: dict[str, dict[str, Any]] = {}
-    key_counts: dict[str, int] = {}
-    for index, entity in enumerate(graph_entities):
-        candidate_key = _legacy_agent_key(entity, index, key_counts)
-        next_key = candidate_key
-        duplicate_index = 2
-        while next_key in entities:
-            next_key = f"{candidate_key}#{duplicate_index}"
-            duplicate_index += 1
-        entities[next_key] = deepcopy(entity)
-
-    payload = {"entities": entities}
-    if assembled.excluded_entities:
-        payload["excluded_entities"] = deepcopy(assembled.excluded_entities)
-    return payload
+def build_json_output(assembled: AssembledOutput) -> dict[str, Any]:
+    graph_entities: list[dict[str, Any]] = []
+    if isinstance(assembled.root_entity, dict):
+        graph_entities.append(assembled.root_entity)
+    graph_entities.extend(assembled.related_entities)
+    return {
+        "root_entity": deepcopy(assembled.root_entity),
+        "related_entities": deepcopy(assembled.related_entities),
+        "excluded_entities": deepcopy(assembled.excluded_entities),
+        "entities_by_type": _entities_by_type(graph_entities),
+    }
 
 
 def assemble_output(  # noqa: C901, PLR0912

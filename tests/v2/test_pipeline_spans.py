@@ -106,6 +106,8 @@ def test_extract_pipeline_emits_stage_spans_and_agent_children(
     assert "pipeline:permissive_validation" in span_names
     assert "pipeline:strict_validation" in span_names
     assert "pipeline:reconciliation" in span_names
+    assert "pipeline:jsonld_build" in span_names
+    assert "pipeline:shacl_gate" in span_names
     assert "pipeline:graph_write" in span_names
     assert "pipeline:output_assembly" in span_names
 
@@ -139,6 +141,10 @@ def test_extract_pipeline_emits_stage_spans_and_agent_children(
         if "validation" in str(span.attributes.get("stage"))
     }
     assert validation_stages == {"permissive_validation", "strict_validation"}
+
+    graph_write_spans = [span for span in stage_spans if span.attributes.get("stage") == "graph_write"]
+    assert graph_write_spans
+    assert all(span.attributes.get("status") == "success" for span in graph_write_spans)
 
     request_spans = [span for span in fake_logfire.spans if span.name == "v2.request"]
     assert request_spans

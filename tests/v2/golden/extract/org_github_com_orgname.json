@@ -3,11 +3,19 @@
   "detected_type": "organization",
   "output_format": "json",
   "output": {
-    "entities": {
-      "org_agent": {
-        "type": "org:Organization",
-        "pulse:githubOrganizationHandle": "github"
-      }
+    "root_entity": {
+      "type": "org:Organization",
+      "pulse:githubOrganizationHandle": "github"
+    },
+    "related_entities": [],
+    "excluded_entities": [],
+    "entities_by_type": {
+      "organizations": [
+        {
+          "type": "org:Organization",
+          "pulse:githubOrganizationHandle": "github"
+        }
+      ]
     }
   },
   "stats": {
@@ -17,7 +25,17 @@
       "context_gather",
       "org_agent",
       "person_agents",
-      "repo_agents"
+      "repo_agents",
+      "article_agents",
+      "membership_agents",
+      "contribution_agents",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "jsonld_build",
+      "shacl_gate",
+      "graph_write"
     ]
   }
 }

@@ -3,11 +3,19 @@
   "detected_type": "user",
   "output_format": "json",
   "output": {
-    "entities": {
-      "person_agent": {
-        "type": "schema:Person",
-        "pulse:githubUsername": "octocat"
-      }
+    "root_entity": {
+      "type": "schema:Person",
+      "pulse:githubUsername": "octocat"
+    },
+    "related_entities": [],
+    "excluded_entities": [],
+    "entities_by_type": {
+      "persons": [
+        {
+          "type": "schema:Person",
+          "pulse:githubUsername": "octocat"
+        }
+      ]
     }
   },
   "stats": {
@@ -17,7 +25,17 @@
       "context_gather",
       "person_agent",
       "repo_agents",
-      "org_agents"
+      "org_agents",
+      "article_agents",
+      "membership_agents",
+      "contribution_agents",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "jsonld_build",
+      "shacl_gate",
+      "graph_write"
     ]
   }
 }

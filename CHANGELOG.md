@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Implemented v2b phase-4 output contracts for `/v2/extract`: output assembly now emits a clean JSON envelope (`root_entity`, `related_entities`, `excluded_entities`, `entities_by_type`) and JSON-LD responses are built through a dedicated `jsonld_build` stage before SHACL validation.
+- Updated v2 extract contract models to typed output unions (`V2JSONOutputEnvelope` and `V2JSONLDOutput`) with `output_format`/payload consistency checks.
+- Promoted additional JSON-LD context term mappings in `src/v2/schemas/context/v2.0.jsonld` (relationship `@id` bindings and xsd datatype annotations) to keep phase-4 JSON-LD payloads compact/typed.
+- Updated `AGENTS.md` handoff to the next v2b entry task `.internal/v2b-plan/phase-5-graph-integration/P2B-24-graphstore-intermediates-apis.md` after completing phase-4 tasks `P2B-20` through `P2B-23`.
 - Integrated phase-3 v2b validation/reconciliation runtime gates into `/v2/extract`: reconciliation now runs before strict validation, strict root failures return typed 422, non-root strict failures are excluded with warnings, and SHACL validation executes as a non-fatal gate.
 - Refactored reconciliation precedence to treat class-agent `articles`/`memberships`/`contributions` as primary outputs, synthesize fallback membership/contribution entities only for uncovered links, and emit explicit synthesis-traceability warnings.
 - Aligned canonicalization `idSource` output with strict enums (`pulse:*` / `schema:identifier`) while preserving legacy alias compatibility for pre-existing payloads.
@@ -75,6 +79,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/models/contracts.py src/v2/pipeline/stages/output_assembly.py src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/models.py src/v2/pipeline/stages/__init__.py tests/v2/test_extract_e2e.py tests/v2/test_response_contracts.py tests/v2/test_context_versioning.py tests/v2/test_pipeline_spans.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/models/contracts.py src/v2/pipeline/stages/output_assembly.py src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/models.py src/v2/pipeline/stages/__init__.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json" | jq '{status: .status, error_type: .error_type, message: .error.message}'`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/validation/shacl_validation.py tests/v2/test_reconciliation.py tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py tests/v2/test_canonical_id_repository.py tests/v2/test_canonical_id_article.py tests/v2/test_strict_validation_gate.py tests/v2/test_extract_e2e.py tests/v2/test_shacl_validation.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/validation/shacl_validation.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/`
@@ -159,6 +168,9 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added a dedicated phase-4 JSON-LD build stage at `src/v2/pipeline/stages/jsonld_build.py` and updated stage exports/wiring.
+- Added clean-break extract response contracts and validation tests for JSON/JSON-LD output shapes (`tests/v2/test_response_contracts.py`, `tests/v2/test_extract_e2e.py`).
+- Added phase-4 regression coverage for context-term promotion and stage-span sequencing (`tests/v2/test_context_versioning.py`, `tests/v2/test_pipeline_spans.py`) plus refreshed v2 extract/graph golden fixtures.
 - Added phase-2 orchestration coverage for class-stage fanout context propagation, deterministic root-type seeding, mixed-success retry behavior, and stage-span assertions (`tests/v2/test_orchestrator_execution.py`, `tests/v2/test_pipeline_spans.py`).
 - Added new v2 class-agent implementations and tests:
   - `src/v2/agents/article_agent.py`

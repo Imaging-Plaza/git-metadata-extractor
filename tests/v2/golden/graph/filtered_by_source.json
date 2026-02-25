@@ -1,18 +1,94 @@
 {
   "graph_jsonld": {
     "@context": {
-      "dct": "http://purl.org/dc/terms/",
-      "org": "http://www.w3.org/ns/org#",
-      "owl": "http://www.w3.org/2002/07/owl#",
-      "pulse": "https://open-pulse.epfl.ch/ontology#",
-      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-      "schema": "http://schema.org/",
       "sh": "http://www.w3.org/ns/shacl#",
-      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "schema": "http://schema.org/",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "org": "http://www.w3.org/ns/org#",
       "time": "http://www.w3.org/2006/time#",
+      "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "owl": "http://www.w3.org/2002/07/owl#",
+      "dct": "http://purl.org/dc/terms/",
       "wd": "http://www.wikidata.org/entity/",
-      "xsd": "http://www.w3.org/2001/XMLSchema#"
+      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "schema:author": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:sourceOrganization": {
+        "@type": "@id"
+      },
+      "org:organization": {
+        "@type": "@id"
+      },
+      "org:hasMembership": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasContribution": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:contributionTo": {
+        "@type": "@id"
+      },
+      "pulse:owns": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:ownedBy": {
+        "@type": "@id"
+      },
+      "pulse:isForkOf": {
+        "@type": "@id"
+      },
+      "affiliations": {
+        "@id": "pulse:affiliations",
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:discipline": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:repositoryType": {
+        "@type": "@id"
+      },
+      "pulse:OrganizationType": {
+        "@type": "@id"
+      },
+      "schema:dateCreated": {
+        "@type": "xsd:dateTime"
+      },
+      "schema:datePublished": {
+        "@type": "xsd:date"
+      },
+      "time:hasBeginning": {
+        "@type": "xsd:date"
+      },
+      "time:hasEnd": {
+        "@type": "xsd:date"
+      },
+      "pulse:firstContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:lastContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:contributionCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoStars": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoForks": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubOrgFollowers": {
+        "@type": "xsd:integer"
+      }
     },
     "@graph": [
       {
@@ -35,12 +111,12 @@
     ]
   },
   "stats": {
-    "duration_ms": 0,
     "entities_count": 2,
+    "triples_count": 7,
     "run_id": "graph-export",
+    "duration_ms": 0,
     "stages_completed": [
       "graph_export"
-    ],
-    "triples_count": 7
+    ]
   }
 }

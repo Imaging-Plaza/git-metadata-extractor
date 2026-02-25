@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class IntermediateEnvelope(BaseModel):
@@ -26,15 +26,42 @@ class V2GraphUpdate(BaseModel):
     aliases_added: int
 
 
+class V2JSONLDOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    context: dict[str, Any] = Field(alias="@context")
+    graph: list[dict[str, Any]] = Field(alias="@graph")
+    excluded_entities: list[dict[str, Any]] | None = None
+
+
+class V2JSONOutputEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    root_entity: dict[str, Any] | None
+    related_entities: list[dict[str, Any]]
+    excluded_entities: list[dict[str, Any]]
+    entities_by_type: dict[str, list[dict[str, Any]]]
+
+
 class V2ExtractResponse(BaseModel):
     source_url: str
     detected_type: Literal["repository", "user", "organization"]
     output_format: Literal["jsonld", "json"]
-    output: dict[str, Any] | list[Any]
+    output: V2JSONLDOutput | V2JSONOutputEnvelope
     graph_update: V2GraphUpdate | None = None
     warnings: list[str] = Field(default_factory=list)
     stats: V2Stats
     intermediates: list[IntermediateEnvelope] | None = None
+
+    @model_validator(mode="after")
+    def output_matches_format(self) -> V2ExtractResponse:
+        if self.output_format == "jsonld" and not isinstance(self.output, V2JSONLDOutput):
+            message = "output must match jsonld contract when output_format=jsonld"
+            raise ValueError(message)
+        if self.output_format == "json" and not isinstance(self.output, V2JSONOutputEnvelope):
+            message = "output must match json envelope contract when output_format=json"
+            raise ValueError(message)
+        return self
 
 
 class V2GraphResponse(BaseModel):

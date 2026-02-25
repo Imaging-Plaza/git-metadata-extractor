@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from rdflib import Graph as RDFGraph
 
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
@@ -122,8 +124,14 @@ def test_extract_endpoint_runs_pipeline_with_mock_providers(monkeypatch: Any) ->
     assert payload["detected_type"] == "repository"
     assert payload["warnings"] == [] or isinstance(payload["warnings"], list)
     assert payload["stats"]["stages_completed"]
+    assert "entities" not in payload["output"]
+    assert payload["output"]["root_entity"]
 
-    entities = list(payload["output"]["entities"].values())
+    entities = [
+        entity
+        for entity in [payload["output"]["root_entity"], *payload["output"]["related_entities"]]
+        if isinstance(entity, dict)
+    ]
     repository_entity = next(
         entity
         for entity in entities
@@ -148,7 +156,11 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
     )
 
     assert status_code == HTTP_OK
-    entities = list(payload["output"]["entities"].values())
+    entities = [
+        entity
+        for entity in [payload["output"]["root_entity"], *payload["output"]["related_entities"]]
+        if isinstance(entity, dict)
+    ]
 
     person = next(
         entity
@@ -380,8 +392,39 @@ def test_extract_excludes_invalid_non_root_entities_and_reports_collection() -> 
     )
 
     assert status_code == HTTP_OK
-    entities = list(payload["output"]["entities"].values())
+    entities = [
+        entity
+        for entity in [payload["output"]["root_entity"], *payload["output"]["related_entities"]]
+        if isinstance(entity, dict)
+    ]
     assert any(entity.get("type") == "schema:SoftwareSourceCode" for entity in entities)
     assert not any(entity.get("type") == "schema:Person" for entity in entities)
     assert payload["output"]["excluded_entities"]
     assert any("Excluded person entity" in warning for warning in payload["warnings"])
+
+
+def test_extract_jsonld_output_uses_stage_built_graph_contract() -> None:
+    status_code, payload = _get_json(
+        "/v2/extract/github.com/octocat/Hello-World",
+        params={"output_format": "jsonld"},
+    )
+
+    assert status_code == HTTP_OK
+    output = payload["output"]
+    assert "@context" in output
+    assert "@graph" in output
+    assert isinstance(output["@graph"], list)
+    assert "jsonld_build" in payload["stats"]["stages_completed"]
+
+    for node in output["@graph"]:
+        assert "@id" in node
+        assert "@type" in node
+        assert "id" not in node
+        assert "type" not in node
+        assert "shacl" not in node
+        assert "identifiers" not in node
+        assert "idSource" not in node
+
+    graph = RDFGraph()
+    graph.parse(data=json.dumps(output), format="json-ld")
+    assert len(graph) > 0

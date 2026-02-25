@@ -29,7 +29,7 @@ class ReconciledEntities:
 
 @dataclass(slots=True)
 class AssembledOutput:
-    root_entity: dict[str, Any]
+    root_entity: dict[str, Any] | None
     related_entities: list[dict[str, Any]] = field(default_factory=list)
     excluded_entities: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)

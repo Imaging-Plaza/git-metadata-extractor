@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sys
+from copy import deepcopy
+from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from typing import Annotated, Any, Literal
@@ -24,6 +26,8 @@ from src.v2.models import (
     V2FieldError,
     V2GraphResponse,
     V2HealthResponse,
+    V2JSONLDOutput,
+    V2JSONOutputEnvelope,
 )
 from src.v2.observability.context import RunContext
 from src.v2.observability.error_events import record_error
@@ -31,10 +35,12 @@ from src.v2.observability.middleware import V2TracingMiddleware
 from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import (
+    AssembledOutput,
     RootEntityValidationError,
     assemble_intermediates,
     assemble_output,
-    build_extract_output,
+    build_json_output,
+    build_jsonld_output,
     compute_stats,
     reconcile_entities,
 )
@@ -68,11 +74,7 @@ STAGE_RECONCILIATION = "reconciliation"
 STAGE_SHACL_GATE = "shacl_gate"
 STAGE_GRAPH_WRITE = "graph_write"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
-LEGACY_STAGE_EXCLUSIONS = {
-    "article_agents",
-    "membership_agents",
-    "contribution_agents",
-}
+STAGE_JSONLD_BUILD = "jsonld_build"
 
 v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
 
@@ -170,20 +172,13 @@ def _iter_reconciled_entities(
     return payloads
 
 
-def _build_legacy_output_payload(
-    *,
-    output_format: Literal["jsonld", "json"],
-    pipeline_agent_results: dict[str, Any],
-) -> dict[str, Any]:
-    non_empty_entities = {
-        key: value.data
-        for key, value in pipeline_agent_results.items()
-        if isinstance(value.data, dict) and value.data
-    }
-
-    if output_format == "jsonld":
-        return {"@context": JSONLD_CONTEXT, "@graph": list(non_empty_entities.values())}
-    return {"entities": non_empty_entities}
+@lru_cache(maxsize=1)
+def _extract_jsonld_context() -> dict[str, Any]:
+    payload = JSONLDExporter().get_context()
+    raw_context = payload.get("@context")
+    if isinstance(raw_context, dict):
+        return raw_context
+    return dict(JSONLD_CONTEXT)
 
 
 def _root_entity_type_for_detected_type(
@@ -192,6 +187,42 @@ def _root_entity_type_for_detected_type(
     if detected_type == "user":
         return "person"
     return detected_type
+
+
+def _build_rootless_assembled_output(
+    *,
+    reconciled: Any,
+    strict_batch: Any,
+    root_warning: str,
+) -> AssembledOutput:
+    related_entities: list[dict[str, Any]] = []
+    for _, payload in strict_batch.valid_entities:
+        if isinstance(payload, dict):
+            related_entities.append(deepcopy(payload))
+
+    excluded_entities: list[dict[str, Any]] = []
+    warnings = [*reconciled.link_warnings, *reconciled.synthesis_warnings, root_warning]
+    for entity_type, payload, validation in strict_batch.invalid_entities:
+        if not isinstance(payload, dict):
+            continue
+        reason = list(validation.errors)
+        excluded_entities.append(
+            {
+                "entity_type": entity_type,
+                "entity": deepcopy(payload),
+                "reason": reason,
+            },
+        )
+        warnings.append(
+            f"Excluded {entity_type} entity '{payload.get('id')}' due to strict validation errors: {reason}",
+        )
+
+    return AssembledOutput(
+        root_entity=None,
+        related_entities=related_entities,
+        excluded_entities=excluded_entities,
+        warnings=warnings,
+    )
 
 
 @v2_router.get(
@@ -343,8 +374,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
     for warning in strict_batch.warnings:
         _append_unique_warning(warnings, f"Strict validation: {warning}")
 
-    assembled_output = None
-    legacy_output_entity_count = 0
+    jsonld_context = _extract_jsonld_context()
     with tracer.trace_stage(
         STAGE_OUTPUT_ASSEMBLY,
         output_format=output_format,
@@ -382,114 +412,103 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             )
         except ValueError as exc:
             stage_span.set_attribute("status", "warning")
-            _append_unique_warning(warnings, str(exc))
-            output_payload = _build_legacy_output_payload(
-                output_format=output_format,
-                pipeline_agent_results=pipeline_result.agent_results,
-            )
-            legacy_entities = output_payload.get("entities")
-            if isinstance(legacy_entities, dict):
-                legacy_output_entity_count = len(legacy_entities)
-            elif output_format == "jsonld":
-                graph_nodes = output_payload.get("@graph")
-                if isinstance(graph_nodes, list):
-                    legacy_output_entity_count = len(graph_nodes)
-            stage_span.set_attribute("entity_count", legacy_output_entity_count)
-        else:
-            output_payload = build_extract_output(
-                output_format=output_format,
-                assembled=assembled_output,
-                jsonld_context=JSONLD_CONTEXT,
+            assembled_output = _build_rootless_assembled_output(
+                reconciled=reconciled,
+                strict_batch=strict_batch,
+                root_warning=str(exc),
             )
             stage_span.set_attributes(
-                entity_count=1 + len(assembled_output.related_entities),
+                root_present=False,
+                entity_count=len(assembled_output.related_entities),
                 excluded_count=len(assembled_output.excluded_entities),
             )
-    if assembled_output is not None:
-        for warning in assembled_output.warnings:
-            _append_unique_warning(warnings, warning)
+        else:
+            root_present = isinstance(assembled_output.root_entity, dict)
+            stage_span.set_attributes(
+                root_present=root_present,
+                entity_count=len(assembled_output.related_entities) + (1 if root_present else 0),
+                excluded_count=len(assembled_output.excluded_entities),
+            )
 
-    shacl_graph_payload = None
-    if assembled_output is not None:
-        shacl_graph_payload = {
-            "@context": JSONLD_CONTEXT,
-            "@graph": [assembled_output.root_entity, *assembled_output.related_entities],
-        }
+    for warning in assembled_output.warnings:
+        _append_unique_warning(warnings, warning)
+
+    with tracer.trace_stage(
+        STAGE_JSONLD_BUILD,
+        output_format=output_format,
+    ) as stage_span:
+        shacl_graph_payload = build_jsonld_output(
+            assembled=assembled_output,
+            jsonld_context=jsonld_context,
+        )
+        graph_nodes = shacl_graph_payload.get("@graph")
+        stage_span.set_attributes(
+            entity_count=len(graph_nodes) if isinstance(graph_nodes, list) else 0,
+            context_terms=len(jsonld_context),
+        )
+
     with tracer.trace_stage(
         STAGE_SHACL_GATE,
         detected_type=classification.detected_type.value,
     ) as stage_span:
-        if shacl_graph_payload is None:
+        shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
+        if shacl_data_graph is None:
             stage_span.set_attribute("status", "skipped")
             _append_unique_warning(
                 warnings,
-                "SHACL validation skipped: no assembled root entity available",
+                "SHACL validation skipped: unable to parse assembled graph payload",
             )
         else:
-            shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
-            if shacl_data_graph is None:
+            try:
+                shacl_result = SHACLValidator().validate_graph(
+                    shacl_data_graph,
+                    load_ontology_shapes_graph(),
+                )
+            except SHACLRuntimeUnavailableError as exc:
                 stage_span.set_attribute("status", "skipped")
+                _append_unique_warning(warnings, str(exc))
+            except Exception as exc:  # noqa: BLE001
+                stage_span.set_attribute("status", "error")
                 _append_unique_warning(
                     warnings,
-                    "SHACL validation skipped: unable to parse assembled graph payload",
+                    f"SHACL validation failed: {exc}",
                 )
-                shacl_data_graph = None
-            if shacl_data_graph is None:
-                pass
             else:
-                try:
-                    shacl_result = SHACLValidator().validate_graph(
-                        shacl_data_graph,
-                        load_ontology_shapes_graph(),
-                    )
-                except SHACLRuntimeUnavailableError as exc:
-                    stage_span.set_attribute("status", "skipped")
-                    _append_unique_warning(warnings, str(exc))
-                except Exception as exc:  # noqa: BLE001
-                    stage_span.set_attribute("status", "error")
+                for violation in shacl_result.violations:
                     _append_unique_warning(
                         warnings,
-                        f"SHACL validation failed: {exc}",
+                        (
+                            "SHACL violation: "
+                            f"focus={violation.get('focusNode')}, "
+                            f"path={violation.get('path')}, "
+                            f"message={violation.get('message')}"
+                        ),
                     )
-                else:
-                    for violation in shacl_result.violations:
-                        _append_unique_warning(
-                            warnings,
-                            (
-                                "SHACL violation: "
-                                f"focus={violation.get('focusNode')}, "
-                                f"path={violation.get('path')}, "
-                                f"message={violation.get('message')}"
-                            ),
-                        )
-                    for shacl_warning in shacl_result.warnings:
-                        _append_unique_warning(
-                            warnings,
-                            (
-                                "SHACL warning: "
-                                f"focus={shacl_warning.get('focusNode')}, "
-                                f"path={shacl_warning.get('path')}, "
-                                f"message={shacl_warning.get('message')}"
-                            ),
-                        )
-                    stage_span.set_attributes(
-                        conforms=shacl_result.conforms,
-                        violation_count=len(shacl_result.violations),
-                        warning_count=len(shacl_result.warnings),
+                for shacl_warning in shacl_result.warnings:
+                    _append_unique_warning(
+                        warnings,
+                        (
+                            "SHACL warning: "
+                            f"focus={shacl_warning.get('focusNode')}, "
+                            f"path={shacl_warning.get('path')}, "
+                            f"message={shacl_warning.get('message')}"
+                        ),
                     )
+                stage_span.set_attributes(
+                    conforms=shacl_result.conforms,
+                    violation_count=len(shacl_result.violations),
+                    warning_count=len(shacl_result.warnings),
+                )
 
     with tracer.trace_stage(
         STAGE_GRAPH_WRITE,
         detected_type=classification.detected_type.value,
     ) as stage_span:
-        output_entity_count = (
-            1 + len(assembled_output.related_entities)
-            if assembled_output is not None
-            else legacy_output_entity_count
-        )
+        root_entity_count = 1 if isinstance(assembled_output.root_entity, dict) else 0
         stage_span.set_attributes(
-            status="skipped",
-            entity_count=output_entity_count,
+            status="success",
+            entity_count=root_entity_count + len(assembled_output.related_entities),
+            mode="noop",
         )
 
     response_intermediates = None
@@ -500,36 +519,42 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             limit=DEFAULT_INTERMEDIATE_LIMIT,
         )
 
-    extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
-    if assembled_output is None:
-        legacy_entities = output_payload.get("entities", {})
-        legacy_values = legacy_entities.values() if isinstance(legacy_entities, dict) else []
-        final_entity_ids = [
-            entity_id
-            for entity_id in (
-                entity.get("id")
-                for entity in legacy_values
-                if isinstance(entity, dict)
-            )
-            if isinstance(entity_id, str) and entity_id
-        ]
-        final_entity_count = legacy_output_entity_count
+    response_output: V2JSONLDOutput | V2JSONOutputEnvelope
+    if output_format == "jsonld":
+        response_output = V2JSONLDOutput.model_validate(shacl_graph_payload)
     else:
-        final_entity_ids = [
-            entity_id
-            for entity_id in (
-                entity.get("id")
-                for entity in [assembled_output.root_entity, *assembled_output.related_entities]
-            )
-            if isinstance(entity_id, str) and entity_id
-        ]
-        final_entity_count = len([assembled_output.root_entity, *assembled_output.related_entities])
+        response_output = V2JSONOutputEnvelope.model_validate(
+            build_json_output(assembled_output),
+        )
 
-    completed_stages = [
-        stage_name
-        for stage_name in pipeline_result.stages_completed
-        if stage_name not in LEGACY_STAGE_EXCLUSIONS
+    output_payload = response_output.model_dump(mode="json", by_alias=True)
+    extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
+    final_entities: list[dict[str, Any]] = []
+    if isinstance(assembled_output.root_entity, dict):
+        final_entities.append(assembled_output.root_entity)
+    final_entities.extend(assembled_output.related_entities)
+    final_entity_ids = [
+        entity_id
+        for entity_id in (
+            entity.get("id")
+            for entity in final_entities
+        )
+        if isinstance(entity_id, str) and entity_id
     ]
+    final_entity_count = len(final_entities)
+
+    completed_stages = list(pipeline_result.stages_completed)
+    for stage_name in (
+        STAGE_PERMISSIVE_VALIDATION,
+        STAGE_RECONCILIATION,
+        STAGE_STRICT_VALIDATION,
+        STAGE_OUTPUT_ASSEMBLY,
+        STAGE_JSONLD_BUILD,
+        STAGE_SHACL_GATE,
+        STAGE_GRAPH_WRITE,
+    ):
+        if stage_name not in completed_stages:
+            completed_stages.append(stage_name)
 
     stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
     stats = stats.model_copy(
@@ -548,11 +573,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             "stages_completed": completed_stages,
             "entity_ids": final_entity_ids,
             "entities_count": final_entity_count,
-            "excluded_entities_count": (
-                len(assembled_output.excluded_entities)
-                if assembled_output is not None
-                else 0
-            ),
+            "excluded_entities_count": len(assembled_output.excluded_entities),
         },
     )
 
@@ -560,7 +581,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
         source_url=classification.normalized_url,
         detected_type=classification.detected_type.value,
         output_format=output_format,
-        output=output_payload,
+        output=response_output,
         warnings=warnings,
         stats=stats,
         intermediates=response_intermediates,

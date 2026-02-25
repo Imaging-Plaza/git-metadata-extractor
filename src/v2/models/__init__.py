@@ -4,6 +4,8 @@ from src.v2.models.contracts import (
     V2GraphResponse,
     V2GraphUpdate,
     V2HealthResponse,
+    V2JSONLDOutput,
+    V2JSONOutputEnvelope,
     V2Stats,
 )
 from src.v2.models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
@@ -21,5 +23,7 @@ __all__ = [
     "V2GraphResponse",
     "V2GraphUpdate",
     "V2HealthResponse",
+    "V2JSONLDOutput",
+    "V2JSONOutputEnvelope",
     "V2Stats",
 ]
