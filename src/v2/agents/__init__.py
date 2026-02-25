@@ -1,5 +1,8 @@
 """Agent wrappers for v2 extraction pipeline."""
 
+from src.v2.agents.article_agent import ArticleAgentV2
+from src.v2.agents.contribution_agent import ContributionAgentV2
+from src.v2.agents.membership_agent import MembershipAgentV2
 from src.v2.agents.models import (
     AgentResult,
     ProviderSet,
@@ -14,6 +17,9 @@ from src.v2.agents.retry import with_retry
 
 __all__ = [
     "AgentResult",
+    "ArticleAgentV2",
+    "ContributionAgentV2",
+    "MembershipAgentV2",
     "OrganizationAgentV2",
     "PersonAgentV2",
     "ProviderSet",
