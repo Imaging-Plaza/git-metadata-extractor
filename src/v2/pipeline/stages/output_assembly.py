@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
@@ -30,6 +30,14 @@ SINGULAR_ENTITY_KEY_BY_PLURAL = {
     plural: singular
     for singular, plural in PLURAL_ENTITY_KEY_BY_SINGULAR.items()
 }
+LEGACY_KEY_BASE_BY_TYPE = {
+    "schema:SoftwareSourceCode": "repo_agent",
+    "schema:Person": "person_agent",
+    "org:Organization": "org_agent",
+    "schema:ScholarlyArticle": "article_agent",
+    "org:Membership": "membership_agent",
+    "pulse:Contribution": "contribution_agent",
+}
 
 
 @dataclass(slots=True)
@@ -49,7 +57,24 @@ def _entity_identity(entity_type: str, payload: dict[str, Any]) -> tuple[str, st
     return _entity_singular_type(entity_type), payload.get("id") if isinstance(payload.get("id"), str) else None
 
 
-def _select_root_entity(entities: dict[str, list[dict[str, Any]]]) -> tuple[str, dict[str, Any]]:
+def _select_root_entity(
+    entities: dict[str, list[dict[str, Any]]],
+    *,
+    root_entity_type: str | None = None,
+) -> tuple[str, dict[str, Any]]:
+    if root_entity_type is not None:
+        normalized_root = _entity_singular_type(root_entity_type)
+        plural_key = PLURAL_ENTITY_KEY_BY_SINGULAR.get(normalized_root)
+        if plural_key is not None:
+            candidates = entities.get(plural_key, [])
+            if candidates:
+                return normalized_root, candidates[0]
+        message = (
+            "Unable to assemble output without a root "
+            f"{normalized_root} entity"
+        )
+        raise ValueError(message)
+
     for root_singular in ROOT_ENTITY_PRIORITY:
         plural_key = PLURAL_ENTITY_KEY_BY_SINGULAR[root_singular]
         candidates = entities.get(plural_key, [])
@@ -73,11 +98,80 @@ def _clean_relationship_refs(entity: dict[str, Any], excluded_ids: set[str]) -> 
     return cleaned
 
 
+def _legacy_agent_key_base(entity: dict[str, Any]) -> str:
+    entity_type = entity.get("type")
+    if isinstance(entity_type, str):
+        return LEGACY_KEY_BASE_BY_TYPE.get(entity_type, "entity")
+    return "entity"
+
+
+def _legacy_agent_key(
+    entity: dict[str, Any],
+    index: int,
+    counts_by_base: dict[str, int],
+) -> str:
+    base = _legacy_agent_key_base(entity)
+    next_count = counts_by_base.get(base, 0) + 1
+    counts_by_base[base] = next_count
+    if next_count == 1:
+        return base
+
+    for hint_key in (
+        "pulse:githubUsername",
+        "pulse:githubOrganizationHandle",
+        "pulse:githubRepositoryHandle",
+        "id",
+    ):
+        value = entity.get(hint_key)
+        if isinstance(value, str) and value:
+            return f"{base}:{value}"
+
+    return f"{base}:{index}"
+
+
+def build_extract_output(
+    *,
+    output_format: Literal["jsonld", "json"],
+    assembled: AssembledOutput,
+    jsonld_context: dict[str, Any],
+) -> dict[str, Any]:
+    graph_entities = [assembled.root_entity, *assembled.related_entities]
+    if output_format == "jsonld":
+        payload: dict[str, Any] = {
+            "@context": deepcopy(jsonld_context),
+            "@graph": deepcopy(graph_entities),
+        }
+        if assembled.excluded_entities:
+            payload["excluded_entities"] = deepcopy(assembled.excluded_entities)
+        return payload
+
+    entities: dict[str, dict[str, Any]] = {}
+    key_counts: dict[str, int] = {}
+    for index, entity in enumerate(graph_entities):
+        candidate_key = _legacy_agent_key(entity, index, key_counts)
+        next_key = candidate_key
+        duplicate_index = 2
+        while next_key in entities:
+            next_key = f"{candidate_key}#{duplicate_index}"
+            duplicate_index += 1
+        entities[next_key] = deepcopy(entity)
+
+    payload = {"entities": entities}
+    if assembled.excluded_entities:
+        payload["excluded_entities"] = deepcopy(assembled.excluded_entities)
+    return payload
+
+
 def assemble_output(  # noqa: C901, PLR0912
     reconciled: ReconciledEntities,
     strict_results: BatchValidationResult,
+    *,
+    root_entity_type: str | None = None,
 ) -> AssembledOutput:
-    root_entity_type, root_entity = _select_root_entity(reconciled.entities)
+    root_entity_type, root_entity = _select_root_entity(
+        reconciled.entities,
+        root_entity_type=root_entity_type,
+    )
 
     invalid_details: dict[tuple[str, str], ValidationResult] = {}
     invalid_entities_by_identity: dict[tuple[str, str], tuple[str, dict[str, Any], ValidationResult]] = {}
@@ -143,7 +237,7 @@ def assemble_output(  # noqa: C901, PLR0912
                 continue
             related_entities.append(deepcopy(entry))
 
-    warnings = list(reconciled.link_warnings)
+    warnings = [*reconciled.link_warnings, *reconciled.synthesis_warnings]
     for excluded_entity in excluded_entities:
         entity = excluded_entity["entity"]
         entity_id = entity.get("id")

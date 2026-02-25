@@ -6,10 +6,13 @@ from urllib.parse import quote
 import pytest
 from rdflib import RDF, XSD, Graph, Literal, Namespace, URIRef
 
+from src.v2.validation import shacl_validation as shacl_validation_module
 from src.v2.validation.ontology import load_ontology_shapes_graph
-from src.v2.validation.shacl_validation import SHACLValidationResult, SHACLValidator
-
-pytest.importorskip("pyshacl")
+from src.v2.validation.shacl_validation import (
+    SHACLRuntimeUnavailableError,
+    SHACLValidationResult,
+    SHACLValidator,
+)
 
 SCHEMA = Namespace("http://schema.org/")
 PULSE = Namespace("https://open-pulse.epfl.ch/ontology#")
@@ -17,6 +20,7 @@ ORG = Namespace("http://www.w3.org/ns/org#")
 TIME = Namespace("http://www.w3.org/2006/time#")
 WD = Namespace("http://www.wikidata.org/entity/")
 ENTITY_BASE = "https://open-pulse.epfl.ch/entity/"
+HAS_PYSHACL = shacl_validation_module.pyshacl_validate is not None
 
 
 def _entity_ref(value: str) -> URIRef:
@@ -258,6 +262,7 @@ def _strict_fixtures_to_graph(load_fixture: Callable[[str, str], Any]) -> Graph:
     return graph
 
 
+@pytest.mark.skipif(not HAS_PYSHACL, reason="pyshacl is not installed")
 def test_shacl_validator_accepts_valid_fixture_graph(
     load_fixture: Callable[[str, str], Any],
 ) -> None:
@@ -272,6 +277,7 @@ def test_shacl_validator_accepts_valid_fixture_graph(
     assert result.violations == []
 
 
+@pytest.mark.skipif(not HAS_PYSHACL, reason="pyshacl is not installed")
 def test_shacl_validator_rejects_person_without_any_identifier() -> None:
     validator = SHACLValidator()
     shapes_graph = load_ontology_shapes_graph()
@@ -295,6 +301,7 @@ def test_shacl_validator_rejects_person_without_any_identifier() -> None:
     )
 
 
+@pytest.mark.skipif(not HAS_PYSHACL, reason="pyshacl is not installed")
 def test_shacl_validator_rejects_repository_with_invalid_repository_type() -> None:
     validator = SHACLValidator()
     shapes_graph = load_ontology_shapes_graph()
@@ -328,3 +335,14 @@ def test_ontology_shapes_graph_is_cached() -> None:
     second = load_ontology_shapes_graph()
 
     assert first is second
+
+
+def test_shacl_validator_reports_missing_runtime_dependency(monkeypatch) -> None:
+    validator = SHACLValidator()
+    monkeypatch.setattr(shacl_validation_module, "pyshacl_validate", None)
+
+    with pytest.raises(
+        SHACLRuntimeUnavailableError,
+        match="pyshacl is not installed",
+    ):
+        validator.validate_graph(Graph(), Graph())

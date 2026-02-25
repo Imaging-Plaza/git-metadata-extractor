@@ -64,6 +64,37 @@ def _article(
     }
 
 
+def _membership(person_ref: str, org_ref: str) -> dict:
+    membership_id = f"{person_ref}_{org_ref}"
+    return {
+        "id": membership_id,
+        "type": "org:Membership",
+        "shacl": "pulse:MembershipShape",
+        "identifiers": {"pulse:composite": membership_id, "uuid": "11111111-1111-4111-8111-111111111111"},
+        "idSource": "pulse:composite",
+        "org:organization": org_ref,
+        "org:role": "Researcher",
+        "time:hasBeginning": "2021-01-01",
+        "time:hasEnd": None,
+    }
+
+
+def _contribution(person_ref: str, repository_ref: str) -> dict:
+    contribution_id = f"{person_ref}_{repository_ref}"
+    return {
+        "id": contribution_id,
+        "type": "pulse:Contribution",
+        "shacl": "pulse:ContributionShape",
+        "identifiers": {"pulse:composite": contribution_id, "uuid": "22222222-2222-4222-8222-222222222222"},
+        "idSource": "pulse:composite",
+        "pulse:contributionTo": repository_ref,
+        "pulse:contributionCount": 7,
+        "pulse:firstContributionDate": "2020-01-01T00:00:00Z",
+        "pulse:lastContributionDate": "2025-01-01T00:00:00Z",
+        "schema:author": person_ref,
+    }
+
+
 def test_reconcile_updates_repository_author_references_to_canonical_person_ids() -> None:
     entities = {
         "persons": [_person("johndoe")],
@@ -166,6 +197,47 @@ def test_reconcile_normalizes_article_ids_and_article_relationship_references() 
         "https://infoscience.epfl.ch/server/api/core/items/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
-    assert article["idSource"] == "infoscienceArticleIdentifier"
+    assert article["idSource"] == "pulse:infoscienceArticleIdentifier"
     assert article["schema:author"] == [person_id]
     assert article["schema:sourceOrganization"] == organization_id
+
+
+def test_reconcile_uses_class_memberships_and_contributions_as_primary_sources() -> None:
+    entities = {
+        "persons": [_person("johndoe", affiliations=["EPFL"])],
+        "organizations": [_organization("EPFL", "05gzmn429")],
+        "repositories": [_repository("owner/repo", ["johndoe"])],
+        "memberships": [_membership("johndoe", "EPFL")],
+        "contributions": [_contribution("johndoe", "owner/repo")],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    person_id = reconciled.entities["persons"][0]["id"]
+    organization_id = reconciled.entities["organizations"][0]["id"]
+    repository_id = reconciled.entities["repositories"][0]["id"]
+
+    assert reconciled.memberships == [
+        _membership(person_id, organization_id),
+    ]
+    assert reconciled.contributions == [
+        _contribution(person_id, repository_id),
+    ]
+    assert reconciled.synthesis_warnings == []
+
+
+def test_reconcile_synthesizes_fallback_links_only_when_class_entities_missing() -> None:
+    entities = {
+        "persons": [_person("johndoe", affiliations=["EPFL"])],
+        "organizations": [_organization("EPFL", "05gzmn429")],
+        "repositories": [_repository("owner/repo", ["johndoe"])],
+        "memberships": [],
+        "contributions": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    assert len(reconciled.memberships) == 1
+    assert len(reconciled.contributions) == 1
+    assert any("Synthesized fallback membership entity" in w for w in reconciled.synthesis_warnings)
+    assert any("Synthesized fallback contribution entity" in w for w in reconciled.synthesis_warnings)

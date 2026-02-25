@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any, Callable
 
 from src.v2.canonicalization import resolve_article_id
+from src.v2.validation.schema_validation import StrictSchemaValidator
 
 UUID_V5_VERSION = 5
 
@@ -38,7 +40,7 @@ def test_resolve_article_id_normalizes_infoscience_api_url_with_full_suffix() ->
         "https://infoscience.epfl.ch/server/api/core/items/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
-    assert id_source == "infoscienceArticleIdentifier"
+    assert id_source == "pulse:infoscienceArticleIdentifier"
 
 
 def test_resolve_article_id_normalizes_infoscience_core_items_url() -> None:
@@ -58,7 +60,7 @@ def test_resolve_article_id_normalizes_infoscience_core_items_url() -> None:
         "https://infoscience.epfl.ch/server/api/core/items/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
-    assert id_source == "infoscienceArticleIdentifier"
+    assert id_source == "pulse:infoscienceArticleIdentifier"
 
 
 def test_resolve_article_id_falls_back_to_uuid_v5() -> None:
@@ -91,3 +93,16 @@ def test_resolve_article_id_is_idempotent_for_pre_resolved_payload() -> None:
 
     assert canonical_id == "https://doi.org/10.1038/s41586-024-07856-z"
     assert id_source == "schema:identifier"
+
+
+def test_resolve_article_id_output_is_strict_enum_compatible(
+    load_fixture: Callable[[str, str], Any],
+) -> None:
+    validator = StrictSchemaValidator()
+    article = load_fixture("schema/strict", "pulse_ArticleShape")[0]
+    article["id"] = "https://doi.org/10.1038/s41586-024-07856-z"
+    article["idSource"] = resolve_article_id(article)[1]
+
+    result = validator.validate("article", article)
+
+    assert result.is_valid is True

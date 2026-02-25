@@ -7,11 +7,16 @@ from src.v2.validation.schema_validation import (
     StrictSchemaValidator,
     ValidationResult,
 )
-from src.v2.validation.shacl_validation import SHACLValidationResult, SHACLValidator
+from src.v2.validation.shacl_validation import (
+    SHACLRuntimeUnavailableError,
+    SHACLValidationResult,
+    SHACLValidator,
+)
 
 __all__ = [
     "BatchValidationResult",
     "CrossRefReport",
+    "SHACLRuntimeUnavailableError",
     "SHACLValidationResult",
     "SHACLValidator",
     "StrictSchemaValidator",

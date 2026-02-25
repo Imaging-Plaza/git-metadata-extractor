@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from rdflib import Graph
 
+pyshacl_validate: Any | None
 try:
-    from pyshacl import validate as pyshacl_validate  # type: ignore[import-untyped]
+    from pyshacl import validate as _pyshacl_validate  # type: ignore[import-untyped]
+    pyshacl_validate = _pyshacl_validate
 except ModuleNotFoundError:  # pragma: no cover - runtime dependency
     pyshacl_validate = None
 
@@ -34,6 +36,10 @@ class SHACLValidationResult:
     warnings: list[dict[str, str | None]] = field(default_factory=list)
 
 
+class SHACLRuntimeUnavailableError(RuntimeError):
+    """Raised when SHACL runtime dependency is unavailable."""
+
+
 def _as_optional_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -49,8 +55,8 @@ class SHACLValidator:
         shapes_graph: Graph,
     ) -> SHACLValidationResult:
         if pyshacl_validate is None:
-            message = "pyshacl is required for SHACL validation"
-            raise RuntimeError(message)
+            message = "pyshacl is not installed; skipping SHACL validation gate"
+            raise SHACLRuntimeUnavailableError(message)
 
         # Include ontology triples in the data graph so sh:class checks can resolve
         # enum instances defined in the ontology itself.

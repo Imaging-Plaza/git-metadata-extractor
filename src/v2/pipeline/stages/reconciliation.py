@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 from uuid import uuid4
@@ -12,6 +13,17 @@ from src.v2.canonicalization import (
 )
 from src.v2.pipeline.stages.models import ReconciledEntities
 from src.v2.pipeline.stages.privacy import anonymize_email
+
+UUID_V4_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    flags=re.IGNORECASE,
+)
+INFOSCIENCE_UUID_PATTERN = re.compile(
+    r"(?:entities/(?:person|organization|publication)|core/items)/"
+    r"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})",
+    flags=re.IGNORECASE,
+)
+ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$", flags=re.IGNORECASE)
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -29,6 +41,71 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
         deduplicated.append(value)
         seen.add(value)
     return deduplicated
+
+
+def _normalize_uuid_v4(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip().lower()
+    if not candidate or not UUID_V4_PATTERN.match(candidate):
+        return None
+    return candidate
+
+
+def _normalize_orcid_token(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if candidate.lower().startswith("https://orcid.org/"):
+        candidate = candidate.rsplit("/", maxsplit=1)[-1]
+    if not candidate or not ORCID_PATTERN.match(candidate):
+        return None
+    return candidate
+
+
+def _normalize_infoscience_uuid(value: Any) -> str | None:
+    direct_uuid = _normalize_uuid_v4(value)
+    if direct_uuid is not None:
+        return direct_uuid
+    if not isinstance(value, str):
+        return None
+    match = INFOSCIENCE_UUID_PATTERN.search(value.strip())
+    if match is None:
+        return None
+    return _normalize_uuid_v4(match.group(1))
+
+
+def _normalize_person_identifiers(person: dict[str, Any]) -> None:
+    identifiers = person.get("identifiers")
+    if not isinstance(identifiers, dict):
+        identifiers = {}
+
+    normalized_orcid = _normalize_orcid_token(
+        identifiers.get("pulse:orcid") or person.get("pulse:orcidIdentifier"),
+    )
+    normalized_infoscience_id = _normalize_infoscience_uuid(
+        identifiers.get("pulse:infosciencePersonIdentifier")
+        or person.get("pulse:infosciencePersonIdentifier"),
+    )
+    github_username = identifiers.get("pulse:githubUsername")
+    if not isinstance(github_username, str) or not github_username:
+        github_username = person.get("pulse:githubUsername")
+    if not isinstance(github_username, str) or not github_username:
+        github_username = None
+
+    uuid_value = _normalize_uuid_v4(identifiers.get("uuid"))
+    if uuid_value is None:
+        uuid_value = str(uuid4())
+
+    person["identifiers"] = {
+        "pulse:orcid": normalized_orcid,
+        "pulse:infosciencePersonIdentifier": normalized_infoscience_id,
+        "pulse:githubUsername": github_username,
+        "uuid": uuid_value,
+    }
+    person["pulse:orcidIdentifier"] = normalized_orcid
+    person["pulse:infosciencePersonIdentifier"] = normalized_infoscience_id
+    person["pulse:githubUsername"] = github_username
 
 
 def _normalize_lookup_token(token: str) -> str:
@@ -189,19 +266,175 @@ def _detect_repository_fork_cycles(repositories: list[dict[str, Any]]) -> list[s
     return _dedupe_preserve_order(warnings)
 
 
+def _extract_composite_pair(composite_id: Any) -> tuple[str | None, str | None]:
+    if not isinstance(composite_id, str) or "_" not in composite_id:
+        return None, None
+    left, right = composite_id.split("_", maxsplit=1)
+    if not left or not right:
+        return None, None
+    return left, right
+
+
+def _normalize_membership_entities(
+    memberships: list[dict[str, Any]],
+    *,
+    person_lookup: dict[str, str],
+    organization_lookup: dict[str, str],
+) -> tuple[list[dict[str, Any]], set[tuple[str, str]], list[str]]:
+    normalized_memberships: list[dict[str, Any]] = []
+    covered_pairs: set[tuple[str, str]] = set()
+    warnings: list[str] = []
+    seen_membership_ids: set[str] = set()
+
+    for membership in memberships:
+        composite_id_ref: Any = membership.get("id")
+        identifiers = membership.get("identifiers")
+        if isinstance(identifiers, dict):
+            composite_id_ref = identifiers.get("pulse:composite") or composite_id_ref
+
+        person_ref, org_ref = _extract_composite_pair(composite_id_ref)
+        organization_ref = membership.get("org:organization")
+        if isinstance(organization_ref, str):
+            org_ref = organization_ref
+
+        canonical_person_id = _resolve_lookup_token(person_lookup, person_ref)
+        canonical_org_id = _resolve_lookup_token(organization_lookup, org_ref)
+        if canonical_person_id is None or canonical_org_id is None:
+            warnings.append(
+                (
+                    "Unresolved class membership reference during reconciliation: "
+                    f"id={membership.get('id')}, person={person_ref}, organization={org_ref}"
+                ),
+            )
+            continue
+
+        canonical_membership_id = f"{canonical_person_id}_{canonical_org_id}"
+        if canonical_membership_id in seen_membership_ids:
+            continue
+        seen_membership_ids.add(canonical_membership_id)
+        covered_pairs.add((canonical_person_id, canonical_org_id))
+
+        normalized_membership = deepcopy(membership)
+        normalized_identifiers = (
+            deepcopy(identifiers)
+            if isinstance(identifiers, dict)
+            else {}
+        )
+        normalized_identifiers["pulse:composite"] = canonical_membership_id
+        uuid_value = normalized_identifiers.get("uuid")
+        if not isinstance(uuid_value, str) or not uuid_value:
+            normalized_identifiers["uuid"] = str(uuid4())
+
+        normalized_membership["id"] = canonical_membership_id
+        normalized_membership["type"] = "org:Membership"
+        normalized_membership["shacl"] = "pulse:MembershipShape"
+        normalized_membership["identifiers"] = normalized_identifiers
+        normalized_membership["idSource"] = "pulse:composite"
+        normalized_membership["org:organization"] = canonical_org_id
+        if not isinstance(normalized_membership.get("org:role"), str):
+            normalized_membership["org:role"] = None
+        if not isinstance(normalized_membership.get("time:hasBeginning"), str):
+            normalized_membership["time:hasBeginning"] = None
+        if not isinstance(normalized_membership.get("time:hasEnd"), str):
+            normalized_membership["time:hasEnd"] = None
+
+        normalized_memberships.append(normalized_membership)
+
+    return normalized_memberships, covered_pairs, warnings
+
+
+def _normalize_contribution_entities(  # noqa: C901
+    contributions: list[dict[str, Any]],
+    *,
+    person_lookup: dict[str, str],
+    repository_lookup: dict[str, str],
+) -> tuple[list[dict[str, Any]], set[tuple[str, str]], list[str]]:
+    normalized_contributions: list[dict[str, Any]] = []
+    covered_pairs: set[tuple[str, str]] = set()
+    warnings: list[str] = []
+    seen_contribution_ids: set[str] = set()
+
+    for contribution in contributions:
+        composite_id_ref: Any = contribution.get("id")
+        identifiers = contribution.get("identifiers")
+        if isinstance(identifiers, dict):
+            composite_id_ref = identifiers.get("pulse:composite") or composite_id_ref
+
+        person_ref, repository_ref = _extract_composite_pair(composite_id_ref)
+        schema_author = contribution.get("schema:author")
+        if isinstance(schema_author, str):
+            person_ref = schema_author
+        contribution_to = contribution.get("pulse:contributionTo")
+        if isinstance(contribution_to, str):
+            repository_ref = contribution_to
+
+        canonical_person_id = _resolve_lookup_token(person_lookup, person_ref)
+        canonical_repository_id = _resolve_lookup_token(repository_lookup, repository_ref)
+        if canonical_person_id is None or canonical_repository_id is None:
+            warnings.append(
+                (
+                    "Unresolved class contribution reference during reconciliation: "
+                    f"id={contribution.get('id')}, person={person_ref}, "
+                    f"repository={repository_ref}"
+                ),
+            )
+            continue
+
+        canonical_contribution_id = f"{canonical_person_id}_{canonical_repository_id}"
+        if canonical_contribution_id in seen_contribution_ids:
+            continue
+        seen_contribution_ids.add(canonical_contribution_id)
+        covered_pairs.add((canonical_person_id, canonical_repository_id))
+
+        normalized_contribution = deepcopy(contribution)
+        normalized_identifiers = (
+            deepcopy(identifiers)
+            if isinstance(identifiers, dict)
+            else {}
+        )
+        normalized_identifiers["pulse:composite"] = canonical_contribution_id
+        uuid_value = normalized_identifiers.get("uuid")
+        if not isinstance(uuid_value, str) or not uuid_value:
+            normalized_identifiers["uuid"] = str(uuid4())
+
+        contribution_count = normalized_contribution.get("pulse:contributionCount")
+        if not isinstance(contribution_count, int) or contribution_count < 0:
+            contribution_count = 0
+
+        normalized_contribution["id"] = canonical_contribution_id
+        normalized_contribution["type"] = "pulse:Contribution"
+        normalized_contribution["shacl"] = "pulse:ContributionShape"
+        normalized_contribution["identifiers"] = normalized_identifiers
+        normalized_contribution["idSource"] = "pulse:composite"
+        normalized_contribution["schema:author"] = canonical_person_id
+        normalized_contribution["pulse:contributionTo"] = canonical_repository_id
+        normalized_contribution["pulse:contributionCount"] = contribution_count
+        if not isinstance(normalized_contribution.get("pulse:firstContributionDate"), str):
+            normalized_contribution["pulse:firstContributionDate"] = None
+        if not isinstance(normalized_contribution.get("pulse:lastContributionDate"), str):
+            normalized_contribution["pulse:lastContributionDate"] = None
+
+        normalized_contributions.append(normalized_contribution)
+
+    return normalized_contributions, covered_pairs, warnings
+
+
 def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     entities_by_type: dict[str, Any],
 ) -> ReconciledEntities:
     reconciled_entities: dict[str, list[dict[str, Any]]] = {
-        key: deepcopy(_as_entity_list(value))
-        for key, value in entities_by_type.items()
-        if isinstance(value, list)
+        "persons": deepcopy(_as_entity_list(entities_by_type.get("persons"))),
+        "organizations": deepcopy(_as_entity_list(entities_by_type.get("organizations"))),
+        "repositories": deepcopy(_as_entity_list(entities_by_type.get("repositories"))),
+        "articles": deepcopy(_as_entity_list(entities_by_type.get("articles"))),
     }
+    class_memberships = deepcopy(_as_entity_list(entities_by_type.get("memberships")))
+    class_contributions = deepcopy(_as_entity_list(entities_by_type.get("contributions")))
 
-    persons = reconciled_entities.setdefault("persons", [])
-    organizations = reconciled_entities.setdefault("organizations", [])
-    repositories = reconciled_entities.setdefault("repositories", [])
-    articles = reconciled_entities.setdefault("articles", [])
+    persons = reconciled_entities["persons"]
+    organizations = reconciled_entities["organizations"]
+    repositories = reconciled_entities["repositories"]
+    articles = reconciled_entities["articles"]
 
     person_lookup: dict[str, str] = {}
     organization_lookup: dict[str, str] = {}
@@ -211,6 +444,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         canonical_id, id_source = resolve_person_id(person)
         person["id"] = canonical_id
         person["idSource"] = id_source
+        _normalize_person_identifiers(person)
         _register_person_lookup_tokens(person_lookup, person)
         email = person.get("schema:email")
         if isinstance(email, str):
@@ -233,9 +467,10 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         article["id"] = canonical_id
         article["idSource"] = id_source
 
-    membership_pairs: set[tuple[str, str]] = set()
-    contribution_pairs: set[tuple[str, str]] = set()
+    fallback_membership_pairs: set[tuple[str, str]] = set()
+    fallback_contribution_pairs: set[tuple[str, str]] = set()
     link_warnings: list[str] = []
+    synthesis_warnings: list[str] = []
 
     for repository in repositories:
         repository_id = repository["id"]
@@ -248,6 +483,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             author_refs = fallback_authors if isinstance(fallback_authors, list) else []
 
         canonical_authors: list[str] = []
+        unresolved_author_refs: list[str] = []
         for author_ref in author_refs:
             canonical_author = _resolve_lookup_token(person_lookup, author_ref)
             if canonical_author is None:
@@ -257,11 +493,15 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                         f"repo={repository_id}, author={author_ref}"
                     ),
                 )
+                if isinstance(author_ref, str) and author_ref:
+                    unresolved_author_refs.append(author_ref)
                 continue
             canonical_authors.append(canonical_author)
-            contribution_pairs.add((canonical_author, repository_id))
+            fallback_contribution_pairs.add((canonical_author, repository_id))
 
-        canonical_authors = _dedupe_preserve_order(canonical_authors)
+        canonical_authors = _dedupe_preserve_order(
+            [*canonical_authors, *unresolved_author_refs],
+        )
         repository["schema:author"] = canonical_authors
         if "authors" in repository:
             repository["authors"] = list(canonical_authors)
@@ -344,7 +584,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                         )
                     continue
                 canonical_affiliations.append(canonical_affiliation)
-                membership_pairs.add((person_id, canonical_affiliation))
+                fallback_membership_pairs.add((person_id, canonical_affiliation))
             person["affiliations"] = _dedupe_preserve_order(canonical_affiliations)
 
         owns_refs = person.get("pulse:owns")
@@ -383,25 +623,56 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                 canonical_org_owns.append(canonical_repo_id)
             organization["pulse:owns"] = _dedupe_preserve_order(canonical_org_owns)
 
-    memberships = [
-        _build_membership(person_id, org_id)
-        for person_id, org_id in sorted(membership_pairs)
-    ]
-    contributions = [
-        _build_contribution(person_id, repository_id)
-        for person_id, repository_id in sorted(contribution_pairs)
-    ]
+    memberships, covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
+        class_memberships,
+        person_lookup=person_lookup,
+        organization_lookup=organization_lookup,
+    )
+    link_warnings.extend(class_membership_warnings)
+    for person_id, org_id in sorted(fallback_membership_pairs):
+        if (person_id, org_id) in covered_membership_pairs:
+            continue
+        memberships.append(_build_membership(person_id, org_id))
+        covered_membership_pairs.add((person_id, org_id))
+        synthesis_warnings.append(
+            (
+                "Synthesized fallback membership entity due to missing class-agent link: "
+                f"person={person_id}, organization={org_id}"
+            ),
+        )
+
+    contributions, covered_contribution_pairs, class_contribution_warnings = _normalize_contribution_entities(
+        class_contributions,
+        person_lookup=person_lookup,
+        repository_lookup=repository_lookup,
+    )
+    link_warnings.extend(class_contribution_warnings)
+    for person_id, repository_id in sorted(fallback_contribution_pairs):
+        if (person_id, repository_id) in covered_contribution_pairs:
+            continue
+        contributions.append(_build_contribution(person_id, repository_id))
+        covered_contribution_pairs.add((person_id, repository_id))
+        synthesis_warnings.append(
+            (
+                "Synthesized fallback contribution entity due to missing class-agent link: "
+                f"person={person_id}, repository={repository_id}"
+            ),
+        )
 
     membership_ids_by_person: dict[str, list[str]] = {}
     for membership in memberships:
         membership_id = membership["id"]
-        person_id, _ = membership_id.split("_", maxsplit=1)
+        person_id, _ = _extract_composite_pair(membership_id)
+        if person_id is None:
+            continue
         membership_ids_by_person.setdefault(person_id, []).append(membership_id)
 
     contribution_ids_by_person: dict[str, list[str]] = {}
     for contribution in contributions:
         contribution_id = contribution["id"]
-        person_id, _ = contribution_id.split("_", maxsplit=1)
+        person_id, _ = _extract_composite_pair(contribution_id)
+        if person_id is None:
+            continue
         contribution_ids_by_person.setdefault(person_id, []).append(contribution_id)
 
     for person in persons:
@@ -420,4 +691,5 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         memberships=memberships,
         contributions=contributions,
         link_warnings=_dedupe_preserve_order(link_warnings),
+        synthesis_warnings=_dedupe_preserve_order(synthesis_warnings),
     )

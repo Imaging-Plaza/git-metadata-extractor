@@ -19,19 +19,38 @@ ORGANIZATION_UUID_NAMESPACE = uuid.UUID("4f7f847a-8d6e-56b3-9164-2668e51f040f")
 REPOSITORY_UUID_NAMESPACE = uuid.UUID("c5b462e3-9cf5-5b59-b2df-bdbfd9bd0ac5")
 ARTICLE_UUID_NAMESPACE = uuid.UUID("f9f26cbf-1939-5c0d-a0f2-89dcf8a56cf8")
 
-PERSON_ID_SOURCES = {"orcid", "infosciencePersonIdentifier", "githubUsername", "uuid"}
-ORGANIZATION_ID_SOURCES = {
-    "ror",
-    "infoscienceOrganizationIdentifier",
-    "githubOrganizationHandle",
+PERSON_ID_SOURCES = {
+    "pulse:orcid",
+    "pulse:infosciencePersonIdentifier",
+    "pulse:githubUsername",
     "uuid",
 }
-REPOSITORY_ID_SOURCES = {"githubRepositoryHandle", "doi", "uuid"}
+ORGANIZATION_ID_SOURCES = {
+    "pulse:ror",
+    "pulse:infoscienceOrganizationIdentifier",
+    "pulse:githubOrganizationHandle",
+    "uuid",
+}
+REPOSITORY_ID_SOURCES = {
+    "pulse:githubRepositoryHandle",
+    "schema:identifier",
+    "uuid",
+}
 ARTICLE_ID_SOURCES = {
     "schema:identifier",
-    "doi",
-    "infoscienceArticleIdentifier",
+    "pulse:infoscienceArticleIdentifier",
     "uuid",
+}
+ID_SOURCE_ALIASES = {
+    "orcid": "pulse:orcid",
+    "infosciencePersonIdentifier": "pulse:infosciencePersonIdentifier",
+    "githubUsername": "pulse:githubUsername",
+    "ror": "pulse:ror",
+    "infoscienceOrganizationIdentifier": "pulse:infoscienceOrganizationIdentifier",
+    "githubOrganizationHandle": "pulse:githubOrganizationHandle",
+    "githubRepositoryHandle": "pulse:githubRepositoryHandle",
+    "doi": "schema:identifier",
+    "infoscienceArticleIdentifier": "pulse:infoscienceArticleIdentifier",
 }
 REPOSITORY_HANDLE_PARTS = 2
 
@@ -66,9 +85,10 @@ def _existing_resolution(
     id_source = _clean_text(entity.get("idSource"))
     if entity_id is None or id_source is None:
         return None
-    if id_source not in valid_sources:
+    normalized_source = ID_SOURCE_ALIASES.get(id_source, id_source)
+    if normalized_source not in valid_sources:
         return None
-    return entity_id, id_source
+    return entity_id, normalized_source
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:
@@ -205,7 +225,7 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if orcid is not None:
-        return f"{ORCID_BASE_URI}{orcid}", "orcid"
+        return f"{ORCID_BASE_URI}{orcid}", "pulse:orcid"
 
     infoscience_id = _normalize_infoscience_identifier(
         _lookup_identifier(
@@ -219,7 +239,10 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         legacy_path="person",
     )
     if infoscience_id is not None:
-        return f"{INFOSCIENCE_PERSON_BASE_URI}{infoscience_id}", "infosciencePersonIdentifier"
+        return (
+            f"{INFOSCIENCE_PERSON_BASE_URI}{infoscience_id}",
+            "pulse:infosciencePersonIdentifier",
+        )
 
     github_username = _normalize_github_handle(
         _lookup_identifier(
@@ -228,7 +251,7 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if github_username is not None:
-        return f"{GITHUB_BASE_URI}{github_username}", "githubUsername"
+        return f"{GITHUB_BASE_URI}{github_username}", "pulse:githubUsername"
 
     fallback_uuid = _deterministic_uuid(
         PERSON_UUID_NAMESPACE,
@@ -250,7 +273,7 @@ def resolve_organization_id(organization: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if ror is not None:
-        return f"{ROR_BASE_URI}{ror}", "ror"
+        return f"{ROR_BASE_URI}{ror}", "pulse:ror"
 
     infoscience_id = _normalize_infoscience_identifier(
         _lookup_identifier(
@@ -266,7 +289,7 @@ def resolve_organization_id(organization: dict[str, Any]) -> tuple[str, str]:
     if infoscience_id is not None:
         return (
             f"{INFOSCIENCE_ORGANIZATION_BASE_URI}{infoscience_id}",
-            "infoscienceOrganizationIdentifier",
+            "pulse:infoscienceOrganizationIdentifier",
         )
 
     github_org_handle = _normalize_github_handle(
@@ -276,7 +299,10 @@ def resolve_organization_id(organization: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if github_org_handle is not None:
-        return f"{GITHUB_BASE_URI}{github_org_handle}", "githubOrganizationHandle"
+        return (
+            f"{GITHUB_BASE_URI}{github_org_handle}",
+            "pulse:githubOrganizationHandle",
+        )
 
     fallback_uuid = _deterministic_uuid(
         ORGANIZATION_UUID_NAMESPACE,
@@ -298,7 +324,10 @@ def resolve_repository_id(repository: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if github_handle is not None:
-        return f"{GITHUB_BASE_URI}{github_handle}", "githubRepositoryHandle"
+        return (
+            f"{GITHUB_BASE_URI}{github_handle}",
+            "pulse:githubRepositoryHandle",
+        )
 
     doi = _normalize_doi(
         _lookup_identifier(
@@ -307,7 +336,7 @@ def resolve_repository_id(repository: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if doi is not None:
-        return f"{DOI_BASE_URI}{doi}", "doi"
+        return f"{DOI_BASE_URI}{doi}", "schema:identifier"
 
     fallback_uuid = _deterministic_uuid(
         REPOSITORY_UUID_NAMESPACE,
@@ -344,7 +373,7 @@ def resolve_article_id(article: dict[str, Any]) -> tuple[str, str]:
     if infoscience_id is not None:
         return (
             f"{INFOSCIENCE_PUBLICATION_BASE_URI}{infoscience_id}",
-            "infoscienceArticleIdentifier",
+            "pulse:infoscienceArticleIdentifier",
         )
 
     fallback_uuid = _deterministic_uuid(

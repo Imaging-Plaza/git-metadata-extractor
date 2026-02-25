@@ -121,3 +121,28 @@ def test_strict_validator_errors_include_path_and_expected_constraint(
     assert first_error["path"]
     assert first_error["constraint"]
     assert first_error["expected"]
+
+
+def test_strict_validator_accepts_prefixed_idsource_values(
+    load_fixture: Callable[[str, str], Any],
+) -> None:
+    validator = StrictSchemaValidator()
+    repository = load_fixture("schema/strict", "pulse_RepositoryShape")[0]
+    repository["idSource"] = "pulse:githubRepositoryHandle"
+
+    result = validator.validate("repository", repository)
+
+    assert result.is_valid is True
+
+
+def test_strict_validator_rejects_legacy_unprefixed_idsource_values(
+    load_fixture: Callable[[str, str], Any],
+) -> None:
+    validator = StrictSchemaValidator()
+    repository = load_fixture("schema/strict", "pulse_RepositoryShape")[0]
+    repository["idSource"] = "githubRepositoryHandle"
+
+    result = validator.validate("repository", repository)
+
+    assert result.is_valid is False
+    assert any(error["path"] == "idSource" and error["constraint"] == "enum" for error in result.errors)

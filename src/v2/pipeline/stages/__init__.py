@@ -10,6 +10,7 @@ from src.v2.pipeline.stages.models import (
 from src.v2.pipeline.stages.output_assembly import (
     RootEntityValidationError,
     assemble_output,
+    build_extract_output,
 )
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.pipeline.stages.stats import compute_stats
@@ -21,6 +22,7 @@ __all__ = [
     "RootEntityValidationError",
     "assemble_intermediates",
     "assemble_output",
+    "build_extract_output",
     "compute_stats",
     "gather_context",
     "reconcile_entities",

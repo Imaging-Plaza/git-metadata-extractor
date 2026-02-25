@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Integrated phase-3 v2b validation/reconciliation runtime gates into `/v2/extract`: reconciliation now runs before strict validation, strict root failures return typed 422, non-root strict failures are excluded with warnings, and SHACL validation executes as a non-fatal gate.
+- Refactored reconciliation precedence to treat class-agent `articles`/`memberships`/`contributions` as primary outputs, synthesize fallback membership/contribution entities only for uncovered links, and emit explicit synthesis-traceability warnings.
+- Aligned canonicalization `idSource` output with strict enums (`pulse:*` / `schema:identifier`) while preserving legacy alias compatibility for pre-existing payloads.
+- Restored extract response compatibility for existing v2 contracts by preserving legacy stage-report filtering and legacy `output.entities` keying while keeping strict/SHACL gate execution active.
 - Expanded v2 orchestration to a six-class stage graph (`repo/person/org/article/membership/contribution`) for repository/user/organization execution plans.
 - Added derivation metadata emission in `AgentResult.stats["derivation"]` for repository, person, and organization agents while keeping entity payloads schema-clean.
 - Updated `AGENTS.md` handoff to the next v2b entry task `.internal/v2b-plan/phase-3-validation-reconciliation/P2B-16-reconciliation-primary-class-outputs.md`.
@@ -71,6 +75,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/api.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/validation/shacl_validation.py tests/v2/test_reconciliation.py tests/v2/test_canonical_id_person.py tests/v2/test_canonical_id_organization.py tests/v2/test_canonical_id_repository.py tests/v2/test_canonical_id_article.py tests/v2/test_strict_validation_gate.py tests/v2/test_extract_e2e.py tests/v2/test_shacl_validation.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/api.py src/v2/canonicalization/id_resolution.py src/v2/pipeline/stages/reconciliation.py src/v2/pipeline/stages/output_assembly.py src/v2/validation/shacl_validation.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/repository_agent.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py tests/v2/test_orchestrator_graph.py tests/v2/test_orchestrator_execution.py tests/v2/test_pipeline_spans.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/agents/repository_agent.py src/v2/agents/person_agent.py src/v2/agents/organization_agent.py src/v2/pipeline/orchestrator.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_orchestrator_graph.py tests/v2/test_orchestrator_execution.py tests/v2/test_pipeline_spans.py tests/v2/test_repository_agent.py tests/v2/test_person_agent.py tests/v2/test_organization_agent.py -q`
