@@ -58,6 +58,7 @@ def _default_provider_set(
             force_refresh=force_refresh,
             include_user_repositories=include_user_repositories,
             include_organization_repositories=include_organization_repositories,
+            include_git_authors=False,
         ),
         orcid=RealORCIDProvider(),
         infoscience=RealInfoscienceProvider(),

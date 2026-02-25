@@ -81,9 +81,35 @@ class RepositoryAgentV2:
         providers: ProviderSet,
     ) -> dict[str, Any]:
         full_name = _ensure_repo_handle(context)
-        repository = providers.github.get_repository(full_name)
-        contributors = providers.github.get_contributors(full_name)
-        languages = providers.github.get_languages(full_name)
+
+        repository_context = context.get("repository_context")
+        reuse_gathered_context = (
+            isinstance(repository_context, dict)
+            and repository_context.get("full_name") == full_name
+        )
+
+        repository: dict[str, Any]
+        contributors: list[dict[str, Any]]
+        languages: dict[str, Any]
+
+        if reuse_gathered_context and isinstance(repository_context, dict):
+            metadata_candidate = repository_context.get("metadata")
+            repository = metadata_candidate if isinstance(metadata_candidate, dict) else {}
+
+            contributors_candidate = repository_context.get("contributors")
+            contributors = (
+                contributors_candidate
+                if isinstance(contributors_candidate, list)
+                else []
+            )
+
+            languages_candidate = repository_context.get("languages")
+            languages = languages_candidate if isinstance(languages_candidate, dict) else {}
+        else:
+            repository = providers.github.get_repository(full_name)
+            contributors = providers.github.get_contributors(full_name)
+            languages = providers.github.get_languages(full_name)
+
         return {
             "full_name": full_name,
             "repository": repository,

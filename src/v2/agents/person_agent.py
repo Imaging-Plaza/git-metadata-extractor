@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from copy import deepcopy
 from typing import Any
 from uuid import uuid4
 
 from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
 from src.v2.providers.base import ProviderNotFoundError
+
+HASH_LENGTH = 12
+HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNORECASE)
 
 
 def _normalize_orcid(orcid_value: Any) -> str | None:
@@ -23,8 +28,10 @@ def _anonymize_email(email: Any) -> str | None:
     local_part, domain = email.split("@", maxsplit=1)
     if not local_part or not domain:
         return None
-    masked_local = f"{local_part[0]}***"
-    return f"{masked_local}@{domain}"
+    if HASHED_LOCAL_PART_PATTERN.fullmatch(local_part):
+        return email
+    hashed_local = hashlib.sha256(local_part.encode("utf-8")).hexdigest()[:HASH_LENGTH]
+    return f"{hashed_local}@{domain}"
 
 
 def _pick_best_infoscience_match(results: Any) -> dict[str, Any] | None:

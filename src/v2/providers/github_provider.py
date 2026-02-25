@@ -5,6 +5,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from urllib.parse import urlparse
 
 from src.v2.providers.base import (
     GitHubProvider,
@@ -27,19 +28,20 @@ GITHUB_NOREPLY_PATTERN = re.compile(
 logger = logging.getLogger(__name__)
 
 
-def _first_non_empty_string(value: Any) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    if isinstance(value, list):
-        for item in value:
-            normalized = _first_non_empty_string(item)
-            if normalized:
-                return normalized
-    if isinstance(value, dict):
-        for key in ("@value", "value", "name"):
-            nested = _first_non_empty_string(value.get(key))
-            if nested:
-                return nested
+def _first_non_empty_string(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, list):
+            for item in value:
+                normalized = _first_non_empty_string(item)
+                if normalized:
+                    return normalized
+        if isinstance(value, dict):
+            for key in ("@value", "value", "name", "@id", "id", "url"):
+                nested = _first_non_empty_string(value.get(key))
+                if nested:
+                    return nested
     return None
 
 
@@ -101,27 +103,136 @@ def _resolve_contributor_login(author: Any) -> str | None:
     return _normalize_github_login(getattr(author, "name", None))
 
 
+def _deduplicate_preserve_order(values: list[str]) -> list[str]:
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            continue
+        deduplicated.append(value)
+        seen.add(value)
+    return deduplicated
+
+
+def _extract_github_login_from_identifier(identifier: Any) -> str | None:
+    candidate = identifier.strip() if isinstance(identifier, str) else ""
+    login: str | None = None
+
+    if not candidate:
+        return None
+
+    parsed = urlparse(candidate)
+    if parsed.scheme and parsed.netloc:
+        host = parsed.netloc.lower()
+        if "github.com" in host:
+            path_segments = [segment for segment in parsed.path.split("/") if segment]
+            if path_segments:
+                login = _normalize_github_login(path_segments[0])
+    elif "github.com/" in candidate:
+        suffix = candidate.split("github.com/", maxsplit=1)[-1].strip("/")
+        if suffix:
+            login = _normalize_github_login(suffix.split("/", maxsplit=1)[0])
+    else:
+        login = _normalize_github_login(candidate)
+
+    return login
+
+
+def _extract_login_from_reference(reference: Any) -> str | None:
+    if isinstance(reference, str):
+        return _extract_github_login_from_identifier(reference)
+    if isinstance(reference, dict):
+        identifier = None
+        for key in ("@id", "id", "url", "@value", "value", "name"):
+            identifier = _first_non_empty_string(reference.get(key))
+            if identifier:
+                break
+        return _extract_github_login_from_identifier(identifier)
+    return None
+
+
+def _extract_contributor_logins_from_node(node: JSONMapping) -> list[str]:
+    references: list[Any] = []
+    for key in (
+        "schema:contributor",
+        "http://schema.org/contributor",
+        "schema:author",
+        "http://schema.org/author",
+    ):
+        value = node.get(key)
+        if isinstance(value, list):
+            references.extend(value)
+        elif value is not None:
+            references.append(value)
+
+    logins: list[str] = []
+    for reference in references:
+        login = _extract_login_from_reference(reference)
+        if login:
+            logins.append(login)
+    return _deduplicate_preserve_order(logins)
+
+
+def _extract_spdx_id(node: JSONMapping) -> str | None:
+    license_candidate = _first_non_empty_string(
+        node.get("schema:license"),
+        node.get("http://schema.org/license"),
+    )
+    if not isinstance(license_candidate, str) or not license_candidate:
+        return None
+
+    if "spdx.org/licenses/" not in license_candidate:
+        return license_candidate
+
+    spdx_suffix = license_candidate.split("spdx.org/licenses/", maxsplit=1)[-1].strip("/")
+    if spdx_suffix.endswith(".html"):
+        spdx_suffix = spdx_suffix[:-5]
+    return spdx_suffix or None
+
+
+def _is_software_source_code_node(node: Any) -> bool:
+    if not isinstance(node, dict):
+        return False
+
+    node_type = node.get("@type")
+    if node_type == "schema:SoftwareSourceCode":
+        return True
+    if isinstance(node_type, str):
+        return "SoftwareSourceCode" in node_type
+    if isinstance(node_type, list):
+        return any("SoftwareSourceCode" in str(item) for item in node_type)
+    return False
+
+
+def _find_software_source_code_node(nodes: list[Any]) -> JSONMapping | None:
+    for node in nodes:
+        if _is_software_source_code_node(node):
+            return node
+    return None
+
+
 def _extract_repository_node(gimie_payload: Any) -> JSONMapping:
+    if isinstance(gimie_payload, list):
+        node = _find_software_source_code_node(gimie_payload)
+        if isinstance(node, dict):
+            return node
+        return {}
+
     if isinstance(gimie_payload, dict):
         graph = gimie_payload.get("@graph")
         if isinstance(graph, list):
-            for node in graph:
-                if not isinstance(node, dict):
-                    continue
-                node_type = node.get("@type")
-                if node_type == "schema:SoftwareSourceCode":
-                    return node
-                if isinstance(node_type, list) and any(
-                    "SoftwareSourceCode" in str(item) for item in node_type
-                ):
-                    return node
+            node = _find_software_source_code_node(graph)
+            if isinstance(node, dict):
+                return node
         return gimie_payload
     return {}
 
 
 def _extract_languages_from_node(node: JSONMapping) -> dict[str, int]:
-    language_values = node.get("schema:programmingLanguage") or node.get(
-        "programmingLanguage",
+    language_values = (
+        node.get("schema:programmingLanguage")
+        or node.get("http://schema.org/programmingLanguage")
+        or node.get("programmingLanguage")
     )
     languages: dict[str, int] = {}
 
@@ -159,6 +270,7 @@ class RealGitHubProvider(GitHubProvider):
         force_refresh: bool = False,
         include_user_repositories: bool = True,
         include_organization_repositories: bool = True,
+        include_git_authors: bool = True,
         gimie_extractor: GimieExtractor | None = None,
         user_lookup: UserLookup | None = None,
         organization_lookup: OrganizationLookup | None = None,
@@ -169,6 +281,7 @@ class RealGitHubProvider(GitHubProvider):
         self._force_refresh = force_refresh
         self._include_user_repositories = include_user_repositories
         self._include_organization_repositories = include_organization_repositories
+        self._include_git_authors = include_git_authors
         self._gimie_extractor = gimie_extractor
         self._user_lookup = user_lookup
         self._organization_lookup = organization_lookup
@@ -176,6 +289,7 @@ class RealGitHubProvider(GitHubProvider):
 
         self._cached_users_parser: Any | None = None
         self._cached_orgs_parser: Any | None = None
+        self._gimie_payload_cache: dict[str, Any] = {}
 
     @property
     def force_refresh(self) -> bool:
@@ -188,6 +302,10 @@ class RealGitHubProvider(GitHubProvider):
     @property
     def include_organization_repositories(self) -> bool:
         return self._include_organization_repositories
+
+    @property
+    def include_git_authors(self) -> bool:
+        return self._include_git_authors
 
     @staticmethod
     def _model_dump(value: Any) -> JSONMapping:
@@ -214,6 +332,16 @@ class RealGitHubProvider(GitHubProvider):
 
         self._repository_context_loader = prepare_repository_context
         return prepare_repository_context
+
+    def _get_repository_node(self, full_name: str) -> JSONMapping:
+        repository_url = _normalize_repo_url(full_name)
+        gimie_payload = self._gimie_payload_cache.get(repository_url)
+        if gimie_payload is None:
+            gimie_payload = self._run_with_rate_limit(
+                lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
+            )
+            self._gimie_payload_cache[repository_url] = gimie_payload
+        return _extract_repository_node(gimie_payload)
 
     def _resolve_user_lookup(self) -> UserLookup:
         if self._user_lookup is not None:
@@ -265,10 +393,7 @@ class RealGitHubProvider(GitHubProvider):
 
     def get_repository(self, full_name: str) -> dict[str, Any]:
         repository_url = _normalize_repo_url(full_name)
-        gimie_payload = self._run_with_rate_limit(
-            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
-        )
-        node = _extract_repository_node(gimie_payload)
+        node = self._get_repository_node(full_name)
 
         normalized_full_name = _normalize_full_name(full_name, node)
         if "/" not in normalized_full_name:
@@ -280,22 +405,34 @@ class RealGitHubProvider(GitHubProvider):
                 message,
             )
         owner_name = normalized_full_name.split("/", maxsplit=1)[0]
+        repository_name = normalized_full_name.split("/", maxsplit=1)[-1]
+        node_name = _first_non_empty_string(
+            node.get("schema:name"),
+            node.get("http://schema.org/name"),
+        )
+        if node_name == normalized_full_name:
+            node_name = repository_name
 
         return {
-            "name": _first_non_empty_string(node.get("schema:name"))
-            or normalized_full_name.split("/", maxsplit=1)[-1],
+            "name": node_name or repository_name,
             "full_name": normalized_full_name,
             "html_url": repository_url,
             "owner": {
                 "login": owner_name,
                 "type": "Organization",
             },
-            "description": _first_non_empty_string(node.get("schema:description")),
+            "description": _first_non_empty_string(
+                node.get("schema:description"),
+                node.get("http://schema.org/description"),
+            ),
             "stargazers_count": node.get("pulse:githubRepoStars"),
             "forks_count": node.get("pulse:githubRepoForks"),
-            "created_at": _first_non_empty_string(node.get("schema:dateCreated")),
+            "created_at": _first_non_empty_string(
+                node.get("schema:dateCreated"),
+                node.get("http://schema.org/dateCreated"),
+            ),
             "license": {
-                "spdx_id": _first_non_empty_string(node.get("schema:license")),
+                "spdx_id": _extract_spdx_id(node),
             },
             "fork": bool(node.get("pulse:isForkOf")),
             "source": {
@@ -321,8 +458,29 @@ class RealGitHubProvider(GitHubProvider):
             raise ProviderNotFoundError(str(exc)) from exc
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
-        context_loader = self._resolve_context_loader()
         repository_url = _normalize_repo_url(full_name)
+        node = self._get_repository_node(full_name)
+        gimie_contributor_logins = _extract_contributor_logins_from_node(node)
+        if gimie_contributor_logins:
+            return [
+                {
+                    "login": login,
+                    "name": None,
+                    "email": None,
+                    "contributions": None,
+                }
+                for login in gimie_contributor_logins
+            ]
+
+        if not self._include_git_authors:
+            logger.debug(
+                "GIMIE contributor extraction returned no GitHub logins for %s "
+                "(include_git_authors=false)",
+                full_name,
+            )
+            return []
+
+        context_loader = self._resolve_context_loader()
         context_result = self._run_with_rate_limit(
             lambda: _run_async(context_loader(repository_url)),
         )
@@ -355,9 +513,5 @@ class RealGitHubProvider(GitHubProvider):
         return contributors
 
     def get_languages(self, full_name: str) -> dict[str, int]:
-        repository_url = _normalize_repo_url(full_name)
-        gimie_payload = self._run_with_rate_limit(
-            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
-        )
-        node = _extract_repository_node(gimie_payload)
+        node = self._get_repository_node(full_name)
         return _extract_languages_from_node(node)

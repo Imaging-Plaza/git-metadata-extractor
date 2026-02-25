@@ -70,7 +70,7 @@ def test_person_agent_output_validates_and_merges_affiliations(
 
     assert result.data["schema:name"] == "Alice Example"
     assert result.data["pulse:githubUsername"] == "octocat"
-    assert result.data["schema:email"] == "a***@example.org"
+    assert result.data["schema:email"] == "2bd806c97f0e@example.org"
     assert len(result.data["org:hasMembership"]) >= MIN_EXPECTED_MEMBERSHIPS
 
 

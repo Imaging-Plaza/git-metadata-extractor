@@ -280,6 +280,7 @@ class _FakeSession:
 
 def _build_real_github_provider(
     git_authors: list[_GitAuthor] | None = None,
+    **provider_kwargs: Any,
 ) -> RealGitHubProvider:
     resolved_authors = (
         git_authors
@@ -313,6 +314,7 @@ def _build_real_github_provider(
         user_lookup=lambda username: {"login": username, "name": "The Octocat"},
         organization_lookup=lambda org_name: {"login": org_name, "name": "GitHub"},
         repository_context_loader=_repository_context_loader,
+        **provider_kwargs,
     )
 
 
@@ -434,6 +436,60 @@ def test_real_github_provider_infers_login_from_noreply_email() -> None:
     contributors = real_github.get_contributors("octocat/Hello-World")
 
     assert contributors[0]["login"] == "janedoe"
+
+
+def test_real_github_provider_skips_git_authors_when_disabled() -> None:
+    def _unexpected_repository_context_loader(_url: str) -> dict[str, Any]:
+        message = "repository_context_loader should not be called when git authors are disabled"
+        raise AssertionError(message)
+
+    provider = RealGitHubProvider(
+        include_git_authors=False,
+        repository_context_loader=_unexpected_repository_context_loader,
+        gimie_extractor=lambda _url, _format: {"@graph": []},
+        user_lookup=lambda username: {"login": username},
+        organization_lookup=lambda org_name: {"login": org_name},
+    )
+
+    contributors = provider.get_contributors("octocat/Hello-World")
+
+    assert contributors == []
+
+
+def test_real_github_provider_reads_contributors_from_gimie_payload() -> None:
+    def _unexpected_repository_context_loader(_url: str) -> dict[str, Any]:
+        message = (
+            "repository_context_loader should not be called when GIMIE already provides contributors"
+        )
+        raise AssertionError(message)
+
+    provider = RealGitHubProvider(
+        include_git_authors=False,
+        repository_context_loader=_unexpected_repository_context_loader,
+        gimie_extractor=lambda _url, _format: [
+            {
+                "@id": "https://github.com/octocat/Hello-World",
+                "@type": ["http://schema.org/SoftwareSourceCode"],
+                "http://schema.org/contributor": [
+                    {"@id": "https://github.com/octocat"},
+                    {"@id": "https://github.com/hubot"},
+                ],
+                "http://schema.org/author": [
+                    {"@id": "https://orcid.org/0000-0002-1825-0097"},
+                    {"@id": "https://github.com/octocat"},
+                ],
+            },
+        ],
+        user_lookup=lambda username: {"login": username},
+        organization_lookup=lambda org_name: {"login": org_name},
+    )
+
+    contributors = provider.get_contributors("octocat/Hello-World")
+
+    assert [contributor["login"] for contributor in contributors] == [
+        "octocat",
+        "hubot",
+    ]
 
 
 def test_get_provider_factory_returns_expected_mock_and_real_implementations() -> None:
