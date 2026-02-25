@@ -23,7 +23,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
 - V2B continuation work is tracked in `.internal/v2b-plan/` and executes in dependency order from `.internal/v2b-plan/README.md`.
-- Current entry task: `.internal/v2b-plan/phase-5-graph-integration/P2B-24-graphstore-intermediates-apis.md` (v2b Phase 4 tasks `P2B-20` through `P2B-23` complete and validated in scoped `tests/v2` runs).
+- Current entry task: `.internal/v2b-plan/phase-6-regression-docs/P2B-27-e2e-golden-graph-regressions.md` (v2b Phase 5 tasks `P2B-24` through `P2B-26` complete and validated in scoped `tests/v2` runs).
 - Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.

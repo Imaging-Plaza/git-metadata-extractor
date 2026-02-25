@@ -11,6 +11,7 @@ from rdflib import Graph as RDFGraph
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.api import v2_router
+from src.v2.graph.store import GraphStore
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
 from src.v2.providers.base import GitHubProvider
@@ -266,7 +267,13 @@ def test_extract_returns_422_when_root_entity_fails_strict_validation() -> None:
     assert any(error["field"] == "schema:author" for error in payload["errors"])
 
 
-def test_extract_excludes_invalid_non_root_entities_and_reports_collection() -> None:
+def test_extract_excludes_invalid_non_root_entities_and_reports_collection(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    graph_db = tmp_path / "extract_excludes_invalid_non_root_entities.db"
+    monkeypatch.setenv("V2_GRAPH_DB_PATH", str(graph_db))
+
     async def _context_gatherer(
         _detected_type: str,
         _url_info: GitHubURLClassification,
@@ -401,6 +408,31 @@ def test_extract_excludes_invalid_non_root_entities_and_reports_collection() -> 
     assert not any(entity.get("type") == "schema:Person" for entity in entities)
     assert payload["output"]["excluded_entities"]
     assert any("Excluded person entity" in warning for warning in payload["warnings"])
+
+    included_entity_ids = {
+        entity["id"]
+        for entity in entities
+        if isinstance(entity.get("id"), str)
+    }
+    excluded_entity_ids = {
+        excluded.get("entity", {}).get("id")
+        for excluded in payload["output"]["excluded_entities"]
+        if isinstance(excluded, dict) and isinstance(excluded.get("entity"), dict)
+    }
+
+    store = GraphStore(str(graph_db))
+    runs = store.get_runs_by_source(payload["source_url"])
+    assert runs
+    latest_run = runs[0]
+    run_entity_ids = set(latest_run.stats.get("entity_ids", []))
+    assert run_entity_ids == included_entity_ids
+    assert run_entity_ids.isdisjoint(excluded_entity_ids)
+
+    for entity_id in included_entity_ids:
+        assert store.get_entity(entity_id) is not None
+    for entity_id in excluded_entity_ids:
+        if isinstance(entity_id, str):
+            assert store.get_entity(entity_id) is None
 
 
 def test_extract_jsonld_output_uses_stage_built_graph_contract() -> None:

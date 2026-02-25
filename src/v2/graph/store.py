@@ -259,6 +259,93 @@ class GraphStore:
             entity_ids.update(_extract_entity_ids_from_stats(stats))
         return entity_ids
 
+    def insert_intermediate(  # noqa: PLR0913
+        self,
+        *,
+        source_url: str,
+        agent_name: str,
+        data: dict[str, Any] | list[Any] | str | float | bool | None,
+        run_id: str | None = None,
+        intermediate_id: str | None = None,
+        created_at: str | None = None,
+    ) -> str:
+        stored_id = intermediate_id or str(uuid4())
+        timestamp = created_at or _utcnow_iso()
+
+        def _write() -> None:
+            with self._connect() as connection, connection:
+                connection.execute(
+                    """
+                    INSERT INTO intermediates (
+                        id,
+                        source_url,
+                        agent_name,
+                        run_id,
+                        data,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        stored_id,
+                        source_url,
+                        agent_name,
+                        run_id,
+                        json.dumps(data),
+                        timestamp,
+                    ),
+                )
+
+        self._run_write_with_retry(_write)
+        return stored_id
+
+    def get_intermediates(
+        self,
+        *,
+        source_url: str | None = None,
+        run_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        if limit is not None and limit <= 0:
+            return []
+
+        query = """
+            SELECT
+                id,
+                source_url,
+                agent_name,
+                run_id,
+                data,
+                created_at
+            FROM intermediates
+            WHERE (? IS NULL OR source_url = ?)
+              AND (? IS NULL OR run_id = ?)
+            ORDER BY created_at DESC, id DESC
+        """
+        parameters: tuple[Any, ...] = (source_url, source_url, run_id, run_id)
+        if limit is not None:
+            query = f"{query} LIMIT ?;"
+            parameters = (*parameters, limit)
+        else:
+            query = f"{query};"
+
+        with self._connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+
+        records: list[dict[str, Any]] = []
+        for row in rows:
+            raw_run_id = row["run_id"]
+            records.append(
+                {
+                    "id": str(row["id"]),
+                    "source_url": str(row["source_url"]),
+                    "agent_name": str(row["agent_name"]),
+                    "run_id": str(raw_run_id) if raw_run_id is not None else None,
+                    "data": _parse_json_value(str(row["data"])),
+                    "created_at": str(row["created_at"]),
+                },
+            )
+        return records
+
     def insert_entity(
         self,
         entity_type: str,

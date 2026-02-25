@@ -75,6 +75,7 @@ STAGE_SHACL_GATE = "shacl_gate"
 STAGE_GRAPH_WRITE = "graph_write"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
+GRAPH_ENTITY_HELPER_KEYS = {"id", "type", "identifiers", "idSource", "shacl"}
 
 v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
 
@@ -225,6 +226,35 @@ def _build_rootless_assembled_output(
     )
 
 
+def _to_graph_store_entity_payload(
+    entity: dict[str, Any],
+) -> tuple[str, str, dict[str, Any], dict[str, Any], str] | None:
+    entity_id = entity.get("id")
+    entity_type = entity.get("type")
+    if not isinstance(entity_id, str) or not entity_id:
+        return None
+    if not isinstance(entity_type, str) or not entity_type:
+        return None
+
+    raw_identifiers = entity.get("identifiers")
+    identifiers = raw_identifiers if isinstance(raw_identifiers, dict) else {}
+
+    raw_id_source = entity.get("idSource")
+    id_source = (
+        raw_id_source
+        if isinstance(raw_id_source, str) and raw_id_source
+        else "schema:identifier"
+    )
+
+    data = {
+        key: deepcopy(value)
+        for key, value in entity.items()
+        if key not in GRAPH_ENTITY_HELPER_KEYS and value is not None
+    }
+
+    return entity_type, entity_id, data, deepcopy(identifiers), id_source
+
+
 @v2_router.get(
     "/extract/{full_path:path}",
     response_model=V2ExtractResponse,
@@ -330,6 +360,26 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             warnings,
             "force_refresh requested for provider-backed pipeline run",
         )
+
+    persisted_intermediates = 0
+    for agent_name, agent_result in pipeline_result.agent_results.items():
+        payload = agent_result.data
+        if not isinstance(payload, dict) or not payload:
+            continue
+        try:
+            store.insert_intermediate(
+                source_url=classification.normalized_url,
+                agent_name=agent_name,
+                run_id=run_id,
+                data=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _append_unique_warning(
+                warnings,
+                f"Failed to persist intermediate for {agent_name}: {exc}",
+            )
+        else:
+            persisted_intermediates += 1
 
     typed_entity_buckets = pipeline_result.resolved_typed_entity_buckets().to_dict()
     permissive_entity_count = sum(len(bucket) for bucket in typed_entity_buckets.values())
@@ -504,11 +554,62 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
         STAGE_GRAPH_WRITE,
         detected_type=classification.detected_type.value,
     ) as stage_span:
-        root_entity_count = 1 if isinstance(assembled_output.root_entity, dict) else 0
+        final_entities: list[dict[str, Any]] = []
+        if isinstance(assembled_output.root_entity, dict):
+            final_entities.append(assembled_output.root_entity)
+        final_entities.extend(assembled_output.related_entities)
+
+        graph_entities_upserted = 0
+        skipped_entities = 0
+        try:
+            for entity in final_entities:
+                parsed = _to_graph_store_entity_payload(entity)
+                if parsed is None:
+                    skipped_entities += 1
+                    _append_unique_warning(
+                        warnings,
+                        "Skipped graph write for an entity without valid id/type",
+                    )
+                    continue
+
+                entity_type, entity_id, data, identifiers, id_source = parsed
+                store.upsert_entity(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    data=data,
+                    identifiers=identifiers,
+                    id_source=id_source,
+                    source="extract",
+                    run_id=run_id,
+                )
+                graph_entities_upserted += 1
+        except Exception as exc:  # noqa: BLE001
+            stage_span.set_attribute("status", "error")
+            failure_message = f"Graph write failed: {exc}"
+            store.fail_run(run_id, failure_message)
+            record_error(
+                STAGE_GRAPH_WRITE,
+                exc,
+                run_id=run_id,
+                source_url=classification.normalized_url,
+                detected_type=classification.detected_type.value,
+            )
+            error_payload = V2ErrorResponse(
+                error_type=V2ErrorType.PIPELINE_ERROR,
+                detail=failure_message,
+                source_url=classification.normalized_url,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content=error_payload.model_dump(mode="json", exclude_none=True),
+            )
+
         stage_span.set_attributes(
-            status="success",
-            entity_count=root_entity_count + len(assembled_output.related_entities),
-            mode="noop",
+            status="success" if skipped_entities == 0 else "warning",
+            entity_count=graph_entities_upserted,
+            skipped_count=skipped_entities,
+            intermediates_written=persisted_intermediates,
+            mode="upsert",
         )
 
     response_intermediates = None
@@ -517,6 +618,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             source_url=classification.normalized_url,
             store=store,
             limit=DEFAULT_INTERMEDIATE_LIMIT,
+            run_id=run_id,
         )
 
     response_output: V2JSONLDOutput | V2JSONOutputEnvelope
@@ -529,7 +631,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     output_payload = response_output.model_dump(mode="json", by_alias=True)
     extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
-    final_entities: list[dict[str, Any]] = []
+    final_entities = []
     if isinstance(assembled_output.root_entity, dict):
         final_entities.append(assembled_output.root_entity)
     final_entities.extend(assembled_output.related_entities)

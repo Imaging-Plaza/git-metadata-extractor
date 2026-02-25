@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sqlite3
 from collections import Counter
 from typing import Any
 
@@ -70,65 +69,51 @@ def _seed_graph_store(db_path) -> None:
     run_secondary = store.create_run(SOURCE_URL_SECONDARY, "repository")
     store.complete_run(run_secondary, {"entity_ids": ["person-2", "repo-2"]})
 
-    with sqlite3.connect(db_path) as connection:
-        for index in range(5):
-            connection.execute(
-                """
-                INSERT INTO intermediates (
-                    id,
-                    source_url,
-                    agent_name,
-                    run_id,
-                    data,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, datetime('now', ?));
-                """,
-                (
-                    f"person-agent-{index}",
-                    SOURCE_URL_PRIMARY,
-                    "person_agent",
-                    run_primary,
-                    json.dumps({"sequence": index}),
-                    f"-{index} seconds",
-                ),
-            )
-            connection.execute(
-                """
-                INSERT INTO intermediates (
-                    id,
-                    source_url,
-                    agent_name,
-                    run_id,
-                    data,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, datetime('now', ?));
-                """,
-                (
-                    f"repo-agent-{index}",
-                    SOURCE_URL_PRIMARY,
-                    "repo_agent",
-                    run_primary,
-                    json.dumps({"sequence": index}),
-                    f"-{index} seconds",
-                ),
-            )
-        connection.commit()
+    for index in range(5):
+        timestamp = f"2026-02-24T10:00:0{index}Z"
+        store.insert_intermediate(
+            source_url=SOURCE_URL_PRIMARY,
+            agent_name="person_agent",
+            run_id=run_primary,
+            data={"sequence": index},
+            intermediate_id=f"person-agent-{index}",
+            created_at=timestamp,
+        )
+        store.insert_intermediate(
+            source_url=SOURCE_URL_PRIMARY,
+            agent_name="repo_agent",
+            run_id=run_primary,
+            data={"sequence": index},
+            intermediate_id=f"repo-agent-{index}",
+            created_at=timestamp,
+        )
+
+
+def _request_json(
+    path: str,
+    *,
+    app: FastAPI | None = None,
+    params: list[tuple[str, str]] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    target_app = app or _build_test_app()
+
+    async def _run() -> tuple[int, dict[str, Any]]:
+        transport = ASGITransport(app=target_app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(path, params=params)
+        return response.status_code, response.json()
+
+    return asyncio.run(_run())
 
 
 def _get_json(
     *,
     params: list[tuple[str, str]] | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    async def _run() -> tuple[int, dict[str, Any]]:
-        transport = ASGITransport(app=_build_test_app())
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get("/v2/graph", params=params)
-        return response.status_code, response.json()
-
-    return asyncio.run(_run())
+    return _request_json("/v2/graph", params=params)
 
 
 def test_graph_endpoint_returns_graph_response_with_entities(tmp_path, monkeypatch) -> None:
@@ -233,3 +218,41 @@ def test_graph_endpoint_stats_match_graph_payload(tmp_path, monkeypatch) -> None
     parsed_graph = RDFGraph()
     parsed_graph.parse(data=json.dumps(payload["graph_jsonld"]), format="json-ld")
     assert payload["stats"]["triples_count"] == len(parsed_graph)
+
+
+def test_graph_endpoint_source_filter_matches_extract_graph_write(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "api_graph_extract_write.db"
+    monkeypatch.setenv("V2_GRAPH_DB_PATH", str(db_path))
+    app = _build_test_app()
+
+    extract_status, extract_payload = _request_json(
+        "/v2/extract/github.com/octocat/Hello-World",
+        app=app,
+        params=[("output_format", "json"), ("include_intermediates", "false")],
+    )
+    assert extract_status == HTTP_OK
+
+    included_entity_ids = {
+        entity["id"]
+        for entity in [
+            extract_payload["output"]["root_entity"],
+            *extract_payload["output"]["related_entities"],
+        ]
+        if isinstance(entity, dict) and isinstance(entity.get("id"), str)
+    }
+    assert included_entity_ids
+
+    graph_status, graph_payload = _request_json(
+        "/v2/graph",
+        app=app,
+        params=[
+            ("source_url", str(extract_payload["source_url"])),
+            ("include_intermediates", "false"),
+        ],
+    )
+
+    assert graph_status == HTTP_OK
+    assert _payload_entity_ids(graph_payload) == included_entity_ids
