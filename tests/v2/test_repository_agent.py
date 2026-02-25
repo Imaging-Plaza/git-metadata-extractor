@@ -116,3 +116,4 @@ def test_repository_agent_reuses_context_gather_payload_without_provider_refetch
     schema = load_schema("agent", "repository")
     validate(instance=result.data, schema=schema)
     assert result.data["schema:author"] == ["octocat"]
+    assert result.data["schema:dateCreated"] == "2020-01-01T00:00:00Z"

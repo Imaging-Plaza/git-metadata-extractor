@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Normalized repository `schema:dateCreated` values in `RepositoryAgentV2` to strict UTC timestamp format (`YYYY-MM-DDTHH:MM:SSZ`) so live extracts do not fail root strict validation when providers return date-only strings.
+- Updated `AGENTS.md` handoff to the next Phase 8 entry task `.internal/phase-8/P8-02-live-smoke-test-harness.md` after completing live connectivity stabilization in `P8-01`.
 - Updated v2b phase-6 regression coverage to lock extract output contracts and stage ordering across repository/user/organization flows (`tests/v2/test_extract_e2e.py`, `tests/v2/test_extract_golden.py`).
 - Updated extract golden fixtures to assert broader clean-break JSON envelope expectations (`id` coverage and full six-bucket `entities_by_type` shape for user/org payloads).
 - Updated graph regression coverage to assert source-scoped intermediate filtering behavior when secondary-source intermediates exist (`tests/v2/test_api_graph.py`).
@@ -88,6 +90,13 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json" | jq '{source_url, detected_type, output_format, error_type, entities_count: .stats.entities_count, stages_completed: .stats.stages_completed, output_keys: (.output|keys)}'`
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json" | jq '{root_id: .output.root_entity.id, date_created: .output.root_entity[\"schema:dateCreated\"]}'`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_repository_agent.py tests/v2/test_extract_e2e.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/repository_agent.py tests/v2/test_repository_agent.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/agents/repository_agent.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/`
+- `PYTHONPATH=. .venv/bin/pytest -m v2`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_api_graph.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check tests/v2/test_extract_e2e.py tests/v2/test_extract_golden.py tests/v2/test_api_graph.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/`
@@ -188,6 +197,7 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added repository-agent regression coverage for strict date normalization from date-only source values in `tests/v2/test_repository_agent.py`.
 - Added phase-6 extract regression assertions for:
   - explicit clean-break JSON envelope keys and six-bucket output grouping.
   - detected-type-specific stage sequence locking in integration and golden tests.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -18,6 +20,8 @@ RepositoryClassifierStage = Callable[
 ]
 
 MIN_REPOSITORY_SEGMENTS = 2
+DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+STRICT_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
 def _to_list_of_strings(value: Any) -> list[str]:
@@ -74,6 +78,28 @@ def _normalize_license_url(spdx_id: Any) -> str | None:
     if not spdx_id or spdx_id.upper() == "NOASSERTION":
         return None
     return f"https://spdx.org/licenses/{spdx_id}.html"
+
+
+def _normalize_created_at(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if STRICT_TIMESTAMP_PATTERN.fullmatch(candidate):
+        return candidate
+    if DATE_ONLY_PATTERN.fullmatch(candidate):
+        return f"{candidate}T00:00:00Z"
+
+    normalized = candidate.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return candidate
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -195,7 +221,7 @@ class RepositoryAgentV2:
             "schema:author": author_ids,
             "pulse:githubRepoStars": repository.get("stargazers_count"),
             "pulse:githubRepoForks": repository.get("forks_count"),
-            "schema:dateCreated": repository.get("created_at"),
+            "schema:dateCreated": _normalize_created_at(repository.get("created_at")),
             "schema:license": _normalize_license_url(
                 repository.get("license", {}).get("spdx_id"),
             ),

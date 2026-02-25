@@ -23,7 +23,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
 - V2B continuation work is tracked in `.internal/v2b-plan/` and executes in dependency order from `.internal/v2b-plan/README.md`.
-- Current entry task: `.internal/phase-8/P8-01-basic-live-connectivity.md` (v2b continuation tasks `P2B-01` through `P2B-28` complete and validated in scoped `tests/v2` runs).
+- Current entry task: `.internal/phase-8/P8-02-live-smoke-test-harness.md` (Phase 8 task `P8-01` complete; `/v2/extract` live connectivity validated for `https://www.github.com/sdsc-ordes/gimie` with strict root-date normalization fix).
 - Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
