@@ -22,6 +22,8 @@ from src.v2.providers.orcid_provider import RealORCIDProvider
 from src.v2.providers.ror_provider import RealRORProvider
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
+FORCE_REFRESH_QUERY_PARAM = "force_refresh"
+DISABLE_CACHE_ENV_VAR = "V2_DISABLE_CACHE"
 
 
 def _is_truthy_env(value: str | None) -> bool:
@@ -36,7 +38,11 @@ def _resolve_provider_override(app_state: Any, field_name: str) -> Any | None:
     return None
 
 
-def _default_provider_set(*, use_mock_providers: bool) -> ProviderSet:
+def _default_provider_set(
+    *,
+    use_mock_providers: bool,
+    force_refresh: bool = False,
+) -> ProviderSet:
     if use_mock_providers:
         return ProviderSet(
             github=MockGitHubProvider(),
@@ -45,7 +51,7 @@ def _default_provider_set(*, use_mock_providers: bool) -> ProviderSet:
             ror=MockRORProvider(),
         )
     return ProviderSet(
-        github=RealGitHubProvider(force_refresh=False),
+        github=RealGitHubProvider(force_refresh=force_refresh),
         orcid=RealORCIDProvider(),
         infoscience=RealInfoscienceProvider(),
         ror=RealRORProvider(),
@@ -60,8 +66,13 @@ async def get_provider_set(request: Request) -> ProviderSet:
         return provider_set_override
 
     use_mock_providers = _is_truthy_env(os.getenv("V2_USE_MOCK_PROVIDERS", "true"))
+    request_force_refresh = _is_truthy_env(
+        request.query_params.get(FORCE_REFRESH_QUERY_PARAM),
+    )
+    disable_cache_for_run = _is_truthy_env(os.getenv(DISABLE_CACHE_ENV_VAR))
     default_provider_set = _default_provider_set(
         use_mock_providers=use_mock_providers,
+        force_refresh=request_force_refresh or disable_cache_for_run,
     )
 
     github_provider = _resolve_provider_override(app_state, "v2_github_provider")

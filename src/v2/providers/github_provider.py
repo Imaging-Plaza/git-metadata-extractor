@@ -134,6 +134,10 @@ class RealGitHubProvider(GitHubProvider):
         self._cached_users_parser: Any | None = None
         self._cached_orgs_parser: Any | None = None
 
+    @property
+    def force_refresh(self) -> bool:
+        return self._force_refresh
+
     @staticmethod
     def _model_dump(value: Any) -> JSONMapping:
         if hasattr(value, "model_dump"):

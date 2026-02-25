@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added v2 cache-bypass controls for testing runs:
+  - `/v2/extract?force_refresh=true` now propagates to real-provider dependency wiring.
+  - New env switch `V2_DISABLE_CACHE=true` disables v1-backed provider cache for all v2 runs.
+- Updated `AGENTS.md` environment/testing guidance with explicit no-cache run instructions for v2 (`V2_DISABLE_CACHE` and `force_refresh`).
 - Added CI migration gates for Phase 7 completion:
   - JSON-LD roundtrip regression gate (`tests/v2/test_roundtrip.py`)
   - v1 parity regression gate (`tests/test_v1_parity.py` plus legacy v1 suites in CI)
@@ -55,6 +59,9 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/dependencies.py src/v2/providers/github_provider.py tests/v2/test_dependencies.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_dependencies.py -v`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_api_extract_stub.py -v`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/stages/privacy.py src/v2/pipeline/stages/reconciliation.py src/v2/providers/base.py src/v2/providers/rate_limiter.py src/v2/providers/github_provider.py src/v2/providers/infoscience_provider.py src/v2/providers/orcid_provider.py src/v2/providers/ror_provider.py src/v2/providers/__init__.py tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py tests/test_v1_parity.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/stages/privacy.py src/v2/pipeline/stages/reconciliation.py src/v2/providers/base.py src/v2/providers/rate_limiter.py src/v2/providers/github_provider.py src/v2/providers/infoscience_provider.py src/v2/providers/orcid_provider.py src/v2/providers/ror_provider.py tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py tests/test_v1_parity.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_roundtrip.py tests/v2/test_email_anonymization.py tests/v2/test_rate_limiter.py -q`
@@ -114,6 +121,7 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added focused v2 dependency coverage for cache-bypass toggles in `tests/v2/test_dependencies.py`.
 - Added Phase 7 CI and migration artifacts:
   - `tests/v2/test_roundtrip.py`
   - `tests/test_v1_parity.py`

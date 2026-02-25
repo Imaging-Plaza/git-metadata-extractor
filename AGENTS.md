@@ -48,6 +48,7 @@ Rules:
 - If required variables are missing for the requested task, fail fast and report exactly which variables are missing.
 - For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
 - Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
+- For cache-bypass testing runs, use `V2_DISABLE_CACHE=true` (global for v2) or `/v2/extract?...&force_refresh=true` (per request).
 
 ## Canonical Commands
 `justfile` is the source of truth for routine operations. Prefer `just` commands over ad-hoc shell commands when equivalent recipes exist.

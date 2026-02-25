@@ -21,7 +21,7 @@ Runs the v2 extraction pipeline for a GitHub URL path.
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`
-- `force_refresh`: `true|false` (default `false`)
+- `force_refresh`: `true|false` (default `false`, bypasses provider cache)
 - `include_intermediates`: `true|false` (default `false`)
 
 Examples:
@@ -81,6 +81,6 @@ curl -s \
 | `V2_GRAPH_DB_PATH` | `data/v2_graph.db` | SQLite graph-store path |
 | `V2_INTERMEDIATE_HISTORY_LIMIT` | `5` | Max intermediate snapshots returned |
 | `V2_ENABLE_LOGFIRE` | `true` | Enables v2 Logfire instrumentation |
+| `V2_DISABLE_CACHE` | `false` | Bypass v1-backed provider cache for all v2 extract runs |
 | `LOGFIRE_TOKEN` | unset | Optional Logfire token |
 | `GITHUB_TOKEN` | unset | Required for healthy provider preflight |
-
