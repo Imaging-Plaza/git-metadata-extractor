@@ -25,7 +25,7 @@ SKOS_NAMESPACE = Namespace("http://www.w3.org/2004/02/skos/core#")
 SH_NAMESPACE = Namespace("http://www.w3.org/ns/shacl#")
 WD_NAMESPACE = Namespace("http://www.wikidata.org/entity/")
 ENTITY_NAMESPACE = Namespace("urn:git-metadata-extractor:entity:")
-NAMESPACE_BY_PREFIX: dict[str, Namespace] = {
+NAMESPACE_BY_PREFIX: dict[str, Any] = {
     "pulse": PULSE_NAMESPACE,
     "schema": SCHEMA_NAMESPACE,
     "org": ORG_NAMESPACE,
@@ -39,6 +39,11 @@ NAMESPACE_BY_PREFIX: dict[str, Namespace] = {
     "wd": WD_NAMESPACE,
     "xsd": XSD,
 }
+LITERAL_STRING_PREDICATES: frozenset[str] = frozenset(
+    {
+        str(SCHEMA_NAMESPACE["identifier"]),
+    },
+)
 ENTITY_TYPE_CLASS_MAP: dict[str, str] = {
     "person": "pulse:Person",
     "repository": "pulse:Repository",
@@ -140,9 +145,21 @@ class RDFGraphSync:
                 for item in value:
                     if item is None:
                         continue
-                    triples.append((subject, predicate, _coerce_uri_or_literal(item)))
+                    triples.append(
+                        (
+                            subject,
+                            predicate,
+                            _coerce_uri_or_literal(item, predicate=predicate),
+                        ),
+                    )
                 continue
-            triples.append((subject, predicate, _coerce_uri_or_literal(value)))
+            triples.append(
+                (
+                    subject,
+                    predicate,
+                    _coerce_uri_or_literal(value, predicate=predicate),
+                ),
+            )
 
         return triples
 
@@ -173,7 +190,15 @@ def _predicate_uri(raw_key: str) -> URIRef:
     return URIRef(PULSE_NAMESPACE[raw_key])
 
 
-def _coerce_uri_or_literal(value: Any, *, for_type: bool = False) -> Node:
+def _coerce_uri_or_literal(  # noqa: PLR0911
+    value: Any,
+    *,
+    for_type: bool = False,
+    predicate: URIRef | None = None,
+) -> Node:
+    if predicate is not None and str(predicate) in LITERAL_STRING_PREDICATES:
+        return Literal(str(value), datatype=XSD.string)
+
     primitive_literal = _primitive_literal(value)
     if primitive_literal is not None:
         return primitive_literal

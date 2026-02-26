@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from rdflib import Literal, URIRef
-from rdflib.namespace import RDF
+from rdflib.namespace import RDF, XSD
 
 from src.v2.graph.rdf_sync import RDFGraphSync
 from src.v2.graph.store import GraphStore
@@ -199,6 +199,36 @@ def test_entity_to_triples_normalizes_builtin_entity_types() -> None:
     type_values = {obj for _, predicate, obj in triples if predicate == RDF.type}
 
     assert URIRef("https://open-pulse.epfl.ch/ontology#Person") in type_values
+
+
+def test_entity_to_triples_keeps_schema_identifier_as_xsd_string_literal() -> None:
+    sync = RDFGraphSync()
+
+    triples = sync.entity_to_triples(
+        "organization",
+        {
+            "id": "org-1",
+            "type": "org:Organization",
+            "schema:identifier": "https://ror.org/02s376052",
+            "schema:url": "https://www.epfl.ch",
+        },
+    )
+    identifier_objects = [
+        obj
+        for _, predicate, obj in triples
+        if predicate == URIRef("http://schema.org/identifier")
+    ]
+    url_objects = [
+        obj
+        for _, predicate, obj in triples
+        if predicate == URIRef("http://schema.org/url")
+    ]
+
+    assert len(identifier_objects) == 1
+    assert isinstance(identifier_objects[0], Literal)
+    assert identifier_objects[0] == Literal("https://ror.org/02s376052", datatype=XSD.string)
+    assert len(url_objects) == 1
+    assert url_objects[0] == URIRef("https://www.epfl.ch")
 
 
 def test_startup_load_with_mock_dataset_33_entities(tmp_path) -> None:

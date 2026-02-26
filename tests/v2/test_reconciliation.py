@@ -444,3 +444,58 @@ def test_reconcile_resolves_membership_org_aliases_and_handle_variants() -> None
         "Unresolved class membership reference during reconciliation" in warning
         for warning in reconciled.link_warnings
     )
+
+
+def test_reconcile_prunes_unresolved_organization_hierarchy_links() -> None:
+    organization = _organization(
+        "Swiss Data Science Center",
+        "https://ror.org/02hdt9m26",
+    )
+    organization["org:hasUnit"] = ["https://ror.org/999999999"]
+    organization["org:unitOf"] = "https://ror.org/888888888"
+    entities = {
+        "persons": [],
+        "organizations": [organization],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    reconciled_org = reconciled.entities["organizations"][0]
+
+    assert reconciled_org["org:hasUnit"] == []
+    assert reconciled_org["org:unitOf"] is None
+    assert any(
+        "Dropped unresolved organization hierarchy references during reconciliation: "
+        "org:hasUnit=1, org:unitOf=1"
+        in warning
+        for warning in reconciled.link_warnings
+    )
+
+
+def test_reconcile_preserves_resolvable_organization_hierarchy_links() -> None:
+    parent = _organization(
+        "Parent Organization",
+        "https://ror.org/05gzmn429",
+    )
+    child = _organization(
+        "Child Organization",
+        "https://ror.org/04f4a0c74",
+    )
+    parent["org:hasUnit"] = ["https://ror.org/04f4a0c74"]
+    child["org:unitOf"] = "https://ror.org/05gzmn429"
+    entities = {
+        "persons": [],
+        "organizations": [parent, child],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organizations = {organization["id"]: organization for organization in reconciled.entities["organizations"]}
+
+    assert organizations["https://ror.org/05gzmn429"]["org:hasUnit"] == ["https://ror.org/04f4a0c74"]
+    assert organizations["https://ror.org/04f4a0c74"]["org:unitOf"] == "https://ror.org/05gzmn429"
+    assert not any(
+        "Dropped unresolved organization hierarchy references during reconciliation"
+        in warning
+        for warning in reconciled.link_warnings
+    )

@@ -347,6 +347,64 @@ def _ensure_github_org_units_for_repository_owners(
         github_unit["identifiers"] = github_identifiers
 
 
+def _prune_unresolved_organization_hierarchy_links(
+    *,
+    organizations: list[dict[str, Any]],
+    organization_lookup: dict[str, str],
+) -> list[str]:
+    organization_ids = {
+        organization["id"]
+        for organization in organizations
+        if isinstance(organization.get("id"), str)
+    }
+
+    dropped_has_unit = 0
+    dropped_unit_of = 0
+
+    for organization in organizations:
+        organization_id = organization.get("id")
+        if not isinstance(organization_id, str):
+            continue
+
+        has_unit_refs = organization.get("org:hasUnit")
+        canonical_has_units: list[str] = []
+        if isinstance(has_unit_refs, list):
+            for has_unit_ref in has_unit_refs:
+                if not isinstance(has_unit_ref, str) or not has_unit_ref:
+                    continue
+                canonical_has_unit = _resolve_lookup_token(organization_lookup, has_unit_ref)
+                if (
+                    canonical_has_unit is None
+                    or canonical_has_unit not in organization_ids
+                ):
+                    dropped_has_unit += 1
+                    continue
+                canonical_has_units.append(canonical_has_unit)
+        organization["org:hasUnit"] = _dedupe_preserve_order(canonical_has_units)
+
+        unit_of_ref = organization.get("org:unitOf")
+        if not isinstance(unit_of_ref, str) or not unit_of_ref:
+            organization["org:unitOf"] = None
+            continue
+
+        canonical_unit_of = _resolve_lookup_token(organization_lookup, unit_of_ref)
+        if canonical_unit_of is None or canonical_unit_of not in organization_ids:
+            organization["org:unitOf"] = None
+            dropped_unit_of += 1
+            continue
+        organization["org:unitOf"] = canonical_unit_of
+
+    warnings: list[str] = []
+    if dropped_has_unit > 0 or dropped_unit_of > 0:
+        warnings.append(
+            (
+                "Dropped unresolved organization hierarchy references during reconciliation: "
+                f"org:hasUnit={dropped_has_unit}, org:unitOf={dropped_unit_of}"
+            ),
+        )
+    return warnings
+
+
 def _register_repository_lookup_tokens(
     lookup: dict[str, str],
     repository: dict[str, Any],
@@ -696,7 +754,10 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
 
     fallback_membership_pairs: set[tuple[str, str]] = set()
     fallback_contribution_pairs: set[tuple[str, str]] = set()
-    link_warnings: list[str] = []
+    link_warnings = _prune_unresolved_organization_hierarchy_links(
+        organizations=organizations,
+        organization_lookup=organization_lookup,
+    )
     synthesis_warnings: list[str] = []
 
     for repository in repositories:

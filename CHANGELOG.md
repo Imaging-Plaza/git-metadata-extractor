@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Updated RDF graph coercion to be predicate-aware for string-constrained fields so URL-looking `schema:identifier` values are emitted as `xsd:string` literals instead of IRIs.
+- Updated reconciliation organization normalization to prune unresolved `org:hasUnit` / `org:unitOf` links and emit explicit dropped-reference counters, preventing dangling organization hierarchy edges.
+- Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-07-jsonld-literal-to-id-conversion.md` after completing Plan C issues 5 and 6.
 - Expanded v2 organization alias propagation and reconciliation lookup matching for membership/source-organization resolution by adding `schema:alternateName` support, accent/punctuation-insensitive token variants, and GitHub handle matching with/without `@`.
 - Updated v2 article-author resolution to use richer person-name alias tokens (including ORCID/Infoscience/GitHub display-name style inputs plus comma-order normalization) before strict no-synthetic skip decisions.
 - Updated strict no-synthetic article skip warnings to include per-candidate matched/unmatched author counts for clearer operational diagnostics.
@@ -103,6 +106,9 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_rdf_sync.py tests/v2/test_reconciliation.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/graph/rdf_sync.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_rdf_sync.py tests/v2/test_reconciliation.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/graph/rdf_sync.py src/v2/pipeline/stages/reconciliation.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_article_agent.py tests/v2/test_reconciliation.py tests/v2/test_organization_agent.py tests/v2/test_membership_agent.py tests/v2/test_provider_interfaces.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/providers/ror_provider.py src/v2/agents/organization_agent.py src/v2/pipeline/stages/reconciliation.py src/v2/agents/membership_agent.py src/v2/agents/article_agent.py tests/v2/test_reconciliation.py tests/v2/test_organization_agent.py tests/v2/test_article_agent.py tests/v2/test_provider_interfaces.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/providers/ror_provider.py src/v2/agents/organization_agent.py src/v2/pipeline/stages/reconciliation.py src/v2/agents/membership_agent.py src/v2/agents/article_agent.py`
@@ -225,6 +231,8 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added RDF sync regression coverage that locks `schema:identifier` URL values to typed string literals while preserving IRI coercion for predicates such as `schema:url`.
+- Added reconciliation regression coverage for organization hierarchy pruning/preservation across unresolved and resolvable `org:hasUnit` / `org:unitOf` references.
 - Added orchestrator regression coverage `test_execute_skips_github_organization_accounts_from_person_fanout` to lock the org-account exclusion behavior in person fanout.
 - Added reconciliation regression coverage `test_reconcile_models_github_org_account_as_unit_for_repository_owner` to lock `org:hasUnit`/`org:unitOf` modeling for GitHub org accounts.
 - Added regression test `test_real_infoscience_person_profile_url_is_coerced_to_string` in `tests/v2/test_provider_interfaces.py` to lock `HttpUrl` to `str` coercion in real Infoscience provider person results.
