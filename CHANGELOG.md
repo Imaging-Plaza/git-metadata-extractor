@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Expanded v2 organization alias propagation and reconciliation lookup matching for membership/source-organization resolution by adding `schema:alternateName` support, accent/punctuation-insensitive token variants, and GitHub handle matching with/without `@`.
+- Updated v2 article-author resolution to use richer person-name alias tokens (including ORCID/Infoscience/GitHub display-name style inputs plus comma-order normalization) before strict no-synthetic skip decisions.
+- Updated strict no-synthetic article skip warnings to include per-candidate matched/unmatched author counts for clearer operational diagnostics.
 - Updated v2 person-fanout orchestration to skip GitHub contributor accounts whose resolved profile type is `Organization`, preventing organization handles (for example `sdsc-ordes`) from being emitted by `person_agent` as `schema:Person`.
 - Updated reconciliation to model GitHub organization accounts as organization units when they act as repository owners under a canonical organization, adding `org:hasUnit` (canonical org) and `org:unitOf` (GitHub org-account node) links.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-05-schema-identifier-literal-vs-iri.md`.
@@ -100,6 +103,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_article_agent.py tests/v2/test_reconciliation.py tests/v2/test_organization_agent.py tests/v2/test_membership_agent.py tests/v2/test_provider_interfaces.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/providers/ror_provider.py src/v2/agents/organization_agent.py src/v2/pipeline/stages/reconciliation.py src/v2/agents/membership_agent.py src/v2/agents/article_agent.py tests/v2/test_reconciliation.py tests/v2/test_organization_agent.py tests/v2/test_article_agent.py tests/v2/test_provider_interfaces.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/providers/ror_provider.py src/v2/agents/organization_agent.py src/v2/pipeline/stages/reconciliation.py src/v2/agents/membership_agent.py src/v2/agents/article_agent.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_promoted_agent_schemas.py tests/v2/test_promoted_strict_schemas.py -q`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_orchestrator_execution.py tests/v2/test_reconciliation.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/orchestrator.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_orchestrator_execution.py tests/v2/test_reconciliation.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/orchestrator.py src/v2/pipeline/stages/reconciliation.py`

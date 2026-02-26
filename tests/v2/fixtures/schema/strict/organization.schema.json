@@ -49,6 +49,12 @@
       "type": "string",
       "minLength": 1
     },
+    "schema:alternateName": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "schema:identifier": {
       "type": ["string", "null"],
       "pattern": "^https://ror\\.org/[0-9a-z]{9}$",

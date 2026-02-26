@@ -246,3 +246,86 @@ def test_article_agent_skips_candidate_with_year_only_date_when_synthetic_fallba
         in warning
         for warning in result.warnings
     )
+
+
+def test_article_agent_resolves_accent_and_name_order_variants_without_synthetic_fallbacks() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "pub-variant-1",
+                    "title": "Accent and Ordering Variants",
+                    "doi": "10.1000/variant-1",
+                    "publicationDate": "2025-04-01",
+                    "authors": ["Alvarez, Jose"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-variant-1",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 9.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+    context["known_persons"] = [
+        {
+            "id": "https://orcid.org/0000-0003-1234-5678",
+            "schema:name": "José Alvarez",
+            "pulse:githubUsername": "josealvarez",
+            "github_display_name": "Jose Alvarez",
+            "orcid_record": {"name": "José Alvarez"},
+            "infoscience_record": {"name": "Jose Alvarez"},
+        },
+    ]
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data["id"] == "10.1000/variant-1"
+    assert result.data["schema:author"] == ["https://orcid.org/0000-0003-1234-5678"]
+    assert not any(
+        "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled"
+        in warning
+        for warning in result.warnings
+    )
+
+
+def test_article_agent_skips_fully_unresolved_authors_with_count_metadata_when_synthetic_fallbacks_disabled() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "pub-variant-2",
+                    "title": "No Resolvable Authors",
+                    "doi": "10.1000/variant-2",
+                    "publicationDate": "2025-05-01",
+                    "authors": ["Unknown One", "Unknown Two"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-variant-2",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 8.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data == {}
+    assert result.stats["articles"] == []
+    assert any(
+        "matched_authors=0, unmatched_authors=2" in warning
+        and "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled"
+        in warning
+        for warning in result.warnings
+    )

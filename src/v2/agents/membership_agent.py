@@ -9,6 +9,7 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 
 
 def _as_string(value: Any) -> str | None:
@@ -18,6 +19,39 @@ def _as_string(value: Any) -> str | None:
 def _normalize_token(value: Any) -> str | None:
     candidate = _as_string(value)
     return candidate.casefold() if candidate else None
+
+
+def _lookup_token_variants(token: Any) -> list[str]:
+    candidate = _as_string(token)
+    if candidate is None:
+        return []
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str | None) -> None:
+        if value is None:
+            return
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        variants.append(normalized)
+
+    lowered = candidate.casefold()
+    _add(lowered)
+    _add(strip_accents(lowered))
+    _add(normalize_string(candidate))
+
+    return variants
+
+
+def _resolve_lookup_token(lookup: dict[str, str], token: Any) -> str | None:
+    for variant in _lookup_token_variants(token):
+        resolved = lookup.get(variant)
+        if isinstance(resolved, str):
+            return resolved
+    return None
 
 
 def _append_unique(target: list[str], warning: str) -> None:
@@ -69,13 +103,27 @@ def _collect_known_organizations(context: dict[str, Any]) -> list[dict[str, Any]
 
 
 def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str) -> None:
-    normalized = _normalize_token(token)
-    if normalized is None:
+    for normalized in _lookup_token_variants(token):
+        lookup.setdefault(normalized, canonical_id)
+
+
+def _register_organization_handle_lookup_tokens(
+    lookup: dict[str, str],
+    token: Any,
+    canonical_id: str,
+) -> None:
+    handle = _as_string(token)
+    if handle is None:
         return
-    lookup.setdefault(normalized, canonical_id)
+    normalized_handle = handle[1:] if handle.startswith("@") else handle
+    if not normalized_handle:
+        return
+    _register_lookup_token(lookup, normalized_handle, canonical_id)
+    _register_lookup_token(lookup, f"@{normalized_handle}", canonical_id)
+    _register_lookup_token(lookup, handle, canonical_id)
 
 
-def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str, str]:
+def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str, str]:  # noqa: C901
     lookup: dict[str, str] = {}
     for organization in organizations:
         org_id = _as_string(organization.get("id"))
@@ -83,12 +131,32 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
             continue
         _register_lookup_token(lookup, org_id, org_id)
         _register_lookup_token(lookup, organization.get("schema:name"), org_id)
-        _register_lookup_token(lookup, organization.get("pulse:githubOrganizationHandle"), org_id)
+        _register_organization_handle_lookup_tokens(
+            lookup,
+            organization.get("pulse:githubOrganizationHandle"),
+            org_id,
+        )
         _register_lookup_token(lookup, organization.get("schema:identifier"), org_id)
+        alternate_names = organization.get("schema:alternateName")
+        if isinstance(alternate_names, list):
+            for alternate_name in alternate_names:
+                _register_lookup_token(lookup, alternate_name, org_id)
+        for key in ("aliases", "acronyms"):
+            values = organization.get(key)
+            if isinstance(values, list):
+                for value in values:
+                    _register_lookup_token(lookup, value, org_id)
+        labels = organization.get("labels")
+        if isinstance(labels, list):
+            for label_payload in labels:
+                label = label_payload
+                if isinstance(label_payload, dict):
+                    label = label_payload.get("label")
+                _register_lookup_token(lookup, label, org_id)
 
         identifiers = organization.get("identifiers")
         if isinstance(identifiers, dict):
-            _register_lookup_token(
+            _register_organization_handle_lookup_tokens(
                 lookup,
                 identifiers.get("pulse:githubOrganizationHandle"),
                 org_id,
@@ -209,7 +277,7 @@ class MembershipAgentV2:
                 if normalized_organization is None:
                     continue
 
-                organization_id = organization_lookup.get(normalized_organization)
+                organization_id = _resolve_lookup_token(organization_lookup, organization_name)
                 if organization_id is None:
                     _append_unique(
                         warnings,

@@ -61,14 +61,31 @@ def _normalize_relationships(relationships: list[dict[str, Any]]) -> dict[str, A
     }
 
 
-def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:
+def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:  # noqa: C901, PLR0912
     names = item.get("names")
     names_list = names if isinstance(names, list) else []
-    aliases = [
-        name.get("value")
-        for name in names_list
-        if isinstance(name, dict) and "alias" in name.get("types", [])
-    ]
+    aliases: list[str] = []
+    labels: list[dict[str, str]] = []
+    for name_entry in names_list:
+        if not isinstance(name_entry, dict):
+            continue
+        value = name_entry.get("value")
+        if not isinstance(value, str) or not value:
+            continue
+        name_types = name_entry.get("types")
+        normalized_types = (
+            [str(name_type).lower() for name_type in name_types]
+            if isinstance(name_types, list)
+            else []
+        )
+        if "alias" in normalized_types and value not in aliases:
+            aliases.append(value)
+        if "label" in normalized_types:
+            label_payload: dict[str, str] = {"label": value}
+            language = name_entry.get("lang")
+            if isinstance(language, str) and language:
+                label_payload["iso639"] = language
+            labels.append(label_payload)
 
     acronyms = item.get("acronyms")
     acronyms_list = [value for value in acronyms if isinstance(value, str)] if isinstance(acronyms, list) else []
@@ -109,6 +126,7 @@ def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:
         "name": _first_name(names_list),
         "aliases": aliases,
         "acronyms": acronyms_list,
+        "labels": labels,
         "types": type_names,
         "country": country_payload,
         "links": links_list,

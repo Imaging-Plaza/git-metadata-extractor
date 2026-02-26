@@ -12,6 +12,7 @@ from src.v2.canonicalization import (
     resolve_person_id,
     resolve_repository_id,
 )
+from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 from src.v2.pipeline.stages.models import ReconciledEntities
 from src.v2.pipeline.stages.privacy import anonymize_email
 
@@ -113,19 +114,70 @@ def _normalize_lookup_token(token: str) -> str:
     return token.strip().lower()
 
 
+def _lookup_token_variants(token: str) -> list[str]:
+    candidate = token.strip()
+    if not candidate:
+        return []
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str) -> None:
+        normalized_value = value.strip()
+        if not normalized_value:
+            return
+        if normalized_value in seen:
+            return
+        seen.add(normalized_value)
+        variants.append(normalized_value)
+
+    lowered = _normalize_lookup_token(candidate)
+    _add(lowered)
+
+    accent_folded = strip_accents(lowered).strip()
+    _add(accent_folded)
+
+    collapsed = normalize_string(candidate)
+    _add(collapsed)
+
+    return variants
+
+
 def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str) -> None:
     if not isinstance(token, str):
         return
-    normalized = _normalize_lookup_token(token)
-    if not normalized:
-        return
-    lookup[normalized] = canonical_id
+    for normalized in _lookup_token_variants(token):
+        lookup[normalized] = canonical_id
 
 
 def _resolve_lookup_token(lookup: dict[str, str], token: Any) -> str | None:
     if not isinstance(token, str):
         return None
-    return lookup.get(_normalize_lookup_token(token))
+    for normalized in _lookup_token_variants(token):
+        resolved = lookup.get(normalized)
+        if isinstance(resolved, str):
+            return resolved
+    return None
+
+
+def _register_organization_handle_lookup_tokens(
+    lookup: dict[str, str],
+    handle: Any,
+    canonical_id: str,
+) -> None:
+    if not isinstance(handle, str):
+        return
+    stripped_handle = handle.strip()
+    if not stripped_handle:
+        return
+
+    normalized_handle = stripped_handle[1:] if stripped_handle.startswith("@") else stripped_handle
+    if not normalized_handle:
+        return
+
+    _register_lookup_token(lookup, normalized_handle, canonical_id)
+    _register_lookup_token(lookup, f"@{normalized_handle}", canonical_id)
+    _register_lookup_token(lookup, stripped_handle, canonical_id)
 
 
 def _register_person_lookup_tokens(lookup: dict[str, str], person: dict[str, Any]) -> None:
@@ -147,13 +199,37 @@ def _register_organization_lookup_tokens(
     canonical_id = organization["id"]
     _register_lookup_token(lookup, canonical_id, canonical_id)
     _register_lookup_token(lookup, organization.get("schema:name"), canonical_id)
-    _register_lookup_token(lookup, organization.get("pulse:githubOrganizationHandle"), canonical_id)
+    _register_organization_handle_lookup_tokens(
+        lookup,
+        organization.get("pulse:githubOrganizationHandle"),
+        canonical_id,
+    )
     _register_lookup_token(lookup, organization.get("pulse:ror"), canonical_id)
     _register_lookup_token(lookup, organization.get("schema:identifier"), canonical_id)
+    alternate_names = organization.get("schema:alternateName")
+    if isinstance(alternate_names, list):
+        for alternate_name in alternate_names:
+            _register_lookup_token(lookup, alternate_name, canonical_id)
+    for key in ("aliases", "acronyms"):
+        values = organization.get(key)
+        if isinstance(values, list):
+            for value in values:
+                _register_lookup_token(lookup, value, canonical_id)
+    labels = organization.get("labels")
+    if isinstance(labels, list):
+        for label_payload in labels:
+            label = label_payload
+            if isinstance(label_payload, dict):
+                label = label_payload.get("label")
+            _register_lookup_token(lookup, label, canonical_id)
 
     identifiers = organization.get("identifiers")
     if isinstance(identifiers, dict):
-        _register_lookup_token(lookup, identifiers.get("pulse:githubOrganizationHandle"), canonical_id)
+        _register_organization_handle_lookup_tokens(
+            lookup,
+            identifiers.get("pulse:githubOrganizationHandle"),
+            canonical_id,
+        )
         _register_lookup_token(lookup, identifiers.get("pulse:ror"), canonical_id)
         _register_lookup_token(
             lookup,

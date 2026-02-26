@@ -430,6 +430,8 @@ def test_real_providers_execute_all_interface_methods_without_notimplementederro
     ror_organization = real_ror.get_organization("https://ror.org/02s376052")
     ror_matches = real_ror.search_organizations("epfl")
     assert ror_organization["id"] == "https://ror.org/02s376052"
+    assert isinstance(ror_organization.get("acronyms"), list)
+    assert isinstance(ror_organization.get("labels"), list)
     assert ror_matches
 
 

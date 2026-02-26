@@ -50,6 +50,13 @@
       "type": "string",
       "description": "Organization name. Example: 'École Polytechnique Fédérale de Lausanne'"
     },
+    "schema:alternateName": {
+      "type": "array",
+      "description": "Alternate organization names (aliases/acronyms/labels) used for entity matching. Example: ['EPFL', 'Swiss Federal Institute of Technology Lausanne']",
+      "items": {
+        "type": "string"
+      }
+    },
     "schema:identifier": {
       "type": ["string", "null"],
       "description": "Canonical identifier (typically ROR URL). Example: 'https://ror.org/02s376052'"

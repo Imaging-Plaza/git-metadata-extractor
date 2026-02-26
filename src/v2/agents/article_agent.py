@@ -12,6 +12,7 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 
 DEFAULT_QUERY_CAP = 8
 UNKNOWN_AUTHOR = "unknown-author"
@@ -53,6 +54,39 @@ def _as_string_list(value: Any) -> list[str]:
 def _normalize_token(value: Any) -> str | None:
     candidate = _as_string(value)
     return candidate.casefold() if candidate else None
+
+
+def _lookup_token_variants(value: Any) -> list[str]:
+    candidate = _as_string(value)
+    if candidate is None:
+        return []
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _add(token: str | None) -> None:
+        if token is None:
+            return
+        normalized = token.strip()
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        variants.append(normalized)
+
+    def _add_normalized_forms(token: str) -> None:
+        lowered = token.casefold()
+        _add(lowered)
+        _add(strip_accents(lowered))
+        _add(normalize_string(token))
+
+    _add_normalized_forms(candidate)
+
+    if "," in candidate:
+        family, given = (segment.strip() for segment in candidate.split(",", maxsplit=1))
+        if family and given:
+            _add_normalized_forms(f"{given} {family}")
+
+    return variants
 
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
@@ -120,33 +154,154 @@ def _collect_known_organizations(context: dict[str, Any]) -> list[dict[str, Any]
 
 
 def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str) -> None:
-    normalized = _normalize_token(token)
-    if normalized is None:
+    for normalized in _lookup_token_variants(token):
+        lookup.setdefault(normalized, canonical_id)
+
+
+def _resolve_lookup_token(lookup: dict[str, str], token: Any) -> str | None:
+    for normalized in _lookup_token_variants(token):
+        resolved = lookup.get(normalized)
+        if isinstance(resolved, str):
+            return resolved
+    return None
+
+
+def _register_organization_handle_tokens(
+    lookup: dict[str, str],
+    token: Any,
+    canonical_id: str,
+) -> None:
+    handle = _as_string(token)
+    if handle is None:
         return
-    lookup.setdefault(normalized, canonical_id)
+    normalized = handle[1:] if handle.startswith("@") else handle
+    if not normalized:
+        return
+    _register_lookup_token(lookup, normalized, canonical_id)
+    _register_lookup_token(lookup, f"@{normalized}", canonical_id)
+    _register_lookup_token(lookup, handle, canonical_id)
 
 
-def _build_person_lookup(persons: list[dict[str, Any]]) -> dict[str, str]:
+def _orcid_record_name(record: dict[str, Any]) -> str | None:
+    name = _as_string(record.get("name"))
+    if name:
+        return name
+
+    name_payload = record.get("name")
+    if not isinstance(name_payload, dict):
+        return None
+
+    given_names_payload = name_payload.get("given-names")
+    family_name_payload = name_payload.get("family-name")
+    given_name = (
+        _as_string(given_names_payload.get("value"))
+        if isinstance(given_names_payload, dict)
+        else None
+    )
+    family_name = (
+        _as_string(family_name_payload.get("value"))
+        if isinstance(family_name_payload, dict)
+        else None
+    )
+    if given_name and family_name:
+        return f"{given_name} {family_name}"
+    return given_name or family_name
+
+
+def _collect_person_alias_tokens(  # noqa: C901
+    person: dict[str, Any],
+    *,
+    derivation_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    aliases: list[str] = []
+
+    def _append(value: Any) -> None:
+        candidate = _as_string(value)
+        if candidate:
+            aliases.append(candidate)
+
+    person_id = _as_string(person.get("id"))
+
+    for key in (
+        "schema:name",
+        "name",
+        "display_name",
+        "github_display_name",
+        "github_name",
+        "orcid_name",
+        "infoscience_name",
+        "pulse:githubUsername",
+    ):
+        _append(person.get(key))
+
+    identifiers = person.get("identifiers")
+    if isinstance(identifiers, dict):
+        _append(identifiers.get("pulse:githubUsername"))
+
+    github_profile = person.get("github_profile")
+    if isinstance(github_profile, dict):
+        _append(github_profile.get("name"))
+        _append(github_profile.get("display_name"))
+        _append(github_profile.get("login"))
+
+    github_payload = person.get("github")
+    if isinstance(github_payload, dict):
+        _append(github_payload.get("name"))
+        _append(github_payload.get("login"))
+
+    orcid_record = person.get("orcid_record")
+    if isinstance(orcid_record, dict):
+        _append(_orcid_record_name(orcid_record))
+
+    infoscience_record = person.get("infoscience_record")
+    if isinstance(infoscience_record, dict):
+        _append(infoscience_record.get("name"))
+        _append(infoscience_record.get("displayName"))
+
+    if person_id and person_id in derivation_by_id:
+        derivation = derivation_by_id[person_id]
+        for key in (
+            "github_username",
+            "github_display_name",
+            "orcid_name",
+            "infoscience_name",
+            "person_name",
+        ):
+            _append(derivation.get(key))
+
+    return _dedupe_preserve_order(aliases)
+
+
+def _build_person_lookup(
+    persons: list[dict[str, Any]],
+    *,
+    person_derivations: Any = None,
+) -> dict[str, str]:
     lookup: dict[str, str] = {}
+    derivation_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(person_derivations, list):
+        for derivation in person_derivations:
+            if not isinstance(derivation, dict):
+                continue
+            person_id = _as_string(derivation.get("person_id"))
+            if person_id:
+                derivation_by_id[person_id] = derivation
+
     for person in persons:
         person_id = _as_string(person.get("id"))
         if person_id is None:
             continue
         _register_lookup_token(lookup, person_id, person_id)
-        _register_lookup_token(lookup, person.get("schema:name"), person_id)
-        _register_lookup_token(lookup, person.get("pulse:githubUsername"), person_id)
 
-        identifiers = person.get("identifiers")
-        if isinstance(identifiers, dict):
-            _register_lookup_token(
-                lookup,
-                identifiers.get("pulse:githubUsername"),
-                person_id,
-            )
+        for alias_token in _collect_person_alias_tokens(
+            person,
+            derivation_by_id=derivation_by_id,
+        ):
+            _register_lookup_token(lookup, alias_token, person_id)
     return lookup
 
 
-def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str, str]:
+def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str, str]:  # noqa: C901
     lookup: dict[str, str] = {}
     for organization in organizations:
         organization_id = _as_string(organization.get("id"))
@@ -154,16 +309,32 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
             continue
         _register_lookup_token(lookup, organization_id, organization_id)
         _register_lookup_token(lookup, organization.get("schema:name"), organization_id)
-        _register_lookup_token(
+        _register_organization_handle_tokens(
             lookup,
             organization.get("pulse:githubOrganizationHandle"),
             organization_id,
         )
         _register_lookup_token(lookup, organization.get("schema:identifier"), organization_id)
+        alternate_names = organization.get("schema:alternateName")
+        if isinstance(alternate_names, list):
+            for alternate_name in alternate_names:
+                _register_lookup_token(lookup, alternate_name, organization_id)
+        for key in ("aliases", "acronyms"):
+            values = organization.get(key)
+            if isinstance(values, list):
+                for value in values:
+                    _register_lookup_token(lookup, value, organization_id)
+        labels = organization.get("labels")
+        if isinstance(labels, list):
+            for label_payload in labels:
+                label = label_payload
+                if isinstance(label_payload, dict):
+                    label = label_payload.get("label")
+                _register_lookup_token(lookup, label, organization_id)
 
         identifiers = organization.get("identifiers")
         if isinstance(identifiers, dict):
-            _register_lookup_token(
+            _register_organization_handle_tokens(
                 lookup,
                 identifiers.get("pulse:githubOrganizationHandle"),
                 organization_id,
@@ -325,16 +496,21 @@ def _map_author_ids(
     *,
     person_lookup: dict[str, str],
     allow_synthetic_fallbacks: bool,
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str], int, int]:
     warnings: list[str] = []
     unresolved_authors: list[str] = []
     mapped_authors: list[str] = []
-    for author_name in _as_string_list(publication.get("authors")):
-        normalized_author = _normalize_token(author_name)
-        if normalized_author and normalized_author in person_lookup:
-            mapped_authors.append(person_lookup[normalized_author])
+    matched_authors = 0
+    unresolved_count = 0
+    author_names = _as_string_list(publication.get("authors"))
+    for author_name in author_names:
+        resolved_author = _resolve_lookup_token(person_lookup, author_name)
+        if isinstance(resolved_author, str):
+            mapped_authors.append(resolved_author)
+            matched_authors += 1
             continue
         unresolved_authors.append(author_name)
+        unresolved_count += 1
         if allow_synthetic_fallbacks:
             mapped_authors.append(author_name)
 
@@ -355,6 +531,8 @@ def _map_author_ids(
         _dedupe_preserve_order(mapped_authors),
         _dedupe_preserve_order(unresolved_authors),
         warnings,
+        matched_authors,
+        unresolved_count,
     )
 
 
@@ -367,9 +545,9 @@ def _map_source_organization(
     if source_organization is None:
         return None, []
 
-    normalized_source = _normalize_token(source_organization)
-    if normalized_source and normalized_source in organization_lookup:
-        return organization_lookup[normalized_source], []
+    resolved_source = _resolve_lookup_token(organization_lookup, source_organization)
+    if isinstance(resolved_source, str):
+        return resolved_source, []
 
     return source_organization, [
         f"Unresolved article source organization mapping: '{source_organization}'",
@@ -527,7 +705,10 @@ class ArticleAgentV2:
                 stats={"queries": queries, "articles": []},
             )
 
-        person_lookup = _build_person_lookup(_collect_known_persons(context))
+        person_lookup = _build_person_lookup(
+            _collect_known_persons(context),
+            person_derivations=context.get("person_derivations"),
+        )
         organization_lookup = _build_organization_lookup(_collect_known_organizations(context))
 
         ranked_candidates = _rank_and_dedupe_publications(raw_candidates)
@@ -536,7 +717,13 @@ class ArticleAgentV2:
         unresolved_author_names: list[str] = []
 
         for candidate in ranked_candidates:
-            author_ids, unresolved_authors, author_warnings = _map_author_ids(
+            (
+                author_ids,
+                unresolved_authors,
+                author_warnings,
+                matched_author_count,
+                unresolved_author_count,
+            ) = _map_author_ids(
                 candidate.publication,
                 person_lookup=person_lookup,
                 allow_synthetic_fallbacks=allow_synthetic_fallbacks,
@@ -552,7 +739,10 @@ class ArticleAgentV2:
                     warnings,
                     (
                         "Skipped article candidate due to missing resolvable authors with synthetic "
-                        f"fallbacks disabled: {_publication_label(candidate.publication)}"
+                        "fallbacks disabled: "
+                        f"{_publication_label(candidate.publication)} "
+                        f"(matched_authors={matched_author_count}, "
+                        f"unmatched_authors={unresolved_author_count})"
                     ),
                 )
                 continue

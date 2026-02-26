@@ -82,6 +82,7 @@ def test_organization_agent_output_validates_against_agent_schema(
     assert result.data["pulse:OrganizationType"] == "pulse:University"
     assert result.data["idSource"] == "pulse:ror"
     assert result.data["id"] == "https://ror.org/02s376052"
+    assert "EPFL" in result.data["schema:alternateName"]
     assert "source_repositories" not in result.data
 
     derivation = result.stats.get("derivation")
