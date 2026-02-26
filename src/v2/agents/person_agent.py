@@ -200,6 +200,9 @@ class PersonAgentV2:
                 for repo_name in repositories
                 if isinstance(repo_name, str) and repo_name
             ]
+        email = _anonymize_email(
+            context.get("email") or github_user.get("email"),
+        )
 
         payload = {
             "id": resolved_id,
@@ -217,9 +220,6 @@ class PersonAgentV2:
                 or (infoscience_match or {}).get("name")
                 or github_user.get("name")
                 or username
-            ),
-            "schema:email": _anonymize_email(
-                context.get("email") or github_user.get("email"),
             ),
             "schema:url": (
                 (infoscience_match or {}).get("profileUrl")
@@ -239,6 +239,8 @@ class PersonAgentV2:
             ),
             "pulse:owns": repository_ownership,
         }
+        if email is not None:
+            payload["schema:email"] = email
 
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):

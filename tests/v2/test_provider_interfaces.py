@@ -9,6 +9,7 @@ from src.cache.cached_parsers import (
     CachedGitHubOrganizationsParser,
     CachedGitHubUsersParser,
 )
+from src.data_models.infoscience import InfoscienceAuthor, InfoscienceSearchResult
 from src.parsers.orgs_parser import GitHubOrganizationsParser
 from src.parsers.users_parser import GitHubUsersParser
 from src.v2.providers import (
@@ -430,6 +431,34 @@ def test_real_providers_execute_all_interface_methods_without_notimplementederro
     ror_matches = real_ror.search_organizations("epfl")
     assert ror_organization["id"] == "https://ror.org/02s376052"
     assert ror_matches
+
+
+def test_real_infoscience_person_profile_url_is_coerced_to_string() -> None:
+    profile_url = (
+        "https://infoscience.epfl.ch/entities/person/"
+        "1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d"
+    )
+
+    async def _search_authors(_query: str, _max_results: int) -> InfoscienceSearchResult:
+        return InfoscienceSearchResult(
+            total_results=1,
+            authors=[
+                InfoscienceAuthor(
+                    uuid="1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d",
+                    name="Alice Smith",
+                    orcid="0000-0002-1825-0097",
+                    affiliation="EPFL",
+                    profile_url=profile_url,
+                ),
+            ],
+        )
+
+    provider = RealInfoscienceProvider(search_authors_func=_search_authors)
+    people = provider.search_person("alice smith")
+
+    assert len(people) == 1
+    assert people[0]["profileUrl"] == profile_url
+    assert isinstance(people[0]["profileUrl"], str)
 
 
 def _assert_publication_contract(publication: dict[str, Any]) -> None:

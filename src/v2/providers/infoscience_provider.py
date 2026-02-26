@@ -133,7 +133,11 @@ class RealInfoscienceProvider(InfoscienceProvider):
                     if isinstance(author.get("affiliation"), str)
                     else []
                 ),
-                "profileUrl": author.get("profile_url"),
+                "profileUrl": (
+                    str(author["profile_url"])
+                    if author.get("profile_url") is not None
+                    else None
+                ),
             }
             for author in authors
         ]

@@ -147,3 +147,26 @@ def test_person_agent_repository_mode_owns_only_source_repo() -> None:
 
     assert result.data["pulse:owns"] == ["owner-org/source-repo"]
     assert len(result.data["org:hasMembership"]) >= MIN_EXPECTED_MEMBERSHIPS
+
+
+def test_person_agent_omits_schema_email_when_no_email_is_available() -> None:
+    agent = PersonAgentV2()
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=MockInfoscienceProvider(),
+    )
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "username": "octocat",
+                "orcid": "0000-0002-1825-0097",
+                "person_query": "alice smith",
+            },
+            providers,
+        ),
+    )
+
+    assert "schema:email" not in result.data
+    assert all("schema:email" not in warning for warning in result.warnings)

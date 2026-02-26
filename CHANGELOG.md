@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Coerced Infoscience person `profile_url` values to plain strings in `RealInfoscienceProvider.search_person(...)` so `schema:url` is no longer dropped due to `HttpUrl` object typing in permissive agent validation.
+- Updated `PersonAgentV2` payload assembly to omit `schema:email` when anonymization returns `None`, removing noisy optional-field validation warnings without changing SHACL semantics.
+- Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-03-membership-organization-resolution.md` after completing Plan C issues 1 and 2.
 - Enforced v2 production-safe fallback behavior in `/v2/extract` by introducing `V2_ALLOW_SYNTHETIC_FALLBACKS` (default `false`) and wiring it through article generation and reconciliation to prevent synthetic fallback entities/values in default production output.
 - Standardized v2 agent-emitted `identifiers.uuid` generation on shared UUIDv4 helper `src/v2/agents/models.py::generate_uuid()` across person/repository/organization/article/membership/contribution agents.
 - Updated reconciliation controls so unresolved article authors, fallback memberships, and fallback contributions are only synthesized when synthetic fallback mode is explicitly enabled.
@@ -94,6 +97,12 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/providers/infoscience_provider.py src/v2/agents/person_agent.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/` (1 known failure remains: `tests/v2/test_extract_golden.py::test_extract_endpoint_matches_golden_contract[...]` expected `entities_count=3`, actual `5`)
+- `PYTHONPATH=. .venv/bin/pytest -m v2` (same single known golden failure; no non-v2 collection/import failures)
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json&force_refresh=true" > /tmp/issue01_issue02_extract.json && jq '{status: .status, source_url: .source_url, detected_type: .detected_type, warnings_count: (.warnings|length), first_warning: (.warnings[0] // null)}' /tmp/issue01_issue02_extract.json`
+- `jq '{schema_url_httpurl_warnings: ([.warnings[] | select(test("schema:url") and test("HttpUrl"))] | length), schema_email_none_warnings: ([.warnings[] | select(test("schema:email") and test("None is not of type '\\''string'\\''"))] | length), sample_schema_url_warning: ([.warnings[] | select(test("schema:url"))][0] // null), sample_schema_email_warning: ([.warnings[] | select(test("schema:email"))][0] // null)}' /tmp/issue01_issue02_extract.json`
 - `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json" | jq '{source_url, detected_type, output_format, error_type, entities_count: .stats.entities_count, stages_completed: .stats.stages_completed, output_keys: (.output|keys)}'`
 - `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json" | jq '{root_id: .output.root_entity.id, date_created: .output.root_entity[\"schema:dateCreated\"]}'`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_repository_agent.py tests/v2/test_extract_e2e.py -q`
@@ -201,6 +210,8 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added regression test `test_real_infoscience_person_profile_url_is_coerced_to_string` in `tests/v2/test_provider_interfaces.py` to lock `HttpUrl` to `str` coercion in real Infoscience provider person results.
+- Added regression test `test_person_agent_omits_schema_email_when_no_email_is_available` in `tests/v2/test_person_agent.py` to lock `None` email pre-filter behavior.
 - Added v2 UUID helper regression coverage (`tests/v2/test_agent_uuid_generation.py`) asserting UUIDv4 generation semantics.
 - Added reconciliation and extract e2e regression coverage for synthetic-fallback policy, including stress coverage for large unresolved Infoscience author lists to prevent fallback-entity explosions in production mode.
 - Added repository-agent regression coverage for strict date normalization from date-only source values in `tests/v2/test_repository_agent.py`.
