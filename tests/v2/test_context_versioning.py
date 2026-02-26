@@ -126,6 +126,26 @@ def test_context_file_promotes_relationship_term_mappings() -> None:
         term="schema:url",
         expected={"@type": "@id"},
     )
+    _assert_term_mapping(
+        payload,
+        term="schema:license",
+        expected={"@type": "@id"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="schema:citation",
+        expected={"@type": "@id"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="org:hasUnit",
+        expected={"@type": "@id", "@container": "@set"},
+    )
+    _assert_term_mapping(
+        payload,
+        term="org:unitOf",
+        expected={"@type": "@id"},
+    )
 
 
 def test_context_file_promotes_datatype_term_mappings() -> None:

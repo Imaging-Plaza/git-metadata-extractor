@@ -87,3 +87,60 @@ def test_build_jsonld_output_emits_schema_url_as_iri_node() -> None:
     assert len(objects) == 1
     assert objects[0] == URIRef("https://github.com/alice")
     assert not isinstance(objects[0], Literal)
+
+
+def test_build_jsonld_output_emits_license_citation_and_org_hierarchy_as_iris() -> None:
+    assembled = AssembledOutput(
+        root_entity={
+            "id": "owner/repo",
+            "type": "schema:SoftwareSourceCode",
+            "schema:name": "owner/repo",
+            "schema:author": ["alice"],
+            "schema:license": "https://spdx.org/licenses/MIT.html",
+            "schema:citation": "https://doi.org/10.1234/example",
+        },
+        related_entities=[
+            {
+                "id": "alice",
+                "type": "schema:Person",
+                "schema:name": "Alice",
+                "pulse:githubUsername": "alice",
+            },
+            {
+                "id": "https://ror.org/02s376052",
+                "type": "org:Organization",
+                "schema:name": "EPFL",
+                "org:hasUnit": ["https://github.com/sdsc-ordes"],
+            },
+            {
+                "id": "https://github.com/sdsc-ordes",
+                "type": "org:Organization",
+                "schema:name": "sdsc-ordes",
+                "org:unitOf": "https://ror.org/02s376052",
+            },
+        ],
+    )
+    payload = build_jsonld_output(
+        assembled=assembled,
+        jsonld_context=_context(),
+    )
+
+    graph = Graph()
+    graph.parse(data=json.dumps(payload), format="json-ld")
+
+    repo_subject = URIRef(f"{ENTITY_URI_PREFIX}owner/repo")
+    org_parent = URIRef("https://ror.org/02s376052")
+    org_child = URIRef("https://github.com/sdsc-ordes")
+
+    assert list(graph.objects(repo_subject, URIRef("http://schema.org/license"))) == [
+        URIRef("https://spdx.org/licenses/MIT.html"),
+    ]
+    assert list(graph.objects(repo_subject, URIRef("http://schema.org/citation"))) == [
+        URIRef("https://doi.org/10.1234/example"),
+    ]
+    assert list(graph.objects(org_parent, URIRef("http://www.w3.org/ns/org#hasUnit"))) == [
+        org_child,
+    ]
+    assert list(graph.objects(org_child, URIRef("http://www.w3.org/ns/org#unitOf"))) == [
+        org_parent,
+    ]

@@ -24,12 +24,25 @@
     "schema:url": {
       "@type": "@id"
     },
+    "schema:license": {
+      "@type": "@id"
+    },
+    "schema:citation": {
+      "@type": "@id"
+    },
     "org:organization": {
       "@type": "@id"
     },
     "org:hasMembership": {
       "@type": "@id",
       "@container": "@set"
+    },
+    "org:hasUnit": {
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "org:unitOf": {
+      "@type": "@id"
     },
     "pulse:hasContribution": {
       "@type": "@id",
