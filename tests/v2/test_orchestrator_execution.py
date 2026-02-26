@@ -230,6 +230,83 @@ def test_execute_pipeline_completes_full_repository_plan() -> None:
     assert serialized_result["typed_entity_buckets"] == typed_buckets
 
 
+def test_execute_skips_github_organization_accounts_from_person_fanout() -> None:
+    class _GitHubProviderWithOrgContributor(MockGitHubProvider):
+        def get_user(self, username: str) -> dict[str, Any]:
+            if username == "alice":
+                return {"login": "alice", "type": "User", "name": "Alice"}
+            if username == "sdsc-ordes":
+                return {
+                    "login": "sdsc-ordes",
+                    "type": "Organization",
+                    "name": "Swiss Data Science Center - ORD",
+                }
+            return super().get_user(username)
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "sdsc-ordes/gimie",
+                    "metadata": {"owner": {"login": "sdsc-ordes", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}, {"login": "sdsc-ordes"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["username"]})
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=ProviderSet(github=_GitHubProviderWithOrgContributor()),
+            context={"url_info": _classification(), "source_url": "https://github.com/sdsc-ordes/gimie"},
+        ),
+    )
+
+    assert "person_agent:alice" in result.agent_results
+    assert "person_agent:sdsc-ordes" not in result.agent_results
+    assert any(
+        warning == "Skipping person fanout for GitHub organization account: sdsc-ordes"
+        for warning in result.warnings
+    )
+
+
 def test_execute_runs_agents_within_stage_concurrently() -> None:
     start_times: list[float] = []
 

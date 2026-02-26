@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Updated v2 person-fanout orchestration to skip GitHub contributor accounts whose resolved profile type is `Organization`, preventing organization handles (for example `sdsc-ordes`) from being emitted by `person_agent` as `schema:Person`.
+- Updated reconciliation to model GitHub organization accounts as organization units when they act as repository owners under a canonical organization, adding `org:hasUnit` (canonical org) and `org:unitOf` (GitHub org-account node) links.
+- Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-05-schema-identifier-literal-vs-iri.md`.
 - Coerced Infoscience person `profile_url` values to plain strings in `RealInfoscienceProvider.search_person(...)` so `schema:url` is no longer dropped due to `HttpUrl` object typing in permissive agent validation.
 - Updated `PersonAgentV2` payload assembly to omit `schema:email` when anonymization returns `None`, removing noisy optional-field validation warnings without changing SHACL semantics.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-03-membership-organization-resolution.md` after completing Plan C issues 1 and 2.
@@ -97,6 +100,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_orchestrator_execution.py tests/v2/test_reconciliation.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/orchestrator.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_orchestrator_execution.py tests/v2/test_reconciliation.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/orchestrator.py src/v2/pipeline/stages/reconciliation.py`
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/` (1 known failure remains: `tests/v2/test_extract_golden.py::test_extract_endpoint_matches_golden_contract[...]` expected `entities_count=3`, actual `5`)
+- `curl -sS -m 180 "http://localhost:1234/v2/extract/https%3A%2F%2Fwww.github.com%2Fsdsc-ordes%2Fgimie?output_format=json&force_refresh=true"` (timed out with `curl: (28)`; local `serve-dev` endpoint not responding during this run)
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/providers/infoscience_provider.py src/v2/agents/person_agent.py tests/v2/test_provider_interfaces.py tests/v2/test_person_agent.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/` (1 known failure remains: `tests/v2/test_extract_golden.py::test_extract_endpoint_matches_golden_contract[...]` expected `entities_count=3`, actual `5`)
@@ -210,6 +218,8 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added orchestrator regression coverage `test_execute_skips_github_organization_accounts_from_person_fanout` to lock the org-account exclusion behavior in person fanout.
+- Added reconciliation regression coverage `test_reconcile_models_github_org_account_as_unit_for_repository_owner` to lock `org:hasUnit`/`org:unitOf` modeling for GitHub org accounts.
 - Added regression test `test_real_infoscience_person_profile_url_is_coerced_to_string` in `tests/v2/test_provider_interfaces.py` to lock `HttpUrl` to `str` coercion in real Infoscience provider person results.
 - Added regression test `test_person_agent_omits_schema_email_when_no_email_is_available` in `tests/v2/test_person_agent.py` to lock `None` email pre-filter behavior.
 - Added v2 UUID helper regression coverage (`tests/v2/test_agent_uuid_generation.py`) asserting UUIDv4 generation semantics.

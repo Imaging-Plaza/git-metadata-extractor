@@ -162,6 +162,115 @@ def _register_organization_lookup_tokens(
         )
 
 
+def _organization_github_handle(organization: dict[str, Any]) -> str | None:
+    handle = organization.get("pulse:githubOrganizationHandle")
+    if isinstance(handle, str) and handle:
+        return handle
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        identifier_handle = identifiers.get("pulse:githubOrganizationHandle")
+        if isinstance(identifier_handle, str) and identifier_handle:
+            return identifier_handle
+    return None
+
+
+def _build_github_org_account_unit(
+    *,
+    github_handle: str,
+    parent_org_id: str,
+) -> dict[str, Any]:
+    return {
+        "id": github_handle,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            "pulse:ror": None,
+            "pulse:infoscienceOrganizationIdentifier": None,
+            "pulse:githubOrganizationHandle": github_handle,
+            "uuid": str(uuid4()),
+        },
+        "idSource": "pulse:githubOrganizationHandle",
+        "schema:name": github_handle,
+        "schema:identifier": None,
+        "pulse:githubOrganizationHandle": github_handle,
+        "pulse:infoscienceOrganizationIdentifier": None,
+        "pulse:OrganizationType": "pulse:OtherOrganizationType",
+        "pulse:githubOrgFollowers": None,
+        "org:hasUnit": [],
+        "org:unitOf": parent_org_id,
+        "pulse:owns": [],
+    }
+
+
+def _ensure_github_org_units_for_repository_owners(
+    *,
+    organizations: list[dict[str, Any]],
+    repositories: list[dict[str, Any]],
+    organization_lookup: dict[str, str],
+) -> None:
+    repository_owner_handles = {
+        owner
+        for repository in repositories
+        for owner in [repository.get("pulse:ownedBy")]
+        if isinstance(owner, str) and owner
+    }
+    if not repository_owner_handles:
+        return
+
+    organizations_by_id: dict[str, dict[str, Any]] = {
+        organization["id"]: organization
+        for organization in organizations
+        if isinstance(organization.get("id"), str)
+    }
+
+    for organization in list(organizations):
+        canonical_org_id = organization.get("id")
+        if not isinstance(canonical_org_id, str) or not canonical_org_id:
+            continue
+
+        github_handle = _organization_github_handle(organization)
+        if (
+            not isinstance(github_handle, str)
+            or not github_handle
+            or github_handle == canonical_org_id
+            or github_handle not in repository_owner_handles
+        ):
+            continue
+
+        org_units = organization.get("org:hasUnit")
+        if not isinstance(org_units, list):
+            org_units = []
+        organization["org:hasUnit"] = _dedupe_preserve_order(
+            [
+                *[value for value in org_units if isinstance(value, str) and value],
+                github_handle,
+            ],
+        )
+
+        github_unit = organizations_by_id.get(github_handle)
+        if github_unit is None:
+            github_unit = _build_github_org_account_unit(
+                github_handle=github_handle,
+                parent_org_id=canonical_org_id,
+            )
+            organizations.append(github_unit)
+            organizations_by_id[github_handle] = github_unit
+            _register_organization_lookup_tokens(organization_lookup, github_unit)
+
+        github_unit["org:unitOf"] = canonical_org_id
+        github_unit["type"] = "org:Organization"
+        github_unit["shacl"] = "pulse:OrganizationShape"
+        github_unit["pulse:githubOrganizationHandle"] = github_handle
+
+        github_identifiers = github_unit.get("identifiers")
+        if not isinstance(github_identifiers, dict):
+            github_identifiers = {}
+        github_identifiers["pulse:githubOrganizationHandle"] = github_handle
+        if not isinstance(github_identifiers.get("uuid"), str) or not github_identifiers.get("uuid"):
+            github_identifiers["uuid"] = str(uuid4())
+        github_unit["identifiers"] = github_identifiers
+
+
 def _register_repository_lookup_tokens(
     lookup: dict[str, str],
     repository: dict[str, Any],
@@ -502,6 +611,12 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         canonical_id, id_source = resolve_article_id(article)
         article["id"] = canonical_id
         article["idSource"] = id_source
+
+    _ensure_github_org_units_for_repository_owners(
+        organizations=organizations,
+        repositories=repositories,
+        organization_lookup=organization_lookup,
+    )
 
     fallback_membership_pairs: set[tuple[str, str]] = set()
     fallback_contribution_pairs: set[tuple[str, str]] = set()

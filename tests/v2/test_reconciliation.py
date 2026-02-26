@@ -16,20 +16,32 @@ def _person(github_username: str, *, affiliations: list[str] | None = None) -> d
     }
 
 
-def _organization(name: str, ror: str) -> dict:
+def _organization(
+    name: str,
+    ror: str,
+    *,
+    github_handle: str | None = None,
+) -> dict:
     return {
         "schema:name": name,
         "schema:identifier": ror,
         "identifiers": {
             "pulse:ror": ror,
             "pulse:infoscienceOrganizationIdentifier": None,
-            "pulse:githubOrganizationHandle": None,
+            "pulse:githubOrganizationHandle": github_handle,
         },
+        "pulse:githubOrganizationHandle": github_handle,
         "pulse:owns": [],
     }
 
 
-def _repository(handle: str, authors: list[str], *, fork_of: str | None = None) -> dict:
+def _repository(
+    handle: str,
+    authors: list[str],
+    *,
+    fork_of: str | None = None,
+    owned_by: str | None = None,
+) -> dict:
     return {
         "schema:name": handle,
         "pulse:githubRepositoryHandle": handle,
@@ -39,6 +51,7 @@ def _repository(handle: str, authors: list[str], *, fork_of: str | None = None) 
         },
         "schema:author": authors,
         "pulse:isForkOf": fork_of,
+        "pulse:ownedBy": owned_by,
     }
 
 
@@ -331,3 +344,42 @@ def test_reconcile_skips_fallback_memberships_and_contributions_when_disabled() 
         in warning
         for warning in reconciled.link_warnings
     )
+
+
+def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> None:
+    entities = {
+        "persons": [],
+        "organizations": [
+            _organization(
+                "Swiss Data Science Center",
+                "https://ror.org/02hdt9m26",
+                github_handle="sdsc-ordes",
+            ),
+        ],
+        "repositories": [
+            _repository(
+                "sdsc-ordes/gimie",
+                [],
+                owned_by="sdsc-ordes",
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    organizations = reconciled.entities["organizations"]
+    canonical_org = next(
+        organization
+        for organization in organizations
+        if organization["id"] == "https://ror.org/02hdt9m26"
+    )
+    github_org_account = next(
+        organization
+        for organization in organizations
+        if organization["id"] == "sdsc-ordes"
+    )
+
+    assert "sdsc-ordes" in canonical_org["org:hasUnit"]
+    assert github_org_account["org:unitOf"] == "https://ror.org/02hdt9m26"
+    assert github_org_account["pulse:githubOrganizationHandle"] == "sdsc-ordes"
+    assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "sdsc-ordes"

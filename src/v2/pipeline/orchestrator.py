@@ -185,7 +185,7 @@ class PipelineOrchestrator:
             raise ValueError
         return plan
 
-    async def execute(
+    async def execute(  # noqa: C901
         self,
         plan: ExecutionPlan,
         providers: ProviderSet,
@@ -231,6 +231,13 @@ class PipelineOrchestrator:
                 continue
 
             work_items = self._build_work_items(stage.name, plan.detected_type, runtime_context)
+            if stage.name == STAGE_PERSON_AGENTS and work_items:
+                work_items, pre_stage_warnings = self._filter_person_work_items(
+                    work_items,
+                    providers,
+                )
+                for warning in pre_stage_warnings:
+                    _append_unique(warnings, warning)
             with pipeline_tracer.trace_stage(
                 STAGE_AGENTS,
                 orchestrator_stage=stage.name,
@@ -527,6 +534,47 @@ class PipelineOrchestrator:
             ]
 
         return []
+
+    @staticmethod
+    def _filter_person_work_items(
+        work_items: list[_StageWorkItem],
+        providers: ProviderSet,
+    ) -> tuple[list[_StageWorkItem], list[str]]:
+        filtered_items: list[_StageWorkItem] = []
+        warnings: list[str] = []
+        account_type_by_username: dict[str, str | None] = {}
+
+        for work_item in work_items:
+            username = work_item.context.get("username")
+            if not isinstance(username, str) or not username:
+                filtered_items.append(work_item)
+                continue
+
+            if username not in account_type_by_username:
+                account_type: str | None = None
+                try:
+                    github_user = providers.github.get_user(username)
+                except Exception:  # noqa: BLE001
+                    github_user = {}
+                if isinstance(github_user, dict):
+                    raw_type = github_user.get("type")
+                    if isinstance(raw_type, str) and raw_type:
+                        account_type = raw_type.lower()
+                account_type_by_username[username] = account_type
+
+            if account_type_by_username.get(username) == "organization":
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipping person fanout for GitHub organization account: "
+                        f"{username}"
+                    ),
+                )
+                continue
+
+            filtered_items.append(work_item)
+
+        return filtered_items, warnings
 
     def _repository_root_context(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
         bundle = runtime_context.get("context_bundle")

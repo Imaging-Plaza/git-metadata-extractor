@@ -23,7 +23,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
 - Execute tasks in dependency order from `.internal/v2-plan/README.md`.
 - V2B continuation work is tracked in `.internal/v2b-plan/` and executes in dependency order from `.internal/v2b-plan/README.md`.
-- Current entry task: `.internal/plan-c/issue-03-membership-organization-resolution.md` (Issues 1 and 2 from `.internal/plan-c` completed: Infoscience `HttpUrl` coercion for `schema:url` and `schema:email` `None` pre-filtering in person payloads).
+- Current entry task: `.internal/plan-c/issue-05-schema-identifier-literal-vs-iri.md` (Plan C follow-up after implementing org-account classification guardrails: repository contributor GitHub `Organization` accounts are skipped from person fanout, and canonical orgs now model GitHub org-account units via `org:hasUnit`/`org:unitOf`.)
 - Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
