@@ -147,6 +147,21 @@ def test_resolve_person_id_is_idempotent_for_pre_resolved_payload() -> None:
     assert id_source == "pulse:orcid"
 
 
+def test_resolve_person_id_canonicalizes_pre_resolved_github_handle() -> None:
+    person = {
+        "id": "johndoe",
+        "idSource": "pulse:githubUsername",
+        "identifiers": {
+            "pulse:githubUsername": "johndoe",
+        },
+    }
+
+    canonical_id, id_source = resolve_person_id(person)
+
+    assert canonical_id == "https://github.com/johndoe"
+    assert id_source == "pulse:githubUsername"
+
+
 def test_resolve_person_id_output_is_strict_enum_compatible(
     load_fixture: Callable[[str, str], Any],
 ) -> None:

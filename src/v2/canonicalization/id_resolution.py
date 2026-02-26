@@ -77,6 +77,18 @@ def _lookup_identifier(entity: dict[str, Any], keys: tuple[str, ...]) -> str | N
     return None
 
 
+def _normalize_uuid(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    try:
+        return str(uuid.UUID(candidate))
+    except ValueError:
+        return None
+
+
 def _existing_resolution(
     entity: dict[str, Any],
     valid_sources: set[str],
@@ -88,7 +100,63 @@ def _existing_resolution(
     normalized_source = ID_SOURCE_ALIASES.get(id_source, id_source)
     if normalized_source not in valid_sources:
         return None
-    return entity_id, normalized_source
+    normalized_id: str | None = None
+
+    if normalized_source == "pulse:orcid":
+        normalized_orcid = _normalize_orcid(entity_id)
+        if normalized_orcid is not None:
+            normalized_id = f"{ORCID_BASE_URI}{normalized_orcid}"
+    elif normalized_source == "pulse:infosciencePersonIdentifier":
+        normalized_infoscience_id = _normalize_infoscience_identifier(
+            entity_id,
+            entity_path="person",
+            legacy_path="person",
+        )
+        if normalized_infoscience_id is not None:
+            normalized_id = f"{INFOSCIENCE_PERSON_BASE_URI}{normalized_infoscience_id}"
+    elif normalized_source == "pulse:githubUsername":
+        normalized_github_username = _normalize_github_handle(entity_id)
+        if normalized_github_username is not None:
+            normalized_id = f"{GITHUB_BASE_URI}{normalized_github_username}"
+    elif normalized_source == "pulse:ror":
+        normalized_ror = _normalize_ror(entity_id)
+        if normalized_ror is not None:
+            normalized_id = f"{ROR_BASE_URI}{normalized_ror}"
+    elif normalized_source == "pulse:infoscienceOrganizationIdentifier":
+        normalized_infoscience_id = _normalize_infoscience_identifier(
+            entity_id,
+            entity_path="orgunit",
+            legacy_path="organization",
+        )
+        if normalized_infoscience_id is not None:
+            normalized_id = (
+                f"{INFOSCIENCE_ORGANIZATION_BASE_URI}{normalized_infoscience_id}"
+            )
+    elif normalized_source == "pulse:githubOrganizationHandle":
+        normalized_github_handle = _normalize_github_handle(entity_id)
+        if normalized_github_handle is not None:
+            normalized_id = f"{GITHUB_BASE_URI}{normalized_github_handle}"
+    elif normalized_source == "pulse:githubRepositoryHandle":
+        normalized_repository_handle = _normalize_repository_handle(entity_id)
+        if normalized_repository_handle is not None:
+            normalized_id = f"{GITHUB_BASE_URI}{normalized_repository_handle}"
+    elif normalized_source == "schema:identifier":
+        normalized_doi = _normalize_doi(entity_id)
+        if normalized_doi is not None:
+            normalized_id = f"{DOI_BASE_URI}{normalized_doi}"
+    elif normalized_source == "pulse:infoscienceArticleIdentifier":
+        normalized_infoscience_id = _normalize_infoscience_identifier(
+            entity_id,
+            entity_path="publication",
+        )
+        if normalized_infoscience_id is not None:
+            normalized_id = f"{INFOSCIENCE_PUBLICATION_BASE_URI}{normalized_infoscience_id}"
+    elif normalized_source == "uuid":
+        normalized_id = _normalize_uuid(entity_id)
+
+    if normalized_id is None:
+        return None
+    return normalized_id, normalized_source
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:

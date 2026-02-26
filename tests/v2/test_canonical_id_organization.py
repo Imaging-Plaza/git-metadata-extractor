@@ -130,6 +130,21 @@ def test_resolve_organization_id_is_deterministic() -> None:
     assert first_source == second_source == "uuid"
 
 
+def test_resolve_organization_id_canonicalizes_pre_resolved_github_handle() -> None:
+    organization = {
+        "id": "epfl-center-imaging",
+        "idSource": "pulse:githubOrganizationHandle",
+        "identifiers": {
+            "pulse:githubOrganizationHandle": "epfl-center-imaging",
+        },
+    }
+
+    canonical_id, id_source = resolve_organization_id(organization)
+
+    assert canonical_id == "https://github.com/epfl-center-imaging"
+    assert id_source == "pulse:githubOrganizationHandle"
+
+
 def test_resolve_organization_id_output_is_strict_enum_compatible(
     load_fixture: Callable[[str, str], Any],
 ) -> None:

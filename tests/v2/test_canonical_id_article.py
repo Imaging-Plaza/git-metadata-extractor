@@ -95,6 +95,21 @@ def test_resolve_article_id_is_idempotent_for_pre_resolved_payload() -> None:
     assert id_source == "schema:identifier"
 
 
+def test_resolve_article_id_canonicalizes_pre_resolved_doi_identifier() -> None:
+    article = {
+        "id": "10.1038/s41586-024-07856-z",
+        "idSource": "schema:identifier",
+        "identifiers": {
+            "schema:identifier": "10.1038/s41586-024-07856-z",
+        },
+    }
+
+    canonical_id, id_source = resolve_article_id(article)
+
+    assert canonical_id == "https://doi.org/10.1038/s41586-024-07856-z"
+    assert id_source == "schema:identifier"
+
+
 def test_resolve_article_id_output_is_strict_enum_compatible(
     load_fixture: Callable[[str, str], Any],
 ) -> None:

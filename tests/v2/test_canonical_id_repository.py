@@ -78,3 +78,18 @@ def test_resolve_repository_id_output_is_strict_enum_compatible(
     result = validator.validate("repository", repository)
 
     assert result.is_valid is True
+
+
+def test_resolve_repository_id_canonicalizes_pre_resolved_github_handle() -> None:
+    repository = {
+        "id": "owner/repo",
+        "idSource": "pulse:githubRepositoryHandle",
+        "identifiers": {
+            "pulse:githubRepositoryHandle": "owner/repo",
+        },
+    }
+
+    canonical_id, id_source = resolve_repository_id(repository)
+
+    assert canonical_id == "https://github.com/owner/repo"
+    assert id_source == "pulse:githubRepositoryHandle"
