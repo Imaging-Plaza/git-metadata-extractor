@@ -21,6 +21,9 @@
     "schema:sourceOrganization": {
       "@type": "@id"
     },
+    "schema:url": {
+      "@type": "@id"
+    },
     "org:organization": {
       "@type": "@id"
     },

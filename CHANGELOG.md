@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unpublished]
 
+### Added
+- Added focused v2 regression coverage for Plan C issues 07/08/09 in `tests/v2/test_jsonld_build.py`, `tests/v2/test_context_versioning.py`, and `tests/v2/test_reconciliation.py`:
+  - literal `schema:name` / `pulse:githubUsername` values that match entity IDs remain literals,
+  - `schema:url` compacts/expands as an IRI-valued term,
+  - organization Infoscience identifiers normalize from URL input to UUID tokens.
+
 ### Changed
+- Updated JSON-LD build normalization to be context-property-aware so string values are promoted to `{"@id": ...}` only for terms declared with `@type: @id`.
+- Updated v2 JSON-LD context promotion with explicit `schema:url` IRI typing (`"schema:url": {"@type": "@id"}`) to satisfy SHACL IRI node-kind expectations.
+- Updated reconciliation organization identifier normalization so `pulse:infoscienceOrganizationIdentifier` is persisted as UUID form (including URL-input extraction) in both top-level and `identifiers` payload fields.
+- Updated `AGENTS.md` handoff to set the next entry task to `.internal/phase-8/P8-01-basic-live-connectivity.md` after completing Plan C issues 07, 08, and 09.
 - Updated RDF graph coercion to be predicate-aware for string-constrained fields so URL-looking `schema:identifier` values are emitted as `xsd:string` literals instead of IRIs.
 - Updated reconciliation organization normalization to prune unresolved `org:hasUnit` / `org:unitOf` links and emit explicit dropped-reference counters, preventing dangling organization hierarchy edges.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-07-jsonld-literal-to-id-conversion.md` after completing Plan C issues 5 and 6.
@@ -106,6 +116,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_jsonld_build.py tests/v2/test_context_versioning.py tests/v2/test_reconciliation.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_jsonld_build.py tests/v2/test_context_versioning.py tests/v2/test_reconciliation.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/reconciliation.py`
+- `python -m json.tool src/v2/schemas/context/v2.0.jsonld`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_rdf_sync.py tests/v2/test_reconciliation.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/graph/rdf_sync.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_rdf_sync.py tests/v2/test_reconciliation.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/graph/rdf_sync.py src/v2/pipeline/stages/reconciliation.py`

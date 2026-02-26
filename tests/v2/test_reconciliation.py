@@ -217,6 +217,70 @@ def test_reconcile_normalizes_article_ids_and_article_relationship_references() 
     assert article["schema:sourceOrganization"] == organization_id
 
 
+def test_reconcile_normalizes_infoscience_organization_identifier_url_to_uuid() -> None:
+    infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
+    infoscience_url = (
+        "https://infoscience.epfl.ch/server/api/entities/organization/"
+        f"{infoscience_uuid}/full"
+    )
+    entities = {
+        "persons": [],
+        "organizations": [
+            {
+                "schema:name": "EPFL Unit",
+                "schema:identifier": None,
+                "identifiers": {
+                    "pulse:ror": None,
+                    "pulse:infoscienceOrganizationIdentifier": infoscience_url,
+                    "pulse:githubOrganizationHandle": None,
+                },
+                "pulse:infoscienceOrganizationIdentifier": infoscience_url,
+                "pulse:githubOrganizationHandle": None,
+                "pulse:owns": [],
+            },
+        ],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organization = reconciled.entities["organizations"][0]
+
+    assert organization["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert organization["id"] == f"https://infoscience.epfl.ch/server/api/core/items/{infoscience_uuid}"
+    assert organization["idSource"] == "pulse:infoscienceOrganizationIdentifier"
+
+
+def test_reconcile_preserves_uuid_infoscience_organization_identifier() -> None:
+    infoscience_uuid = "41674f42-ba15-4612-9817-2a6f60985c01"
+    entities = {
+        "persons": [],
+        "organizations": [
+            {
+                "schema:name": "Another EPFL Unit",
+                "schema:identifier": None,
+                "identifiers": {
+                    "pulse:ror": None,
+                    "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                    "pulse:githubOrganizationHandle": None,
+                },
+                "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                "pulse:githubOrganizationHandle": None,
+                "pulse:owns": [],
+            },
+        ],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organization = reconciled.entities["organizations"][0]
+
+    assert organization["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert organization["id"] == f"https://infoscience.epfl.ch/server/api/core/items/{infoscience_uuid}"
+    assert organization["idSource"] == "pulse:infoscienceOrganizationIdentifier"
+
+
 def test_reconcile_synthesizes_person_for_unresolved_article_author_references() -> None:
     unresolved_authors = ["Gehant, Sebastien", "Gfeller, David"]
     entities = {

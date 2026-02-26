@@ -110,6 +110,22 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
     person["pulse:githubUsername"] = github_username
 
 
+def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
+    identifiers = organization.get("identifiers")
+    normalized_identifiers = (
+        deepcopy(identifiers)
+        if isinstance(identifiers, dict)
+        else {}
+    )
+    normalized_infoscience_id = _normalize_infoscience_uuid(
+        normalized_identifiers.get("pulse:infoscienceOrganizationIdentifier")
+        or organization.get("pulse:infoscienceOrganizationIdentifier"),
+    )
+    normalized_identifiers["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
+    organization["identifiers"] = normalized_identifiers
+    organization["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
+
+
 def _normalize_lookup_token(token: str) -> str:
     return token.strip().lower()
 
@@ -730,6 +746,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             person["schema:email"] = anonymize_email(email)
 
     for organization in organizations:
+        _normalize_organization_identifiers(organization)
         canonical_id, id_source = resolve_organization_id(organization)
         organization["id"] = canonical_id
         organization["idSource"] = id_source
