@@ -51,6 +51,7 @@ STAGE_MEMBERSHIP_AGENTS = "membership_agents"
 STAGE_CONTRIBUTION_AGENTS = "contribution_agents"
 STAGE_AGENTS = "agents"
 GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
+VALIDATION_WARNING_PREFIX = "Validation warning at"
 
 PLAN_BY_TYPE: dict[str, list[str]] = {
     "repository": [
@@ -371,6 +372,9 @@ class PipelineOrchestrator:
                 agent_context: dict[str, Any],
                 agent_providers: ProviderSet,
             ) -> AgentResult:
+                invalid_result_checker = self._invalid_result_checker_for_runner(
+                    work_item.runner_key,
+                )
                 return await with_retry(
                     runner,
                     context=agent_context,
@@ -378,6 +382,7 @@ class PipelineOrchestrator:
                     max_retries=self._retry_max_retries,
                     backoff_base=self._retry_backoff_base,
                     sleep_func=self._retry_sleep_func,
+                    invalid_result_checker=invalid_result_checker,
                 )
 
             run_id = runtime_context.get("run_id")
@@ -426,6 +431,33 @@ class PipelineOrchestrator:
                 )
 
         return stage_results, stage_warnings, stage_errors
+
+    @staticmethod
+    def _invalid_result_checker_for_runner(
+        runner_key: str,
+    ) -> Callable[[AgentResult], str | None] | None:
+        if runner_key not in {
+            STAGE_ARTICLE_AGENT,
+            STAGE_MEMBERSHIP_AGENT,
+            STAGE_CONTRIBUTION_AGENT,
+        }:
+            return None
+
+        def _class_stage_checker(result: AgentResult) -> str | None:
+            if result.is_partial:
+                return result.failure_reason or "Agent returned partial result"
+
+            for warning in result.warnings:
+                if warning.startswith(VALIDATION_WARNING_PREFIX):
+                    return "Agent output did not satisfy permissive validation"
+
+            if not isinstance(result.data, dict):
+                return "Agent returned invalid data payload"
+
+            # Empty payloads are valid for class-stage fanout agents.
+            return None
+
+        return _class_stage_checker
 
     def _build_work_items(  # noqa: PLR0911
         self,

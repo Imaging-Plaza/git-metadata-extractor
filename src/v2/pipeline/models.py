@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.v2.agents.models import AgentResult, TypedEntityBuckets, infer_entity_bucket
+from src.v2.agents.models import (
+    AgentResult,
+    TypedEntityBuckets,
+    infer_entity_bucket,
+    normalize_entity_bucket_key,
+)
 
 
 @dataclass(slots=True)
@@ -87,11 +92,21 @@ class PipelineResult:
 
         for result_key, result in self.agent_results.items():
             if not isinstance(result.data, dict) or not result.data:
+                pass
+            else:
+                bucket_name = infer_entity_bucket(agent_key=result_key, data=result.data)
+                if bucket_name is not None:
+                    resolved.add(bucket_name, result.data)
+
+            if not isinstance(result.stats, dict):
                 continue
-            bucket_name = infer_entity_bucket(agent_key=result_key, data=result.data)
-            if bucket_name is None:
-                continue
-            resolved.add(bucket_name, result.data)
+            for stats_key, stats_value in result.stats.items():
+                bucket_name = normalize_entity_bucket_key(stats_key)
+                if bucket_name is None or not isinstance(stats_value, list):
+                    continue
+                for entity in stats_value:
+                    if isinstance(entity, dict) and entity:
+                        resolved.add(bucket_name, entity)
 
         return resolved
 

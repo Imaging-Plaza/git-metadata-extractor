@@ -307,6 +307,70 @@ def test_execute_skips_github_organization_accounts_from_person_fanout() -> None
     )
 
 
+def test_execute_accepts_empty_class_agent_payload_and_uses_stats_entities() -> None:
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "octocat", "type": "User"}},
+                    "contributors": [],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _article_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(
+            data={},
+            warnings=["No article queries could be derived from runtime context"],
+            stats={
+                "articles": [
+                    {"id": "article:stats-only", "entity_type": "article"},
+                ],
+            },
+        )
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            **_empty_class_agent_runners(),
+            "repo_agent": _repo_agent,
+            STAGE_ARTICLE_AGENT: _article_agent,
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={"url_info": _classification(), "source_url": "https://github.com/octocat/Hello-World"},
+        ),
+    )
+
+    assert "article_agent:octocat/Hello-World" in result.agent_results
+    assert "article_agent:octocat/Hello-World: Agent returned empty or invalid data payload" not in result.warnings
+    typed_buckets = result.resolved_typed_entity_buckets().to_dict()
+    assert [entity["id"] for entity in typed_buckets["articles"]] == ["article:stats-only"]
+
+
 def test_execute_runs_agents_within_stage_concurrently() -> None:
     start_times: list[float] = []
 
