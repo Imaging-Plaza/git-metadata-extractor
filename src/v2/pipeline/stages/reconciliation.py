@@ -26,6 +26,8 @@ INFOSCIENCE_UUID_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$", flags=re.IGNORECASE)
+LOOKUP_SPLIT_PATTERN = re.compile(r"\s+(?:-|–|—|\||/)\s+|;|,")
+PARENTHETICAL_PATTERN = re.compile(r"\s*\([^)]*\)")
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -147,14 +149,42 @@ def _lookup_token_variants(token: str) -> list[str]:
         seen.add(normalized_value)
         variants.append(normalized_value)
 
-    lowered = _normalize_lookup_token(candidate)
-    _add(lowered)
+    def _add_normalized_forms(value: str) -> None:
+        lowered = _normalize_lookup_token(value)
+        _add(lowered)
+        accent_folded = strip_accents(lowered).strip()
+        _add(accent_folded)
+        collapsed = normalize_string(value)
+        _add(collapsed)
+        _add(collapsed.replace(" ", ""))
 
-    accent_folded = strip_accents(lowered).strip()
-    _add(accent_folded)
+    raw_candidates: list[str] = []
+    raw_seen: set[str] = set()
 
-    collapsed = normalize_string(candidate)
-    _add(collapsed)
+    def _add_raw(value: str | None) -> None:
+        if not isinstance(value, str):
+            return
+        normalized_value = value.strip()
+        if not normalized_value or normalized_value in raw_seen:
+            return
+        raw_seen.add(normalized_value)
+        raw_candidates.append(normalized_value)
+
+    _add_raw(candidate)
+    if candidate.startswith("@"):
+        _add_raw(candidate[1:])
+
+    for raw_value in list(raw_candidates):
+        _add_raw(PARENTHETICAL_PATTERN.sub("", raw_value))
+
+    for raw_value in list(raw_candidates):
+        for segment in LOOKUP_SPLIT_PATTERN.split(raw_value):
+            segment = segment.strip()
+            if len(segment) >= 3:
+                _add_raw(segment)
+
+    for raw_value in raw_candidates:
+        _add_normalized_forms(raw_value)
 
     return variants
 

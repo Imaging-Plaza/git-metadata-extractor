@@ -700,6 +700,11 @@ class PipelineOrchestrator:
             owner_login = owner.get("login") if isinstance(owner, dict) else None
             owner_type = owner.get("type") if isinstance(owner, dict) else None
             owner_is_org = isinstance(owner_type, str) and owner_type.lower() == "organization"
+            normalized_owner_login = (
+                owner_login.strip().casefold()
+                if isinstance(owner_login, str) and owner_login.strip()
+                else None
+            )
 
             if isinstance(contributors, list):
                 for contributor in contributors:
@@ -716,11 +721,12 @@ class PipelineOrchestrator:
                     if not _is_valid_github_login(login):
                         continue
                     normalized_login = str(login).strip()
+                    normalized_login_casefold = normalized_login.casefold()
 
                     if (
                         owner_is_org
-                        and isinstance(owner_login, str)
-                        and normalized_login == owner_login
+                        and isinstance(normalized_owner_login, str)
+                        and normalized_login_casefold == normalized_owner_login
                     ):
                         continue
 

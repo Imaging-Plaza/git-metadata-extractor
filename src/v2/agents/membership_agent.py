@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -10,6 +11,9 @@ from src.v2.agents.models import (
     validate_permissive,
 )
 from src.v2.canonicalization.string_utils import normalize_string, strip_accents
+
+LOOKUP_SPLIT_PATTERN = re.compile(r"\s+(?:-|–|—|\||/)\s+|;|,")
+PARENTHETICAL_PATTERN = re.compile(r"\s*\([^)]*\)")
 
 
 def _as_string(value: Any) -> str | None:
@@ -38,10 +42,38 @@ def _lookup_token_variants(token: Any) -> list[str]:
         seen.add(normalized)
         variants.append(normalized)
 
-    lowered = candidate.casefold()
-    _add(lowered)
-    _add(strip_accents(lowered))
-    _add(normalize_string(candidate))
+    def _add_normalized_forms(value: str) -> None:
+        lowered = value.casefold()
+        _add(lowered)
+        _add(strip_accents(lowered))
+        collapsed = normalize_string(value)
+        _add(collapsed)
+        _add(collapsed.replace(" ", ""))
+
+    raw_candidates: list[str] = []
+    raw_seen: set[str] = set()
+
+    def _add_raw(value: str | None) -> None:
+        normalized = _as_string(value)
+        if normalized is None or normalized in raw_seen:
+            return
+        raw_seen.add(normalized)
+        raw_candidates.append(normalized)
+
+    _add_raw(candidate)
+    if candidate.startswith("@"):
+        _add_raw(candidate[1:])
+
+    for raw_value in list(raw_candidates):
+        _add_raw(PARENTHETICAL_PATTERN.sub("", raw_value))
+
+    for raw_value in list(raw_candidates):
+        for segment in LOOKUP_SPLIT_PATTERN.split(raw_value):
+            if len(segment.strip()) >= 3:
+                _add_raw(segment)
+
+    for raw_value in raw_candidates:
+        _add_normalized_forms(raw_value)
 
     return variants
 

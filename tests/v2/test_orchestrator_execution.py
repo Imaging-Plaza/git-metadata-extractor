@@ -329,7 +329,7 @@ def test_execute_skips_repository_owner_org_without_user_lookup() -> None:
             context={
                 "repository": {
                     "full_name": "sdsc-ordes/gimie",
-                    "metadata": {"owner": {"login": "sdsc-ordes", "type": "Organization"}},
+                    "metadata": {"owner": {"login": "SDSC-ORDES", "type": "Organization"}},
                     "contributors": [{"login": "alice"}, {"login": "sdsc-ordes"}],
                     "languages": {"Python": 1},
                     "readme_content": "README",

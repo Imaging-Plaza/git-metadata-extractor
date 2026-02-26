@@ -517,6 +517,35 @@ def test_reconcile_resolves_accented_affiliation_variant_from_org_alternate_name
     )
 
 
+def test_reconcile_resolves_affiliation_with_prefixed_org_alias_without_explicit_alternate_name() -> None:
+    entities = {
+        "persons": [
+            _person(
+                "johndoe",
+                affiliations=["EPFL - École Polytechnique Fédérale de Lausanne"],
+            ),
+        ],
+        "organizations": [
+            _organization(
+                "École Polytechnique Fédérale de Lausanne",
+                "https://ror.org/02s376052",
+                alternate_names=["EPFL"],
+            ),
+        ],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organization_id = reconciled.entities["organizations"][0]["id"]
+
+    assert reconciled.entities["persons"][0]["affiliations"] == [organization_id]
+    assert reconciled.memberships[0]["org:organization"] == organization_id
+    assert not any(
+        "Orphan organization reference from person affiliation" in warning
+        for warning in reconciled.link_warnings
+    )
+
+
 def test_reconcile_resolves_membership_org_aliases_and_handle_variants() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["SDSC-GE", "@SwissDataScienceCenter"])],

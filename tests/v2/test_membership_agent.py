@@ -125,3 +125,29 @@ def test_membership_agent_handles_unresolved_organizations_with_warnings() -> No
     assert result.data == {}
     assert result.stats["memberships"] == []
     assert any("Unresolved membership organization mapping" in warning for warning in result.warnings)
+
+
+def test_membership_agent_resolves_prefixed_affiliation_alias_with_separator() -> None:
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = MembershipAgentV2()
+    context = {
+        "known_persons": [
+            {
+                "id": "https://orcid.org/0000-0002-1825-0097",
+                "schema:name": "Alice Example",
+                "affiliations": ["EPFL - École Polytechnique Fédérale de Lausanne"],
+            },
+        ],
+        "known_organizations": [
+            {
+                "id": "https://ror.org/02s376052",
+                "schema:name": "École Polytechnique Fédérale de Lausanne",
+            },
+        ],
+    }
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.stats["membership_count"] == 1
+    assert result.data["org:organization"] == "https://ror.org/02s376052"
+    assert not any("Unresolved membership organization mapping" in warning for warning in result.warnings)
