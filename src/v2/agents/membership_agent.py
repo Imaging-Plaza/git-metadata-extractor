@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
-from uuid import UUID, uuid5
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
-
-MEMBERSHIP_UUID_NAMESPACE = UUID("4e635472-2945-5894-bd8f-b70918ed36d1")
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 
 
 def _as_string(value: Any) -> str | None:
@@ -157,10 +159,6 @@ def _extract_affiliation_signals(  # noqa: C901
     return signals
 
 
-def _deterministic_membership_uuid(composite_id: str) -> str:
-    return str(uuid5(MEMBERSHIP_UUID_NAMESPACE, composite_id))
-
-
 def _build_membership_payload(
     *,
     composite_id: str,
@@ -175,7 +173,7 @@ def _build_membership_payload(
         "shacl": "pulse:MembershipShape",
         "identifiers": {
             "pulse:composite": composite_id,
-            "uuid": _deterministic_membership_uuid(composite_id),
+            "uuid": generate_uuid(),
         },
         "idSource": "pulse:composite",
         "org:organization": organization_id,

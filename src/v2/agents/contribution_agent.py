@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
-from uuid import UUID, uuid5
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
-
-CONTRIBUTION_UUID_NAMESPACE = UUID("7fd3121f-ad33-5182-8fc8-cd5e2fe95ec0")
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 
 
 def _as_string(value: Any) -> str | None:
@@ -177,10 +179,6 @@ def _latest_date(current: str | None, candidate: str | None) -> str | None:
     return max(current, candidate)
 
 
-def _deterministic_contribution_uuid(composite_id: str) -> str:
-    return str(uuid5(CONTRIBUTION_UUID_NAMESPACE, composite_id))
-
-
 def _build_contribution_payload(  # noqa: PLR0913
     *,
     composite_id: str,
@@ -196,7 +194,7 @@ def _build_contribution_payload(  # noqa: PLR0913
         "shacl": "pulse:ContributionShape",
         "identifiers": {
             "pulse:composite": composite_id,
-            "uuid": _deterministic_contribution_uuid(composite_id),
+            "uuid": generate_uuid(),
         },
         "idSource": "pulse:composite",
         "pulse:contributionTo": repository_id,

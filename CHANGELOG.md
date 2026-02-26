@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Enforced v2 production-safe fallback behavior in `/v2/extract` by introducing `V2_ALLOW_SYNTHETIC_FALLBACKS` (default `false`) and wiring it through article generation and reconciliation to prevent synthetic fallback entities/values in default production output.
+- Standardized v2 agent-emitted `identifiers.uuid` generation on shared UUIDv4 helper `src/v2/agents/models.py::generate_uuid()` across person/repository/organization/article/membership/contribution agents.
+- Updated reconciliation controls so unresolved article authors, fallback memberships, and fallback contributions are only synthesized when synthetic fallback mode is explicitly enabled.
+- Updated article-agent handling for no-synthetic mode to drop unresolved author references, reject placeholder-author/date coercion, and skip invalid candidates with explicit warnings.
 - Normalized repository `schema:dateCreated` values in `RepositoryAgentV2` to strict UTC timestamp format (`YYYY-MM-DDTHH:MM:SSZ`) so live extracts do not fail root strict validation when providers return date-only strings.
 - Updated `AGENTS.md` handoff to the next Phase 8 entry task `.internal/phase-8/P8-02-live-smoke-test-harness.md` after completing live connectivity stabilization in `P8-01`.
 - Updated v2b phase-6 regression coverage to lock extract output contracts and stage ordering across repository/user/organization flows (`tests/v2/test_extract_e2e.py`, `tests/v2/test_extract_golden.py`).
@@ -197,6 +201,8 @@ All notable changes to this project will be documented in this file.
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_canonical_id_repository.py tests/v2/test_reconciliation.py tests/v2/test_partial_failure.py tests/v2/test_enum_alignment.py -v`
 
 ### Added
+- Added v2 UUID helper regression coverage (`tests/v2/test_agent_uuid_generation.py`) asserting UUIDv4 generation semantics.
+- Added reconciliation and extract e2e regression coverage for synthetic-fallback policy, including stress coverage for large unresolved Infoscience author lists to prevent fallback-entity explosions in production mode.
 - Added repository-agent regression coverage for strict date normalization from date-only source values in `tests/v2/test_repository_agent.py`.
 - Added phase-6 extract regression assertions for:
   - explicit clean-break JSON envelope keys and six-bucket output grouping.

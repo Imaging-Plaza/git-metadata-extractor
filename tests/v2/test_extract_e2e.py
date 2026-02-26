@@ -14,7 +14,7 @@ from src.v2.api import v2_router
 from src.v2.graph.store import GraphStore
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.providers.base import GitHubProvider
+from src.v2.providers.base import GitHubProvider, InfoscienceProvider
 from src.v2.providers.github_provider import RealGitHubProvider
 from src.v2.providers.mock_github import MockGitHubProvider
 from src.v2.providers.mock_infoscience import MockInfoscienceProvider
@@ -128,6 +128,33 @@ class _RepositoryModeScopeGitHubProvider(GitHubProvider):
     def get_languages(self, full_name: str) -> dict[str, int]:
         del full_name
         return {"Python": 10}
+
+
+class _UnresolvedAuthorInfoscienceProvider(InfoscienceProvider):
+    def __init__(self, *, unresolved_authors: list[str]) -> None:
+        self._unresolved_authors = unresolved_authors
+
+    def search_person(self, query: str) -> list[dict[str, Any]]:
+        del query
+        return []
+
+    def search_orgunit(self, query: str) -> list[dict[str, Any]]:
+        del query
+        return []
+
+    def search_publications(self, query: str) -> list[dict[str, Any]]:
+        del query
+        return [
+            {
+                "infosciencePublicationIdentifier": "pub-unresolved-1",
+                "title": "Repository Author Mapping",
+                "authors": ["alice", *self._unresolved_authors],
+                "publicationDate": "2025-06-01",
+                "doi": "10.9999/repo-author-mapping",
+                "url": "https://infoscience.epfl.ch/entities/publication/pub-unresolved-1",
+                "sourceOrganization": None,
+            },
+        ]
 
 
 def _build_test_app(provider_set: ProviderSet | None = None) -> FastAPI:
@@ -275,6 +302,79 @@ def test_extract_json_contract_stage_sequence_for_user_and_org() -> None:
         }
         assert set(payload["output"]["entities_by_type"]) == EXPECTED_JSON_ENTITY_BUCKETS
         assert payload["stats"]["stages_completed"] == EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE[detected_type]
+
+
+def test_extract_defaults_to_no_synthetic_fallback_people_for_unresolved_article_authors(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.delenv("V2_ALLOW_SYNTHETIC_FALLBACKS", raising=False)
+    unresolved_authors = [f"Unresolved Author {index}" for index in range(1, 201)]
+    provider_set = ProviderSet(
+        github=_RepositoryModeScopeGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=_UnresolvedAuthorInfoscienceProvider(
+            unresolved_authors=unresolved_authors,
+        ),
+        ror=MockRORProvider(),
+    )
+
+    status_code, payload = _get_json_from_app(
+        _build_test_app(provider_set),
+        "/v2/extract/github.com/owner-org/source-repo",
+        params={"output_format": "json"},
+    )
+
+    assert status_code == HTTP_OK
+    persons = payload["output"]["entities_by_type"]["persons"]
+    assert len(persons) == 1
+    assert not any(
+        isinstance(person.get("schema:email"), str)
+        and person["schema:email"].endswith("@example.org")
+        for person in persons
+    )
+    assert any(
+        "Dropped unresolved article author references for 200 name(s)" in warning
+        for warning in payload["warnings"]
+    )
+    assert not any(
+        "Synthesized fallback person entity for unresolved article author" in warning
+        for warning in payload["warnings"]
+    )
+
+
+def test_extract_allows_synthetic_fallback_people_when_opted_in(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("V2_ALLOW_SYNTHETIC_FALLBACKS", "true")
+    unresolved_authors = ["Ghost Author 1", "Ghost Author 2", "Ghost Author 3"]
+    provider_set = ProviderSet(
+        github=_RepositoryModeScopeGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=_UnresolvedAuthorInfoscienceProvider(
+            unresolved_authors=unresolved_authors,
+        ),
+        ror=MockRORProvider(),
+    )
+
+    status_code, payload = _get_json_from_app(
+        _build_test_app(provider_set),
+        "/v2/extract/github.com/owner-org/source-repo",
+        params={"output_format": "json"},
+    )
+
+    assert status_code == HTTP_OK
+    persons = payload["output"]["entities_by_type"]["persons"]
+    synthetic_people = [
+        person
+        for person in persons
+        if isinstance(person.get("schema:email"), str)
+        and person["schema:email"].endswith("@example.org")
+    ]
+    assert len(synthetic_people) == len(unresolved_authors)
+    assert any(
+        "Synthesized fallback person entity for unresolved article author" in warning
+        for warning in payload["warnings"]
+    )
 
 
 def test_extract_returns_422_when_root_entity_fails_strict_validation() -> None:

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
-from uuid import uuid4
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 from src.v2.providers.base import ProviderNotFoundError
 
 
@@ -102,7 +106,7 @@ class OrganizationAgentV2:
             github_handle = org_name
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
-            uuid_value = str(uuid4())
+            uuid_value = generate_uuid()
 
         identifier_hierarchy: list[tuple[str, str | None]] = [
             ("pulse:ror", ror_id if isinstance(ror_id, str) else None),

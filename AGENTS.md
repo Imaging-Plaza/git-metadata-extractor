@@ -28,6 +28,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
 - For schema promotion tasks, treat `dev/ontology-v2-json-response/a-001/json-schema/` as source artifacts and preserve byte-identical copies when promoting into `src/v2/schemas/`.
 - In v2 repository-mode extracts, GitHub traversal is direct-only (source repo + direct owner + direct contributors). Keep ORCID/Infoscience/ROR enrichment enabled for discovered person/org entities.
+- In v2 agent payloads, `identifiers.uuid` must be generated with `src/v2/agents/models.py::generate_uuid()` (UUIDv4 only); avoid deterministic UUIDv5 emitters for agent outputs.
 
 ## Environment & Prerequisites
 Required environment variables (from `.env.dist` and `.env.example`):
@@ -43,6 +44,7 @@ Required environment variables (from `.env.dist` and `.env.example`):
 - `MAX_SELENIUM_SESSIONS`
 - `MAX_CACHE_ENTRIES`
 - `GUNICORN_CMD_ARGS`
+- `V2_ALLOW_SYNTHETIC_FALLBACKS` (optional; defaults `false`)
 
 Rules:
 - Never print, log, or commit secrets.
@@ -51,6 +53,7 @@ Rules:
 - For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
 - Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
 - For cache-bypass testing runs, use `V2_DISABLE_CACHE=true` (global for v2) or `/v2/extract?...&force_refresh=true` (per request).
+- For `/v2/extract`, synthetic fallbacks are production-disabled by default. Enable only for explicit test/dev scenarios with `V2_ALLOW_SYNTHETIC_FALLBACKS=true`.
 
 ## Canonical Commands
 `justfile` is the source of truth for routine operations. Prefer `just` commands over ad-hoc shell commands when equivalent recipes exist.

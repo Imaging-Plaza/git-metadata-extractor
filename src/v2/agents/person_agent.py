@@ -4,9 +4,13 @@ import hashlib
 import re
 from copy import deepcopy
 from typing import Any
-from uuid import uuid4
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 from src.v2.providers.base import ProviderNotFoundError
 
 HASH_LENGTH = 12
@@ -153,7 +157,7 @@ class PersonAgentV2:
         github_username = github_user.get("login")
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
-            uuid_value = str(uuid4())
+            uuid_value = generate_uuid()
 
         identifier_hierarchy: list[tuple[str, str | None]] = [
             ("pulse:orcid", normalized_orcid),

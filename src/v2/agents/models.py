@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -56,6 +57,11 @@ AGENT_BUCKET_HINTS: dict[str, str] = {
     "membership_agent": "memberships",
     "contribution_agent": "contributions",
 }
+
+
+def generate_uuid() -> str:
+    """Generate a UUIDv4 string for agent payload identifiers."""
+    return str(uuid.uuid4())
 
 
 def normalize_entity_bucket_key(value: str | None) -> str | None:

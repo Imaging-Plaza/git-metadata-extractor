@@ -269,7 +269,8 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
-    store = GraphStore(V2Config().V2_GRAPH_DB_PATH)
+    config = V2Config()
+    store = GraphStore(config.V2_GRAPH_DB_PATH)
     run_id: str | None = None
 
     try:
@@ -331,6 +332,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 "source_url": classification.normalized_url,
                 "url_info": classification,
                 "force_refresh": force_refresh,
+                "allow_synthetic_fallbacks": config.V2_ALLOW_SYNTHETIC_FALLBACKS,
                 "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
             },
@@ -393,7 +395,10 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
         STAGE_RECONCILIATION,
         detected_type=classification.detected_type.value,
     ) as stage_span:
-        reconciled = reconcile_entities(typed_entity_buckets)
+        reconciled = reconcile_entities(
+            typed_entity_buckets,
+            allow_synthetic_fallbacks=config.V2_ALLOW_SYNTHETIC_FALLBACKS,
+        )
         stage_span.set_attributes(
             person_count=len(reconciled.entities.get("persons", [])),
             organization_count=len(reconciled.entities.get("organizations", [])),

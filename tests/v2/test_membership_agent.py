@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from typing import Any, Callable
+from uuid import UUID
 
 from jsonschema import validate
 
@@ -10,6 +11,21 @@ from src.v2.agents import MembershipAgentV2, ProviderSet
 from src.v2.providers.mock_github import MockGitHubProvider
 
 EXPECTED_MEMBERSHIP_COUNT = 2
+UUID_VERSION_4 = 4
+
+
+def _assert_uuid4(value: str) -> None:
+    parsed = UUID(value)
+    assert parsed.version == UUID_VERSION_4
+
+
+def _strip_membership_uuids(memberships: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sanitized = deepcopy(memberships)
+    for membership in sanitized:
+        identifiers = membership.get("identifiers")
+        if isinstance(identifiers, dict) and isinstance(identifiers.get("uuid"), str):
+            identifiers["uuid"] = "<uuid>"
+    return sanitized
 
 
 def _membership_context() -> dict[str, Any]:
@@ -46,7 +62,7 @@ def _membership_context() -> dict[str, Any]:
     }
 
 
-def test_membership_agent_derives_deterministic_deduplicated_memberships(
+def test_membership_agent_derives_deduplicated_memberships_with_uuid4_identifiers(
     load_schema: Callable[[str, str], dict[str, Any]],
 ) -> None:
     providers = ProviderSet(github=MockGitHubProvider())
@@ -65,7 +81,19 @@ def test_membership_agent_derives_deterministic_deduplicated_memberships(
         "https://orcid.org/0000-0002-1825-0097_https://ror.org/019wvm592",
         "https://orcid.org/0000-0002-1825-0097_https://ror.org/02s376052",
     ]
-    assert first_result.stats["memberships"] == second_result.stats["memberships"]
+    for membership in memberships:
+        identifiers = membership.get("identifiers")
+        assert isinstance(identifiers, dict)
+        assert isinstance(identifiers.get("uuid"), str)
+        _assert_uuid4(str(identifiers["uuid"]))
+    for membership in second_result.stats["memberships"]:
+        identifiers = membership.get("identifiers")
+        assert isinstance(identifiers, dict)
+        assert isinstance(identifiers.get("uuid"), str)
+        _assert_uuid4(str(identifiers["uuid"]))
+    assert _strip_membership_uuids(first_result.stats["memberships"]) == _strip_membership_uuids(
+        second_result.stats["memberships"],
+    )
 
 
 def test_membership_agent_enriches_role_and_dates_from_affiliation_context() -> None:

@@ -53,6 +53,12 @@ class V2Config:
     V2_ENABLE_LOGFIRE: bool = field(
         default_factory=lambda: _get_env_bool("V2_ENABLE_LOGFIRE", default_value=True),
     )
+    V2_ALLOW_SYNTHETIC_FALLBACKS: bool = field(
+        default_factory=lambda: _get_env_bool(
+            "V2_ALLOW_SYNTHETIC_FALLBACKS",
+            default_value=False,
+        ),
+    )
     LOGFIRE_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("LOGFIRE_TOKEN"))
     GITHUB_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("GITHUB_TOKEN"))
 

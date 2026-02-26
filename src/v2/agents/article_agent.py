@@ -5,18 +5,22 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
-from uuid import UUID, uuid5
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 
 DEFAULT_QUERY_CAP = 8
-ARTICLE_UUID_NAMESPACE = UUID("f9f26cbf-1939-5c0d-a0f2-89dcf8a56cf8")
 UNKNOWN_AUTHOR = "unknown-author"
 UNKNOWN_ARTICLE_DATE = "1900-01-01"
 DOI_PREFIX = "doi"
 INFOSCIENCE_PREFIX = "infoscience"
 URL_PREFIX = "url"
 TITLE_DATE_PREFIX = "title-date"
+DEFAULT_MAX_UNRESOLVED_AUTHORS = 10
 IDENTITY_ORDER = {
     DOI_PREFIX: 0,
     INFOSCIENCE_PREFIX: 1,
@@ -24,6 +28,8 @@ IDENTITY_ORDER = {
     TITLE_DATE_PREFIX: 3,
 }
 YEAR_PATTERN = re.compile(r"^(?P<year>\d{4})")
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+YEAR_ONLY_DATE_PATTERN = re.compile(r"^\d{4}$")
 MIN_REPOSITORY_PATH_SEGMENTS = 2
 
 
@@ -318,28 +324,38 @@ def _map_author_ids(
     publication: dict[str, Any],
     *,
     person_lookup: dict[str, str],
-) -> tuple[list[str], list[str]]:
+    allow_synthetic_fallbacks: bool,
+) -> tuple[list[str], list[str], list[str]]:
     warnings: list[str] = []
+    unresolved_authors: list[str] = []
     mapped_authors: list[str] = []
     for author_name in _as_string_list(publication.get("authors")):
         normalized_author = _normalize_token(author_name)
         if normalized_author and normalized_author in person_lookup:
             mapped_authors.append(person_lookup[normalized_author])
             continue
-        mapped_authors.append(author_name)
-        _append_unique(
-            warnings,
-            f"Unresolved article author mapping: '{author_name}'",
-        )
+        unresolved_authors.append(author_name)
+        if allow_synthetic_fallbacks:
+            mapped_authors.append(author_name)
 
     if not mapped_authors:
-        mapped_authors = [UNKNOWN_AUTHOR]
-        _append_unique(
-            warnings,
-            "Publication has no author names; using placeholder author identifier",
-        )
+        if allow_synthetic_fallbacks:
+            mapped_authors = [UNKNOWN_AUTHOR]
+            _append_unique(
+                warnings,
+                "Publication has no author names; using placeholder author identifier",
+            )
+        else:
+            _append_unique(
+                warnings,
+                "Publication has no resolvable author identifiers",
+            )
 
-    return _dedupe_preserve_order(mapped_authors), warnings
+    return (
+        _dedupe_preserve_order(mapped_authors),
+        _dedupe_preserve_order(unresolved_authors),
+        warnings,
+    )
 
 
 def _map_source_organization(
@@ -360,18 +376,38 @@ def _map_source_organization(
     ]
 
 
-def _deterministic_article_uuid(publication: dict[str, Any]) -> str:
-    seed_parts = [
-        _as_string(publication.get("doi")),
-        _as_string(publication.get("infosciencePublicationIdentifier")),
-        _as_string(publication.get("title")),
-        _as_string(publication.get("publicationDate")),
-        _as_string(publication.get("url")),
-    ]
-    seed = "|".join(part for part in seed_parts if part)
-    if not seed:
-        seed = "article"
-    return str(uuid5(ARTICLE_UUID_NAMESPACE, seed))
+def _normalize_publication_date(
+    publication_date: Any,
+    *,
+    allow_synthetic_fallbacks: bool,
+) -> tuple[str | None, str | None]:
+    normalized = _as_string(publication_date)
+    if normalized and ISO_DATE_PATTERN.fullmatch(normalized):
+        return normalized, None
+    if normalized and YEAR_ONLY_DATE_PATTERN.fullmatch(normalized):
+        if allow_synthetic_fallbacks:
+            normalized_year_date = f"{normalized}-01-01"
+            return (
+                normalized_year_date,
+                (
+                    "Publication date provided as year-only; normalized to "
+                    f"'{normalized_year_date}' for schema compatibility"
+                ),
+            )
+        return None, f"Publication date '{normalized}' is year-only and cannot be used without synthetic fallback"
+    if allow_synthetic_fallbacks:
+        return UNKNOWN_ARTICLE_DATE, "Publication date missing/invalid; using placeholder date"
+    if normalized:
+        return None, f"Publication date '{normalized}' is invalid and synthetic fallback is disabled"
+    return None, "Publication date is missing and synthetic fallback is disabled"
+
+
+def _publication_label(publication: dict[str, Any]) -> str:
+    for key in ("doi", "infosciencePublicationIdentifier", "title", "url"):
+        value = _as_string(publication.get(key))
+        if value:
+            return value
+    return "<unknown-article>"
 
 
 def _build_article_payload(
@@ -379,10 +415,11 @@ def _build_article_payload(
     *,
     author_ids: list[str],
     source_organization: str | None,
+    publication_date: str,
+    article_uuid: str,
 ) -> dict[str, Any]:
     doi = _as_string(publication.get("doi"))
     infoscience_id = _as_string(publication.get("infosciencePublicationIdentifier"))
-    article_uuid = _deterministic_article_uuid(publication)
 
     identifier_value = doi or infoscience_id or _as_string(publication.get("url")) or article_uuid
     if doi:
@@ -407,9 +444,7 @@ def _build_article_payload(
         "idSource": id_source,
         "schema:name": _as_string(publication.get("title")) or "Untitled article",
         "schema:identifier": identifier_value,
-        "schema:datePublished": (
-            _as_string(publication.get("publicationDate")) or UNKNOWN_ARTICLE_DATE
-        ),
+        "schema:datePublished": publication_date,
         "schema:author": author_ids,
         "pulse:infoscienceArticleIdentifier": infoscience_id,
         "schema:sourceOrganization": source_organization,
@@ -434,13 +469,20 @@ class ArticleAgentV2:
             return []
         return query_terms[: self._max_queries]
 
-    async def run(  # noqa: C901
+    async def run(  # noqa: C901, PLR0912, PLR0915
         self,
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
         queries = self.build_query_blend(context)
+        allow_synthetic_fallbacks = context.get("allow_synthetic_fallbacks")
+        if not isinstance(allow_synthetic_fallbacks, bool):
+            allow_synthetic_fallbacks = True
+
+        max_unresolved_authors = context.get("max_unresolved_article_authors")
+        if not isinstance(max_unresolved_authors, int) or max_unresolved_authors < 1:
+            max_unresolved_authors = DEFAULT_MAX_UNRESOLVED_AUTHORS
 
         if providers.infoscience is None:
             return AgentResult(
@@ -491,14 +533,29 @@ class ArticleAgentV2:
         ranked_candidates = _rank_and_dedupe_publications(raw_candidates)
         validated_articles: list[dict[str, Any]] = []
         raw_articles: list[dict[str, Any]] = []
+        unresolved_author_names: list[str] = []
 
         for candidate in ranked_candidates:
-            author_ids, author_warnings = _map_author_ids(
+            author_ids, unresolved_authors, author_warnings = _map_author_ids(
                 candidate.publication,
                 person_lookup=person_lookup,
+                allow_synthetic_fallbacks=allow_synthetic_fallbacks,
             )
+            for unresolved_author in unresolved_authors:
+                if unresolved_author not in unresolved_author_names:
+                    unresolved_author_names.append(unresolved_author)
             for warning in author_warnings:
                 _append_unique(warnings, warning)
+
+            if not author_ids and not allow_synthetic_fallbacks:
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipped article candidate due to missing resolvable authors with synthetic "
+                        f"fallbacks disabled: {_publication_label(candidate.publication)}"
+                    ),
+                )
+                continue
 
             source_organization, org_warnings = _map_source_organization(
                 candidate.publication,
@@ -507,10 +564,31 @@ class ArticleAgentV2:
             for warning in org_warnings:
                 _append_unique(warnings, warning)
 
+            publication_date, date_warning = _normalize_publication_date(
+                candidate.publication.get("publicationDate"),
+                allow_synthetic_fallbacks=allow_synthetic_fallbacks,
+            )
+            if date_warning:
+                _append_unique(
+                    warnings,
+                    f"{_publication_label(candidate.publication)}: {date_warning}",
+                )
+            if publication_date is None:
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipped article candidate due to invalid publication date with synthetic "
+                        f"fallbacks disabled: {_publication_label(candidate.publication)}"
+                    ),
+                )
+                continue
+
             payload = _build_article_payload(
                 candidate.publication,
                 author_ids=author_ids,
                 source_organization=source_organization,
+                publication_date=publication_date,
+                article_uuid=generate_uuid(),
             )
             raw_payload = deepcopy(payload)
             validated_payload, validation_warnings = validate_permissive(
@@ -524,6 +602,29 @@ class ArticleAgentV2:
                 )
             validated_articles.append(validated_payload)
             raw_articles.append(raw_payload)
+
+        if unresolved_author_names:
+            preview = ", ".join(f"'{name}'" for name in unresolved_author_names[:max_unresolved_authors])
+            remainder = len(unresolved_author_names) - max_unresolved_authors
+            remainder_suffix = f", +{remainder} more" if remainder > 0 else ""
+            if allow_synthetic_fallbacks:
+                _append_unique(
+                    warnings,
+                    (
+                        "Deferred article author resolution for "
+                        f"{len(unresolved_author_names)} name(s); reconciliation will synthesize "
+                        f"fallback person links. Examples: {preview}{remainder_suffix}"
+                    ),
+                )
+            else:
+                _append_unique(
+                    warnings,
+                    (
+                        "Dropped unresolved article author references for "
+                        f"{len(unresolved_author_names)} name(s) because synthetic fallbacks are disabled. "
+                        f"Examples: {preview}{remainder_suffix}"
+                    ),
+                )
 
         primary_article = validated_articles[0] if validated_articles else {}
         primary_raw_output = raw_articles[0] if raw_articles else {}

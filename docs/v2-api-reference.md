@@ -126,6 +126,7 @@ Detected-type execution order before shared gates:
 | `V2_GRAPH_DB_PATH` | `data/v2_graph.db` | SQLite graph-store path |
 | `V2_INTERMEDIATE_HISTORY_LIMIT` | `5` | Max intermediates returned by extract-stage reads and per-agent graph response caps |
 | `V2_ENABLE_LOGFIRE` | `true` | Enables v2 Logfire instrumentation |
+| `V2_ALLOW_SYNTHETIC_FALLBACKS` | `false` | Enables synthetic fallback entity/value synthesis for unresolved references in `/v2/extract` reconciliation |
 | `V2_DISABLE_CACHE` | `false` | Bypass v1-backed provider cache for all v2 extract runs |
 | `LOGFIRE_TOKEN` | unset | Optional Logfire token |
 | `GITHUB_TOKEN` | unset | Required for healthy provider preflight |

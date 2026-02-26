@@ -73,6 +73,7 @@ curl -s \
 - `V2_GRAPH_DB_PATH` (default `data/v2_graph.db`)
 - `V2_INTERMEDIATE_HISTORY_LIMIT` (default `5`)
 - `V2_ENABLE_LOGFIRE` (default `true`)
+- `V2_ALLOW_SYNTHETIC_FALLBACKS` (default `false`, keep disabled in production to avoid synthesized fallback entities)
 - `LOGFIRE_TOKEN` (optional)
 - `GITHUB_TOKEN` (required for healthy provider preflight)
 
@@ -89,4 +90,3 @@ curl -s \
 - September 30, 2026 (target `v3.0.0`): v1 endpoints removed.
 
 If timeline dates move, update this document and `CHANGELOG.md` in the same release.
-

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from copy import deepcopy
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from src.v2.canonicalization import (
     resolve_article_id,
@@ -224,6 +225,39 @@ def _extract_affiliation_reference(affiliation: Any) -> str | None:
     return None
 
 
+def _stable_uuid_v4_from_seed(seed: str) -> str:
+    digest = bytearray(hashlib.sha256(seed.encode("utf-8")).digest()[:16])
+    digest[6] = (digest[6] & 0x0F) | 0x40
+    digest[8] = (digest[8] & 0x3F) | 0x80
+    return str(UUID(bytes=bytes(digest)))
+
+
+def _build_fallback_article_author_person(author_name: str, *, article_id: str) -> dict[str, Any]:
+    normalized_name = _normalize_lookup_token(author_name)
+    fallback_uuid = _stable_uuid_v4_from_seed(f"{article_id}::{normalized_name}")
+    email_local = re.sub(r"[^a-z0-9]+", ".", normalized_name).strip(".")
+    if not email_local:
+        email_local = "unknown.author"
+    fallback_email = f"{email_local}.{fallback_uuid.split('-', maxsplit=1)[0]}@example.org"
+    return {
+        "id": fallback_uuid,
+        "type": "schema:Person",
+        "shacl": "pulse:PersonShape",
+        "identifiers": {
+            "pulse:orcid": None,
+            "pulse:infosciencePersonIdentifier": None,
+            "pulse:githubUsername": None,
+            "uuid": fallback_uuid,
+        },
+        "idSource": "uuid",
+        "schema:name": author_name,
+        "schema:email": fallback_email,
+        "pulse:githubUsername": None,
+        "pulse:orcidIdentifier": None,
+        "pulse:infosciencePersonIdentifier": None,
+    }
+
+
 def _detect_repository_fork_cycles(repositories: list[dict[str, Any]]) -> list[str]:
     repository_ids = {
         repository["id"]
@@ -421,6 +455,8 @@ def _normalize_contribution_entities(  # noqa: C901
 
 def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     entities_by_type: dict[str, Any],
+    *,
+    allow_synthetic_fallbacks: bool = True,
 ) -> ReconciledEntities:
     reconciled_entities: dict[str, list[dict[str, Any]]] = {
         "persons": deepcopy(_as_entity_list(entities_by_type.get("persons"))),
@@ -543,6 +579,43 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             for author_ref in author_refs_value:
                 canonical_author = _resolve_lookup_token(person_lookup, author_ref)
                 if canonical_author is None:
+                    if (
+                        allow_synthetic_fallbacks
+                        and isinstance(author_ref, str)
+                        and author_ref
+                    ):
+                        synthesized_person = _build_fallback_article_author_person(
+                            author_ref,
+                            article_id=article_id,
+                        )
+                        _normalize_person_identifiers(synthesized_person)
+                        persons.append(synthesized_person)
+                        _register_person_lookup_tokens(person_lookup, synthesized_person)
+                        canonical_author = synthesized_person["id"]
+                        synthesis_warnings.append(
+                            (
+                                "Synthesized fallback person entity for unresolved article author: "
+                                f"article={article_id}, author={author_ref}, person={canonical_author}"
+                            ),
+                        )
+                    else:
+                        if allow_synthetic_fallbacks:
+                            link_warnings.append(
+                                (
+                                    "Orphan person reference from article author list: "
+                                    f"article={article_id}, author={author_ref}"
+                                ),
+                            )
+                        else:
+                            link_warnings.append(
+                                (
+                                    "Dropped unresolved article author reference because synthetic "
+                                    "fallbacks are disabled: "
+                                    f"article={article_id}, author={author_ref}"
+                                ),
+                            )
+                        continue
+                if canonical_author is None:
                     link_warnings.append(
                         (
                             "Orphan person reference from article author list: "
@@ -632,14 +705,22 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     for person_id, org_id in sorted(fallback_membership_pairs):
         if (person_id, org_id) in covered_membership_pairs:
             continue
-        memberships.append(_build_membership(person_id, org_id))
-        covered_membership_pairs.add((person_id, org_id))
-        synthesis_warnings.append(
-            (
-                "Synthesized fallback membership entity due to missing class-agent link: "
-                f"person={person_id}, organization={org_id}"
-            ),
-        )
+        if allow_synthetic_fallbacks:
+            memberships.append(_build_membership(person_id, org_id))
+            covered_membership_pairs.add((person_id, org_id))
+            synthesis_warnings.append(
+                (
+                    "Synthesized fallback membership entity due to missing class-agent link: "
+                    f"person={person_id}, organization={org_id}"
+                ),
+            )
+        else:
+            link_warnings.append(
+                (
+                    "Skipped fallback membership synthesis because synthetic fallbacks are disabled: "
+                    f"person={person_id}, organization={org_id}"
+                ),
+            )
 
     contributions, covered_contribution_pairs, class_contribution_warnings = _normalize_contribution_entities(
         class_contributions,
@@ -650,14 +731,22 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     for person_id, repository_id in sorted(fallback_contribution_pairs):
         if (person_id, repository_id) in covered_contribution_pairs:
             continue
-        contributions.append(_build_contribution(person_id, repository_id))
-        covered_contribution_pairs.add((person_id, repository_id))
-        synthesis_warnings.append(
-            (
-                "Synthesized fallback contribution entity due to missing class-agent link: "
-                f"person={person_id}, repository={repository_id}"
-            ),
-        )
+        if allow_synthetic_fallbacks:
+            contributions.append(_build_contribution(person_id, repository_id))
+            covered_contribution_pairs.add((person_id, repository_id))
+            synthesis_warnings.append(
+                (
+                    "Synthesized fallback contribution entity due to missing class-agent link: "
+                    f"person={person_id}, repository={repository_id}"
+                ),
+            )
+        else:
+            link_warnings.append(
+                (
+                    "Skipped fallback contribution synthesis because synthetic fallbacks are disabled: "
+                    f"person={person_id}, repository={repository_id}"
+                ),
+            )
 
     membership_ids_by_person: dict[str, list[str]] = {}
     for membership in memberships:

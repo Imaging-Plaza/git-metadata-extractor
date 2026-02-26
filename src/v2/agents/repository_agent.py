@@ -5,9 +5,13 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
-from uuid import uuid4
 
-from src.v2.agents.models import AgentResult, ProviderSet, validate_permissive
+from src.v2.agents.models import (
+    AgentResult,
+    ProviderSet,
+    generate_uuid,
+    validate_permissive,
+)
 
 CompiledContextStage = Callable[[dict[str, Any], ProviderSet], dict[str, Any] | Awaitable[dict[str, Any]]]
 StructuredOutputStage = Callable[
@@ -204,7 +208,7 @@ class RepositoryAgentV2:
         doi_value = doi if isinstance(doi, str) and doi.strip() else None
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
-            uuid_value = str(uuid4())
+            uuid_value = generate_uuid()
 
         return {
             "id": full_name,

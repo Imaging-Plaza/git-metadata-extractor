@@ -202,6 +202,70 @@ def test_reconcile_normalizes_article_ids_and_article_relationship_references() 
     assert article["schema:sourceOrganization"] == organization_id
 
 
+def test_reconcile_synthesizes_person_for_unresolved_article_author_references() -> None:
+    unresolved_authors = ["Gehant, Sebastien", "Gfeller, David"]
+    entities = {
+        "persons": [],
+        "organizations": [],
+        "repositories": [],
+        "articles": [
+            _article(
+                doi="10.1093/nar/gkv1310",
+                infoscience_id=None,
+                authors=unresolved_authors,
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=True)
+
+    article = reconciled.entities["articles"][0]
+    synthesized_people = reconciled.entities["persons"]
+    person_ids = {person["id"] for person in synthesized_people}
+    person_names = {person["schema:name"] for person in synthesized_people}
+
+    assert person_names == set(unresolved_authors)
+    assert len(person_ids) == len(unresolved_authors)
+    assert set(article["schema:author"]) == person_ids
+    assert all(not person_id.startswith("https://github.com/") for person_id in person_ids)
+    assert all(person["idSource"] == "uuid" for person in synthesized_people)
+    assert not any(
+        "Orphan person reference from article author list" in warning
+        for warning in reconciled.link_warnings
+    )
+    assert any(
+        "Synthesized fallback person entity for unresolved article author" in warning
+        for warning in reconciled.synthesis_warnings
+    )
+
+
+def test_reconcile_does_not_synthesize_person_for_unresolved_article_authors_when_disabled() -> None:
+    unresolved_authors = ["Gehant, Sebastien", "Gfeller, David"]
+    entities = {
+        "persons": [],
+        "organizations": [],
+        "repositories": [],
+        "articles": [
+            _article(
+                doi="10.1093/nar/gkv1310",
+                infoscience_id=None,
+                authors=unresolved_authors,
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=False)
+
+    assert reconciled.entities["persons"] == []
+    assert reconciled.entities["articles"][0]["schema:author"] == []
+    assert reconciled.synthesis_warnings == []
+    assert any(
+        "Dropped unresolved article author reference because synthetic fallbacks are disabled"
+        in warning
+        for warning in reconciled.link_warnings
+    )
+
+
 def test_reconcile_uses_class_memberships_and_contributions_as_primary_sources() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["EPFL"])],
@@ -241,3 +305,29 @@ def test_reconcile_synthesizes_fallback_links_only_when_class_entities_missing()
     assert len(reconciled.contributions) == 1
     assert any("Synthesized fallback membership entity" in w for w in reconciled.synthesis_warnings)
     assert any("Synthesized fallback contribution entity" in w for w in reconciled.synthesis_warnings)
+
+
+def test_reconcile_skips_fallback_memberships_and_contributions_when_disabled() -> None:
+    entities = {
+        "persons": [_person("johndoe", affiliations=["EPFL"])],
+        "organizations": [_organization("EPFL", "05gzmn429")],
+        "repositories": [_repository("owner/repo", ["johndoe"])],
+        "memberships": [],
+        "contributions": [],
+    }
+
+    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=False)
+
+    assert reconciled.memberships == []
+    assert reconciled.contributions == []
+    assert reconciled.synthesis_warnings == []
+    assert any(
+        "Skipped fallback membership synthesis because synthetic fallbacks are disabled"
+        in warning
+        for warning in reconciled.link_warnings
+    )
+    assert any(
+        "Skipped fallback contribution synthesis because synthetic fallbacks are disabled"
+        in warning
+        for warning in reconciled.link_warnings
+    )

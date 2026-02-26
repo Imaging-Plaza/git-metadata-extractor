@@ -144,7 +144,11 @@ def test_article_agent_ranks_dedupes_and_maps_links(
         "https://orcid.org/0000-0002-1825-0097",
         "Unknown Contributor",
     ]
-    assert "Unresolved article author mapping: 'Unknown Contributor'" in result.warnings
+    assert any(
+        warning.startswith("Deferred article author resolution for 1 name(s);")
+        and "'Unknown Contributor'" in warning
+        for warning in result.warnings
+    )
     assert result.stats["ranked_candidate_count"] == EXPECTED_RANKED_ARTICLE_COUNT
     assert [article["id"] for article in result.stats["articles"]] == [
         "10.1000/graph-1",
@@ -171,3 +175,74 @@ def test_article_agent_handles_empty_provider_results_without_failure() -> None:
     assert "No publications returned for blended article queries" in result.warnings
     assert result.stats["queries"]
     assert result.stats["articles"] == []
+
+
+def test_article_agent_drops_unresolved_author_references_when_synthetic_fallbacks_disabled() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "pub-3",
+                    "title": "Mapped Authors Only",
+                    "doi": "10.1000/graph-3",
+                    "publicationDate": "2025-03-01",
+                    "authors": ["Alice Example", "Unknown Contributor"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-3",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 10.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data["id"] == "10.1000/graph-3"
+    assert result.data["schema:author"] == ["https://orcid.org/0000-0002-1825-0097"]
+    assert any(
+        warning.startswith("Dropped unresolved article author references for 1 name(s)")
+        for warning in result.warnings
+    )
+
+
+def test_article_agent_skips_candidate_with_year_only_date_when_synthetic_fallbacks_disabled() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "pub-4",
+                    "title": "Year Only Date",
+                    "doi": "10.1000/graph-4",
+                    "publicationDate": "2016",
+                    "authors": ["Alice Example"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-4",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 10.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data == {}
+    assert result.stats["articles"] == []
+    assert any(
+        "Skipped article candidate due to invalid publication date with synthetic fallbacks disabled"
+        in warning
+        for warning in result.warnings
+    )
