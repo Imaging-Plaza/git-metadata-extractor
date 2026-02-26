@@ -338,7 +338,6 @@ class MembershipAgentV2:
                     existing["end_date"] = _as_string(signal.get("end_date"))
 
         if not membership_data_by_composite:
-            _append_unique(warnings, "No membership candidates were derived from context")
             return AgentResult(
                 data={},
                 warnings=warnings,

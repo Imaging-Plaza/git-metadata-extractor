@@ -269,7 +269,6 @@ class ContributionAgentV2:
                 )
 
         if not contribution_data_by_composite:
-            _append_unique(warnings, "No contribution candidates were derived from context")
             return AgentResult(
                 data={},
                 warnings=warnings,

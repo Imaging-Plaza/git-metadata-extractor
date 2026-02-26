@@ -129,8 +129,8 @@ class PersonAgentV2:
                 orcid_record = providers.orcid.get_person_by_orcid(orcid_identifier_hint)
             except (ProviderNotFoundError, ValueError) as exc:
                 warnings.append(f"ORCID lookup failed: {exc}")
-        else:
-            warnings.append("ORCID not available; using GitHub and Infoscience fallback only")
+        elif not providers.orcid:
+            warnings.append("ORCID provider not configured for person enrichment")
 
         infoscience_match: dict[str, Any] | None = None
         if providers.infoscience:
