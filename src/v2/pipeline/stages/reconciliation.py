@@ -200,10 +200,18 @@ def _register_person_lookup_tokens(lookup: dict[str, str], person: dict[str, Any
     canonical_id = person["id"]
     _register_lookup_token(lookup, canonical_id, canonical_id)
     _register_lookup_token(lookup, person.get("pulse:githubUsername"), canonical_id)
+    _register_lookup_token(lookup, person.get("pulse:orcidIdentifier"), canonical_id)
+    _register_lookup_token(lookup, person.get("pulse:infosciencePersonIdentifier"), canonical_id)
     _register_lookup_token(lookup, person.get("schema:name"), canonical_id)
 
     identifiers = person.get("identifiers")
     if isinstance(identifiers, dict):
+        _register_lookup_token(lookup, identifiers.get("pulse:orcid"), canonical_id)
+        _register_lookup_token(
+            lookup,
+            identifiers.get("pulse:infosciencePersonIdentifier"),
+            canonical_id,
+        )
         _register_lookup_token(lookup, identifiers.get("pulse:githubUsername"), canonical_id)
         _register_lookup_token(lookup, identifiers.get("uuid"), canonical_id)
 
@@ -712,6 +720,11 @@ def _normalize_contribution_entities(  # noqa: C901
     return normalized_contributions, covered_pairs, warnings
 
 
+def _drop_non_shape_fields(organizations: list[dict[str, Any]]) -> None:
+    for organization in organizations:
+        organization.pop("schema:alternateName", None)
+
+
 def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     entities_by_type: dict[str, Any],
     *,
@@ -1043,6 +1056,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         )
 
     link_warnings.extend(_detect_repository_fork_cycles(repositories))
+    _drop_non_shape_fields(organizations)
 
     return ReconciledEntities(
         entities=reconciled_entities,

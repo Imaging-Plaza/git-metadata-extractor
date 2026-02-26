@@ -217,6 +217,38 @@ def test_reconcile_normalizes_article_ids_and_article_relationship_references() 
     assert article["schema:sourceOrganization"] == organization_id
 
 
+def test_reconcile_resolves_article_author_when_article_references_person_orcid_token() -> None:
+    person = _person("johndoe")
+    person["pulse:orcidIdentifier"] = "0000-0002-1825-0097"
+    person["identifiers"]["pulse:orcid"] = "0000-0002-1825-0097"
+    entities = {
+        "persons": [person],
+        "organizations": [],
+        "repositories": [],
+        "articles": [
+            _article(
+                doi="10.1000/linked-author",
+                infoscience_id=None,
+                authors=["0000-0002-1825-0097"],
+                source_organization=None,
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    article = reconciled.entities["articles"][0]
+    person_id = reconciled.entities["persons"][0]["id"]
+
+    assert person_id == "https://orcid.org/0000-0002-1825-0097"
+    assert article["schema:author"] == [person_id]
+    assert not any(
+        "Dropped unresolved article author reference because synthetic fallbacks are disabled"
+        in warning
+        for warning in reconciled.link_warnings
+    )
+
+
 def test_reconcile_normalizes_infoscience_organization_identifier_url_to_uuid() -> None:
     infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
     infoscience_url = (
@@ -473,10 +505,12 @@ def test_reconcile_resolves_accented_affiliation_variant_from_org_alternate_name
     }
 
     reconciled = reconcile_entities(entities)
-    organization_id = reconciled.entities["organizations"][0]["id"]
+    organization = reconciled.entities["organizations"][0]
+    organization_id = organization["id"]
 
     assert reconciled.entities["persons"][0]["affiliations"] == [organization_id]
     assert reconciled.memberships[0]["org:organization"] == organization_id
+    assert "schema:alternateName" not in organization
     assert not any(
         "Orphan organization reference from person affiliation" in warning
         for warning in reconciled.link_warnings

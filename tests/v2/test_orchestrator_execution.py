@@ -250,15 +250,15 @@ def test_execute_skips_github_organization_accounts_from_person_fanout() -> None
     ) -> ContextBundle:
         return ContextBundle(
             detected_type="repository",
-            context={
-                "repository": {
-                    "full_name": "sdsc-ordes/gimie",
-                    "metadata": {"owner": {"login": "sdsc-ordes", "type": "Organization"}},
-                    "contributors": [{"login": "alice"}, {"login": "sdsc-ordes"}],
-                    "languages": {"Python": 1},
-                    "readme_content": "README",
+                context={
+                    "repository": {
+                        "full_name": "sdsc-ordes/gimie",
+                        "metadata": {"owner": {"login": "octocat", "type": "User"}},
+                        "contributors": [{"login": "alice"}, {"login": "sdsc-ordes"}],
+                        "languages": {"Python": 1},
+                        "readme_content": "README",
+                    },
                 },
-            },
         )
 
     async def _repo_agent(
@@ -305,6 +305,72 @@ def test_execute_skips_github_organization_accounts_from_person_fanout() -> None
         warning == "Skipping person fanout for GitHub organization account: sdsc-ordes"
         for warning in result.warnings
     )
+
+
+def test_execute_skips_repository_owner_org_without_user_lookup() -> None:
+    called_usernames: list[str] = []
+
+    class _GitHubProviderWithUserLookupTracking(MockGitHubProvider):
+        def get_user(self, username: str) -> dict[str, Any]:
+            called_usernames.append(username)
+            if username == "alice":
+                return {"login": "alice", "type": "User", "name": "Alice"}
+            if username == "sdsc-ordes":
+                raise AssertionError("repository owner org should be filtered before user lookup")
+            return super().get_user(username)
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "sdsc-ordes/gimie",
+                    "metadata": {"owner": {"login": "sdsc-ordes", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}, {"login": "sdsc-ordes"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["username"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=ProviderSet(github=_GitHubProviderWithUserLookupTracking()),
+            context={"url_info": _classification(), "source_url": "https://github.com/sdsc-ordes/gimie"},
+        ),
+    )
+
+    assert "person_agent:alice" in result.agent_results
+    assert "person_agent:sdsc-ordes" not in result.agent_results
+    assert "sdsc-ordes" not in called_usernames
 
 
 def test_execute_accepts_empty_class_agent_payload_and_uses_stats_entities() -> None:

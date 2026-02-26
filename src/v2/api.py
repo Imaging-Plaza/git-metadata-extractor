@@ -44,6 +44,7 @@ from src.v2.pipeline.stages import (
     compute_stats,
     reconcile_entities,
 )
+from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
 from src.v2.validation import (
     SHACLValidator,
     StrictSchemaValidator,
@@ -336,6 +337,24 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
             },
+        )
+    except RequiredProviderUnavailableError as exc:
+        store.fail_run(run_id, str(exc))
+        record_error(
+            "provider_preflight",
+            exc,
+            run_id=run_id,
+            source_url=classification.normalized_url,
+            detected_type=classification.detected_type.value,
+        )
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.PROVIDER_ERROR,
+            detail=str(exc),
+            source_url=classification.normalized_url,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except Exception as exc:  # noqa: BLE001
         store.fail_run(run_id, str(exc))

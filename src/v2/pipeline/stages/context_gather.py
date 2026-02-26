@@ -9,6 +9,18 @@ if TYPE_CHECKING:
     from src.v2.detection.models import GitHubURLClassification
 
 
+class RequiredProviderUnavailableError(RuntimeError):
+    """Raised when a required provider call fails for the current extract mode."""
+
+    def __init__(self, *, provider: str, operation: str, cause: Exception) -> None:
+        self.provider = provider
+        self.operation = operation
+        self.cause = cause
+        super().__init__(
+            f"Required provider '{provider}' failed during {operation}: {cause}",
+        )
+
+
 def _first_non_empty_string(*candidates: Any) -> str | None:
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
@@ -76,17 +88,29 @@ async def gather_context(  # noqa: C901, PLR0915
         try:
             repository_metadata = providers.github.get_repository(full_name)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Repository metadata lookup failed: {exc}")
+            raise RequiredProviderUnavailableError(
+                provider="github",
+                operation="repository metadata lookup",
+                cause=exc,
+            ) from exc
 
         try:
             contributors = providers.github.get_contributors(full_name)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Repository contributors lookup failed: {exc}")
+            raise RequiredProviderUnavailableError(
+                provider="github",
+                operation="repository contributors lookup",
+                cause=exc,
+            ) from exc
 
         try:
             languages = providers.github.get_languages(full_name)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Repository languages lookup failed: {exc}")
+            raise RequiredProviderUnavailableError(
+                provider="github",
+                operation="repository languages lookup",
+                cause=exc,
+            ) from exc
 
         readme_content = _first_non_empty_string(
             repository_metadata.get("readme"),
@@ -118,7 +142,11 @@ async def gather_context(  # noqa: C901, PLR0915
         try:
             user_profile = providers.github.get_user(username)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"User profile lookup failed: {exc}")
+            raise RequiredProviderUnavailableError(
+                provider="github",
+                operation="user profile lookup",
+                cause=exc,
+            ) from exc
 
         owned_repos = _coerce_repositories(
             user_profile.get("repositories")
@@ -159,7 +187,11 @@ async def gather_context(  # noqa: C901, PLR0915
         try:
             organization_profile = providers.github.get_organization(organization_name)
         except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Organization profile lookup failed: {exc}")
+            raise RequiredProviderUnavailableError(
+                provider="github",
+                operation="organization profile lookup",
+                cause=exc,
+            ) from exc
 
         member_list = _coerce_members(organization_profile.get("members"))
         owned_repos = _coerce_repositories(

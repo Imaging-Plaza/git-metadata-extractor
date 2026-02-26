@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422
+HTTP_BAD_GATEWAY = 502
 EXPECTED_JSON_ENTITY_BUCKETS = {
     "repositories",
     "persons",
@@ -157,6 +158,36 @@ class _UnresolvedAuthorInfoscienceProvider(InfoscienceProvider):
         ]
 
 
+class _FailingGitHubProvider(GitHubProvider):
+    def _raise(self) -> None:
+        raise RuntimeError("unauthorized github token")
+
+    def get_repository(self, full_name: str) -> dict[str, Any]:
+        del full_name
+        self._raise()
+        return {}
+
+    def get_user(self, username: str) -> dict[str, Any]:
+        del username
+        self._raise()
+        return {}
+
+    def get_organization(self, org_name: str) -> dict[str, Any]:
+        del org_name
+        self._raise()
+        return {}
+
+    def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
+        del full_name
+        self._raise()
+        return []
+
+    def get_languages(self, full_name: str) -> dict[str, int]:
+        del full_name
+        self._raise()
+        return {}
+
+
 def _build_test_app(provider_set: ProviderSet | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(v2_router)
@@ -235,6 +266,24 @@ def test_extract_endpoint_runs_pipeline_with_mock_providers(monkeypatch: Any) ->
     assert payload["stats"]["entities_count"] == len(entities)
 
 
+def test_extract_returns_provider_error_when_required_github_provider_fails() -> None:
+    provider_set = ProviderSet(
+        github=_FailingGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=MockInfoscienceProvider(),
+        ror=MockRORProvider(),
+    )
+    status_code, payload = _get_json_from_app(
+        _build_test_app(provider_set),
+        "/v2/extract/github.com/octocat/Hello-World",
+        params={"output_format": "json"},
+    )
+
+    assert status_code == HTTP_BAD_GATEWAY
+    assert payload["error_type"] == "provider_error"
+    assert "Required provider 'github'" in payload["detail"]
+
+
 def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichment() -> None:
     provider_set = ProviderSet(
         github=_RepositoryModeScopeGitHubProvider(),
@@ -262,7 +311,7 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
         if entity.get("type") == "schema:Person"
         and entity.get("pulse:githubUsername") == "alice"
     )
-    assert person["pulse:owns"] == ["owner-org/source-repo"]
+    assert person["pulse:owns"] == ["https://github.com/owner-org/source-repo"]
     assert person["org:hasMembership"]
 
     organization_entities = [
@@ -275,7 +324,7 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
         for entity in organization_entities
         if entity.get("pulse:githubOrganizationHandle") == "owner-org"
     )
-    assert owner_org["pulse:owns"] == ["owner-org/source-repo"]
+    assert owner_org["pulse:owns"] == ["https://github.com/owner-org/source-repo"]
 
     enriched_org = next(
         entity

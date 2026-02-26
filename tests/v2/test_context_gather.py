@@ -4,9 +4,12 @@ import asyncio
 import json
 from typing import Any
 
+import pytest
+
 from src.v2.agents import ProviderSet
 from src.v2.detection.models import GitHubURLClassification, GitHubURLType
 from src.v2.pipeline.stages import gather_context
+from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
 from src.v2.providers.base import GitHubProvider, ORCIDProvider, ORCIDRecord
 
 EXPECTED_CONTRIBUTOR_COUNT = 2
@@ -146,3 +149,21 @@ def test_context_bundle_is_serializable() -> None:
 
     assert serialized["detected_type"] == "repository"
     json.dumps(serialized)
+
+
+def test_repository_context_raises_when_required_github_call_fails() -> None:
+    class _FailingGitHubProvider(_DummyGitHubProvider):
+        def get_repository(self, full_name: str) -> dict[str, Any]:
+            del full_name
+            raise RuntimeError("github unavailable")
+
+    providers = ProviderSet(github=_FailingGitHubProvider())
+    url_info = GitHubURLClassification(
+        normalized_url="https://github.com/octocat/Hello-World",
+        detected_type=GitHubURLType.REPOSITORY,
+        owner="octocat",
+        repo="Hello-World",
+    )
+
+    with pytest.raises(RequiredProviderUnavailableError, match="repository metadata lookup"):
+        asyncio.run(gather_context("repository", url_info, providers))

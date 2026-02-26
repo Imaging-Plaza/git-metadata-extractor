@@ -582,6 +582,17 @@ class PipelineOrchestrator:
                 filtered_items.append(work_item)
                 continue
 
+            account_type_hint = work_item.context.get("account_type_hint")
+            if isinstance(account_type_hint, str) and account_type_hint.lower() == "organization":
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipping person fanout for GitHub organization account: "
+                        f"{username}"
+                    ),
+                )
+                continue
+
             if username not in account_type_by_username:
                 account_type: str | None = None
                 try:
@@ -680,18 +691,42 @@ class PipelineOrchestrator:
             return []
 
         usernames: list[str] = []
+        account_type_hint_by_username: dict[str, str] = {}
         if detected_type == "repository":
             repository_context = bundle.context.get("repository", {})
             contributors = repository_context.get("contributors", [])
+            metadata = repository_context.get("metadata")
+            owner = metadata.get("owner") if isinstance(metadata, dict) else None
+            owner_login = owner.get("login") if isinstance(owner, dict) else None
+            owner_type = owner.get("type") if isinstance(owner, dict) else None
+            owner_is_org = isinstance(owner_type, str) and owner_type.lower() == "organization"
+
             if isinstance(contributors, list):
                 for contributor in contributors:
+                    login: str | None = None
+                    account_type_hint: str | None = None
                     if isinstance(contributor, dict):
                         login = contributor.get("login")
-                        if _is_valid_github_login(login):
-                            usernames.append(str(login).strip())
+                        contributor_type = contributor.get("type")
+                        if isinstance(contributor_type, str) and contributor_type:
+                            account_type_hint = contributor_type.lower()
                     elif isinstance(contributor, str) and contributor:
-                        if _is_valid_github_login(contributor):
-                            usernames.append(contributor.strip())
+                        login = contributor
+
+                    if not _is_valid_github_login(login):
+                        continue
+                    normalized_login = str(login).strip()
+
+                    if (
+                        owner_is_org
+                        and isinstance(owner_login, str)
+                        and normalized_login == owner_login
+                    ):
+                        continue
+
+                    usernames.append(normalized_login)
+                    if account_type_hint and normalized_login not in account_type_hint_by_username:
+                        account_type_hint_by_username[normalized_login] = account_type_hint
         if detected_type == "organization":
             organization_context = bundle.context.get("organization", {})
             members = organization_context.get("members", [])
@@ -711,6 +746,9 @@ class PipelineOrchestrator:
                 "username": username,
                 "source_url": runtime_context.get("source_url"),
             }
+            account_type_hint = account_type_hint_by_username.get(username)
+            if account_type_hint:
+                context["account_type_hint"] = account_type_hint
             if source_repositories:
                 context["source_repositories"] = list(source_repositories)
             contexts.append(context)
