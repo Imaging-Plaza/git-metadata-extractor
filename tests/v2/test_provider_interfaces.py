@@ -5,10 +5,6 @@ from typing import Any
 
 import pytest
 
-from src.cache.cached_parsers import (
-    CachedGitHubOrganizationsParser,
-    CachedGitHubUsersParser,
-)
 from src.data_models.infoscience import InfoscienceAuthor, InfoscienceSearchResult
 from src.parsers.orgs_parser import GitHubOrganizationsParser
 from src.parsers.users_parser import GitHubUsersParser
@@ -34,28 +30,6 @@ from src.v2.providers.orcid_provider import RealORCIDProvider
 from src.v2.providers.ror_provider import RealRORProvider
 
 STATUS_ERROR_THRESHOLD = 400
-
-
-class _CacheCapture:
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-
-    def get_cached_or_fetch(
-        self,
-        api_type: str,
-        params: dict[str, Any],
-        fetch_func: Any,
-        *,
-        force_refresh: bool = False,
-    ) -> Any:
-        self.calls.append(
-            {
-                "api_type": api_type,
-                "params": dict(params),
-                "force_refresh": force_refresh,
-            },
-        )
-        return fetch_func()
 
 
 class _SpyUsersParser(GitHubUsersParser):
@@ -638,59 +612,19 @@ def test_org_parser_skips_repo_endpoint_when_repositories_are_disabled() -> None
     assert parser.repo_calls == 0
 
 
-def test_cached_user_parser_scopes_cache_key_by_include_repositories() -> None:
-    parser = CachedGitHubUsersParser.__new__(CachedGitHubUsersParser)
-    parser.cache_manager = _CacheCapture()
-    observed: dict[str, Any] = {}
+def test_user_parser_passes_include_repositories_to_metadata_call() -> None:
+    parser = _SpyUsersParser()
 
-    def _fake_get_user_metadata(
-        username: str,
-        *,
-        include_repositories: bool = True,
-    ) -> dict[str, Any]:
-        observed["username"] = username
-        observed["include_repositories"] = include_repositories
-        return {"login": username}
+    metadata = parser.get_user_metadata("octocat", include_repositories=True)
 
-    parser.get_user_metadata = _fake_get_user_metadata  # type: ignore[method-assign]
-
-    result = parser.get_user_metadata_cached(
-        "octocat",
-        include_repositories=False,
-    )
-
-    assert result == {"login": "octocat"}
-    assert observed["include_repositories"] is False
-    assert parser.cache_manager.calls[0]["params"] == {
-        "username": "octocat",
-        "include_repositories": False,
-    }
+    assert metadata.login == "octocat"
+    assert parser.repo_calls == 1
 
 
-def test_cached_org_parser_scopes_cache_key_by_include_repositories() -> None:
-    parser = CachedGitHubOrganizationsParser.__new__(CachedGitHubOrganizationsParser)
-    parser.cache_manager = _CacheCapture()
-    observed: dict[str, Any] = {}
+def test_org_parser_passes_include_repositories_to_metadata_call() -> None:
+    parser = _SpyOrganizationsParser()
 
-    def _fake_get_organization_metadata(
-        org_name: str,
-        *,
-        include_repositories: bool = True,
-    ) -> dict[str, Any]:
-        observed["org_name"] = org_name
-        observed["include_repositories"] = include_repositories
-        return {"login": org_name}
+    metadata = parser.get_organization_metadata("github", include_repositories=True)
 
-    parser.get_organization_metadata = _fake_get_organization_metadata  # type: ignore[method-assign]
-
-    result = parser.get_organization_metadata_cached(
-        "github",
-        include_repositories=False,
-    )
-
-    assert result == {"login": "github"}
-    assert observed["include_repositories"] is False
-    assert parser.cache_manager.calls[0]["params"] == {
-        "org_name": "github",
-        "include_repositories": False,
-    }
+    assert metadata.login == "github"
+    assert parser.repo_calls == 1

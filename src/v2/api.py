@@ -261,12 +261,11 @@ def _to_graph_store_entity_payload(
     response_model=V2ExtractResponse,
     response_model_exclude_none=True,
 )
-async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
+async def extract(  # noqa: C901, PLR0912, PLR0915
     full_path: str,
     request: Request,
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
-    force_refresh: Annotated[bool, Query()] = False,
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
@@ -332,7 +331,6 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
             context={
                 "source_url": classification.normalized_url,
                 "url_info": classification,
-                "force_refresh": force_refresh,
                 "allow_synthetic_fallbacks": config.V2_ALLOW_SYNTHETIC_FALLBACKS,
                 "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
@@ -376,11 +374,6 @@ async def extract(  # noqa: C901, PLR0912, PLR0913, PLR0915
         )
 
     warnings = list(pipeline_result.warnings)
-    if force_refresh:
-        _append_unique_warning(
-            warnings,
-            "force_refresh requested for provider-backed pipeline run",
-        )
 
     persisted_intermediates = 0
     for agent_name, agent_result in pipeline_result.agent_results.items():

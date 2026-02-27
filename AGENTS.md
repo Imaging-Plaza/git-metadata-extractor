@@ -52,7 +52,7 @@ Rules:
 - If required variables are missing for the requested task, fail fast and report exactly which variables are missing.
 - For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
 - Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
-- For cache-bypass testing runs, use `V2_DISABLE_CACHE=true` (global for v2) or `/v2/extract?...&force_refresh=true` (per request).
+- V2 does not use the v1 TTL cache system. Providers always fetch fresh data. The `force_refresh` query parameter and `V2_DISABLE_CACHE` env var have been removed from v2.
 - For `/v2/extract`, synthetic fallbacks are production-disabled by default. Enable only for explicit test/dev scenarios with `V2_ALLOW_SYNTHETIC_FALLBACKS=true`.
 
 ## Canonical Commands

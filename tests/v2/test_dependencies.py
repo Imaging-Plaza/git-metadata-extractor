@@ -36,49 +36,21 @@ def _build_request(
 
 def test_get_provider_set_uses_mock_provider_by_default(monkeypatch) -> None:
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "true")
-    monkeypatch.delenv("V2_DISABLE_CACHE", raising=False)
+
 
     provider_set = asyncio.run(get_provider_set(_build_request()))
 
     assert isinstance(provider_set.github, MockGitHubProvider)
 
 
-def test_get_provider_set_respects_force_refresh_query_for_real_provider(
+def test_get_provider_set_creates_real_provider_without_cache(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "false")
-    monkeypatch.delenv("V2_DISABLE_CACHE", raising=False)
-
-    provider_set = asyncio.run(
-        get_provider_set(_build_request(query_string="force_refresh=true")),
-    )
-
-    assert isinstance(provider_set.github, RealGitHubProvider)
-    assert provider_set.github.force_refresh is True
-    assert provider_set.github.include_git_authors is False
-
-
-def test_get_provider_set_respects_v2_disable_cache_env_flag(
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "false")
-    monkeypatch.setenv("V2_DISABLE_CACHE", "1")
 
     provider_set = asyncio.run(get_provider_set(_build_request()))
 
     assert isinstance(provider_set.github, RealGitHubProvider)
-    assert provider_set.github.force_refresh is True
-    assert provider_set.github.include_git_authors is False
-
-
-def test_get_provider_set_keeps_cache_enabled_when_no_flags(monkeypatch) -> None:
-    monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "false")
-    monkeypatch.delenv("V2_DISABLE_CACHE", raising=False)
-
-    provider_set = asyncio.run(get_provider_set(_build_request()))
-
-    assert isinstance(provider_set.github, RealGitHubProvider)
-    assert provider_set.github.force_refresh is False
     assert provider_set.github.include_git_authors is False
 
 
@@ -86,7 +58,7 @@ def test_get_provider_set_disables_github_repo_expansion_for_repository_extract(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "false")
-    monkeypatch.delenv("V2_DISABLE_CACHE", raising=False)
+
 
     provider_set = asyncio.run(
         get_provider_set(_build_request(full_path="github.com/octocat/Hello-World")),
@@ -102,7 +74,7 @@ def test_get_provider_set_keeps_github_repo_expansion_for_user_extract(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "false")
-    monkeypatch.delenv("V2_DISABLE_CACHE", raising=False)
+
 
     provider_set = asyncio.run(
         get_provider_set(_build_request(full_path="github.com/octocat")),

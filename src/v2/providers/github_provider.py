@@ -267,7 +267,6 @@ class RealGitHubProvider(GitHubProvider):
     def __init__(  # noqa: PLR0913
         self,
         *,
-        force_refresh: bool = False,
         include_user_repositories: bool = True,
         include_organization_repositories: bool = True,
         include_git_authors: bool = True,
@@ -278,7 +277,6 @@ class RealGitHubProvider(GitHubProvider):
         rate_limiter: RateLimiter | None = None,
     ) -> None:
         super().__init__(provider_name="github", rate_limiter=rate_limiter)
-        self._force_refresh = force_refresh
         self._include_user_repositories = include_user_repositories
         self._include_organization_repositories = include_organization_repositories
         self._include_git_authors = include_git_authors
@@ -287,13 +285,9 @@ class RealGitHubProvider(GitHubProvider):
         self._organization_lookup = organization_lookup
         self._repository_context_loader = repository_context_loader
 
-        self._cached_users_parser: Any | None = None
-        self._cached_orgs_parser: Any | None = None
+        self._users_parser: Any | None = None
+        self._orgs_parser: Any | None = None
         self._gimie_payload_cache: dict[str, Any] = {}
-
-    @property
-    def force_refresh(self) -> bool:
-        return self._force_refresh
 
     @property
     def include_user_repositories(self) -> bool:
@@ -347,19 +341,15 @@ class RealGitHubProvider(GitHubProvider):
         if self._user_lookup is not None:
             return self._user_lookup
 
-        if self._cached_users_parser is None:
-            from src.cache.cached_parsers import (  # noqa: PLC0415
-                CachedGitHubUsersParser,
-            )
+        if self._users_parser is None:
+            from src.parsers.users_parser import GitHubUsersParser  # noqa: PLC0415
 
-            self._cached_users_parser = CachedGitHubUsersParser()
-        parser = self._cached_users_parser
-        assert parser is not None
+            self._users_parser = GitHubUsersParser()
+        parser = self._users_parser
 
         def _lookup(username: str) -> JSONMapping:
-            user = parser.get_user_metadata_cached(
+            user = parser.get_user_metadata(
                 username,
-                force_refresh=self._force_refresh,
                 include_repositories=self._include_user_repositories,
             )
             return self._model_dump(user)
@@ -371,19 +361,17 @@ class RealGitHubProvider(GitHubProvider):
         if self._organization_lookup is not None:
             return self._organization_lookup
 
-        if self._cached_orgs_parser is None:
-            from src.cache.cached_parsers import (  # noqa: PLC0415
-                CachedGitHubOrganizationsParser,
+        if self._orgs_parser is None:
+            from src.parsers.orgs_parser import (  # noqa: PLC0415
+                GitHubOrganizationsParser,
             )
 
-            self._cached_orgs_parser = CachedGitHubOrganizationsParser()
-        parser = self._cached_orgs_parser
-        assert parser is not None
+            self._orgs_parser = GitHubOrganizationsParser()
+        parser = self._orgs_parser
 
         def _lookup(org_name: str) -> JSONMapping:
-            org = parser.get_organization_metadata_cached(
+            org = parser.get_organization_metadata(
                 org_name,
-                force_refresh=self._force_refresh,
                 include_repositories=self._include_organization_repositories,
             )
             return self._model_dump(org)
