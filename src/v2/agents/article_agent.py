@@ -715,6 +715,7 @@ class ArticleAgentV2:
         validated_articles: list[dict[str, Any]] = []
         raw_articles: list[dict[str, Any]] = []
         unresolved_author_names: list[str] = []
+        skipped_missing_resolvable_author_candidates: list[tuple[str, int, int]] = []
 
         for candidate in ranked_candidates:
             (
@@ -735,14 +736,11 @@ class ArticleAgentV2:
                 _append_unique(warnings, warning)
 
             if not author_ids and not allow_synthetic_fallbacks:
-                _append_unique(
-                    warnings,
+                skipped_missing_resolvable_author_candidates.append(
                     (
-                        "Skipped article candidate due to missing resolvable authors with synthetic "
-                        "fallbacks disabled: "
-                        f"{_publication_label(candidate.publication)} "
-                        f"(matched_authors={matched_author_count}, "
-                        f"unmatched_authors={unresolved_author_count})"
+                        _publication_label(candidate.publication),
+                        matched_author_count,
+                        unresolved_author_count,
                     ),
                 )
                 continue
@@ -769,6 +767,16 @@ class ArticleAgentV2:
                     (
                         "Skipped article candidate due to invalid publication date with synthetic "
                         f"fallbacks disabled: {_publication_label(candidate.publication)}"
+                    ),
+                )
+                continue
+
+            if not _as_string(candidate.publication.get("doi")):
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipped article candidate due to missing DOI required by strict schema: "
+                        f"{_publication_label(candidate.publication)}"
                     ),
                 )
                 continue
@@ -813,6 +821,38 @@ class ArticleAgentV2:
                         "Dropped unresolved article author references for "
                         f"{len(unresolved_author_names)} name(s) because synthetic fallbacks are disabled. "
                         f"Examples: {preview}{remainder_suffix}"
+                    ),
+                )
+
+        if skipped_missing_resolvable_author_candidates:
+            if len(skipped_missing_resolvable_author_candidates) == 1:
+                publication_label, matched_author_count, unresolved_author_count = (
+                    skipped_missing_resolvable_author_candidates[0]
+                )
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipped article candidate due to missing resolvable authors with synthetic "
+                        "fallbacks disabled: "
+                        f"{publication_label} "
+                        f"(matched_authors={matched_author_count}, "
+                        f"unmatched_authors={unresolved_author_count})"
+                    ),
+                )
+            else:
+                example_count = min(max_unresolved_authors, 5)
+                examples = ", ".join(
+                    f"'{label}'"
+                    for label, _, _ in skipped_missing_resolvable_author_candidates[:example_count]
+                )
+                remainder = len(skipped_missing_resolvable_author_candidates) - example_count
+                remainder_suffix = f", +{remainder} more" if remainder > 0 else ""
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipped article candidates due to missing resolvable authors with synthetic "
+                        f"fallbacks disabled: count={len(skipped_missing_resolvable_author_candidates)}. "
+                        f"Examples: {examples}{remainder_suffix}"
                     ),
                 )
 

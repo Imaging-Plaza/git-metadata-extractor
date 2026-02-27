@@ -117,3 +117,39 @@ def test_repository_agent_reuses_context_gather_payload_without_provider_refetch
     validate(instance=result.data, schema=schema)
     assert result.data["schema:author"] == ["octocat"]
     assert result.data["schema:dateCreated"] == "2020-01-01T00:00:00Z"
+
+
+def test_repository_agent_filters_organization_contributors_from_authors() -> None:
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "sdsc-ordes/gimie",
+                "repository_context": {
+                    "full_name": "sdsc-ordes/gimie",
+                    "metadata": {
+                        "name": "gimie",
+                        "full_name": "sdsc-ordes/gimie",
+                        "owner": {"login": "sdsc-ordes", "type": "Organization"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [
+                        {"login": "sdsc-ordes", "type": "Organization"},
+                        {"login": "alice", "type": "User"},
+                    ],
+                    "languages": {"Python": 1},
+                },
+            },
+            providers,
+        ),
+    )
+
+    assert result.data["schema:author"] == ["alice"]
+    derivation = result.stats.get("derivation")
+    assert isinstance(derivation, dict)
+    assert derivation["contributor_logins"] == ["alice"]

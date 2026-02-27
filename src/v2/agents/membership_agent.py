@@ -12,8 +12,28 @@ from src.v2.agents.models import (
 )
 from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 
-LOOKUP_SPLIT_PATTERN = re.compile(r"\s+(?:-|–|—|\||/)\s+|;|,")
+LOOKUP_SPLIT_PATTERN = re.compile(r"\s*[-–—|/&]\s*|;|,")
 PARENTHETICAL_PATTERN = re.compile(r"\s*\([^)]*\)")
+NON_ALNUM_SPLIT_PATTERN = re.compile(r"[^a-z0-9]+")
+COMMON_ACRONYM_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "de",
+    "des",
+    "di",
+    "du",
+    "et",
+    "for",
+    "in",
+    "la",
+    "le",
+    "of",
+    "on",
+    "the",
+    "und",
+    "university",
+}
 
 
 def _as_string(value: Any) -> str | None:
@@ -49,6 +69,11 @@ def _lookup_token_variants(token: Any) -> list[str]:
         collapsed = normalize_string(value)
         _add(collapsed)
         _add(collapsed.replace(" ", ""))
+        tokens = [token for token in collapsed.split() if token]
+        if "university" in tokens and tokens[0] != "university":
+            _add(f"{tokens[0]} university")
+        if "institute" in tokens and tokens[0] != "institute":
+            _add(f"{tokens[0]} institute")
 
     raw_candidates: list[str] = []
     raw_seen: set[str] = set()
@@ -76,6 +101,46 @@ def _lookup_token_variants(token: Any) -> list[str]:
         _add_normalized_forms(raw_value)
 
     return variants
+
+
+def _organization_acronym_tokens(value: Any) -> list[str]:
+    candidate = _as_string(value)
+    if candidate is None:
+        return []
+
+    normalized = normalize_string(candidate)
+    parts = [
+        part
+        for part in NON_ALNUM_SPLIT_PATTERN.split(normalized)
+        if part
+    ]
+    if not parts:
+        return []
+
+    acronym_chars = [part[0] for part in parts if part not in COMMON_ACRONYM_STOPWORDS]
+    if len(acronym_chars) < 2:
+        acronym_chars = [part[0] for part in parts]
+    acronym = "".join(acronym_chars)
+    if len(acronym) < 2:
+        return []
+    return [acronym]
+
+
+def _organization_partial_name_tokens(value: Any) -> list[str]:
+    candidate = _as_string(value)
+    if candidate is None:
+        return []
+
+    tokens = [token for token in normalize_string(candidate).split() if token]
+    if len(tokens) < 2:
+        return []
+
+    partials: list[str] = []
+    if "university" in tokens and tokens[0] != "university":
+        partials.append(f"{tokens[0]} university")
+    if "institute" in tokens and tokens[0] != "institute":
+        partials.append(f"{tokens[0]} institute")
+    return partials
 
 
 def _resolve_lookup_token(lookup: dict[str, str], token: Any) -> str | None:
@@ -139,6 +204,24 @@ def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str
         lookup.setdefault(normalized, canonical_id)
 
 
+def _register_organization_name_lookup_tokens(
+    lookup: dict[str, str],
+    token: Any,
+    canonical_id: str,
+) -> None:
+    name = _as_string(token)
+    if name is None:
+        return
+
+    _register_lookup_token(lookup, name, canonical_id)
+    _register_lookup_token(lookup, name.replace("centre", "center"), canonical_id)
+    _register_lookup_token(lookup, name.replace("center", "centre"), canonical_id)
+    for acronym in _organization_acronym_tokens(name):
+        _register_lookup_token(lookup, acronym, canonical_id)
+    for partial_name in _organization_partial_name_tokens(name):
+        _register_lookup_token(lookup, partial_name, canonical_id)
+
+
 def _register_organization_handle_lookup_tokens(
     lookup: dict[str, str],
     token: Any,
@@ -162,7 +245,11 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
         if org_id is None:
             continue
         _register_lookup_token(lookup, org_id, org_id)
-        _register_lookup_token(lookup, organization.get("schema:name"), org_id)
+        _register_organization_name_lookup_tokens(
+            lookup,
+            organization.get("schema:name"),
+            org_id,
+        )
         _register_organization_handle_lookup_tokens(
             lookup,
             organization.get("pulse:githubOrganizationHandle"),
@@ -172,19 +259,19 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
         alternate_names = organization.get("schema:alternateName")
         if isinstance(alternate_names, list):
             for alternate_name in alternate_names:
-                _register_lookup_token(lookup, alternate_name, org_id)
+                _register_organization_name_lookup_tokens(lookup, alternate_name, org_id)
         for key in ("aliases", "acronyms"):
             values = organization.get(key)
             if isinstance(values, list):
                 for value in values:
-                    _register_lookup_token(lookup, value, org_id)
+                    _register_organization_name_lookup_tokens(lookup, value, org_id)
         labels = organization.get("labels")
         if isinstance(labels, list):
             for label_payload in labels:
                 label = label_payload
                 if isinstance(label_payload, dict):
                     label = label_payload.get("label")
-                _register_lookup_token(lookup, label, org_id)
+                _register_organization_name_lookup_tokens(lookup, label, org_id)
 
         identifiers = organization.get("identifiers")
         if isinstance(identifiers, dict):

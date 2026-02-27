@@ -92,6 +92,34 @@ def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str
     lookup.setdefault(normalized, canonical_id)
 
 
+def _build_organization_lookup(organizations: list[dict[str, Any]]) -> set[str]:
+    lookup: set[str] = set()
+
+    def _register(token: Any) -> None:
+        normalized = _normalize_token(token)
+        if normalized is not None:
+            lookup.add(normalized)
+
+    for organization in organizations:
+        _register(organization.get("id"))
+        _register(organization.get("schema:name"))
+        _register(organization.get("pulse:githubOrganizationHandle"))
+        identifiers = organization.get("identifiers")
+        if isinstance(identifiers, dict):
+            _register(identifiers.get("pulse:githubOrganizationHandle"))
+    return lookup
+
+
+def _collect_known_organizations(context: dict[str, Any]) -> list[dict[str, Any]]:
+    organizations: list[dict[str, Any]] = []
+    for key in ("known_organizations", "organizations"):
+        value = context.get(key)
+        if isinstance(value, list):
+            organizations.extend(item for item in value if isinstance(item, dict) and item)
+    organizations.extend(_collect_pipeline_entities(context, prefix="org_agent"))
+    return organizations
+
+
 def _build_person_lookup(persons: list[dict[str, Any]]) -> dict[str, str]:
     lookup: dict[str, str] = {}
     for person in persons:
@@ -134,6 +162,10 @@ def _extract_contributor_signals(repository: dict[str, Any]) -> list[dict[str, A
             continue
 
         if not isinstance(contributor, dict):
+            continue
+
+        contributor_type = contributor.get("type")
+        if isinstance(contributor_type, str) and contributor_type.lower() == "organization":
             continue
 
         login = _as_string(contributor.get("login") or contributor.get("username"))
@@ -217,6 +249,7 @@ class ContributionAgentV2:
 
         warnings: list[str] = []
         person_lookup = _build_person_lookup(_collect_known_persons(context))
+        organization_lookup = _build_organization_lookup(_collect_known_organizations(context))
         repositories = _collect_known_repositories(context)
 
         contribution_data_by_composite: dict[str, dict[str, Any]] = {}
@@ -237,6 +270,8 @@ class ContributionAgentV2:
 
                 person_id = person_lookup.get(normalized_login)
                 if person_id is None:
+                    if normalized_login in organization_lookup:
+                        continue
                     _append_unique(
                         warnings,
                         (

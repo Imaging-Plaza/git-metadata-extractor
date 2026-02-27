@@ -146,3 +146,23 @@ def test_contribution_agent_handles_unresolvable_contributors_without_failure() 
     assert result.data == {}
     assert result.stats["contributions"] == []
     assert any("Unresolved contribution person mapping" in warning for warning in result.warnings)
+
+
+def test_contribution_agent_ignores_organization_contributor_entries() -> None:
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = ContributionAgentV2()
+    context = deepcopy(_contribution_context())
+    context["known_repositories"][0]["contributors"].append(
+        {"login": "sdsc-ordes", "type": "Organization", "contributions": 42},
+    )
+    context["known_organizations"] = [
+        {
+            "id": "https://ror.org/02hdt9m26",
+            "schema:name": "Swiss Data Science Center",
+            "pulse:githubOrganizationHandle": "sdsc-ordes",
+        },
+    ]
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert not any("contributor=sdsc-ordes" in warning for warning in result.warnings)

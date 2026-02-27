@@ -835,6 +835,8 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         for author_ref in author_refs:
             canonical_author = _resolve_lookup_token(person_lookup, author_ref)
             if canonical_author is None:
+                if _resolve_lookup_token(organization_lookup, author_ref) is not None:
+                    continue
                 link_warnings.append(
                     (
                         "Orphan person reference from repository author list: "
@@ -847,9 +849,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             canonical_authors.append(canonical_author)
             fallback_contribution_pairs.add((canonical_author, repository_id))
 
-        canonical_authors = _dedupe_preserve_order(
-            [*canonical_authors, *unresolved_author_refs],
-        )
+        canonical_authors = _dedupe_preserve_order(canonical_authors)
         repository["schema:author"] = canonical_authors
         if "authors" in repository:
             repository["authors"] = list(canonical_authors)

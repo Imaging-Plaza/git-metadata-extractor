@@ -123,6 +123,29 @@ def test_reconcile_updates_repository_author_references_to_canonical_person_ids(
     assert reconciled.entities["repositories"][0]["schema:author"] == [person_id]
 
 
+def test_reconcile_drops_repository_author_references_that_match_organizations() -> None:
+    entities = {
+        "persons": [_person("johndoe")],
+        "organizations": [
+            _organization(
+                "Swiss Data Science Center",
+                "https://ror.org/02hdt9m26",
+                github_handle="sdsc-ordes",
+            ),
+        ],
+        "repositories": [_repository("owner/repo", ["johndoe", "sdsc-ordes"])],
+    }
+
+    reconciled = reconcile_entities(entities)
+    person_id = reconciled.entities["persons"][0]["id"]
+
+    assert reconciled.entities["repositories"][0]["schema:author"] == [person_id]
+    assert not any(
+        "author=sdsc-ordes" in warning
+        for warning in reconciled.link_warnings
+    )
+
+
 def test_reconcile_links_person_affiliations_and_generates_memberships() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["EPFL"])],

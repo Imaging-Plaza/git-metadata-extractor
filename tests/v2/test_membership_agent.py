@@ -151,3 +151,81 @@ def test_membership_agent_resolves_prefixed_affiliation_alias_with_separator() -
     assert result.stats["membership_count"] == 1
     assert result.data["org:organization"] == "https://ror.org/02s376052"
     assert not any("Unresolved membership organization mapping" in warning for warning in result.warnings)
+
+
+def test_membership_agent_resolves_sdsc_alias_variants_from_org_acronym() -> None:
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = MembershipAgentV2()
+    context = {
+        "known_persons": [
+            {
+                "id": "https://orcid.org/0000-0002-1825-0097",
+                "schema:name": "Alice Example",
+                "affiliations": ["SDSC-GE", "SDSC"],
+            },
+        ],
+        "known_organizations": [
+            {
+                "id": "https://ror.org/02hdt9m26",
+                "schema:name": "Swiss Data Science Center",
+            },
+        ],
+    }
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.stats["membership_count"] == 1
+    assert result.data["org:organization"] == "https://ror.org/02hdt9m26"
+    assert not any("Unresolved membership organization mapping" in warning for warning in result.warnings)
+
+
+def test_membership_agent_resolves_wageningen_short_name_from_ampersand_variant() -> None:
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = MembershipAgentV2()
+    context = {
+        "known_persons": [
+            {
+                "id": "https://orcid.org/0000-0002-1825-0097",
+                "schema:name": "Alice Example",
+                "affiliations": ["Wageningen University"],
+            },
+        ],
+        "known_organizations": [
+            {
+                "id": "https://ror.org/04qw24q55",
+                "schema:name": "Wageningen University & Research",
+            },
+        ],
+    }
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.stats["membership_count"] == 1
+    assert result.data["org:organization"] == "https://ror.org/04qw24q55"
+    assert not any("Unresolved membership organization mapping" in warning for warning in result.warnings)
+
+
+def test_membership_agent_resolves_concordia_international_variant_to_university_token() -> None:
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = MembershipAgentV2()
+    context = {
+        "known_persons": [
+            {
+                "id": "https://orcid.org/0000-0002-1825-0097",
+                "schema:name": "Alice Example",
+                "affiliations": ["Concordia International University Estonia"],
+            },
+        ],
+        "known_organizations": [
+            {
+                "id": "https://ror.org/01qxhf360",
+                "schema:name": "Concordia University",
+            },
+        ],
+    }
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.stats["membership_count"] == 1
+    assert result.data["org:organization"] == "https://ror.org/01qxhf360"
+    assert not any("Unresolved membership organization mapping" in warning for warning in result.warnings)

@@ -45,6 +45,9 @@ def _extract_contributor_logins(contributors: Any) -> list[str]:
     for contributor in contributors:
         login = None
         if isinstance(contributor, dict):
+            account_type = contributor.get("type")
+            if isinstance(account_type, str) and account_type.lower() == "organization":
+                continue
             login = contributor.get("login")
         elif isinstance(contributor, str):
             login = contributor
@@ -186,12 +189,23 @@ class RepositoryAgentV2:
             for contributor in contributors:
                 if not isinstance(contributor, dict):
                     continue
+                contributor_type = contributor.get("type")
+                if isinstance(contributor_type, str) and contributor_type.lower() == "organization":
+                    continue
                 login = contributor.get("login")
                 if isinstance(login, str) and login:
                     author_ids.append(login)
         if not author_ids:
             owner_login = repository.get("owner", {}).get("login")
-            if isinstance(owner_login, str) and owner_login:
+            owner_type = repository.get("owner", {}).get("type")
+            if (
+                isinstance(owner_login, str)
+                and owner_login
+                and not (
+                    isinstance(owner_type, str)
+                    and owner_type.lower() == "organization"
+                )
+            ):
                 author_ids = [owner_login]
         if not author_ids:
             author_ids = ["unknown-author"]

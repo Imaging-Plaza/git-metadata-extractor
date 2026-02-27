@@ -329,3 +329,91 @@ def test_article_agent_skips_fully_unresolved_authors_with_count_metadata_when_s
         in warning
         for warning in result.warnings
     )
+
+
+def test_article_agent_skips_candidate_without_doi_required_by_strict_schema() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "36f14ad6-3b30-4c6a-9118-2346d8f8a83e",
+                    "title": "No DOI Publication",
+                    "doi": None,
+                    "publicationDate": "2025-01-01",
+                    "authors": ["Alice Example"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/36f14ad6-3b30-4c6a-9118-2346d8f8a83e",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 7.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data == {}
+    assert result.stats["articles"] == []
+    assert any(
+        "Skipped article candidate due to missing DOI required by strict schema" in warning
+        for warning in result.warnings
+    )
+
+
+def test_article_agent_aggregates_missing_resolvable_author_skip_warnings() -> None:
+    provider = _RecordingInfoscienceProvider(
+        {
+            "sdsc-ordes/gimie": [
+                {
+                    "infosciencePublicationIdentifier": "pub-a",
+                    "title": "Unmapped Authors A",
+                    "doi": "10.1000/unmapped-a",
+                    "publicationDate": "2025-01-01",
+                    "authors": ["Unknown One", "Unknown Two"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-a",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 10.0,
+                },
+                {
+                    "infosciencePublicationIdentifier": "pub-b",
+                    "title": "Unmapped Authors B",
+                    "doi": "10.1000/unmapped-b",
+                    "publicationDate": "2025-02-01",
+                    "authors": ["Unknown Three"],
+                    "url": "https://infoscience.epfl.ch/entities/publication/pub-b",
+                    "sourceOrganization": "Swiss Data Science Center",
+                    "score": 9.0,
+                },
+            ],
+        },
+    )
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=provider,
+    )
+    agent = ArticleAgentV2(max_queries=3)
+    context = _build_context()
+    context["allow_synthetic_fallbacks"] = False
+
+    result = asyncio.run(agent.run(context, providers))
+
+    assert result.data == {}
+    assert result.stats["articles"] == []
+    assert any(
+        "Skipped article candidates due to missing resolvable authors with synthetic fallbacks disabled: count=2"
+        in warning
+        for warning in result.warnings
+    )
+    assert not any(
+        warning.startswith(
+            "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled:",
+        )
+        and "10.1000/unmapped" in warning
+        for warning in result.warnings
+    )
