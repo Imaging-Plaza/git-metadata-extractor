@@ -496,6 +496,7 @@ def _map_author_ids(
     *,
     person_lookup: dict[str, str],
     allow_synthetic_fallbacks: bool,
+    publication_reference: str,
 ) -> tuple[list[str], list[str], list[str], int, int]:
     warnings: list[str] = []
     unresolved_authors: list[str] = []
@@ -522,9 +523,18 @@ def _map_author_ids(
                 "Publication has no author names; using placeholder author identifier",
             )
         else:
+            raw_author_values = _as_string_list(publication.get("authors"))
+            author_preview = (
+                ", ".join(f"'{author}'" for author in raw_author_values[:3])
+                if raw_author_values
+                else "<no-author-names>"
+            )
             _append_unique(
                 warnings,
-                "Publication has no resolvable author identifiers",
+                (
+                    "Publication has no resolvable author identifiers: "
+                    f"{publication_reference} (author_examples={author_preview})"
+                ),
             )
 
     return (
@@ -563,21 +573,19 @@ def _normalize_publication_date(
     if normalized and ISO_DATE_PATTERN.fullmatch(normalized):
         return normalized, None
     if normalized and YEAR_ONLY_DATE_PATTERN.fullmatch(normalized):
-        if allow_synthetic_fallbacks:
-            normalized_year_date = f"{normalized}-01-01"
-            return (
-                normalized_year_date,
-                (
-                    "Publication date provided as year-only; normalized to "
-                    f"'{normalized_year_date}' for schema compatibility"
-                ),
-            )
-        return None, f"Publication date '{normalized}' is year-only and cannot be used without synthetic fallback"
+        normalized_year_date = f"{normalized}-01-01"
+        return (
+            normalized_year_date,
+            (
+                "Publication date provided as year-only; normalized to "
+                f"'{normalized_year_date}' for schema compatibility"
+            ),
+        )
     if allow_synthetic_fallbacks:
         return UNKNOWN_ARTICLE_DATE, "Publication date missing/invalid; using placeholder date"
     if normalized:
-        return None, f"Publication date '{normalized}' is invalid and synthetic fallback is disabled"
-    return None, "Publication date is missing and synthetic fallback is disabled"
+        return None, f"Publication date '{normalized}' is invalid"
+    return None, "Publication date is missing"
 
 
 def _publication_label(publication: dict[str, Any]) -> str:
@@ -585,6 +593,27 @@ def _publication_label(publication: dict[str, Any]) -> str:
         value = _as_string(publication.get(key))
         if value:
             return value
+    return "<unknown-article>"
+
+
+def _publication_reference(publication: dict[str, Any]) -> str:
+    parts: list[str] = []
+    doi = _as_string(publication.get("doi"))
+    infoscience_id = _as_string(publication.get("infosciencePublicationIdentifier"))
+    title = _as_string(publication.get("title"))
+    url = _as_string(publication.get("url"))
+
+    if doi:
+        parts.append(f"doi={doi}")
+    if infoscience_id:
+        parts.append(f"infoscience={infoscience_id}")
+    if title:
+        parts.append(f"title='{title}'")
+    if url:
+        parts.append(f"url={url}")
+
+    if parts:
+        return ", ".join(parts)
     return "<unknown-article>"
 
 
@@ -718,6 +747,7 @@ class ArticleAgentV2:
         skipped_missing_resolvable_author_candidates: list[tuple[str, int, int]] = []
 
         for candidate in ranked_candidates:
+            publication_reference = _publication_reference(candidate.publication)
             (
                 author_ids,
                 unresolved_authors,
@@ -728,6 +758,7 @@ class ArticleAgentV2:
                 candidate.publication,
                 person_lookup=person_lookup,
                 allow_synthetic_fallbacks=allow_synthetic_fallbacks,
+                publication_reference=publication_reference,
             )
             for unresolved_author in unresolved_authors:
                 if unresolved_author not in unresolved_author_names:
@@ -738,7 +769,7 @@ class ArticleAgentV2:
             if not author_ids and not allow_synthetic_fallbacks:
                 skipped_missing_resolvable_author_candidates.append(
                     (
-                        _publication_label(candidate.publication),
+                        publication_reference,
                         matched_author_count,
                         unresolved_author_count,
                     ),
@@ -765,8 +796,8 @@ class ArticleAgentV2:
                 _append_unique(
                     warnings,
                     (
-                        "Skipped article candidate due to invalid publication date with synthetic "
-                        f"fallbacks disabled: {_publication_label(candidate.publication)}"
+                        "Skipped article candidate due to invalid publication date: "
+                        f"{publication_reference}"
                     ),
                 )
                 continue
@@ -776,7 +807,7 @@ class ArticleAgentV2:
                     warnings,
                     (
                         "Skipped article candidate due to missing DOI required by strict schema: "
-                        f"{_publication_label(candidate.publication)}"
+                        f"{publication_reference}"
                     ),
                 )
                 continue
@@ -819,7 +850,7 @@ class ArticleAgentV2:
                     warnings,
                     (
                         "Dropped unresolved article author references for "
-                        f"{len(unresolved_author_names)} name(s) because synthetic fallbacks are disabled. "
+                        f"{len(unresolved_author_names)} name(s). "
                         f"Examples: {preview}{remainder_suffix}"
                     ),
                 )
@@ -832,8 +863,7 @@ class ArticleAgentV2:
                 _append_unique(
                     warnings,
                     (
-                        "Skipped article candidate due to missing resolvable authors with synthetic "
-                        "fallbacks disabled: "
+                        "Skipped article candidate due to missing resolvable authors: "
                         f"{publication_label} "
                         f"(matched_authors={matched_author_count}, "
                         f"unmatched_authors={unresolved_author_count})"
@@ -850,8 +880,8 @@ class ArticleAgentV2:
                 _append_unique(
                     warnings,
                     (
-                        "Skipped article candidates due to missing resolvable authors with synthetic "
-                        f"fallbacks disabled: count={len(skipped_missing_resolvable_author_candidates)}. "
+                        "Skipped article candidates due to missing resolvable authors: "
+                        f"count={len(skipped_missing_resolvable_author_candidates)}. "
                         f"Examples: {examples}{remainder_suffix}"
                     ),
                 )

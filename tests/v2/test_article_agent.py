@@ -212,7 +212,7 @@ def test_article_agent_drops_unresolved_author_references_when_synthetic_fallbac
     )
 
 
-def test_article_agent_skips_candidate_with_year_only_date_when_synthetic_fallbacks_disabled() -> None:
+def test_article_agent_normalizes_year_only_date_when_synthetic_fallbacks_disabled() -> None:
     provider = _RecordingInfoscienceProvider(
         {
             "sdsc-ordes/gimie": [
@@ -239,10 +239,11 @@ def test_article_agent_skips_candidate_with_year_only_date_when_synthetic_fallba
 
     result = asyncio.run(agent.run(context, providers))
 
-    assert result.data == {}
-    assert result.stats["articles"] == []
+    assert result.data["id"] == "10.1000/graph-4"
+    assert result.data["schema:datePublished"] == "2016-01-01"
+    assert result.stats["articles"]
     assert any(
-        "Skipped article candidate due to invalid publication date with synthetic fallbacks disabled"
+        "Publication date provided as year-only; normalized to '2016-01-01' for schema compatibility"
         in warning
         for warning in result.warnings
     )
@@ -288,7 +289,7 @@ def test_article_agent_resolves_accent_and_name_order_variants_without_synthetic
     assert result.data["id"] == "10.1000/variant-1"
     assert result.data["schema:author"] == ["https://orcid.org/0000-0003-1234-5678"]
     assert not any(
-        "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled"
+        "Skipped article candidate due to missing resolvable authors"
         in warning
         for warning in result.warnings
     )
@@ -324,8 +325,14 @@ def test_article_agent_skips_fully_unresolved_authors_with_count_metadata_when_s
     assert result.data == {}
     assert result.stats["articles"] == []
     assert any(
+        "Publication has no resolvable author identifiers: doi=10.1000/variant-2" in warning
+        and "title='No Resolvable Authors'" in warning
+        and "author_examples='Unknown One', 'Unknown Two'" in warning
+        for warning in result.warnings
+    )
+    assert any(
         "matched_authors=0, unmatched_authors=2" in warning
-        and "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled"
+        and "Skipped article candidate due to missing resolvable authors"
         in warning
         for warning in result.warnings
     )
@@ -361,7 +368,12 @@ def test_article_agent_skips_candidate_without_doi_required_by_strict_schema() -
     assert result.data == {}
     assert result.stats["articles"] == []
     assert any(
-        "Skipped article candidate due to missing DOI required by strict schema" in warning
+        "Skipped article candidate due to missing DOI required by strict schema: "
+        "infoscience=36f14ad6-3b30-4c6a-9118-2346d8f8a83e"
+        in warning
+        and "title='No DOI Publication'" in warning
+        and "url=https://infoscience.epfl.ch/entities/publication/36f14ad6-3b30-4c6a-9118-2346d8f8a83e"
+        in warning
         for warning in result.warnings
     )
 
@@ -406,13 +418,13 @@ def test_article_agent_aggregates_missing_resolvable_author_skip_warnings() -> N
     assert result.data == {}
     assert result.stats["articles"] == []
     assert any(
-        "Skipped article candidates due to missing resolvable authors with synthetic fallbacks disabled: count=2"
+        "Skipped article candidates due to missing resolvable authors: count=2"
         in warning
         for warning in result.warnings
     )
     assert not any(
         warning.startswith(
-            "Skipped article candidate due to missing resolvable authors with synthetic fallbacks disabled:",
+            "Skipped article candidate due to missing resolvable authors:",
         )
         and "10.1000/unmapped" in warning
         for warning in result.warnings
