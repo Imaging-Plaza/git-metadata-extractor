@@ -745,6 +745,7 @@ class ArticleAgentV2:
         raw_articles: list[dict[str, Any]] = []
         unresolved_author_names: list[str] = []
         skipped_missing_resolvable_author_candidates: list[tuple[str, int, int]] = []
+        reported_unresolvable_author_identifiers_warning = False
 
         for candidate in ranked_candidates:
             publication_reference = _publication_reference(candidate.publication)
@@ -764,6 +765,10 @@ class ArticleAgentV2:
                 if unresolved_author not in unresolved_author_names:
                     unresolved_author_names.append(unresolved_author)
             for warning in author_warnings:
+                if warning.startswith("Publication has no resolvable author identifiers:"):
+                    if reported_unresolvable_author_identifiers_warning:
+                        continue
+                    reported_unresolvable_author_identifiers_warning = True
                 _append_unique(warnings, warning)
 
             if not author_ids and not allow_synthetic_fallbacks:
@@ -872,8 +877,11 @@ class ArticleAgentV2:
             else:
                 example_count = min(max_unresolved_authors, 5)
                 examples = ", ".join(
-                    f"'{label}'"
-                    for label, _, _ in skipped_missing_resolvable_author_candidates[:example_count]
+                    (
+                        f"'{label}' (matched_authors={matched_author_count}, "
+                        f"unmatched_authors={unresolved_author_count})"
+                    )
+                    for label, matched_author_count, unresolved_author_count in skipped_missing_resolvable_author_candidates[:example_count]
                 )
                 remainder = len(skipped_missing_resolvable_author_candidates) - example_count
                 remainder_suffix = f", +{remainder} more" if remainder > 0 else ""
