@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   - organization Infoscience identifiers normalize from URL input to UUID tokens.
 
 ### Changed
+- Enforced ontology parity for organization outputs by dropping `schema:alternateName` from reconciled/final organization entities after alias resolution, preventing this non-shape field from appearing in `/v2/extract` JSON/JSON-LD and graph writes.
 - Updated JSON-LD build normalization to be context-property-aware so string values are promoted to `{"@id": ...}` only for terms declared with `@type: @id`.
 - Updated v2 JSON-LD context promotion with explicit `schema:url` IRI typing (`"schema:url": {"@type": "@id"}`) to satisfy SHACL IRI node-kind expectations.
 - Updated reconciliation organization identifier normalization so `pulse:infoscienceOrganizationIdentifier` is persisted as UUID form (including URL-input extraction) in both top-level and `identifiers` payload fields.
