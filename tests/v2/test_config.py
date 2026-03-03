@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.v2.agents.runtime import AgentRuntime
 from src.v2.config import V2Config
 
 V2_CONFIG_ENV_KEYS = {
@@ -11,6 +12,7 @@ V2_CONFIG_ENV_KEYS = {
     "V2_ENABLE_LOGFIRE",
     "V2_GRAPH_DB_PATH",
     "V2_INTERMEDIATE_HISTORY_LIMIT",
+    "V2_AGENT_RUNTIME_DEFAULT",
 }
 
 
@@ -102,3 +104,37 @@ def test_v2_allow_synthetic_fallbacks_can_be_enabled(
     config.validate_preflight()
 
     assert config.V2_ALLOW_SYNTHETIC_FALLBACKS is True
+
+
+def test_v2_agent_runtime_default_is_rule_based(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+
+    config = V2Config()
+
+    assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.RULE_BASED
+
+
+def test_v2_agent_runtime_default_can_be_set_to_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "llm")
+
+    config = V2Config()
+
+    assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.LLM
+
+
+def test_v2_agent_runtime_default_rejects_invalid_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_v2_config_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "hybrid")
+
+    with pytest.raises(ValueError, match="Invalid runtime value for V2_AGENT_RUNTIME_DEFAULT"):
+        V2Config()

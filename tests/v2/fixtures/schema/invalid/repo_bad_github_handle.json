@@ -4,7 +4,7 @@
   "shacl": "pulse:RepositoryShape",
   "identifiers": {
     "pulse:githubRepositoryHandle": "EPFL-ENAC geodata-toolkit",
-    "schema:identifier": "10.5281/zenodo.12345678",
+    "schema:citation": "https://doi.org/10.5281/zenodo.12345678",
     "uuid": "b1c2d3e4-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
   },
   "idSource": "pulse:githubRepositoryHandle",

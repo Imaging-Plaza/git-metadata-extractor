@@ -4,7 +4,7 @@
   "output_format": "json",
   "output": {
     "root_entity": {
-      "id": "github",
+      "id": "https://github.com/github",
       "type": "org:Organization",
       "pulse:githubOrganizationHandle": "github"
     },
@@ -15,7 +15,7 @@
       "persons": [],
       "organizations": [
         {
-          "id": "github",
+          "id": "https://github.com/github",
           "type": "org:Organization",
           "pulse:githubOrganizationHandle": "github"
         }

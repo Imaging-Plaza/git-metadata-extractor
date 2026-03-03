@@ -4,6 +4,8 @@ import asyncio
 from time import monotonic
 from typing import Any
 
+import pytest
+
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.detection.models import GitHubURLClassification, GitHubURLType
@@ -1111,3 +1113,269 @@ def test_class_stage_partial_failures_keep_sibling_and_downstream_execution() ->
     assert result.agent_results["membership_agent:bob"].is_partial is False
     assert result.agent_results["contribution_agent:repo-root"].is_partial is False
     assert attempt_count["bob"] == EXPECTED_BOB_RETRY_ATTEMPTS
+
+
+def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
+    llm_repo_calls = 0
+    rule_repo_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            nonlocal llm_repo_calls
+            llm_repo_calls += 1
+            return AgentResult(data={"id": "llm-repo-root"})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo-root"})
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "org_agent": _org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={
+                "url_info": _classification(),
+                "source_url": "https://github.com/octocat/Hello-World",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+
+    assert llm_repo_calls == 1
+    assert rule_repo_calls == 0
+    assert result.agent_results["repo_agent"].data["id"] == "llm-repo-root"
+
+
+def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode() -> None:
+    llm_repo_calls = 0
+    rule_repo_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            nonlocal llm_repo_calls
+            llm_repo_calls += 1
+            return AgentResult(data={"id": "llm-repo-root"})
+
+    async def _context_gatherer(
+        detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        if detected_type == "user":
+            return ContextBundle(
+                detected_type="user",
+                context={
+                    "user": {
+                        "username": "octocat",
+                        "owned_repos": ["octocat/repo-a"],
+                        "profile": {"company": "github"},
+                    },
+                },
+            )
+        return ContextBundle(
+            detected_type="organization",
+            context={
+                "organization": {
+                    "org_name": "github",
+                    "owned_repos": ["github/repo-a"],
+                    "members": ["alice"],
+                },
+            },
+        )
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(
+            data={"id": context["username"]},
+            stats={"derivation": {"person_id": context["username"], "affiliation_names": []}},
+        )
+
+    async def _rule_repo_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": context["full_name"]})
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        agent_runners={
+            "person_agent": _person_agent,
+            "repo_agent": _rule_repo_agent,
+            "org_agent": _org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+
+    user_plan = orchestrator.get_execution_plan("user")
+    org_plan = orchestrator.get_execution_plan("organization")
+
+    asyncio.run(
+        orchestrator.execute(
+            plan=user_plan,
+            providers=_providers(),
+            context={
+                "url_info": GitHubURLClassification(
+                    normalized_url="https://github.com/octocat",
+                    detected_type=GitHubURLType.USER,
+                    owner="octocat",
+                    repo=None,
+                ),
+                "source_url": "https://github.com/octocat",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+    asyncio.run(
+        orchestrator.execute(
+            plan=org_plan,
+            providers=_providers(),
+            context={
+                "url_info": GitHubURLClassification(
+                    normalized_url="https://github.com/orgs/github",
+                    detected_type=GitHubURLType.ORGANIZATION,
+                    owner="github",
+                    repo=None,
+                ),
+                "source_url": "https://github.com/orgs/github",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+
+    assert llm_repo_calls == 0
+    assert rule_repo_calls == 2
+
+
+def test_execute_hard_fails_when_llm_repository_runner_errors() -> None:
+    rule_repo_calls = 0
+
+    class _FailingLLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            raise RuntimeError("llm repository failure")
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo-root"})
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_FailingLLMRepositoryRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "org_agent": _org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+        retry_max_retries=1,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    with pytest.raises(RuntimeError, match="LLM repository runtime failed without fallback"):
+        asyncio.run(
+            orchestrator.execute(
+                plan=plan,
+                providers=_providers(),
+                context={
+                    "url_info": _classification(),
+                    "source_url": "https://github.com/octocat/Hello-World",
+                    "agent_runtime": "llm",
+                },
+            ),
+        )
+
+    assert rule_repo_calls == 0

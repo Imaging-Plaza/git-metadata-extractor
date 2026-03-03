@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from rdflib import Graph as RDFGraph
 
-from src.v2.agents import ProviderSet  # noqa: TC001
+from src.v2.agents import ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
 from src.v2.detection import UnsupportedGitHubURL, classify_github_url
@@ -261,14 +261,17 @@ def _to_graph_store_entity_payload(
     response_model=V2ExtractResponse,
     response_model_exclude_none=True,
 )
-async def extract(  # noqa: C901, PLR0912, PLR0915
+async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     full_path: str,
     request: Request,
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
+    agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
+    """Run the v2 extraction pipeline for a GitHub path."""
+
     config = V2Config()
     store = GraphStore(config.V2_GRAPH_DB_PATH)
     run_id: str | None = None
@@ -321,6 +324,13 @@ async def extract(  # noqa: C901, PLR0912, PLR0915
     with tracer.trace_stage(STAGE_CLASSIFY_URL, source_url=full_path) as stage_span:
         stage_span.set_attribute("detected_type", classification.detected_type.value)
         stage_span.set_attribute("normalized_url", classification.normalized_url)
+        # Query-level runtime overrides the configured default when present.
+        resolved_runtime = parse_agent_runtime(
+            agent_runtime,
+            default=config.V2_AGENT_RUNTIME_DEFAULT,
+            field_name="agent_runtime",
+        )
+        stage_span.set_attribute("agent_runtime", resolved_runtime.value)
 
     try:
         orchestrator = _get_orchestrator(request)
@@ -332,6 +342,7 @@ async def extract(  # noqa: C901, PLR0912, PLR0915
                 "source_url": classification.normalized_url,
                 "url_info": classification,
                 "allow_synthetic_fallbacks": config.V2_ALLOW_SYNTHETIC_FALLBACKS,
+                "agent_runtime": resolved_runtime.value,
                 "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
             },

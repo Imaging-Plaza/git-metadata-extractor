@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422
 HTTP_BAD_GATEWAY = 502
+HTTP_INTERNAL_SERVER_ERROR = 500
 EXPECTED_JSON_ENTITY_BUCKETS = {
     "repositories",
     "persons",
@@ -284,6 +285,201 @@ def test_extract_returns_provider_error_when_required_github_provider_fails() ->
     assert "Required provider 'github'" in payload["detail"]
 
 
+def test_extract_uses_llm_runtime_default_when_configured(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "llm")
+    llm_repo_calls = 0
+    rule_repo_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            nonlocal llm_repo_calls
+            llm_repo_calls += 1
+            return AgentResult(
+                data={
+                    "id": "owner/repo",
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "identifiers": {
+                        "pulse:githubRepositoryHandle": "owner/repo",
+                        "schema:citation": None,
+                        "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                    },
+                    "idSource": "pulse:githubRepositoryHandle",
+                    "schema:name": "repo",
+                    "pulse:githubRepositoryHandle": "owner/repo",
+                    "pulse:repositoryType": "pulse:Software",
+                    "pulse:discipline": ["wd:Q735"],
+                    "schema:author": ["alice"],
+                },
+            )
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner/repo",
+                    "metadata": {"owner": {"login": "owner", "type": "User"}},
+                    "contributors": [{"login": "alice", "type": "User"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo"})
+
+    async def _no_data_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        username = context["username"]
+        return AgentResult(
+            data={
+                "id": username,
+                "type": "schema:Person",
+                "shacl": "pulse:PersonShape",
+                "identifiers": {
+                    "pulse:orcid": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "pulse:githubUsername": username,
+                    "uuid": "11111111-1111-4111-8111-111111111111",
+                },
+                "idSource": "pulse:githubUsername",
+                "schema:name": username,
+                "schema:url": f"https://github.com/{username}",
+                "pulse:githubUsername": username,
+                "pulse:orcidIdentifier": None,
+                "pulse:infosciencePersonIdentifier": None,
+                "org:hasMembership": [],
+                "pulse:hasContribution": [],
+                "pulse:owns": [],
+            },
+        )
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _no_data_agent,
+            "article_agent": _no_data_agent,
+            "membership_agent": _no_data_agent,
+            "contribution_agent": _no_data_agent,
+        },
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/owner/repo",
+        params={"output_format": "json"},
+    )
+
+    assert status_code == HTTP_OK
+    assert llm_repo_calls == 1
+    assert rule_repo_calls == 0
+    assert payload["output"]["root_entity"]["id"].endswith("/owner/repo")
+
+
+def test_extract_llm_runtime_failure_does_not_fallback_to_rule_based_repository_agent() -> None:
+    rule_repo_calls = 0
+
+    class _FailingLLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            raise RuntimeError("llm repository failure")
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner/repo",
+                    "metadata": {"owner": {"login": "owner", "type": "User"}},
+                    "contributors": [],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo"})
+
+    async def _no_data_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={})
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_FailingLLMRepositoryRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "person_agent": _no_data_agent,
+            "org_agent": _no_data_agent,
+            "article_agent": _no_data_agent,
+            "membership_agent": _no_data_agent,
+            "contribution_agent": _no_data_agent,
+        },
+        retry_max_retries=1,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/owner/repo",
+        params={"output_format": "json", "agent_runtime": "llm"},
+    )
+
+    assert status_code == HTTP_INTERNAL_SERVER_ERROR
+    assert payload["error_type"] == "pipeline_error"
+    assert "LLM repository runtime failed without fallback" in payload["detail"]
+    assert rule_repo_calls == 0
+
+
 def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichment() -> None:
     provider_set = ProviderSet(
         github=_RepositoryModeScopeGitHubProvider(),
@@ -456,7 +652,7 @@ def test_extract_returns_422_when_root_entity_fails_strict_validation() -> None:
                 "shacl": "pulse:RepositoryShape",
                 "identifiers": {
                     "pulse:githubRepositoryHandle": "owner/repo",
-                    "schema:identifier": None,
+                    "schema:citation": None,
                     "uuid": "a6bfb89f-f34d-4e67-84c9-1735d0524f24",
                 },
                 "idSource": "pulse:githubRepositoryHandle",
@@ -537,7 +733,7 @@ def test_extract_excludes_invalid_non_root_entities_and_reports_collection(
                 "shacl": "pulse:RepositoryShape",
                 "identifiers": {
                     "pulse:githubRepositoryHandle": "owner/repo",
-                    "schema:identifier": None,
+                    "schema:citation": None,
                     "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
                 },
                 "idSource": "pulse:githubRepositoryHandle",

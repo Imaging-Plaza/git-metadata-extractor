@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
 from src.v2.providers.base import (
@@ -19,7 +17,6 @@ JSONMapping = dict[str, Any]
 GimieExtractor = Callable[[str, str], Any]
 UserLookup = Callable[[str], JSONMapping]
 OrganizationLookup = Callable[[str], JSONMapping]
-RepositoryContextLoader = Callable[[str], Awaitable[JSONMapping] | JSONMapping]
 GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
 GITHUB_NOREPLY_PATTERN = re.compile(
     r"^(?:\d+\+)?([A-Za-z\d-]{1,39})@users\.noreply\.github\.com$",
@@ -90,19 +87,6 @@ def _extract_login_from_email(email: Any) -> str | None:
     return _normalize_github_login(match.group(1))
 
 
-def _resolve_contributor_login(author: Any) -> str | None:
-    author_id = getattr(author, "id", None)
-    login_from_id = _normalize_github_login(author_id)
-    if login_from_id:
-        return login_from_id
-
-    login_from_email = _extract_login_from_email(getattr(author, "email", None))
-    if login_from_email:
-        return login_from_email
-
-    return _normalize_github_login(getattr(author, "name", None))
-
-
 def _deduplicate_preserve_order(values: list[str]) -> list[str]:
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -149,6 +133,56 @@ def _extract_login_from_reference(reference: Any) -> str | None:
                 break
         return _extract_github_login_from_identifier(identifier)
     return None
+
+
+def _extract_graph_nodes(gimie_payload: Any) -> list[Any]:
+    """Return all nodes from a GIMIE JSON-LD payload (@graph list or flat list)."""
+    if isinstance(gimie_payload, list):
+        return gimie_payload
+    if isinstance(gimie_payload, dict):
+        graph = gimie_payload.get("@graph")
+        if isinstance(graph, list):
+            return graph
+    return []
+
+
+def _classify_graph_nodes(
+    gimie_payload: Any,
+) -> tuple[dict[str, JSONMapping], set[str]]:
+    """Classify GIMIE graph nodes by entity type.
+
+    Returns:
+        person_index: GitHub URL → Person node for all schema:Person nodes.
+        org_logins: GitHub logins for all schema:Organization nodes.
+    """
+    person_index: dict[str, JSONMapping] = {}
+    org_logins: set[str] = set()
+
+    for node in _extract_graph_nodes(gimie_payload):
+        if not isinstance(node, dict):
+            continue
+        node_id = node.get("@id")
+        if not isinstance(node_id, str) or "github.com/" not in node_id:
+            continue
+        node_type = node.get("@type", [])
+        types = node_type if isinstance(node_type, list) else [node_type]
+        type_strs = [str(t) for t in types]
+        if any("Person" in t for t in type_strs):
+            person_index[node_id] = node
+        elif any("Organization" in t for t in type_strs):
+            login = node_id.split("github.com/")[-1].strip("/")
+            if login:
+                org_logins.add(login.lower())
+
+    return person_index, org_logins
+
+
+def _extract_name_from_person_node(node: JSONMapping) -> str | None:
+    """Extract schema:name from a GIMIE Person node (handles @value wrapper)."""
+    return _first_non_empty_string(
+        node.get("schema:name"),
+        node.get("http://schema.org/name"),
+    )
 
 
 def _extract_contributor_logins_from_node(node: JSONMapping) -> list[str]:
@@ -248,42 +282,25 @@ def _extract_languages_from_node(node: JSONMapping) -> dict[str, int]:
     return languages
 
 
-def _run_async(sync_or_async: Awaitable[Any] | Any) -> Any:
-    if not asyncio.iscoroutine(sync_or_async):
-        return sync_or_async
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(sync_or_async)
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(asyncio.run, sync_or_async)
-        return future.result()
-
-
 class RealGitHubProvider(GitHubProvider):
     """Production GitHub provider backed by existing GIMIE and v1 parser utilities."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         include_user_repositories: bool = True,
         include_organization_repositories: bool = True,
-        include_git_authors: bool = True,
         gimie_extractor: GimieExtractor | None = None,
         user_lookup: UserLookup | None = None,
         organization_lookup: OrganizationLookup | None = None,
-        repository_context_loader: RepositoryContextLoader | None = None,
         rate_limiter: RateLimiter | None = None,
     ) -> None:
         super().__init__(provider_name="github", rate_limiter=rate_limiter)
         self._include_user_repositories = include_user_repositories
         self._include_organization_repositories = include_organization_repositories
-        self._include_git_authors = include_git_authors
         self._gimie_extractor = gimie_extractor
         self._user_lookup = user_lookup
         self._organization_lookup = organization_lookup
-        self._repository_context_loader = repository_context_loader
 
         self._users_parser: Any | None = None
         self._orgs_parser: Any | None = None
@@ -296,10 +313,6 @@ class RealGitHubProvider(GitHubProvider):
     @property
     def include_organization_repositories(self) -> bool:
         return self._include_organization_repositories
-
-    @property
-    def include_git_authors(self) -> bool:
-        return self._include_git_authors
 
     @staticmethod
     def _model_dump(value: Any) -> JSONMapping:
@@ -318,14 +331,6 @@ class RealGitHubProvider(GitHubProvider):
 
         self._gimie_extractor = extract_gimie
         return extract_gimie
-
-    def _resolve_context_loader(self) -> RepositoryContextLoader:
-        if self._repository_context_loader is not None:
-            return self._repository_context_loader
-        from src.context.repository import prepare_repository_context  # noqa: PLC0415
-
-        self._repository_context_loader = prepare_repository_context
-        return prepare_repository_context
 
     def _get_repository_node(self, full_name: str) -> JSONMapping:
         repository_url = _normalize_repo_url(full_name)
@@ -447,57 +452,29 @@ class RealGitHubProvider(GitHubProvider):
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
         repository_url = _normalize_repo_url(full_name)
+        gimie_payload = self._gimie_payload_cache.get(repository_url) or {}
         node = self._get_repository_node(full_name)
         gimie_contributor_logins = _extract_contributor_logins_from_node(node)
-        if gimie_contributor_logins:
-            return [
-                {
-                    "login": login,
-                    "name": None,
-                    "email": None,
-                    "contributions": None,
-                }
-                for login in gimie_contributor_logins
-            ]
-
-        if not self._include_git_authors:
+        if not gimie_contributor_logins:
             logger.debug(
-                "GIMIE contributor extraction returned no GitHub logins for %s "
-                "(include_git_authors=false)",
+                "GIMIE contributor extraction returned no GitHub logins for %s",
                 full_name,
             )
             return []
-
-        context_loader = self._resolve_context_loader()
-        context_result = self._run_with_rate_limit(
-            lambda: _run_async(context_loader(repository_url)),
-        )
-
-        if not isinstance(context_result, dict):
-            return []
-
-        git_authors = context_result.get("git_authors", [])
-        contributors: list[dict[str, Any]] = []
-        for author in git_authors:
-            commits = getattr(author, "commits", None)
-            total_commits = getattr(commits, "total", None)
-            login = _resolve_contributor_login(author)
-            if login is None:
-                logger.debug(
-                    "Contributor login unresolved; skipping GitHub username fanout "
-                    "(author_id=%s, name=%s, email=%s)",
-                    getattr(author, "id", None),
-                    getattr(author, "name", None),
-                    getattr(author, "email", None),
-                )
-            contributor = {
-                "login": login,
-                "name": getattr(author, "name", None),
-                "email": getattr(author, "email", None),
-                "contributions": total_commits,
-            }
-            contributors.append(contributor)
-
+        person_index, org_logins = _classify_graph_nodes(gimie_payload)
+        contributors = []
+        for login in gimie_contributor_logins:
+            if login.lower() in org_logins:
+                continue
+            person_node = person_index.get(f"https://github.com/{login}", {})
+            contributors.append(
+                {
+                    "login": login,
+                    "name": _extract_name_from_person_node(person_node),
+                    "email": None,
+                    "contributions": None,
+                }
+            )
         return contributors
 
     def get_languages(self, full_name: str) -> dict[str, int]:

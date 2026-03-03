@@ -28,9 +28,9 @@
           "type": "string",
           "pattern": "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$"
         },
-        "schema:identifier": {
+        "schema:citation": {
           "type": ["string", "null"],
-          "pattern": "^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
+          "format": "uri",
           "description": "DOI identifier"
         },
         "uuid": {
@@ -41,7 +41,7 @@
     },
     "idSource": {
       "type": "string",
-      "enum": ["pulse:githubRepositoryHandle", "schema:identifier", "uuid"]
+      "enum": ["pulse:githubRepositoryHandle", "schema:citation", "uuid"]
     },
     "schema:name": {
       "type": "string",

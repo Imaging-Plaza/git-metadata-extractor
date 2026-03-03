@@ -9,7 +9,7 @@
   "properties": {
     "id": {
       "type": "string",
-      "description": "Resolved hierarchical identifier. Set to the first non-null value from: pulse:githubRepositoryHandle, schema:identifier (DOI), or uuid (fallback). Example: 'EPFL-ENAC/geodata-toolkit'"
+      "description": "Resolved hierarchical identifier. Set to the first non-null value from: pulse:githubRepositoryHandle, schema:citation (DOI), or uuid (fallback). Example: 'EPFL-ENAC/geodata-toolkit'"
     },
     "type": {
       "type": "string",
@@ -22,15 +22,15 @@
     "identifiers": {
       "type": "object",
       "additionalProperties": false,
-      "description": "All available identifiers for this repository. Contains pulse:githubRepositoryHandle, schema:identifier (DOI), and uuid",
+      "description": "All available identifiers for this repository. Contains pulse:githubRepositoryHandle, schema:citation (DOI), and uuid",
       "properties": {
         "pulse:githubRepositoryHandle": {
           "type": "string",
           "description": "GitHub repository handle. Format: owner/repo. Example: 'EPFL-ENAC/geodata-toolkit'"
         },
-        "schema:identifier": {
+        "schema:citation": {
           "type": ["string", "null"],
-          "description": "DOI identifier. Format: 10.XXXX/suffix. Example: '10.5281/zenodo.12345678'"
+          "description": "DOI identifier. Example: 'https://doi.org/10.5281/zenodo.1234567845678'"
         },
         "uuid": {
           "type": "string",
@@ -40,7 +40,7 @@
     },
     "idSource": {
       "type": "string",
-      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:githubRepositoryHandle', 'schema:identifier', or 'uuid'"
+      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:githubRepositoryHandle', 'schema:citation', or 'uuid'"
     },
     "schema:name": {
       "type": "string",

@@ -5,12 +5,34 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Added
+- Added `src/v2/agents/llm/agent_tools/` package as the shared tool registry for LLM agents. Each tool module exposes a named pydantic-ai `Tool` instance that any LLM agent can import and pass to `V2LLMRuntime.run_json_prompt`.
+- Added `list_disciplines_tool` (`src/v2/agents/llm/agent_tools/disciplines.py`): a pydantic-ai tool named `list_disciplines` that returns the complete `DisciplineV2` mapping as a list of `{"wikidata_id", "name"}` objects. The tool description is generated at import time from the enum and contains the full Wikidata-ID-to-name table. Logs an INFO line on each call for observability.
+- Extended `V2LLMRuntime.run_json_prompt` with a `tools: list[Any] | None` parameter forwarded directly to the pydantic-ai `Agent` constructor, enabling per-agent tool customization without subclassing the runtime.
+- Wired `list_disciplines_tool` into `LLMRepositoryAgentV2`: the agent passes `tools=[list_disciplines_tool]` to the runtime call so the model can look up valid `pulse:discipline` Wikidata IRIs during generation.
+- Updated `LLMRepositoryAgentV2` system prompt to add an "Available tools" section that names `list_disciplines`, describes its return shape, and instructs the model to call it before assigning any `pulse:discipline` values.
+- Added Plan D runtime-migration implementation artifacts and task breakdown docs in `.internal/plan-d/PD-02` through `.internal/plan-d/PD-10`, including updated Plan D dependency/index metadata in `.internal/plan-d/README.md`.
+- Added v2 runtime-selection primitives (`AgentRuntime`, parser, runtime protocol, runtime registry, rule-based/llm namespace scaffolding) to support staged runtime switching.
+- Added v2 LLM runtime adapter (`src/v2/llm/runtime.py`) that reuses `src/llm/model_config.py`, enforces provider credential presence by env-var name, and normalizes structured JSON output + token metadata.
+- Added `LLMRepositoryAgentV2` as the wave-1 LLM stage replacement for repository extraction, with permissive schema validation and contract-failure rejection behavior.
+- Added runtime regression coverage for:
+  - config/runtime parsing (`tests/v2/test_config.py`),
+  - API runtime query validation (`tests/v2/test_api_extract_stub.py`),
+  - orchestrator runtime routing/hard-fail semantics (`tests/v2/test_orchestrator_execution.py`),
+  - LLM runtime adapter behavior (`tests/v2/test_llm_runtime_adapter.py`),
+  - LLM repository agent contract behavior (`tests/v2/test_llm_repository_agent.py`),
+  - runtime-default and no-fallback e2e behavior (`tests/v2/test_extract_e2e.py`).
 - Added focused v2 regression coverage for Plan C issues 07/08/09 in `tests/v2/test_jsonld_build.py`, `tests/v2/test_context_versioning.py`, and `tests/v2/test_reconciliation.py`:
   - literal `schema:name` / `pulse:githubUsername` values that match entity IDs remain literals,
   - `schema:url` compacts/expands as an IRI-valued term,
   - organization Infoscience identifiers normalize from URL input to UUID tokens.
 
 ### Changed
+- Renamed repository identifier field `schema:identifier` to `schema:citation` in both agent and strict repository schemas (`src/v2/schemas/*/repository.schema.json`) to correctly represent the DOI/citation link. Updated `idSource` enum accordingly (`"schema:citation"` replaces `"schema:identifier"`). Regenerated Pydantic models (`IdSource3.schema_citation`). Updated all fixture copies and promoted dev schemas.
+- Removed `schema:alternateName` from the strict organization schema (`src/v2/schemas/strict/organization.schema.json`) to enforce TTL shape compliance. The field is retained in the agent schema as an internal intermediate used by membership/article/reconciliation pipeline stages and is already stripped by reconciliation before final output and strict validation.
+- Added `/v2/extract` runtime selector support with `agent_runtime=rule_based|llm`, defaulting from `V2_AGENT_RUNTIME_DEFAULT` when omitted.
+- Updated pipeline orchestrator to resolve stage runners through runtime registry and enforce hard-fail policy for repository-stage LLM failures (`agent_runtime=llm`) without rule-based fallback.
+- Updated `AGENTS.md` handoff to Plan D entry task `.internal/plan-d/PD-02-runtime-enum-and-config.md`.
+- Updated v2 API reference docs with runtime selector semantics and `V2_AGENT_RUNTIME_DEFAULT` environment variable.
 - Removed v2 dependency on the v1 TTL-based cache system (`cache_manager`). `RealGitHubProvider` now calls base parsers (`GitHubUsersParser`, `GitHubOrganizationsParser`) directly instead of cached wrappers. The `force_refresh` query parameter and `V2_DISABLE_CACHE` environment variable have been removed from v2 endpoints and provider initialization.
 - Enforced ontology parity for organization outputs by dropping `schema:alternateName` from reconciled/final organization entities after alias resolution, preventing this non-shape field from appearing in `/v2/extract` JSON/JSON-LD and graph writes.
 - Updated JSON-LD build normalization to be context-property-aware so string values are promoted to `{"@id": ...}` only for terms declared with `@type: @id`.
@@ -118,6 +140,10 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `PYTHONPATH=. .venv/bin/pytest tests/v2/test_config.py tests/v2/test_api_extract_stub.py tests/v2/test_orchestrator_execution.py tests/v2/test_llm_runtime_adapter.py tests/v2/test_llm_repository_agent.py tests/v2/test_agent_runtime_scaffolding.py tests/v2/test_extract_e2e.py -q`
+- `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/__init__.py src/v2/agents/contracts.py src/v2/agents/runtime.py src/v2/agents/registry.py src/v2/agents/llm/repository_agent.py src/v2/agents/rule_based/__init__.py src/v2/llm/runtime.py src/v2/llm/__init__.py src/v2/config.py src/v2/api.py src/v2/pipeline/orchestrator.py`
+- `PYTHONPATH=. .venv/bin/ruff check tests/v2/test_llm_runtime_adapter.py tests/v2/test_llm_repository_agent.py tests/v2/test_agent_runtime_scaffolding.py tests/v2/test_api_extract_stub.py tests/v2/test_config.py`
+- `PYTHONPATH=. .venv/bin/mypy src/v2/agents/runtime.py src/v2/agents/contracts.py src/v2/agents/registry.py src/v2/agents/llm/repository_agent.py src/v2/llm/runtime.py src/v2/config.py src/v2/api.py src/v2/pipeline/orchestrator.py`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_jsonld_build.py tests/v2/test_context_versioning.py tests/v2/test_reconciliation.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/reconciliation.py tests/v2/test_jsonld_build.py tests/v2/test_context_versioning.py tests/v2/test_reconciliation.py`
 - `PYTHONPATH=. .venv/bin/mypy src/v2/pipeline/stages/jsonld_build.py src/v2/pipeline/stages/reconciliation.py`

@@ -5,11 +5,14 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from src.v2.agents import (
+    AgentRuntime,
+    AgentRuntimeRegistry,
     ArticleAgentV2,
     ContributionAgentV2,
+    LLMRepositoryAgentV2,
     MembershipAgentV2,
     OrganizationAgentV2,
     PersonAgentV2,
@@ -17,6 +20,7 @@ from src.v2.agents import (
     RepositoryAgentV2,
     TypedEntityBuckets,
     infer_entity_bucket,
+    parse_agent_runtime,
     with_retry,
 )
 from src.v2.agents.models import AgentResult
@@ -25,6 +29,9 @@ from src.v2.observability.agent_instrumentation import instrument_agent
 from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage
 from src.v2.pipeline.stages import ContextBundle, gather_context
+
+if TYPE_CHECKING:
+    from src.v2.agents.contracts import RuntimeAgent
 
 ContextGatherer = Callable[
     [str, GitHubURLClassification, ProviderSet],
@@ -126,6 +133,8 @@ def _is_valid_github_login(candidate: Any) -> bool:
 
 
 class PipelineOrchestrator:
+    """Coordinates stage execution for repository, user, and organization flows."""
+
     def __init__(  # noqa: PLR0913
         self,
         *,
@@ -136,11 +145,15 @@ class PipelineOrchestrator:
         article_agent: ArticleAgentV2 | None = None,
         membership_agent: MembershipAgentV2 | None = None,
         contribution_agent: ContributionAgentV2 | None = None,
+        llm_repository_agent: RuntimeAgent | None = None,
+        agent_registry: AgentRuntimeRegistry | None = None,
         agent_runners: dict[str, AgentRunner] | None = None,
         retry_max_retries: int = 3,
         retry_backoff_base: float = 0.0,
         retry_sleep_func: SleepCallable | None = None,
     ) -> None:
+        """Initialize stage runners and runtime-aware routing infrastructure."""
+
         self._context_gatherer = context_gatherer
         self._repository_agent = repository_agent or RepositoryAgentV2()
         self._person_agent = person_agent or PersonAgentV2()
@@ -148,8 +161,9 @@ class PipelineOrchestrator:
         self._article_agent = article_agent or ArticleAgentV2()
         self._membership_agent = membership_agent or MembershipAgentV2()
         self._contribution_agent = contribution_agent or ContributionAgentV2()
+        self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
 
-        self._agent_runners: dict[str, AgentRunner] = {
+        self._rule_based_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
             STAGE_PERSON_AGENT: self._person_agent.run,
             STAGE_ORG_AGENT: self._organization_agent.run,
@@ -158,7 +172,15 @@ class PipelineOrchestrator:
             STAGE_CONTRIBUTION_AGENT: self._contribution_agent.run,
         }
         if agent_runners:
-            self._agent_runners.update(agent_runners)
+            self._rule_based_runners.update(agent_runners)
+
+        self._agent_registry = agent_registry or AgentRuntimeRegistry(
+            rule_based_runners=self._rule_based_runners,
+            llm_repository_agent=self._llm_repository_agent,
+        )
+        if agent_registry and agent_runners:
+            for stage_key, runner in agent_runners.items():
+                self._agent_registry.register_rule_runner(stage_key, runner)
 
         self._retry_max_retries = retry_max_retries
         self._retry_backoff_base = retry_backoff_base
@@ -186,12 +208,14 @@ class PipelineOrchestrator:
             raise ValueError
         return plan
 
-    async def execute(  # noqa: C901
+    async def execute(  # noqa: C901, PLR0915
         self,
         plan: ExecutionPlan,
         providers: ProviderSet,
         context: dict[str, Any],
     ) -> PipelineResult:
+        """Execute an orchestration plan and aggregate stage outputs."""
+
         started_at = perf_counter()
         stages_completed: list[str] = []
         warnings: list[str] = []
@@ -255,12 +279,31 @@ class PipelineOrchestrator:
                     runtime_context=runtime_context,
                     pipeline_outputs=pipeline_outputs,
                     providers=providers,
+                    detected_type=plan.detected_type,
                 )
                 stage_span.set_attributes(
                     result_count=len(stage_results),
                     warning_count=len(stage_warnings),
                     error_count=len(stage_errors),
                 )
+
+            runtime_mode = parse_agent_runtime(
+                runtime_context.get("agent_runtime"),
+                default=AgentRuntime.RULE_BASED,
+                field_name="agent_runtime",
+            )
+            if (
+                runtime_mode == AgentRuntime.LLM
+                and plan.detected_type == "repository"
+                and stage.name == STAGE_REPO_AGENT
+                and stage_errors
+            ):
+                # LLM mode intentionally hard-fails repository stage errors.
+                message = (
+                    "LLM repository runtime failed without fallback: "
+                    f"{stage_errors[0]}"
+                )
+                raise RuntimeError(message)
 
             for key, value in stage_results.items():
                 agent_results[key] = value
@@ -343,7 +386,7 @@ class PipelineOrchestrator:
             return url_info
         raise ValueError
 
-    async def _execute_stage(
+    async def _execute_stage(  # noqa: PLR0913
         self,
         *,
         stage_name: str,
@@ -351,15 +394,26 @@ class PipelineOrchestrator:
         runtime_context: dict[str, Any],
         pipeline_outputs: dict[str, dict[str, Any]],
         providers: ProviderSet,
+        detected_type: str,
     ) -> tuple[dict[str, AgentResult], list[str], list[str]]:
+        """Run all work items for a stage and collect result envelopes."""
+
         stage_warnings: list[str] = []
         stage_errors: list[str] = []
         stage_results: dict[str, AgentResult] = {}
 
         async def _run_item(work_item: _StageWorkItem) -> tuple[str, AgentResult]:
-            runner = self._agent_runners.get(work_item.runner_key)
-            if runner is None:
-                raise ValueError
+            runtime_mode = parse_agent_runtime(
+                runtime_context.get("agent_runtime"),
+                default=AgentRuntime.RULE_BASED,
+                field_name="agent_runtime",
+            )
+            # Select runner by runtime and stage (llm override for repo stage only).
+            runner = self._agent_registry.resolve_runner(
+                stage_key=work_item.runner_key,
+                runtime=runtime_mode,
+                detected_type=detected_type,
+            )
 
             item_context = {
                 **runtime_context,
@@ -681,7 +735,7 @@ class PipelineOrchestrator:
         full_name = self._repository_source_full_name(runtime_context)
         return [full_name] if isinstance(full_name, str) and full_name else []
 
-    def _person_fanout_contexts(  # noqa: C901
+    def _person_fanout_contexts(  # noqa: C901, PLR0912
         self,
         runtime_context: dict[str, Any],
         detected_type: str,

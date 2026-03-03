@@ -561,14 +561,14 @@ def generate_repositories(
 
         identifiers = {
             "pulse:githubRepositoryHandle": github_handle,
-            "schema:identifier": doi,
+            "schema:citation": doi,
             "uuid": make_uuid4(),
         }
         primary_id, id_source = resolve_id(
             identifiers,
             [
                 "pulse:githubRepositoryHandle",
-                "schema:identifier",
+                "schema:citation",
                 "uuid",
             ],
         )
@@ -839,7 +839,7 @@ def generate_edge_cases(
         "shacl": "pulse:RepositoryShape",
         "identifiers": {
             "pulse:githubRepositoryHandle": edge_repo_handle,
-            "schema:identifier": None,
+            "schema:citation": None,
             "uuid": make_uuid4(),
         },
         "idSource": "pulse:githubRepositoryHandle",

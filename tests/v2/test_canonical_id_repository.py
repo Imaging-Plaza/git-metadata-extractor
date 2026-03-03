@@ -13,7 +13,7 @@ def test_resolve_repository_id_prefers_github_repository_handle() -> None:
     repository = {
         "identifiers": {
             "pulse:githubRepositoryHandle": "owner/repo",
-            "schema:identifier": "10.5281/zenodo.1234",
+            "schema:citation": "10.5281/zenodo.1234",
         },
     }
 
@@ -27,14 +27,14 @@ def test_resolve_repository_id_uses_doi_when_github_handle_is_missing() -> None:
     repository = {
         "identifiers": {
             "pulse:githubRepositoryHandle": None,
-            "schema:identifier": "10.5281/zenodo.1234",
+            "schema:citation": "10.5281/zenodo.1234",
         },
     }
 
     canonical_id, id_source = resolve_repository_id(repository)
 
     assert canonical_id == "https://doi.org/10.5281/zenodo.1234"
-    assert id_source == "schema:identifier"
+    assert id_source == "schema:citation"
 
 
 def test_resolve_repository_id_falls_back_to_uuid_v5() -> None:
@@ -42,7 +42,7 @@ def test_resolve_repository_id_falls_back_to_uuid_v5() -> None:
         "schema:name": "Some Repository",
         "identifiers": {
             "pulse:githubRepositoryHandle": None,
-            "schema:identifier": None,
+            "schema:citation": None,
         },
     }
 
@@ -57,14 +57,14 @@ def test_resolve_repository_id_validates_github_handle_shape() -> None:
     repository = {
         "identifiers": {
             "pulse:githubRepositoryHandle": "owner/repo/extra",
-            "schema:identifier": "10.5281/zenodo.1234",
+            "schema:citation": "10.5281/zenodo.1234",
         },
     }
 
     canonical_id, id_source = resolve_repository_id(repository)
 
     assert canonical_id == "https://doi.org/10.5281/zenodo.1234"
-    assert id_source == "schema:identifier"
+    assert id_source == "schema:citation"
 
 
 def test_resolve_repository_id_output_is_strict_enum_compatible(

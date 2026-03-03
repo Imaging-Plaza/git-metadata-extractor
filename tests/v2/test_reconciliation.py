@@ -49,7 +49,7 @@ def _repository(
         "pulse:githubRepositoryHandle": handle,
         "identifiers": {
             "pulse:githubRepositoryHandle": handle,
-            "schema:identifier": None,
+            "schema:citation": None,
         },
         "schema:author": authors,
         "pulse:isForkOf": fork_of,

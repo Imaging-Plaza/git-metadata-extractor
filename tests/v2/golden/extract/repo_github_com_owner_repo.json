@@ -11,24 +11,28 @@
     },
     "@graph": [
       {
-        "@type": "org:Organization"
-      },
-      {
-        "@id": "urn:git-metadata-extractor:entity:octocat",
+        "@id": "https://github.com/octocat",
         "@type": "schema:Person",
-        "pulse:githubUsername": {
-          "@id": "urn:git-metadata-extractor:entity:octocat"
-        }
+        "pulse:githubUsername": "octocat"
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:octocat/Hello-World",
+        "@id": "https://github.com/octocat/Hello-World",
         "@type": "schema:SoftwareSourceCode"
+      },
+      {
+        "@type": "org:Membership"
+      },
+      {
+        "@type": "pulse:Contribution"
+      },
+      {
+        "@type": "org:Organization"
       }
     ]
   },
   "stats": {
-    "entities_count": 3,
-    "triples_count": 23,
+    "entities_count": 5,
+    "triples_count": 28,
     "stages_completed": [
       "context_gather",
       "repo_agent",

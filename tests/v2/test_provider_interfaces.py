@@ -141,18 +141,6 @@ class _SpyOrganizationsParser(GitHubOrganizationsParser):
         return {"url": None, "content": None}
 
 
-@dataclass
-class _Commits:
-    total: int
-
-
-@dataclass
-class _GitAuthor:
-    name: str
-    email: str | None
-    id: str
-    commits: _Commits
-
 
 class _FakeResponse:
     def __init__(self, *, status_code: int, payload: dict[str, Any]) -> None:
@@ -257,28 +245,7 @@ class _FakeSession:
         return _FakeResponse(status_code=404, payload={"error": "not found"})
 
 
-def _build_real_github_provider(
-    git_authors: list[_GitAuthor] | None = None,
-    **provider_kwargs: Any,
-) -> RealGitHubProvider:
-    resolved_authors = (
-        git_authors
-        if git_authors is not None
-        else [
-            _GitAuthor(
-                name="The Octocat",
-                email="octocat@github.com",
-                id="octocat",
-                commits=_Commits(total=3),
-            ),
-        ]
-    )
-
-    async def _repository_context_loader(_: str) -> dict[str, Any]:
-        return {
-            "git_authors": resolved_authors,
-        }
-
+def _build_real_github_provider(**provider_kwargs: Any) -> RealGitHubProvider:
     return RealGitHubProvider(
         gimie_extractor=lambda _url, _format: {
             "@graph": [
@@ -287,12 +254,17 @@ def _build_real_github_provider(
                     "schema:name": "Hello-World",
                     "schema:codeRepository": "https://github.com/octocat/Hello-World",
                     "schema:programmingLanguage": ["Python"],
+                    "schema:contributor": [{"@id": "https://github.com/octocat"}],
+                },
+                {
+                    "@id": "https://github.com/octocat",
+                    "@type": ["http://schema.org/Person"],
+                    "http://schema.org/name": [{"@value": "The Octocat"}],
                 },
             ],
         },
         user_lookup=lambda username: {"login": username, "name": "The Octocat"},
         organization_lookup=lambda org_name: {"login": org_name, "name": "GitHub"},
-        repository_context_loader=_repository_context_loader,
         **provider_kwargs,
     )
 
@@ -488,51 +460,8 @@ def test_infoscience_publication_contract_is_enforced_for_real_and_mock_provider
     assert real_publications[1]["url"] is None
 
 
-def test_real_github_provider_infers_login_from_noreply_email() -> None:
-    real_github = _build_real_github_provider(
-        git_authors=[
-            _GitAuthor(
-                name="Jane Doe",
-                email="12345+janedoe@users.noreply.github.com",
-                id="0b3f69f4d1e5bdc420e7bea74e3e037ab841e385aefc2c37097f40edd13f8cd4",
-                commits=_Commits(total=5),
-            ),
-        ],
-    )
-
-    contributors = real_github.get_contributors("octocat/Hello-World")
-
-    assert contributors[0]["login"] == "janedoe"
-
-
-def test_real_github_provider_skips_git_authors_when_disabled() -> None:
-    def _unexpected_repository_context_loader(_url: str) -> dict[str, Any]:
-        message = "repository_context_loader should not be called when git authors are disabled"
-        raise AssertionError(message)
-
-    provider = RealGitHubProvider(
-        include_git_authors=False,
-        repository_context_loader=_unexpected_repository_context_loader,
-        gimie_extractor=lambda _url, _format: {"@graph": []},
-        user_lookup=lambda username: {"login": username},
-        organization_lookup=lambda org_name: {"login": org_name},
-    )
-
-    contributors = provider.get_contributors("octocat/Hello-World")
-
-    assert contributors == []
-
-
 def test_real_github_provider_reads_contributors_from_gimie_payload() -> None:
-    def _unexpected_repository_context_loader(_url: str) -> dict[str, Any]:
-        message = (
-            "repository_context_loader should not be called when GIMIE already provides contributors"
-        )
-        raise AssertionError(message)
-
     provider = RealGitHubProvider(
-        include_git_authors=False,
-        repository_context_loader=_unexpected_repository_context_loader,
         gimie_extractor=lambda _url, _format: [
             {
                 "@id": "https://github.com/octocat/Hello-World",
@@ -571,7 +500,6 @@ def test_get_provider_factory_returns_expected_mock_and_real_implementations() -
         gimie_extractor=lambda _url, _format: {},
         user_lookup=lambda _username: {},
         organization_lookup=lambda _org_name: {},
-        repository_context_loader=lambda _url: {"git_authors": []},
     )
     assert isinstance(real_github, RealGitHubProvider)
 

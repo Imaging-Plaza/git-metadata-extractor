@@ -33,7 +33,7 @@ ORGANIZATION_ID_SOURCES = {
 }
 REPOSITORY_ID_SOURCES = {
     "pulse:githubRepositoryHandle",
-    "schema:identifier",
+    "schema:citation",
     "uuid",
 }
 ARTICLE_ID_SOURCES = {
@@ -140,7 +140,7 @@ def _existing_resolution(
         normalized_repository_handle = _normalize_repository_handle(entity_id)
         if normalized_repository_handle is not None:
             normalized_id = f"{GITHUB_BASE_URI}{normalized_repository_handle}"
-    elif normalized_source == "schema:identifier":
+    elif normalized_source in ("schema:identifier", "schema:citation"):
         normalized_doi = _normalize_doi(entity_id)
         if normalized_doi is not None:
             normalized_id = f"{DOI_BASE_URI}{normalized_doi}"
@@ -400,16 +400,16 @@ def resolve_repository_id(repository: dict[str, Any]) -> tuple[str, str]:
     doi = _normalize_doi(
         _lookup_identifier(
             repository,
-            ("schema:identifier", "doi"),
+            ("schema:citation", "schema:identifier", "doi"),
         ),
     )
     if doi is not None:
-        return f"{DOI_BASE_URI}{doi}", "schema:identifier"
+        return f"{DOI_BASE_URI}{doi}", "schema:citation"
 
     fallback_uuid = _deterministic_uuid(
         REPOSITORY_UUID_NAMESPACE,
         repository,
-        ("schema:name", "name", "pulse:githubRepositoryHandle", "schema:identifier"),
+        ("schema:name", "name", "pulse:githubRepositoryHandle", "schema:citation"),
     )
     return fallback_uuid, "uuid"
 

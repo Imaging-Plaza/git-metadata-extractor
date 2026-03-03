@@ -6,8 +6,13 @@ from typing import Any
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from src.v2.agents import ProviderSet
 from src.v2.api import v2_router
 from src.v2.models.contracts import V2ExtractResponse
+from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.providers.mock_orcid import MockORCIDProvider
+from src.v2.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422
@@ -16,6 +21,12 @@ HTTP_UNPROCESSABLE_ENTITY = 422
 def _build_test_app() -> FastAPI:
     app = FastAPI()
     app.include_router(v2_router)
+    app.state.v2_provider_set = ProviderSet(
+        github=MockGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=MockInfoscienceProvider(),
+        ror=MockRORProvider(),
+    )
     return app
 
 
@@ -34,7 +45,7 @@ def _get_json(path: str, params: dict[str, str] | None = None) -> tuple[int, Any
 
 
 def test_extract_repository_url_returns_detected_repository() -> None:
-    status_code, payload = _get_json("/v2/extract/github.com/owner/repo")
+    status_code, payload = _get_json("/v2/extract/github.com/octocat/Hello-World")
 
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"
@@ -42,7 +53,7 @@ def test_extract_repository_url_returns_detected_repository() -> None:
 
 
 def test_extract_user_url_returns_detected_user() -> None:
-    status_code, payload = _get_json("/v2/extract/github.com/username")
+    status_code, payload = _get_json("/v2/extract/github.com/octocat")
 
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "user"
@@ -59,7 +70,7 @@ def test_extract_unsupported_issue_url_returns_typed_422() -> None:
 
 def test_extract_accepts_output_format_json() -> None:
     status_code, payload = _get_json(
-        "/v2/extract/github.com/owner/repo",
+        "/v2/extract/github.com/octocat/Hello-World",
         params={"output_format": "json"},
     )
 
@@ -69,8 +80,29 @@ def test_extract_accepts_output_format_json() -> None:
 
 def test_extract_rejects_invalid_output_format() -> None:
     status_code, payload = _get_json(
-        "/v2/extract/github.com/owner/repo",
+        "/v2/extract/github.com/octocat/Hello-World",
         params={"output_format": "xml"},
+    )
+
+    assert status_code == HTTP_UNPROCESSABLE_ENTITY
+    assert "detail" in payload
+
+
+def test_extract_accepts_agent_runtime_llm_for_user_routes() -> None:
+    status_code, payload = _get_json(
+        "/v2/extract/github.com/octocat",
+        params={"agent_runtime": "llm"},
+    )
+
+    assert status_code == HTTP_OK
+    assert payload["detected_type"] == "user"
+    assert V2ExtractResponse.model_validate(payload)
+
+
+def test_extract_rejects_invalid_agent_runtime() -> None:
+    status_code, payload = _get_json(
+        "/v2/extract/github.com/octocat/Hello-World",
+        params={"agent_runtime": "hybrid"},
     )
 
     assert status_code == HTTP_UNPROCESSABLE_ENTITY

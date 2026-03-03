@@ -466,12 +466,12 @@ def _register_repository_lookup_tokens(
     canonical_id = repository["id"]
     _register_lookup_token(lookup, canonical_id, canonical_id)
     _register_lookup_token(lookup, repository.get("pulse:githubRepositoryHandle"), canonical_id)
-    _register_lookup_token(lookup, repository.get("schema:identifier"), canonical_id)
+    _register_lookup_token(lookup, repository.get("schema:citation"), canonical_id)
 
     identifiers = repository.get("identifiers")
     if isinstance(identifiers, dict):
         _register_lookup_token(lookup, identifiers.get("pulse:githubRepositoryHandle"), canonical_id)
-        _register_lookup_token(lookup, identifiers.get("schema:identifier"), canonical_id)
+        _register_lookup_token(lookup, identifiers.get("schema:citation"), canonical_id)
 
 
 def _build_membership(person_id: str, org_id: str) -> dict[str, Any]:

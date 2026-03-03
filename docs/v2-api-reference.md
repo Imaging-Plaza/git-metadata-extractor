@@ -28,7 +28,9 @@ Repository-mode traversal contract:
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`
-- `force_refresh`: `true|false` (default `false`, bypasses provider cache)
+- `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT`)
+  - Wave 1 behavior: repository root stage can run in `llm` mode; user/organization fanout stages remain rule-based.
+  - `agent_runtime=llm` uses hard-fail policy for repository LLM failures (no rule-based fallback).
 - `include_intermediates`: `true|false` (default `false`, returns run-scoped intermediate envelopes for this extract run only)
 
 Examples:
@@ -41,7 +43,13 @@ curl -s \
 
 ```bash
 curl -s \
-  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&force_refresh=true" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" \
+  | jq
+```
+
+```bash
+curl -s \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=llm" \
   | jq
 ```
 
@@ -119,6 +127,34 @@ Detected-type execution order before shared gates:
 - `/v2/extract` persists final included IDs into `runs.stats.entity_ids`.
 - `/v2/graph?source_url=...` uses those persisted `entity_ids` to build source-scoped subgraphs.
 
+## LLM Agent Tools
+
+LLM agents can call server-side tools during generation. Tools are registered per-agent by passing a `tools=[...]` list to `V2LLMRuntime.run_json_prompt`, which forwards them to the pydantic-ai `Agent`.
+
+Shared tools live in `src/v2/agents/llm/agent_tools/`. Add a new module there to make a tool available to multiple agents.
+
+### Currently registered tools
+
+| Tool name | Module | Used by | Description |
+|---|---|---|---|
+| `list_disciplines` | `agent_tools/disciplines.py` | `LLMRepositoryAgentV2` | Returns the complete `DisciplineV2` mapping as `[{"wikidata_id": "wd:QXXXXX", "name": "..."}]`. Logs at INFO on each call. |
+
+### Observability
+
+Tool calls emit an INFO log line from `src.v2.agents.llm.agent_tools.<module>`:
+
+```
+INFO src.v2.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
+```
+
+If this line is absent after an LLM repository run with `agent_runtime=llm`, the model did not call the tool.
+
+## Repository Entity Schema Notes
+
+- Repository `identifiers` use `schema:citation` (not `schema:identifier`) for the DOI/citation link. The `idSource` enum values for repositories are `pulse:githubRepositoryHandle`, `schema:citation`, and `uuid`.
+- Article entities continue to use `schema:identifier` for their canonical identifier.
+- `schema:alternateName` is an internal intermediate field on organization entities: it is consumed by pipeline stages during alias matching and is not present in final `/v2/extract` or `/v2/graph` outputs.
+
 ## V2 Environment Variables
 
 | Variable | Default | Notes |
@@ -127,6 +163,6 @@ Detected-type execution order before shared gates:
 | `V2_INTERMEDIATE_HISTORY_LIMIT` | `5` | Max intermediates returned by extract-stage reads and per-agent graph response caps |
 | `V2_ENABLE_LOGFIRE` | `true` | Enables v2 Logfire instrumentation |
 | `V2_ALLOW_SYNTHETIC_FALLBACKS` | `false` | Enables synthetic fallback entity/value synthesis for unresolved references in `/v2/extract` reconciliation |
-| `V2_DISABLE_CACHE` | `false` | Bypass v1-backed provider cache for all v2 extract runs |
+| `V2_AGENT_RUNTIME_DEFAULT` | `rule_based` | Default runtime selector for `/v2/extract` when `agent_runtime` query parameter is omitted |
 | `LOGFIRE_TOKEN` | unset | Optional Logfire token |
 | `GITHUB_TOKEN` | unset | Required for healthy provider preflight |

@@ -9,7 +9,7 @@ from typing import Any
 AUTHORITATIVE_IDENTIFIER_KEYS: dict[str, set[str]] = {
     "person": {"orcid", "pulse:orcid", "pulse:orcidIdentifier"},
     "organization": {"ror", "pulse:ror", "schema:identifier"},
-    "repository": {"doi", "schema:identifier", "pulse:githubRepositoryHandle"},
+    "repository": {"doi", "schema:citation", "pulse:githubRepositoryHandle"},
 }
 IDENTIFIER_PATH_DEPTH = 2
 

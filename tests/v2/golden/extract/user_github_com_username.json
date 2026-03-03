@@ -4,7 +4,7 @@
   "output_format": "json",
   "output": {
     "root_entity": {
-      "id": "octocat",
+      "id": "https://github.com/octocat",
       "type": "schema:Person",
       "pulse:githubUsername": "octocat"
     },
@@ -14,7 +14,7 @@
       "repositories": [],
       "persons": [
         {
-          "id": "octocat",
+          "id": "https://github.com/octocat",
           "type": "schema:Person",
           "pulse:githubUsername": "octocat"
         }

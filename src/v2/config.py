@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from src.v2.agents.runtime import AgentRuntime, parse_agent_runtime
+
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}
 MISSING_GITHUB_TOKEN_ERROR = "Missing required environment variable: GITHUB_TOKEN"  # noqa: S105
@@ -57,6 +59,13 @@ class V2Config:
         default_factory=lambda: _get_env_bool(
             "V2_ALLOW_SYNTHETIC_FALLBACKS",
             default_value=False,
+        ),
+    )
+    V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = field(
+        default_factory=lambda: parse_agent_runtime(
+            os.getenv("V2_AGENT_RUNTIME_DEFAULT"),
+            default=AgentRuntime.RULE_BASED,
+            field_name="V2_AGENT_RUNTIME_DEFAULT",
         ),
     )
     LOGFIRE_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("LOGFIRE_TOKEN"))

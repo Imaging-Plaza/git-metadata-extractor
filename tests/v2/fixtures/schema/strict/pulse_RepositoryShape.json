@@ -5,7 +5,7 @@
     "shacl": "pulse:RepositoryShape",
     "identifiers": {
       "pulse:githubRepositoryHandle": "EPFL-ENAC/geodata-toolkit",
-      "schema:identifier": "10.5281/zenodo.12345678",
+      "schema:citation": "https://doi.org/10.5281/zenodo.12345678",
       "uuid": "b1c2d3e4-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
     },
     "idSource": "pulse:githubRepositoryHandle",
@@ -29,7 +29,7 @@
     "shacl": "pulse:RepositoryShape",
     "identifiers": {
       "pulse:githubRepositoryHandle": "EPFL-ENAC/structural-analysis",
-      "schema:identifier": null,
+      "schema:citation": null,
       "uuid": "b2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
     },
     "idSource": "pulse:githubRepositoryHandle",
@@ -53,7 +53,7 @@
     "shacl": "pulse:RepositoryShape",
     "identifiers": {
       "pulse:githubRepositoryHandle": "mweber/data-pipeline",
-      "schema:identifier": null,
+      "schema:citation": null,
       "uuid": "b3e4f5a6-7b8c-4d9e-8f1a-2b3c4d5e6f7a"
     },
     "idSource": "pulse:githubRepositoryHandle",
@@ -77,7 +77,7 @@
     "shacl": "pulse:RepositoryShape",
     "identifiers": {
       "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
-      "schema:identifier": null,
+      "schema:citation": null,
       "uuid": "b4f5a6b7-8c9d-4e0f-a1b2-3c4d5e6f7a8b"
     },
     "idSource": "pulse:githubRepositoryHandle",

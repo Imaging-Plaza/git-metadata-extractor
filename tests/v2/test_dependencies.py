@@ -51,7 +51,6 @@ def test_get_provider_set_creates_real_provider_without_cache(
     provider_set = asyncio.run(get_provider_set(_build_request()))
 
     assert isinstance(provider_set.github, RealGitHubProvider)
-    assert provider_set.github.include_git_authors is False
 
 
 def test_get_provider_set_disables_github_repo_expansion_for_repository_extract(
@@ -67,7 +66,6 @@ def test_get_provider_set_disables_github_repo_expansion_for_repository_extract(
     assert isinstance(provider_set.github, RealGitHubProvider)
     assert provider_set.github.include_user_repositories is False
     assert provider_set.github.include_organization_repositories is False
-    assert provider_set.github.include_git_authors is False
 
 
 def test_get_provider_set_keeps_github_repo_expansion_for_user_extract(
@@ -83,4 +81,3 @@ def test_get_provider_set_keeps_github_repo_expansion_for_user_extract(
     assert isinstance(provider_set.github, RealGitHubProvider)
     assert provider_set.github.include_user_repositories is True
     assert provider_set.github.include_organization_repositories is True
-    assert provider_set.github.include_git_authors is False

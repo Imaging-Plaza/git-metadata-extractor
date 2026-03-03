@@ -230,7 +230,7 @@ class RepositoryAgentV2:
             "shacl": "pulse:RepositoryShape",
             "identifiers": {
                 "pulse:githubRepositoryHandle": full_name,
-                "schema:identifier": doi_value,
+                "schema:citation": doi_value,
                 "uuid": uuid_value,
             },
             "idSource": "pulse:githubRepositoryHandle",

@@ -140,6 +140,11 @@ v2-models-generate:
 v2-models-check:
     PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py --check
 
+# Run LLM repository agent end-to-end with real GIMIE context (no server needed)
+# Usage: just v2-run-repo-agent sdsc-ordes/gimie
+v2-run-repo-agent REPO:
+    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repository_agent.py {{REPO}}
+
 # ============================================================================
 # Cache Management (via API)
 # ============================================================================
