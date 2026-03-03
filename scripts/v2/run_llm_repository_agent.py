@@ -11,6 +11,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 from src.v2.agents.llm.repository import LLMRepositoryAgentV2
 from src.v2.agents.models import ProviderSet
