@@ -7,10 +7,24 @@ This script shows how the caching system reduces external API calls.
 import time
 
 import requests
+import pytest
 
 # Add src to path for imports
+import src.cache.cache as cache_module
+import src.cache.cache_manager as cache_manager_module
 from src.cache.cache import get_cache
 from src.cache.cache_manager import get_cache_manager
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache_singletons(tmp_path, monkeypatch) -> None:
+    """Keep cache singleton state isolated between tests."""
+    monkeypatch.setenv("CACHE_DB_PATH", str(tmp_path / "cache.db"))
+    cache_module._cache_instance = None
+    cache_manager_module._cache_manager = None
+    yield
+    cache_module._cache_instance = None
+    cache_manager_module._cache_manager = None
 
 
 def test_cache_basic_functionality():

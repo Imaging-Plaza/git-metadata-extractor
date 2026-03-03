@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unpublished]
 
+### Fixed
+- Fixed `V2LLMRuntime` token count extraction: `result.usage` in pydantic-ai 1.5.0 is a method, not a property. Added `if callable(usage): usage = usage()` guard before field access so `tokens_prompt`/`tokens_completion` are populated from the real `RunUsage` object instead of always returning `None`. V1 agents had the same bug but silently fell back to tiktoken estimates; v2 now uses the actual API-reported counts.
+
 ### Added
+- Added local test-runtime tooling for faster loops: `pytest-xdist` and `pytest-testmon` in dev dependencies, plus a new `llm_integration` pytest marker and explicit `just test-llm-integration` command for opt-in real-provider LLM tests.
 - Added `src/v2/agents/llm/agent_tools/` package as the shared tool registry for LLM agents. Each tool module exposes a named pydantic-ai `Tool` instance that any LLM agent can import and pass to `V2LLMRuntime.run_json_prompt`.
 - Added `list_disciplines_tool` (`src/v2/agents/llm/agent_tools/disciplines.py`): a pydantic-ai tool named `list_disciplines` that returns the complete `DisciplineV2` mapping as a list of `{"wikidata_id", "name"}` objects. The tool description is generated at import time from the enum and contains the full Wikidata-ID-to-name table. Logs an INFO line on each call for observability.
 - Extended `V2LLMRuntime.run_json_prompt` with a `tools: list[Any] | None` parameter forwarded directly to the pydantic-ai `Agent` constructor, enabling per-agent tool customization without subclassing the runtime.
@@ -27,6 +31,10 @@ All notable changes to this project will be documented in this file.
   - organization Infoscience identifiers normalize from URL input to UUID tokens.
 
 ### Changed
+- Changed local test workflows in `justfile` to a fast-default model: `just test` now runs `--testmon --no-cov -n auto --dist=loadfile`, while `just test-full` and `just test-coverage` provide deterministic full-suite and coverage-focused runs.
+- Changed test invocation guidance and automation to prefer `.venv/bin/python -m pytest` (instead of relying on ad-hoc `PYTHONPATH`/global `pytest`) across `just` recipes, docs, and CI test steps.
+- Changed v2 test isolation for safe parallel execution by resetting shared `src.api.app.state` fields between tests, using per-test DB paths (`V2_GRAPH_DB_PATH`/`CACHE_DB_PATH`), and hardening cache-singleton cleanup in v1 cache tests.
+- Changed CI test throughput by parallelizing the default v2 suite (`-n 4 --dist=loadfile`) and separating `llm_integration` into a dedicated scheduled/manual job instead of default PR execution.
 - Renamed repository identifier field `schema:identifier` to `schema:citation` in both agent and strict repository schemas (`src/v2/schemas/*/repository.schema.json`) to correctly represent the DOI/citation link. Updated `idSource` enum accordingly (`"schema:citation"` replaces `"schema:identifier"`). Regenerated Pydantic models (`IdSource3.schema_citation`). Updated all fixture copies and promoted dev schemas.
 - Removed `schema:alternateName` from the strict organization schema (`src/v2/schemas/strict/organization.schema.json`) to enforce TTL shape compliance. The field is retained in the agent schema as an internal intermediate used by membership/article/reconciliation pipeline stages and is already stripped by reconciliation before final output and strict validation.
 - Added `/v2/extract` runtime selector support with `agent_runtime=rule_based|llm`, defaulting from `V2_AGENT_RUNTIME_DEFAULT` when omitted.
@@ -140,6 +148,11 @@ All notable changes to this project will be documented in this file.
 - Added explicit guardrails for destructive graph rollback: `MigrationRunner.rollback_to()` now requires explicit opt-in with `allow_destructive_rollback=True` or `V2_GRAPH_ALLOW_DESTRUCTIVE_ROLLBACK=1`.
 
 ### Testing
+- `.venv/bin/python -m pytest tests/v2/test_api_mount_v2_router.py -q`
+- `.venv/bin/python -m pytest tests/test_cache.py -q`
+- `.venv/bin/python -m pytest tests/v2/test_llm_repository_agent.py -q -m 'not llm_integration'`
+- `.venv/bin/python -m pytest tests/v2/test_dependencies.py tests/v2/test_extract_golden.py tests/v2/test_api_extract_stub.py -q -m 'not llm_integration and not live_provider'`
+- `.venv/bin/python -m pytest tests/v2 -q -n 4 --dist=loadfile -m 'not live_provider and not llm_integration'`
 - `PYTHONPATH=. .venv/bin/pytest tests/v2/test_config.py tests/v2/test_api_extract_stub.py tests/v2/test_orchestrator_execution.py tests/v2/test_llm_runtime_adapter.py tests/v2/test_llm_repository_agent.py tests/v2/test_agent_runtime_scaffolding.py tests/v2/test_extract_e2e.py -q`
 - `PYTHONPATH=. .venv/bin/ruff check src/v2/agents/__init__.py src/v2/agents/contracts.py src/v2/agents/runtime.py src/v2/agents/registry.py src/v2/agents/llm/repository_agent.py src/v2/agents/rule_based/__init__.py src/v2/llm/runtime.py src/v2/llm/__init__.py src/v2/config.py src/v2/api.py src/v2/pipeline/orchestrator.py`
 - `PYTHONPATH=. .venv/bin/ruff check tests/v2/test_llm_runtime_adapter.py tests/v2/test_llm_repository_agent.py tests/v2/test_agent_runtime_scaffolding.py tests/v2/test_api_extract_stub.py tests/v2/test_config.py`

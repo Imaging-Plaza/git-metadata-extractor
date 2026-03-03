@@ -127,6 +127,21 @@ Detected-type execution order before shared gates:
 - `/v2/extract` persists final included IDs into `runs.stats.entity_ids`.
 - `/v2/graph?source_url=...` uses those persisted `entity_ids` to build source-scoped subgraphs.
 
+## LLM Agent Architecture
+
+### Single-call model
+
+`LLMRepositoryAgentV2` is a **single pydantic-ai `Agent` call** — it produces all output fields (identifiers, authors, disciplines, license, …) in one prompt/response round-trip. This differs from v1, which split repository extraction across two sequential LLM calls:
+
+1. **Context agent** (`run_llm_analysis` config) — general metadata extraction with Infoscience tools.
+2. **Classifier agent** (`run_repository_classifier` config) — dedicated call producing only `repositoryType` + `discipline[]` from the compiled context, with a laser-focused system prompt.
+
+The v1 two-call split produced more reliable discipline classification because the classifier prompt made discipline a required non-nullable output. In v2, `pulse:discipline` is optional and the model tends to omit it when producing all fields at once. The `list_disciplines` tool is intended to guide the model, but a dedicated sub-agent pass (wave 2) would be more robust.
+
+### Token counts
+
+Token counts (`tokens_prompt`, `tokens_completion`) are extracted from `result.usage()` — note the call: pydantic-ai 1.5.0 exposes `usage` as a method on `AgentRunResult`, not a property. The `V2LLMRuntime` resolves this with a `callable` guard before field access. V1 agents accessed `result.usage` without calling it and silently fell back to tiktoken estimates when the counts were 0.
+
 ## LLM Agent Tools
 
 LLM agents can call server-side tools during generation. Tools are registered per-agent by passing a `tools=[...]` list to `V2LLMRuntime.run_json_prompt`, which forwards them to the pydantic-ai `Agent`.

@@ -7,6 +7,11 @@ from httpx import ASGITransport, AsyncClient
 
 from src.api import app as main_app
 from src.api import index
+from src.v2.agents import ProviderSet
+from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.providers.mock_orcid import MockORCIDProvider
+from src.v2.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 
@@ -25,7 +30,13 @@ def _get_json(path: str) -> tuple[int, Any]:
 
 
 def test_main_app_serves_v2_extract_route() -> None:
-    status_code, payload = _get_json("/v2/extract/github.com/owner/repo")
+    main_app.state.v2_provider_set = ProviderSet(
+        github=MockGitHubProvider(),
+        orcid=MockORCIDProvider(),
+        infoscience=MockInfoscienceProvider(),
+        ror=MockRORProvider(),
+    )
+    status_code, payload = _get_json("/v2/extract/github.com/octocat/Hello-World")
 
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"

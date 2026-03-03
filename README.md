@@ -79,6 +79,51 @@ python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_p
 
 If no arguments are provided, it will use the default repository and output path.
 
+## Testing Workflows
+
+Use the `just` recipes as the default entry points for local testing.
+They invoke `.venv/bin/python -m pytest`, so you do not need to set `PYTHONPATH`
+or rely on a globally available `pytest` binary.
+
+Fast local loop (default):
+
+```bash
+just test
+```
+
+Full deterministic local run (parallelized, excludes opt-in live/LLM integration markers):
+
+```bash
+just test-full
+```
+
+Coverage run:
+
+```bash
+just test-coverage
+```
+
+Opt-in real-provider LLM integration test:
+
+```bash
+just test-llm-integration
+```
+
+Live-provider smoke tests remain opt-in:
+
+```bash
+just test-live
+```
+
+### Troubleshooting Test Speed
+
+- Clear testmon state if selection looks stale:
+  `rm -f .testmondata`
+- Run a full pass after major refactors:
+  `just test-full`
+- Disable xdist parallelization for debugging:
+  run `pytest ... -n 0`
+
 ## Versioned documentation (GitHub Pages)
 
 The repository includes a versioned documentation site under `docs/` powered by MkDocs Material + Mike.

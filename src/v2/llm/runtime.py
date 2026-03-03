@@ -187,6 +187,8 @@ class V2LLMRuntime:
         payload = _coerce_output_payload(output)
 
         usage = getattr(result, "usage", None)
+        if callable(usage):
+            usage = usage()
         tokens_prompt: int | None = None
         tokens_completion: int | None = None
         if usage is not None:

@@ -32,6 +32,8 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - In v2 repository-mode extracts, GitHub traversal is direct-only (source repo + direct owner + direct contributors). Keep ORCID/Infoscience/ROR enrichment enabled for discovered person/org entities.
 - In v2 agent payloads, `identifiers.uuid` must be generated with `src/v2/agents/models.py::generate_uuid()` (UUIDv4 only); avoid deterministic UUIDv5 emitters for agent outputs.
 - LLM agent tools live in `src/v2/agents/llm/agent_tools/`. Each file exposes one or more named pydantic-ai `Tool` instances. Agents import the tools they need and pass them as `tools=[...]` to `V2LLMRuntime.run_json_prompt`. Current tools: `list_disciplines_tool` (`disciplines.py`) — returns the full `DisciplineV2` Wikidata-ID-to-name mapping.
+- `LLMRepositoryAgentV2` is a **single-call agent** (one pydantic-ai `Agent` run). V1 used two sequential LLM calls: a general extraction agent plus a dedicated classifier for `repositoryType`/`discipline`. The single-call approach tends to leave `pulse:discipline` null; a separate discipline sub-agent (wave 2) would improve classification reliability.
+- `V2LLMRuntime` extracts token counts by calling `result.usage()` — pydantic-ai 1.5.0 exposes `usage` as a method, not a property. Do not access it as `result.usage` without calling it, or counts will always be `None`/`0`.
 
 ## Environment & Prerequisites
 Required environment variables (from `.env.dist` and `.env.example`):
@@ -79,17 +81,22 @@ Rules:
 - V2 schema validation checks:
   - `python -m json.tool src/v2/schemas/strict/*.json`
   - `python -m json.tool src/v2/schemas/agent/*.json`
-  - `pytest tests/v2/ --collect-only`
-  - `pytest tests/v2 -m v2 --collect-only`
+  - `.venv/bin/python -m pytest tests/v2/ --collect-only`
+  - `.venv/bin/python -m pytest tests/v2 -m v2 --collect-only`
   - `just test-file tests/v2/test_test_infrastructure.py`
   - `just test-file tests/v2/test_promoted_strict_schemas.py`
   - `just test-file tests/v2/test_promoted_agent_schemas.py`
 - Phase 8 live-provider checks:
   - `just preflight-live` (defaults to `github`, `ror`, `orcid`, `infoscience`, `logfire`, `selenium`)
   - `just capture-live`
-  - `just test-live` (runs `pytest -m live_provider`)
+  - `just test-live` (runs `.venv/bin/python -m pytest -m live_provider`)
   - `just test-offline`
   - `python scripts/v2/check_provider_connectivity.py --providers github ror orcid infoscience logfire` (optional: skip Selenium)
+
+Testing command guidance:
+- Prefer `just` test recipes to avoid shell-specific setup.
+- When running pytest directly, prefer `.venv/bin/python -m pytest ...` instead of `pytest ...`.
+- Avoid ad-hoc `PYTHONPATH=...` unless explicitly required for a non-module script workflow.
 
 ## Architecture Map For Agents
 - Repository analysis flow entrypoints: `src/analysis/repositories.py`

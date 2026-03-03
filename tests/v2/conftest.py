@@ -3,11 +3,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import pytest
 
 V2_TESTS_ROOT = Path(__file__).resolve().parent
+V2_APP_STATE_FIELDS = (
+    "v2_provider_set",
+    "v2_orchestrator",
+    "v2_github_provider",
+    "v2_orcid_provider",
+    "v2_infoscience_provider",
+    "v2_ror_provider",
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,37 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if _item_path(item).is_relative_to(V2_TESTS_ROOT):
             item.add_marker(pytest.mark.v2)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_v2_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Ensure each test uses isolated local storage and mock providers by default."""
+    monkeypatch.setenv("V2_GRAPH_DB_PATH", str(tmp_path / "v2_graph.db"))
+    monkeypatch.setenv("CACHE_DB_PATH", str(tmp_path / "cache.db"))
+    monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "true")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_main_app_state() -> Iterator[None]:
+    """Prevent tests mutating src.api.app.state from leaking across tests."""
+    from src.api import app as main_app  # noqa: PLC0415
+
+    sentinel = object()
+    original_values: dict[str, object] = {}
+    for field in V2_APP_STATE_FIELDS:
+        value = getattr(main_app.state, field, sentinel)
+        original_values[field] = value
+        if hasattr(main_app.state, field):
+            delattr(main_app.state, field)
+
+    yield
+
+    for field, value in original_values.items():
+        if value is sentinel:
+            if hasattr(main_app.state, field):
+                delattr(main_app.state, field)
+            continue
+        setattr(main_app.state, field, value)
 
 
 @pytest.fixture(scope="session")

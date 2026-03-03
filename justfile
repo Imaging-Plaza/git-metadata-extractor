@@ -100,17 +100,25 @@ docker-up: docker-build docker-run
 # Testing
 # ============================================================================
 
-# Run all tests
+# Run fast local tests (impacted tests via testmon, no coverage, parallelized) TOKEN are provided empty to avoid trigering a real API call.
 test:
-    PYTHONPATH=src pytest tests/ -v
+    OPENAI_API_KEY= OPENROUTER_API_KEY= RCP_TOKEN= .venv/bin/python -m pytest tests/ -q --testmon --no-cov -n auto --dist=loadfile
+
+# Run full local tests (parallelized, deterministic selection)
+test-full:
+    .venv/bin/python -m pytest tests/ -q -n auto --dist=loadfile -m 'not live_provider and not llm_integration'
 
 # Run tests with coverage
 test-coverage:
-    PYTHONPATH=src pytest tests/ --cov=src --cov-report=html --cov-report=term
+    .venv/bin/python -m pytest tests/ --cov=src --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'
 
 # Run specific test file
 test-file FILE:
-    PYTHONPATH=src pytest {{FILE}} -v
+    .venv/bin/python -m pytest {{FILE}} -v
+
+# Run real-provider LLM integration tests only
+test-llm-integration:
+    .venv/bin/python -m pytest tests/v2/test_llm_repository_agent.py -m llm_integration -v
 
 # Run tests in watch mode (requires pytest-watch)
 test-watch:
@@ -126,11 +134,11 @@ capture-live:
 
 # Run opt-in live provider smoke tests
 test-live:
-    PYTHONPATH=. pytest tests/v2/test_live_provider_connectivity.py -m live_provider -v
+    .venv/bin/python -m pytest tests/v2/test_live_provider_connectivity.py -m live_provider -v
 
 # Run offline Phase 8 fixture/sanitizer checks
 test-offline:
-    PYTHONPATH=. pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
+    .venv/bin/python -m pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
 
 # Generate committed v2 Pydantic models from strict schemas
 v2-models-generate:

@@ -15,7 +15,8 @@ from src.v2.providers.mock_github import MockGitHubProvider
 _HAS_LLM_CREDENTIALS = bool(
     os.getenv("RCP_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 )
-llm_integration = pytest.mark.skipif(
+llm_integration = pytest.mark.llm_integration
+requires_llm_credentials = pytest.mark.skipif(
     not _HAS_LLM_CREDENTIALS,
     reason="No LLM provider credentials available (RCP_TOKEN / OPENAI_API_KEY / OPENROUTER_API_KEY)",
 )
@@ -105,6 +106,7 @@ def test_llm_repository_agent_validates_payload_and_exposes_model_metadata(
 
 
 @llm_integration
+@requires_llm_credentials
 def test_llm_repository_agent_real_provider_call() -> None:
     """Integration test: sends a real prompt to the configured LLM provider."""
 
