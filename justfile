@@ -196,15 +196,15 @@ format-ruff:
 
 # Lint code using ruff
 lint:
-    ruff check src/
+    uv run ruff check src/
 
 # Lint and fix issues automatically
 lint-fix:
-    ruff check --fix src/
+    uv run ruff check --fix src/
 
 # Type check using mypy
 type-check:
-    mypy src/
+    uv run mypy src/
 
 # Run all code quality checks
 check: lint type-check
