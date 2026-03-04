@@ -10,6 +10,7 @@ This guide explains the architecture of the `src/v2/agents/llm/` sub-package and
 src/v2/agents/llm/
 ├── __init__.py                  # Public exports (LLMRepositoryAgentV2, LLMPersonAgentV2)
 ├── _loader.py                   # load_prompt() — importlib.resources wrapper
+├── prompt_context.py            # Optional runtime prompt append blocks
 ├── agent_tools/
 │   ├── __init__.py
 │   ├── disciplines.py           # Static tool: list_disciplines_tool
@@ -52,6 +53,7 @@ result: LLMRuntimeResult = await self._llm_runtime.run_json_prompt(
 - `payload: dict[str, Any]` — serialized output (`model_dump(by_alias=True)`)
 - `model: str`, `provider: str` — from model config
 - `tokens_prompt: int | None`, `tokens_completion: int | None`
+- `requests: int | None`, `tool_calls: int | None` — extracted from `result.usage()`
 
 **Important**: `output_type` must be a flat `BaseModel` with `type: "object"` JSON schema. pydantic-ai cannot use `RootModel` union types (their schema is `{"anyOf": [...]}`) — create a flat mirror model if needed (see `LLMPersonOutputShape` in `person/agent.py`).
 
@@ -213,6 +215,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.generated.entities import OrganizationModel          # strict model
 from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
@@ -244,6 +247,7 @@ class LLMOrganizationAgentV2:
         # 2. Build llm_input dict.
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
+        user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         # 3. Build tools (factory closures capturing providers).
         tools = []
@@ -287,6 +291,7 @@ Key conventions:
 - Strip `None` top-level optional fields before strict validation (`{k: v for k, v in ... if v is not None}`).
 - Apply `agent_overrides` from context after the LLM call, before validation.
 - `del providers` only if the agent genuinely needs no providers (like `LLMRepositoryAgentV2`). If you build tools from providers, keep the reference.
+- For long-running person extraction, wrap runtime calls with an explicit timeout (see `LLMPersonAgentV2.llm_call_timeout_seconds`).
 
 ### Step 4 — Write the prompts
 
@@ -499,9 +504,23 @@ Use `src.v2.agents.models.generate_uuid()` (UUIDv4) for any stable person/entity
 
 Agents should apply `context.get("agent_overrides")` after the LLM call, before strict validation. This lets callers inject field values for testing or reconciliation without changing the agent.
 
+### Runtime Prompt Context Append Blocks
+
+Both `LLMRepositoryAgentV2` and `LLMPersonAgentV2` support optional prompt append sections via `append_runtime_prompt_context(...)`:
+
+- `upstream_stage_outputs_json` (string): appended under `## Upstream Stage Outputs (JSON)`.
+- `user_prompt_appendix` (string): appended under `## Additional Context (verbatim text)`.
+
+These values are treated as raw strings and are not parsed by the helper.
+
 ### Concurrency
 
 `PipelineOrchestrator` limits fanout via `max_concurrent_agents` (default 3). A fresh `asyncio.Semaphore` wraps each item inside `_execute_stage`. The standalone script `scripts/v2/run_llm_repo_and_persons.py` maintains its own `asyncio.Semaphore(3)` because it calls agents directly without going through the orchestrator.
+
+Prompt propagation in orchestrated runs is configurable:
+
+- `include_upstream_stage_outputs_in_prompt` (bool): serializes accumulated `pipeline_outputs` and forwards them as `upstream_stage_outputs_json` to each child stage context.
+- `user_prompt_appendix` (str): forwards a verbatim text block to each child context so agents can append pre-concatenated multi-file text directly to user prompts.
 
 ### Logging
 

@@ -37,8 +37,13 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
   - `make_infoscience_search_tool(infoscience_provider)` (`infoscience_search.py`) — factory; returns `search_infoscience_person` tool that searches Infoscience for person records by name/query.
 - `LLMRepositoryAgentV2` is a **single-call agent** (one pydantic-ai `Agent` run). V1 used two sequential LLM calls: a general extraction agent plus a dedicated classifier for `repositoryType`/`discipline`. The single-call approach tends to leave `pulse:discipline` null; a separate discipline sub-agent (wave 2) would improve classification reliability.
 - `LLMPersonAgentV2` is a **single-call agent** that accepts any combination of person identifiers (GitHub username, ORCID, Infoscience ID, or display name). It optionally fetches the GitHub profile when a username is available, then builds live tool closures over the provided `ORCIDProvider` and `InfoscienceProvider` (omitted if the respective provider is `None`) and delegates to `V2LLMRuntime`. Top-level `None` optional fields are stripped from the output before strict validation to satisfy SHACL absent-field requirements.
+- `LLMPersonAgentV2` enforces a hard per-call timeout via `llm_call_timeout_seconds` (default `180.0`) around the runtime call (`asyncio.wait_for(...)`) and raises `LLMRuntimeError` with identifier+seconds when exceeded.
 - `PipelineOrchestrator` limits fanout concurrency via `max_concurrent_agents` (default `3`). A fresh `asyncio.Semaphore` is created per `_execute_stage` call and wraps each individual agent execution. This prevents unbounded parallelism from saturating the LLM endpoint when many person/org/article agents run simultaneously. Set `max_concurrent_agents` in the orchestrator constructor to tune throughput vs. latency.
+- `PipelineOrchestrator` supports prompt-context propagation for downstream LLM agents:
+  - `include_upstream_stage_outputs_in_prompt` (constructor flag or runtime-context override) injects `upstream_stage_outputs_json` containing serialized accumulated stage outputs.
+  - `user_prompt_appendix` (constructor value or runtime-context override) injects verbatim text into each agent prompt without parsing. Use this for pre-concatenated multi-file text blocks.
 - `V2LLMRuntime` extracts token counts by calling `result.usage()` — pydantic-ai 1.5.0 exposes `usage` as a method, not a property. Do not access it as `result.usage` without calling it, or counts will always be `None`/`0`.
+- `V2LLMRuntime` also surfaces `usage.requests` and `usage.tool_calls` in `LLMRuntimeResult` and logs them for runtime observability.
 
 ## Environment & Prerequisites
 Required environment variables (from `.env.dist` and `.env.example`):
