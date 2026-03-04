@@ -76,7 +76,6 @@ def _valid_organization_payload() -> dict[str, Any]:
         },
         "idSource": "pulse:githubOrganizationHandle",
         "schema:name": "GitHub",
-        "schema:alternateName": ["GitHub, Inc."],
         "schema:identifier": None,
         "pulse:githubOrganizationHandle": "github",
         "pulse:infoscienceOrganizationIdentifier": None,

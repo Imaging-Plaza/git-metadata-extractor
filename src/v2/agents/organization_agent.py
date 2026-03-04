@@ -45,44 +45,6 @@ def _classify_organization_type(ror_types: list[str]) -> str:
     return "pulse:OtherOrganizationType"
 
 
-def _dedupe_preserve_order(values: list[str]) -> list[str]:
-    deduplicated: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        token = value.casefold()
-        if token in seen:
-            continue
-        deduplicated.append(value)
-        seen.add(token)
-    return deduplicated
-
-
-def _extract_ror_alternate_names(ror_record: dict[str, Any] | None) -> list[str]:
-    if not isinstance(ror_record, dict):
-        return []
-
-    alternate_names: list[str] = []
-    for key in ("aliases", "acronyms"):
-        values = ror_record.get(key)
-        if isinstance(values, list):
-            alternate_names.extend(
-                value
-                for value in values
-                if isinstance(value, str) and value
-            )
-
-    labels = ror_record.get("labels")
-    if isinstance(labels, list):
-        for label_payload in labels:
-            label = label_payload
-            if isinstance(label_payload, dict):
-                label = label_payload.get("label")
-            if isinstance(label, str) and label:
-                alternate_names.append(label)
-
-    return _dedupe_preserve_order(alternate_names)
-
-
 class OrganizationAgentV2:
     """Organization agent wrapper with permissive output validation."""
 
@@ -172,12 +134,6 @@ class OrganizationAgentV2:
             or github_org.get("name")
             or org_name
         )
-        alternate_names = _extract_ror_alternate_names(ror_record)
-        alternate_names = [
-            alternate_name
-            for alternate_name in alternate_names
-            if alternate_name.casefold() != resolved_name.casefold()
-        ]
         parent_org = None
         has_units: list[str] = []
         if isinstance(ror_record, dict):
@@ -232,7 +188,6 @@ class OrganizationAgentV2:
             "schema:name": (
                 resolved_name
             ),
-            "schema:alternateName": alternate_names,
             "schema:identifier": ror_id if isinstance(ror_id, str) else None,
             "pulse:githubOrganizationHandle": github_handle,
             "pulse:infoscienceOrganizationIdentifier": (
@@ -269,7 +224,6 @@ class OrganizationAgentV2:
             "parent_organization": parent_org,
             "unit_ids": deepcopy(has_units),
             "ror_types": deepcopy(ror_types),
-            "alternate_names": deepcopy(alternate_names),
         }
 
         return AgentResult(

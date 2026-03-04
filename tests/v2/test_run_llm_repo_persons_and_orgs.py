@@ -205,7 +205,7 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
             "id": "https://ror.org/019whta54",
             "type": "org:Organization",
             "schema:name": "University of Lausanne",
-            "schema:alternateName": ["Université de Lausanne"],
+            "aliases": ["Université de Lausanne"],
             "identifiers": {
                 "pulse:ror": "https://ror.org/019whta54",
             },
@@ -216,7 +216,7 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
             "id": "https://ror.org/019whta54",
             "type": "org:Organization",
             "schema:name": "University of Lausanne",
-            "schema:alternateName": ["Universite de Lausanne"],
+            "aliases": ["Universite de Lausanne"],
             "org:hasUnit": ["https://ror.org/03kwyfa97"],
         },
     ]
@@ -249,7 +249,7 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
     assert len(organizations) == 1
     assert organizations[0]["schema:identifier"] == "https://ror.org/019whta54"
     assert organizations[0]["pulse:owns"] == ["owner/repo"]
-    assert sorted(organizations[0]["schema:alternateName"]) == [
+    assert sorted(organizations[0]["aliases"]) == [
         "Universite de Lausanne",
         "Université de Lausanne",
     ]

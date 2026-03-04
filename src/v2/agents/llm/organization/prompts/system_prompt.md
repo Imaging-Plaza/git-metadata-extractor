@@ -43,7 +43,6 @@ Use the `uuid` provided in the input context; do not invent deterministic IDs.
 
 | Field | Type | Rules |
 |---|---|---|
-| `schema:alternateName` | array of strings | Alias names/acronyms for matching. This is agent-only metadata. |
 | `schema:identifier` | string or null | Canonical identifier (typically ROR URL). |
 | `pulse:githubOrganizationHandle` | string or null | GitHub org login. |
 | `pulse:infoscienceOrganizationIdentifier` | string or null | Infoscience UUID4 org identifier. |
@@ -79,7 +78,6 @@ Use this to resolve:
 - `pulse:ror`
 - `schema:identifier`
 - `schema:name`
-- `schema:alternateName`
 - `pulse:OrganizationType`
 - `org:hasUnit` / `org:unitOf`
 

@@ -260,10 +260,6 @@ def _register_organization_lookup_tokens(
     )
     _register_lookup_token(lookup, organization.get("pulse:ror"), canonical_id)
     _register_lookup_token(lookup, organization.get("schema:identifier"), canonical_id)
-    alternate_names = organization.get("schema:alternateName")
-    if isinstance(alternate_names, list):
-        for alternate_name in alternate_names:
-            _register_lookup_token(lookup, alternate_name, canonical_id)
     for key in ("aliases", "acronyms"):
         values = organization.get(key)
         if isinstance(values, list):
@@ -750,11 +746,6 @@ def _normalize_contribution_entities(  # noqa: C901
     return normalized_contributions, covered_pairs, warnings
 
 
-def _drop_non_shape_fields(organizations: list[dict[str, Any]]) -> None:
-    for organization in organizations:
-        organization.pop("schema:alternateName", None)
-
-
 def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     entities_by_type: dict[str, Any],
     *,
@@ -1086,8 +1077,6 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         )
 
     link_warnings.extend(_detect_repository_fork_cycles(repositories))
-    _drop_non_shape_fields(organizations)
-
     return ReconciledEntities(
         entities=reconciled_entities,
         memberships=memberships,

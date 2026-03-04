@@ -315,10 +315,6 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
             organization_id,
         )
         _register_lookup_token(lookup, organization.get("schema:identifier"), organization_id)
-        alternate_names = organization.get("schema:alternateName")
-        if isinstance(alternate_names, list):
-            for alternate_name in alternate_names:
-                _register_lookup_token(lookup, alternate_name, organization_id)
         for key in ("aliases", "acronyms"):
             values = organization.get(key)
             if isinstance(values, list):

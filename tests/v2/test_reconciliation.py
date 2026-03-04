@@ -21,11 +21,11 @@ def _organization(
     ror: str,
     *,
     github_handle: str | None = None,
-    alternate_names: list[str] | None = None,
+    aliases: list[str] | None = None,
 ) -> dict:
     return {
         "schema:name": name,
-        "schema:alternateName": alternate_names or [],
+        "aliases": aliases or [],
         "schema:identifier": ror,
         "identifiers": {
             "pulse:ror": ror,
@@ -506,7 +506,7 @@ def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> N
     assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "sdsc-ordes"
 
 
-def test_reconcile_resolves_accented_affiliation_variant_from_org_alternate_names() -> None:
+def test_reconcile_resolves_accented_affiliation_variant_from_org_aliases() -> None:
     entities = {
         "persons": [
             _person(
@@ -518,7 +518,7 @@ def test_reconcile_resolves_accented_affiliation_variant_from_org_alternate_name
             _organization(
                 "Ecole Polytechnique Federale de Lausanne",
                 "https://ror.org/02s376052",
-                alternate_names=[
+                aliases=[
                     "EPFL",
                     "EPFL - Ecole Polytechnique Federale de Lausanne",
                 ],
@@ -533,7 +533,6 @@ def test_reconcile_resolves_accented_affiliation_variant_from_org_alternate_name
 
     assert reconciled.entities["persons"][0]["affiliations"] == [organization_id]
     assert reconciled.memberships[0]["org:organization"] == organization_id
-    assert "schema:alternateName" not in organization
     assert not any(
         "Orphan organization reference from person affiliation" in warning
         for warning in reconciled.link_warnings
@@ -552,7 +551,7 @@ def test_reconcile_resolves_affiliation_with_prefixed_org_alias_without_explicit
             _organization(
                 "École Polytechnique Fédérale de Lausanne",
                 "https://ror.org/02s376052",
-                alternate_names=["EPFL"],
+                aliases=["EPFL"],
             ),
         ],
         "repositories": [],
@@ -577,7 +576,7 @@ def test_reconcile_resolves_membership_org_aliases_and_handle_variants() -> None
                 "Swiss Data Science Center",
                 "https://ror.org/02hdt9m26",
                 github_handle="SwissDataScienceCenter",
-                alternate_names=["SDSC-GE"],
+                aliases=["SDSC-GE"],
             ),
         ],
         "repositories": [],

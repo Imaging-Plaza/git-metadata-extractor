@@ -250,8 +250,9 @@ def _build_organization_lookup(entities: list[dict[str, Any]]) -> dict[str, str]
         ):
             _register_lookup_token(lookup, entity.get(key), canonical_id)
 
-        for alternate_name in _as_string_list(entity.get("schema:alternateName")):
-            _register_lookup_token(lookup, alternate_name, canonical_id)
+        for key in ("aliases", "acronyms"):
+            for alias in _as_string_list(entity.get(key)):
+                _register_lookup_token(lookup, alias, canonical_id)
 
         identifiers = entity.get("identifiers")
         if isinstance(identifiers, dict):

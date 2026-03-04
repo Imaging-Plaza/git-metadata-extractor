@@ -214,11 +214,7 @@ class LLMOrganizationAgentV2:
 
         raw_output = deepcopy(payload)
 
-        # `schema:alternateName` is intentionally agent-only and removed before
-        # strict-model checks to avoid false-positive warnings.
-        strict_validation_payload = deepcopy(payload)
-        strict_validation_payload.pop("schema:alternateName", None)
-        validation_warnings = _strict_validate(strict_validation_payload)
+        validation_warnings = _strict_validate(payload)
 
         derivation_stats = {
             "organization_id": payload.get("id"),
@@ -243,15 +239,6 @@ class LLMOrganizationAgentV2:
                 ],
             )
             if isinstance(payload.get("org:hasUnit"), list)
-            else [],
-            "alternate_names": deepcopy(
-                [
-                    alias
-                    for alias in payload.get("schema:alternateName", [])
-                    if isinstance(alias, str)
-                ],
-            )
-            if isinstance(payload.get("schema:alternateName"), list)
             else [],
         }
 

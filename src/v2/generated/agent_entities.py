@@ -4,7 +4,7 @@
 # - article.schema.json: 6376b9d6c9ac02fb6c356c504dab00e558f2dac1e4d06e5d4fb65b12379d7c6a
 # - contribution.schema.json: d2608dca362f3a6b87b57f88d7b1ae756bf2144f8f8cfa8316b46675f682b196
 # - membership.schema.json: c67e400c62b657b91975f17d0974aa7bc5b66561c06661ce748e4b13adf678b1
-# - organization.schema.json: a80679d014bf1fd99ef9839918bcdc27d74d8dfe2a99d74120e3c955cc3a3a7a
+# - organization.schema.json: 11bbe5d04f71ac356674487ad85dae449ed0f420c14c4ff8f5aea5aaefd71915
 # - person.schema.json: 20c8e2394b0fc09b865ef52f7e7de86cff8af2ff1e8b554fdd700c9c6f6e4729
 # - repository.schema.json: 4ed204222665d3d8180c86fbd247444c76c04edb4e531babef5a8f6c54176f1f
 #
@@ -477,11 +477,6 @@ class AgentOrganizationShape(BaseModel):
         ...,
         alias="schema:name",
         description="Organization name. Example: 'École Polytechnique Fédérale de Lausanne'",
-    )
-    schema_alternateName: list[str] | None = Field(
-        None,
-        alias="schema:alternateName",
-        description="Alternate organization names (aliases/acronyms/labels) used for entity matching. Example: ['EPFL', 'Swiss Federal Institute of Technology Lausanne']",
     )
     schema_identifier: str | None = Field(
         None,
