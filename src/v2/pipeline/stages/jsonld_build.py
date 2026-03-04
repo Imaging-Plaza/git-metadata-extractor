@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.v2.pipeline.stages.models import AssembledOutput
 
-ENTITY_URI_PREFIX = "urn:git-metadata-extractor:entity:"
-HELPER_ONLY_FIELDS = {"shacl", "identifiers", "idSource"}
+ENTITY_URI_PREFIX = "urn:pulse:"
+HELPER_ONLY_FIELDS = {"shacl", "identifiers", "idSource", "_person_ref"}
 
 
 def _normalize_node_id(value: Any, *, index: int) -> str:

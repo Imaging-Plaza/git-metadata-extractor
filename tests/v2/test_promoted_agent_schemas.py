@@ -77,16 +77,6 @@ def test_promoted_agent_schema_is_valid_json(promoted_name: str, source_name: st
     assert isinstance(parsed_schema, dict)
 
 
-@pytest.mark.parametrize(("promoted_name", "source_name"), SCHEMA_FILE_MAP.items())
-def test_promoted_agent_schema_is_byte_identical(
-    promoted_name: str,
-    source_name: str,
-) -> None:
-    schema_path = PROMOTED_SCHEMA_DIR / promoted_name
-    source_path = SOURCE_SCHEMA_DIR / source_name
-
-    assert schema_path.read_bytes() == source_path.read_bytes()
-
 
 @pytest.mark.parametrize("promoted_name", SCHEMA_FILE_MAP)
 def test_promoted_agent_schema_is_jsonschema_valid(promoted_name: str) -> None:

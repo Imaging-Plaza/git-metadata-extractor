@@ -44,7 +44,8 @@ def test_generated_entities_validate_against_strict_schemas(
     for dataset_key, schema_name in schema_map.items():
         schema = load_schema("strict", schema_name)
         for instance in dataset[dataset_key]:
-            validate(instance=instance, schema=schema)
+            clean = {k: v for k, v in instance.items() if not k.startswith("_")}
+            validate(instance=clean, schema=schema)
 
 
 def test_generated_cross_references_are_consistent() -> None:

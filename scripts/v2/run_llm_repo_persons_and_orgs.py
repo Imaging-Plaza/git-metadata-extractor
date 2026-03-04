@@ -41,7 +41,12 @@ from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 from src.v2.dependencies import _default_provider_set
 from src.v2.detection.github_url_classifier import classify_github_url
 from src.v2.graph.export import JSONLDExporter
-from src.v2.pipeline.stages import AssembledOutput, build_jsonld_output, gather_context
+from src.v2.pipeline.stages import (
+    AssembledOutput,
+    build_jsonld_output,
+    gather_context,
+    reconcile_entities,
+)
 
 if TYPE_CHECKING:
     from src.v2.agents.models import ProviderSet
@@ -1557,6 +1562,44 @@ async def _run(  # noqa: C901, PLR0915
     print("Raw combined JSON-LD (pre-reconciliation):")
     print(_pj(combined_jsonld))
     print(_SEP)
+
+    # --- Reconciliation pass ---------------------------------------------------
+    entities_by_type: dict[str, list[dict[str, Any]]] = {
+        "repositories": [deepcopy(repo_result.data)],
+        "persons": [deepcopy(e) for e in successful_person_entities],
+        "organizations": [deepcopy(e) for e in successful_organization_entities],
+        "articles": [deepcopy(e) for e in successful_article_entities],
+        "memberships": [deepcopy(e) for e in successful_membership_entities],
+        "contributions": [deepcopy(e) for e in successful_contribution_entities],
+    }
+    reconciled = reconcile_entities(entities_by_type, allow_synthetic_fallbacks=True)
+
+    reconciled_all: list[dict[str, Any]] = []
+    for entity_list in reconciled.entities.values():
+        reconciled_all.extend(entity_list)
+    reconciled_all.extend(reconciled.memberships)
+    reconciled_all.extend(reconciled.contributions)
+
+    if reconciled_all:
+        reconciled_jsonld = build_jsonld_output(
+            assembled=AssembledOutput(
+                root_entity=reconciled_all[0],
+                related_entities=reconciled_all[1:],
+            ),
+            jsonld_context=JSONLDExporter().get_context()["@context"],
+        )
+        print(f"\n{_SEP}")
+        print("Reconciled JSON-LD (post-reconciliation):")
+        print(_pj(reconciled_jsonld))
+        if reconciled.link_warnings:
+            print("\nLink warnings:")
+            for warning in reconciled.link_warnings:
+                print(f"  - {warning}")
+        if reconciled.synthesis_warnings:
+            print("\nSynthesis warnings:")
+            for warning in reconciled.synthesis_warnings:
+                print(f"  - {warning}")
+        print(_SEP)
 
     if not verify_links:
         return

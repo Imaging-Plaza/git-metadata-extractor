@@ -658,6 +658,7 @@ def _normalize_membership_entities(
         normalized_membership["identifiers"] = normalized_identifiers
         normalized_membership["idSource"] = "pulse:composite"
         normalized_membership["org:organization"] = canonical_org_id
+        normalized_membership["_person_ref"] = canonical_person_id
         if not isinstance(normalized_membership.get("org:role"), str):
             normalized_membership["org:role"] = None
         if not isinstance(normalized_membership.get("time:hasBeginning"), str):
@@ -1054,7 +1055,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     membership_ids_by_person: dict[str, list[str]] = {}
     for membership in memberships:
         membership_id = membership["id"]
-        person_id, _ = _extract_composite_pair(membership_id)
+        person_id = membership.get("_person_ref")
         if person_id is None:
             continue
         membership_ids_by_person.setdefault(person_id, []).append(membership_id)
@@ -1062,7 +1063,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     contribution_ids_by_person: dict[str, list[str]] = {}
     for contribution in contributions:
         contribution_id = contribution["id"]
-        person_id, _ = _extract_composite_pair(contribution_id)
+        person_id = contribution.get("schema:author")
         if person_id is None:
             continue
         contribution_ids_by_person.setdefault(person_id, []).append(contribution_id)

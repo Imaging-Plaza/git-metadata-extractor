@@ -26,6 +26,6 @@ def test_generate_uuid_v4_batch_respects_bounds_and_returns_uuid4_values() -> No
 
 
 def test_fetch_link_content_via_selenium_rejects_non_http_urls() -> None:
-    result = fetch_link_content_via_selenium("urn:git-metadata-extractor:entity:foo")
+    result = fetch_link_content_via_selenium("urn:pulse:foo")
     assert result["fetched"] is False
     assert result["error"] == "Invalid http(s) URL"

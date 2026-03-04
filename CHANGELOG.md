@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unpublished]
 
+### Changed
+- Replaced opaque `urn:git-metadata-extractor:entity:` URI prefix with shorter `urn:pulse:` for fallback entity `@id` values. Canonical entities (persons, repositories, organizations, articles) now use dereferenceable URLs (`https://orcid.org/`, `https://github.com/`, `https://ror.org/`, `https://doi.org/`) as `@id` wherever the `resolve_*_id()` functions in `id_resolution.py` produce them. Only UUID-fallback or pre-reconciliation entities receive the `urn:pulse:` prefix.
+- Membership and contribution composite IDs now use full canonical URIs for both parts (e.g., `https://github.com/user_https://ror.org/02s376052`). The pipeline no longer relies on splitting composite IDs by `_` to extract person/org references — `_person_ref` and `schema:author`/`org:organization` fields are used instead.
+- Crossref validation no longer parses composite membership IDs via string splitting. Ownership checks use an explicit `_person_ref` → person lookup map built from membership entities.
+- Strict schema validation now strips `_`-prefixed internal fields before checking `additionalProperties`, preventing false rejections from pipeline-internal metadata.
+
 ### Fixed
 - Fixed `LLMPersonAgentV2` null optional-field leak: `model_dump(by_alias=True, mode="json")` in pydantic-ai returns all fields including `None`-valued optionals. The strict SHACL schema requires absent fields rather than explicit nulls, so top-level `None` values are now stripped from the payload dict before validation (`{k: v for k, v in payload.items() if v is not None}`). The nested `identifiers` sub-object is preserved intact.
 - Fixed `LLMPersonAgentV2` null-list iteration bug: when the LLM returned `"pulse:hasContribution": null` or `"org:hasMembership": null`, `payload.get(key, [])` returned `None` (key exists with null value, default not used), causing `TypeError: 'NoneType' object is not iterable`. Changed to `(payload.get(key) or [])` to handle both absent key and null value.

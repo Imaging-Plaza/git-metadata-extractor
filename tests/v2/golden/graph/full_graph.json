@@ -114,18 +114,18 @@
         "schema:name": "Graph Organization"
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097",
+        "@id": "urn:pulse:0000-0002-1825-0097",
         "@type": "schema:Person",
         "pulse:identifiers": "{}",
         "schema:name": "Graph Person"
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097_https://ror.org/02s376052",
+        "@id": "urn:pulse:0000-0002-1825-0097_https://ror.org/02s376052",
         "@type": "org:Membership",
         "pulse:identifiers": "{}"
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097_owner/repo",
+        "@id": "urn:pulse:0000-0002-1825-0097_owner/repo",
         "@type": "pulse:Contribution",
         "pulse:identifiers": "{}",
         "pulse:source_url": {
@@ -133,13 +133,13 @@
         }
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:10.5281/example0001",
+        "@id": "urn:pulse:10.5281/example0001",
         "@type": "schema:ScholarlyArticle",
         "pulse:identifiers": "{}",
         "schema:name": "Graph Article"
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:owner/repo",
+        "@id": "urn:pulse:owner/repo",
         "@type": "schema:SoftwareSourceCode",
         "pulse:identifiers": "{}",
         "pulse:source_url": {

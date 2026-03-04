@@ -4,8 +4,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-MEMBERSHIP_COMPOSITE_PARTS = 2
-
 
 @dataclass
 class CrossRefReport:
@@ -205,25 +203,23 @@ def validate_cross_references(  # noqa: C901, PLR0912, PLR0915
             )
             continue
 
-        membership_parts = membership_id.split("_", maxsplit=1)
-        if len(membership_parts) != MEMBERSHIP_COMPOSITE_PARTS:
+        person_ref = membership.get("_person_ref")
+        org_ref = membership.get("org:organization")
+        if not isinstance(person_ref, str) or not isinstance(org_ref, str):
             _add_invalid_ref(
                 report,
                 {
-                    "type": "invalid_membership_composite_id",
+                    "type": "invalid_membership_refs",
                     "source_type": "membership",
                     "source_id": membership_id,
                     "field": "id",
                     "reference": membership_id,
                     "message": (
-                        "Membership composite id must follow '<person_id>_<org_id>' "
-                        "format."
+                        "Membership must have _person_ref and org:organization fields."
                     ),
                 },
             )
             continue
-
-        person_ref, org_ref = membership_parts
         if person_ref in person_ids:
             report.valid_refs_count += 1
         else:
@@ -260,41 +256,15 @@ def validate_cross_references(  # noqa: C901, PLR0912, PLR0915
                 },
             )
 
-        membership_org_ref = membership.get("org:organization")
-        if isinstance(membership_org_ref, str) and membership_org_ref in organization_ids:
-            report.valid_refs_count += 1
-            if membership_org_ref == org_ref:
-                report.valid_refs_count += 1
-            else:
-                _add_invalid_ref(
-                    report,
-                    {
-                        "type": "membership_org_mismatch",
-                        "source_type": "membership",
-                        "source_id": membership_id,
-                        "field": "org:organization",
-                        "reference": membership_org_ref,
-                        "message": (
-                            "Membership org:organization must match the organization "
-                            "segment in membership composite id."
-                        ),
-                    },
-                )
-        elif isinstance(membership_org_ref, str):
-            _add_invalid_ref(
-                report,
-                {
-                    "type": "membership_unknown_organization_field",
-                    "source_type": "membership",
-                    "source_id": membership_id,
-                    "field": "org:organization",
-                    "reference": membership_org_ref,
-                    "message": (
-                        "Membership org:organization references an organization that "
-                        "does not exist."
-                    ),
-                },
-            )
+        # org:organization is already validated above via org_ref.
+
+    # Build membership → person lookup for ownership checks.
+    membership_person_map: dict[str, str] = {}
+    for membership in memberships:
+        mid = _entity_id(membership)
+        pref = membership.get("_person_ref")
+        if mid is not None and isinstance(pref, str):
+            membership_person_map[mid] = pref
 
     # Validate person -> membership references.
     for person in persons:
@@ -304,7 +274,7 @@ def validate_cross_references(  # noqa: C901, PLR0912, PLR0915
         for membership_ref in _as_ref_list(person.get("org:hasMembership")):
             if membership_ref in membership_ids:
                 report.valid_refs_count += 1
-                if membership_ref.startswith(f"{person_id}_"):
+                if membership_person_map.get(membership_ref) == person_id:
                     report.valid_refs_count += 1
                 else:
                     _add_invalid_ref(

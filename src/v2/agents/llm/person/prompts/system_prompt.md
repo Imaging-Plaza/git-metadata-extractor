@@ -50,7 +50,7 @@ Resolve `id` and `idSource` by selecting the **first non-null** value in this or
 | Field | Type | Rules |
 |---|---|---|
 | `schema:email` | string | Anonymized email only — see email rules. Omit if unavailable. |
-| `schema:url` | string or null | Infoscience profileUrl preferred, else GitHub html_url. |
+| `schema:url` | string or null | Any url not present in others identifiers, such as a personal webpage. |
 | `pulse:githubUsername` | string or null | GitHub login from context or tool results. |
 | `pulse:orcidIdentifier` | string or null | Same value as `identifiers.pulse:orcid`. |
 | `pulse:infosciencePersonIdentifier` | string or null | Same value as `identifiers.pulse:infosciencePersonIdentifier`. |

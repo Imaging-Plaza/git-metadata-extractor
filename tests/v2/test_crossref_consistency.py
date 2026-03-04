@@ -58,6 +58,8 @@ def test_bidirectional_ownership_mismatch_is_detected() -> None:
 def test_membership_composite_id_must_resolve_existing_person_and_org() -> None:
     dataset = generate_dataset(seed=42)
     dataset["memberships"][0]["id"] = "missing-person_missing-org"
+    dataset["memberships"][0]["_person_ref"] = "missing-person"
+    dataset["memberships"][0]["org:organization"] = "missing-org"
 
     report = validate_cross_references(dataset)
 

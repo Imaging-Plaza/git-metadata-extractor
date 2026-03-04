@@ -94,8 +94,9 @@ class StrictSchemaValidator:
 
     def validate(self, entity_type: str, data: dict[str, Any]) -> ValidationResult:
         validator = self._validator_for_entity(entity_type)
+        clean_data = {k: v for k, v in data.items() if not k.startswith("_")}
         errors = sorted(
-            validator.iter_errors(data),
+            validator.iter_errors(clean_data),
             key=lambda err: ([str(token) for token in err.path], err.message),
         )
         formatted_errors = [self._error_payload(error) for error in errors]

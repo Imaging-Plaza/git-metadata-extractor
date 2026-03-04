@@ -108,7 +108,7 @@
     },
     "@graph": [
       {
-        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097",
+        "@id": "urn:pulse:0000-0002-1825-0097",
         "@type": "schema:Person",
         "pulse:identifiers": "{}",
         "schema:name": "Graph Person"

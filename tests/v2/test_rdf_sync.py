@@ -111,7 +111,7 @@ def test_upsert_entity_updates_sqlite_and_in_memory_graph(tmp_path) -> None:
     assert entity is not None
     assert entity.data["schema:name"] == "Ada Lovelace"
     assert (
-        URIRef("urn:git-metadata-extractor:entity:person-1"),
+        URIRef("urn:pulse:person-1"),
         URIRef("http://schema.org/name"),
         Literal("Ada Lovelace"),
     ) in graph
@@ -142,7 +142,7 @@ def test_delete_entity_removes_entity_and_edge_triples_from_graph(tmp_path) -> N
 
     deleted = store.delete_entity("person-1")
     graph = store.get_rdf_graph()
-    person_uri = URIRef("urn:git-metadata-extractor:entity:person-1")
+    person_uri = URIRef("urn:pulse:person-1")
 
     assert deleted is True
     assert store.get_entity("person-1") is None

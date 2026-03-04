@@ -250,7 +250,7 @@ def _to_graph_store_entity_payload(
     data = {
         key: deepcopy(value)
         for key, value in entity.items()
-        if key not in GRAPH_ENTITY_HELPER_KEYS and value is not None
+        if key not in GRAPH_ENTITY_HELPER_KEYS and not key.startswith("_") and value is not None
     }
 
     return entity_type, entity_id, data, deepcopy(identifiers), id_source

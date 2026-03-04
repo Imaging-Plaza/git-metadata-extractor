@@ -56,7 +56,7 @@
     },
     "schema:url": {
       "type": ["string", "null"],
-      "description": "Profile URL. Example: 'https://people.epfl.ch/carlos.vivar'"
+      "description": "Profile URL for personal webpage. Example: 'https://caviri.github.io'"
     },
     "pulse:githubUsername": {
       "type": ["string", "null"],

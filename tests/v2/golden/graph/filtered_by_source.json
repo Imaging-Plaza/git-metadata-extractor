@@ -108,7 +108,7 @@
     },
     "@graph": [
       {
-        "@id": "urn:git-metadata-extractor:entity:0000-0002-1825-0097_owner/repo",
+        "@id": "urn:pulse:0000-0002-1825-0097_owner/repo",
         "@type": "pulse:Contribution",
         "pulse:identifiers": "{}",
         "pulse:source_url": {
@@ -116,7 +116,7 @@
         }
       },
       {
-        "@id": "urn:git-metadata-extractor:entity:owner/repo",
+        "@id": "urn:pulse:owner/repo",
         "@type": "schema:SoftwareSourceCode",
         "pulse:identifiers": "{}",
         "pulse:source_url": {

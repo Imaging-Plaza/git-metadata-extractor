@@ -24,7 +24,7 @@ OWL_NAMESPACE = Namespace("http://www.w3.org/2002/07/owl#")
 SKOS_NAMESPACE = Namespace("http://www.w3.org/2004/02/skos/core#")
 SH_NAMESPACE = Namespace("http://www.w3.org/ns/shacl#")
 WD_NAMESPACE = Namespace("http://www.wikidata.org/entity/")
-ENTITY_NAMESPACE = Namespace("urn:git-metadata-extractor:entity:")
+ENTITY_NAMESPACE = Namespace("urn:pulse:")
 NAMESPACE_BY_PREFIX: dict[str, Any] = {
     "pulse": PULSE_NAMESPACE,
     "schema": SCHEMA_NAMESPACE,
@@ -138,7 +138,7 @@ class RDFGraphSync:
             (subject, RDF.type, _coerce_uri_or_literal(type_value, for_type=True)),
         ]
         for key, value in entity_data.items():
-            if key in {"id", "type"} or value is None:
+            if key in {"id", "type"} or key.startswith("_") or value is None:
                 continue
             predicate = _predicate_uri(key)
             if isinstance(value, list):

@@ -13,8 +13,8 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     monkeypatch,
     capsys,
 ) -> None:
-    person_ok_id = "urn:git-metadata-extractor:entity:person-ok-user"
-    person_ok2_id = "urn:git-metadata-extractor:entity:person-ok-user-2"
+    person_ok_id = "urn:pulse:person-ok-user"
+    person_ok2_id = "urn:pulse:person-ok-user-2"
 
     class _FakeRepositoryAgent:
         async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
@@ -397,7 +397,7 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
             "pulse:ownedBy": None,
         },
         {
-            "id": "urn:git-metadata-extractor:entity:0000-0001-2345-6789",
+            "id": "urn:pulse:0000-0001-2345-6789",
             "type": "schema:Person",
             "schema:name": "Alice",
             "pulse:githubUsername": "alice",
@@ -431,7 +431,7 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
         if entity.get("type") == "schema:SoftwareSourceCode"
     )
     assert repository["schema:author"] == [
-        "urn:git-metadata-extractor:entity:0000-0001-2345-6789",
+        "urn:pulse:0000-0001-2345-6789",
         "ghost",
     ]
     assert "pulse:ownedBy" not in repository

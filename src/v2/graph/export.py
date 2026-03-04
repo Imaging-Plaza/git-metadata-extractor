@@ -10,7 +10,7 @@ from rdflib import Graph, URIRef
 if TYPE_CHECKING:
     from src.v2.graph.store import GraphStore
 
-ENTITY_URI_PREFIX = "urn:git-metadata-extractor:entity:"
+ENTITY_URI_PREFIX = "urn:pulse:"
 CONTEXT_RELATIVE_PATH = Path("src/v2/schemas/context/v2.0.jsonld")
 
 _ENTITY_TYPE_ALIASES: dict[str, set[str]] = {
