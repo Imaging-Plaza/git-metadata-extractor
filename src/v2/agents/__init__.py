@@ -4,6 +4,9 @@ from src.v2.agents.article_agent import ArticleAgentV2
 from src.v2.agents.contracts import RuntimeAgent
 from src.v2.agents.contribution_agent import ContributionAgentV2
 from src.v2.agents.llm import (
+    LLMArticleAgentV2,
+    LLMContributionAgentV2,
+    LLMMembershipAgentV2,
     LLMOrganizationAgentV2,
     LLMPersonAgentV2,
     LLMRepositoryAgentV2,
@@ -29,6 +32,9 @@ __all__ = [
     "AgentRuntimeRegistry",
     "ArticleAgentV2",
     "ContributionAgentV2",
+    "LLMArticleAgentV2",
+    "LLMContributionAgentV2",
+    "LLMMembershipAgentV2",
     "LLMOrganizationAgentV2",
     "LLMPersonAgentV2",
     "LLMRepositoryAgentV2",

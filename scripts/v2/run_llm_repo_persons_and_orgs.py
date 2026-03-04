@@ -1,14 +1,18 @@
-# ruff: noqa: INP001, T201
-"""Run LLM repository + person + organization agents against a real GitHub repo.
+# ruff: noqa: INP001
+"""Run repository debug stages against a real GitHub repo.
 
 Executes repository-oriented stages in order:
   1. context_gather
   2. repo_agent (LLM)
   3. person_agents fanout (LLM)
   4. organization_agents fanout (LLM)
+  5. article_agents fanout (LLM)
+  6. membership_agents fanout (LLM)
+  7. contribution_agents fanout (LLM)
 
 Usage:
     just v2-run-repo-persons-and-orgs sdsc-ordes/gimie
+    just v2-run-repo-full-llm sdsc-ordes/gimie
     python scripts/v2/run_llm_repo_persons_and_orgs.py sdsc-ordes/gimie
     python scripts/v2/run_llm_repo_persons_and_orgs.py https://github.com/sdsc-ordes/gimie
 """
@@ -21,11 +25,15 @@ import logging
 from copy import deepcopy
 from dataclasses import dataclass
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
 
+from src.v2.agents.llm.article import LLMArticleAgentV2
+from src.v2.agents.llm.contribution import LLMContributionAgentV2
+from src.v2.agents.llm.membership import LLMMembershipAgentV2
 from src.v2.agents.llm.organization import LLMOrganizationAgentV2
 from src.v2.agents.llm.person import LLMPersonAgentV2
 from src.v2.agents.llm.repository import LLMRepositoryAgentV2
+from src.v2.agents.models import AgentResult, TypedEntityBuckets, infer_entity_bucket
 from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 from src.v2.dependencies import _default_provider_set
 from src.v2.detection.github_url_classifier import classify_github_url
@@ -33,12 +41,18 @@ from src.v2.graph.export import JSONLDExporter
 from src.v2.pipeline.stages import AssembledOutput, build_jsonld_output, gather_context
 
 if TYPE_CHECKING:
-    from src.v2.agents.models import AgentResult, ProviderSet
+    from src.v2.agents.models import ProviderSet
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 _SEP = "─" * 60
 _SEP_THIN = "·" * 60
+_STAGE_REPO_AGENT = "repo_agent"
+_STAGE_PERSON_AGENT = "person_agent"
+_STAGE_ORG_AGENT = "org_agent"
+_STAGE_ARTICLE_AGENT = "article_agent"
+_STAGE_MEMBERSHIP_AGENT = "membership_agent"
+_STAGE_CONTRIBUTION_AGENT = "contribution_agent"
 
 
 @dataclass(slots=True)
@@ -480,6 +494,388 @@ def _organization_candidates(
     return _dedupe_preserve_order_normalized(candidates)
 
 
+def _collect_stage_payloads(
+    pipeline_outputs: dict[str, dict[str, Any]],
+    stage_prefix: str,
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for result_key in sorted(pipeline_outputs):
+        if not str(result_key).startswith(stage_prefix):
+            continue
+        payload = pipeline_outputs[result_key]
+        if isinstance(payload, dict) and payload:
+            payloads.append(deepcopy(payload))
+    return payloads
+
+
+def _collect_stage_derivations(
+    pipeline_agent_results: dict[str, AgentResult],
+    stage_prefix: str,
+) -> list[dict[str, Any]]:
+    derivations: list[dict[str, Any]] = []
+    for result_key in sorted(pipeline_agent_results):
+        if not str(result_key).startswith(stage_prefix):
+            continue
+        result = pipeline_agent_results[result_key]
+        if not isinstance(result, AgentResult):
+            continue
+        if not isinstance(result.stats, dict):
+            continue
+        derivation = result.stats.get("derivation")
+        if isinstance(derivation, dict):
+            derivations.append(deepcopy(derivation))
+    return derivations
+
+
+def _typed_entity_bucket_snapshot(
+    pipeline_outputs: dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    buckets = TypedEntityBuckets()
+    for result_key in sorted(pipeline_outputs):
+        payload = pipeline_outputs[result_key]
+        if not isinstance(payload, dict) or not payload:
+            continue
+        bucket_name = infer_entity_bucket(agent_key=str(result_key), data=payload)
+        if bucket_name is None:
+            continue
+        buckets.add(bucket_name, payload)
+    return buckets.to_dict()
+
+
+def _class_agent_base_context(
+    *,
+    source_url: str,
+    full_name: str,
+    repository_context: dict[str, Any],
+    pipeline_outputs: dict[str, dict[str, Any]],
+    pipeline_agent_results: dict[str, AgentResult],
+) -> dict[str, Any]:
+    return {
+        "detected_type": "repository",
+        "source_url": source_url,
+        "full_name": full_name,
+        "repository_context": deepcopy(repository_context),
+        "known_persons": _collect_stage_payloads(
+            pipeline_outputs,
+            _STAGE_PERSON_AGENT,
+        ),
+        "known_organizations": _collect_stage_payloads(
+            pipeline_outputs,
+            _STAGE_ORG_AGENT,
+        ),
+        "known_repositories": _collect_stage_payloads(
+            pipeline_outputs,
+            _STAGE_REPO_AGENT,
+        ),
+        "person_derivations": _collect_stage_derivations(
+            pipeline_agent_results,
+            _STAGE_PERSON_AGENT,
+        ),
+        "organization_derivations": _collect_stage_derivations(
+            pipeline_agent_results,
+            _STAGE_ORG_AGENT,
+        ),
+        "repository_derivations": _collect_stage_derivations(
+            pipeline_agent_results,
+            _STAGE_REPO_AGENT,
+        ),
+        "typed_entity_buckets": _typed_entity_bucket_snapshot(pipeline_outputs),
+        "pipeline_outputs": deepcopy(pipeline_outputs),
+        "upstream_stage_outputs_json": json.dumps(
+            pipeline_outputs,
+            ensure_ascii=True,
+            sort_keys=True,
+        ),
+    }
+
+
+def _person_derivations_by_id(
+    pipeline_agent_results: dict[str, AgentResult],
+) -> dict[str, dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    for derivation in _collect_stage_derivations(
+        pipeline_agent_results,
+        _STAGE_PERSON_AGENT,
+    ):
+        person_id = derivation.get("person_id")
+        if isinstance(person_id, str) and person_id:
+            by_id[person_id] = derivation
+    return by_id
+
+
+def _repository_derivations_by_id(
+    pipeline_agent_results: dict[str, AgentResult],
+) -> dict[str, dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    for derivation in _collect_stage_derivations(
+        pipeline_agent_results,
+        _STAGE_REPO_AGENT,
+    ):
+        repository_id = derivation.get("repository_full_name")
+        if isinstance(repository_id, str) and repository_id:
+            by_id[repository_id] = derivation
+    return by_id
+
+
+def _merge_person_with_derivation(
+    person: dict[str, Any],
+    derivation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = deepcopy(person)
+    if not isinstance(derivation, dict):
+        return merged
+
+    affiliation_names = derivation.get("affiliation_names")
+    if isinstance(affiliation_names, list):
+        merged["affiliations"] = [
+            value
+            for value in affiliation_names
+            if isinstance(value, str) and value
+        ]
+
+    orcid_affiliations = derivation.get("orcid_affiliations")
+    if isinstance(orcid_affiliations, list):
+        merged["orcid_affiliations"] = [
+            deepcopy(value)
+            for value in orcid_affiliations
+            if isinstance(value, dict)
+        ]
+
+    source_repositories = derivation.get("source_repositories")
+    if isinstance(source_repositories, list):
+        merged["source_repositories"] = [
+            value
+            for value in source_repositories
+            if isinstance(value, str) and value
+        ]
+
+    return merged
+
+
+def _merge_repository_with_derivation(
+    repository: dict[str, Any],
+    derivation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = deepcopy(repository)
+    if not isinstance(derivation, dict):
+        return merged
+
+    contributors = derivation.get("contributors")
+    if isinstance(contributors, list):
+        merged["contributors"] = [
+            deepcopy(contributor)
+            for contributor in contributors
+            if isinstance(contributor, (dict, str))
+        ]
+    return merged
+
+
+def _article_fanout_contexts_repository(
+    *,
+    base_context: dict[str, Any],
+    full_name: str,
+) -> list[dict[str, Any]]:
+    seeds = _dedupe_preserve_order([full_name] if full_name else [])
+    contexts: list[dict[str, Any]] = []
+    for seed in seeds:
+        context = deepcopy(base_context)
+        context["article_seed"] = seed
+        context["full_name"] = seed
+        contexts.append(context)
+    return contexts
+
+
+def _membership_fanout_contexts_repository(
+    *,
+    base_context: dict[str, Any],
+    pipeline_agent_results: dict[str, AgentResult],
+) -> list[dict[str, Any]]:
+    known_persons = base_context.get("known_persons")
+    known_organizations = base_context.get("known_organizations")
+    if not isinstance(known_persons, list) or not isinstance(known_organizations, list):
+        return []
+    if not known_persons or not known_organizations:
+        return []
+
+    person_derivations = _person_derivations_by_id(pipeline_agent_results)
+    contexts: list[dict[str, Any]] = []
+    seen_person_ids: set[str] = set()
+
+    for person in sorted(
+        [item for item in known_persons if isinstance(item, dict)],
+        key=lambda item: str(item.get("id", "")),
+    ):
+        person_id = person.get("id")
+        if not isinstance(person_id, str) or not person_id or person_id in seen_person_ids:
+            continue
+        seen_person_ids.add(person_id)
+
+        merged_person = _merge_person_with_derivation(
+            person,
+            person_derivations.get(person_id),
+        )
+        context = deepcopy(base_context)
+        context["membership_seed"] = person_id
+        context["known_persons"] = [merged_person]
+        context["known_organizations"] = deepcopy(known_organizations)
+        contexts.append(context)
+
+    return contexts
+
+
+def _contribution_fanout_contexts_repository(
+    *,
+    base_context: dict[str, Any],
+    pipeline_agent_results: dict[str, AgentResult],
+) -> list[dict[str, Any]]:
+    known_persons = base_context.get("known_persons")
+    known_repositories = base_context.get("known_repositories")
+    if not isinstance(known_persons, list) or not isinstance(known_repositories, list):
+        return []
+    if not known_persons or not known_repositories:
+        return []
+
+    repository_derivations = _repository_derivations_by_id(pipeline_agent_results)
+    contexts: list[dict[str, Any]] = []
+    seen_repository_ids: set[str] = set()
+
+    for repository in sorted(
+        [item for item in known_repositories if isinstance(item, dict)],
+        key=lambda item: str(
+            item.get("id")
+            or item.get("pulse:githubRepositoryHandle")
+            or item.get("full_name")
+            or "",
+        ),
+    ):
+        repository_id = repository.get("id")
+        if not isinstance(repository_id, str) or not repository_id or repository_id in seen_repository_ids:
+            continue
+        seen_repository_ids.add(repository_id)
+
+        merged_repository = _merge_repository_with_derivation(
+            repository,
+            repository_derivations.get(repository_id),
+        )
+        context = deepcopy(base_context)
+        context["contribution_seed"] = repository_id
+        context["known_persons"] = deepcopy(known_persons)
+        context["known_repositories"] = [merged_repository]
+        contexts.append(context)
+
+    return contexts
+
+
+def _append_pipeline_output(
+    pipeline_outputs: dict[str, dict[str, Any]],
+    pipeline_agent_results: dict[str, AgentResult],
+    *,
+    result_key: str,
+    result: AgentResult,
+) -> None:
+    pipeline_outputs[result_key] = deepcopy(result.data)
+    pipeline_agent_results[result_key] = result
+
+
+def _extract_result_entities(
+    result: AgentResult,
+    *,
+    stats_keys: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    entities: list[dict[str, Any]] = []
+    if isinstance(result.data, dict) and result.data:
+        entities.append(deepcopy(result.data))
+    if not isinstance(result.stats, dict):
+        return entities
+
+    for stats_key in stats_keys:
+        values = result.stats.get(stats_key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, dict) and value:
+                entities.append(deepcopy(value))
+    return entities
+
+
+async def _run_fanout_stage(
+    *,
+    subjects: list[str],
+    running_label: str,
+    max_concurrency: int,
+    heartbeat_seconds: float,
+    run_subject: Callable[[str], Awaitable[AgentResult]],
+) -> list[_ExecutionOutcome]:
+    if not subjects:
+        return []
+
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def _run_one(subject: str) -> _ExecutionOutcome:
+        async with semaphore:
+            print(f"  → {subject}: starting …")
+            started_at = perf_counter()
+            try:
+                result = await run_subject(subject)
+            except Exception as exc:  # noqa: BLE001
+                elapsed_seconds = perf_counter() - started_at
+                status = _classify_error(exc)
+                print(f"  ✗ {subject}: {status} in {elapsed_seconds:.1f}s ({exc})")
+                return _ExecutionOutcome(
+                    subject=subject,
+                    status=status,
+                    elapsed_seconds=elapsed_seconds,
+                    error=str(exc),
+                )
+
+            elapsed_seconds = perf_counter() - started_at
+            print(f"  ✓ {subject}: done in {elapsed_seconds:.1f}s")
+            return _ExecutionOutcome(
+                subject=subject,
+                status="ok",
+                elapsed_seconds=elapsed_seconds,
+                result=result,
+            )
+
+    outcomes_by_subject: dict[str, _ExecutionOutcome] = {}
+    task_to_subject: dict[asyncio.Task[_ExecutionOutcome], str] = {
+        asyncio.create_task(_run_one(subject)): subject for subject in subjects
+    }
+    pending_tasks = set(task_to_subject)
+    fanout_started_at = perf_counter()
+
+    while pending_tasks:
+        done, pending_tasks = await asyncio.wait(
+            pending_tasks,
+            timeout=heartbeat_seconds,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if not done:
+            running = sorted(task_to_subject[task] for task in pending_tasks)
+            print(
+                "  … heartbeat: "
+                f"{len(running)} {running_label}(s) still running after {perf_counter() - fanout_started_at:.1f}s: "
+                f"{running}",
+            )
+            continue
+
+        for task in done:
+            subject = task_to_subject[task]
+            try:
+                outcome = task.result()
+            except Exception as exc:  # noqa: BLE001
+                status = _classify_error(exc)
+                outcome = _ExecutionOutcome(
+                    subject=subject,
+                    status=status,
+                    elapsed_seconds=perf_counter() - fanout_started_at,
+                    error=str(exc),
+                )
+            outcomes_by_subject[subject] = outcome
+
+    return [outcomes_by_subject[subject] for subject in subjects]
+
+
 def _classify_error(error: BaseException) -> Literal["timeout", "error"]:
     if "timed out" in str(error).lower():
         return "timeout"
@@ -507,6 +903,9 @@ async def _run(  # noqa: C901, PLR0915
     *,
     person_timeout_seconds: float,
     organization_timeout_seconds: float,
+    article_timeout_seconds: float,
+    membership_timeout_seconds: float,
+    contribution_timeout_seconds: float,
     max_concurrency: int,
     heartbeat_seconds: float,
 ) -> None:
@@ -522,7 +921,7 @@ async def _run(  # noqa: C901, PLR0915
     providers: ProviderSet = _default_provider_set(use_mock_providers=False)
 
     # ── Stage 1: context_gather ──────────────────────────────────────────────
-    print("[ 1 / 4 ]  Gathering GIMIE context …\n")
+    print("[ 1 / 7 ]  Gathering GIMIE context …\n")
     bundle = await gather_context("repository", url_info, providers)
     repo_ctx = bundle.context.get("repository", {})
 
@@ -536,7 +935,7 @@ async def _run(  # noqa: C901, PLR0915
 
     # ── Stage 2: repo_agent ──────────────────────────────────────────────────
     print(f"{_SEP}")
-    print("[ 2 / 4 ]  Running LLM repository agent …\n")
+    print("[ 2 / 7 ]  Running LLM repository agent …\n")
 
     repo_agent = LLMRepositoryAgentV2()
     repo_result = await repo_agent.run(
@@ -557,92 +956,46 @@ async def _run(  # noqa: C901, PLR0915
             print(f"  • {warning}")
     print(f"\nRepository entity:\n{_pj(repo_result.data)}\n")
 
+    pipeline_outputs: dict[str, dict[str, Any]] = {
+        _STAGE_REPO_AGENT: deepcopy(repo_result.data),
+    }
+    pipeline_agent_results: dict[str, AgentResult] = {
+        _STAGE_REPO_AGENT: repo_result,
+    }
+
     # ── Stage 3: person_agents (concurrent) ─────────────────────────────────
     usernames = _contributor_usernames(repo_ctx)
     print(f"{_SEP}")
-    print(f"[ 3 / 4 ]  Running LLM person agent for {len(usernames)} contributor(s): {usernames}\n")
+    print(f"[ 3 / 7 ]  Running LLM person agent for {len(usernames)} contributor(s): {usernames}\n")
 
     ordered_person_outcomes: list[_ExecutionOutcome] = []
-    successful_person_entities: list[dict[str, object]] = []
+    successful_person_entities: list[dict[str, Any]] = []
     source_repositories = [full_name]
 
     if usernames:
         person_agent = LLMPersonAgentV2(
             llm_call_timeout_seconds=person_timeout_seconds,
         )
-        semaphore = asyncio.Semaphore(max_concurrency)
-
-        async def _run_person(username: str) -> _ExecutionOutcome:
-            async with semaphore:
-                print(f"  → {username}: starting …")
-                started_at = perf_counter()
-                context = {
-                    "username": username,
-                    "source_url": url_info.normalized_url,
-                    "source_repositories": source_repositories,
-                    "repository_context": repo_ctx,
-                }
-                try:
-                    result = await person_agent.run(context, providers)
-                except Exception as exc:  # noqa: BLE001
-                    elapsed_seconds = perf_counter() - started_at
-                    status = _classify_error(exc)
-                    print(f"  ✗ {username}: {status} in {elapsed_seconds:.1f}s ({exc})")
-                    return _ExecutionOutcome(
-                        subject=username,
-                        status=status,
-                        elapsed_seconds=elapsed_seconds,
-                        error=str(exc),
-                    )
-
-                elapsed_seconds = perf_counter() - started_at
-                print(f"  ✓ {username}: done in {elapsed_seconds:.1f}s")
-                return _ExecutionOutcome(
-                    subject=username,
-                    status="ok",
-                    elapsed_seconds=elapsed_seconds,
-                    result=result,
-                )
-
-        person_outcomes_by_subject: dict[str, _ExecutionOutcome] = {}
-        person_task_to_subject: dict[asyncio.Task[_ExecutionOutcome], str] = {
-            asyncio.create_task(_run_person(username)): username for username in usernames
+        person_context_by_username: dict[str, dict[str, Any]] = {
+            username: {
+                "username": username,
+                "source_url": url_info.normalized_url,
+                "source_repositories": source_repositories,
+                "repository_context": repo_ctx,
+            }
+            for username in usernames
         }
-        pending_person_tasks = set(person_task_to_subject)
-        fanout_started_at = perf_counter()
 
-        while pending_person_tasks:
-            done, pending_person_tasks = await asyncio.wait(
-                pending_person_tasks,
-                timeout=heartbeat_seconds,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if not done:
-                running = sorted(person_task_to_subject[task] for task in pending_person_tasks)
-                print(
-                    "  … heartbeat: "
-                    f"{len(running)} contributor(s) still running after {perf_counter() - fanout_started_at:.1f}s: "
-                    f"{running}",
-                )
-                continue
+        async def _run_person(username: str) -> AgentResult:
+            return await person_agent.run(person_context_by_username[username], providers)
 
-            for task in done:
-                subject = person_task_to_subject[task]
-                try:
-                    outcome = task.result()
-                except Exception as exc:  # noqa: BLE001
-                    status = _classify_error(exc)
-                    outcome = _ExecutionOutcome(
-                        subject=subject,
-                        status=status,
-                        elapsed_seconds=perf_counter() - fanout_started_at,
-                        error=str(exc),
-                    )
-                person_outcomes_by_subject[subject] = outcome
-
-        ordered_person_outcomes = [
-            person_outcomes_by_subject[username] for username in usernames
-        ]
+        ordered_person_outcomes = await _run_fanout_stage(
+            subjects=usernames,
+            running_label="contributor",
+            max_concurrency=max_concurrency,
+            heartbeat_seconds=heartbeat_seconds,
+            run_subject=_run_person,
+        )
         for outcome in ordered_person_outcomes:
             print(_SEP_THIN)
             if outcome.status != "ok" or outcome.result is None:
@@ -660,11 +1013,17 @@ async def _run(  # noqa: C901, PLR0915
                     print(f"    • {warning}")
             print(f"  Entity:\n{_pj(result.data)}\n")
 
-        successful_person_entities = [
-            outcome.result.data
-            for outcome in ordered_person_outcomes
-            if outcome.status == "ok" and outcome.result is not None
-        ]
+        for outcome in ordered_person_outcomes:
+            if outcome.status != "ok" or outcome.result is None:
+                continue
+            _append_pipeline_output(
+                pipeline_outputs,
+                pipeline_agent_results,
+                result_key=f"{_STAGE_PERSON_AGENT}:{outcome.subject}",
+                result=outcome.result,
+            )
+            successful_person_entities.extend(_extract_result_entities(outcome.result))
+
         timeout_count = sum(1 for outcome in ordered_person_outcomes if outcome.status == "timeout")
         error_count = sum(1 for outcome in ordered_person_outcomes if outcome.status == "error")
 
@@ -689,23 +1048,17 @@ async def _run(  # noqa: C901, PLR0915
     organization_names = _organization_candidates(repo_ctx, ordered_person_outcomes)
     print(f"{_SEP}")
     print(
-        "[ 4 / 4 ]  Running LLM organization agent for "
+        "[ 4 / 7 ]  Running LLM organization agent for "
         f"{len(organization_names)} organization(s): {organization_names}\n",
     )
 
     ordered_organization_outcomes: list[_ExecutionOutcome] = []
-    successful_organization_entities: list[dict[str, object]] = []
+    successful_organization_entities: list[dict[str, Any]] = []
     if organization_names:
         organization_agent = LLMOrganizationAgentV2(
             llm_call_timeout_seconds=organization_timeout_seconds,
         )
-        semaphore = asyncio.Semaphore(max_concurrency)
-        upstream_outputs_for_org: dict[str, dict[str, object]] = {
-            "repo_agent": repo_result.data,
-        }
-        for outcome in ordered_person_outcomes:
-            if outcome.status == "ok" and outcome.result is not None:
-                upstream_outputs_for_org[f"person_agent:{outcome.subject}"] = outcome.result.data
+        upstream_outputs_for_org = deepcopy(pipeline_outputs)
 
         upstream_outputs_json = json.dumps(
             upstream_outputs_for_org,
@@ -713,83 +1066,28 @@ async def _run(  # noqa: C901, PLR0915
             sort_keys=True,
         )
 
-        async def _run_org(org_name: str) -> _ExecutionOutcome:
-            async with semaphore:
-                print(f"  → {org_name}: starting …")
-                started_at = perf_counter()
-                context = {
-                    "org_name": org_name,
-                    "source_url": url_info.normalized_url,
-                    "source_repositories": source_repositories,
-                    "repository_context": repo_ctx,
-                    "pipeline_outputs": upstream_outputs_for_org,
-                    "upstream_stage_outputs_json": upstream_outputs_json,
-                }
-                try:
-                    result = await organization_agent.run(context, providers)
-                except Exception as exc:  # noqa: BLE001
-                    elapsed_seconds = perf_counter() - started_at
-                    status = _classify_error(exc)
-                    print(f"  ✗ {org_name}: {status} in {elapsed_seconds:.1f}s ({exc})")
-                    return _ExecutionOutcome(
-                        subject=org_name,
-                        status=status,
-                        elapsed_seconds=elapsed_seconds,
-                        error=str(exc),
-                    )
-
-                elapsed_seconds = perf_counter() - started_at
-                print(f"  ✓ {org_name}: done in {elapsed_seconds:.1f}s")
-                return _ExecutionOutcome(
-                    subject=org_name,
-                    status="ok",
-                    elapsed_seconds=elapsed_seconds,
-                    result=result,
-                )
-
-        organization_outcomes_by_subject: dict[str, _ExecutionOutcome] = {}
-        organization_task_to_subject: dict[asyncio.Task[_ExecutionOutcome], str] = {
-            asyncio.create_task(_run_org(org_name)): org_name for org_name in organization_names
-        }
-        pending_organization_tasks = set(organization_task_to_subject)
-        fanout_started_at = perf_counter()
-
-        while pending_organization_tasks:
-            done, pending_organization_tasks = await asyncio.wait(
-                pending_organization_tasks,
-                timeout=heartbeat_seconds,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if not done:
-                running = sorted(
-                    organization_task_to_subject[task]
-                    for task in pending_organization_tasks
-                )
-                print(
-                    "  … heartbeat: "
-                    f"{len(running)} organization(s) still running after {perf_counter() - fanout_started_at:.1f}s: "
-                    f"{running}",
-                )
-                continue
-
-            for task in done:
-                subject = organization_task_to_subject[task]
-                try:
-                    outcome = task.result()
-                except Exception as exc:  # noqa: BLE001
-                    status = _classify_error(exc)
-                    outcome = _ExecutionOutcome(
-                        subject=subject,
-                        status=status,
-                        elapsed_seconds=perf_counter() - fanout_started_at,
-                        error=str(exc),
-                    )
-                organization_outcomes_by_subject[subject] = outcome
-
-        ordered_organization_outcomes = [
-            organization_outcomes_by_subject[org_name]
+        organization_context_by_name: dict[str, dict[str, Any]] = {
+            org_name: {
+                "org_name": org_name,
+                "source_url": url_info.normalized_url,
+                "source_repositories": source_repositories,
+                "repository_context": repo_ctx,
+                "pipeline_outputs": deepcopy(upstream_outputs_for_org),
+                "upstream_stage_outputs_json": upstream_outputs_json,
+            }
             for org_name in organization_names
-        ]
+        }
+
+        async def _run_org(org_name: str) -> AgentResult:
+            return await organization_agent.run(organization_context_by_name[org_name], providers)
+
+        ordered_organization_outcomes = await _run_fanout_stage(
+            subjects=organization_names,
+            running_label="organization",
+            max_concurrency=max_concurrency,
+            heartbeat_seconds=heartbeat_seconds,
+            run_subject=_run_org,
+        )
         for outcome in ordered_organization_outcomes:
             print(_SEP_THIN)
             if outcome.status != "ok" or outcome.result is None:
@@ -807,11 +1105,19 @@ async def _run(  # noqa: C901, PLR0915
                     print(f"    • {warning}")
             print(f"  Entity:\n{_pj(result.data)}\n")
 
-        successful_organization_entities = [
-            outcome.result.data
-            for outcome in ordered_organization_outcomes
-            if outcome.status == "ok" and outcome.result is not None
-        ]
+        for outcome in ordered_organization_outcomes:
+            if outcome.status != "ok" or outcome.result is None:
+                continue
+            _append_pipeline_output(
+                pipeline_outputs,
+                pipeline_agent_results,
+                result_key=f"{_STAGE_ORG_AGENT}:{outcome.subject}",
+                result=outcome.result,
+            )
+            successful_organization_entities.extend(
+                _extract_result_entities(outcome.result),
+            )
+
         timeout_count = sum(
             1 for outcome in ordered_organization_outcomes if outcome.status == "timeout"
         )
@@ -836,11 +1142,300 @@ async def _run(  # noqa: C901, PLR0915
     else:
         print("  No organizations derived — skipping organization stage.\n")
 
+    # ── Stage 5: article_agents (concurrent) ────────────────────────────────
+    article_base_context = _class_agent_base_context(
+        source_url=url_info.normalized_url,
+        full_name=full_name,
+        repository_context=repo_ctx,
+        pipeline_outputs=pipeline_outputs,
+        pipeline_agent_results=pipeline_agent_results,
+    )
+    article_contexts = _article_fanout_contexts_repository(
+        base_context=article_base_context,
+        full_name=full_name,
+    )
+    article_seeds = [context["article_seed"] for context in article_contexts]
+
+    print(f"{_SEP}")
+    print(
+        "[ 5 / 7 ]  Running LLM article agent for "
+        f"{len(article_seeds)} seed(s): {article_seeds}\n",
+    )
+
+    ordered_article_outcomes: list[_ExecutionOutcome] = []
+    successful_article_entities: list[dict[str, Any]] = []
+    if article_contexts:
+        article_agent = LLMArticleAgentV2(
+            llm_call_timeout_seconds=article_timeout_seconds,
+        )
+        article_context_by_seed: dict[str, dict[str, Any]] = {
+            context["article_seed"]: context for context in article_contexts
+        }
+
+        async def _run_article(seed: str) -> AgentResult:
+            return await article_agent.run(article_context_by_seed[seed], providers)
+
+        ordered_article_outcomes = await _run_fanout_stage(
+            subjects=article_seeds,
+            running_label="article",
+            max_concurrency=max_concurrency,
+            heartbeat_seconds=heartbeat_seconds,
+            run_subject=_run_article,
+        )
+
+        for outcome in ordered_article_outcomes:
+            print(_SEP_THIN)
+            if outcome.status != "ok" or outcome.result is None:
+                print(f"  Article: {outcome.subject}")
+                print(f"  Status   : {outcome.status}")
+                print(f"  Error    : {outcome.error}\n")
+                continue
+            result = outcome.result
+            print(f"  Article: {outcome.subject}")
+            print(f"  Model    : {result.model}")
+            print(f"  Tokens   : prompt={result.tokens_prompt}  completion={result.tokens_completion}")
+            if result.warnings:
+                print("  Warnings:")
+                for warning in result.warnings:
+                    print(f"    • {warning}")
+            print(f"  Entity:\n{_pj(result.data)}\n")
+
+        for outcome in ordered_article_outcomes:
+            if outcome.status != "ok" or outcome.result is None:
+                continue
+            _append_pipeline_output(
+                pipeline_outputs,
+                pipeline_agent_results,
+                result_key=f"{_STAGE_ARTICLE_AGENT}:{outcome.subject}",
+                result=outcome.result,
+            )
+            successful_article_entities.extend(
+                _extract_result_entities(
+                    outcome.result,
+                    stats_keys=("articles",),
+                ),
+            )
+
+        timeout_count = sum(1 for outcome in ordered_article_outcomes if outcome.status == "timeout")
+        error_count = sum(1 for outcome in ordered_article_outcomes if outcome.status == "error")
+        print(_SEP_THIN)
+        print(
+            "Article summary: "
+            f"ok={len(successful_article_entities)} timeout={timeout_count} error={error_count}",
+        )
+        failed_article_outcomes = [
+            outcome for outcome in ordered_article_outcomes if outcome.status != "ok"
+        ]
+        if failed_article_outcomes:
+            print("Failed article seeds:")
+            for outcome in failed_article_outcomes:
+                print(f"  - {outcome.subject}: {outcome.status} ({outcome.error})")
+        print("\nArticle entities:")
+        print(_pj(successful_article_entities))
+    else:
+        print("  No article seeds derived — skipping article stage.\n")
+
+    # ── Stage 6: membership_agents (concurrent) ─────────────────────────────
+    membership_base_context = _class_agent_base_context(
+        source_url=url_info.normalized_url,
+        full_name=full_name,
+        repository_context=repo_ctx,
+        pipeline_outputs=pipeline_outputs,
+        pipeline_agent_results=pipeline_agent_results,
+    )
+    membership_contexts = _membership_fanout_contexts_repository(
+        base_context=membership_base_context,
+        pipeline_agent_results=pipeline_agent_results,
+    )
+    membership_seeds = [context["membership_seed"] for context in membership_contexts]
+
+    print(f"{_SEP}")
+    print(
+        "[ 6 / 7 ]  Running LLM membership agent for "
+        f"{len(membership_seeds)} seed(s): {membership_seeds}\n",
+    )
+
+    ordered_membership_outcomes: list[_ExecutionOutcome] = []
+    successful_membership_entities: list[dict[str, Any]] = []
+    if membership_contexts:
+        membership_agent = LLMMembershipAgentV2(
+            llm_call_timeout_seconds=membership_timeout_seconds,
+        )
+        membership_context_by_seed: dict[str, dict[str, Any]] = {
+            context["membership_seed"]: context for context in membership_contexts
+        }
+
+        async def _run_membership(seed: str) -> AgentResult:
+            return await membership_agent.run(membership_context_by_seed[seed], providers)
+
+        ordered_membership_outcomes = await _run_fanout_stage(
+            subjects=membership_seeds,
+            running_label="membership",
+            max_concurrency=max_concurrency,
+            heartbeat_seconds=heartbeat_seconds,
+            run_subject=_run_membership,
+        )
+
+        for outcome in ordered_membership_outcomes:
+            print(_SEP_THIN)
+            if outcome.status != "ok" or outcome.result is None:
+                print(f"  Membership: {outcome.subject}")
+                print(f"  Status   : {outcome.status}")
+                print(f"  Error    : {outcome.error}\n")
+                continue
+            result = outcome.result
+            print(f"  Membership: {outcome.subject}")
+            print(f"  Model    : {result.model}")
+            print(f"  Tokens   : prompt={result.tokens_prompt}  completion={result.tokens_completion}")
+            if result.warnings:
+                print("  Warnings:")
+                for warning in result.warnings:
+                    print(f"    • {warning}")
+            print(f"  Entity:\n{_pj(result.data)}\n")
+
+        for outcome in ordered_membership_outcomes:
+            if outcome.status != "ok" or outcome.result is None:
+                continue
+            _append_pipeline_output(
+                pipeline_outputs,
+                pipeline_agent_results,
+                result_key=f"{_STAGE_MEMBERSHIP_AGENT}:{outcome.subject}",
+                result=outcome.result,
+            )
+            successful_membership_entities.extend(
+                _extract_result_entities(
+                    outcome.result,
+                    stats_keys=("memberships",),
+                ),
+            )
+
+        timeout_count = sum(1 for outcome in ordered_membership_outcomes if outcome.status == "timeout")
+        error_count = sum(1 for outcome in ordered_membership_outcomes if outcome.status == "error")
+        print(_SEP_THIN)
+        print(
+            "Membership summary: "
+            f"ok={len(successful_membership_entities)} timeout={timeout_count} error={error_count}",
+        )
+        failed_membership_outcomes = [
+            outcome for outcome in ordered_membership_outcomes if outcome.status != "ok"
+        ]
+        if failed_membership_outcomes:
+            print("Failed membership seeds:")
+            for outcome in failed_membership_outcomes:
+                print(f"  - {outcome.subject}: {outcome.status} ({outcome.error})")
+        print("\nMembership entities:")
+        print(_pj(successful_membership_entities))
+    else:
+        print("  No membership seeds derived — skipping membership stage.\n")
+
+    # ── Stage 7: contribution_agents (concurrent) ───────────────────────────
+    contribution_base_context = _class_agent_base_context(
+        source_url=url_info.normalized_url,
+        full_name=full_name,
+        repository_context=repo_ctx,
+        pipeline_outputs=pipeline_outputs,
+        pipeline_agent_results=pipeline_agent_results,
+    )
+    contribution_contexts = _contribution_fanout_contexts_repository(
+        base_context=contribution_base_context,
+        pipeline_agent_results=pipeline_agent_results,
+    )
+    contribution_seeds = [context["contribution_seed"] for context in contribution_contexts]
+
+    print(f"{_SEP}")
+    print(
+        "[ 7 / 7 ]  Running LLM contribution agent for "
+        f"{len(contribution_seeds)} seed(s): {contribution_seeds}\n",
+    )
+
+    ordered_contribution_outcomes: list[_ExecutionOutcome] = []
+    successful_contribution_entities: list[dict[str, Any]] = []
+    if contribution_contexts:
+        contribution_agent = LLMContributionAgentV2(
+            llm_call_timeout_seconds=contribution_timeout_seconds,
+        )
+        contribution_context_by_seed: dict[str, dict[str, Any]] = {
+            context["contribution_seed"]: context for context in contribution_contexts
+        }
+
+        async def _run_contribution(seed: str) -> AgentResult:
+            return await contribution_agent.run(
+                contribution_context_by_seed[seed],
+                providers,
+            )
+
+        ordered_contribution_outcomes = await _run_fanout_stage(
+            subjects=contribution_seeds,
+            running_label="contribution",
+            max_concurrency=max_concurrency,
+            heartbeat_seconds=heartbeat_seconds,
+            run_subject=_run_contribution,
+        )
+
+        for outcome in ordered_contribution_outcomes:
+            print(_SEP_THIN)
+            if outcome.status != "ok" or outcome.result is None:
+                print(f"  Contribution: {outcome.subject}")
+                print(f"  Status   : {outcome.status}")
+                print(f"  Error    : {outcome.error}\n")
+                continue
+            result = outcome.result
+            print(f"  Contribution: {outcome.subject}")
+            print(f"  Model    : {result.model}")
+            print(f"  Tokens   : prompt={result.tokens_prompt}  completion={result.tokens_completion}")
+            if result.warnings:
+                print("  Warnings:")
+                for warning in result.warnings:
+                    print(f"    • {warning}")
+            print(f"  Entity:\n{_pj(result.data)}\n")
+
+        for outcome in ordered_contribution_outcomes:
+            if outcome.status != "ok" or outcome.result is None:
+                continue
+            _append_pipeline_output(
+                pipeline_outputs,
+                pipeline_agent_results,
+                result_key=f"{_STAGE_CONTRIBUTION_AGENT}:{outcome.subject}",
+                result=outcome.result,
+            )
+            successful_contribution_entities.extend(
+                _extract_result_entities(
+                    outcome.result,
+                    stats_keys=("contributions",),
+                ),
+            )
+
+        timeout_count = sum(
+            1 for outcome in ordered_contribution_outcomes if outcome.status == "timeout"
+        )
+        error_count = sum(
+            1 for outcome in ordered_contribution_outcomes if outcome.status == "error"
+        )
+        print(_SEP_THIN)
+        print(
+            "Contribution summary: "
+            f"ok={len(successful_contribution_entities)} timeout={timeout_count} error={error_count}",
+        )
+        failed_contribution_outcomes = [
+            outcome for outcome in ordered_contribution_outcomes if outcome.status != "ok"
+        ]
+        if failed_contribution_outcomes:
+            print("Failed contribution seeds:")
+            for outcome in failed_contribution_outcomes:
+                print(f"  - {outcome.subject}: {outcome.status} ({outcome.error})")
+        print("\nContribution entities:")
+        print(_pj(successful_contribution_entities))
+    else:
+        print("  No contribution seeds derived — skipping contribution stage.\n")
+
     combined_entities = _normalize_entities_for_debug_jsonld(
         [
             repo_result.data,
             *successful_person_entities,
             *successful_organization_entities,
+            *successful_article_entities,
+            *successful_membership_entities,
+            *successful_contribution_entities,
         ],
     )
     if not combined_entities:
@@ -862,7 +1457,7 @@ async def _run(  # noqa: C901, PLR0915
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run LLM repo + person + organization agents for repository mode stages.",
+        description="Run repository debug stages (repo/person/org/article/membership/contribution).",
     )
     parser.add_argument("repo", help="GitHub repo as owner/repo or full URL")
     parser.add_argument(
@@ -878,10 +1473,28 @@ def main() -> None:
         help="Per-organization timeout for LLM organization extraction (seconds).",
     )
     parser.add_argument(
+        "--article-timeout-seconds",
+        type=_positive_float,
+        default=180.0,
+        help="Per-article timeout for LLM article extraction (seconds).",
+    )
+    parser.add_argument(
+        "--membership-timeout-seconds",
+        type=_positive_float,
+        default=180.0,
+        help="Per-membership timeout for LLM membership extraction (seconds).",
+    )
+    parser.add_argument(
+        "--contribution-timeout-seconds",
+        type=_positive_float,
+        default=180.0,
+        help="Per-contribution timeout for LLM contribution extraction (seconds).",
+    )
+    parser.add_argument(
         "--max-concurrency",
         type=_positive_int,
         default=3,
-        help="Maximum number of concurrent person/organization calls.",
+        help="Maximum number of concurrent fanout agent calls.",
     )
     parser.add_argument(
         "--heartbeat-seconds",
@@ -895,6 +1508,9 @@ def main() -> None:
             args.repo,
             person_timeout_seconds=args.person_timeout_seconds,
             organization_timeout_seconds=args.organization_timeout_seconds,
+            article_timeout_seconds=args.article_timeout_seconds,
+            membership_timeout_seconds=args.membership_timeout_seconds,
+            contribution_timeout_seconds=args.contribution_timeout_seconds,
             max_concurrency=args.max_concurrency,
             heartbeat_seconds=args.heartbeat_seconds,
         ),

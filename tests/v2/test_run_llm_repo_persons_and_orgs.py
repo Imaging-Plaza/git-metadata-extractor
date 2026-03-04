@@ -13,19 +13,32 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     monkeypatch,
     capsys,
 ) -> None:
+    person_ok_id = "urn:git-metadata-extractor:entity:person-ok-user"
+    person_ok2_id = "urn:git-metadata-extractor:entity:person-ok-user-2"
+
     class _FakeRepositoryAgent:
         async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
             del context, providers
             return AgentResult(
                 data={
-                    "id": "repo-id",
+                    "id": "octo/repo",
                     "type": "schema:SoftwareSourceCode",
                     "shacl": "pulse:RepositoryShape",
+                    "schema:author": ["ok-user", "ghost-author"],
                 },
                 model="openai/gpt-test",
                 provider="openai",
                 tokens_prompt=10,
                 tokens_completion=5,
+                stats={
+                    "derivation": {
+                        "repository_full_name": "octo/repo",
+                        "contributors": [
+                            {"login": "ok-user", "contributions": 5},
+                            {"login": "ok-user-2", "contributions": 2},
+                        ],
+                    },
+                },
             )
 
     class _FakePersonAgent:
@@ -44,8 +57,9 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
             if username == "ok-user":
                 return AgentResult(
                     data={
-                        "id": "ok-user",
+                        "id": person_ok_id,
                         "type": "schema:Person",
+                        "pulse:githubUsername": "ok-user",
                         "org:hasMembership": [
                             "ok-user_org-owner",
                             "ok-user_org-timeout",
@@ -57,6 +71,42 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
                     provider="openai",
                     tokens_prompt=20,
                     tokens_completion=8,
+                    stats={
+                        "derivation": {
+                            "person_id": person_ok_id,
+                            "affiliation_names": ["org-owner"],
+                            "orcid_affiliations": [
+                                {
+                                    "organization": "org-owner",
+                                    "role": "Research Engineer",
+                                    "start_date": "2020-01-01",
+                                    "end_date": None,
+                                },
+                            ],
+                        },
+                    },
+                )
+            if username == "ok-user-2":
+                return AgentResult(
+                    data={
+                        "id": person_ok2_id,
+                        "type": "schema:Person",
+                        "pulse:githubUsername": "ok-user-2",
+                        "org:hasMembership": [
+                            "ok-user-2_org-success",
+                        ],
+                    },
+                    model="openai/gpt-test",
+                    provider="openai",
+                    tokens_prompt=19,
+                    tokens_completion=7,
+                    stats={
+                        "derivation": {
+                            "person_id": person_ok2_id,
+                            "affiliation_names": ["org-success"],
+                            "orcid_affiliations": [],
+                        },
+                    },
                 )
             if username == "timeout-user":
                 await asyncio.sleep(0.05)
@@ -86,6 +136,7 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
                     data={
                         "id": org_name,
                         "type": "org:Organization",
+                        "schema:name": org_name,
                     },
                     model="openai/gpt-test",
                     provider="openai",
@@ -98,6 +149,102 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
                     f"{org_name} — LLM call timed out after {self._timeout:.1f}s",
                 )
             raise RuntimeError(f"{org_name} exploded")
+
+    class _FakeArticleAgent:
+        captured_contexts: list[dict[str, Any]] = []
+
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime
+            self._timeout = llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            _FakeArticleAgent.captured_contexts.append(dict(context))
+            return AgentResult(
+                data={
+                    "id": "10.1000/repo-article",
+                    "type": "schema:ScholarlyArticle",
+                    "schema:author": [person_ok_id],
+                },
+                stats={
+                    "articles": [
+                        {
+                            "id": "10.1000/repo-article-2",
+                            "type": "schema:ScholarlyArticle",
+                            "schema:author": [person_ok2_id],
+                        },
+                    ],
+                },
+            )
+
+    class _FakeMembershipAgent:
+        captured_contexts: list[dict[str, Any]] = []
+
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime
+            self._timeout = llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            _FakeMembershipAgent.captured_contexts.append(dict(context))
+            seed = context["membership_seed"]
+            if seed == person_ok_id:
+                await asyncio.sleep(0.05)
+                raise RuntimeError(
+                    f"{seed} — LLM call timed out after {self._timeout:.1f}s",
+                )
+            return AgentResult(
+                data={
+                    "id": f"{seed}_org-success",
+                    "type": "org:Membership",
+                    "org:organization": "org-success",
+                },
+                stats={"memberships": []},
+            )
+
+    class _FakeContributionAgent:
+        captured_contexts: list[dict[str, Any]] = []
+
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime
+            self._timeout = llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            _FakeContributionAgent.captured_contexts.append(dict(context))
+            return AgentResult(
+                data={
+                    "id": f"{person_ok_id}_octo/repo",
+                    "type": "pulse:Contribution",
+                    "schema:author": person_ok_id,
+                    "pulse:contributionTo": "octo/repo",
+                },
+                stats={
+                    "contributions": [
+                        {
+                            "id": f"{person_ok2_id}_octo/repo",
+                            "type": "pulse:Contribution",
+                            "schema:author": person_ok2_id,
+                            "pulse:contributionTo": "octo/repo",
+                        },
+                    ],
+                },
+            )
 
     async def _fake_gather_context(
         _detected_type: str,
@@ -113,6 +260,7 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
                     },
                     "contributors": [
                         {"login": "ok-user"},
+                        {"login": "ok-user-2"},
                         {"login": "timeout-user"},
                         {"login": "error-user"},
                     ],
@@ -141,12 +289,18 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     monkeypatch.setattr(run_script, "LLMRepositoryAgentV2", _FakeRepositoryAgent)
     monkeypatch.setattr(run_script, "LLMPersonAgentV2", _FakePersonAgent)
     monkeypatch.setattr(run_script, "LLMOrganizationAgentV2", _FakeOrganizationAgent)
+    monkeypatch.setattr(run_script, "LLMArticleAgentV2", _FakeArticleAgent)
+    monkeypatch.setattr(run_script, "LLMMembershipAgentV2", _FakeMembershipAgent)
+    monkeypatch.setattr(run_script, "LLMContributionAgentV2", _FakeContributionAgent)
 
     asyncio.run(
         run_script._run(
             "octo/repo",
             person_timeout_seconds=180.0,
             organization_timeout_seconds=180.0,
+            article_timeout_seconds=180.0,
+            membership_timeout_seconds=180.0,
+            contribution_timeout_seconds=180.0,
             max_concurrency=3,
             heartbeat_seconds=0.01,
         ),
@@ -155,9 +309,24 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     captured = capsys.readouterr()
     stdout = captured.out
 
+    stage_markers = [
+        "[ 1 / 7 ]  Gathering GIMIE context",
+        "[ 2 / 7 ]  Running LLM repository agent",
+        "[ 3 / 7 ]  Running LLM person agent",
+        "[ 4 / 7 ]  Running LLM organization agent",
+        "[ 5 / 7 ]  Running LLM article agent",
+        "[ 6 / 7 ]  Running LLM membership agent",
+        "[ 7 / 7 ]  Running LLM contribution agent",
+    ]
+    stage_positions = [stdout.index(marker) for marker in stage_markers]
+    assert stage_positions == sorted(stage_positions)
+
     assert "heartbeat:" in stdout
-    assert "Person summary: ok=1 timeout=1 error=1" in stdout
+    assert "Person summary: ok=2 timeout=1 error=1" in stdout
     assert "Organization summary: ok=2 timeout=1 error=1" in stdout
+    assert "Article summary: ok=2 timeout=0 error=0" in stdout
+    assert "Membership summary: ok=1 timeout=1 error=0" in stdout
+    assert "Contribution summary: ok=2 timeout=0 error=0" in stdout
     assert "Raw combined JSON-LD (pre-reconciliation):" in stdout
 
     jsonld_section = stdout.split(
@@ -171,6 +340,16 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     assert any(node.get("@type") == "schema:SoftwareSourceCode" for node in graph_nodes)
     assert any(node.get("@type") == "schema:Person" for node in graph_nodes)
     assert any(node.get("@type") == "org:Organization" for node in graph_nodes)
+    assert any(node.get("@type") == "schema:ScholarlyArticle" for node in graph_nodes)
+    assert any(node.get("@type") == "org:Membership" for node in graph_nodes)
+    assert any(node.get("@type") == "pulse:Contribution" for node in graph_nodes)
+
+    repository_node = next(
+        node
+        for node in graph_nodes
+        if node.get("@type") == "schema:SoftwareSourceCode"
+    )
+    assert {"@id": person_ok_id} in repository_node.get("schema:author", [])
 
     assert _FakeOrganizationAgent.captured_contexts
     org_context = _FakeOrganizationAgent.captured_contexts[0]
@@ -182,6 +361,29 @@ def test_run_llm_repo_persons_and_orgs_handles_partial_failures_and_prints_jsonl
     upstream_payload = json.loads(upstream_json)
     assert "repo_agent" in upstream_payload
     assert "person_agent:ok-user" in upstream_payload
+    assert "person_agent:ok-user-2" in upstream_payload
+
+    assert _FakeArticleAgent.captured_contexts
+    article_context = _FakeArticleAgent.captured_contexts[0]
+    assert isinstance(article_context.get("known_persons"), list)
+    assert isinstance(article_context.get("known_organizations"), list)
+    assert isinstance(article_context.get("known_repositories"), list)
+    assert isinstance(article_context.get("pipeline_outputs"), dict)
+    assert "repository_context" in article_context
+
+    assert _FakeMembershipAgent.captured_contexts
+    membership_context = _FakeMembershipAgent.captured_contexts[0]
+    assert membership_context["known_persons"][0]["affiliations"] == ["org-owner"]
+    assert isinstance(membership_context.get("known_organizations"), list)
+    assert isinstance(membership_context.get("pipeline_outputs"), dict)
+
+    assert _FakeContributionAgent.captured_contexts
+    contribution_context = _FakeContributionAgent.captured_contexts[0]
+    assert contribution_context["known_repositories"][0]["contributors"] == [
+        {"login": "ok-user", "contributions": 5},
+        {"login": "ok-user-2", "contributions": 2},
+    ]
+    assert isinstance(contribution_context.get("known_persons"), list)
 
 
 def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_strips_nulls() -> None:

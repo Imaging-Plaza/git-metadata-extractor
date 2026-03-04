@@ -1215,6 +1215,7 @@ def test_class_stage_partial_failures_keep_sibling_and_downstream_execution() ->
 def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
     llm_repo_calls = 0
     llm_org_calls = 0
+    llm_article_calls = 0
     rule_repo_calls = 0
 
     class _LLMRepositoryRunner:
@@ -1238,6 +1239,22 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
             nonlocal llm_org_calls
             llm_org_calls += 1
             return AgentResult(data={"id": f"llm-org:{context['org_name']}"})
+
+    class _LLMArticleRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_article_calls
+            llm_article_calls += 1
+            return AgentResult(
+                data={
+                    "id": f"llm-article:{context.get('article_seed', 'seed')}",
+                    "entity_type": "article",
+                },
+            )
 
     async def _context_gatherer(
         _detected_type: str,
@@ -1275,6 +1292,9 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
         llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMArticleRunner(),
+        llm_membership_agent=_LLMArticleRunner(),
+        llm_contribution_agent=_LLMArticleRunner(),
         agent_runners={
             "repo_agent": _rule_repo_agent,
             "org_agent": _org_agent,
@@ -1298,6 +1318,7 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
 
     assert llm_repo_calls == 1
     assert llm_org_calls == 1
+    assert llm_article_calls == 1
     assert rule_repo_calls == 0
     assert result.agent_results["repo_agent"].data["id"] == "llm-repo-root"
     assert result.agent_results["org_agent:github"].data["id"] == "llm-org:github"
@@ -1306,6 +1327,7 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
 def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode() -> None:
     llm_repo_calls = 0
     llm_org_calls = 0
+    llm_class_calls = 0
     rule_repo_calls = 0
 
     class _LLMRepositoryRunner:
@@ -1329,6 +1351,36 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
             nonlocal llm_org_calls
             llm_org_calls += 1
             return AgentResult(data={"id": f"llm-org:{context['org_name']}"})
+
+    class _LLMClassRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_class_calls
+            llm_class_calls += 1
+            if "article_seed" in context:
+                return AgentResult(
+                    data={
+                        "id": f"llm-article:{context['article_seed']}",
+                        "entity_type": "article",
+                    },
+                )
+            if "membership_seed" in context:
+                return AgentResult(
+                    data={
+                        "id": f"llm-membership:{context['membership_seed']}",
+                        "entity_type": "membership",
+                    },
+                )
+            return AgentResult(
+                data={
+                    "id": f"llm-contribution:{context.get('contribution_seed', 'seed')}",
+                    "entity_type": "contribution",
+                },
+            )
 
     async def _context_gatherer(
         detected_type: str,
@@ -1384,6 +1436,9 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
         llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMClassRunner(),
+        llm_membership_agent=_LLMClassRunner(),
+        llm_contribution_agent=_LLMClassRunner(),
         agent_runners={
             "person_agent": _person_agent,
             "repo_agent": _rule_repo_agent,
@@ -1431,11 +1486,13 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
 
     assert llm_repo_calls == 0
     assert llm_org_calls == 2
+    assert llm_class_calls >= 2
     assert rule_repo_calls == 2
 
 
 def test_execute_uses_llm_organization_runner_for_repository_runtime() -> None:
     llm_org_calls = 0
+    llm_article_calls = 0
     rule_org_calls = 0
 
     class _LLMRepositoryRunner:
@@ -1457,6 +1514,22 @@ def test_execute_uses_llm_organization_runner_for_repository_runtime() -> None:
             nonlocal llm_org_calls
             llm_org_calls += 1
             return AgentResult(data={"id": f"llm-org:{context['org_name']}"})
+
+    class _LLMArticleRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_article_calls
+            llm_article_calls += 1
+            return AgentResult(
+                data={
+                    "id": f"llm-article:{context.get('article_seed', 'seed')}",
+                    "entity_type": "article",
+                },
+            )
 
     async def _context_gatherer(
         _detected_type: str,
@@ -1494,6 +1567,9 @@ def test_execute_uses_llm_organization_runner_for_repository_runtime() -> None:
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
         llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMArticleRunner(),
+        llm_membership_agent=_LLMArticleRunner(),
+        llm_contribution_agent=_LLMArticleRunner(),
         agent_runners={
             "repo_agent": _rule_repo_agent,
             "org_agent": _rule_org_agent,
@@ -1516,8 +1592,213 @@ def test_execute_uses_llm_organization_runner_for_repository_runtime() -> None:
     )
 
     assert llm_org_calls == 1
+    assert llm_article_calls == 1
     assert rule_org_calls == 0
     assert result.agent_results["org_agent:github"].data["id"] == "llm-org:github"
+
+
+def test_execute_uses_llm_class_runners_for_repository_runtime() -> None:
+    llm_article_calls = 0
+    llm_membership_calls = 0
+    llm_contribution_calls = 0
+    rule_class_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            full_name = context.get("full_name", "octocat/Hello-World")
+            return AgentResult(
+                data={
+                    "id": full_name,
+                    "type": "schema:SoftwareSourceCode",
+                    "schema:author": ["alice"],
+                },
+                stats={
+                    "derivation": {
+                        "repository_full_name": full_name,
+                        "contributors": [{"login": "alice", "contributions": 3}],
+                    },
+                },
+            )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username", "alice")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "schema:name": username,
+                    "org:hasMembership": ["alice_github"],
+                },
+                stats={"derivation": {"person_id": username, "affiliation_names": ["github"]}},
+            )
+
+    class _LLMOrganizationRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            org_name = context.get("org_name", "github")
+            return AgentResult(
+                data={
+                    "id": org_name,
+                    "type": "org:Organization",
+                    "schema:name": org_name,
+                },
+            )
+
+    class _LLMArticleRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_article_calls
+            llm_article_calls += 1
+            return AgentResult(
+                data={
+                    "id": "10.1000/llm-article",
+                    "type": "schema:ScholarlyArticle",
+                    "schema:author": [context.get("article_seed", "alice")],
+                },
+                stats={"articles": []},
+            )
+
+    class _LLMMembershipRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_membership_calls
+            llm_membership_calls += 1
+            seed = context.get("membership_seed", "alice")
+            return AgentResult(
+                data={
+                    "id": f"{seed}_github",
+                    "type": "org:Membership",
+                    "org:organization": "github",
+                },
+                stats={"memberships": []},
+            )
+
+    class _LLMContributionRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_contribution_calls
+            llm_contribution_calls += 1
+            seed = context.get("contribution_seed", "octocat/Hello-World")
+            return AgentResult(
+                data={
+                    "id": f"alice_{seed}",
+                    "type": "pulse:Contribution",
+                    "schema:author": "alice",
+                    "pulse:contributionTo": seed,
+                },
+                stats={"contributions": []},
+            )
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "rule-repo-root"})
+
+    async def _rule_person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["username"]})
+
+    async def _rule_org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"]})
+
+    async def _rule_class_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_class_calls
+        rule_class_calls += 1
+        return AgentResult(data={"id": "rule-class"})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMArticleRunner(),
+        llm_membership_agent=_LLMMembershipRunner(),
+        llm_contribution_agent=_LLMContributionRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "person_agent": _rule_person_agent,
+            "org_agent": _rule_org_agent,
+            "article_agent": _rule_class_agent,
+            "membership_agent": _rule_class_agent,
+            "contribution_agent": _rule_class_agent,
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={
+                "url_info": _classification(),
+                "source_url": "https://github.com/octocat/Hello-World",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+
+    assert llm_article_calls == 1
+    assert llm_membership_calls == 1
+    assert llm_contribution_calls == 1
+    assert rule_class_calls == 0
+    assert "article_agent:octocat/Hello-World" in result.agent_results
+    assert "membership_agent:alice" in result.agent_results
+    assert "contribution_agent:octocat/Hello-World" in result.agent_results
 
 
 def test_execute_hard_fails_when_llm_repository_runner_errors() -> None:

@@ -16,6 +16,9 @@ from src.v2.agents import (
     AgentRuntimeRegistry,
     ArticleAgentV2,
     ContributionAgentV2,
+    LLMArticleAgentV2,
+    LLMContributionAgentV2,
+    LLMMembershipAgentV2,
     LLMOrganizationAgentV2,
     LLMPersonAgentV2,
     LLMRepositoryAgentV2,
@@ -158,6 +161,9 @@ class PipelineOrchestrator:
         llm_repository_agent: RuntimeAgent | None = None,
         llm_person_agent: RuntimeAgent | None = None,
         llm_organization_agent: RuntimeAgent | None = None,
+        llm_article_agent: RuntimeAgent | None = None,
+        llm_membership_agent: RuntimeAgent | None = None,
+        llm_contribution_agent: RuntimeAgent | None = None,
         agent_registry: AgentRuntimeRegistry | None = None,
         agent_runners: dict[str, AgentRunner] | None = None,
         retry_max_retries: int = 3,
@@ -179,6 +185,9 @@ class PipelineOrchestrator:
         self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
         self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
         self._llm_organization_agent = llm_organization_agent or LLMOrganizationAgentV2()
+        self._llm_article_agent = llm_article_agent or LLMArticleAgentV2()
+        self._llm_membership_agent = llm_membership_agent or LLMMembershipAgentV2()
+        self._llm_contribution_agent = llm_contribution_agent or LLMContributionAgentV2()
 
         self._rule_based_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
@@ -196,6 +205,9 @@ class PipelineOrchestrator:
             llm_repository_agent=self._llm_repository_agent,
             llm_person_agent=self._llm_person_agent,
             llm_organization_agent=self._llm_organization_agent,
+            llm_article_agent=self._llm_article_agent,
+            llm_membership_agent=self._llm_membership_agent,
+            llm_contribution_agent=self._llm_contribution_agent,
         )
         if agent_registry and agent_runners:
             for stage_key, runner in agent_runners.items():

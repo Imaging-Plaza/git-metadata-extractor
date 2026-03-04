@@ -418,12 +418,24 @@ def test_extract_uses_llm_runtime_default_when_configured(
                 },
             )
 
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
     app = _build_test_app()
     app.state.v2_orchestrator = PipelineOrchestrator(
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
         llm_person_agent=_LLMPersonRunner(),
         llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
         agent_runners={
             "repo_agent": _rule_repo_agent,
             "person_agent": _person_agent,

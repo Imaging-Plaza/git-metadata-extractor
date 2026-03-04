@@ -158,9 +158,15 @@ v2-run-repo-agent REPO:
 v2-run-repo-and-persons REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_and_persons.py {{REPO}}
 
-# Run LLM repository + person + organization agents (sequential stage debug)
+# Run full 7-stage LLM repository debug pipeline
+# (context -> repo -> persons -> orgs -> articles -> memberships -> contributions)
 # Usage: just v2-run-repo-persons-and-orgs sdsc-ordes/gimie
 v2-run-repo-persons-and-orgs REPO:
+    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}}
+
+# Alias for the full 7-stage LLM repository debug pipeline
+# Usage: just v2-run-repo-full-llm sdsc-ordes/gimie
+v2-run-repo-full-llm REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}}
 
 # ============================================================================
