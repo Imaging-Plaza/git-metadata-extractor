@@ -30,10 +30,15 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - Repository identifier DOI/citation is stored as `schema:citation` (not `schema:identifier`) in both `identifiers` and `idSource`. Articles continue to use `schema:identifier` for their canonical identifier.
 - In v2 repository-mode extracts, GitHub traversal is direct-only (source repo + direct owner + direct contributors). Keep ORCID/Infoscience/ROR enrichment enabled for discovered person/org entities.
 - In v2 agent payloads, `identifiers.uuid` must be generated with `src/v2/agents/models.py::generate_uuid()` (UUIDv4 only); avoid deterministic UUIDv5 emitters for agent outputs.
-- LLM agent tools live in `src/v2/agents/llm/agent_tools/`. Each file exposes a factory function that captures a provider at construction time and returns a named pydantic-ai `Tool`. Agents build tools at `run()` time and pass them as `tools=[...]` to `V2LLMRuntime.run_json_prompt`. Current tools:
+- LLM agent tools live in `src/v2/agents/llm/agent_tools/`. Tool modules expose either static `Tool` instances or provider-capturing factory functions. Agents build/select tools at `run()` time and pass them as `tools=[...]` to `V2LLMRuntime.run_json_prompt`. Current tools:
   - `list_disciplines_tool` (`disciplines.py`) — static tool, returns the full `DisciplineV2` Wikidata-ID-to-name mapping.
   - `make_orcid_person_tool(orcid_provider)` (`orcid_person.py`) — factory; returns `get_orcid_record` tool that fetches name, employment, education, and affiliations by ORCID ID.
   - `make_infoscience_search_tool(infoscience_provider)` (`infoscience_search.py`) — factory; returns `search_infoscience_person` tool that searches Infoscience for person records by name/query.
+  - `make_ror_organization_search_tool(ror_provider)` (`ror_organization.py`) — factory; returns `search_ror_organization` for organization lookup by name.
+  - `make_infoscience_orgunit_tool(infoscience_provider)` (`infoscience_orgunit.py`) — factory; returns `search_infoscience_orgunit` for organization-unit lookup.
+  - `generate_uuid_v4_tool` / `generate_uuid_v4_batch_tool` (`uuid.py`) — static tools for UUIDv4 generation in single or batch mode.
+  - `fetch_link_content_via_selenium_tool` (`selenium_fetch.py`) — static Selenium-backed fetch tool returning rendered page text/title/final URL.
+- `LLMLinkVeracityAgentV2` (`src/v2/agents/llm/link_veracity/agent.py`) runs independent yes/no relationship checks per link and uses `fetch_link_content_via_selenium_tool` to ground verdicts in fetched page content.
 - `LLMRepositoryAgentV2` is a **single-call agent** (one pydantic-ai `Agent` run). V1 used two sequential LLM calls: a general extraction agent plus a dedicated classifier for `repositoryType`/`discipline`. The single-call approach tends to leave `pulse:discipline` null; a separate discipline sub-agent (wave 2) would improve classification reliability.
 - `LLMPersonAgentV2` is a **single-call agent** that accepts any combination of person identifiers (GitHub username, ORCID, Infoscience ID, or display name). It optionally fetches the GitHub profile when a username is available, then builds live tool closures over the provided `ORCIDProvider` and `InfoscienceProvider` (omitted if the respective provider is `None`) and delegates to `V2LLMRuntime`. Top-level `None` optional fields are stripped from the output before strict validation to satisfy SHACL absent-field requirements.
 - `LLMPersonAgentV2` enforces a hard per-call timeout via `llm_call_timeout_seconds` (default `180.0`) around the runtime call (`asyncio.wait_for(...)`) and raises `LLMRuntimeError` with identifier+seconds when exceeded.
@@ -78,6 +83,9 @@ Rules:
 - Run API:
   - `just serve-dev`
   - `just serve`
+- LLM debug pipelines:
+  - `just v2-run-repo-persons-and-orgs <owner/repo>` (full 7-stage LLM repo pipeline)
+  - `just v2-run-repo-full-llm <owner/repo>` (7-stage pipeline plus final `--verify-links` link-veracity pass)
 - Tests:
   - `just test`
   - `just test-file tests/<file>.py`

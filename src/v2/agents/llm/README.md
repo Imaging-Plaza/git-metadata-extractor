@@ -1,6 +1,6 @@
 # LLM Agents — Developer Guide
 
-This guide explains the architecture of the `src/v2/agents/llm/` sub-package and walks through the exact steps required to add a new LLM-backed agent. Use the existing `LLMRepositoryAgentV2` and `LLMPersonAgentV2` as reference implementations.
+This guide explains the architecture of the `src/v2/agents/llm/` sub-package and walks through the exact steps required to add a new LLM-backed agent. Use the existing repository/person/organization/article/membership/contribution agents as reference implementations.
 
 ---
 
@@ -8,28 +8,25 @@ This guide explains the architecture of the `src/v2/agents/llm/` sub-package and
 
 ```
 src/v2/agents/llm/
-├── __init__.py                  # Public exports (LLMRepositoryAgentV2, LLMPersonAgentV2)
+├── __init__.py                  # Public exports for all LLM agents
 ├── _loader.py                   # load_prompt() — importlib.resources wrapper
 ├── prompt_context.py            # Optional runtime prompt append blocks
 ├── agent_tools/
 │   ├── __init__.py
 │   ├── disciplines.py           # Static tool: list_disciplines_tool
+│   ├── infoscience_orgunit.py   # Factory: make_infoscience_orgunit_tool(provider)
 │   ├── infoscience_search.py    # Factory: make_infoscience_search_tool(provider)
-│   └── orcid_person.py          # Factory: make_orcid_person_tool(provider)
-├── repository/
-│   ├── __init__.py              # Exports LLMRepositoryAgentV2
-│   ├── agent.py                 # LLMRepositoryAgentV2 class
-│   └── prompts/
-│       ├── __init__.py          # Empty marker (required for importlib.resources)
-│       ├── system_prompt.md
-│       └── user_prompt.md
-└── person/
-    ├── __init__.py              # Exports LLMPersonAgentV2
-    ├── agent.py                 # LLMPersonAgentV2 class
-    └── prompts/
-        ├── __init__.py          # Empty marker (required for importlib.resources)
-        ├── system_prompt.md
-        └── user_prompt.md
+│   ├── orcid_person.py          # Factory: make_orcid_person_tool(provider)
+│   ├── ror_organization.py      # Factory: make_ror_organization_search_tool(provider)
+│   ├── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
+│   └── uuid.py                  # Static tools: generate_uuid_v4_tool, generate_uuid_v4_batch_tool
+├── repository/                  # LLMRepositoryAgentV2 (+ prompts)
+├── person/                      # LLMPersonAgentV2 (+ prompts)
+├── organization/                # LLMOrganizationAgentV2 (+ prompts)
+├── article/                     # LLMArticleAgentV2 (+ prompts)
+├── membership/                  # LLMMembershipAgentV2 (+ prompts)
+├── contribution/                # LLMContributionAgentV2 (+ prompts)
+└── link_veracity/               # LLMLinkVeracityAgentV2 (+ prompts)
 ```
 
 ---
@@ -161,8 +158,12 @@ if providers.my_provider is not None:
 | File | Export | Type | Used by |
 |---|---|---|---|
 | `agent_tools/disciplines.py` | `list_disciplines_tool` | Static | `LLMRepositoryAgentV2` |
+| `agent_tools/ror_organization.py` | `make_ror_organization_search_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
+| `agent_tools/infoscience_orgunit.py` | `make_infoscience_orgunit_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/infoscience_search.py` | `make_infoscience_search_tool(provider)` | Factory | `LLMPersonAgentV2` |
 | `agent_tools/orcid_person.py` | `make_orcid_person_tool(provider)` | Factory | `LLMPersonAgentV2` |
+| `agent_tools/uuid.py` | `generate_uuid_v4_tool`, `generate_uuid_v4_batch_tool` | Static | `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2` |
+| `agent_tools/selenium_fetch.py` | `fetch_link_content_via_selenium_tool` | Static | `LLMRepositoryAgentV2`, `LLMPersonAgentV2`, `LLMOrganizationAgentV2`, `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2`, `LLMLinkVeracityAgentV2` |
 
 ---
 
@@ -506,7 +507,7 @@ Agents should apply `context.get("agent_overrides")` after the LLM call, before 
 
 ### Runtime Prompt Context Append Blocks
 
-Both `LLMRepositoryAgentV2` and `LLMPersonAgentV2` support optional prompt append sections via `append_runtime_prompt_context(...)`:
+All current v2 LLM agents (including class agents and `LLMLinkVeracityAgentV2`) support optional prompt append sections via `append_runtime_prompt_context(...)`:
 
 - `upstream_stage_outputs_json` (string): appended under `## Upstream Stage Outputs (JSON)`.
 - `user_prompt_appendix` (string): appended under `## Additional Context (verbatim text)`.
@@ -515,7 +516,7 @@ These values are treated as raw strings and are not parsed by the helper.
 
 ### Concurrency
 
-`PipelineOrchestrator` limits fanout via `max_concurrent_agents` (default 3). A fresh `asyncio.Semaphore` wraps each item inside `_execute_stage`. The standalone script `scripts/v2/run_llm_repo_and_persons.py` maintains its own `asyncio.Semaphore(3)` because it calls agents directly without going through the orchestrator.
+`PipelineOrchestrator` limits fanout via `max_concurrent_agents` (default 3). A fresh `asyncio.Semaphore` wraps each item inside `_execute_stage`. The standalone script `scripts/v2/run_llm_repo_persons_and_orgs.py` also manages fanout concurrency directly and optionally runs a final independent link-veracity pass (`--verify-links`).
 
 Prompt propagation in orchestrated runs is configurable:
 

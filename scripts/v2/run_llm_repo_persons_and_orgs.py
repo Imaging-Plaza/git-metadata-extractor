@@ -12,9 +12,10 @@ Executes repository-oriented stages in order:
 
 Usage:
     just v2-run-repo-persons-and-orgs sdsc-ordes/gimie
-    just v2-run-repo-full-llm sdsc-ordes/gimie
+    just v2-run-repo-full-llm sdsc-ordes/gimie  # includes --verify-links
     python scripts/v2/run_llm_repo_persons_and_orgs.py sdsc-ordes/gimie
     python scripts/v2/run_llm_repo_persons_and_orgs.py https://github.com/sdsc-ordes/gimie
+    python scripts/v2/run_llm_repo_persons_and_orgs.py sdsc-ordes/gimie --verify-links
 """
 from __future__ import annotations
 
@@ -26,9 +27,11 @@ from copy import deepcopy
 from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
+from urllib.parse import urlparse
 
 from src.v2.agents.llm.article import LLMArticleAgentV2
 from src.v2.agents.llm.contribution import LLMContributionAgentV2
+from src.v2.agents.llm.link_veracity import LLMLinkVeracityAgentV2
 from src.v2.agents.llm.membership import LLMMembershipAgentV2
 from src.v2.agents.llm.organization import LLMOrganizationAgentV2
 from src.v2.agents.llm.person import LLMPersonAgentV2
@@ -53,6 +56,7 @@ _STAGE_ORG_AGENT = "org_agent"
 _STAGE_ARTICLE_AGENT = "article_agent"
 _STAGE_MEMBERSHIP_AGENT = "membership_agent"
 _STAGE_CONTRIBUTION_AGENT = "contribution_agent"
+_HTTP_SCHEMES = {"http", "https"}
 
 
 @dataclass(slots=True)
@@ -798,6 +802,103 @@ def _extract_result_entities(
     return entities
 
 
+def _is_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in _HTTP_SCHEMES and bool(parsed.netloc)
+
+
+def _collect_unique_http_link_contexts(
+    jsonld_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    graph = jsonld_payload.get("@graph")
+    if not isinstance(graph, list):
+        return []
+
+    link_contexts: dict[str, dict[str, Any]] = {}
+
+    def _record_link(
+        *,
+        link: str,
+        source_entity_id: str | None,
+        predicate: str | None,
+    ) -> None:
+        normalized_link = link.strip()
+        if not normalized_link or not _is_http_url(normalized_link):
+            return
+
+        context = link_contexts.setdefault(
+            normalized_link,
+            {
+                "link": normalized_link,
+                "source_entity_id": source_entity_id,
+                "predicate": predicate,
+                "relationships": [],
+            },
+        )
+        relationship = {
+            "source_entity_id": source_entity_id,
+            "predicate": predicate,
+        }
+        if relationship not in context["relationships"]:
+            context["relationships"].append(relationship)
+
+    def _walk(
+        value: Any,
+        *,
+        source_entity_id: str | None,
+        predicate: str | None,
+    ) -> None:
+        if isinstance(value, str):
+            _record_link(
+                link=value,
+                source_entity_id=source_entity_id,
+                predicate=predicate,
+            )
+            return
+
+        if isinstance(value, dict):
+            at_id = value.get("@id")
+            if isinstance(at_id, str):
+                _record_link(
+                    link=at_id,
+                    source_entity_id=source_entity_id,
+                    predicate=predicate,
+                )
+            for key, nested in value.items():
+                if key == "@id":
+                    continue
+                next_predicate = predicate if predicate else key
+                _walk(
+                    nested,
+                    source_entity_id=source_entity_id,
+                    predicate=next_predicate,
+                )
+            return
+
+        if isinstance(value, list):
+            for nested in value:
+                _walk(
+                    nested,
+                    source_entity_id=source_entity_id,
+                    predicate=predicate,
+                )
+
+    for node in graph:
+        if not isinstance(node, dict):
+            continue
+        source_entity_id = node.get("@id") if isinstance(node.get("@id"), str) else None
+        for key, value in node.items():
+            if key == "@id":
+                continue
+            _walk(
+                value,
+                source_entity_id=source_entity_id,
+                predicate=key,
+            )
+
+    return [link_contexts[link] for link in sorted(link_contexts)]
+
+
 async def _run_fanout_stage(
     *,
     subjects: list[str],
@@ -901,13 +1002,16 @@ def _positive_int(raw_value: str) -> int:
 async def _run(  # noqa: C901, PLR0915
     repo: str,
     *,
-    person_timeout_seconds: float,
-    organization_timeout_seconds: float,
-    article_timeout_seconds: float,
-    membership_timeout_seconds: float,
-    contribution_timeout_seconds: float,
-    max_concurrency: int,
-    heartbeat_seconds: float,
+    person_timeout_seconds: float = 180.0,
+    organization_timeout_seconds: float = 180.0,
+    article_timeout_seconds: float = 180.0,
+    membership_timeout_seconds: float = 180.0,
+    contribution_timeout_seconds: float = 180.0,
+    max_concurrency: int = 3,
+    heartbeat_seconds: float = 15.0,
+    verify_links: bool = False,
+    link_verification_timeout_seconds: float = 120.0,
+    link_verification_max_concurrency: int | None = None,
 ) -> None:
     if "/" in repo and not repo.startswith("http") and "github.com" not in repo:
         repo = f"github.com/{repo}"
@@ -1454,6 +1558,83 @@ async def _run(  # noqa: C901, PLR0915
     print(_pj(combined_jsonld))
     print(_SEP)
 
+    if not verify_links:
+        return
+
+    link_contexts = _collect_unique_http_link_contexts(combined_jsonld)
+    print(f"{_SEP}")
+    print(
+        "[ links ]  Verifying unique http(s) links via LLM + Selenium tool for "
+        f"{len(link_contexts)} link(s)",
+    )
+
+    if not link_contexts:
+        print("  No http(s) links found in combined JSON-LD graph.")
+        print(_SEP)
+        return
+
+    verifier = LLMLinkVeracityAgentV2(
+        llm_call_timeout_seconds=link_verification_timeout_seconds,
+    )
+    verifier_context_by_link = {
+        context["link"]: {
+            **context,
+            "source_url": url_info.normalized_url,
+        }
+        for context in link_contexts
+        if isinstance(context.get("link"), str)
+    }
+    links = sorted(verifier_context_by_link)
+    verification_concurrency = (
+        link_verification_max_concurrency
+        if isinstance(link_verification_max_concurrency, int)
+        and link_verification_max_concurrency > 0
+        else max_concurrency
+    )
+
+    async def _run_link_verification(link: str) -> AgentResult:
+        return await verifier.run(verifier_context_by_link[link], providers)
+
+    verification_outcomes = await _run_fanout_stage(
+        subjects=links,
+        running_label="link verification",
+        max_concurrency=verification_concurrency,
+        heartbeat_seconds=heartbeat_seconds,
+        run_subject=_run_link_verification,
+    )
+
+    verification_yes = 0
+    verification_no = 0
+    for outcome in verification_outcomes:
+        print(_SEP_THIN)
+        if outcome.status != "ok" or outcome.result is None:
+            verification_no += 1
+            print(f"  Link   : {outcome.subject}")
+            print(f"  Verdict: no (execution {outcome.status})")
+            print(f"  Error  : {outcome.error}")
+            continue
+
+        payload = outcome.result.data
+        verdict = bool(payload.get("relationship_supported"))
+        if verdict:
+            verification_yes += 1
+        else:
+            verification_no += 1
+        print(f"  Link   : {outcome.subject}")
+        print(f"  Verdict: {'yes' if verdict else 'no'}")
+        summary = payload.get("relationship_summary")
+        if isinstance(summary, str) and summary:
+            print(f"  Why    : {summary}")
+
+    timeout_count = sum(1 for outcome in verification_outcomes if outcome.status == "timeout")
+    error_count = sum(1 for outcome in verification_outcomes if outcome.status == "error")
+    print(_SEP_THIN)
+    print(
+        "Link verification summary: "
+        f"yes={verification_yes} no={verification_no} timeout={timeout_count} error={error_count}",
+    )
+    print(_SEP)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -1502,6 +1683,26 @@ def main() -> None:
         default=15.0,
         help="How often to print fanout heartbeat while waiting for tasks.",
     )
+    parser.add_argument(
+        "--verify-links",
+        action="store_true",
+        help=(
+            "Run independent link-veracity checks over unique http(s) links in the final "
+            "combined JSON-LD using Selenium-backed content retrieval."
+        ),
+    )
+    parser.add_argument(
+        "--link-verification-timeout-seconds",
+        type=_positive_float,
+        default=120.0,
+        help="Per-link timeout for LLM link veracity checks (seconds).",
+    )
+    parser.add_argument(
+        "--link-verification-max-concurrency",
+        type=_positive_int,
+        default=3,
+        help="Maximum number of concurrent link-verification agent calls.",
+    )
     args = parser.parse_args()
     asyncio.run(
         _run(
@@ -1513,6 +1714,9 @@ def main() -> None:
             contribution_timeout_seconds=args.contribution_timeout_seconds,
             max_concurrency=args.max_concurrency,
             heartbeat_seconds=args.heartbeat_seconds,
+            verify_links=args.verify_links,
+            link_verification_timeout_seconds=args.link_verification_timeout_seconds,
+            link_verification_max_concurrency=args.link_verification_max_concurrency,
         ),
     )
 

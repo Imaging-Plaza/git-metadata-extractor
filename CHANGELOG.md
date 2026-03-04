@@ -12,6 +12,14 @@ All notable changes to this project will be documented in this file.
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
 
 ### Added
+- Added full 7-stage LLM repository debug flow in `scripts/v2/run_llm_repo_persons_and_orgs.py`:
+  `context_gather -> repo_agent -> person_agents -> org_agents -> article_agents -> membership_agents -> contribution_agents`,
+  with deterministic class-stage seed fanout, partial-failure tolerance, stage summaries, and final combined JSON-LD aggregation including class entities from both primary `result.data` and stage list stats.
+- Added independent `LLMLinkVeracityAgentV2` (`src/v2/agents/llm/link_veracity/agent.py`) to verify extracted link relationships with boolean verdicts using Selenium-backed content retrieval.
+- Added shared LLM agent tools:
+  - `generate_uuid_v4_tool` / `generate_uuid_v4_batch_tool` (`src/v2/agents/llm/agent_tools/uuid.py`)
+  - `fetch_link_content_via_selenium_tool` (`src/v2/agents/llm/agent_tools/selenium_fetch.py`)
+  and wired Selenium tool availability into repository/person/organization/article/membership/contribution LLM agents.
 - Added `LLMPersonAgentV2` (`src/v2/agents/llm/person/agent.py`) as the LLM-backed person extraction agent. Uses the same runtime infrastructure as `LLMRepositoryAgentV2` but accepts any combination of identifiers (GitHub username, ORCID, Infoscience ID, or name) and routes tool calls through provider-aware factories built at `run()` time.
 - Added `make_orcid_person_tool` factory (`src/v2/agents/llm/agent_tools/orcid_person.py`): creates a pydantic-ai `Tool` named `get_orcid_record` that fetches a full ORCID profile (name, employment, education, affiliations) by ORCID identifier. Tool closure captures the `ORCIDProvider` instance at construction time.
 - Added `make_infoscience_search_tool` factory (`src/v2/agents/llm/agent_tools/infoscience_search.py`): creates a pydantic-ai `Tool` named `search_infoscience_person` that queries Infoscience for person records by name or query string. Returns ranked results with `infosciencePersonIdentifier`, `name`, `orcid`, `affiliations`, `profileUrl`, and `score`.
@@ -43,6 +51,7 @@ All notable changes to this project will be documented in this file.
   - organization Infoscience identifiers normalize from URL input to UUID tokens.
 
 ### Changed
+- Changed `just v2-run-repo-full-llm` to run the full 7-stage script with `--verify-links`, so the command now appends end-of-run link-veracity checks by default.
 - Changed local test workflows in `justfile` to a fast-default model: `just test` now runs `--testmon --no-cov -n auto --dist=loadfile`, while `just test-full` and `just test-coverage` provide deterministic full-suite and coverage-focused runs.
 - Changed test invocation guidance and automation to prefer `.venv/bin/python -m pytest` (instead of relying on ad-hoc `PYTHONPATH`/global `pytest`) across `just` recipes, docs, and CI test steps.
 - Changed v2 test isolation for safe parallel execution by resetting shared `src.api.app.state` fields between tests, using per-test DB paths (`V2_GRAPH_DB_PATH`/`CACHE_DB_PATH`), and hardening cache-singleton cleanup in v1 cache tests.

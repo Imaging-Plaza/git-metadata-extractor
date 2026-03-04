@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.infoscience_search import make_infoscience_search_tool
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
+from src.v2.agents.llm.agent_tools.selenium_fetch import (
+    fetch_link_content_via_selenium_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.generated.entities import PersonModel
@@ -311,7 +314,7 @@ class LLMPersonAgentV2:
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         # Build provider-dependent tools only when providers are available.
-        tools = []
+        tools = [fetch_link_content_via_selenium_tool]
         if providers.infoscience is not None:
             tools.append(make_infoscience_search_tool(providers.infoscience))
         if providers.orcid is not None:

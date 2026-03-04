@@ -146,6 +146,7 @@ def test_llm_contribution_agent_records_strict_schema_warnings() -> None:
 
 def test_llm_contribution_agent_appends_runtime_prompt_context_blocks() -> None:
     captured_user_prompts: list[str] = []
+    captured_tool_names: list[str] = []
 
     class _CapturingRuntime:
         async def run_json_prompt(
@@ -156,8 +157,9 @@ def test_llm_contribution_agent_appends_runtime_prompt_context_blocks() -> None:
             output_type: Any = None,
             tools: Any = None,
         ) -> LLMRuntimeResult:
-            del system_prompt, output_type, tools
+            del system_prompt, output_type
             captured_user_prompts.append(user_prompt)
+            captured_tool_names.extend(getattr(tool, "name", "") for tool in (tools or []))
             return LLMRuntimeResult(
                 payload=_valid_contribution_payload(),
                 model="openai/gpt-test",
@@ -185,3 +187,5 @@ def test_llm_contribution_agent_appends_runtime_prompt_context_blocks() -> None:
     assert upstream_json in prompt
     assert "## Additional Context (verbatim text)" in prompt
     assert prompt_appendix in prompt
+    assert "generate_uuid_v4" in captured_tool_names
+    assert "fetch_link_content_via_selenium" in captured_tool_names

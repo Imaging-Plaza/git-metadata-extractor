@@ -9,6 +9,9 @@ from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.disciplines import list_disciplines_tool
+from src.v2.agents.llm.agent_tools.selenium_fetch import (
+    fetch_link_content_via_selenium_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.generated.agent_entities import AgentRepositoryShape
@@ -172,7 +175,8 @@ class LLMRepositoryAgentV2:
         }
         if isinstance(gimie_jsonld, dict) and gimie_jsonld:
             llm_input["gimie_jsonld"] = json.dumps(
-                gimie_jsonld, ensure_ascii=True
+                gimie_jsonld,
+                ensure_ascii=True,
             )[:GIMIE_JSONLD_MAX_CHARS]
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
@@ -183,7 +187,7 @@ class LLMRepositoryAgentV2:
                 system_prompt=_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 output_type=AgentRepositoryShape,
-                tools=[list_disciplines_tool],
+                tools=[list_disciplines_tool, fetch_link_content_via_selenium_tool],
             )
         except LLMRuntimeError:
             raise

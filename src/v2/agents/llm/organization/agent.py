@@ -15,6 +15,9 @@ from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
 from src.v2.agents.llm.agent_tools.ror_organization import (
     make_ror_organization_search_tool,
 )
+from src.v2.agents.llm.agent_tools.selenium_fetch import (
+    fetch_link_content_via_selenium_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.generated.agent_entities import AgentOrganizationShape
@@ -169,7 +172,7 @@ class LLMOrganizationAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
-        tools = []
+        tools = [fetch_link_content_via_selenium_tool]
         if providers.ror is not None:
             tools.append(make_ror_organization_search_tool(providers.ror))
         if providers.infoscience is not None:

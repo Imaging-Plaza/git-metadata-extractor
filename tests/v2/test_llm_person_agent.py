@@ -202,6 +202,7 @@ def test_llm_person_agent_builds_tools_from_providers() -> None:
     )
 
     tool_names = [getattr(tool, "name", None) for tool in captured_tools]
+    assert "fetch_link_content_via_selenium" in tool_names
     assert "search_infoscience_person" in tool_names
     assert "get_orcid_record" in tool_names
 
@@ -249,8 +250,8 @@ def test_llm_person_agent_appends_runtime_prompt_context_blocks() -> None:
     assert prompt_appendix in prompt
 
 
-def test_llm_person_agent_no_tools_without_providers() -> None:
-    """When only GitHub provider is present, no enrichment tools are passed."""
+def test_llm_person_agent_exposes_selenium_tool_without_optional_providers() -> None:
+    """When only GitHub provider is present, Selenium fetch tool remains available."""
 
     captured_tools: list[Any] = []
 
@@ -279,7 +280,8 @@ def test_llm_person_agent_no_tools_without_providers() -> None:
         ),
     )
 
-    assert captured_tools == []
+    tool_names = [getattr(tool, "name", None) for tool in captured_tools]
+    assert tool_names == ["fetch_link_content_via_selenium"]
 
 
 def test_llm_person_agent_works_with_orcid_only_context() -> None:

@@ -164,10 +164,10 @@ v2-run-repo-and-persons REPO:
 v2-run-repo-persons-and-orgs REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}}
 
-# Alias for the full 7-stage LLM repository debug pipeline
+# Alias for the full 7-stage LLM repository debug pipeline + link verification
 # Usage: just v2-run-repo-full-llm sdsc-ordes/gimie
 v2-run-repo-full-llm REPO:
-    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}}
+    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}} --verify-links
 
 # ============================================================================
 # Cache Management (via API)

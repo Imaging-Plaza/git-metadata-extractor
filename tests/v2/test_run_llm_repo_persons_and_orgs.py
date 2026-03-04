@@ -455,3 +455,178 @@ def test_normalize_entities_for_debug_jsonld_resolves_authors_merges_orgs_and_st
         "Universite de Lausanne",
         "Université de Lausanne",
     ]
+
+
+def test_run_llm_repo_persons_and_orgs_can_verify_links_with_independent_agent(
+    monkeypatch,
+    capsys,
+) -> None:
+    class _FakeRepositoryAgent:
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del context, providers
+            return AgentResult(
+                data={
+                    "id": "octo/repo",
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "schema:name": "octo/repo",
+                    "schema:author": ["ok-user"],
+                    "schema:license": "https://spdx.org/licenses/MIT.html",
+                    "pulse:githubRepositoryHandle": "octo/repo",
+                },
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    class _FakePersonAgent:
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime, llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            username = context["username"]
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "schema:name": username,
+                    "pulse:githubUsername": username,
+                    "schema:url": "https://github.com/ok-user",
+                },
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    class _FakeOrganizationAgent:
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime, llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            return AgentResult(
+                data={
+                    "id": context["org_name"],
+                    "type": "org:Organization",
+                    "schema:name": context["org_name"],
+                    "schema:identifier": "https://ror.org/02s376052",
+                },
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    class _NoopClassAgent:
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime, llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del context, providers
+            return AgentResult(data={}, model="openai/gpt-test", provider="openai")
+
+    class _FakeLinkVeracityAgent:
+        captured_contexts: list[dict[str, Any]] = []
+
+        def __init__(
+            self,
+            *,
+            llm_runtime: Any | None = None,
+            llm_call_timeout_seconds: float = 180.0,
+        ) -> None:
+            del llm_runtime, llm_call_timeout_seconds
+
+        async def run(self, context: dict[str, Any], providers: ProviderSet) -> AgentResult:
+            del providers
+            _FakeLinkVeracityAgent.captured_contexts.append(dict(context))
+            link = context["link"]
+            return AgentResult(
+                data={
+                    "link": link,
+                    "relationship_supported": link.startswith("https://"),
+                    "relationship_summary": "verified",
+                    "fetched_successfully": True,
+                },
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    async def _fake_gather_context(
+        _detected_type: str,
+        _url_info: Any,
+        _providers: ProviderSet,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            context={
+                "repository": {
+                    "metadata": {
+                        "full_name": "octo/repo",
+                        "owner": {"login": "org-owner", "type": "Organization"},
+                    },
+                    "contributors": [{"login": "ok-user"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+            warnings=[],
+        )
+
+    monkeypatch.setattr(
+        run_script,
+        "classify_github_url",
+        lambda _repo: SimpleNamespace(
+            owner="octo",
+            repo="repo",
+            normalized_url="https://github.com/octo/repo",
+        ),
+    )
+    monkeypatch.setattr(
+        run_script,
+        "_default_provider_set",
+        lambda *, use_mock_providers: ProviderSet(github=object()),
+    )
+    monkeypatch.setattr(run_script, "gather_context", _fake_gather_context)
+    monkeypatch.setattr(run_script, "LLMRepositoryAgentV2", _FakeRepositoryAgent)
+    monkeypatch.setattr(run_script, "LLMPersonAgentV2", _FakePersonAgent)
+    monkeypatch.setattr(run_script, "LLMOrganizationAgentV2", _FakeOrganizationAgent)
+    monkeypatch.setattr(run_script, "LLMArticleAgentV2", _NoopClassAgent)
+    monkeypatch.setattr(run_script, "LLMMembershipAgentV2", _NoopClassAgent)
+    monkeypatch.setattr(run_script, "LLMContributionAgentV2", _NoopClassAgent)
+    monkeypatch.setattr(run_script, "LLMLinkVeracityAgentV2", _FakeLinkVeracityAgent)
+
+    asyncio.run(
+        run_script._run(
+            "octo/repo",
+            verify_links=True,
+            link_verification_timeout_seconds=60.0,
+            link_verification_max_concurrency=2,
+            heartbeat_seconds=0.01,
+        ),
+    )
+
+    stdout = capsys.readouterr().out
+    assert "[ links ]  Verifying unique http(s) links via LLM + Selenium tool" in stdout
+    assert "Link verification summary: yes=" in stdout
+
+    links = sorted(
+        {
+            context["link"]
+            for context in _FakeLinkVeracityAgent.captured_contexts
+            if isinstance(context.get("link"), str)
+        },
+    )
+    assert "https://github.com/ok-user" in links
+    assert "https://ror.org/02s376052" in links
+    assert "https://spdx.org/licenses/MIT.html" in links

@@ -8,6 +8,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm.agent_tools.selenium_fetch import (
+    fetch_link_content_via_selenium_tool,
+)
+from src.v2.agents.llm.agent_tools.uuid import generate_uuid_v4_tool
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.generated.agent_entities import AgentMembershipShape
@@ -117,6 +121,7 @@ class LLMMembershipAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=AgentMembershipShape,
+                    tools=[generate_uuid_v4_tool, fetch_link_content_via_selenium_tool],
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )

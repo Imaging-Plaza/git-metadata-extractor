@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from src.v2.agents.llm import (
     LLMArticleAgentV2,
     LLMContributionAgentV2,
+    LLMLinkVeracityAgentV2,
     LLMMembershipAgentV2,
     LLMOrganizationAgentV2,
     LLMPersonAgentV2,
@@ -71,3 +72,9 @@ def test_llm_namespace_exposes_contribution_runtime_agent() -> None:
     agent: RuntimeAgent = LLMContributionAgentV2()
     _assert_runtime_agent_shape(agent)
     assert isinstance(agent, LLMContributionAgentV2)
+
+
+def test_llm_namespace_exposes_link_veracity_runtime_agent() -> None:
+    agent: RuntimeAgent = LLMLinkVeracityAgentV2()
+    _assert_runtime_agent_shape(agent)
+    assert isinstance(agent, LLMLinkVeracityAgentV2)
