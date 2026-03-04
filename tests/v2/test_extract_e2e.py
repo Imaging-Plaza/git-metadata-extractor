@@ -393,11 +393,37 @@ def test_extract_uses_llm_runtime_default_when_configured(
             username = context.get("username") or context.get("github_username", "unknown")
             return _make_person_result(username)
 
+    class _LLMOrganizationRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            org_name = context.get("org_name", "unknown-org")
+            return AgentResult(
+                data={
+                    "id": org_name,
+                    "type": "org:Organization",
+                    "shacl": "pulse:OrganizationShape",
+                    "identifiers": {
+                        "pulse:ror": None,
+                        "pulse:infoscienceOrganizationIdentifier": None,
+                        "pulse:githubOrganizationHandle": org_name,
+                        "uuid": "22222222-2222-4222-8222-222222222222",
+                    },
+                    "idSource": "pulse:githubOrganizationHandle",
+                    "schema:name": org_name,
+                    "pulse:githubOrganizationHandle": org_name,
+                },
+            )
+
     app = _build_test_app()
     app.state.v2_orchestrator = PipelineOrchestrator(
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
         llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMOrganizationRunner(),
         agent_runners={
             "repo_agent": _rule_repo_agent,
             "person_agent": _person_agent,
@@ -541,7 +567,7 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
         for entity in organization_entities
         if entity.get("pulse:githubOrganizationHandle") != "owner-org"
     )
-    assert enriched_org.get("pulse:owns", []) == []
+    assert enriched_org.get("pulse:owns", []) == ["https://github.com/owner-org/source-repo"]
 
 
 def test_extract_json_contract_stage_sequence_for_user_and_org() -> None:

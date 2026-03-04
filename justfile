@@ -158,6 +158,11 @@ v2-run-repo-agent REPO:
 v2-run-repo-and-persons REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_and_persons.py {{REPO}}
 
+# Run LLM repository + person + organization agents (sequential stage debug)
+# Usage: just v2-run-repo-persons-and-orgs sdsc-ordes/gimie
+v2-run-repo-persons-and-orgs REPO:
+    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}}
+
 # ============================================================================
 # Cache Management (via API)
 # ============================================================================

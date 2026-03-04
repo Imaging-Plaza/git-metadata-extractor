@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from src.v2.agents.llm import LLMPersonAgentV2, LLMRepositoryAgentV2
+from src.v2.agents.llm import (
+    LLMOrganizationAgentV2,
+    LLMPersonAgentV2,
+    LLMRepositoryAgentV2,
+)
 from src.v2.agents.runtime import AgentRuntime
 
 if TYPE_CHECKING:
@@ -12,6 +16,7 @@ AgentRunner = Callable[[dict[str, Any], Any], Any | Awaitable[Any]]
 
 STAGE_REPO_AGENT = "repo_agent"
 STAGE_PERSON_AGENT = "person_agent"
+STAGE_ORG_AGENT = "org_agent"
 
 
 class AgentRuntimeRegistry:
@@ -23,10 +28,12 @@ class AgentRuntimeRegistry:
         rule_based_runners: dict[str, AgentRunner] | None = None,
         llm_repository_agent: RuntimeAgent | None = None,
         llm_person_agent: RuntimeAgent | None = None,
+        llm_organization_agent: RuntimeAgent | None = None,
     ) -> None:
         self._rule_based_runners: dict[str, AgentRunner] = dict(rule_based_runners or {})
         self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
         self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
+        self._llm_organization_agent = llm_organization_agent or LLMOrganizationAgentV2()
 
     def register_rule_runner(self, stage_key: str, runner: AgentRunner) -> None:
         """Register or replace a rule-based runner for a pipeline stage."""
@@ -51,6 +58,9 @@ class AgentRuntimeRegistry:
 
         if runtime == AgentRuntime.LLM and stage_key == STAGE_PERSON_AGENT:
             return self._llm_person_agent.run
+
+        if runtime == AgentRuntime.LLM and stage_key == STAGE_ORG_AGENT:
+            return self._llm_organization_agent.run
 
         runner = self._rule_based_runners.get(stage_key)
         if runner is None:

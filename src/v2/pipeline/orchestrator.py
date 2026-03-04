@@ -16,6 +16,7 @@ from src.v2.agents import (
     AgentRuntimeRegistry,
     ArticleAgentV2,
     ContributionAgentV2,
+    LLMOrganizationAgentV2,
     LLMPersonAgentV2,
     LLMRepositoryAgentV2,
     MembershipAgentV2,
@@ -156,6 +157,7 @@ class PipelineOrchestrator:
         contribution_agent: ContributionAgentV2 | None = None,
         llm_repository_agent: RuntimeAgent | None = None,
         llm_person_agent: RuntimeAgent | None = None,
+        llm_organization_agent: RuntimeAgent | None = None,
         agent_registry: AgentRuntimeRegistry | None = None,
         agent_runners: dict[str, AgentRunner] | None = None,
         retry_max_retries: int = 3,
@@ -176,6 +178,7 @@ class PipelineOrchestrator:
         self._contribution_agent = contribution_agent or ContributionAgentV2()
         self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
         self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
+        self._llm_organization_agent = llm_organization_agent or LLMOrganizationAgentV2()
 
         self._rule_based_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
@@ -192,6 +195,7 @@ class PipelineOrchestrator:
             rule_based_runners=self._rule_based_runners,
             llm_repository_agent=self._llm_repository_agent,
             llm_person_agent=self._llm_person_agent,
+            llm_organization_agent=self._llm_organization_agent,
         )
         if agent_registry and agent_runners:
             for stage_key, runner in agent_runners.items():
@@ -444,7 +448,7 @@ class PipelineOrchestrator:
                 default=AgentRuntime.RULE_BASED,
                 field_name="agent_runtime",
             )
-            # Select runner by runtime and stage (llm override for repo stage only).
+            # Select runner by runtime and stage.
             runner = self._agent_registry.resolve_runner(
                 stage_key=work_item.runner_key,
                 runtime=runtime_mode,
@@ -865,11 +869,11 @@ class PipelineOrchestrator:
 
         # Forward repository context (README, metadata) so person agents can
         # scan it for ORCID identifiers, affiliations, and author credits.
-        repository_context: dict[str, Any] | None = None
+        repository_context_for_person: dict[str, Any] | None = None
         if detected_type == "repository" and isinstance(bundle, ContextBundle):
             raw = bundle.context.get("repository")
             if isinstance(raw, dict) and raw:
-                repository_context = raw
+                repository_context_for_person = raw
 
         contexts: list[dict[str, Any]] = []
         for username in _deduplicate(usernames):
@@ -882,8 +886,8 @@ class PipelineOrchestrator:
                 context["account_type_hint"] = account_type_hint
             if source_repositories:
                 context["source_repositories"] = list(source_repositories)
-            if repository_context is not None:
-                context["repository_context"] = repository_context
+            if repository_context_for_person is not None:
+                context["repository_context"] = repository_context_for_person
             contexts.append(context)
         return contexts
 
@@ -935,6 +939,11 @@ class PipelineOrchestrator:
             if detected_type == "repository"
             else []
         )
+        repository_context_for_prompt: dict[str, Any] | None = None
+        if detected_type == "repository":
+            raw_repository_context = bundle.context.get("repository")
+            if isinstance(raw_repository_context, dict) and raw_repository_context:
+                repository_context_for_prompt = raw_repository_context
         contexts_by_org_name: dict[str, dict[str, Any]] = {}
 
         def _set_context(
@@ -942,6 +951,7 @@ class PipelineOrchestrator:
             *,
             github_lookup_enabled: bool,
             include_source_repositories: bool = False,
+            include_repository_context: bool = False,
         ) -> None:
             if not org_name:
                 return
@@ -954,6 +964,25 @@ class PipelineOrchestrator:
                         existing_context["source_repositories"] = list(
                             source_repositories,
                         )
+                    if (
+                        include_repository_context
+                        and repository_context_for_prompt is not None
+                    ):
+                        existing_context["repository_context"] = (
+                            repository_context_for_prompt
+                        )
+                if (
+                    include_source_repositories
+                    and source_repositories
+                    and "source_repositories" not in existing_context
+                ):
+                    existing_context["source_repositories"] = list(source_repositories)
+                if (
+                    include_repository_context
+                    and repository_context_for_prompt is not None
+                    and "repository_context" not in existing_context
+                ):
+                    existing_context["repository_context"] = repository_context_for_prompt
                 return
 
             next_context: dict[str, Any] = {
@@ -963,6 +992,8 @@ class PipelineOrchestrator:
             }
             if include_source_repositories and source_repositories:
                 next_context["source_repositories"] = list(source_repositories)
+            if include_repository_context and repository_context_for_prompt is not None:
+                next_context["repository_context"] = repository_context_for_prompt
             contexts_by_org_name[org_name] = next_context
 
         if detected_type == "repository":
@@ -978,6 +1009,7 @@ class PipelineOrchestrator:
                             owner_login,
                             github_lookup_enabled=True,
                             include_source_repositories=True,
+                            include_repository_context=True,
                         )
 
         if detected_type == "user":
@@ -1004,6 +1036,8 @@ class PipelineOrchestrator:
                         _set_context(
                             organization,
                             github_lookup_enabled=detected_type != "repository",
+                            include_source_repositories=detected_type == "repository",
+                            include_repository_context=detected_type == "repository",
                         )
 
         return list(contexts_by_org_name.values())

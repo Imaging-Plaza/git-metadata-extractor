@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.v2.agents.llm import LLMRepositoryAgentV2
+from src.v2.agents.llm import LLMOrganizationAgentV2, LLMRepositoryAgentV2
 from src.v2.agents.rule_based import (
     ArticleAgentV2,
     ContributionAgentV2,
@@ -34,3 +34,9 @@ def test_llm_namespace_exposes_repository_runtime_agent() -> None:
     agent: RuntimeAgent = LLMRepositoryAgentV2()
     _assert_runtime_agent_shape(agent)
     assert isinstance(agent, LLMRepositoryAgentV2)
+
+
+def test_llm_namespace_exposes_organization_runtime_agent() -> None:
+    agent: RuntimeAgent = LLMOrganizationAgentV2()
+    _assert_runtime_agent_shape(agent)
+    assert isinstance(agent, LLMOrganizationAgentV2)
