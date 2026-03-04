@@ -106,6 +106,10 @@ class GitHubProvider(BaseProvider, ABC):
     def get_languages(self, full_name: str) -> dict[str, int]:
         """Return language byte counts for ``owner/repo``."""
 
+    def get_repository_jsonld(self, full_name: str) -> dict[str, Any]:
+        """Return the raw GIMIE JSON-LD payload for ``owner/repo``, or an empty dict."""
+        return {}
+
 
 class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""

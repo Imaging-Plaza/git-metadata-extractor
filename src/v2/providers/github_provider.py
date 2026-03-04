@@ -342,6 +342,12 @@ class RealGitHubProvider(GitHubProvider):
             self._gimie_payload_cache[repository_url] = gimie_payload
         return _extract_repository_node(gimie_payload)
 
+    def get_repository_jsonld(self, full_name: str) -> dict[str, Any]:
+        """Return the cached raw GIMIE JSON-LD payload, or an empty dict."""
+        repository_url = _normalize_repo_url(full_name)
+        payload = self._gimie_payload_cache.get(repository_url)
+        return payload if isinstance(payload, dict) else {}
+
     def _resolve_user_lookup(self) -> UserLookup:
         if self._user_lookup is not None:
             return self._user_lookup

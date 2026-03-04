@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import os
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 from pydantic_ai import Agent
@@ -15,6 +17,8 @@ from src.llm.model_config import (
     validate_config,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class LLMRuntimeResult:
@@ -23,6 +27,8 @@ class LLMRuntimeResult:
     provider: str
     tokens_prompt: int | None = None
     tokens_completion: int | None = None
+    requests: int | None = None
+    tool_calls: int | None = None
 
 
 class LLMRuntimeError(RuntimeError):
@@ -74,6 +80,18 @@ def _extract_usage_tokens(usage: Any) -> tuple[int | None, int | None]:
         else None
     )
     return normalized_prompt, normalized_completion
+
+
+def _extract_usage_counts(usage: Any) -> tuple[int | None, int | None]:
+    """Extract request/tool-call counts from usage payloads."""
+
+    requests = getattr(usage, "requests", None)
+    tool_calls = getattr(usage, "tool_calls", None)
+    normalized_requests = int(requests) if isinstance(requests, int) and requests >= 0 else None
+    normalized_tool_calls = (
+        int(tool_calls) if isinstance(tool_calls, int) and tool_calls >= 0 else None
+    )
+    return normalized_requests, normalized_tool_calls
 
 
 def _coerce_output_payload(output: Any) -> dict[str, Any]:
@@ -158,6 +176,7 @@ class V2LLMRuntime:
         config = self._resolve_model_config()
         model_name = str(config.get("model", "unknown"))
         provider_name = str(config.get("provider", "unknown"))
+        run_started_at = perf_counter()
 
         try:
             model = create_pydantic_ai_model(config)
@@ -172,11 +191,20 @@ class V2LLMRuntime:
             )
             run_kwargs: dict[str, Any] = {}
             run_parameters = inspect.signature(agent.run).parameters
-            model_parameters = get_model_parameters(config)
+            model_parameters = dict(get_model_parameters(config))
+            timeout = config.get("timeout")
+            if isinstance(timeout, (int, float)) and timeout > 0:
+                model_parameters["timeout"] = float(timeout)
             # Pass model tuning knobs only when the backend supports the kwarg.
             if model_parameters and "model_settings" in run_parameters:
                 run_kwargs["model_settings"] = model_parameters
 
+            logger.info(
+                "LLM runtime start (provider=%s, model=%s, tools=%d)",
+                provider_name,
+                model_name,
+                len(tools or []),
+            )
             result = await agent.run(user_prompt, **run_kwargs)
         except LLMRuntimeError:
             raise
@@ -191,8 +219,22 @@ class V2LLMRuntime:
             usage = usage()
         tokens_prompt: int | None = None
         tokens_completion: int | None = None
+        requests: int | None = None
+        tool_calls: int | None = None
         if usage is not None:
             tokens_prompt, tokens_completion = _extract_usage_tokens(usage)
+            requests, tool_calls = _extract_usage_counts(usage)
+
+        logger.info(
+            "LLM runtime done in %.1fs (provider=%s, model=%s, prompt_tokens=%s, completion_tokens=%s, requests=%s, tool_calls=%s)",
+            perf_counter() - run_started_at,
+            provider_name,
+            model_name,
+            tokens_prompt,
+            tokens_completion,
+            requests,
+            tool_calls,
+        )
 
         return LLMRuntimeResult(
             payload=payload,
@@ -200,4 +242,6 @@ class V2LLMRuntime:
             provider=provider_name,
             tokens_prompt=tokens_prompt,
             tokens_completion=tokens_completion,
+            requests=requests,
+            tool_calls=tool_calls,
         )

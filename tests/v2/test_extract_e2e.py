@@ -352,11 +352,7 @@ def test_extract_uses_llm_runtime_default_when_configured(
     ) -> AgentResult:
         return AgentResult(data={})
 
-    async def _person_agent(
-        context: dict[str, Any],
-        _providers: ProviderSet,
-    ) -> AgentResult:
-        username = context["username"]
+    def _make_person_result(username: str) -> AgentResult:
         return AgentResult(
             data={
                 "id": username,
@@ -380,10 +376,28 @@ def test_extract_uses_llm_runtime_default_when_configured(
             },
         )
 
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        username = context["username"]
+        return _make_person_result(username)
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username") or context.get("github_username", "unknown")
+            return _make_person_result(username)
+
     app = _build_test_app()
     app.state.v2_orchestrator = PipelineOrchestrator(
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
         agent_runners={
             "repo_agent": _rule_repo_agent,
             "person_agent": _person_agent,

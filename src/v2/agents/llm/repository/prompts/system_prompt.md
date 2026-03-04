@@ -68,3 +68,16 @@ The context may include a `readme_content` field containing the repository's REA
 - Supplement `schema:name` if the metadata name is generic or missing
 
 Ignore `readme_content` if it is `null` or empty.
+
+## Input context field: `gimie_jsonld`
+
+The context may include a `gimie_jsonld` field containing the full GIMIE JSON-LD extraction as a serialized JSON string (truncated to 8 000 characters). This is the raw RDF graph emitted by the GIMIE library and is richer than the structured metadata fields. Use it to:
+- Find the DOI (`schema:identifier` or `schema:citation`) for `identifiers.schema:identifier` and `schema:citation`
+- Resolve `schema:license` SPDX IRI if not present in metadata
+- Identify `schema:dateCreated` / `schema:dateModified` timestamps
+- Confirm `schema:author` contributor logins
+- Infer `pulse:discipline` from subject keywords or topic annotations in the graph
+
+Parse `gimie_jsonld` as a JSON string to access the `@graph` array. Prefer values from `gimie_jsonld` over `metadata` when they are more specific (e.g. a full DOI URL is more authoritative than a generic description field).
+
+Ignore `gimie_jsonld` if it is `null` or empty.

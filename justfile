@@ -153,6 +153,11 @@ v2-models-check:
 v2-run-repo-agent REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repository_agent.py {{REPO}}
 
+# Run LLM repository + person agents (stages: context_gather -> repo_agent -> person_agents)
+# Usage: just v2-run-repo-and-persons sdsc-ordes/gimie
+v2-run-repo-and-persons REPO:
+    PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_and_persons.py {{REPO}}
+
 # ============================================================================
 # Cache Management (via API)
 # ============================================================================

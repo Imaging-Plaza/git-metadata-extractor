@@ -1,5 +1,7 @@
 .cursor/mcp.json
 .cursor/plans
+.claude/
+.opentix-worktree/
 .ruff_cache
 data
 api_cache.db

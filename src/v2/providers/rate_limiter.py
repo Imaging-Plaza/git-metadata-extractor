@@ -44,7 +44,9 @@ class RateLimiter:
         self._sleep = sleep_func
         self._jitter = jitter_func or random.random
         self._states: dict[str, _ProviderRateLimitState] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+        # asyncio.Lock instances are bound to the loop where they are created.
+        # Keep separate locks per provider+loop to avoid cross-loop binding errors.
+        self._locks: dict[tuple[str, int], asyncio.Lock] = {}
 
     def get_remaining(self, provider_name: str) -> int | None:
         return self._state(provider_name).remaining
@@ -55,7 +57,9 @@ class RateLimiter:
         request_func: RequestFunc[ResponseT],
     ) -> ResponseT:
         normalized_provider = provider_name.strip().lower() or "unknown"
-        provider_lock = self._locks.setdefault(normalized_provider, asyncio.Lock())
+        current_loop = asyncio.get_running_loop()
+        lock_key = (normalized_provider, id(current_loop))
+        provider_lock = self._locks.setdefault(lock_key, asyncio.Lock())
         async with provider_lock:
             await self._throttle_when_approaching_limit(normalized_provider)
 

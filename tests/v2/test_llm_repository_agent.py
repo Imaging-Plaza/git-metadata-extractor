@@ -209,3 +209,46 @@ def test_llm_repository_agent_records_strict_schema_warnings() -> None:
 
     assert result.warnings, "Expected strict-schema warnings but got none"
     assert any("schema:author" in w for w in result.warnings)
+
+
+def test_llm_repository_agent_appends_runtime_prompt_context_blocks() -> None:
+    captured_user_prompts: list[str] = []
+
+    class _CapturingRuntime:
+        async def run_json_prompt(
+            self,
+            *,
+            system_prompt: str,
+            user_prompt: str,
+            output_type: Any = None,
+            tools: Any = None,
+        ) -> LLMRuntimeResult:
+            del system_prompt, output_type, tools
+            captured_user_prompts.append(user_prompt)
+            return LLMRuntimeResult(
+                payload=_valid_repository_payload(),
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    agent = LLMRepositoryAgentV2(llm_runtime=_CapturingRuntime())
+    upstream_json = '{"person_agent:alice":{"id":"alice"}}'
+    prompt_appendix = "COMBINED_FILE_BLOCK"
+
+    asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "upstream_stage_outputs_json": upstream_json,
+                "user_prompt_appendix": prompt_appendix,
+            },
+            _providers(),
+        ),
+    )
+
+    assert len(captured_user_prompts) == 1
+    prompt = captured_user_prompts[0]
+    assert "## Upstream Stage Outputs (JSON)" in prompt
+    assert upstream_json in prompt
+    assert "## Additional Context (verbatim text)" in prompt
+    assert prompt_appendix in prompt

@@ -122,12 +122,15 @@ async def gather_context(  # noqa: C901, PLR0915
             warnings.append("Repository README content is not available")
             readme_content = ""
 
+        gimie_jsonld = providers.github.get_repository_jsonld(full_name)
+
         context["repository"] = {
             "full_name": full_name,
             "metadata": repository_metadata,
             "readme_content": readme_content,
             "contributors": contributors,
             "languages": languages,
+            "gimie_jsonld": gimie_jsonld,
         }
         return ContextBundle(
             detected_type=normalized_type,

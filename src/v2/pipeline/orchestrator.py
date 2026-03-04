@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import re
 from copy import deepcopy
 from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+logger = logging.getLogger(__name__)
+
 from src.v2.agents import (
     AgentRuntime,
     AgentRuntimeRegistry,
     ArticleAgentV2,
     ContributionAgentV2,
+    LLMPersonAgentV2,
     LLMRepositoryAgentV2,
     MembershipAgentV2,
     OrganizationAgentV2,
@@ -22,6 +27,10 @@ from src.v2.agents import (
     infer_entity_bucket,
     parse_agent_runtime,
     with_retry,
+)
+from src.v2.agents.llm.prompt_context import (
+    UPSTREAM_STAGE_OUTPUTS_JSON_CONTEXT_KEY,
+    USER_PROMPT_APPENDIX_CONTEXT_KEY,
 )
 from src.v2.agents.models import AgentResult
 from src.v2.detection.models import GitHubURLClassification
@@ -146,11 +155,15 @@ class PipelineOrchestrator:
         membership_agent: MembershipAgentV2 | None = None,
         contribution_agent: ContributionAgentV2 | None = None,
         llm_repository_agent: RuntimeAgent | None = None,
+        llm_person_agent: RuntimeAgent | None = None,
         agent_registry: AgentRuntimeRegistry | None = None,
         agent_runners: dict[str, AgentRunner] | None = None,
         retry_max_retries: int = 3,
         retry_backoff_base: float = 0.0,
         retry_sleep_func: SleepCallable | None = None,
+        max_concurrent_agents: int = 3,
+        include_upstream_stage_outputs_in_prompt: bool = False,
+        user_prompt_appendix: str | None = None,
     ) -> None:
         """Initialize stage runners and runtime-aware routing infrastructure."""
 
@@ -162,6 +175,7 @@ class PipelineOrchestrator:
         self._membership_agent = membership_agent or MembershipAgentV2()
         self._contribution_agent = contribution_agent or ContributionAgentV2()
         self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
+        self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
 
         self._rule_based_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
@@ -177,6 +191,7 @@ class PipelineOrchestrator:
         self._agent_registry = agent_registry or AgentRuntimeRegistry(
             rule_based_runners=self._rule_based_runners,
             llm_repository_agent=self._llm_repository_agent,
+            llm_person_agent=self._llm_person_agent,
         )
         if agent_registry and agent_runners:
             for stage_key, runner in agent_runners.items():
@@ -185,6 +200,11 @@ class PipelineOrchestrator:
         self._retry_max_retries = retry_max_retries
         self._retry_backoff_base = retry_backoff_base
         self._retry_sleep_func = retry_sleep_func
+        self._max_concurrent_agents = max_concurrent_agents
+        self._include_upstream_stage_outputs_in_prompt = (
+            include_upstream_stage_outputs_in_prompt
+        )
+        self._user_prompt_appendix = user_prompt_appendix
 
     def get_execution_plan(self, detected_type: str) -> ExecutionPlan:
         normalized_type = _to_detected_type(detected_type)
@@ -263,16 +283,23 @@ class PipelineOrchestrator:
                 )
                 for warning in pre_stage_warnings:
                     _append_unique(warnings, warning)
+            logger.info(
+                "[%s] starting — %d item(s)",
+                stage.name,
+                len(work_items),
+            )
             with pipeline_tracer.trace_stage(
                 STAGE_AGENTS,
                 orchestrator_stage=stage.name,
                 work_item_count=len(work_items),
             ) as stage_span:
                 if not work_items:
+                    logger.info("[%s] skipped — no items", stage.name)
                     stage_span.set_attribute("status", "skipped")
                     stages_completed.append(stage.name)
                     continue
 
+                stage_started_at = perf_counter()
                 stage_results, stage_warnings, stage_errors = await self._execute_stage(
                     stage_name=stage.name,
                     work_items=work_items,
@@ -280,6 +307,13 @@ class PipelineOrchestrator:
                     pipeline_outputs=pipeline_outputs,
                     providers=providers,
                     detected_type=plan.detected_type,
+                )
+                logger.info(
+                    "[%s] done — %d result(s), %d error(s) in %.1fs",
+                    stage.name,
+                    len(stage_results),
+                    len(stage_errors),
+                    perf_counter() - stage_started_at,
                 )
                 stage_span.set_attributes(
                     result_count=len(stage_results),
@@ -402,6 +436,8 @@ class PipelineOrchestrator:
         stage_errors: list[str] = []
         stage_results: dict[str, AgentResult] = {}
 
+        semaphore = asyncio.Semaphore(self._max_concurrent_agents)
+
         async def _run_item(work_item: _StageWorkItem) -> tuple[str, AgentResult]:
             runtime_mode = parse_agent_runtime(
                 runtime_context.get("agent_runtime"),
@@ -421,6 +457,23 @@ class PipelineOrchestrator:
                 "stage_name": stage_name,
                 "pipeline_outputs": dict(pipeline_outputs),
             }
+            include_upstream_outputs = runtime_context.get(
+                "include_upstream_stage_outputs_in_prompt",
+            )
+            if not isinstance(include_upstream_outputs, bool):
+                include_upstream_outputs = self._include_upstream_stage_outputs_in_prompt
+            if include_upstream_outputs and pipeline_outputs:
+                item_context[UPSTREAM_STAGE_OUTPUTS_JSON_CONTEXT_KEY] = json.dumps(
+                    pipeline_outputs,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                )
+
+            prompt_appendix = runtime_context.get("user_prompt_appendix")
+            if not isinstance(prompt_appendix, str):
+                prompt_appendix = self._user_prompt_appendix
+            if isinstance(prompt_appendix, str) and prompt_appendix.strip():
+                item_context[USER_PROMPT_APPENDIX_CONTEXT_KEY] = prompt_appendix
 
             async def _run_with_retry(
                 agent_context: dict[str, Any],
@@ -451,7 +504,16 @@ class PipelineOrchestrator:
                 if isinstance(item_context.get("provider"), str)
                 else None,
             )
-            result = await _maybe_await(traced_runner(item_context, providers))
+            async with semaphore:
+                logger.info("[%s] %s — started", stage_name, work_item.result_key)
+                item_started_at = perf_counter()
+                result = await _maybe_await(traced_runner(item_context, providers))
+                logger.info(
+                    "[%s] %s — done in %.1fs",
+                    stage_name,
+                    work_item.result_key,
+                    perf_counter() - item_started_at,
+                )
             return work_item.result_key, result
 
         gathered = await asyncio.gather(
@@ -800,6 +862,15 @@ class PipelineOrchestrator:
             if detected_type == "repository"
             else []
         )
+
+        # Forward repository context (README, metadata) so person agents can
+        # scan it for ORCID identifiers, affiliations, and author credits.
+        repository_context: dict[str, Any] | None = None
+        if detected_type == "repository" and isinstance(bundle, ContextBundle):
+            raw = bundle.context.get("repository")
+            if isinstance(raw, dict) and raw:
+                repository_context = raw
+
         contexts: list[dict[str, Any]] = []
         for username in _deduplicate(usernames):
             context: dict[str, Any] = {
@@ -811,6 +882,8 @@ class PipelineOrchestrator:
                 context["account_type_hint"] = account_type_hint
             if source_repositories:
                 context["source_repositories"] = list(source_repositories)
+            if repository_context is not None:
+                context["repository_context"] = repository_context
             contexts.append(context)
         return contexts
 

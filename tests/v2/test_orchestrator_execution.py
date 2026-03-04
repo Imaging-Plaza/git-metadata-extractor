@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from time import monotonic
 from typing import Any
 
@@ -230,6 +231,100 @@ def test_execute_pipeline_completes_full_repository_plan() -> None:
 
     serialized_result = result.to_dict()
     assert serialized_result["typed_entity_buckets"] == typed_buckets
+
+
+def test_execute_can_append_upstream_json_and_verbatim_prompt_text_to_agent_context() -> None:
+    captured_person_contexts: list[dict[str, Any]] = []
+    captured_org_contexts: list[dict[str, Any]] = []
+    prompt_appendix = "FILE_A\nFILE_B\nThis is verbatim."
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        captured_person_contexts.append(dict(context))
+        return AgentResult(
+            data={
+                "id": "alice",
+                "org:hasMembership": ["alice_github"],
+            },
+        )
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        captured_org_contexts.append(dict(context))
+        return AgentResult(data={"id": context["org_name"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+        include_upstream_stage_outputs_in_prompt=True,
+        user_prompt_appendix=prompt_appendix,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={
+                "url_info": _classification(),
+                "source_url": "https://github.com/octocat/Hello-World",
+            },
+        ),
+    )
+
+    assert len(captured_person_contexts) == 1
+    person_context = captured_person_contexts[0]
+    person_upstream = person_context.get("upstream_stage_outputs_json")
+    assert isinstance(person_upstream, str)
+    assert json.loads(person_upstream) == {"repo_agent": {"id": "repo-root"}}
+    assert person_context.get("user_prompt_appendix") == prompt_appendix
+
+    assert len(captured_org_contexts) == 1
+    org_context = captured_org_contexts[0]
+    org_upstream = org_context.get("upstream_stage_outputs_json")
+    assert isinstance(org_upstream, str)
+    assert json.loads(org_upstream) == {
+        "repo_agent": {"id": "repo-root"},
+        "person_agent:alice": {
+            "id": "alice",
+            "org:hasMembership": ["alice_github"],
+        },
+    }
+    assert org_context.get("user_prompt_appendix") == prompt_appendix
 
 
 def test_execute_skips_github_organization_accounts_from_person_fanout() -> None:

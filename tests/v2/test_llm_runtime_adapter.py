@@ -21,6 +21,8 @@ EXPECTED_COMPLETION_TOKENS = 23
 class _FakeUsage:
     input_tokens: int = 11
     output_tokens: int = 7
+    requests: int = 3
+    tool_calls: int = 2
     details: dict[str, int] | None = None
 
 
@@ -59,7 +61,12 @@ def test_llm_runtime_selects_first_valid_profile_and_returns_tokens(
         "load_model_config",
         lambda _analysis_type: [
             {"provider": "openai", "model": "broken-model", "valid": False},
-            {"provider": "openai", "model": "gpt-test", "valid": True},
+            {
+                "provider": "openai",
+                "model": "gpt-test",
+                "valid": True,
+                "timeout": 42.0,
+            },
         ],
     )
     monkeypatch.setattr(
@@ -93,7 +100,9 @@ def test_llm_runtime_selects_first_valid_profile_and_returns_tokens(
     assert result.provider == "openai"
     assert result.tokens_prompt == EXPECTED_PROMPT_TOKENS
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
-    assert captured_run_kwargs["model_settings"] == {"temperature": 0.1}
+    assert result.requests == 3
+    assert result.tool_calls == 2
+    assert captured_run_kwargs["model_settings"] == {"temperature": 0.1, "timeout": 42.0}
 
 
 def test_llm_runtime_reports_missing_provider_credentials_by_env_var_name(

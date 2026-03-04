@@ -144,6 +144,22 @@ def test_rate_limit_tracking_is_isolated_by_provider() -> None:
     assert limiter.get_remaining("ror") == EXPECTED_ROR_REMAINING
 
 
+def test_rate_limiter_supports_same_provider_across_multiple_event_loops() -> None:
+    limiter = RateLimiter(jitter_func=lambda: 0.0)
+
+    async def _call_once() -> _Response:
+        return await limiter.with_rate_limit(
+            "github",
+            lambda: _Response(200),
+        )
+
+    first = asyncio.run(_call_once())
+    second = asyncio.run(_call_once())
+
+    assert first.status_code == HTTP_OK
+    assert second.status_code == HTTP_OK
+
+
 def test_rate_limiter_logs_rate_limit_events(caplog: pytest.LogCaptureFixture) -> None:
     recorder = _SleepRecorder()
     responses = iter([_Response(429), _Response(200)])

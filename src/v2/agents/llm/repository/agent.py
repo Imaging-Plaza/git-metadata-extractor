@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.disciplines import list_disciplines_tool
+from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.generated.agent_entities import AgentRepositoryShape
 from src.v2.generated.entities import RepositoryModel
@@ -19,6 +20,7 @@ from src.v2.llm.runtime import (
 
 MIN_REPOSITORY_SEGMENTS = 2
 README_CONTENT_MAX_CHARS = 4000
+GIMIE_JSONLD_MAX_CHARS = 8000
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.repository.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
@@ -158,6 +160,7 @@ class LLMRepositoryAgentV2:
         if not isinstance(languages, dict):
             languages = {}
         readme_content = repository_context.get("readme_content") or ""
+        gimie_jsonld = repository_context.get("gimie_jsonld")
 
         llm_input = {
             "full_name": full_name,
@@ -167,8 +170,13 @@ class LLMRepositoryAgentV2:
             "source_url": context.get("source_url"),
             "readme_content": readme_content[:README_CONTENT_MAX_CHARS] or None,
         }
+        if isinstance(gimie_jsonld, dict) and gimie_jsonld:
+            llm_input["gimie_jsonld"] = json.dumps(
+                gimie_jsonld, ensure_ascii=True
+            )[:GIMIE_JSONLD_MAX_CHARS]
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
+        user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         try:
             llm_result = await self._llm_runtime.run_json_prompt(
