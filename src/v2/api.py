@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from rdflib import Graph as RDFGraph
 
-from src.v2.agents import ProviderSet, parse_agent_runtime
+from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
 from src.v2.detection import UnsupportedGitHubURL, classify_github_url
@@ -43,6 +43,7 @@ from src.v2.pipeline.stages import (
     build_jsonld_output,
     compute_stats,
     reconcile_entities,
+    run_link_veracity_stage,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
 from src.v2.validation import (
@@ -76,6 +77,7 @@ STAGE_SHACL_GATE = "shacl_gate"
 STAGE_GRAPH_WRITE = "graph_write"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
+STAGE_LINK_VERACITY = "link_veracity"
 GRAPH_ENTITY_HELPER_KEYS = {"id", "type", "identifiers", "idSource", "shacl"}
 
 v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
@@ -267,6 +269,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
+    verify_links: Annotated[bool, Query()] = False,
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
@@ -331,6 +334,26 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             field_name="agent_runtime",
         )
         stage_span.set_attribute("agent_runtime", resolved_runtime.value)
+
+    if verify_links and resolved_runtime != AgentRuntime.LLM:
+        failure_message = "verify_links=true requires agent_runtime=llm"
+        store.fail_run(run_id, failure_message)
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.VALIDATION_ERROR,
+            detail=failure_message,
+            source_url=classification.normalized_url,
+            errors=[
+                V2FieldError(
+                    field="verify_links",
+                    message="Link verification is only supported when agent_runtime=llm",
+                    value=verify_links,
+                ),
+            ],
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
 
     try:
         orchestrator = _get_orchestrator(request)
@@ -640,6 +663,61 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             mode="upsert",
         )
 
+    link_veracity_executed = False
+    if verify_links:
+        with tracer.trace_stage(
+            STAGE_LINK_VERACITY,
+            detected_type=classification.detected_type.value,
+        ) as stage_span:
+            link_veracity_executed = True
+            try:
+                # TODO(graph-cache): Cache link-veracity verdicts by normalized link + model + relation context.
+                # TODO(graph-cache): Define cache invalidation strategy tied to source entity and graph changes.
+                # TODO(graph-cache): Integrate link-veracity lookups with future graph-cache read-through/write-through policy.
+                link_veracity_result = await run_link_veracity_stage(
+                    jsonld_payload=shacl_graph_payload,
+                    source_url=classification.normalized_url,
+                    providers=providers,
+                    max_concurrency=orchestrator.max_concurrent_agents,
+                )
+            except Exception as exc:  # noqa: BLE001
+                stage_span.set_attribute("status", "error")
+                _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
+            else:
+                stage_span.set_attributes(
+                    checked_count=link_veracity_result.checked_count,
+                    supported_count=link_veracity_result.supported_count,
+                    unsupported_count=link_veracity_result.unsupported_count,
+                    failed_count=link_veracity_result.failed_count,
+                )
+                _append_unique_warning(
+                    warnings,
+                    (
+                        "Link veracity summary: "
+                        f"checked={link_veracity_result.checked_count}, "
+                        f"supported={link_veracity_result.supported_count}, "
+                        f"unsupported={link_veracity_result.unsupported_count}, "
+                        f"failed={link_veracity_result.failed_count}"
+                    ),
+                )
+                for warning in link_veracity_result.warnings:
+                    _append_unique_warning(warnings, warning)
+                for record in link_veracity_result.records:
+                    try:
+                        store.insert_intermediate(
+                            source_url=classification.normalized_url,
+                            agent_name=STAGE_LINK_VERACITY,
+                            run_id=run_id,
+                            data=record,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        _append_unique_warning(
+                            warnings,
+                            f"Failed to persist intermediate for {STAGE_LINK_VERACITY}: {exc}",
+                        )
+                    else:
+                        persisted_intermediates += 1
+
     response_intermediates = None
     if include_intermediates:
         response_intermediates = assemble_intermediates(
@@ -685,6 +763,8 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     ):
         if stage_name not in completed_stages:
             completed_stages.append(stage_name)
+    if link_veracity_executed and STAGE_LINK_VERACITY not in completed_stages:
+        completed_stages.append(STAGE_LINK_VERACITY)
 
     stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
     stats = stats.model_copy(

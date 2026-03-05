@@ -7,8 +7,11 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.v2.agents import ProviderSet
+from src.v2.agents.models import AgentResult
 from src.v2.api import v2_router
 from src.v2.models.contracts import V2ExtractResponse
+from src.v2.pipeline import PipelineOrchestrator
+from src.v2.pipeline.stages.models import ContextBundle
 from src.v2.providers.mock_github import MockGitHubProvider
 from src.v2.providers.mock_infoscience import MockInfoscienceProvider
 from src.v2.providers.mock_orcid import MockORCIDProvider
@@ -34,6 +37,23 @@ def _get_json(path: str, params: dict[str, str] | None = None) -> tuple[int, Any
     async def _run() -> tuple[int, Any]:
         test_app = _build_test_app()
         transport = ASGITransport(app=test_app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(path, params=params)
+        return response.status_code, response.json()
+
+    return asyncio.run(_run())
+
+
+def _get_json_from_app(
+    app: FastAPI,
+    path: str,
+    params: dict[str, str] | None = None,
+) -> tuple[int, Any]:
+    async def _run() -> tuple[int, Any]:
+        transport = ASGITransport(app=app)
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
@@ -89,7 +109,78 @@ def test_extract_rejects_invalid_output_format() -> None:
 
 
 def test_extract_accepts_agent_runtime_llm_for_user_routes() -> None:
-    status_code, payload = _get_json(
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: Any,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="user",
+            context={
+                "user": {
+                    "username": "octocat",
+                    "profile": {"login": "octocat"},
+                    "owned_repos": [],
+                    "orcid_data": None,
+                },
+            },
+        )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username", "octocat")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": username,
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": username,
+                    "schema:url": f"https://github.com/{username}",
+                    "pulse:githubUsername": username,
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_person_agent=_LLMPersonRunner(),
+        llm_repository_agent=_LLMNoDataRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
         "/v2/extract/github.com/octocat",
         params={"agent_runtime": "llm"},
     )

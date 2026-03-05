@@ -64,7 +64,7 @@ class V2Config:
     V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = field(
         default_factory=lambda: parse_agent_runtime(
             os.getenv("V2_AGENT_RUNTIME_DEFAULT"),
-            default=AgentRuntime.RULE_BASED,
+            default=AgentRuntime.LLM,
             field_name="V2_AGENT_RUNTIME_DEFAULT",
         ),
     )

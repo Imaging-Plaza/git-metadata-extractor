@@ -1324,7 +1324,7 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
     assert result.agent_results["org_agent:github"].data["id"] == "llm-org:github"
 
 
-def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode() -> None:
+def test_execute_uses_llm_repository_runner_for_user_and_org_in_llm_mode() -> None:
     llm_repo_calls = 0
     llm_org_calls = 0
     llm_class_calls = 0
@@ -1351,6 +1351,21 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
             nonlocal llm_org_calls
             llm_org_calls += 1
             return AgentResult(data={"id": f"llm-org:{context['org_name']}"})
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            return AgentResult(
+                data={
+                    "id": context["username"],
+                    "type": "schema:Person",
+                    "org:hasMembership": [],
+                },
+            )
 
     class _LLMClassRunner:
         async def run(
@@ -1435,6 +1450,7 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
     orchestrator = PipelineOrchestrator(
         context_gatherer=_context_gatherer,
         llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
         llm_organization_agent=_LLMOrganizationRunner(),
         llm_article_agent=_LLMClassRunner(),
         llm_membership_agent=_LLMClassRunner(),
@@ -1484,10 +1500,10 @@ def test_execute_keeps_rule_based_repository_runner_for_user_and_org_in_llm_mode
         ),
     )
 
-    assert llm_repo_calls == 0
+    assert llm_repo_calls == 2
     assert llm_org_calls == 2
     assert llm_class_calls >= 2
-    assert rule_repo_calls == 2
+    assert rule_repo_calls == 0
 
 
 def test_execute_uses_llm_organization_runner_for_repository_runtime() -> None:
@@ -1872,3 +1888,264 @@ def test_execute_hard_fails_when_llm_repository_runner_errors() -> None:
         )
 
     assert rule_repo_calls == 0
+
+
+def test_execute_uses_llm_repository_runner_for_user_repo_fanout() -> None:
+    llm_repo_calls = 0
+    rule_repo_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_repo_calls
+            llm_repo_calls += 1
+            return AgentResult(
+                data={
+                    "id": context["full_name"],
+                    "type": "schema:SoftwareSourceCode",
+                },
+            )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            return AgentResult(
+                data={
+                    "id": context["username"],
+                    "type": "schema:Person",
+                    "org:hasMembership": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="user",
+            context={
+                "user": {
+                    "username": "alice",
+                    "profile": {"login": "alice"},
+                    "owned_repos": ["alice/repo-a"],
+                    "repository_contexts": {
+                        "alice/repo-a": {
+                            "full_name": "alice/repo-a",
+                            "metadata": {"full_name": "alice/repo-a"},
+                            "contributors": [],
+                            "languages": {"Python": 1},
+                            "readme_content": "README",
+                            "gimie_jsonld": {},
+                        },
+                    },
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo"})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+            "person_agent": _rule_repo_agent,
+            "org_agent": _rule_repo_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("user")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={
+                "url_info": GitHubURLClassification(
+                    normalized_url="https://github.com/alice",
+                    detected_type=GitHubURLType.USER,
+                    owner="alice",
+                    repo=None,
+                ),
+                "source_url": "https://github.com/alice",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+
+    assert llm_repo_calls == 1
+    assert rule_repo_calls == 0
+    assert "repo_agent:alice/repo-a" in result.agent_results
+
+
+def test_execute_hard_fails_when_llm_user_root_runner_errors() -> None:
+    rule_person_calls = 0
+
+    class _FailingLLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            raise RuntimeError("llm person failure")
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="user",
+            context={
+                "user": {
+                    "username": "alice",
+                    "profile": {"login": "alice"},
+                    "owned_repos": [],
+                },
+            },
+        )
+
+    async def _rule_person_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_person_calls
+        rule_person_calls += 1
+        return AgentResult(data={"id": "rule-person"})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_person_agent=_FailingLLMPersonRunner(),
+        agent_runners={
+            "person_agent": _rule_person_agent,
+            "repo_agent": _rule_person_agent,
+            "org_agent": _rule_person_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+        retry_max_retries=1,
+    )
+    plan = orchestrator.get_execution_plan("user")
+
+    with pytest.raises(RuntimeError, match="LLM user runtime failed without fallback"):
+        asyncio.run(
+            orchestrator.execute(
+                plan=plan,
+                providers=_providers(),
+                context={
+                    "url_info": GitHubURLClassification(
+                        normalized_url="https://github.com/alice",
+                        detected_type=GitHubURLType.USER,
+                        owner="alice",
+                        repo=None,
+                    ),
+                    "source_url": "https://github.com/alice",
+                    "agent_runtime": "llm",
+                },
+            ),
+        )
+
+    assert rule_person_calls == 0
+
+
+def test_execute_hard_fails_when_llm_organization_root_runner_errors() -> None:
+    rule_org_calls = 0
+
+    class _FailingLLMOrganizationRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            raise RuntimeError("llm organization failure")
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="organization",
+            context={
+                "organization": {
+                    "org_name": "example",
+                    "profile": {"login": "example"},
+                    "members": [],
+                    "owned_repos": [],
+                },
+            },
+        )
+
+    async def _rule_org_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_org_calls
+        rule_org_calls += 1
+        return AgentResult(data={"id": "rule-org"})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_organization_agent=_FailingLLMOrganizationRunner(),
+        agent_runners={
+            "org_agent": _rule_org_agent,
+            "repo_agent": _rule_org_agent,
+            "person_agent": _rule_org_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+        retry_max_retries=1,
+    )
+    plan = orchestrator.get_execution_plan("organization")
+
+    with pytest.raises(RuntimeError, match="LLM organization runtime failed without fallback"):
+        asyncio.run(
+            orchestrator.execute(
+                plan=plan,
+                providers=_providers(),
+                context={
+                    "url_info": GitHubURLClassification(
+                        normalized_url="https://github.com/orgs/example",
+                        detected_type=GitHubURLType.ORGANIZATION,
+                        owner="example",
+                        repo=None,
+                    ),
+                    "source_url": "https://github.com/orgs/example",
+                    "agent_runtime": "llm",
+                },
+            ),
+        )
+
+    assert rule_org_calls == 0

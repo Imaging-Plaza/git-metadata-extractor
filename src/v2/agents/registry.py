@@ -61,11 +61,9 @@ class AgentRuntimeRegistry:
     ) -> AgentRunner:
         """Resolve the callable for the requested runtime/stage combination."""
 
-        if (
-            runtime == AgentRuntime.LLM
-            and detected_type == "repository"
-            and stage_key == STAGE_REPO_AGENT
-        ):
+        del detected_type
+
+        if runtime == AgentRuntime.LLM and stage_key == STAGE_REPO_AGENT:
             return self._llm_repository_agent.run
 
         if runtime == AgentRuntime.LLM and stage_key == STAGE_PERSON_AGENT:

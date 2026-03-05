@@ -102,6 +102,11 @@ PLAN_BY_TYPE: dict[str, list[str]] = {
         STAGE_CONTRIBUTION_AGENTS,
     ],
 }
+ROOT_STAGE_BY_DETECTED_TYPE: dict[str, str] = {
+    "repository": STAGE_REPO_AGENT,
+    "user": STAGE_PERSON_AGENT,
+    "organization": STAGE_ORG_AGENT,
+}
 
 
 @dataclass(slots=True)
@@ -221,6 +226,10 @@ class PipelineOrchestrator:
             include_upstream_stage_outputs_in_prompt
         )
         self._user_prompt_appendix = user_prompt_appendix
+
+    @property
+    def max_concurrent_agents(self) -> int:
+        return self._max_concurrent_agents
 
     def get_execution_plan(self, detected_type: str) -> ExecutionPlan:
         normalized_type = _to_detected_type(detected_type)
@@ -344,13 +353,17 @@ class PipelineOrchestrator:
             )
             if (
                 runtime_mode == AgentRuntime.LLM
-                and plan.detected_type == "repository"
-                and stage.name == STAGE_REPO_AGENT
+                and stage.name == ROOT_STAGE_BY_DETECTED_TYPE.get(plan.detected_type)
                 and stage_errors
             ):
-                # LLM mode intentionally hard-fails repository stage errors.
+                # LLM mode intentionally hard-fails root-stage errors without fallback.
+                detected_label = {
+                    "repository": "repository",
+                    "user": "user",
+                    "organization": "organization",
+                }.get(plan.detected_type, plan.detected_type)
                 message = (
-                    "LLM repository runtime failed without fallback: "
+                    f"LLM {detected_label} runtime failed without fallback: "
                     f"{stage_errors[0]}"
                 )
                 raise RuntimeError(message)
@@ -914,9 +927,17 @@ class PipelineOrchestrator:
 
         owner = self._require_url_info(runtime_context).owner
         full_names: list[str] = []
+        repository_contexts_by_full_name: dict[str, dict[str, Any]] = {}
         if detected_type == "user":
             user_context = bundle.context.get("user", {})
             repos = user_context.get("owned_repos", [])
+            raw_repository_contexts = user_context.get("repository_contexts")
+            if isinstance(raw_repository_contexts, dict):
+                repository_contexts_by_full_name = {
+                    str(key): value
+                    for key, value in raw_repository_contexts.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
             if isinstance(repos, list):
                 for repo in repos:
                     if not isinstance(repo, str) or not repo:
@@ -925,16 +946,31 @@ class PipelineOrchestrator:
         if detected_type == "organization":
             organization_context = bundle.context.get("organization", {})
             repos = organization_context.get("owned_repos", [])
+            raw_repository_contexts = organization_context.get("repository_contexts")
+            if isinstance(raw_repository_contexts, dict):
+                repository_contexts_by_full_name = {
+                    str(key): value
+                    for key, value in raw_repository_contexts.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
             if isinstance(repos, list):
                 for repo in repos:
                     if not isinstance(repo, str) or not repo:
                         continue
                     full_names.append(repo if "/" in repo else f"{owner}/{repo}")
 
-        return [
-            {"full_name": full_name, "source_url": runtime_context.get("source_url")}
-            for full_name in _deduplicate(full_names)
-        ]
+        contexts: list[dict[str, Any]] = []
+        for full_name in _deduplicate(full_names):
+            context: dict[str, Any] = {
+                "full_name": full_name,
+                "source_url": runtime_context.get("source_url"),
+            }
+            repository_context = repository_contexts_by_full_name.get(full_name)
+            if isinstance(repository_context, dict) and repository_context:
+                context["repository_context"] = deepcopy(repository_context)
+            contexts.append(context)
+
+        return contexts
 
     def _organization_fanout_contexts(  # noqa: C901, PLR0912
         self,

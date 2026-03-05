@@ -95,6 +95,7 @@ def test_user_context_contains_profile_repos_and_orcid() -> None:
     user_context = bundle.context["user"]
     assert user_context["profile"]["login"] == "alice"
     assert user_context["owned_repos"] == ["alice/repo-a", "repo-b"]
+    assert set(user_context["repository_contexts"]) == {"alice/repo-a", "alice/repo-b"}
     assert user_context["orcid_data"]["name"] == "Alice Example"
 
 
@@ -113,6 +114,38 @@ def test_org_context_contains_profile_members_and_repositories() -> None:
     assert organization_context["profile"]["login"] == "example"
     assert organization_context["members"] == ["alice", "bob"]
     assert organization_context["owned_repos"] == ["example/repo-a", "example/repo-b"]
+    assert set(organization_context["repository_contexts"]) == {
+        "example/repo-a",
+        "example/repo-b",
+    }
+
+
+def test_optional_repository_context_failures_are_warnings_for_user_mode() -> None:
+    class _PartiallyFailingGitHubProvider(_DummyGitHubProvider):
+        def get_repository(self, full_name: str) -> dict[str, Any]:
+            if full_name.endswith("repo-b"):
+                raise RuntimeError("repo unavailable")
+            return super().get_repository(full_name)
+
+    providers = ProviderSet(
+        github=_PartiallyFailingGitHubProvider(),
+        orcid=_DummyORCIDProvider(),
+    )
+    url_info = GitHubURLClassification(
+        normalized_url="https://github.com/alice",
+        detected_type=GitHubURLType.USER,
+        owner="alice",
+        repo=None,
+    )
+
+    bundle = asyncio.run(gather_context("user", url_info, providers))
+
+    user_context = bundle.context["user"]
+    assert set(user_context["repository_contexts"]) == {"alice/repo-a"}
+    assert any(
+        "Repository metadata lookup failed for alice/repo-b" in warning
+        for warning in bundle.warnings
+    )
 
 
 def test_missing_optional_orcid_adds_warning_instead_of_error() -> None:

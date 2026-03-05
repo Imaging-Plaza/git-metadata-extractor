@@ -62,6 +62,73 @@ def _coerce_members(candidate: Any) -> list[str]:
     return members
 
 
+def _normalize_owned_repo_full_name(owner: str, repo: str) -> str:
+    if "/" in repo:
+        return repo
+    return f"{owner}/{repo}"
+
+
+def _optional_repository_context(
+    *,
+    full_name: str,
+    providers: ProviderSet,
+    warnings: list[str],
+) -> dict[str, Any] | None:
+    try:
+        repository_metadata = providers.github.get_repository(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository metadata lookup failed for {full_name}: {exc}",
+        )
+        return None
+
+    try:
+        contributors = providers.github.get_contributors(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository contributors lookup failed for {full_name}: {exc}",
+        )
+        contributors = []
+
+    try:
+        languages = providers.github.get_languages(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository languages lookup failed for {full_name}: {exc}",
+        )
+        languages = {}
+
+    readme_content = _first_non_empty_string(
+        repository_metadata.get("readme"),
+        repository_metadata.get("readme_content"),
+        repository_metadata.get("README"),
+        repository_metadata.get("description"),
+    )
+    if not readme_content:
+        warnings.append(f"Repository README content is not available for {full_name}")
+        readme_content = ""
+
+    gimie_jsonld: dict[str, Any] = {}
+    try:
+        fetched_jsonld = providers.github.get_repository_jsonld(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository GIMIE JSON-LD lookup failed for {full_name}: {exc}",
+        )
+    else:
+        if isinstance(fetched_jsonld, dict):
+            gimie_jsonld = fetched_jsonld
+
+    return {
+        "full_name": full_name,
+        "metadata": repository_metadata,
+        "readme_content": readme_content,
+        "contributors": contributors,
+        "languages": languages,
+        "gimie_jsonld": gimie_jsonld,
+    }
+
+
 def _normalize_detected_type(detected_type: str | Any) -> str:
     if hasattr(detected_type, "value"):
         return str(detected_type.value)
@@ -156,6 +223,16 @@ async def gather_context(  # noqa: C901, PLR0915
             or user_profile.get("repos")
             or user_profile.get("owned_repos"),
         )
+        repository_contexts: dict[str, dict[str, Any]] = {}
+        for repo in owned_repos:
+            full_name = _normalize_owned_repo_full_name(username, repo)
+            repository_context = _optional_repository_context(
+                full_name=full_name,
+                providers=providers,
+                warnings=warnings,
+            )
+            if isinstance(repository_context, dict):
+                repository_contexts[full_name] = repository_context
         orcid_id = _first_non_empty_string(
             user_profile.get("orcid"),
             user_profile.get("orcid_id"),
@@ -175,6 +252,7 @@ async def gather_context(  # noqa: C901, PLR0915
             "username": username,
             "profile": user_profile,
             "owned_repos": owned_repos,
+            "repository_contexts": repository_contexts,
             "orcid_data": orcid_data,
         }
         return ContextBundle(
@@ -201,12 +279,23 @@ async def gather_context(  # noqa: C901, PLR0915
             organization_profile.get("repositories")
             or organization_profile.get("repos"),
         )
+        repository_contexts: dict[str, dict[str, Any]] = {}
+        for repo in owned_repos:
+            full_name = _normalize_owned_repo_full_name(organization_name, repo)
+            repository_context = _optional_repository_context(
+                full_name=full_name,
+                providers=providers,
+                warnings=warnings,
+            )
+            if isinstance(repository_context, dict):
+                repository_contexts[full_name] = repository_context
 
         context["organization"] = {
             "org_name": organization_name,
             "profile": organization_profile,
             "members": member_list,
             "owned_repos": owned_repos,
+            "repository_contexts": repository_contexts,
         }
         return ContextBundle(
             detected_type=normalized_type,

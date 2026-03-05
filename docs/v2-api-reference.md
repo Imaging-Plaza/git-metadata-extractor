@@ -28,9 +28,15 @@ Repository-mode traversal contract:
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`
-- `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT`)
-  - Wave 1 behavior: repository root stage can run in `llm` mode; user/organization fanout stages remain rule-based.
-  - `agent_runtime=llm` uses hard-fail policy for repository LLM failures (no rule-based fallback).
+- `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
+  - `agent_runtime=llm` runs LLM agents for repository/user/organization roots and fanout stages.
+  - Root-stage hard-fail policy in LLM mode (no rule-based fallback):
+    - repository input: `repo_agent`
+    - user input: `person_agent`
+    - organization input: `org_agent`
+- `verify_links`: `true|false` (default `false`)
+  - Runs optional `link_veracity` stage for unique HTTP(S) links in final JSON-LD.
+  - Supported only when `agent_runtime=llm`; otherwise returns `422 validation_error`.
 - `include_intermediates`: `true|false` (default `false`, returns run-scoped intermediate envelopes for this extract run only)
 
 Examples:
@@ -83,6 +89,7 @@ Shared runtime gates for all extract types:
 - `jsonld_build`
 - `shacl_gate` (non-fatal warnings)
 - `graph_write` (GraphStore upsert path)
+- optional `link_veracity` (only when `verify_links=true`)
 
 Detected-type execution order before shared gates:
 
@@ -178,6 +185,6 @@ If this line is absent after an LLM repository run with `agent_runtime=llm`, the
 | `V2_INTERMEDIATE_HISTORY_LIMIT` | `5` | Max intermediates returned by extract-stage reads and per-agent graph response caps |
 | `V2_ENABLE_LOGFIRE` | `true` | Enables v2 Logfire instrumentation |
 | `V2_ALLOW_SYNTHETIC_FALLBACKS` | `false` | Enables synthetic fallback entity/value synthesis for unresolved references in `/v2/extract` reconciliation |
-| `V2_AGENT_RUNTIME_DEFAULT` | `rule_based` | Default runtime selector for `/v2/extract` when `agent_runtime` query parameter is omitted |
+| `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime selector for `/v2/extract` when `agent_runtime` query parameter is omitted |
 | `LOGFIRE_TOKEN` | unset | Optional Logfire token |
 | `GITHUB_TOKEN` | unset | Required for healthy provider preflight |

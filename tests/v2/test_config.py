@@ -106,7 +106,7 @@ def test_v2_allow_synthetic_fallbacks_can_be_enabled(
     assert config.V2_ALLOW_SYNTHETIC_FALLBACKS is True
 
 
-def test_v2_agent_runtime_default_is_rule_based(
+def test_v2_agent_runtime_default_is_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
@@ -114,7 +114,7 @@ def test_v2_agent_runtime_default_is_rule_based(
 
     config = V2Config()
 
-    assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.RULE_BASED
+    assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.LLM
 
 
 def test_v2_agent_runtime_default_can_be_set_to_llm(

@@ -285,10 +285,10 @@ def test_extract_returns_provider_error_when_required_github_provider_fails() ->
     assert "Required provider 'github'" in payload["detail"]
 
 
-def test_extract_uses_llm_runtime_default_when_configured(
+def test_extract_uses_llm_runtime_default_when_unset(
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "llm")
+    monkeypatch.delenv("V2_AGENT_RUNTIME_DEFAULT", raising=False)
     llm_repo_calls = 0
     rule_repo_calls = 0
 
@@ -530,6 +530,379 @@ def test_extract_llm_runtime_failure_does_not_fallback_to_rule_based_repository_
     assert payload["error_type"] == "pipeline_error"
     assert "LLM repository runtime failed without fallback" in payload["detail"]
     assert rule_repo_calls == 0
+
+
+def test_extract_user_and_org_llm_runtime_use_llm_repo_fanout_runner() -> None:
+    llm_repo_calls = 0
+    rule_repo_calls = 0
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal llm_repo_calls
+            llm_repo_calls += 1
+            full_name = context.get("full_name", "owner/repo")
+            return AgentResult(
+                data={
+                    "id": full_name,
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "identifiers": {
+                        "pulse:githubRepositoryHandle": full_name,
+                        "schema:citation": None,
+                        "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                    },
+                    "idSource": "pulse:githubRepositoryHandle",
+                    "schema:name": full_name,
+                    "pulse:githubRepositoryHandle": full_name,
+                    "pulse:repositoryType": "pulse:Software",
+                    "pulse:discipline": ["wd:Q735"],
+                    "schema:author": [],
+                },
+            )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username") or context.get("github_username", "unknown")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": username,
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": username,
+                    "schema:url": f"https://github.com/{username}",
+                    "pulse:githubUsername": username,
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMOrganizationRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            org_name = context.get("org_name", "unknown-org")
+            return AgentResult(
+                data={
+                    "id": org_name,
+                    "type": "org:Organization",
+                    "shacl": "pulse:OrganizationShape",
+                    "identifiers": {
+                        "pulse:ror": None,
+                        "pulse:infoscienceOrganizationIdentifier": None,
+                        "pulse:githubOrganizationHandle": org_name,
+                        "uuid": "22222222-2222-4222-8222-222222222222",
+                    },
+                    "idSource": "pulse:githubOrganizationHandle",
+                    "schema:name": org_name,
+                    "schema:identifier": None,
+                    "pulse:githubOrganizationHandle": org_name,
+                    "pulse:infoscienceOrganizationIdentifier": None,
+                    "pulse:OrganizationType": "pulse:SoftwareProject",
+                    "pulse:githubOrgFollowers": 1,
+                    "org:hasUnit": [],
+                    "org:unitOf": None,
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        if detected_type == "user":
+            return ContextBundle(
+                detected_type="user",
+                context={
+                    "user": {
+                        "username": "alice",
+                        "profile": {"login": "alice"},
+                        "owned_repos": ["alice/repo-a"],
+                        "repository_contexts": {
+                            "alice/repo-a": {
+                                "full_name": "alice/repo-a",
+                                "metadata": {"full_name": "alice/repo-a"},
+                                "contributors": [],
+                                "languages": {"Python": 1},
+                                "readme_content": "README",
+                                "gimie_jsonld": {},
+                            },
+                        },
+                        "orcid_data": None,
+                    },
+                },
+            )
+
+        return ContextBundle(
+            detected_type="organization",
+            context={
+                "organization": {
+                    "org_name": "example",
+                    "profile": {"login": "example"},
+                    "members": [],
+                    "owned_repos": ["example/repo-a"],
+                    "repository_contexts": {
+                        "example/repo-a": {
+                            "full_name": "example/repo-a",
+                            "metadata": {"full_name": "example/repo-a"},
+                            "contributors": [],
+                            "languages": {"Python": 1},
+                            "readme_content": "README",
+                            "gimie_jsonld": {},
+                        },
+                    },
+                },
+            },
+        )
+
+    async def _rule_repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        nonlocal rule_repo_calls
+        rule_repo_calls += 1
+        return AgentResult(data={"id": "rule-repo"})
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMOrganizationRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        agent_runners={
+            "repo_agent": _rule_repo_agent,
+        },
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    user_status, _user_payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/alice",
+        params={"output_format": "json", "agent_runtime": "llm"},
+    )
+    org_status, _org_payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/orgs/example",
+        params={"output_format": "json", "agent_runtime": "llm"},
+    )
+
+    assert user_status == HTTP_OK
+    assert org_status == HTTP_OK
+    assert llm_repo_calls >= 2
+    assert rule_repo_calls == 0
+
+
+def test_extract_verify_links_rejects_non_llm_runtime() -> None:
+    status_code, payload = _get_json(
+        "/v2/extract/github.com/octocat/Hello-World",
+        params={
+            "output_format": "json",
+            "agent_runtime": "rule_based",
+            "verify_links": "true",
+        },
+    )
+
+    assert status_code == HTTP_UNPROCESSABLE_ENTITY
+    assert payload["error_type"] == "validation_error"
+    assert "verify_links=true requires agent_runtime=llm" in payload["detail"]
+    assert any(error["field"] == "verify_links" for error in payload.get("errors", []))
+
+
+def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
+    monkeypatch: Any,
+) -> None:
+    from src.v2.pipeline.stages import LinkVeracityStageResult
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(
+                data={
+                    "id": "owner/repo",
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "identifiers": {
+                        "pulse:githubRepositoryHandle": "owner/repo",
+                        "schema:citation": None,
+                        "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                    },
+                    "idSource": "pulse:githubRepositoryHandle",
+                    "schema:name": "owner/repo",
+                    "pulse:githubRepositoryHandle": "owner/repo",
+                    "pulse:repositoryType": "pulse:Software",
+                    "pulse:discipline": ["wd:Q735"],
+                    "schema:author": ["owner"],
+                    "schema:license": "https://spdx.org/licenses/MIT.html",
+                },
+            )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username", "owner")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": username,
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": username,
+                    "schema:url": f"https://github.com/{username}",
+                    "pulse:githubUsername": username,
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner/repo",
+                    "metadata": {"owner": {"login": "owner", "type": "User"}},
+                    "contributors": [{"login": "owner", "type": "User"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _fake_run_link_veracity_stage(**kwargs: Any) -> LinkVeracityStageResult:
+        del kwargs
+        return LinkVeracityStageResult(
+            records=[
+                {
+                    "link": "https://spdx.org/licenses/MIT.html",
+                    "status": "ok",
+                    "relationship_supported": False,
+                    "source_entity_id": "urn:git-metadata-extractor:entity:owner/repo",
+                    "predicate": "schema:license",
+                    "relationships": [],
+                },
+                {
+                    "link": "https://github.com/owner/repo",
+                    "status": "error",
+                    "error": "timeout",
+                    "source_entity_id": "urn:git-metadata-extractor:entity:owner/repo",
+                    "predicate": "schema:url",
+                    "relationships": [],
+                },
+            ],
+            warnings=[
+                "Link veracity unsupported relationship: link=https://spdx.org/licenses/MIT.html, source=urn:git-metadata-extractor:entity:owner/repo, predicate=schema:license",
+                "Link veracity check failed: link=https://github.com/owner/repo, error=timeout",
+            ],
+            checked_count=2,
+            supported_count=0,
+            unsupported_count=1,
+            failed_count=1,
+        )
+
+    monkeypatch.setattr("src.v2.api.run_link_veracity_stage", _fake_run_link_veracity_stage)
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/owner/repo",
+        params={
+            "output_format": "jsonld",
+            "agent_runtime": "llm",
+            "verify_links": "true",
+            "include_intermediates": "true",
+        },
+    )
+
+    assert status_code == HTTP_OK
+    assert "link_veracity" in payload["stats"]["stages_completed"]
+    assert any("Link veracity summary: checked=2, supported=0, unsupported=1, failed=1" in warning for warning in payload["warnings"])
+    assert "@graph" in payload["output"]
+
+    intermediates = payload.get("intermediates") or []
+    link_veracity_intermediates = [
+        envelope
+        for envelope in intermediates
+        if envelope.get("agent_name") == "link_veracity"
+    ]
+    assert len(link_veracity_intermediates) == 2
 
 
 def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichment() -> None:

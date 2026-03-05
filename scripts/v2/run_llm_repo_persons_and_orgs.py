@@ -1579,6 +1579,7 @@ async def _run(  # noqa: C901, PLR0915
         reconciled_all.extend(entity_list)
     reconciled_all.extend(reconciled.memberships)
     reconciled_all.extend(reconciled.contributions)
+    reconciled_all = _merge_entities_by_id(reconciled_all)
 
     if reconciled_all:
         reconciled_jsonld = build_jsonld_output(

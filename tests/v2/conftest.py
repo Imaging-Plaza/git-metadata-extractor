@@ -66,6 +66,8 @@ def _isolate_v2_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setenv("V2_GRAPH_DB_PATH", str(tmp_path / "v2_graph.db"))
     monkeypatch.setenv("CACHE_DB_PATH", str(tmp_path / "cache.db"))
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "true")
+    # Most tests exercise deterministic rule-based behavior unless they opt into LLM explicitly.
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "rule_based")
 
 
 @pytest.fixture(autouse=True)
