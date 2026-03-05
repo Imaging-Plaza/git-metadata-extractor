@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -82,6 +83,7 @@ class PipelineResult:
     stages_completed: list[str] = field(default_factory=list)
     agent_results: dict[str, AgentResult] = field(default_factory=dict)
     typed_entity_buckets: TypedEntityBuckets = field(default_factory=TypedEntityBuckets)
+    gathered_context: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     duration_ms: int = 0
@@ -131,6 +133,7 @@ class PipelineResult:
             "stages_completed": list(self.stages_completed),
             "agent_results": serialized_results,
             "typed_entity_buckets": typed_entity_buckets,
+            "gathered_context": deepcopy(self.gathered_context),
             "warnings": list(self.warnings),
             "errors": list(self.errors),
             "duration_ms": self.duration_ms,

@@ -75,6 +75,16 @@ Use these to infer aliases, ownership, org type, and parent/child relations.
 
 ## Available tools
 
+### `search_organization_identity`
+
+Search ROR and Infoscience together in one call and return:
+- `ror_candidates`
+- `infoscience_candidates`
+- `linked_candidates` (high-confidence name-linked pairs)
+
+Use this as the primary tool when available to keep `pulse:ror` and `pulse:infoscienceOrganizationIdentifier` coherent for the same organization.
+Do not rely on acronym-only matches from linked candidates.
+
 ### `search_ror_organizations`
 
 Search ROR organizations by query text.
@@ -93,3 +103,4 @@ Use this to resolve:
 - `schema:name` and parent hints
 
 When both tools return candidates, choose coherent fields from the same entity candidate whenever possible.
+If `search_organization_identity` is available, prefer it over separate provider calls.

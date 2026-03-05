@@ -5,10 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Added two always-on LLM-only global stages in `/v2/extract`: `llm_dedup` (after permissive validation, before reconciliation) and `llm_critic` (after reconciliation, before strict validation). Both stages are fail-open (warning-only) and append to `stats.stages_completed` in LLM runs.
+- `llm_dedup` now applies deterministic constrained merge acceptance on LLM cluster suggestions across organizations/persons/repositories/articles, enforces identifier-conflict rejections, resolves canonical IDs by hierarchy, remaps references, and recomputes membership/contribution composite IDs.
+- `llm_critic` now applies deterministic non-root pruning from LLM suggestions with root protection, cascade cleanup for memberships/contributions, relation-array cleanup, and `critic_pruned` entries in `excluded_entities`.
 - Strengthened v2 organization identity reconciliation to be ROR-first end-to-end. `resolve_organization_id()` now enforces hierarchy precedence even when incoming `id/idSource` is prefilled with a lower-priority source, and reconciliation now merges high-confidence duplicate organization variants (ROR/Infoscience/GitHub signals) before relationship remapping.
+- Improved cross-source organization merge equivalence to normalize common name spelling variants (for example `center`/`centre`) so ROR + Infoscience duplicates merge more reliably and membership/org remaps propagate to canonical ROR IDs.
 - Changed v2 organization lookup collision behavior during reconciliation to prefer ROR-backed canonical organizations when multiple candidates share tokens, while keeping ambiguity warning-only (no extract hard-fail).
 - Changed `PipelineOrchestrator` default prompt-context behavior so downstream LLM agents receive serialized upstream stage JSON by default (`include_upstream_stage_outputs_in_prompt=True`).
 - Updated LLM organization and membership system prompts with explicit acronym-disambiguation guidance, context-grounded ROR selection rules, and “leave ROR null when ambiguous” instructions.
+- Updated membership fanout context to provide explicit `target_person` and `target_organizations` blocks, and wired `LLMMembershipAgentV2` to expose ORCID lookup tooling (`get_orcid_record`) for role/date grounding when ORCID identifiers are available.
+- Tightened organization ownership semantics: reconciliation now rebuilds `pulse:owns` from canonical repository `pulse:ownedBy` links and clears ownership for organizations without a GitHub organization handle, preventing non-owner affiliation organizations from owning source repositories.
+- Disabled ownership propagation from GitHub org-account units to canonical parent organizations; `pulse:owns` now remains direct-owner-only while preserving GitHub org-account nodes as `org:Organization` entities for hierarchy linkage.
+- Reconciliation now strips organization lookup-only fields (`aliases`, `acronyms`, `labels`) before strict validation/output so `org:Organization` payloads stay strict-schema compliant (`additionalProperties: false`).
+- GitHub org-account unit entities synthesized during reconciliation now use canonical GitHub URL IDs (`https://github.com/<handle>`) instead of bare-handle IDs, keeping repository ownership links URL-consistent end-to-end.
+- Added a dual-provider organization LLM tool (`search_organization_identity`) that queries ROR and Infoscience together and returns linked candidate pairs for coherent identifier assignment.
 - Replaced opaque `urn:git-metadata-extractor:entity:` URI prefix with shorter `urn:pulse:` for fallback entity `@id` values. Canonical entities (persons, repositories, organizations, articles) now use dereferenceable URLs (`https://orcid.org/`, `https://github.com/`, `https://ror.org/`, `https://doi.org/`) as `@id` wherever the `resolve_*_id()` functions in `id_resolution.py` produce them. Only UUID-fallback or pre-reconciliation entities receive the `urn:pulse:` prefix.
 - Membership and contribution composite IDs now use full canonical URIs for both parts (e.g., `https://github.com/user_https://ror.org/02s376052`). The pipeline no longer relies on splitting composite IDs by `_` to extract person/org references — `_person_ref` and `schema:author`/`org:organization` fields are used instead.
 - Crossref validation no longer parses composite membership IDs via string splitting. Ownership checks use an explicit `_person_ref` → person lookup map built from membership entities.
@@ -22,6 +32,12 @@ All notable changes to this project will be documented in this file.
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
 
 ### Added
+- Added `LLMDedupAgentV2` (`src/v2/agents/llm/dedup/agent.py`) and `LLMCriticAgentV2` (`src/v2/agents/llm/critic/agent.py`) with structured JSON outputs for global duplicate-cluster and prune suggestions.
+- Added stage helpers `run_llm_dedup_stage` and `run_llm_critic_stage` (`src/v2/pipeline/stages/llm_dedup.py`, `src/v2/pipeline/stages/llm_critic.py`) plus stage result dataclasses in `src/v2/pipeline/stages/models.py`.
+- Added regression coverage:
+  - `tests/v2/test_llm_dedup_stage.py`
+  - `tests/v2/test_llm_critic_stage.py`
+  - `tests/v2/test_extract_e2e.py` (LLM stage sequencing, intermediates, and fail-open behavior)
 - Added `reconciliation_debug` intermediate emission in `/v2/extract` (when `include_intermediates=true`) with merge/remap diagnostics: merged group/entity counts, org remap sample, and organization lookup token-collision sample.
 - Added full 7-stage LLM repository debug flow in `scripts/v2/run_llm_repo_persons_and_orgs.py`:
   `context_gather -> repo_agent -> person_agents -> org_agents -> article_agents -> membership_agents -> contribution_agents`,

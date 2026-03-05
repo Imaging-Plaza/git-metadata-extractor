@@ -911,6 +911,280 @@ def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
     assert len(reconciliation_debug_intermediates) == 1
 
 
+def test_extract_llm_runtime_includes_dedup_and_critic_stages_and_intermediates(
+    monkeypatch: Any,
+) -> None:
+    from src.v2.pipeline.stages.models import LLMCriticStageResult, LLMDedupStageResult
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(
+                data={
+                    "id": "owner/repo",
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "identifiers": {
+                        "pulse:githubRepositoryHandle": "owner/repo",
+                        "schema:citation": None,
+                        "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                    },
+                    "idSource": "pulse:githubRepositoryHandle",
+                    "schema:name": "owner/repo",
+                    "pulse:githubRepositoryHandle": "owner/repo",
+                    "pulse:repositoryType": "pulse:Software",
+                    "pulse:discipline": ["wd:Q735"],
+                    "schema:author": ["owner"],
+                },
+            )
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username", "owner")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": username,
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": username,
+                    "schema:url": f"https://github.com/{username}",
+                    "pulse:githubUsername": username,
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner/repo",
+                    "metadata": {"owner": {"login": "owner", "type": "User"}},
+                    "contributors": [{"login": "owner", "type": "User"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                    "gimie_jsonld": {"@id": "https://github.com/owner/repo"},
+                },
+            },
+        )
+
+    async def _fake_dedup_stage(**kwargs: Any) -> LLMDedupStageResult:
+        return LLMDedupStageResult(
+            typed_entity_buckets=kwargs["typed_entity_buckets"],
+            candidate_clusters={
+                "organizations": [],
+                "persons": [],
+                "repositories": [],
+                "articles": [],
+            },
+            resolution={
+                "accepted_clusters": {},
+                "rejected_clusters": {},
+                "remaps": {},
+            },
+        )
+
+    async def _fake_critic_stage(**kwargs: Any) -> LLMCriticStageResult:
+        return LLMCriticStageResult(reconciled=kwargs["reconciled"])
+
+    monkeypatch.setattr("src.v2.api.run_llm_dedup_stage", _fake_dedup_stage)
+    monkeypatch.setattr("src.v2.api.run_llm_critic_stage", _fake_critic_stage)
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/owner/repo",
+        params={
+            "output_format": "json",
+            "agent_runtime": "llm",
+            "include_intermediates": "true",
+        },
+    )
+
+    assert status_code == HTTP_OK
+    completed = payload["stats"]["stages_completed"]
+    assert "llm_dedup" in completed
+    assert "llm_critic" in completed
+    assert completed.index("llm_dedup") > completed.index("permissive_validation")
+    assert completed.index("llm_critic") > completed.index("reconciliation")
+
+    intermediates = payload.get("intermediates") or []
+    intermediate_names = {envelope.get("agent_name") for envelope in intermediates}
+    assert "llm_dedup_candidates" in intermediate_names
+    assert "llm_dedup_resolution" in intermediate_names
+    assert "llm_critic_decisions" in intermediate_names
+    assert "llm_critic_applied" in intermediate_names
+
+
+def test_extract_llm_dedup_and_critic_fail_open_with_warnings(
+    monkeypatch: Any,
+) -> None:
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(
+                data={
+                    "id": "owner/repo",
+                    "type": "schema:SoftwareSourceCode",
+                    "shacl": "pulse:RepositoryShape",
+                    "identifiers": {
+                        "pulse:githubRepositoryHandle": "owner/repo",
+                        "schema:citation": None,
+                        "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                    },
+                    "idSource": "pulse:githubRepositoryHandle",
+                    "schema:name": "owner/repo",
+                    "pulse:githubRepositoryHandle": "owner/repo",
+                    "pulse:repositoryType": "pulse:Software",
+                    "pulse:discipline": ["wd:Q735"],
+                    "schema:author": ["owner"],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            username = context.get("username", "owner")
+            return AgentResult(
+                data={
+                    "id": username,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": username,
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": username,
+                    "schema:url": f"https://github.com/{username}",
+                    "pulse:githubUsername": username,
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "owner/repo",
+                    "metadata": {"owner": {"login": "owner", "type": "User"}},
+                    "contributors": [{"login": "owner", "type": "User"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _failing_dedup_stage(**kwargs: Any) -> Any:
+        del kwargs
+        raise RuntimeError("boom dedup")
+
+    async def _failing_critic_stage(**kwargs: Any) -> Any:
+        del kwargs
+        raise RuntimeError("boom critic")
+
+    monkeypatch.setattr("src.v2.api.run_llm_dedup_stage", _failing_dedup_stage)
+    monkeypatch.setattr("src.v2.api.run_llm_critic_stage", _failing_critic_stage)
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/owner/repo",
+        params={"output_format": "json", "agent_runtime": "llm"},
+    )
+
+    assert status_code == HTTP_OK
+    assert any("llm_dedup stage failed: boom dedup" in warning for warning in payload["warnings"])
+    assert any("llm_critic stage failed: boom critic" in warning for warning in payload["warnings"])
+    assert "llm_dedup" in payload["stats"]["stages_completed"]
+    assert "llm_critic" in payload["stats"]["stages_completed"]
+
+
 def test_extract_reconciles_org_identity_to_ror_for_memberships() -> None:
     infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
     infoscience_org_id = (
@@ -1151,19 +1425,29 @@ def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichme
         for entity in entities
         if entity.get("type") == "org:Organization"
     ]
+    repository = next(
+        entity
+        for entity in entities
+        if entity.get("type") == "schema:SoftwareSourceCode"
+        and entity.get("pulse:githubRepositoryHandle") == "owner-org/source-repo"
+    )
+    owner_org_id = repository["pulse:ownedBy"]
     owner_org = next(
         entity
         for entity in organization_entities
-        if entity.get("pulse:githubOrganizationHandle") == "owner-org"
+        if entity.get("id") == owner_org_id
     )
     assert owner_org["pulse:owns"] == ["https://github.com/owner-org/source-repo"]
-
-    enriched_org = next(
-        entity
-        for entity in organization_entities
-        if entity.get("pulse:githubOrganizationHandle") != "owner-org"
+    assert all(
+        org.get("pulse:owns", []) == []
+        for org in organization_entities
+        if org.get("pulse:githubOrganizationHandle") is None
     )
-    assert enriched_org.get("pulse:owns", []) == ["https://github.com/owner-org/source-repo"]
+    assert any(
+        org.get("pulse:githubOrganizationHandle") == "owner-org"
+        and org.get("pulse:owns") == ["https://github.com/owner-org/source-repo"]
+        for org in organization_entities
+    )
 
 
 def test_extract_json_contract_stage_sequence_for_user_and_org() -> None:

@@ -8,9 +8,13 @@ from src.v2.pipeline.stages.link_veracity import (
     collect_unique_http_link_contexts,
     run_link_veracity_stage,
 )
+from src.v2.pipeline.stages.llm_critic import run_llm_critic_stage
+from src.v2.pipeline.stages.llm_dedup import run_llm_dedup_stage
 from src.v2.pipeline.stages.models import (
     AssembledOutput,
     ContextBundle,
+    LLMCriticStageResult,
+    LLMDedupStageResult,
     ReconciledEntities,
 )
 from src.v2.pipeline.stages.output_assembly import (
@@ -33,7 +37,11 @@ __all__ = [
     "collect_unique_http_link_contexts",
     "compute_stats",
     "gather_context",
+    "LLMCriticStageResult",
+    "LLMDedupStageResult",
     "LinkVeracityStageResult",
     "reconcile_entities",
+    "run_llm_critic_stage",
+    "run_llm_dedup_stage",
     "run_link_veracity_stage",
 ]

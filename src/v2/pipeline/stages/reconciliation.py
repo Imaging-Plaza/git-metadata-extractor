@@ -36,6 +36,11 @@ ORG_ID_SOURCE_PRIORITY: dict[str, int] = {
     "uuid": 1,
 }
 DEBUG_SAMPLE_LIMIT = 10
+ORGANIZATION_NAME_EQUIVALENCE_TOKENS: dict[str, str] = {
+    "centre": "center",
+    "centres": "centers",
+}
+GITHUB_ORG_BASE_URI = "https://github.com/"
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -451,9 +456,20 @@ def _organization_github_handle_key(organization: dict[str, Any]) -> str | None:
 def _organization_name_key(organization: dict[str, Any]) -> str | None:
     name = organization.get("schema:name")
     if isinstance(name, str) and name:
-        normalized = normalize_string(name)
+        normalized = _normalize_organization_name_for_equivalence(name)
         return normalized or None
     return None
+
+
+def _normalize_organization_name_for_equivalence(value: str) -> str:
+    normalized = normalize_string(value)
+    if not normalized:
+        return ""
+    normalized_tokens = [
+        ORGANIZATION_NAME_EQUIVALENCE_TOKENS.get(token, token)
+        for token in normalized.split()
+    ]
+    return " ".join(normalized_tokens)
 
 
 def _dedupe_any_list(values: list[Any]) -> list[Any]:
@@ -845,6 +861,49 @@ def _preferred_organization_id(
     return existing_id
 
 
+def _github_org_account_id(handle: str) -> str:
+    return f"{GITHUB_ORG_BASE_URI}{handle}"
+
+
+def _prefer_github_unit_for_handle_token(
+    *,
+    token: str,
+    existing_id: str,
+    candidate_id: str,
+    organizations_by_id: dict[str, dict[str, Any]],
+) -> str | None:
+    existing_org = organizations_by_id.get(existing_id)
+    candidate_org = organizations_by_id.get(candidate_id)
+    if not isinstance(existing_org, dict) or not isinstance(candidate_org, dict):
+        return None
+
+    existing_handle = _organization_github_handle_key(existing_org)
+    candidate_handle = _organization_github_handle_key(candidate_org)
+    if (
+        not isinstance(existing_handle, str)
+        or not isinstance(candidate_handle, str)
+        or existing_handle != candidate_handle
+    ):
+        return None
+
+    if token not in _lookup_token_variants(existing_handle):
+        return None
+
+    existing_is_github_unit = existing_org.get("idSource") == "pulse:githubOrganizationHandle"
+    candidate_is_github_unit = candidate_org.get("idSource") == "pulse:githubOrganizationHandle"
+    if existing_is_github_unit == candidate_is_github_unit:
+        return None
+
+    return existing_id if existing_is_github_unit else candidate_id
+
+
+def _strip_organization_lookup_fields(organizations: list[dict[str, Any]]) -> None:
+    """Drop reconciliation-only lookup fields not allowed by strict schema."""
+    for organization in organizations:
+        for field in ("aliases", "acronyms", "labels"):
+            organization.pop(field, None)
+
+
 def _build_organization_lookup_with_collisions(
     organizations: list[dict[str, Any]],
 ) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -884,6 +943,26 @@ def _build_organization_lookup_with_collisions(
                         },
                     )
                 continue
+            github_unit_preferred_id = _prefer_github_unit_for_handle_token(
+                token=token,
+                existing_id=existing_id,
+                candidate_id=canonical_id,
+                organizations_by_id=organizations_by_id,
+            )
+            if isinstance(github_unit_preferred_id, str):
+                lookup[token] = github_unit_preferred_id
+                alternate_id = canonical_id if github_unit_preferred_id == existing_id else existing_id
+                marker = (token, github_unit_preferred_id, alternate_id)
+                if marker not in seen_collision_markers:
+                    seen_collision_markers.add(marker)
+                    collision_records.append(
+                        {
+                            "token": token,
+                            "preferred_id": github_unit_preferred_id,
+                            "alternate_id": alternate_id,
+                        },
+                    )
+                continue
             preferred_id = _preferred_organization_id(
                 existing_id=existing_id,
                 candidate_id=canonical_id,
@@ -911,8 +990,9 @@ def _build_github_org_account_unit(
     github_handle: str,
     parent_org_id: str,
 ) -> dict[str, Any]:
+    github_org_id = _github_org_account_id(github_handle)
     return {
-        "id": github_handle,
+        "id": github_org_id,
         "type": "org:Organization",
         "shacl": "pulse:OrganizationShape",
         "identifiers": {
@@ -968,24 +1048,35 @@ def _ensure_github_org_units_for_repository_owners(
         ):
             continue
 
+        github_org_id = _github_org_account_id(github_handle)
         org_units = organization.get("org:hasUnit")
         if not isinstance(org_units, list):
             org_units = []
         organization["org:hasUnit"] = _dedupe_preserve_order(
             [
-                *[value for value in org_units if isinstance(value, str) and value],
-                github_handle,
+                *[
+                    github_org_id if value == github_handle else value
+                    for value in org_units
+                    if isinstance(value, str) and value
+                ],
+                github_org_id,
             ],
         )
 
-        github_unit = organizations_by_id.get(github_handle)
+        github_unit = organizations_by_id.get(github_org_id)
+        legacy_github_unit = organizations_by_id.get(github_handle)
+        if github_unit is None and isinstance(legacy_github_unit, dict):
+            legacy_github_unit["id"] = github_org_id
+            organizations_by_id.pop(github_handle, None)
+            organizations_by_id[github_org_id] = legacy_github_unit
+            github_unit = legacy_github_unit
         if github_unit is None:
             github_unit = _build_github_org_account_unit(
                 github_handle=github_handle,
                 parent_org_id=canonical_org_id,
             )
             organizations.append(github_unit)
-            organizations_by_id[github_handle] = github_unit
+            organizations_by_id[github_org_id] = github_unit
 
         github_unit["org:unitOf"] = canonical_org_id
         github_unit["type"] = "org:Organization"
@@ -1627,24 +1718,42 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                 canonical_owns.append(canonical_repo_id)
             person["pulse:owns"] = _dedupe_preserve_order(canonical_owns)
 
+    organization_ids = {
+        organization["id"]
+        for organization in organizations
+        if isinstance(organization.get("id"), str)
+    }
+    owned_repository_ids_by_org: dict[str, list[str]] = defaultdict(list)
+    for repository in repositories:
+        repository_id = repository.get("id")
+        owner_ref = repository.get("pulse:ownedBy")
+        if not isinstance(repository_id, str) or not repository_id:
+            continue
+        if not isinstance(owner_ref, str) or not owner_ref:
+            continue
+        canonical_owner = _resolve_lookup_token(organization_lookup, owner_ref)
+        if (
+            isinstance(canonical_owner, str)
+            and canonical_owner in organization_ids
+        ):
+            owned_repository_ids_by_org[canonical_owner].append(repository_id)
+
+    # NOTE: Ownership propagation from GitHub org-account units to canonical
+    # parent organizations is intentionally disabled. `pulse:owns` should reflect
+    # only direct repository owners resolved from `repository.pulse:ownedBy`.
+    #
+    # If needed in the future, re-enable propagation only for strict same-handle
+    # parent/child pairs and with explicit semantic approval.
+
     for organization in organizations:
         organization_id = organization["id"]
-        owns_refs = organization.get("pulse:owns")
-        if isinstance(owns_refs, list):
-            canonical_org_owns: list[str] = []
-            for owned_repo in owns_refs:
-                canonical_repo_id = _resolve_lookup_token(repository_lookup, owned_repo)
-                if canonical_repo_id is None:
-                    if isinstance(owned_repo, str):
-                        link_warnings.append(
-                            (
-                                "Orphan repository ownership reference from organization: "
-                                f"organization={organization_id}, repository={owned_repo}"
-                            ),
-                        )
-                    continue
-                canonical_org_owns.append(canonical_repo_id)
-            organization["pulse:owns"] = _dedupe_preserve_order(canonical_org_owns)
+        github_handle = _organization_github_handle(organization)
+        if not isinstance(github_handle, str) or not github_handle:
+            organization["pulse:owns"] = []
+            continue
+        organization["pulse:owns"] = _dedupe_preserve_order(
+            owned_repository_ids_by_org.get(organization_id, []),
+        )
 
     memberships, covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
         class_memberships,
@@ -1722,6 +1831,8 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         person["pulse:hasContribution"] = _dedupe_preserve_order(
             contribution_ids_by_person.get(person_id, []),
         )
+
+    _strip_organization_lookup_fields(organizations)
 
     link_warnings.extend(_detect_repository_fork_cycles(repositories))
     org_remap_entries = [

@@ -11,6 +11,7 @@ from src.v2.agents.llm.membership import agent as membership_agent_module
 from src.v2.agents.models import ProviderSet
 from src.v2.llm.runtime import LLMRuntimeError, LLMRuntimeResult
 from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.providers.mock_orcid import MockORCIDProvider
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29
@@ -42,6 +43,13 @@ class _FakeLLMRuntime:
 
 def _providers() -> ProviderSet:
     return ProviderSet(github=MockGitHubProvider())
+
+
+def _providers_with_orcid() -> ProviderSet:
+    return ProviderSet(
+        github=MockGitHubProvider(),
+        orcid=MockORCIDProvider(),
+    )
 
 
 def _valid_membership_payload() -> dict[str, Any]:
@@ -187,10 +195,53 @@ def test_llm_membership_agent_appends_runtime_prompt_context_blocks() -> None:
     assert prompt_appendix in prompt
     assert "generate_uuid_v4" in captured_tool_names
     assert "fetch_link_content_via_selenium" in captured_tool_names
+    assert "get_orcid_record" not in captured_tool_names
+
+
+def test_llm_membership_agent_adds_orcid_tool_when_provider_available() -> None:
+    captured_tool_names: list[str] = []
+
+    class _CapturingRuntime:
+        async def run_json_prompt(
+            self,
+            *,
+            system_prompt: str,
+            user_prompt: str,
+            output_type: Any = None,
+            tools: Any = None,
+        ) -> LLMRuntimeResult:
+            del system_prompt, user_prompt, output_type
+            captured_tool_names.extend(getattr(tool, "name", "") for tool in (tools or []))
+            return LLMRuntimeResult(
+                payload=_valid_membership_payload(),
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    agent = LLMMembershipAgentV2(llm_runtime=_CapturingRuntime())
+    asyncio.run(
+        agent.run(
+            {
+                "membership_seed": "alice",
+                "target_person": {
+                    "id": "alice",
+                    "pulse:orcidIdentifier": "0000-0001-5000-0007",
+                },
+                "target_organizations": [{"id": "org:epfl"}],
+            },
+            _providers_with_orcid(),
+        ),
+    )
+
+    assert "generate_uuid_v4" in captured_tool_names
+    assert "fetch_link_content_via_selenium" in captured_tool_names
+    assert "get_orcid_record" in captured_tool_names
 
 
 def test_llm_membership_system_prompt_prefers_ror_backed_canonical_org_ids() -> None:
     prompt = membership_agent_module._SYSTEM_PROMPT
 
     assert "Use canonical IDs from `known_persons` and `known_organizations` when available." in prompt
+    assert "Use `target_person` and `target_organizations` as primary context when provided." in prompt
     assert "Prefer ROR-backed canonical organization IDs" in prompt
+    assert "get_orcid_record(orcid_id)" in prompt

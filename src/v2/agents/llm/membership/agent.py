@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     fetch_link_content_via_selenium_tool,
 )
@@ -87,7 +88,6 @@ class LLMMembershipAgentV2:
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
-        del providers
         membership_seed = _resolve_membership_seed(context)
 
         llm_input: dict[str, Any] = {
@@ -103,6 +103,15 @@ class LLMMembershipAgentV2:
             "typed_entity_buckets": context.get("typed_entity_buckets"),
         }
 
+        target_person = context.get("target_person")
+        if isinstance(target_person, dict) and target_person:
+            llm_input["target_person"] = deepcopy(target_person)
+
+        target_organizations = context.get("target_organizations")
+        normalized_target_organizations = _list_of_dicts(target_organizations)
+        if normalized_target_organizations:
+            llm_input["target_organizations"] = normalized_target_organizations
+
         repository_context = context.get("repository_context")
         if isinstance(repository_context, dict) and repository_context:
             llm_input["repository_context"] = deepcopy(repository_context)
@@ -114,6 +123,9 @@ class LLMMembershipAgentV2:
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
+        tools = [generate_uuid_v4_tool, fetch_link_content_via_selenium_tool]
+        if providers.orcid is not None:
+            tools.append(make_orcid_person_tool(providers.orcid))
 
         try:
             llm_result = await asyncio.wait_for(
@@ -121,7 +133,7 @@ class LLMMembershipAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=AgentMembershipShape,
-                    tools=[generate_uuid_v4_tool, fetch_link_content_via_selenium_tool],
+                    tools=tools,
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )

@@ -30,6 +30,10 @@ Query parameters:
 - `output_format`: `jsonld` (default) or `json`
 - `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
   - `agent_runtime=llm` runs LLM agents for repository/user/organization roots and fanout stages.
+  - In LLM runtime, two global fail-open stages are always enabled:
+    - `llm_dedup` (post-permissive, pre-reconciliation): LLM duplicate-cluster suggestions + deterministic constrained merge/remap.
+    - `llm_critic` (post-reconciliation, pre-strict): LLM prune suggestions + deterministic non-root pruning/cascade cleanup.
+  - Both stages are warning-only on failure (pipeline continues).
   - Root-stage hard-fail policy in LLM mode (no rule-based fallback):
     - repository input: `repo_agent`
     - user input: `person_agent`
@@ -83,13 +87,22 @@ curl -s \
 Shared runtime gates for all extract types:
 
 - `permissive_validation`
+- `llm_dedup` (LLM runtime only)
 - `reconciliation`
+- `llm_critic` (LLM runtime only)
 - `strict_validation`
 - `output_assembly`
 - `jsonld_build`
 - `shacl_gate` (non-fatal warnings)
 - `graph_write` (GraphStore upsert path)
 - optional `link_veracity` (only when `verify_links=true`)
+
+LLM-stage intermediates (when `include_intermediates=true`):
+
+- `llm_dedup_candidates`
+- `llm_dedup_resolution`
+- `llm_critic_decisions`
+- `llm_critic_applied`
 
 Detected-type execution order before shared gates:
 

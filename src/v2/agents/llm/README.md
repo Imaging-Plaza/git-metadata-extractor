@@ -16,6 +16,7 @@ src/v2/agents/llm/
 │   ├── disciplines.py           # Static tool: list_disciplines_tool
 │   ├── infoscience_orgunit.py   # Factory: make_infoscience_orgunit_tool(provider)
 │   ├── infoscience_search.py    # Factory: make_infoscience_search_tool(provider)
+│   ├── organization_identity.py # Factory: make_organization_identity_search_tool(ror, infoscience)
 │   ├── orcid_person.py          # Factory: make_orcid_person_tool(provider)
 │   ├── ror_organization.py      # Factory: make_ror_organization_search_tool(provider)
 │   ├── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
@@ -158,10 +159,11 @@ if providers.my_provider is not None:
 | File | Export | Type | Used by |
 |---|---|---|---|
 | `agent_tools/disciplines.py` | `list_disciplines_tool` | Static | `LLMRepositoryAgentV2` |
+| `agent_tools/organization_identity.py` | `make_organization_identity_search_tool(ror_provider, infoscience_provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/ror_organization.py` | `make_ror_organization_search_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/infoscience_orgunit.py` | `make_infoscience_orgunit_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/infoscience_search.py` | `make_infoscience_search_tool(provider)` | Factory | `LLMPersonAgentV2` |
-| `agent_tools/orcid_person.py` | `make_orcid_person_tool(provider)` | Factory | `LLMPersonAgentV2` |
+| `agent_tools/orcid_person.py` | `make_orcid_person_tool(provider)` | Factory | `LLMPersonAgentV2`, `LLMMembershipAgentV2` |
 | `agent_tools/uuid.py` | `generate_uuid_v4_tool`, `generate_uuid_v4_batch_tool` | Static | `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2` |
 | `agent_tools/selenium_fetch.py` | `fetch_link_content_via_selenium_tool` | Static | `LLMRepositoryAgentV2`, `LLMPersonAgentV2`, `LLMOrganizationAgentV2`, `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2`, `LLMLinkVeracityAgentV2` |
 

@@ -64,6 +64,20 @@ def _providers_full() -> ProviderSet:
     )
 
 
+def _providers_ror_only() -> ProviderSet:
+    return ProviderSet(
+        github=MockGitHubProvider(),
+        ror=MockRORProvider(),
+    )
+
+
+def _providers_infoscience_only() -> ProviderSet:
+    return ProviderSet(
+        github=MockGitHubProvider(),
+        infoscience=MockInfoscienceProvider(),
+    )
+
+
 def _valid_organization_payload() -> dict[str, Any]:
     return {
         "id": "github",
@@ -202,8 +216,52 @@ def test_llm_organization_agent_builds_tools_from_providers() -> None:
 
     tool_names = [getattr(tool, "name", None) for tool in captured_tools]
     assert "fetch_link_content_via_selenium" in tool_names
-    assert "search_ror_organizations" in tool_names
-    assert "search_infoscience_orgunit" in tool_names
+    assert "search_organization_identity" in tool_names
+    assert "search_ror_organizations" not in tool_names
+    assert "search_infoscience_orgunit" not in tool_names
+
+
+@pytest.mark.parametrize(
+    ("provider_set", "expected_tool_name"),
+    [
+        (_providers_ror_only(), "search_ror_organizations"),
+        (_providers_infoscience_only(), "search_infoscience_orgunit"),
+    ],
+)
+def test_llm_organization_agent_falls_back_to_single_provider_org_tools(
+    provider_set: ProviderSet,
+    expected_tool_name: str,
+) -> None:
+    captured_tools: list[Any] = []
+
+    class _CapturingRuntime:
+        async def run_json_prompt(
+            self,
+            *,
+            system_prompt: str,
+            user_prompt: str,
+            output_type: Any = None,
+            tools: Any = None,
+        ) -> LLMRuntimeResult:
+            del system_prompt, user_prompt, output_type
+            if tools:
+                captured_tools.extend(tools)
+            return LLMRuntimeResult(
+                payload=_valid_organization_payload(),
+                model="openai/gpt-test",
+                provider="openai",
+            )
+
+    agent = LLMOrganizationAgentV2(llm_runtime=_CapturingRuntime())
+
+    asyncio.run(
+        agent.run({"org_name": "github"}, provider_set),
+    )
+
+    tool_names = [getattr(tool, "name", None) for tool in captured_tools]
+    assert "fetch_link_content_via_selenium" in tool_names
+    assert expected_tool_name in tool_names
+    assert "search_organization_identity" not in tool_names
 
 
 def test_llm_organization_agent_appends_runtime_prompt_context_blocks() -> None:

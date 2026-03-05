@@ -36,11 +36,17 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
   - `list_disciplines_tool` (`disciplines.py`) — static tool, returns the full `DisciplineV2` Wikidata-ID-to-name mapping.
   - `make_orcid_person_tool(orcid_provider)` (`orcid_person.py`) — factory; returns `get_orcid_record` tool that fetches name, employment, education, and affiliations by ORCID ID.
   - `make_infoscience_search_tool(infoscience_provider)` (`infoscience_search.py`) — factory; returns `search_infoscience_person` tool that searches Infoscience for person records by name/query.
-  - `make_ror_organization_search_tool(ror_provider)` (`ror_organization.py`) — factory; returns `search_ror_organization` for organization lookup by name.
+  - `make_organization_identity_search_tool(ror_provider, infoscience_provider)` (`organization_identity.py`) — factory; returns `search_organization_identity` that queries ROR and Infoscience together and emits linked cross-provider candidates.
+  - `make_ror_organization_search_tool(ror_provider)` (`ror_organization.py`) — factory; returns `search_ror_organizations` for organization lookup by name.
   - `make_infoscience_orgunit_tool(infoscience_provider)` (`infoscience_orgunit.py`) — factory; returns `search_infoscience_orgunit` for organization-unit lookup.
   - `generate_uuid_v4_tool` / `generate_uuid_v4_batch_tool` (`uuid.py`) — static tools for UUIDv4 generation in single or batch mode.
   - `fetch_link_content_via_selenium_tool` (`selenium_fetch.py`) — static Selenium-backed fetch tool returning rendered page text/title/final URL.
 - `LLMLinkVeracityAgentV2` (`src/v2/agents/llm/link_veracity/agent.py`) runs independent yes/no relationship checks per link and uses `fetch_link_content_via_selenium_tool` to ground verdicts in fetched page content.
+- `/v2/extract` in `agent_runtime=llm` always runs two global fail-open stages:
+  - `llm_dedup` before reconciliation (LLM candidate clusters + deterministic constrained merge/remap with hierarchy-aware ID resolution and composite-ID propagation).
+  - `llm_critic` after reconciliation and before strict validation (LLM drop suggestions + deterministic non-root prune/cascade cleanup).
+  Both stages emit warnings on failure and continue the pipeline; they never hard-fail extract requests.
+- When `include_intermediates=true`, `/v2/extract` persists LLM dedup/critic debug envelopes as `llm_dedup_candidates`, `llm_dedup_resolution`, `llm_critic_decisions`, and `llm_critic_applied`.
 - `LLMRepositoryAgentV2` is a **single-call agent** (one pydantic-ai `Agent` run). V1 used two sequential LLM calls: a general extraction agent plus a dedicated classifier for `repositoryType`/`discipline`. The single-call approach tends to leave `pulse:discipline` null; a separate discipline sub-agent (wave 2) would improve classification reliability.
 - `LLMPersonAgentV2` is a **single-call agent** that accepts any combination of person identifiers (GitHub username, ORCID, Infoscience ID, or display name). It optionally fetches the GitHub profile when a username is available, then builds live tool closures over the provided `ORCIDProvider` and `InfoscienceProvider` (omitted if the respective provider is `None`) and delegates to `V2LLMRuntime`. Top-level `None` optional fields are stripped from the output before strict validation to satisfy SHACL absent-field requirements.
 - `LLMPersonAgentV2` enforces a hard per-call timeout via `llm_call_timeout_seconds` (default `180.0`) around the runtime call (`asyncio.wait_for(...)`) and raises `LLMRuntimeError` with identifier+seconds when exceeded.
@@ -50,8 +56,12 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
   - `user_prompt_appendix` (constructor value or runtime-context override) injects verbatim text into each agent prompt without parsing. Use this for pre-concatenated multi-file text blocks.
 - `PipelineOrchestrator` now defaults `include_upstream_stage_outputs_in_prompt=True`; downstream LLM stages receive serialized upstream JSON context unless explicitly disabled via runtime context/constructor override.
 - v2 organization identity reconciliation is ROR-first and warning-only: canonicalization enforces `pulse:ror -> pulse:infoscienceOrganizationIdentifier -> pulse:githubOrganizationHandle -> uuid`, reconciliation merges high-confidence org duplicates (ROR/Infoscience/GitHub + contextual cross-source matches), remaps org references to canonical IDs, and prefers ROR-backed orgs on lookup-token collisions.
+- Cross-source org merge equivalence normalizes common spelling variants (for example `center`/`centre`) before deciding whether ROR and Infoscience candidates represent the same organization.
 - `/v2/extract` persists reconciliation diagnostics as an intermediate (`agent_name="reconciliation_debug"`) when `include_intermediates=true` with merge/remap and token-collision summary fields.
 - LLM org/membership prompts include acronym-disambiguation guidance: acronym-only matches are insufficient, context grounding is required, and `pulse:ror` should remain null when candidates are ambiguous.
+- Reconciliation ownership semantics are direct-only: `pulse:owns` is rebuilt from canonical `repository.pulse:ownedBy` links and is not propagated from GitHub org-account units to canonical parent organizations.
+- GitHub organization accounts that own repositories are still modeled as `org:Organization` nodes and linked in hierarchy (`org:unitOf`/`org:hasUnit`) where applicable; synthesized GitHub org-account unit IDs use canonical URLs (`https://github.com/<handle>`).
+- Organization lookup hints (`aliases`, `acronyms`, `labels`) are reconciliation-internal only and must be stripped before strict validation/output because strict organization schemas disallow extra properties.
 - `V2LLMRuntime` extracts token counts by calling `result.usage()` — pydantic-ai 1.5.0 exposes `usage` as a method, not a property. Do not access it as `result.usage` without calling it, or counts will always be `None`/`0`.
 - `V2LLMRuntime` also surfaces `usage.requests` and `usage.tool_calls` in `LLMRuntimeResult` and logs them for runtime observability.
 

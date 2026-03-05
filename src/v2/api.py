@@ -43,6 +43,8 @@ from src.v2.pipeline.stages import (
     build_jsonld_output,
     compute_stats,
     reconcile_entities,
+    run_llm_critic_stage,
+    run_llm_dedup_stage,
     run_link_veracity_stage,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
@@ -73,6 +75,8 @@ STAGE_CLASSIFY_URL = "classify_url"
 STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
 STAGE_STRICT_VALIDATION = "strict_validation"
 STAGE_RECONCILIATION = "reconciliation"
+STAGE_LLM_DEDUP = "llm_dedup"
+STAGE_LLM_CRITIC = "llm_critic"
 STAGE_SHACL_GATE = "shacl_gate"
 STAGE_GRAPH_WRITE = "graph_write"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
@@ -429,6 +433,17 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         else:
             persisted_intermediates += 1
 
+    pipeline_outputs_for_prompt = {
+        agent_name: agent_result.data
+        for agent_name, agent_result in pipeline_result.agent_results.items()
+        if isinstance(agent_result.data, dict) and agent_result.data
+    }
+    gathered_context = (
+        deepcopy(pipeline_result.gathered_context)
+        if isinstance(pipeline_result.gathered_context, dict)
+        else {}
+    )
+
     typed_entity_buckets = pipeline_result.resolved_typed_entity_buckets().to_dict()
     permissive_entity_count = sum(len(bucket) for bucket in typed_entity_buckets.values())
     with tracer.trace_stage(
@@ -437,6 +452,58 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     ) as stage_span:
         stage_span.set_attribute("entity_count", permissive_entity_count)
 
+    llm_dedup_executed = False
+    if resolved_runtime == AgentRuntime.LLM:
+        with tracer.trace_stage(
+            STAGE_LLM_DEDUP,
+            detected_type=classification.detected_type.value,
+        ) as stage_span:
+            llm_dedup_executed = True
+            try:
+                dedup_result = await run_llm_dedup_stage(
+                    typed_entity_buckets=typed_entity_buckets,
+                    source_url=classification.normalized_url,
+                    detected_type=classification.detected_type.value,
+                    providers=providers,
+                    pipeline_outputs=pipeline_outputs_for_prompt,
+                    initial_context=gathered_context,
+                    max_concurrency=orchestrator.max_concurrent_agents,
+                )
+            except Exception as exc:  # noqa: BLE001
+                stage_span.set_attribute("status", "error")
+                _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
+            else:
+                typed_entity_buckets = dedup_result.typed_entity_buckets
+                stage_span.set_attributes(
+                    accepted_cluster_count=dedup_result.accepted_cluster_count,
+                    rejected_cluster_count=dedup_result.rejected_cluster_count,
+                    remap_count=dedup_result.remap_count,
+                )
+                for warning in dedup_result.warnings:
+                    _append_unique_warning(warnings, warning)
+
+                if include_intermediates:
+                    for agent_name, payload in (
+                        ("llm_dedup_candidates", dedup_result.candidate_clusters),
+                        ("llm_dedup_resolution", dedup_result.resolution),
+                    ):
+                        try:
+                            store.insert_intermediate(
+                                source_url=classification.normalized_url,
+                                agent_name=agent_name,
+                                run_id=run_id,
+                                data=payload,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            _append_unique_warning(
+                                warnings,
+                                f"Failed to persist intermediate for {agent_name}: {exc}",
+                            )
+                        else:
+                            persisted_intermediates += 1
+
+    llm_critic_executed = False
+    critic_pruned_excluded_entities: list[dict[str, Any]] = []
     with tracer.trace_stage(
         STAGE_RECONCILIATION,
         detected_type=classification.detected_type.value,
@@ -472,6 +539,56 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
         else:
             persisted_intermediates += 1
+
+    if resolved_runtime == AgentRuntime.LLM:
+        with tracer.trace_stage(
+            STAGE_LLM_CRITIC,
+            detected_type=classification.detected_type.value,
+        ) as stage_span:
+            llm_critic_executed = True
+            try:
+                critic_result = await run_llm_critic_stage(
+                    reconciled=reconciled,
+                    source_url=classification.normalized_url,
+                    detected_type=classification.detected_type.value,
+                    providers=providers,
+                    initial_context=gathered_context,
+                    pipeline_outputs=pipeline_outputs_for_prompt,
+                    max_concurrency=orchestrator.max_concurrent_agents,
+                )
+            except Exception as exc:  # noqa: BLE001
+                stage_span.set_attribute("status", "error")
+                _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
+            else:
+                reconciled = critic_result.reconciled
+                critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
+                stage_span.set_attributes(
+                    proposed_drop_count=critic_result.applied.get("proposed_drop_count", 0),
+                    applied_drop_count=critic_result.applied.get("applied_drop_count", 0),
+                    protected_root_count=len(critic_result.applied.get("protected_root_ids", [])),
+                )
+                for warning in critic_result.warnings:
+                    _append_unique_warning(warnings, warning)
+
+                if include_intermediates:
+                    for agent_name, payload in (
+                        ("llm_critic_decisions", critic_result.decisions),
+                        ("llm_critic_applied", critic_result.applied),
+                    ):
+                        try:
+                            store.insert_intermediate(
+                                source_url=classification.normalized_url,
+                                agent_name=agent_name,
+                                run_id=run_id,
+                                data=payload,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            _append_unique_warning(
+                                warnings,
+                                f"Failed to persist intermediate for {agent_name}: {exc}",
+                            )
+                        else:
+                            persisted_intermediates += 1
 
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,
@@ -544,6 +661,20 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 root_present=root_present,
                 entity_count=len(assembled_output.related_entities) + (1 if root_present else 0),
                 excluded_count=len(assembled_output.excluded_entities),
+            )
+
+    if critic_pruned_excluded_entities:
+        for excluded_entity in critic_pruned_excluded_entities:
+            if not isinstance(excluded_entity, dict):
+                continue
+            assembled_output.excluded_entities.append(deepcopy(excluded_entity))
+            entity_payload = excluded_entity.get("entity")
+            entity_id = entity_payload.get("id") if isinstance(entity_payload, dict) else None
+            assembled_output.warnings.append(
+                (
+                    f"Excluded {excluded_entity.get('entity_type', 'entity')} entity "
+                    f"'{entity_id}' due to critic pruning"
+                ),
             )
 
     for warning in assembled_output.warnings:
@@ -767,15 +898,22 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     final_entity_count = len(final_entities)
 
     completed_stages = list(pipeline_result.stages_completed)
-    for stage_name in (
-        STAGE_PERMISSIVE_VALIDATION,
-        STAGE_RECONCILIATION,
-        STAGE_STRICT_VALIDATION,
-        STAGE_OUTPUT_ASSEMBLY,
-        STAGE_JSONLD_BUILD,
-        STAGE_SHACL_GATE,
-        STAGE_GRAPH_WRITE,
-    ):
+    stage_sequence = [STAGE_PERMISSIVE_VALIDATION]
+    if llm_dedup_executed:
+        stage_sequence.append(STAGE_LLM_DEDUP)
+    stage_sequence.append(STAGE_RECONCILIATION)
+    if llm_critic_executed:
+        stage_sequence.append(STAGE_LLM_CRITIC)
+    stage_sequence.extend(
+        [
+            STAGE_STRICT_VALIDATION,
+            STAGE_OUTPUT_ASSEMBLY,
+            STAGE_JSONLD_BUILD,
+            STAGE_SHACL_GATE,
+            STAGE_GRAPH_WRITE,
+        ],
+    )
+    for stage_name in stage_sequence:
         if stage_name not in completed_stages:
             completed_stages.append(stage_name)
     if link_veracity_executed and STAGE_LINK_VERACITY not in completed_stages:

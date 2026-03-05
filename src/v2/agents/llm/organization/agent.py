@@ -12,6 +12,9 @@ from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
     make_infoscience_orgunit_tool,
 )
+from src.v2.agents.llm.agent_tools.organization_identity import (
+    make_organization_identity_search_tool,
+)
 from src.v2.agents.llm.agent_tools.ror_organization import (
     make_ror_organization_search_tool,
 )
@@ -173,9 +176,16 @@ class LLMOrganizationAgentV2:
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         tools = [fetch_link_content_via_selenium_tool]
-        if providers.ror is not None:
+        if providers.ror is not None and providers.infoscience is not None:
+            tools.append(
+                make_organization_identity_search_tool(
+                    providers.ror,
+                    providers.infoscience,
+                ),
+            )
+        elif providers.ror is not None:
             tools.append(make_ror_organization_search_tool(providers.ror))
-        if providers.infoscience is not None:
+        elif providers.infoscience is not None:
             tools.append(make_infoscience_orgunit_tool(providers.infoscience))
 
         identifier = org_name

@@ -32,7 +32,7 @@
   },
   "stats": {
     "entities_count": 5,
-    "triples_count": 29,
+    "triples_count": 28,
     "stages_completed": [
       "context_gather",
       "repo_agent",

@@ -8,6 +8,9 @@ from src.v2.agents.llm.agent_tools.infoscience_search import (
     make_infoscience_search_tool,
 )
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
+from src.v2.agents.llm.agent_tools.organization_identity import (
+    make_organization_identity_search_tool,
+)
 from src.v2.agents.llm.agent_tools.ror_organization import (
     make_ror_organization_search_tool,
 )
@@ -26,6 +29,7 @@ __all__ = [
     "list_disciplines_tool",
     "make_infoscience_orgunit_tool",
     "make_infoscience_search_tool",
+    "make_organization_identity_search_tool",
     "make_orcid_person_tool",
     "make_ror_organization_search_tool",
 ]

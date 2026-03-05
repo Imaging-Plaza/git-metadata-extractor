@@ -34,3 +34,23 @@ class AssembledOutput:
     related_entities: list[dict[str, Any]] = field(default_factory=list)
     excluded_entities: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class LLMDedupStageResult:
+    typed_entity_buckets: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    candidate_clusters: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    resolution: dict[str, Any] = field(default_factory=dict)
+    accepted_cluster_count: int = 0
+    rejected_cluster_count: int = 0
+    remap_count: int = 0
+
+
+@dataclass(slots=True)
+class LLMCriticStageResult:
+    reconciled: ReconciledEntities = field(default_factory=ReconciledEntities)
+    warnings: list[str] = field(default_factory=list)
+    decisions: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    applied: dict[str, Any] = field(default_factory=dict)
+    pruned_excluded_entities: list[dict[str, Any]] = field(default_factory=list)

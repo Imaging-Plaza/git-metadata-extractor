@@ -37,6 +37,7 @@ from src.v2.agents.llm.prompt_context import (
     USER_PROMPT_APPENDIX_CONTEXT_KEY,
 )
 from src.v2.agents.models import AgentResult
+from src.v2.canonicalization.string_utils import normalize_string
 from src.v2.detection.models import GitHubURLClassification
 from src.v2.observability.agent_instrumentation import instrument_agent
 from src.v2.observability.pipeline_spans import PipelineTracer
@@ -386,6 +387,9 @@ class PipelineOrchestrator:
         return PipelineResult(
             stages_completed=stages_completed,
             agent_results=agent_results,
+            gathered_context=deepcopy(runtime_context.get("gathered_context", {}))
+            if isinstance(runtime_context.get("gathered_context"), dict)
+            else {},
             warnings=warnings,
             errors=errors,
             duration_ms=duration_ms,
@@ -1231,6 +1235,21 @@ class PipelineOrchestrator:
         return by_id
 
     @staticmethod
+    def _organization_derivations_by_id(
+        runtime_context: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        derivations = PipelineOrchestrator._collect_stage_derivations(
+            runtime_context,
+            STAGE_ORG_AGENT,
+        )
+        by_id: dict[str, dict[str, Any]] = {}
+        for derivation in derivations:
+            organization_id = derivation.get("organization_id")
+            if isinstance(organization_id, str) and organization_id:
+                by_id[organization_id] = derivation
+        return by_id
+
+    @staticmethod
     def _merge_person_with_derivation(
         person: dict[str, Any],
         derivation: dict[str, Any] | None,
@@ -1283,6 +1302,142 @@ class PipelineOrchestrator:
             ]
         return merged
 
+    @staticmethod
+    def _merge_organization_with_derivation(
+        organization: dict[str, Any],
+        derivation: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = deepcopy(organization)
+        if not isinstance(derivation, dict):
+            return merged
+
+        owned_repositories = derivation.get("owned_repositories")
+        if isinstance(owned_repositories, list):
+            merged["pulse:owns"] = [
+                value
+                for value in owned_repositories
+                if isinstance(value, str) and value
+            ]
+
+        parent_organization = derivation.get("parent_organization")
+        if isinstance(parent_organization, str) and parent_organization:
+            merged["org:unitOf"] = parent_organization
+
+        unit_ids = derivation.get("unit_ids")
+        if isinstance(unit_ids, list):
+            merged["org:hasUnit"] = [
+                value
+                for value in unit_ids
+                if isinstance(value, str) and value
+            ]
+
+        return merged
+
+    @staticmethod
+    def _organization_lookup_tokens(organization: dict[str, Any]) -> list[str]:
+        raw_tokens: list[str] = []
+        for key in (
+            "id",
+            "schema:name",
+            "schema:identifier",
+            "pulse:githubOrganizationHandle",
+        ):
+            value = organization.get(key)
+            if isinstance(value, str) and value:
+                raw_tokens.append(value)
+
+        identifiers = organization.get("identifiers")
+        if isinstance(identifiers, dict):
+            for key in (
+                "pulse:ror",
+                "pulse:infoscienceOrganizationIdentifier",
+                "pulse:githubOrganizationHandle",
+                "uuid",
+            ):
+                value = identifiers.get(key)
+                if isinstance(value, str) and value:
+                    raw_tokens.append(value)
+
+        aliases = organization.get("aliases")
+        if isinstance(aliases, list):
+            raw_tokens.extend(alias for alias in aliases if isinstance(alias, str) and alias)
+
+        acronyms = organization.get("acronyms")
+        if isinstance(acronyms, list):
+            raw_tokens.extend(acronym for acronym in acronyms if isinstance(acronym, str) and acronym)
+
+        normalized_tokens: list[str] = []
+        seen: set[str] = set()
+        for token in raw_tokens:
+            normalized = normalize_string(token)
+            if not normalized or normalized in seen:
+                continue
+            normalized_tokens.append(normalized)
+            seen.add(normalized)
+        return normalized_tokens
+
+    @staticmethod
+    def _extract_person_org_references(person: dict[str, Any]) -> list[str]:
+        references: list[str] = []
+
+        affiliations = person.get("affiliations")
+        if isinstance(affiliations, list):
+            for affiliation in affiliations:
+                if isinstance(affiliation, str) and affiliation:
+                    references.append(affiliation)
+                elif isinstance(affiliation, dict):
+                    organization_id = affiliation.get("organizationId")
+                    if isinstance(organization_id, str) and organization_id:
+                        references.append(organization_id)
+                    name = affiliation.get("name") or affiliation.get("schema:name")
+                    if isinstance(name, str) and name:
+                        references.append(name)
+
+        memberships = person.get("org:hasMembership")
+        if isinstance(memberships, list):
+            for membership in memberships:
+                if not isinstance(membership, str) or "_" not in membership:
+                    continue
+                _, organization_reference = membership.split("_", maxsplit=1)
+                if organization_reference:
+                    references.append(organization_reference)
+
+        return references
+
+    def _candidate_organizations_for_person(
+        self,
+        person: dict[str, Any],
+        known_organizations: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        references = self._extract_person_org_references(person)
+        if not references:
+            return deepcopy(known_organizations)
+
+        organizations_by_token: dict[str, dict[str, Any]] = {}
+        for organization in known_organizations:
+            for token in self._organization_lookup_tokens(organization):
+                organizations_by_token.setdefault(token, organization)
+
+        matched: list[dict[str, Any]] = []
+        matched_ids: set[str] = set()
+        for reference in references:
+            normalized = normalize_string(reference)
+            if not normalized:
+                continue
+            organization = organizations_by_token.get(normalized)
+            if not isinstance(organization, dict):
+                continue
+            organization_id = organization.get("id")
+            marker = organization_id if isinstance(organization_id, str) and organization_id else repr(organization)
+            if marker in matched_ids:
+                continue
+            matched.append(deepcopy(organization))
+            matched_ids.add(marker)
+
+        if matched:
+            return matched
+        return deepcopy(known_organizations)
+
     def _article_fanout_contexts(  # noqa: C901
         self,
         runtime_context: dict[str, Any],
@@ -1332,6 +1487,22 @@ class PipelineOrchestrator:
             return []
 
         person_derivations = self._person_derivations_by_id(runtime_context)
+        organization_derivations = self._organization_derivations_by_id(runtime_context)
+        merged_known_organizations: list[dict[str, Any]] = []
+        for organization in sorted(
+            [item for item in known_organizations if isinstance(item, dict)],
+            key=lambda item: str(item.get("id", "")),
+        ):
+            organization_id = organization.get("id")
+            merged_known_organizations.append(
+                self._merge_organization_with_derivation(
+                    organization,
+                    organization_derivations.get(organization_id)
+                    if isinstance(organization_id, str)
+                    else None,
+                ),
+            )
+
         contexts: list[dict[str, Any]] = []
         seen_seeds: set[str] = set()
 
@@ -1351,7 +1522,12 @@ class PipelineOrchestrator:
             context = deepcopy(base_context)
             context["membership_seed"] = person_id
             context["known_persons"] = [merged_person]
-            context["known_organizations"] = deepcopy(known_organizations)
+            context["known_organizations"] = deepcopy(merged_known_organizations)
+            context["target_person"] = deepcopy(merged_person)
+            context["target_organizations"] = self._candidate_organizations_for_person(
+                merged_person,
+                merged_known_organizations,
+            )
             contexts.append(context)
 
         return contexts

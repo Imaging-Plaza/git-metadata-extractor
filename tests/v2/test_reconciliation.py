@@ -498,13 +498,48 @@ def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> N
     github_org_account = next(
         organization
         for organization in organizations
-        if organization["id"] == "sdsc-ordes"
+        if organization["id"] == "https://github.com/sdsc-ordes"
     )
 
-    assert "sdsc-ordes" in canonical_org["org:hasUnit"]
+    assert "https://github.com/sdsc-ordes" in canonical_org["org:hasUnit"]
     assert github_org_account["org:unitOf"] == "https://ror.org/02hdt9m26"
     assert github_org_account["pulse:githubOrganizationHandle"] == "sdsc-ordes"
-    assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "sdsc-ordes"
+    assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "https://github.com/sdsc-ordes"
+
+
+def test_reconcile_organization_ownership_is_rebuilt_from_repository_owner_links() -> None:
+    owner_org = _organization(
+        "Swiss Data Science Center",
+        "https://ror.org/02hdt9m26",
+        github_handle="sdsc-ordes",
+    )
+    unrelated_org = _organization(
+        "University of Geneva",
+        "https://ror.org/01swzsf04",
+    )
+    unrelated_org["pulse:owns"] = ["sdsc-ordes/gimie"]
+
+    entities = {
+        "persons": [],
+        "organizations": [owner_org, unrelated_org],
+        "repositories": [
+            _repository(
+                "sdsc-ordes/gimie",
+                [],
+                owned_by="sdsc-ordes",
+            ),
+        ],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organizations = {
+        organization["id"]: organization
+        for organization in reconciled.entities["organizations"]
+    }
+
+    assert organizations["https://ror.org/01swzsf04"]["pulse:owns"] == []
+    assert organizations["https://ror.org/02hdt9m26"]["pulse:owns"] == []
+    assert organizations["https://github.com/sdsc-ordes"]["pulse:owns"] == ["https://github.com/sdsc-ordes/gimie"]
 
 
 def test_reconcile_resolves_accented_affiliation_variant_from_org_aliases() -> None:
@@ -596,6 +631,30 @@ def test_reconcile_resolves_membership_org_aliases_and_handle_variants() -> None
     )
 
 
+def test_reconcile_strips_organization_lookup_fields_after_resolution() -> None:
+    organization = _organization(
+        "Swiss Data Science Center",
+        "https://ror.org/02hdt9m26",
+        github_handle="sdsc-ordes",
+        aliases=["SDSC"],
+    )
+    organization["acronyms"] = ["SDSC"]
+    organization["labels"] = [{"label": "Swiss Data Science Center", "iso639": "en"}]
+    entities = {
+        "persons": [_person("alice", affiliations=["SDSC"])],
+        "organizations": [organization],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    canonical_org = reconciled.entities["organizations"][0]
+
+    assert reconciled.entities["persons"][0]["affiliations"] == ["https://ror.org/02hdt9m26"]
+    assert "aliases" not in canonical_org
+    assert "acronyms" not in canonical_org
+    assert "labels" not in canonical_org
+
+
 def test_reconcile_prunes_unresolved_organization_hierarchy_links() -> None:
     organization = _organization(
         "Swiss Data Science Center",
@@ -666,15 +725,15 @@ def test_reconcile_merges_ror_and_infoscience_variants_and_remaps_memberships() 
                 github_handle="sdsc-ordes",
             ),
             {
-                "schema:name": "Swiss Data Science Center",
+                "schema:name": "Swiss Data Science Centre",
                 "schema:identifier": None,
                 "identifiers": {
                     "pulse:ror": None,
                     "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
-                    "pulse:githubOrganizationHandle": "sdsc-ordes",
+                    "pulse:githubOrganizationHandle": None,
                 },
                 "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
-                "pulse:githubOrganizationHandle": "sdsc-ordes",
+                "pulse:githubOrganizationHandle": None,
                 "pulse:owns": [],
             },
         ],

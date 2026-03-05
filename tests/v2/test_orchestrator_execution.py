@@ -1008,6 +1008,9 @@ def test_class_stage_work_items_include_upstream_references_and_typed_buckets() 
 
     membership_context = captured_membership_contexts[0]
     assert membership_context["known_persons"][0]["affiliations"] == ["EPFL"]
+    assert membership_context["target_person"]["id"] == membership_context["membership_seed"]
+    assert isinstance(membership_context["target_organizations"], list)
+    assert membership_context["target_organizations"]
     assert isinstance(membership_context["typed_entity_buckets"], dict)
     assert membership_context["typed_entity_buckets"]["persons"]
 
@@ -1166,6 +1169,101 @@ def test_class_stage_fanout_is_deterministic_for_user_and_organization_roots() -
         "octocat/repo-b",
         "github/repo-a",
     ]
+
+
+def test_membership_context_prioritizes_target_organizations_from_person_links() -> None:
+    captured_membership_contexts: list[dict[str, Any]] = []
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "github", "type": "Organization"}},
+                    "contributors": [{"login": "alice"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(
+            data={"id": "repo-root"},
+            stats={"derivation": {"repository_full_name": "repo-root", "contributors": []}},
+        )
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        username = context["username"]
+        return AgentResult(
+            data={
+                "id": username,
+                "schema:name": "Alice",
+                "affiliations": ["EPFL"],
+                "org:hasMembership": [f"{username}_EPFL"],
+            },
+            stats={"derivation": {"person_id": username, "affiliation_names": ["EPFL"]}},
+        )
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": context["org_name"], "schema:name": context["org_name"]})
+
+    async def _membership_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        captured_membership_contexts.append(dict(context))
+        return AgentResult(
+            data={"id": f"membership:{context['membership_seed']}", "entity_type": "membership"},
+        )
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+            STAGE_MEMBERSHIP_AGENT: _membership_agent,
+            **{
+                key: value
+                for key, value in _empty_class_agent_runners().items()
+                if key != STAGE_MEMBERSHIP_AGENT
+            },
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={"url_info": _classification(), "source_url": "https://github.com/octocat/Hello-World"},
+        ),
+    )
+
+    assert len(captured_membership_contexts) == 1
+    membership_context = captured_membership_contexts[0]
+    target_organization_ids = [
+        organization.get("id")
+        for organization in membership_context["target_organizations"]
+        if isinstance(organization, dict)
+    ]
+    assert target_organization_ids == ["EPFL"]
 
 
 def test_class_stage_partial_failures_keep_sibling_and_downstream_execution() -> None:
