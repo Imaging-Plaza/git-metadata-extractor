@@ -48,6 +48,10 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - `PipelineOrchestrator` supports prompt-context propagation for downstream LLM agents:
   - `include_upstream_stage_outputs_in_prompt` (constructor flag or runtime-context override) injects `upstream_stage_outputs_json` containing serialized accumulated stage outputs.
   - `user_prompt_appendix` (constructor value or runtime-context override) injects verbatim text into each agent prompt without parsing. Use this for pre-concatenated multi-file text blocks.
+- `PipelineOrchestrator` now defaults `include_upstream_stage_outputs_in_prompt=True`; downstream LLM stages receive serialized upstream JSON context unless explicitly disabled via runtime context/constructor override.
+- v2 organization identity reconciliation is ROR-first and warning-only: canonicalization enforces `pulse:ror -> pulse:infoscienceOrganizationIdentifier -> pulse:githubOrganizationHandle -> uuid`, reconciliation merges high-confidence org duplicates (ROR/Infoscience/GitHub + contextual cross-source matches), remaps org references to canonical IDs, and prefers ROR-backed orgs on lookup-token collisions.
+- `/v2/extract` persists reconciliation diagnostics as an intermediate (`agent_name="reconciliation_debug"`) when `include_intermediates=true` with merge/remap and token-collision summary fields.
+- LLM org/membership prompts include acronym-disambiguation guidance: acronym-only matches are insufficient, context grounding is required, and `pulse:ror` should remain null when candidates are ambiguous.
 - `V2LLMRuntime` extracts token counts by calling `result.usage()` — pydantic-ai 1.5.0 exposes `usage` as a method, not a property. Do not access it as `result.usage` without calling it, or counts will always be `None`/`0`.
 - `V2LLMRuntime` also surfaces `usage.requests` and `usage.tool_calls` in `LLMRuntimeResult` and logs them for runtime observability.
 

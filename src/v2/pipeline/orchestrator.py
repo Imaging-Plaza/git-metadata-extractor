@@ -175,7 +175,7 @@ class PipelineOrchestrator:
         retry_backoff_base: float = 0.0,
         retry_sleep_func: SleepCallable | None = None,
         max_concurrent_agents: int = 3,
-        include_upstream_stage_outputs_in_prompt: bool = False,
+        include_upstream_stage_outputs_in_prompt: bool = True,
         user_prompt_appendix: str | None = None,
     ) -> None:
         """Initialize stage runners and runtime-aware routing infrastructure."""

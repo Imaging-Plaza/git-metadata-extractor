@@ -649,3 +649,116 @@ def test_reconcile_preserves_resolvable_organization_hierarchy_links() -> None:
         in warning
         for warning in reconciled.link_warnings
     )
+
+
+def test_reconcile_merges_ror_and_infoscience_variants_and_remaps_memberships() -> None:
+    infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
+    infoscience_org_id = (
+        "https://infoscience.epfl.ch/server/api/core/items/"
+        f"{infoscience_uuid}"
+    )
+    entities = {
+        "persons": [_person("alice", affiliations=[infoscience_org_id])],
+        "organizations": [
+            _organization(
+                "Swiss Data Science Center",
+                "https://ror.org/02hdt9m26",
+                github_handle="sdsc-ordes",
+            ),
+            {
+                "schema:name": "Swiss Data Science Center",
+                "schema:identifier": None,
+                "identifiers": {
+                    "pulse:ror": None,
+                    "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                    "pulse:githubOrganizationHandle": "sdsc-ordes",
+                },
+                "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                "pulse:githubOrganizationHandle": "sdsc-ordes",
+                "pulse:owns": [],
+            },
+        ],
+        "repositories": [],
+        "memberships": [_membership("alice", infoscience_org_id)],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organizations = reconciled.entities["organizations"]
+    person_id = reconciled.entities["persons"][0]["id"]
+
+    assert len(organizations) == 1
+    canonical_org = organizations[0]
+    assert canonical_org["id"] == "https://ror.org/02hdt9m26"
+    assert canonical_org["identifiers"]["pulse:ror"] == "https://ror.org/02hdt9m26"
+    assert (
+        canonical_org["identifiers"]["pulse:infoscienceOrganizationIdentifier"]
+        == infoscience_uuid
+    )
+    assert canonical_org["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert canonical_org["schema:identifier"] == "https://ror.org/02hdt9m26"
+    assert reconciled.memberships == [_membership(person_id, "https://ror.org/02hdt9m26")]
+    assert reconciled.reconciliation_debug["merged_group_count"] == 1
+    assert reconciled.reconciliation_debug["org_remap_count"] >= 1
+
+
+def test_reconcile_acronym_only_overlap_does_not_merge_and_warns_about_ambiguity() -> None:
+    first = _organization(
+        "Swiss Data Science Center",
+        "https://ror.org/02hdt9m26",
+    )
+    second = _organization(
+        "San Diego Supercomputer Center",
+        "https://ror.org/04mg3nk07",
+    )
+    first["acronyms"] = ["SDSC"]
+    second["acronyms"] = ["SDSC"]
+    entities = {
+        "persons": [],
+        "organizations": [first, second],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+
+    assert len(reconciled.entities["organizations"]) == 2
+    assert any(
+        "Ambiguous organization lookup tokens detected during reconciliation"
+        in warning
+        for warning in reconciled.link_warnings
+    )
+    assert reconciled.reconciliation_debug["merged_group_count"] == 0
+
+
+def test_reconcile_token_collision_prefers_ror_backed_canonical_organization() -> None:
+    infoscience_uuid = "41674f42-ba15-4612-9817-2a6f60985c01"
+    ror_org = _organization(
+        "Swiss Data Science Center",
+        "https://ror.org/02hdt9m26",
+    )
+    infoscience_org = {
+        "schema:name": "Some Data Systems Consortium",
+        "schema:identifier": None,
+        "identifiers": {
+            "pulse:ror": None,
+            "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+            "pulse:githubOrganizationHandle": None,
+        },
+        "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+        "pulse:githubOrganizationHandle": None,
+        "pulse:owns": [],
+    }
+    ror_org["acronyms"] = ["SDSC"]
+    infoscience_org["acronyms"] = ["SDSC"]
+
+    entities = {
+        "persons": [_person("alice", affiliations=["SDSC"])],
+        "organizations": [ror_org, infoscience_org],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    person = reconciled.entities["persons"][0]
+
+    assert len(reconciled.entities["organizations"]) == 2
+    assert person["affiliations"] == ["https://ror.org/02hdt9m26"]
+    assert reconciled.reconciliation_debug["token_collision_count"] >= 1

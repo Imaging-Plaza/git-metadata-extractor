@@ -58,6 +58,10 @@ Use the `uuid` provided in the input context; do not invent deterministic IDs.
 - Do not add fields outside the schema.
 - If data is unavailable, set nullable fields to `null` or omit optional fields.
 - Prefer high-confidence values from tool results over weak textual hints.
+- Acronym-only matches are insufficient for organization resolution.
+- Validate candidate identity using context: repository owner handle, country/location hints, parent/child hierarchy, and source-repository relevance.
+- If multiple near-match candidates remain ambiguous, leave `pulse:ror` as `null` instead of guessing.
+- When combining provider fields, prefer a single coherent candidate record rather than mixing conflicting organizations.
 
 ## Input context guidance
 

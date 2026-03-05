@@ -145,6 +145,40 @@ def test_resolve_organization_id_canonicalizes_pre_resolved_github_handle() -> N
     assert id_source == "pulse:githubOrganizationHandle"
 
 
+def test_resolve_organization_id_overrides_inconsistent_existing_id_source_when_ror_exists() -> None:
+    organization = {
+        "id": "https://infoscience.epfl.ch/server/api/core/items/95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "idSource": "pulse:infoscienceOrganizationIdentifier",
+        "identifiers": {
+            "pulse:ror": "https://ror.org/02hdt9m26",
+            "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+            "pulse:githubOrganizationHandle": "sdsc-ordes",
+        },
+    }
+
+    canonical_id, id_source = resolve_organization_id(organization)
+
+    assert canonical_id == "https://ror.org/02hdt9m26"
+    assert id_source == "pulse:ror"
+
+
+def test_resolve_organization_id_keeps_existing_resolution_when_consistent() -> None:
+    organization = {
+        "id": "https://ror.org/02hdt9m26",
+        "idSource": "pulse:ror",
+        "identifiers": {
+            "pulse:ror": "02hdt9m26",
+            "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+            "pulse:githubOrganizationHandle": "sdsc-ordes",
+        },
+    }
+
+    canonical_id, id_source = resolve_organization_id(organization)
+
+    assert canonical_id == "https://ror.org/02hdt9m26"
+    assert id_source == "pulse:ror"
+
+
 def test_resolve_organization_id_output_is_strict_enum_compatible(
     load_fixture: Callable[[str, str], Any],
 ) -> None:

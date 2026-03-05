@@ -330,10 +330,18 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
 
 
 def resolve_organization_id(organization: dict[str, Any]) -> tuple[str, str]:
+    hierarchy_candidate = _resolve_organization_hierarchy_candidate(organization)
     existing = _existing_resolution(organization, ORGANIZATION_ID_SOURCES)
-    if existing is not None:
+    if existing is None:
+        return hierarchy_candidate
+    if existing == hierarchy_candidate:
         return existing
+    return hierarchy_candidate
 
+
+def _resolve_organization_hierarchy_candidate(
+    organization: dict[str, Any],
+) -> tuple[str, str]:
     ror = _normalize_ror(
         _lookup_identifier(
             organization,

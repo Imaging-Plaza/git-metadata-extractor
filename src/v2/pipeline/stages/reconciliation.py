@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import defaultdict
 from copy import deepcopy
 from typing import Any
 from uuid import UUID, uuid4
@@ -28,6 +29,13 @@ INFOSCIENCE_UUID_PATTERN = re.compile(
 ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$", flags=re.IGNORECASE)
 LOOKUP_SPLIT_PATTERN = re.compile(r"\s+(?:-|–|—|\||/)\s+|;|,")
 PARENTHETICAL_PATTERN = re.compile(r"\s*\([^)]*\)")
+ORG_ID_SOURCE_PRIORITY: dict[str, int] = {
+    "pulse:ror": 4,
+    "pulse:infoscienceOrganizationIdentifier": 3,
+    "pulse:githubOrganizationHandle": 2,
+    "uuid": 1,
+}
+DEBUG_SAMPLE_LIMIT = 10
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -119,13 +127,46 @@ def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
         if isinstance(identifiers, dict)
         else {}
     )
+    normalized_ror: str | None = None
+    raw_ror = (
+        normalized_identifiers.get("pulse:ror")
+        or organization.get("pulse:ror")
+        or organization.get("schema:identifier")
+    )
+    if isinstance(raw_ror, str) and raw_ror.strip():
+        ror_candidate = raw_ror.strip()
+        if ror_candidate.lower().startswith("https://ror.org/"):
+            ror_candidate = ror_candidate.rsplit("/", maxsplit=1)[-1]
+        ror_token = ror_candidate.lower()
+        if re.fullmatch(r"[0-9a-z]{9}", ror_token):
+            normalized_ror = f"https://ror.org/{ror_token}"
+
     normalized_infoscience_id = _normalize_infoscience_uuid(
         normalized_identifiers.get("pulse:infoscienceOrganizationIdentifier")
         or organization.get("pulse:infoscienceOrganizationIdentifier"),
     )
+    normalized_github_handle: str | None = None
+    raw_github_handle = (
+        normalized_identifiers.get("pulse:githubOrganizationHandle")
+        or organization.get("pulse:githubOrganizationHandle")
+    )
+    if isinstance(raw_github_handle, str):
+        github_handle = raw_github_handle.strip()
+        if github_handle.lower().startswith("https://github.com/"):
+            github_handle = github_handle[len("https://github.com/") :]
+            github_handle = github_handle.split("/", maxsplit=1)[0]
+        if github_handle.startswith("@"):
+            github_handle = github_handle[1:]
+        normalized_github_handle = github_handle or None
+
+    normalized_identifiers["pulse:ror"] = normalized_ror
     normalized_identifiers["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
+    normalized_identifiers["pulse:githubOrganizationHandle"] = normalized_github_handle
     organization["identifiers"] = normalized_identifiers
     organization["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
+    organization["pulse:githubOrganizationHandle"] = normalized_github_handle
+    if normalized_ror is not None:
+        organization["schema:identifier"] = normalized_ror
 
 
 def _normalize_lookup_token(token: str) -> str:
@@ -300,6 +341,571 @@ def _organization_github_handle(organization: dict[str, Any]) -> str | None:
     return None
 
 
+def _organization_source_priority(organization: dict[str, Any]) -> int:
+    id_source = organization.get("idSource")
+    if isinstance(id_source, str):
+        return ORG_ID_SOURCE_PRIORITY.get(id_source, 0)
+    if isinstance(_organization_normalized_ror(organization), str):
+        return ORG_ID_SOURCE_PRIORITY["pulse:ror"]
+    if isinstance(_organization_infoscience_uuid(organization), str):
+        return ORG_ID_SOURCE_PRIORITY["pulse:infoscienceOrganizationIdentifier"]
+    if isinstance(_organization_github_handle_key(organization), str):
+        return ORG_ID_SOURCE_PRIORITY["pulse:githubOrganizationHandle"]
+    return ORG_ID_SOURCE_PRIORITY["uuid"]
+
+
+def _organization_identifier_count(organization: dict[str, Any]) -> int:
+    identifiers = organization.get("identifiers")
+    if not isinstance(identifiers, dict):
+        return 0
+    return sum(
+        1
+        for key in (
+            "pulse:ror",
+            "pulse:infoscienceOrganizationIdentifier",
+            "pulse:githubOrganizationHandle",
+            "uuid",
+        )
+        if isinstance(identifiers.get(key), str) and identifiers.get(key)
+    )
+
+
+def _organization_metadata_score(organization: dict[str, Any]) -> int:
+    score = 0
+    for field in (
+        "schema:name",
+        "schema:identifier",
+        "pulse:OrganizationType",
+        "pulse:githubOrganizationHandle",
+        "pulse:infoscienceOrganizationIdentifier",
+        "org:unitOf",
+    ):
+        value = organization.get(field)
+        if isinstance(value, str) and value:
+            score += 1
+    followers = organization.get("pulse:githubOrgFollowers")
+    if isinstance(followers, int):
+        score += 1
+    for field in ("aliases", "acronyms", "labels", "org:hasUnit", "pulse:owns"):
+        value = organization.get(field)
+        if isinstance(value, list) and value:
+            score += 1
+    return score
+
+
+def _organization_preference_tuple(organization: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        _organization_source_priority(organization),
+        _organization_identifier_count(organization),
+        _organization_metadata_score(organization),
+    )
+
+
+def _normalize_ror_url(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if candidate.lower().startswith("https://ror.org/"):
+        candidate = candidate.rsplit("/", maxsplit=1)[-1]
+    candidate = candidate.lower()
+    if not re.fullmatch(r"[0-9a-z]{9}", candidate):
+        return None
+    return f"https://ror.org/{candidate}"
+
+
+def _organization_normalized_ror(organization: dict[str, Any]) -> str | None:
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        normalized = _normalize_ror_url(identifiers.get("pulse:ror"))
+        if normalized is not None:
+            return normalized
+    for candidate in (
+        organization.get("schema:identifier"),
+    ):
+        normalized = _normalize_ror_url(candidate)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _organization_infoscience_uuid(organization: dict[str, Any]) -> str | None:
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        normalized = _normalize_infoscience_uuid(
+            identifiers.get("pulse:infoscienceOrganizationIdentifier"),
+        )
+        if normalized is not None:
+            return normalized
+    return _normalize_infoscience_uuid(organization.get("pulse:infoscienceOrganizationIdentifier"))
+
+
+def _organization_github_handle_key(organization: dict[str, Any]) -> str | None:
+    handle = _organization_github_handle(organization)
+    if isinstance(handle, str) and handle:
+        return handle.casefold()
+    return None
+
+
+def _organization_name_key(organization: dict[str, Any]) -> str | None:
+    name = organization.get("schema:name")
+    if isinstance(name, str) and name:
+        normalized = normalize_string(name)
+        return normalized or None
+    return None
+
+
+def _dedupe_any_list(values: list[Any]) -> list[Any]:
+    deduplicated: list[Any] = []
+    seen: set[str] = set()
+    for value in values:
+        marker = repr(value)
+        if isinstance(value, dict):
+            marker = f"dict:{repr(sorted(value.items()))}"
+        if marker in seen:
+            continue
+        deduplicated.append(value)
+        seen.add(marker)
+    return deduplicated
+
+
+def _merge_organization_payload(
+    canonical: dict[str, Any],
+    candidate: dict[str, Any],
+) -> None:
+    canonical_identifiers = (
+        deepcopy(canonical.get("identifiers"))
+        if isinstance(canonical.get("identifiers"), dict)
+        else {}
+    )
+    candidate_identifiers = (
+        deepcopy(candidate.get("identifiers"))
+        if isinstance(candidate.get("identifiers"), dict)
+        else {}
+    )
+    for key in (
+        "pulse:ror",
+        "pulse:infoscienceOrganizationIdentifier",
+        "pulse:githubOrganizationHandle",
+        "uuid",
+    ):
+        if isinstance(canonical_identifiers.get(key), str) and canonical_identifiers.get(key):
+            continue
+        fallback_value = candidate_identifiers.get(key) or candidate.get(key)
+        if isinstance(fallback_value, str) and fallback_value:
+            canonical_identifiers[key] = fallback_value
+    canonical["identifiers"] = canonical_identifiers
+
+    for key in ("pulse:infoscienceOrganizationIdentifier", "pulse:githubOrganizationHandle"):
+        value = canonical_identifiers.get(key)
+        if isinstance(value, str) and value:
+            canonical[key] = value
+        elif key not in canonical:
+            canonical[key] = None
+
+    canonical_ror = _organization_normalized_ror(canonical)
+    if canonical_ror is not None:
+        canonical["schema:identifier"] = canonical_ror
+    elif canonical.get("schema:identifier") is None and isinstance(
+        candidate.get("schema:identifier"),
+        str,
+    ):
+        canonical["schema:identifier"] = candidate["schema:identifier"]
+
+    for field in ("schema:name", "pulse:OrganizationType"):
+        if isinstance(canonical.get(field), str) and canonical.get(field):
+            continue
+        candidate_value = candidate.get(field)
+        if isinstance(candidate_value, str) and candidate_value:
+            canonical[field] = candidate_value
+
+    if not isinstance(canonical.get("pulse:githubOrgFollowers"), int) and isinstance(
+        candidate.get("pulse:githubOrgFollowers"),
+        int,
+    ):
+        canonical["pulse:githubOrgFollowers"] = candidate["pulse:githubOrgFollowers"]
+
+    if (
+        not isinstance(canonical.get("org:unitOf"), str)
+        and isinstance(candidate.get("org:unitOf"), str)
+        and candidate.get("org:unitOf")
+    ):
+        canonical["org:unitOf"] = candidate["org:unitOf"]
+
+    for field in ("aliases", "acronyms", "labels", "org:hasUnit", "pulse:owns"):
+        merged_values: list[Any] = []
+        existing_values = canonical.get(field)
+        if isinstance(existing_values, list):
+            merged_values.extend(existing_values)
+        candidate_values = candidate.get(field)
+        if isinstance(candidate_values, list):
+            merged_values.extend(candidate_values)
+        canonical[field] = _dedupe_any_list(merged_values)
+
+    if not isinstance(canonical.get("type"), str) or not canonical.get("type"):
+        canonical["type"] = "org:Organization"
+    if not isinstance(canonical.get("shacl"), str) or not canonical.get("shacl"):
+        canonical["shacl"] = "pulse:OrganizationShape"
+
+
+def _organization_equivalence_groups(
+    organizations: list[dict[str, Any]],
+) -> list[list[int]]:
+    count = len(organizations)
+    if count <= 1:
+        return []
+
+    parent = list(range(count))
+
+    def _find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def _union(left: int, right: int) -> None:
+        left_root = _find(left)
+        right_root = _find(right)
+        if left_root == right_root:
+            return
+        if left_root < right_root:
+            parent[right_root] = left_root
+        else:
+            parent[left_root] = right_root
+
+    by_ror: dict[str, list[int]] = defaultdict(list)
+    by_infoscience: dict[str, list[int]] = defaultdict(list)
+    by_handle: dict[str, list[int]] = defaultdict(list)
+    for index, organization in enumerate(organizations):
+        ror = _organization_normalized_ror(organization)
+        if isinstance(ror, str):
+            by_ror[ror].append(index)
+        infoscience_id = _organization_infoscience_uuid(organization)
+        if isinstance(infoscience_id, str):
+            by_infoscience[infoscience_id].append(index)
+        github_handle = _organization_github_handle_key(organization)
+        if isinstance(github_handle, str):
+            by_handle[github_handle].append(index)
+
+    for indexed_groups in (by_ror, by_infoscience, by_handle):
+        for indices in indexed_groups.values():
+            if len(indices) <= 1:
+                continue
+            head = indices[0]
+            for member in indices[1:]:
+                _union(head, member)
+
+    for left in range(count):
+        left_org = organizations[left]
+        left_ror = _organization_normalized_ror(left_org)
+        left_infoscience = _organization_infoscience_uuid(left_org)
+        left_name = _organization_name_key(left_org)
+        left_handle = _organization_github_handle_key(left_org)
+        for right in range(left + 1, count):
+            right_org = organizations[right]
+            right_ror = _organization_normalized_ror(right_org)
+            right_infoscience = _organization_infoscience_uuid(right_org)
+            has_cross_source_pair = (
+                (isinstance(left_ror, str) and isinstance(right_infoscience, str))
+                or (isinstance(right_ror, str) and isinstance(left_infoscience, str))
+            )
+            if not has_cross_source_pair:
+                continue
+            right_name = _organization_name_key(right_org)
+            names_match = (
+                isinstance(left_name, str)
+                and isinstance(right_name, str)
+                and left_name == right_name
+            )
+            right_handle = _organization_github_handle_key(right_org)
+            handles_match = (
+                isinstance(left_handle, str)
+                and isinstance(right_handle, str)
+                and left_handle == right_handle
+            )
+            if names_match or handles_match:
+                _union(left, right)
+
+    grouped: dict[int, list[int]] = defaultdict(list)
+    for index in range(count):
+        grouped[_find(index)].append(index)
+
+    merged_groups = [indices for indices in grouped.values() if len(indices) > 1]
+    merged_groups.sort(key=lambda indices: min(indices))
+    return merged_groups
+
+
+def _merge_equivalent_organizations(
+    organizations: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, str], int, int]:
+    groups = _organization_equivalence_groups(organizations)
+    if not groups:
+        return organizations, {}, 0, 0
+
+    group_by_index: dict[int, list[int]] = {}
+    for group in groups:
+        for index in group:
+            group_by_index[index] = group
+
+    merged_organizations: list[dict[str, Any]] = []
+    consumed_indices: set[int] = set()
+    id_remap: dict[str, str] = {}
+    merged_group_count = 0
+    merged_entity_count = 0
+
+    for index, organization in enumerate(organizations):
+        if index in consumed_indices:
+            continue
+
+        group = group_by_index.get(index)
+        if not isinstance(group, list):
+            merged_organizations.append(organization)
+            continue
+
+        merged_group_count += 1
+        winner_index = max(
+            group,
+            key=lambda candidate_index: (
+                *_organization_preference_tuple(organizations[candidate_index]),
+                -candidate_index,
+            ),
+        )
+        merged = deepcopy(organizations[winner_index])
+        winner_id = merged.get("id")
+
+        for member_index in group:
+            consumed_indices.add(member_index)
+            member = organizations[member_index]
+            member_id = member.get("id")
+            if (
+                member_index != winner_index
+                and isinstance(member_id, str)
+                and member_id
+                and isinstance(winner_id, str)
+                and winner_id
+                and member_id != winner_id
+            ):
+                id_remap[member_id] = winner_id
+                merged_entity_count += 1
+            if member_index == winner_index:
+                continue
+            _merge_organization_payload(merged, member)
+
+        merged_organizations.append(merged)
+
+    return merged_organizations, id_remap, merged_group_count, merged_entity_count
+
+
+def _apply_organization_id_remap(
+    candidate: Any,
+    org_id_remap: dict[str, str],
+) -> str | Any:
+    if isinstance(candidate, str):
+        return org_id_remap.get(candidate, candidate)
+    return candidate
+
+
+def _apply_org_remap_to_entities(
+    *,
+    organizations: list[dict[str, Any]],
+    repositories: list[dict[str, Any]],
+    articles: list[dict[str, Any]],
+    persons: list[dict[str, Any]],
+    memberships: list[dict[str, Any]],
+    org_id_remap: dict[str, str],
+) -> None:
+    if not org_id_remap:
+        return
+
+    for repository in repositories:
+        owner = repository.get("pulse:ownedBy")
+        if isinstance(owner, str):
+            repository["pulse:ownedBy"] = _apply_organization_id_remap(owner, org_id_remap)
+
+    for article in articles:
+        source_org = article.get("schema:sourceOrganization")
+        if isinstance(source_org, str):
+            article["schema:sourceOrganization"] = _apply_organization_id_remap(
+                source_org,
+                org_id_remap,
+            )
+
+    for person in persons:
+        affiliations = person.get("affiliations")
+        if not isinstance(affiliations, list):
+            continue
+        remapped_affiliations: list[Any] = []
+        for affiliation in affiliations:
+            if isinstance(affiliation, str):
+                remapped_affiliations.append(
+                    _apply_organization_id_remap(affiliation, org_id_remap),
+                )
+                continue
+            if isinstance(affiliation, dict):
+                remapped_affiliation = deepcopy(affiliation)
+                organization_id = remapped_affiliation.get("organizationId")
+                if isinstance(organization_id, str):
+                    remapped_affiliation["organizationId"] = _apply_organization_id_remap(
+                        organization_id,
+                        org_id_remap,
+                    )
+                remapped_affiliations.append(remapped_affiliation)
+                continue
+            remapped_affiliations.append(affiliation)
+        person["affiliations"] = remapped_affiliations
+
+    for membership in memberships:
+        organization_id = membership.get("org:organization")
+        if isinstance(organization_id, str):
+            membership["org:organization"] = _apply_organization_id_remap(
+                organization_id,
+                org_id_remap,
+            )
+
+    for organization in organizations:
+        has_units = organization.get("org:hasUnit")
+        if isinstance(has_units, list):
+            organization["org:hasUnit"] = _dedupe_preserve_order(
+                [
+                    _apply_organization_id_remap(has_unit, org_id_remap)
+                    for has_unit in has_units
+                    if isinstance(has_unit, str) and has_unit
+                ],
+            )
+        unit_of = organization.get("org:unitOf")
+        if isinstance(unit_of, str):
+            organization["org:unitOf"] = _apply_organization_id_remap(unit_of, org_id_remap)
+
+
+def _organization_lookup_tokens(organization: dict[str, Any]) -> list[str]:
+    tokens: list[str] = []
+    for value in (
+        organization.get("id"),
+        organization.get("schema:name"),
+        organization.get("schema:identifier"),
+    ):
+        if not isinstance(value, str):
+            continue
+        tokens.extend(_lookup_token_variants(value))
+
+    handle = _organization_github_handle(organization)
+    if isinstance(handle, str) and handle:
+        tokens.extend(_lookup_token_variants(handle))
+        tokens.extend(_lookup_token_variants(f"@{handle}"))
+
+    for key in ("aliases", "acronyms"):
+        values = organization.get(key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, str):
+                tokens.extend(_lookup_token_variants(value))
+
+    labels = organization.get("labels")
+    if isinstance(labels, list):
+        for label_payload in labels:
+            label = label_payload
+            if isinstance(label_payload, dict):
+                label = label_payload.get("label")
+            if isinstance(label, str):
+                tokens.extend(_lookup_token_variants(label))
+
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        for value in (
+            identifiers.get("pulse:ror"),
+            identifiers.get("pulse:infoscienceOrganizationIdentifier"),
+            identifiers.get("pulse:githubOrganizationHandle"),
+            identifiers.get("uuid"),
+        ):
+            if isinstance(value, str):
+                tokens.extend(_lookup_token_variants(value))
+
+    return _dedupe_preserve_order(tokens)
+
+
+def _preferred_organization_id(
+    *,
+    existing_id: str,
+    candidate_id: str,
+    organizations_by_id: dict[str, dict[str, Any]],
+) -> str:
+    existing_org = organizations_by_id.get(existing_id)
+    candidate_org = organizations_by_id.get(candidate_id)
+    if not isinstance(existing_org, dict):
+        return candidate_id
+    if not isinstance(candidate_org, dict):
+        return existing_id
+
+    existing_rank = _organization_preference_tuple(existing_org)
+    candidate_rank = _organization_preference_tuple(candidate_org)
+    if candidate_rank > existing_rank:
+        return candidate_id
+    return existing_id
+
+
+def _build_organization_lookup_with_collisions(
+    organizations: list[dict[str, Any]],
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    lookup: dict[str, str] = {}
+    collision_records: list[dict[str, str]] = []
+    seen_collision_markers: set[tuple[str, str, str]] = set()
+
+    organizations_by_id = {
+        organization["id"]: organization
+        for organization in organizations
+        if isinstance(organization.get("id"), str) and organization.get("id")
+    }
+
+    for organization in organizations:
+        canonical_id = organization.get("id")
+        if not isinstance(canonical_id, str) or not canonical_id:
+            continue
+        for token in _organization_lookup_tokens(organization):
+            existing_id = lookup.get(token)
+            if existing_id is None:
+                lookup[token] = canonical_id
+                continue
+            if existing_id == canonical_id:
+                continue
+            if token == existing_id:
+                continue
+            if token == canonical_id:
+                lookup[token] = canonical_id
+                marker = (token, canonical_id, existing_id)
+                if marker not in seen_collision_markers:
+                    seen_collision_markers.add(marker)
+                    collision_records.append(
+                        {
+                            "token": token,
+                            "preferred_id": canonical_id,
+                            "alternate_id": existing_id,
+                        },
+                    )
+                continue
+            preferred_id = _preferred_organization_id(
+                existing_id=existing_id,
+                candidate_id=canonical_id,
+                organizations_by_id=organizations_by_id,
+            )
+            lookup[token] = preferred_id
+            alternate_id = canonical_id if preferred_id == existing_id else existing_id
+            marker = (token, preferred_id, alternate_id)
+            if marker in seen_collision_markers:
+                continue
+            seen_collision_markers.add(marker)
+            collision_records.append(
+                {
+                    "token": token,
+                    "preferred_id": preferred_id,
+                    "alternate_id": alternate_id,
+                },
+            )
+
+    return lookup, collision_records
+
+
 def _build_github_org_account_unit(
     *,
     github_handle: str,
@@ -332,7 +938,6 @@ def _ensure_github_org_units_for_repository_owners(
     *,
     organizations: list[dict[str, Any]],
     repositories: list[dict[str, Any]],
-    organization_lookup: dict[str, str],
 ) -> None:
     repository_owner_handles = {
         owner
@@ -381,7 +986,6 @@ def _ensure_github_org_units_for_repository_owners(
             )
             organizations.append(github_unit)
             organizations_by_id[github_handle] = github_unit
-            _register_organization_lookup_tokens(organization_lookup, github_unit)
 
         github_unit["org:unitOf"] = canonical_org_id
         github_unit["type"] = "org:Organization"
@@ -767,8 +1371,8 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     articles = reconciled_entities["articles"]
 
     person_lookup: dict[str, str] = {}
-    organization_lookup: dict[str, str] = {}
     repository_lookup: dict[str, str] = {}
+    link_warnings: list[str] = []
 
     for person in persons:
         canonical_id, id_source = resolve_person_id(person)
@@ -781,11 +1385,19 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             person["schema:email"] = anonymize_email(email)
 
     for organization in organizations:
+        existing_id_source = organization.get("idSource")
         _normalize_organization_identifiers(organization)
         canonical_id, id_source = resolve_organization_id(organization)
         organization["id"] = canonical_id
         organization["idSource"] = id_source
-        _register_organization_lookup_tokens(organization_lookup, organization)
+        if isinstance(existing_id_source, str) and existing_id_source != id_source:
+            link_warnings.append(
+                (
+                    "Organization ID hierarchy override during reconciliation: "
+                    f"name={organization.get('schema:name')}, "
+                    f"from={existing_id_source}, to={id_source}, id={canonical_id}"
+                ),
+            )
 
     for repository in repositories:
         canonical_id, id_source = resolve_repository_id(repository)
@@ -798,17 +1410,51 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         article["id"] = canonical_id
         article["idSource"] = id_source
 
+    organizations, organization_id_remap, merged_group_count, merged_entity_count = (
+        _merge_equivalent_organizations(organizations)
+    )
+    reconciled_entities["organizations"] = organizations
+    _apply_org_remap_to_entities(
+        organizations=organizations,
+        repositories=repositories,
+        articles=articles,
+        persons=persons,
+        memberships=class_memberships,
+        org_id_remap=organization_id_remap,
+    )
+
     _ensure_github_org_units_for_repository_owners(
         organizations=organizations,
         repositories=repositories,
-        organization_lookup=organization_lookup,
     )
+    organization_lookup, token_collision_records = _build_organization_lookup_with_collisions(
+        organizations,
+    )
+    if token_collision_records:
+        token_collision_samples = token_collision_records[:DEBUG_SAMPLE_LIMIT]
+        sample_text = "; ".join(
+            (
+                f"token='{sample['token']}' preferred={sample['preferred_id']} "
+                f"alternate={sample['alternate_id']}"
+            )
+            for sample in token_collision_samples
+        )
+        link_warnings.append(
+            (
+                "Ambiguous organization lookup tokens detected during reconciliation: "
+                f"count={len(token_collision_records)}. "
+                "Preferred ROR-backed canonical organizations when available. "
+                f"Samples: {sample_text}"
+            ),
+        )
 
     fallback_membership_pairs: set[tuple[str, str]] = set()
     fallback_contribution_pairs: set[tuple[str, str]] = set()
-    link_warnings = _prune_unresolved_organization_hierarchy_links(
-        organizations=organizations,
-        organization_lookup=organization_lookup,
+    link_warnings.extend(
+        _prune_unresolved_organization_hierarchy_links(
+            organizations=organizations,
+            organization_lookup=organization_lookup,
+        ),
     )
     synthesis_warnings: list[str] = []
 
@@ -1078,10 +1724,24 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         )
 
     link_warnings.extend(_detect_repository_fork_cycles(repositories))
+    org_remap_entries = [
+        {"from": source_id, "to": target_id}
+        for source_id, target_id in sorted(organization_id_remap.items())
+        if source_id != target_id
+    ]
+    reconciliation_debug = {
+        "merged_group_count": merged_group_count,
+        "merged_entity_count": merged_entity_count,
+        "org_remap_count": len(org_remap_entries),
+        "org_remap_sample": org_remap_entries[:DEBUG_SAMPLE_LIMIT],
+        "token_collision_count": len(token_collision_records),
+        "token_collision_sample": token_collision_records[:DEBUG_SAMPLE_LIMIT],
+    }
     return ReconciledEntities(
         entities=reconciled_entities,
         memberships=memberships,
         contributions=contributions,
         link_warnings=_dedupe_preserve_order(link_warnings),
         synthesis_warnings=_dedupe_preserve_order(synthesis_warnings),
+        reconciliation_debug=reconciliation_debug,
     )

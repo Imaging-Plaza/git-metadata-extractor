@@ -457,6 +457,21 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         _append_unique_warning(warnings, warning)
     for warning in reconciled.synthesis_warnings:
         _append_unique_warning(warnings, warning)
+    if include_intermediates and isinstance(reconciled.reconciliation_debug, dict):
+        try:
+            store.insert_intermediate(
+                source_url=classification.normalized_url,
+                agent_name="reconciliation_debug",
+                run_id=run_id,
+                data=reconciled.reconciliation_debug,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _append_unique_warning(
+                warnings,
+                f"Failed to persist intermediate for reconciliation_debug: {exc}",
+            )
+        else:
+            persisted_intermediates += 1
 
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,

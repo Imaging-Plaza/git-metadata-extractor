@@ -25,6 +25,7 @@ class ReconciledEntities:
     contributions: list[dict[str, Any]] = field(default_factory=list)
     link_warnings: list[str] = field(default_factory=list)
     synthesis_warnings: list[str] = field(default_factory=list)
+    reconciliation_debug: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

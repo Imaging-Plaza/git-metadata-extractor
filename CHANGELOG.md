@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- Strengthened v2 organization identity reconciliation to be ROR-first end-to-end. `resolve_organization_id()` now enforces hierarchy precedence even when incoming `id/idSource` is prefilled with a lower-priority source, and reconciliation now merges high-confidence duplicate organization variants (ROR/Infoscience/GitHub signals) before relationship remapping.
+- Changed v2 organization lookup collision behavior during reconciliation to prefer ROR-backed canonical organizations when multiple candidates share tokens, while keeping ambiguity warning-only (no extract hard-fail).
+- Changed `PipelineOrchestrator` default prompt-context behavior so downstream LLM agents receive serialized upstream stage JSON by default (`include_upstream_stage_outputs_in_prompt=True`).
+- Updated LLM organization and membership system prompts with explicit acronym-disambiguation guidance, context-grounded ROR selection rules, and “leave ROR null when ambiguous” instructions.
 - Replaced opaque `urn:git-metadata-extractor:entity:` URI prefix with shorter `urn:pulse:` for fallback entity `@id` values. Canonical entities (persons, repositories, organizations, articles) now use dereferenceable URLs (`https://orcid.org/`, `https://github.com/`, `https://ror.org/`, `https://doi.org/`) as `@id` wherever the `resolve_*_id()` functions in `id_resolution.py` produce them. Only UUID-fallback or pre-reconciliation entities receive the `urn:pulse:` prefix.
 - Membership and contribution composite IDs now use full canonical URIs for both parts (e.g., `https://github.com/user_https://ror.org/02s376052`). The pipeline no longer relies on splitting composite IDs by `_` to extract person/org references — `_person_ref` and `schema:author`/`org:organization` fields are used instead.
 - Crossref validation no longer parses composite membership IDs via string splitting. Ownership checks use an explicit `_person_ref` → person lookup map built from membership entities.
@@ -18,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
 
 ### Added
+- Added `reconciliation_debug` intermediate emission in `/v2/extract` (when `include_intermediates=true`) with merge/remap diagnostics: merged group/entity counts, org remap sample, and organization lookup token-collision sample.
 - Added full 7-stage LLM repository debug flow in `scripts/v2/run_llm_repo_persons_and_orgs.py`:
   `context_gather -> repo_agent -> person_agents -> org_agents -> article_agents -> membership_agents -> contribution_agents`,
   with deterministic class-stage seed fanout, partial-failure tolerance, stage summaries, and final combined JSON-LD aggregation including class entities from both primary `result.data` and stage list stats.

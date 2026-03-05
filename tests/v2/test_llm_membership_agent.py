@@ -7,6 +7,7 @@ import pytest
 from jsonschema import validate
 
 from src.v2.agents.llm.membership import LLMMembershipAgentV2
+from src.v2.agents.llm.membership import agent as membership_agent_module
 from src.v2.agents.models import ProviderSet
 from src.v2.llm.runtime import LLMRuntimeError, LLMRuntimeResult
 from src.v2.providers.mock_github import MockGitHubProvider
@@ -186,3 +187,10 @@ def test_llm_membership_agent_appends_runtime_prompt_context_blocks() -> None:
     assert prompt_appendix in prompt
     assert "generate_uuid_v4" in captured_tool_names
     assert "fetch_link_content_via_selenium" in captured_tool_names
+
+
+def test_llm_membership_system_prompt_prefers_ror_backed_canonical_org_ids() -> None:
+    prompt = membership_agent_module._SYSTEM_PROMPT
+
+    assert "Use canonical IDs from `known_persons` and `known_organizations` when available." in prompt
+    assert "Prefer ROR-backed canonical organization IDs" in prompt

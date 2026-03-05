@@ -903,6 +903,217 @@ def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
         if envelope.get("agent_name") == "link_veracity"
     ]
     assert len(link_veracity_intermediates) == 2
+    reconciliation_debug_intermediates = [
+        envelope
+        for envelope in intermediates
+        if envelope.get("agent_name") == "reconciliation_debug"
+    ]
+    assert len(reconciliation_debug_intermediates) == 1
+
+
+def test_extract_reconciles_org_identity_to_ror_for_memberships() -> None:
+    infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
+    infoscience_org_id = (
+        "https://infoscience.epfl.ch/server/api/core/items/"
+        f"{infoscience_uuid}"
+    )
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "sdsc-ordes/gimie",
+                    "metadata": {"owner": {"login": "sdsc-ordes", "type": "Organization"}},
+                    "contributors": [{"login": "alice", "type": "User"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(
+            data={
+                "id": "sdsc-ordes/gimie",
+                "type": "schema:SoftwareSourceCode",
+                "shacl": "pulse:RepositoryShape",
+                "identifiers": {
+                    "pulse:githubRepositoryHandle": "sdsc-ordes/gimie",
+                    "schema:citation": None,
+                    "uuid": "f24d251f-c95b-45b7-b89e-b3306d7a42d6",
+                },
+                "idSource": "pulse:githubRepositoryHandle",
+                "schema:name": "gimie",
+                "pulse:githubRepositoryHandle": "sdsc-ordes/gimie",
+                "schema:author": ["alice"],
+                "pulse:repositoryType": "pulse:Software",
+                "pulse:discipline": ["wd:Q735"],
+                "pulse:ownedBy": "sdsc-ordes",
+            },
+        )
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        username = context["username"]
+        return AgentResult(
+            data={
+                "id": username,
+                "type": "schema:Person",
+                "shacl": "pulse:PersonShape",
+                "identifiers": {
+                    "pulse:orcid": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "pulse:githubUsername": username,
+                    "uuid": "11111111-1111-4111-8111-111111111111",
+                },
+                "idSource": "pulse:githubUsername",
+                "schema:name": username,
+                "schema:url": f"https://github.com/{username}",
+                "pulse:githubUsername": username,
+                "pulse:orcidIdentifier": None,
+                "pulse:infosciencePersonIdentifier": None,
+                "org:hasMembership": [f"{username}_{infoscience_org_id}"],
+                "pulse:hasContribution": [],
+                "pulse:owns": [],
+                "affiliations": [infoscience_org_id],
+            },
+        )
+
+    async def _org_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        org_name = context["org_name"]
+        if org_name == "sdsc-ordes":
+            return AgentResult(
+                data={
+                    "id": "https://ror.org/02hdt9m26",
+                    "type": "org:Organization",
+                    "shacl": "pulse:OrganizationShape",
+                    "identifiers": {
+                        "pulse:ror": "https://ror.org/02hdt9m26",
+                        "pulse:infoscienceOrganizationIdentifier": None,
+                        "pulse:githubOrganizationHandle": "sdsc-ordes",
+                        "uuid": "22222222-2222-4222-8222-222222222222",
+                    },
+                    "idSource": "pulse:ror",
+                    "schema:name": "Swiss Data Science Center",
+                    "schema:identifier": "https://ror.org/02hdt9m26",
+                    "pulse:githubOrganizationHandle": "sdsc-ordes",
+                    "pulse:infoscienceOrganizationIdentifier": None,
+                    "pulse:OrganizationType": "pulse:University",
+                    "pulse:githubOrgFollowers": 24,
+                    "org:hasUnit": [],
+                    "org:unitOf": None,
+                    "pulse:owns": [],
+                },
+            )
+        return AgentResult(
+            data={
+                "id": infoscience_org_id,
+                "type": "org:Organization",
+                "shacl": "pulse:OrganizationShape",
+                "identifiers": {
+                    "pulse:ror": None,
+                    "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                    "pulse:githubOrganizationHandle": "sdsc-ordes",
+                    "uuid": "33333333-3333-4333-8333-333333333333",
+                },
+                "idSource": "pulse:infoscienceOrganizationIdentifier",
+                "schema:name": "Swiss Data Science Center",
+                "schema:identifier": None,
+                "pulse:githubOrganizationHandle": "sdsc-ordes",
+                "pulse:infoscienceOrganizationIdentifier": infoscience_uuid,
+                "pulse:OrganizationType": "pulse:OtherOrganizationType",
+                "pulse:githubOrgFollowers": None,
+                "org:hasUnit": [],
+                "org:unitOf": None,
+                "pulse:owns": [],
+            },
+        )
+
+    async def _membership_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        seed = context["membership_seed"]
+        membership_id = f"{seed}_{infoscience_org_id}"
+        return AgentResult(
+            data={
+                "id": membership_id,
+                "type": "org:Membership",
+                "shacl": "pulse:MembershipShape",
+                "identifiers": {
+                    "pulse:composite": membership_id,
+                    "uuid": "44444444-4444-4444-8444-444444444444",
+                },
+                "idSource": "pulse:composite",
+                "org:organization": infoscience_org_id,
+                "org:role": "Research Engineer",
+                "time:hasBeginning": "2024-01-01",
+                "time:hasEnd": None,
+            },
+        )
+
+    async def _no_data_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={})
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            "org_agent": _org_agent,
+            "article_agent": _no_data_agent,
+            "membership_agent": _membership_agent,
+            "contribution_agent": _no_data_agent,
+        },
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/sdsc-ordes/gimie",
+        params={
+            "output_format": "json",
+            "agent_runtime": "rule_based",
+            "include_intermediates": "true",
+        },
+    )
+
+    assert status_code == HTTP_OK
+    organizations = payload["output"]["entities_by_type"]["organizations"]
+    memberships = payload["output"]["entities_by_type"]["memberships"]
+
+    assert not any(org["id"] == infoscience_org_id for org in organizations)
+    assert all(
+        membership["org:organization"] == "https://ror.org/02hdt9m26"
+        for membership in memberships
+    )
+
+    intermediates = payload.get("intermediates") or []
+    reconciliation_debug = next(
+        envelope
+        for envelope in intermediates
+        if envelope.get("agent_name") == "reconciliation_debug"
+    )
+    assert reconciliation_debug["data"]["merged_group_count"] >= 1
+    assert reconciliation_debug["data"]["org_remap_count"] >= 1
 
 
 def test_repository_extract_limits_github_ownership_expansion_but_keeps_enrichment() -> None:

@@ -8,6 +8,7 @@ import pytest
 from jsonschema import validate
 
 from src.v2.agents.llm.organization import LLMOrganizationAgentV2
+from src.v2.agents.llm.organization import agent as organization_agent_module
 from src.v2.agents.models import ProviderSet
 from src.v2.llm.runtime import LLMRuntimeError, LLMRuntimeResult
 from src.v2.providers.mock_github import MockGitHubProvider
@@ -301,6 +302,14 @@ def test_llm_organization_agent_raises_on_empty_context() -> None:
         asyncio.run(
             agent.run({}, _providers()),
         )
+
+
+def test_llm_organization_system_prompt_includes_acronym_disambiguation_guidance() -> None:
+    prompt = organization_agent_module._SYSTEM_PROMPT
+
+    assert "Acronym-only matches are insufficient for organization resolution." in prompt
+    assert "repository owner handle" in prompt
+    assert "leave `pulse:ror` as `null` instead of guessing." in prompt
 
 
 @llm_integration

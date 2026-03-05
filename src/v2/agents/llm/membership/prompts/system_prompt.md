@@ -19,6 +19,7 @@ Optional fields:
 
 Rules:
 - Use canonical IDs from `known_persons` and `known_organizations` when available.
+- Prefer ROR-backed canonical organization IDs when multiple near-match organizations are present and context supports that choice.
 - Prefer `membership_seed` as the target person when present.
 - Build a deterministic composite ID when possible: `{personId}_{organizationId}`.
 - Do not invent unsupported fields.

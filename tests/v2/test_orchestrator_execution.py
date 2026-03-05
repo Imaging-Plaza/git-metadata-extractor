@@ -327,6 +327,65 @@ def test_execute_can_append_upstream_json_and_verbatim_prompt_text_to_agent_cont
     assert org_context.get("user_prompt_appendix") == prompt_appendix
 
 
+def test_execute_includes_upstream_stage_outputs_in_prompt_context_by_default() -> None:
+    captured_person_contexts: list[dict[str, Any]] = []
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {"owner": {"login": "octocat", "type": "User"}},
+                    "contributors": [{"login": "alice"}],
+                    "languages": {"Python": 1},
+                    "readme_content": "README",
+                },
+            },
+        )
+
+    async def _repo_agent(
+        _context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        return AgentResult(data={"id": "repo-root"})
+
+    async def _person_agent(
+        context: dict[str, Any],
+        _providers: ProviderSet,
+    ) -> AgentResult:
+        captured_person_contexts.append(dict(context))
+        return AgentResult(data={"id": context["username"]})
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        agent_runners={
+            "repo_agent": _repo_agent,
+            "person_agent": _person_agent,
+            **_empty_class_agent_runners(),
+        },
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={"url_info": _classification(), "source_url": "https://github.com/octocat/Hello-World"},
+        ),
+    )
+
+    assert len(captured_person_contexts) == 1
+    upstream_json = captured_person_contexts[0].get("upstream_stage_outputs_json")
+    assert isinstance(upstream_json, str)
+    assert json.loads(upstream_json) == {"repo_agent": {"id": "repo-root"}}
+
+
 def test_execute_skips_github_organization_accounts_from_person_fanout() -> None:
     class _GitHubProviderWithOrgContributor(MockGitHubProvider):
         def get_user(self, username: str) -> dict[str, Any]:
