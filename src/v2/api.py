@@ -22,6 +22,7 @@ from src.v2.graph.store import GraphStore
 from src.v2.models import (
     V2ErrorResponse,
     V2ErrorType,
+    V2ExtractRequest,
     V2ExtractResponse,
     V2FieldError,
     V2GraphResponse,
@@ -949,6 +950,30 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         warnings=warnings,
         stats=stats,
         intermediates=response_intermediates,
+    )
+
+
+@v2_router.post(
+    "/extract",
+    response_model=V2ExtractResponse,
+    response_model_exclude_none=True,
+)
+async def extract_post(
+    payload: V2ExtractRequest,
+    request: Request,
+    *,
+    providers: Annotated[ProviderSet, Depends(get_provider_set)],
+) -> V2ExtractResponse | JSONResponse:
+    """Prototype POST variant of v2 extraction with body-based inputs."""
+
+    return await extract(
+        full_path=payload.source_url,
+        request=request,
+        output_format=payload.output_format,
+        agent_runtime=payload.agent_runtime,
+        include_intermediates=payload.include_intermediates,
+        include_context_summary=payload.include_context_summary,
+        providers=providers,
     )
 
 

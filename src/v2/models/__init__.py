@@ -1,5 +1,6 @@
 from src.v2.models.contracts import (
     IntermediateEnvelope,
+    V2ExtractRequest,
     V2ExtractResponse,
     V2GraphResponse,
     V2GraphUpdate,
@@ -18,6 +19,7 @@ __all__ = [
     "RepositoryTypeV2",
     "V2ErrorResponse",
     "V2ErrorType",
+    "V2ExtractRequest",
     "V2ExtractResponse",
     "V2FieldError",
     "V2GraphResponse",

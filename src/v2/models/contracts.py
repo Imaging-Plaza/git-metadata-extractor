@@ -43,6 +43,14 @@ class V2JSONOutputEnvelope(BaseModel):
     entities_by_type: dict[str, list[dict[str, Any]]]
 
 
+class V2ExtractRequest(BaseModel):
+    source_url: str
+    output_format: Literal["jsonld", "json"] = "jsonld"
+    agent_runtime: Literal["rule_based", "llm"] | None = None
+    include_intermediates: bool = False
+    include_context_summary: bool = False
+
+
 class V2ExtractResponse(BaseModel):
     source_url: str
     detected_type: Literal["repository", "user", "organization"]

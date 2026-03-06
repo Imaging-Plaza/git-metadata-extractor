@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
 
 ### Added
+- Added prototype body-based extract endpoint `POST /v2/extract` (keeps existing `GET /v2/extract/{full_path}` intact). Request body mirrors extract options (`source_url`, `output_format`, `agent_runtime`, `include_intermediates`, `include_context_summary`) and returns the same `V2ExtractResponse` contract.
 - Added `LLMContextSummaryAgentV2` (`src/v2/agents/llm/context_summary/agent.py`) as a beginning-of-pipeline LLM context compiler that ingests raw gathered repository material and emits `summary_markdown` for downstream agent grounding.
 - Added `make_repository_corpus_grep_tool` (`src/v2/agents/llm/agent_tools/repository_corpus_grep.py`), a provenance-aware corpus grep tool returning markdown snippets with source metadata and line-numbered context blocks.
 - Added `make_duckduckgo_search_tool` (`src/v2/agents/llm/agent_tools/duckduckgo_search.py`), which exposes `search_on_the_internet` for compact DuckDuckGo-backed external context retrieval (title/url/snippet rows) and wired it into `LLMContextSummaryAgentV2`.

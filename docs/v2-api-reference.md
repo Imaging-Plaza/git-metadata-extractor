@@ -61,6 +61,31 @@ curl -s \
   | jq
 ```
 
+### `POST /v2/extract`
+
+Prototype body-based variant of extract. It keeps `GET /v2/extract/{full_path}` unchanged.
+
+Request body:
+
+- `source_url` (required): GitHub path or URL (for example `github.com/octocat/Hello-World`)
+- `output_format`: `jsonld|json` (default `jsonld`)
+- `agent_runtime`: `rule_based|llm` (optional)
+- `include_intermediates`: `true|false` (default `false`)
+- `include_context_summary`: `true|false` (default `false`)
+
+Example:
+
+```bash
+curl -s -X POST "http://localhost:1234/v2/extract" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_url": "github.com/octocat/Hello-World",
+    "output_format": "json",
+    "agent_runtime": "llm",
+    "include_context_summary": true
+  }' | jq
+```
+
 ### `GET /v2/graph`
 
 Exports graph-store data as JSON-LD.

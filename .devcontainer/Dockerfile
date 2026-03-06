@@ -16,8 +16,9 @@ RUN apt-get update && apt-get install -y \
 # Crear usuario no-root con UID/GID que suele usar VS Code (1000:1000).
 # TOOD: Take this user out of sudoers if you want to use this in fully agents mode.
 RUN useradd -ms /bin/bash -u 1000 vscode \
-    && apt-get update && apt-get install -y sudo \
-    && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    && apt-get update 
+    # && apt-get install -y sudo \
+    #&& echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Gemini CLI
 # Please login outside of the container and copy your credentials to ~/.gemini/...
