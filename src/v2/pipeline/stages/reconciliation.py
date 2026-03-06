@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import re
 from collections import defaultdict
 from copy import deepcopy
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from src.v2.canonicalization import (
     resolve_article_id,
@@ -41,6 +40,31 @@ ORGANIZATION_NAME_EQUIVALENCE_TOKENS: dict[str, str] = {
     "centres": "centers",
 }
 GITHUB_ORG_BASE_URI = "https://github.com/"
+GITHUB_HANDLE_PATTERN = re.compile(
+    r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$",
+)
+
+
+def _normalize_github_org_handle(value: Any, *, allow_plain_handle: bool = True) -> str | None:
+    if not isinstance(value, str):
+        return None
+    github_handle = value.strip()
+    if not github_handle:
+        return None
+    is_github_url = github_handle.lower().startswith(GITHUB_ORG_BASE_URI)
+    if is_github_url:
+        github_handle = github_handle[len(GITHUB_ORG_BASE_URI) :]
+        github_handle = github_handle.split("/", maxsplit=1)[0]
+    elif not allow_plain_handle:
+        return None
+
+    if github_handle.startswith("@"):
+        github_handle = github_handle[1:]
+    if not github_handle:
+        return None
+    if GITHUB_HANDLE_PATTERN.fullmatch(github_handle) is None:
+        return None
+    return github_handle
 
 
 def _as_entity_list(value: Any) -> list[dict[str, Any]]:
@@ -151,22 +175,42 @@ def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
         or organization.get("pulse:infoscienceOrganizationIdentifier"),
     )
     normalized_github_handle: str | None = None
-    raw_github_handle = (
-        normalized_identifiers.get("pulse:githubOrganizationHandle")
-        or organization.get("pulse:githubOrganizationHandle")
-    )
-    if isinstance(raw_github_handle, str):
-        github_handle = raw_github_handle.strip()
-        if github_handle.lower().startswith("https://github.com/"):
-            github_handle = github_handle[len("https://github.com/") :]
-            github_handle = github_handle.split("/", maxsplit=1)[0]
-        if github_handle.startswith("@"):
-            github_handle = github_handle[1:]
-        normalized_github_handle = github_handle or None
+    for candidate in (
+        normalized_identifiers.get("pulse:githubOrganizationHandle"),
+        organization.get("pulse:githubOrganizationHandle"),
+    ):
+        normalized_candidate = _normalize_github_org_handle(
+            candidate,
+            allow_plain_handle=True,
+        )
+        if isinstance(normalized_candidate, str):
+            normalized_github_handle = normalized_candidate
+            break
+
+    if normalized_github_handle is None:
+        for candidate in (
+            organization.get("id"),
+            organization.get("schema:url"),
+        ):
+            normalized_candidate = _normalize_github_org_handle(
+                candidate,
+                allow_plain_handle=False,
+            )
+            if isinstance(normalized_candidate, str):
+                normalized_github_handle = normalized_candidate
+                break
+
+    if normalized_github_handle is not None:
+        normalized_github_handle = normalized_github_handle.strip()
+
+    uuid_value = _normalize_uuid_v4(normalized_identifiers.get("uuid"))
+    if uuid_value is None:
+        uuid_value = str(uuid4())
 
     normalized_identifiers["pulse:ror"] = normalized_ror
     normalized_identifiers["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
     normalized_identifiers["pulse:githubOrganizationHandle"] = normalized_github_handle
+    normalized_identifiers["uuid"] = uuid_value
     organization["identifiers"] = normalized_identifiers
     organization["pulse:infoscienceOrganizationIdentifier"] = normalized_infoscience_id
     organization["pulse:githubOrganizationHandle"] = normalized_github_handle
@@ -1165,43 +1209,6 @@ def _register_repository_lookup_tokens(
         _register_lookup_token(lookup, identifiers.get("schema:citation"), canonical_id)
 
 
-def _build_membership(person_id: str, org_id: str) -> dict[str, Any]:
-    membership_id = f"{person_id}_{org_id}"
-    return {
-        "id": membership_id,
-        "type": "org:Membership",
-        "shacl": "pulse:MembershipShape",
-        "identifiers": {
-            "pulse:composite": membership_id,
-            "uuid": str(uuid4()),
-        },
-        "idSource": "pulse:composite",
-        "org:organization": org_id,
-        "org:role": None,
-        "time:hasBeginning": None,
-        "time:hasEnd": None,
-    }
-
-
-def _build_contribution(person_id: str, repository_id: str) -> dict[str, Any]:
-    contribution_id = f"{person_id}_{repository_id}"
-    return {
-        "id": contribution_id,
-        "type": "pulse:Contribution",
-        "shacl": "pulse:ContributionShape",
-        "identifiers": {
-            "pulse:composite": contribution_id,
-            "uuid": str(uuid4()),
-        },
-        "idSource": "pulse:composite",
-        "pulse:contributionTo": repository_id,
-        "pulse:contributionCount": 0,
-        "pulse:firstContributionDate": None,
-        "pulse:lastContributionDate": None,
-        "schema:author": person_id,
-    }
-
-
 def _extract_affiliation_reference(affiliation: Any) -> str | None:
     if isinstance(affiliation, str):
         return affiliation
@@ -1211,39 +1218,6 @@ def _extract_affiliation_reference(affiliation: Any) -> str | None:
             if isinstance(value, str) and value:
                 return value
     return None
-
-
-def _stable_uuid_v4_from_seed(seed: str) -> str:
-    digest = bytearray(hashlib.sha256(seed.encode("utf-8")).digest()[:16])
-    digest[6] = (digest[6] & 0x0F) | 0x40
-    digest[8] = (digest[8] & 0x3F) | 0x80
-    return str(UUID(bytes=bytes(digest)))
-
-
-def _build_fallback_article_author_person(author_name: str, *, article_id: str) -> dict[str, Any]:
-    normalized_name = _normalize_lookup_token(author_name)
-    fallback_uuid = _stable_uuid_v4_from_seed(f"{article_id}::{normalized_name}")
-    email_local = re.sub(r"[^a-z0-9]+", ".", normalized_name).strip(".")
-    if not email_local:
-        email_local = "unknown.author"
-    fallback_email = f"{email_local}.{fallback_uuid.split('-', maxsplit=1)[0]}@example.org"
-    return {
-        "id": fallback_uuid,
-        "type": "schema:Person",
-        "shacl": "pulse:PersonShape",
-        "identifiers": {
-            "pulse:orcid": None,
-            "pulse:infosciencePersonIdentifier": None,
-            "pulse:githubUsername": None,
-            "uuid": fallback_uuid,
-        },
-        "idSource": "uuid",
-        "schema:name": author_name,
-        "schema:email": fallback_email,
-        "pulse:githubUsername": None,
-        "pulse:orcidIdentifier": None,
-        "pulse:infosciencePersonIdentifier": None,
-    }
 
 
 def _detect_repository_fork_cycles(repositories: list[dict[str, Any]]) -> list[str]:
@@ -1444,8 +1418,6 @@ def _normalize_contribution_entities(  # noqa: C901
 
 def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     entities_by_type: dict[str, Any],
-    *,
-    allow_synthetic_fallbacks: bool = True,
 ) -> ReconciledEntities:
     reconciled_entities: dict[str, list[dict[str, Any]]] = {
         "persons": deepcopy(_as_entity_list(entities_by_type.get("persons"))),
@@ -1539,15 +1511,12 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             ),
         )
 
-    fallback_membership_pairs: set[tuple[str, str]] = set()
-    fallback_contribution_pairs: set[tuple[str, str]] = set()
     link_warnings.extend(
         _prune_unresolved_organization_hierarchy_links(
             organizations=organizations,
             organization_lookup=organization_lookup,
         ),
     )
-    synthesis_warnings: list[str] = []
 
     for repository in repositories:
         repository_id = repository["id"]
@@ -1576,7 +1545,6 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                     unresolved_author_refs.append(author_ref)
                 continue
             canonical_authors.append(canonical_author)
-            fallback_contribution_pairs.add((canonical_author, repository_id))
 
         canonical_authors = _dedupe_preserve_order(canonical_authors)
         repository["schema:author"] = canonical_authors
@@ -1620,43 +1588,6 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             for author_ref in author_refs_value:
                 canonical_author = _resolve_lookup_token(person_lookup, author_ref)
                 if canonical_author is None:
-                    if (
-                        allow_synthetic_fallbacks
-                        and isinstance(author_ref, str)
-                        and author_ref
-                    ):
-                        synthesized_person = _build_fallback_article_author_person(
-                            author_ref,
-                            article_id=article_id,
-                        )
-                        _normalize_person_identifiers(synthesized_person)
-                        persons.append(synthesized_person)
-                        _register_person_lookup_tokens(person_lookup, synthesized_person)
-                        canonical_author = synthesized_person["id"]
-                        synthesis_warnings.append(
-                            (
-                                "Synthesized fallback person entity for unresolved article author: "
-                                f"article={article_id}, author={author_ref}, person={canonical_author}"
-                            ),
-                        )
-                    else:
-                        if allow_synthetic_fallbacks:
-                            link_warnings.append(
-                                (
-                                    "Orphan person reference from article author list: "
-                                    f"article={article_id}, author={author_ref}"
-                                ),
-                            )
-                        else:
-                            link_warnings.append(
-                                (
-                                    "Dropped unresolved article author reference because synthetic "
-                                    "fallbacks are disabled: "
-                                    f"article={article_id}, author={author_ref}"
-                                ),
-                            )
-                        continue
-                if canonical_author is None:
                     link_warnings.append(
                         (
                             "Orphan person reference from article author list: "
@@ -1698,7 +1629,6 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
                         )
                     continue
                 canonical_affiliations.append(canonical_affiliation)
-                fallback_membership_pairs.add((person_id, canonical_affiliation))
             person["affiliations"] = _dedupe_preserve_order(canonical_affiliations)
 
         owns_refs = person.get("pulse:owns")
@@ -1755,57 +1685,19 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             owned_repository_ids_by_org.get(organization_id, []),
         )
 
-    memberships, covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
+    memberships, _covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
         class_memberships,
         person_lookup=person_lookup,
         organization_lookup=organization_lookup,
     )
     link_warnings.extend(class_membership_warnings)
-    for person_id, org_id in sorted(fallback_membership_pairs):
-        if (person_id, org_id) in covered_membership_pairs:
-            continue
-        if allow_synthetic_fallbacks:
-            memberships.append(_build_membership(person_id, org_id))
-            covered_membership_pairs.add((person_id, org_id))
-            synthesis_warnings.append(
-                (
-                    "Synthesized fallback membership entity due to missing class-agent link: "
-                    f"person={person_id}, organization={org_id}"
-                ),
-            )
-        else:
-            link_warnings.append(
-                (
-                    "Skipped fallback membership synthesis because synthetic fallbacks are disabled: "
-                    f"person={person_id}, organization={org_id}"
-                ),
-            )
 
-    contributions, covered_contribution_pairs, class_contribution_warnings = _normalize_contribution_entities(
+    contributions, _covered_contribution_pairs, class_contribution_warnings = _normalize_contribution_entities(
         class_contributions,
         person_lookup=person_lookup,
         repository_lookup=repository_lookup,
     )
     link_warnings.extend(class_contribution_warnings)
-    for person_id, repository_id in sorted(fallback_contribution_pairs):
-        if (person_id, repository_id) in covered_contribution_pairs:
-            continue
-        if allow_synthetic_fallbacks:
-            contributions.append(_build_contribution(person_id, repository_id))
-            covered_contribution_pairs.add((person_id, repository_id))
-            synthesis_warnings.append(
-                (
-                    "Synthesized fallback contribution entity due to missing class-agent link: "
-                    f"person={person_id}, repository={repository_id}"
-                ),
-            )
-        else:
-            link_warnings.append(
-                (
-                    "Skipped fallback contribution synthesis because synthetic fallbacks are disabled: "
-                    f"person={person_id}, repository={repository_id}"
-                ),
-            )
 
     membership_ids_by_person: dict[str, list[str]] = {}
     for membership in memberships:
@@ -1853,6 +1745,5 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
         memberships=memberships,
         contributions=contributions,
         link_warnings=_dedupe_preserve_order(link_warnings),
-        synthesis_warnings=_dedupe_preserve_order(synthesis_warnings),
         reconciliation_debug=reconciliation_debug,
     )

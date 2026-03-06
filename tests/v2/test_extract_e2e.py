@@ -49,6 +49,7 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "reconciliation",
         "strict_validation",
         "output_assembly",
+        "link_veracity",
         "jsonld_build",
         "shacl_gate",
         "graph_write",
@@ -65,6 +66,7 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "reconciliation",
         "strict_validation",
         "output_assembly",
+        "link_veracity",
         "jsonld_build",
         "shacl_gate",
         "graph_write",
@@ -81,6 +83,7 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "reconciliation",
         "strict_validation",
         "output_assembly",
+        "link_veracity",
         "jsonld_build",
         "shacl_gate",
         "graph_write",
@@ -728,23 +731,7 @@ def test_extract_user_and_org_llm_runtime_use_llm_repo_fanout_runner() -> None:
     assert rule_repo_calls == 0
 
 
-def test_extract_verify_links_rejects_non_llm_runtime() -> None:
-    status_code, payload = _get_json(
-        "/v2/extract/github.com/octocat/Hello-World",
-        params={
-            "output_format": "json",
-            "agent_runtime": "rule_based",
-            "verify_links": "true",
-        },
-    )
-
-    assert status_code == HTTP_UNPROCESSABLE_ENTITY
-    assert payload["error_type"] == "validation_error"
-    assert "verify_links=true requires agent_runtime=llm" in payload["detail"]
-    assert any(error["field"] == "verify_links" for error in payload.get("errors", []))
-
-
-def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
+def test_extract_runs_link_veracity_stage_and_persists_intermediates(
     monkeypatch: Any,
 ) -> None:
     from src.v2.pipeline.stages import LinkVeracityStageResult
@@ -886,7 +873,6 @@ def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
         params={
             "output_format": "jsonld",
             "agent_runtime": "llm",
-            "verify_links": "true",
             "include_intermediates": "true",
         },
     )
@@ -914,6 +900,7 @@ def test_extract_verify_links_runs_stage_in_llm_mode_and_persists_intermediates(
 def test_extract_llm_runtime_includes_dedup_and_critic_stages_and_intermediates(
     monkeypatch: Any,
 ) -> None:
+    monkeypatch.setattr("src.v2.api.DEFAULT_INTERMEDIATE_LIMIT", 100)
     from src.v2.pipeline.stages.models import LLMCriticStageResult, LLMDedupStageResult
 
     class _LLMRepositoryRunner:
@@ -1185,7 +1172,8 @@ def test_extract_llm_dedup_and_critic_fail_open_with_warnings(
     assert "llm_critic" in payload["stats"]["stages_completed"]
 
 
-def test_extract_reconciles_org_identity_to_ror_for_memberships() -> None:
+def test_extract_reconciles_org_identity_to_ror_for_memberships(monkeypatch: Any) -> None:
+    monkeypatch.setattr("src.v2.api.DEFAULT_INTERMEDIATE_LIMIT", 100)
     infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
     infoscience_org_id = (
         "https://infoscience.epfl.ch/server/api/core/items/"
@@ -1469,10 +1457,7 @@ def test_extract_json_contract_stage_sequence_for_user_and_org() -> None:
         assert payload["stats"]["stages_completed"] == EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE[detected_type]
 
 
-def test_extract_defaults_to_no_synthetic_fallback_people_for_unresolved_article_authors(
-    monkeypatch: Any,
-) -> None:
-    monkeypatch.delenv("V2_ALLOW_SYNTHETIC_FALLBACKS", raising=False)
+def test_extract_drops_unresolved_article_authors_without_creating_fallback_people() -> None:
     unresolved_authors = [f"Unresolved Author {index}" for index in range(1, 201)]
     provider_set = ProviderSet(
         github=_RepositoryModeScopeGitHubProvider(),
@@ -1499,45 +1484,6 @@ def test_extract_defaults_to_no_synthetic_fallback_people_for_unresolved_article
     )
     assert any(
         "Dropped unresolved article author references for 200 name(s)" in warning
-        for warning in payload["warnings"]
-    )
-    assert not any(
-        "Synthesized fallback person entity for unresolved article author" in warning
-        for warning in payload["warnings"]
-    )
-
-
-def test_extract_allows_synthetic_fallback_people_when_opted_in(
-    monkeypatch: Any,
-) -> None:
-    monkeypatch.setenv("V2_ALLOW_SYNTHETIC_FALLBACKS", "true")
-    unresolved_authors = ["Ghost Author 1", "Ghost Author 2", "Ghost Author 3"]
-    provider_set = ProviderSet(
-        github=_RepositoryModeScopeGitHubProvider(),
-        orcid=MockORCIDProvider(),
-        infoscience=_UnresolvedAuthorInfoscienceProvider(
-            unresolved_authors=unresolved_authors,
-        ),
-        ror=MockRORProvider(),
-    )
-
-    status_code, payload = _get_json_from_app(
-        _build_test_app(provider_set),
-        "/v2/extract/github.com/owner-org/source-repo",
-        params={"output_format": "json"},
-    )
-
-    assert status_code == HTTP_OK
-    persons = payload["output"]["entities_by_type"]["persons"]
-    synthetic_people = [
-        person
-        for person in persons
-        if isinstance(person.get("schema:email"), str)
-        and person["schema:email"].endswith("@example.org")
-    ]
-    assert len(synthetic_people) == len(unresolved_authors)
-    assert any(
-        "Synthesized fallback person entity for unresolved article author" in warning
         for warning in payload["warnings"]
     )
 

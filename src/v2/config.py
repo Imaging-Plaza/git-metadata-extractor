@@ -55,12 +55,6 @@ class V2Config:
     V2_ENABLE_LOGFIRE: bool = field(
         default_factory=lambda: _get_env_bool("V2_ENABLE_LOGFIRE", default_value=True),
     )
-    V2_ALLOW_SYNTHETIC_FALLBACKS: bool = field(
-        default_factory=lambda: _get_env_bool(
-            "V2_ALLOW_SYNTHETIC_FALLBACKS",
-            default_value=False,
-        ),
-    )
     V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = field(
         default_factory=lambda: parse_agent_runtime(
             os.getenv("V2_AGENT_RUNTIME_DEFAULT"),

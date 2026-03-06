@@ -449,7 +449,6 @@ async def run_llm_critic_stage(  # noqa: PLR0913
         memberships=surviving_memberships,
         contributions=surviving_contributions,
         link_warnings=list(reconciled.link_warnings),
-        synthesis_warnings=list(reconciled.synthesis_warnings),
         reconciliation_debug=deepcopy(reconciled.reconciliation_debug),
     )
 

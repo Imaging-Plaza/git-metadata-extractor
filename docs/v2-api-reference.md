@@ -38,9 +38,6 @@ Query parameters:
     - repository input: `repo_agent`
     - user input: `person_agent`
     - organization input: `org_agent`
-- `verify_links`: `true|false` (default `false`)
-  - Runs optional `link_veracity` stage for unique HTTP(S) links in final JSON-LD.
-  - Supported only when `agent_runtime=llm`; otherwise returns `422 validation_error`.
 - `include_intermediates`: `true|false` (default `false`, returns run-scoped intermediate envelopes for this extract run only)
 
 Examples:
@@ -92,10 +89,18 @@ Shared runtime gates for all extract types:
 - `llm_critic` (LLM runtime only)
 - `strict_validation`
 - `output_assembly`
+- `link_veracity` (always-on, checks discovered links and prunes invalid links/entities)
 - `jsonld_build`
 - `shacl_gate` (non-fatal warnings)
 - `graph_write` (GraphStore upsert path)
-- optional `link_veracity` (only when `verify_links=true`)
+
+`link_veracity` behavior:
+
+- Scans all discovered HTTP(S) links across assembled entities.
+- For articles, also validates `schema:identifier` as DOI by normalizing bare DOI strings to `https://doi.org/<doi>`.
+- Removes links that are explicitly fetched and marked unreachable (`fetched_successfully=false`).
+- Removes entities when their canonical URL/DOI fails validation, or when no valid URL remains on that entity.
+- Checker/runtime errors are fail-open (warnings only) and do not auto-prune links/entities.
 
 LLM-stage intermediates (when `include_intermediates=true`):
 
@@ -197,7 +202,6 @@ If this line is absent after an LLM repository run with `agent_runtime=llm`, the
 | `V2_GRAPH_DB_PATH` | `data/v2_graph.db` | SQLite graph-store path |
 | `V2_INTERMEDIATE_HISTORY_LIMIT` | `5` | Max intermediates returned by extract-stage reads and per-agent graph response caps |
 | `V2_ENABLE_LOGFIRE` | `true` | Enables v2 Logfire instrumentation |
-| `V2_ALLOW_SYNTHETIC_FALLBACKS` | `false` | Enables synthetic fallback entity/value synthesis for unresolved references in `/v2/extract` reconciliation |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime selector for `/v2/extract` when `agent_runtime` query parameter is omitted |
 | `LOGFIRE_TOKEN` | unset | Optional Logfire token |
 | `GITHUB_TOKEN` | unset | Required for healthy provider preflight |

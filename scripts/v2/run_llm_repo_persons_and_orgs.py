@@ -1572,7 +1572,7 @@ async def _run(  # noqa: C901, PLR0915
         "memberships": [deepcopy(e) for e in successful_membership_entities],
         "contributions": [deepcopy(e) for e in successful_contribution_entities],
     }
-    reconciled = reconcile_entities(entities_by_type, allow_synthetic_fallbacks=True)
+    reconciled = reconcile_entities(entities_by_type)
 
     reconciled_all: list[dict[str, Any]] = []
     for entity_list in reconciled.entities.values():
@@ -1595,10 +1595,6 @@ async def _run(  # noqa: C901, PLR0915
         if reconciled.link_warnings:
             print("\nLink warnings:")
             for warning in reconciled.link_warnings:
-                print(f"  - {warning}")
-        if reconciled.synthesis_warnings:
-            print("\nSynthesis warnings:")
-            for warning in reconciled.synthesis_warnings:
                 print(f"  - {warning}")
         print(_SEP)
 

@@ -14,13 +14,18 @@ src/v2/agents/llm/
 ├── agent_tools/
 │   ├── __init__.py
 │   ├── disciplines.py           # Static tool: list_disciplines_tool
+│   ├── duckduckgo_search.py     # Factory: make_duckduckgo_search_tool()
+│   ├── email_hash.py            # Static tool: hash_user_email_tool
+│   ├── github_organization.py   # Factory: make_github_organization_metadata_tool(provider)
 │   ├── infoscience_orgunit.py   # Factory: make_infoscience_orgunit_tool(provider)
 │   ├── infoscience_search.py    # Factory: make_infoscience_search_tool(provider)
 │   ├── organization_identity.py # Factory: make_organization_identity_search_tool(ror, infoscience)
 │   ├── orcid_person.py          # Factory: make_orcid_person_tool(provider)
+│   ├── repository_corpus_grep.py # Factory: make_repository_corpus_grep_tool(corpus)
 │   ├── ror_organization.py      # Factory: make_ror_organization_search_tool(provider)
 │   ├── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
 │   └── uuid.py                  # Static tools: generate_uuid_v4_tool, generate_uuid_v4_batch_tool
+├── context_summary/             # LLMContextSummaryAgentV2 (+ prompts)
 ├── repository/                  # LLMRepositoryAgentV2 (+ prompts)
 ├── person/                      # LLMPersonAgentV2 (+ prompts)
 ├── organization/                # LLMOrganizationAgentV2 (+ prompts)
@@ -159,6 +164,10 @@ if providers.my_provider is not None:
 | File | Export | Type | Used by |
 |---|---|---|---|
 | `agent_tools/disciplines.py` | `list_disciplines_tool` | Static | `LLMRepositoryAgentV2` |
+| `agent_tools/duckduckgo_search.py` | `make_duckduckgo_search_tool()` | Factory | `LLMContextSummaryAgentV2` |
+| `agent_tools/email_hash.py` | `hash_user_email_tool` | Static | `LLMPersonAgentV2` |
+| `agent_tools/github_organization.py` | `make_github_organization_metadata_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
+| `agent_tools/repository_corpus_grep.py` | `make_repository_corpus_grep_tool(corpus)` | Factory | `LLMContextSummaryAgentV2` |
 | `agent_tools/organization_identity.py` | `make_organization_identity_search_tool(ror_provider, infoscience_provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/ror_organization.py` | `make_ror_organization_search_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/infoscience_orgunit.py` | `make_infoscience_orgunit_tool(provider)` | Factory | `LLMOrganizationAgentV2` |

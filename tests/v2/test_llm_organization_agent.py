@@ -216,6 +216,7 @@ def test_llm_organization_agent_builds_tools_from_providers() -> None:
 
     tool_names = [getattr(tool, "name", None) for tool in captured_tools]
     assert "fetch_link_content_via_selenium" in tool_names
+    assert "get_github_organization_metadata" in tool_names
     assert "search_organization_identity" in tool_names
     assert "search_ror_organizations" not in tool_names
     assert "search_infoscience_orgunit" not in tool_names
@@ -260,6 +261,7 @@ def test_llm_organization_agent_falls_back_to_single_provider_org_tools(
 
     tool_names = [getattr(tool, "name", None) for tool in captured_tools]
     assert "fetch_link_content_via_selenium" in tool_names
+    assert "get_github_organization_metadata" in tool_names
     assert expected_tool_name in tool_names
     assert "search_organization_identity" not in tool_names
 
@@ -307,7 +309,7 @@ def test_llm_organization_agent_appends_runtime_prompt_context_blocks() -> None:
     assert prompt_appendix in prompt
 
 
-def test_llm_organization_agent_exposes_selenium_tool_without_optional_providers() -> None:
+def test_llm_organization_agent_exposes_github_metadata_tool_without_optional_providers() -> None:
     captured_tools: list[Any] = []
 
     class _CapturingRuntime:
@@ -334,7 +336,10 @@ def test_llm_organization_agent_exposes_selenium_tool_without_optional_providers
     )
 
     tool_names = [getattr(tool, "name", None) for tool in captured_tools]
-    assert tool_names == ["fetch_link_content_via_selenium"]
+    assert tool_names == [
+        "fetch_link_content_via_selenium",
+        "get_github_organization_metadata",
+    ]
 
 
 def test_llm_organization_agent_works_with_minimal_context() -> None:
@@ -368,6 +373,7 @@ def test_llm_organization_system_prompt_includes_acronym_disambiguation_guidance
     assert "Acronym-only matches are insufficient for organization resolution." in prompt
     assert "repository owner handle" in prompt
     assert "leave `pulse:ror` as `null` instead of guessing." in prompt
+    assert "get_github_organization_metadata" in prompt
 
 
 @llm_integration

@@ -67,7 +67,10 @@ Resolve `id` and `idSource` by selecting the **first non-null** value in this or
 
 ### Email anonymization
 
-If an email address is available, anonymize it before including it:
+If an email address is available, anonymize it before including it.
+
+Prefer calling `hash_user_email` tool with the raw email and use the returned value for `schema:email`.
+If you cannot call tools, apply this exact fallback algorithm:
 
 1. Split on `@` → local part and domain
 2. Compute SHA-256 of the local part
@@ -120,3 +123,12 @@ Returns:
 
 Use the ORCID `name` for `schema:name` if it is more complete than the GitHub display name.
 Use `affiliations` to build `org:hasMembership` entries.
+
+### `hash_user_email`
+
+Call this tool with a raw email string and use the output as `schema:email`.
+
+It applies the canonical anonymization policy:
+- keep domain unchanged
+- replace local part with SHA-256(local-part) first 12 hex chars
+- avoid re-hashing already anonymized local parts

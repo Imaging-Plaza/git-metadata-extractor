@@ -15,8 +15,6 @@ from src.v2.agents.models import (
 from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 
 DEFAULT_QUERY_CAP = 8
-UNKNOWN_AUTHOR = "unknown-author"
-UNKNOWN_ARTICLE_DATE = "1900-01-01"
 DOI_PREFIX = "doi"
 INFOSCIENCE_PREFIX = "infoscience"
 URL_PREFIX = "url"
@@ -491,7 +489,6 @@ def _map_author_ids(
     publication: dict[str, Any],
     *,
     person_lookup: dict[str, str],
-    allow_synthetic_fallbacks: bool,
     publication_reference: str,
 ) -> tuple[list[str], list[str], list[str], int, int]:
     warnings: list[str] = []
@@ -508,30 +505,21 @@ def _map_author_ids(
             continue
         unresolved_authors.append(author_name)
         unresolved_count += 1
-        if allow_synthetic_fallbacks:
-            mapped_authors.append(author_name)
 
     if not mapped_authors:
-        if allow_synthetic_fallbacks:
-            mapped_authors = [UNKNOWN_AUTHOR]
-            _append_unique(
-                warnings,
-                "Publication has no author names; using placeholder author identifier",
-            )
-        else:
-            raw_author_values = _as_string_list(publication.get("authors"))
-            author_preview = (
-                ", ".join(f"'{author}'" for author in raw_author_values[:3])
-                if raw_author_values
-                else "<no-author-names>"
-            )
-            _append_unique(
-                warnings,
-                (
-                    "Publication has no resolvable author identifiers: "
-                    f"{publication_reference} (author_examples={author_preview})"
-                ),
-            )
+        raw_author_values = _as_string_list(publication.get("authors"))
+        author_preview = (
+            ", ".join(f"'{author}'" for author in raw_author_values[:3])
+            if raw_author_values
+            else "<no-author-names>"
+        )
+        _append_unique(
+            warnings,
+            (
+                "Publication has no resolvable author identifiers: "
+                f"{publication_reference} (author_examples={author_preview})"
+            ),
+        )
 
     return (
         _dedupe_preserve_order(mapped_authors),
@@ -562,8 +550,6 @@ def _map_source_organization(
 
 def _normalize_publication_date(
     publication_date: Any,
-    *,
-    allow_synthetic_fallbacks: bool,
 ) -> tuple[str | None, str | None]:
     normalized = _as_string(publication_date)
     if normalized and ISO_DATE_PATTERN.fullmatch(normalized):
@@ -577,8 +563,6 @@ def _normalize_publication_date(
                 f"'{normalized_year_date}' for schema compatibility"
             ),
         )
-    if allow_synthetic_fallbacks:
-        return UNKNOWN_ARTICLE_DATE, "Publication date missing/invalid; using placeholder date"
     if normalized:
         return None, f"Publication date '{normalized}' is invalid"
     return None, "Publication date is missing"
@@ -679,9 +663,6 @@ class ArticleAgentV2:
     ) -> AgentResult:
         warnings: list[str] = []
         queries = self.build_query_blend(context)
-        allow_synthetic_fallbacks = context.get("allow_synthetic_fallbacks")
-        if not isinstance(allow_synthetic_fallbacks, bool):
-            allow_synthetic_fallbacks = True
 
         max_unresolved_authors = context.get("max_unresolved_article_authors")
         if not isinstance(max_unresolved_authors, int) or max_unresolved_authors < 1:
@@ -754,7 +735,6 @@ class ArticleAgentV2:
             ) = _map_author_ids(
                 candidate.publication,
                 person_lookup=person_lookup,
-                allow_synthetic_fallbacks=allow_synthetic_fallbacks,
                 publication_reference=publication_reference,
             )
             for unresolved_author in unresolved_authors:
@@ -767,7 +747,7 @@ class ArticleAgentV2:
                     reported_unresolvable_author_identifiers_warning = True
                 _append_unique(warnings, warning)
 
-            if not author_ids and not allow_synthetic_fallbacks:
+            if not author_ids:
                 skipped_missing_resolvable_author_candidates.append(
                     (
                         publication_reference,
@@ -786,7 +766,6 @@ class ArticleAgentV2:
 
             publication_date, date_warning = _normalize_publication_date(
                 candidate.publication.get("publicationDate"),
-                allow_synthetic_fallbacks=allow_synthetic_fallbacks,
             )
             if date_warning:
                 _append_unique(
@@ -837,24 +816,14 @@ class ArticleAgentV2:
             preview = ", ".join(f"'{name}'" for name in unresolved_author_names[:max_unresolved_authors])
             remainder = len(unresolved_author_names) - max_unresolved_authors
             remainder_suffix = f", +{remainder} more" if remainder > 0 else ""
-            if allow_synthetic_fallbacks:
-                _append_unique(
-                    warnings,
-                    (
-                        "Deferred article author resolution for "
-                        f"{len(unresolved_author_names)} name(s); reconciliation will synthesize "
-                        f"fallback person links. Examples: {preview}{remainder_suffix}"
-                    ),
-                )
-            else:
-                _append_unique(
-                    warnings,
-                    (
-                        "Dropped unresolved article author references for "
-                        f"{len(unresolved_author_names)} name(s). "
-                        f"Examples: {preview}{remainder_suffix}"
-                    ),
-                )
+            _append_unique(
+                warnings,
+                (
+                    "Dropped unresolved article author references for "
+                    f"{len(unresolved_author_names)} name(s). "
+                    f"Examples: {preview}{remainder_suffix}"
+                ),
+            )
 
         if skipped_missing_resolvable_author_candidates:
             if len(skipped_missing_resolvable_author_candidates) == 1:

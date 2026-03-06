@@ -62,6 +62,28 @@ def _coerce_members(candidate: Any) -> list[str]:
     return members
 
 
+def _coerce_repository_files(candidate: Any) -> list[dict[str, str]]:
+    if isinstance(candidate, dict):
+        rows: list[dict[str, str]] = []
+        for path, content in candidate.items():
+            if isinstance(path, str) and path.strip() and isinstance(content, str) and content.strip():
+                rows.append({"path": path.strip(), "content": content.strip()})
+        return rows
+
+    if not isinstance(candidate, list):
+        return []
+
+    rows = []
+    for item in candidate:
+        if not isinstance(item, dict):
+            continue
+        path = _first_non_empty_string(item.get("path"), item.get("file_path"), item.get("name"))
+        content = _first_non_empty_string(item.get("content"), item.get("text"), item.get("body"))
+        if path and content:
+            rows.append({"path": path, "content": content})
+    return rows
+
+
 def _normalize_owned_repo_full_name(owner: str, repo: str) -> str:
     if "/" in repo:
         return repo
@@ -126,6 +148,9 @@ def _optional_repository_context(
         "contributors": contributors,
         "languages": languages,
         "gimie_jsonld": gimie_jsonld,
+        "repository_files": _coerce_repository_files(
+            repository_metadata.get("repository_files") or repository_metadata.get("files"),
+        ),
     }
 
 
@@ -198,6 +223,9 @@ async def gather_context(  # noqa: C901, PLR0915
             "contributors": contributors,
             "languages": languages,
             "gimie_jsonld": gimie_jsonld,
+            "repository_files": _coerce_repository_files(
+                repository_metadata.get("repository_files") or repository_metadata.get("files"),
+            ),
         }
         return ContextBundle(
             detected_type=normalized_type,

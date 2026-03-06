@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
 
 
@@ -147,7 +149,7 @@ def test_reconcile_drops_repository_author_references_that_match_organizations()
     )
 
 
-def test_reconcile_links_person_affiliations_and_generates_memberships() -> None:
+def test_reconcile_links_person_affiliations_without_generating_memberships() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["EPFL"])],
         "organizations": [_organization("EPFL", "05gzmn429")],
@@ -160,11 +162,10 @@ def test_reconcile_links_person_affiliations_and_generates_memberships() -> None
     organization_id = reconciled.entities["organizations"][0]["id"]
 
     assert person["affiliations"] == [organization_id]
-    assert len(reconciled.memberships) == 1
-    assert reconciled.memberships[0]["org:organization"] == organization_id
+    assert reconciled.memberships == []
 
 
-def test_reconcile_generates_contributions_for_person_repository_links() -> None:
+def test_reconcile_does_not_generate_contributions_for_person_repository_links() -> None:
     entities = {
         "persons": [_person("johndoe")],
         "organizations": [],
@@ -173,10 +174,7 @@ def test_reconcile_generates_contributions_for_person_repository_links() -> None
 
     reconciled = reconcile_entities(entities)
 
-    assert len(reconciled.contributions) == 1
-    contribution = reconciled.contributions[0]
-    assert contribution["schema:author"] == reconciled.entities["persons"][0]["id"]
-    assert contribution["pulse:contributionTo"] == reconciled.entities["repositories"][0]["id"]
+    assert reconciled.contributions == []
 
 
 def test_reconcile_emits_warnings_for_orphan_references() -> None:
@@ -266,11 +264,6 @@ def test_reconcile_resolves_article_author_when_article_references_person_orcid_
 
     assert person_id == "https://orcid.org/0000-0002-1825-0097"
     assert article["schema:author"] == [person_id]
-    assert not any(
-        "Dropped unresolved article author reference because synthetic fallbacks are disabled"
-        in warning
-        for warning in reconciled.link_warnings
-    )
 
 
 def test_reconcile_normalizes_infoscience_organization_identifier_url_to_uuid() -> None:
@@ -337,7 +330,7 @@ def test_reconcile_preserves_uuid_infoscience_organization_identifier() -> None:
     assert organization["idSource"] == "pulse:infoscienceOrganizationIdentifier"
 
 
-def test_reconcile_synthesizes_person_for_unresolved_article_author_references() -> None:
+def test_reconcile_drops_unresolved_article_author_references() -> None:
     unresolved_authors = ["Gehant, Sebastien", "Gfeller, David"]
     entities = {
         "persons": [],
@@ -352,53 +345,16 @@ def test_reconcile_synthesizes_person_for_unresolved_article_author_references()
         ],
     }
 
-    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=True)
-
-    article = reconciled.entities["articles"][0]
-    synthesized_people = reconciled.entities["persons"]
-    person_ids = {person["id"] for person in synthesized_people}
-    person_names = {person["schema:name"] for person in synthesized_people}
-
-    assert person_names == set(unresolved_authors)
-    assert len(person_ids) == len(unresolved_authors)
-    assert set(article["schema:author"]) == person_ids
-    assert all(not person_id.startswith("https://github.com/") for person_id in person_ids)
-    assert all(person["idSource"] == "uuid" for person in synthesized_people)
-    assert not any(
-        "Orphan person reference from article author list" in warning
-        for warning in reconciled.link_warnings
-    )
-    assert any(
-        "Synthesized fallback person entity for unresolved article author" in warning
-        for warning in reconciled.synthesis_warnings
-    )
-
-
-def test_reconcile_does_not_synthesize_person_for_unresolved_article_authors_when_disabled() -> None:
-    unresolved_authors = ["Gehant, Sebastien", "Gfeller, David"]
-    entities = {
-        "persons": [],
-        "organizations": [],
-        "repositories": [],
-        "articles": [
-            _article(
-                doi="10.1093/nar/gkv1310",
-                infoscience_id=None,
-                authors=unresolved_authors,
-            ),
-        ],
-    }
-
-    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=False)
+    reconciled = reconcile_entities(entities)
 
     assert reconciled.entities["persons"] == []
     assert reconciled.entities["articles"][0]["schema:author"] == []
-    assert reconciled.synthesis_warnings == []
-    assert any(
-        "Dropped unresolved article author reference because synthetic fallbacks are disabled"
-        in warning
+    orphan_warnings = [
+        warning
         for warning in reconciled.link_warnings
-    )
+        if "Orphan person reference from article author list" in warning
+    ]
+    assert len(orphan_warnings) == len(unresolved_authors)
 
 
 def test_reconcile_uses_class_memberships_and_contributions_as_primary_sources() -> None:
@@ -422,10 +378,9 @@ def test_reconcile_uses_class_memberships_and_contributions_as_primary_sources()
     assert reconciled.contributions == [
         _contribution(person_id, repository_id),
     ]
-    assert reconciled.synthesis_warnings == []
 
 
-def test_reconcile_synthesizes_fallback_links_only_when_class_entities_missing() -> None:
+def test_reconcile_does_not_add_memberships_or_contributions_without_class_entities() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["EPFL"])],
         "organizations": [_organization("EPFL", "05gzmn429")],
@@ -436,36 +391,8 @@ def test_reconcile_synthesizes_fallback_links_only_when_class_entities_missing()
 
     reconciled = reconcile_entities(entities)
 
-    assert len(reconciled.memberships) == 1
-    assert len(reconciled.contributions) == 1
-    assert any("Synthesized fallback membership entity" in w for w in reconciled.synthesis_warnings)
-    assert any("Synthesized fallback contribution entity" in w for w in reconciled.synthesis_warnings)
-
-
-def test_reconcile_skips_fallback_memberships_and_contributions_when_disabled() -> None:
-    entities = {
-        "persons": [_person("johndoe", affiliations=["EPFL"])],
-        "organizations": [_organization("EPFL", "05gzmn429")],
-        "repositories": [_repository("owner/repo", ["johndoe"])],
-        "memberships": [],
-        "contributions": [],
-    }
-
-    reconciled = reconcile_entities(entities, allow_synthetic_fallbacks=False)
-
     assert reconciled.memberships == []
     assert reconciled.contributions == []
-    assert reconciled.synthesis_warnings == []
-    assert any(
-        "Skipped fallback membership synthesis because synthetic fallbacks are disabled"
-        in warning
-        for warning in reconciled.link_warnings
-    )
-    assert any(
-        "Skipped fallback contribution synthesis because synthetic fallbacks are disabled"
-        in warning
-        for warning in reconciled.link_warnings
-    )
 
 
 def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> None:
@@ -568,7 +495,6 @@ def test_reconcile_resolves_accented_affiliation_variant_from_org_aliases() -> N
     organization_id = organization["id"]
 
     assert reconciled.entities["persons"][0]["affiliations"] == [organization_id]
-    assert reconciled.memberships[0]["org:organization"] == organization_id
     assert not any(
         "Orphan organization reference from person affiliation" in warning
         for warning in reconciled.link_warnings
@@ -597,7 +523,6 @@ def test_reconcile_resolves_affiliation_with_prefixed_org_alias_without_explicit
     organization_id = reconciled.entities["organizations"][0]["id"]
 
     assert reconciled.entities["persons"][0]["affiliations"] == [organization_id]
-    assert reconciled.memberships[0]["org:organization"] == organization_id
     assert not any(
         "Orphan organization reference from person affiliation" in warning
         for warning in reconciled.link_warnings
@@ -821,3 +746,68 @@ def test_reconcile_token_collision_prefers_ror_backed_canonical_organization() -
     assert len(reconciled.entities["organizations"]) == 2
     assert person["affiliations"] == ["https://ror.org/02hdt9m26"]
     assert reconciled.reconciliation_debug["token_collision_count"] >= 1
+
+
+def test_reconcile_generates_missing_organization_identifier_uuid() -> None:
+    entities = {
+        "persons": [],
+        "organizations": [
+            {
+                "schema:name": "Swiss Data Science Center",
+                "schema:identifier": "https://ror.org/02hdt9m26",
+                "identifiers": {
+                    "pulse:ror": "https://ror.org/02hdt9m26",
+                    "pulse:infoscienceOrganizationIdentifier": None,
+                    "pulse:githubOrganizationHandle": "sdsc-ordes",
+                    "uuid": None,
+                },
+                "pulse:githubOrganizationHandle": "sdsc-ordes",
+                "pulse:infoscienceOrganizationIdentifier": None,
+                "pulse:owns": [],
+            },
+        ],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organization = reconciled.entities["organizations"][0]
+    uuid_value = organization["identifiers"]["uuid"]
+
+    assert isinstance(uuid_value, str)
+    assert re.fullmatch(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+        uuid_value,
+        flags=re.IGNORECASE,
+    )
+
+
+def test_reconcile_derives_organization_github_handle_from_github_url_id() -> None:
+    entities = {
+        "persons": [],
+        "organizations": [
+            {
+                "id": "https://github.com/sdsc-ordes",
+                "idSource": "pulse:githubOrganizationHandle",
+                "schema:name": "sdsc-ordes",
+                "schema:identifier": None,
+                "identifiers": {
+                    "pulse:ror": None,
+                    "pulse:infoscienceOrganizationIdentifier": None,
+                    "pulse:githubOrganizationHandle": None,
+                    "uuid": None,
+                },
+                "pulse:githubOrganizationHandle": None,
+                "pulse:infoscienceOrganizationIdentifier": None,
+                "pulse:owns": [],
+            },
+        ],
+        "repositories": [],
+    }
+
+    reconciled = reconcile_entities(entities)
+    organization = reconciled.entities["organizations"][0]
+
+    assert organization["id"] == "https://github.com/sdsc-ordes"
+    assert organization["idSource"] == "pulse:githubOrganizationHandle"
+    assert organization["pulse:githubOrganizationHandle"] == "sdsc-ordes"
+    assert organization["identifiers"]["pulse:githubOrganizationHandle"] == "sdsc-ordes"

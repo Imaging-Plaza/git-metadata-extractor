@@ -18,6 +18,7 @@ from src.v2.agents import (
     ContributionAgentV2,
     LLMArticleAgentV2,
     LLMContributionAgentV2,
+    LLMContextSummaryAgentV2,
     LLMMembershipAgentV2,
     LLMOrganizationAgentV2,
     LLMPersonAgentV2,
@@ -58,6 +59,7 @@ AgentRunner = Callable[
 SleepCallable = Callable[[float], Awaitable[None]]
 
 STAGE_CONTEXT_GATHER = "context_gather"
+STAGE_CONTEXT_SUMMARY_AGENT = "context_summary_agent"
 STAGE_REPO_AGENT = "repo_agent"
 STAGE_PERSON_AGENT = "person_agent"
 STAGE_ORG_AGENT = "org_agent"
@@ -73,6 +75,7 @@ STAGE_CONTRIBUTION_AGENTS = "contribution_agents"
 STAGE_AGENTS = "agents"
 GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
 VALIDATION_WARNING_PREFIX = "Validation warning at"
+COMPILED_CONTEXT_PROMPT_BLOCK_HEADER = "## Compiled Source Summary"
 
 PLAN_BY_TYPE: dict[str, list[str]] = {
     "repository": [
@@ -151,6 +154,28 @@ def _is_valid_github_login(candidate: Any) -> bool:
     )
 
 
+def _strip_raw_repository_material(repository_context: dict[str, Any]) -> None:
+    repository_context.pop("readme_content", None)
+    repository_context.pop("gimie_jsonld", None)
+    repository_context.pop("repository_files", None)
+    repository_context.pop("files", None)
+
+
+def _compiled_context_prompt_appendix(
+    *,
+    existing_appendix: str | None,
+    summary_markdown: str | None,
+) -> str | None:
+    summary = summary_markdown.strip() if isinstance(summary_markdown, str) else ""
+    if not summary:
+        return existing_appendix
+
+    summary_block = f"{COMPILED_CONTEXT_PROMPT_BLOCK_HEADER}\n{summary}"
+    if isinstance(existing_appendix, str) and existing_appendix.strip():
+        return f"{existing_appendix}\n\n{summary_block}"
+    return summary_block
+
+
 class PipelineOrchestrator:
     """Coordinates stage execution for repository, user, and organization flows."""
 
@@ -167,6 +192,7 @@ class PipelineOrchestrator:
         llm_repository_agent: RuntimeAgent | None = None,
         llm_person_agent: RuntimeAgent | None = None,
         llm_organization_agent: RuntimeAgent | None = None,
+        llm_context_summary_agent: RuntimeAgent | None = None,
         llm_article_agent: RuntimeAgent | None = None,
         llm_membership_agent: RuntimeAgent | None = None,
         llm_contribution_agent: RuntimeAgent | None = None,
@@ -191,6 +217,9 @@ class PipelineOrchestrator:
         self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
         self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
         self._llm_organization_agent = llm_organization_agent or LLMOrganizationAgentV2()
+        self._llm_context_summary_agent = (
+            llm_context_summary_agent or LLMContextSummaryAgentV2()
+        )
         self._llm_article_agent = llm_article_agent or LLMArticleAgentV2()
         self._llm_membership_agent = llm_membership_agent or LLMMembershipAgentV2()
         self._llm_contribution_agent = llm_contribution_agent or LLMContributionAgentV2()
@@ -298,6 +327,65 @@ class PipelineOrchestrator:
                         warning_count=len(context_bundle.warnings),
                         context_keys=sorted(context_bundle.context.keys()),
                     )
+
+                runtime_mode = parse_agent_runtime(
+                    runtime_context.get("agent_runtime"),
+                    default=AgentRuntime.RULE_BASED,
+                    field_name="agent_runtime",
+                )
+                if runtime_mode == AgentRuntime.LLM:
+                    summary_context = {
+                        "detected_type": plan.detected_type,
+                        "source_url": runtime_context.get("source_url"),
+                        "gathered_context": deepcopy(context_bundle.context),
+                    }
+                    try:
+                        summary_result = await with_retry(
+                            self._llm_context_summary_agent.run,
+                            context=summary_context,
+                            providers=providers,
+                            max_retries=self._retry_max_retries,
+                            backoff_base=self._retry_backoff_base,
+                            sleep_func=self._retry_sleep_func,
+                            invalid_result_checker=None,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        _append_unique(
+                            warnings,
+                            (
+                                "context_summary_agent execution failed; "
+                                f"continuing without compiled summary: {exc}"
+                            ),
+                        )
+                    else:
+                        for warning in summary_result.warnings:
+                            _append_unique(
+                                warnings,
+                                f"{STAGE_CONTEXT_SUMMARY_AGENT}: {warning}",
+                            )
+                        if summary_result.is_partial and summary_result.failure_reason:
+                            _append_unique(
+                                warnings,
+                                (
+                                    "context_summary_agent returned partial output: "
+                                    f"{summary_result.failure_reason}"
+                                ),
+                            )
+                        compiled_summary = summary_result.data.get("summary_markdown")
+                        if isinstance(compiled_summary, str) and compiled_summary.strip():
+                            runtime_context["compiled_context_markdown"] = compiled_summary
+                            gathered_context = runtime_context.get("gathered_context")
+                            if isinstance(gathered_context, dict):
+                                gathered_context["compiled_context_markdown"] = compiled_summary
+                                runtime_context["gathered_context"] = gathered_context
+                        else:
+                            _append_unique(
+                                warnings,
+                                (
+                                    "context_summary_agent returned an empty summary; "
+                                    "downstream LLM agents will use default prompt context only"
+                                ),
+                            )
                 stages_completed.append(stage.name)
                 continue
 
@@ -453,6 +541,28 @@ class PipelineOrchestrator:
             return url_info
         raise ValueError
 
+    @staticmethod
+    def _strip_raw_material_for_llm(item_context: dict[str, Any]) -> None:
+        repository_context = item_context.get("repository_context")
+        if isinstance(repository_context, dict):
+            _strip_raw_repository_material(repository_context)
+
+        user_context = item_context.get("user_context")
+        if isinstance(user_context, dict):
+            repository_contexts = user_context.get("repository_contexts")
+            if isinstance(repository_contexts, dict):
+                for context in repository_contexts.values():
+                    if isinstance(context, dict):
+                        _strip_raw_repository_material(context)
+
+        organization_context = item_context.get("organization_context")
+        if isinstance(organization_context, dict):
+            repository_contexts = organization_context.get("repository_contexts")
+            if isinstance(repository_contexts, dict):
+                for context in repository_contexts.values():
+                    if isinstance(context, dict):
+                        _strip_raw_repository_material(context)
+
     async def _execute_stage(  # noqa: PLR0913
         self,
         *,
@@ -490,6 +600,9 @@ class PipelineOrchestrator:
                 "stage_name": stage_name,
                 "pipeline_outputs": dict(pipeline_outputs),
             }
+            if runtime_mode == AgentRuntime.LLM:
+                self._strip_raw_material_for_llm(item_context)
+
             include_upstream_outputs = runtime_context.get(
                 "include_upstream_stage_outputs_in_prompt",
             )
@@ -505,6 +618,11 @@ class PipelineOrchestrator:
             prompt_appendix = runtime_context.get("user_prompt_appendix")
             if not isinstance(prompt_appendix, str):
                 prompt_appendix = self._user_prompt_appendix
+            if runtime_mode == AgentRuntime.LLM:
+                prompt_appendix = _compiled_context_prompt_appendix(
+                    existing_appendix=prompt_appendix,
+                    summary_markdown=runtime_context.get("compiled_context_markdown"),
+                )
             if isinstance(prompt_appendix, str) and prompt_appendix.strip():
                 item_context[USER_PROMPT_APPENDIX_CONTEXT_KEY] = prompt_appendix
 

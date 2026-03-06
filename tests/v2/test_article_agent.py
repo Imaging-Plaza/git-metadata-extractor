@@ -142,10 +142,9 @@ def test_article_agent_ranks_dedupes_and_maps_links(
     assert result.data["schema:sourceOrganization"] == "https://ror.org/02s376052"
     assert result.data["schema:author"] == [
         "https://orcid.org/0000-0002-1825-0097",
-        "Unknown Contributor",
     ]
     assert any(
-        warning.startswith("Deferred article author resolution for 1 name(s);")
+        warning.startswith("Dropped unresolved article author references for 1 name(s)")
         and "'Unknown Contributor'" in warning
         for warning in result.warnings
     )
@@ -177,7 +176,7 @@ def test_article_agent_handles_empty_provider_results_without_failure() -> None:
     assert result.stats["articles"] == []
 
 
-def test_article_agent_drops_unresolved_author_references_when_synthetic_fallbacks_disabled() -> None:
+def test_article_agent_drops_unresolved_author_references() -> None:
     provider = _RecordingInfoscienceProvider(
         {
             "sdsc-ordes/gimie": [
@@ -200,7 +199,6 @@ def test_article_agent_drops_unresolved_author_references_when_synthetic_fallbac
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
 
     result = asyncio.run(agent.run(context, providers))
 
@@ -212,7 +210,7 @@ def test_article_agent_drops_unresolved_author_references_when_synthetic_fallbac
     )
 
 
-def test_article_agent_normalizes_year_only_date_when_synthetic_fallbacks_disabled() -> None:
+def test_article_agent_normalizes_year_only_date() -> None:
     provider = _RecordingInfoscienceProvider(
         {
             "sdsc-ordes/gimie": [
@@ -235,7 +233,6 @@ def test_article_agent_normalizes_year_only_date_when_synthetic_fallbacks_disabl
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
 
     result = asyncio.run(agent.run(context, providers))
 
@@ -249,7 +246,7 @@ def test_article_agent_normalizes_year_only_date_when_synthetic_fallbacks_disabl
     )
 
 
-def test_article_agent_resolves_accent_and_name_order_variants_without_synthetic_fallbacks() -> None:
+def test_article_agent_resolves_accent_and_name_order_variants() -> None:
     provider = _RecordingInfoscienceProvider(
         {
             "sdsc-ordes/gimie": [
@@ -272,7 +269,6 @@ def test_article_agent_resolves_accent_and_name_order_variants_without_synthetic
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
     context["known_persons"] = [
         {
             "id": "https://orcid.org/0000-0003-1234-5678",
@@ -295,7 +291,7 @@ def test_article_agent_resolves_accent_and_name_order_variants_without_synthetic
     )
 
 
-def test_article_agent_skips_fully_unresolved_authors_with_count_metadata_when_synthetic_fallbacks_disabled() -> None:
+def test_article_agent_skips_fully_unresolved_authors_with_count_metadata() -> None:
     provider = _RecordingInfoscienceProvider(
         {
             "sdsc-ordes/gimie": [
@@ -318,7 +314,6 @@ def test_article_agent_skips_fully_unresolved_authors_with_count_metadata_when_s
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
 
     result = asyncio.run(agent.run(context, providers))
 
@@ -361,7 +356,6 @@ def test_article_agent_skips_candidate_without_doi_required_by_strict_schema() -
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
 
     result = asyncio.run(agent.run(context, providers))
 
@@ -411,7 +405,6 @@ def test_article_agent_aggregates_missing_resolvable_author_skip_warnings() -> N
     )
     agent = ArticleAgentV2(max_queries=3)
     context = _build_context()
-    context["allow_synthetic_fallbacks"] = False
 
     result = asyncio.run(agent.run(context, providers))
 

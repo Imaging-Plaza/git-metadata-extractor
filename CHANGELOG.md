@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unpublished]
 
 ### Changed
+- In `agent_runtime=llm`, orchestrator now performs an initial fail-open context-compilation pass immediately after `context_gather`: downstream LLM agents receive a compiled markdown summary block in prompt appendix context, while raw README/GIMIE/repository-file blobs are stripped from per-agent runtime context payloads.
+- `/v2/extract` link validation is now always-on (`link_veracity` stage) for all runtimes (no request flag). The stage now validates all discovered HTTP(S) links from assembled entities and records per-link diagnostics/intermediates.
+- Article link validation now enforces DOI-link checking by normalizing bare `schema:identifier` DOI strings to `https://doi.org/<doi>` before verification. Canonical article identity hierarchy remains `DOI > Infoscience > UUID`.
+- Link-pruning policy now removes only explicitly unreachable links (`fetched_successfully=false`) and prunes entities when canonical URL/DOI checks fail or no valid URL remains after pruning.
 - Added two always-on LLM-only global stages in `/v2/extract`: `llm_dedup` (after permissive validation, before reconciliation) and `llm_critic` (after reconciliation, before strict validation). Both stages are fail-open (warning-only) and append to `stats.stages_completed` in LLM runs.
 - `llm_dedup` now applies deterministic constrained merge acceptance on LLM cluster suggestions across organizations/persons/repositories/articles, enforces identifier-conflict rejections, resolves canonical IDs by hierarchy, remaps references, and recomputes membership/contribution composite IDs.
 - `llm_critic` now applies deterministic non-root pruning from LLM suggestions with root protection, cascade cleanup for memberships/contributions, relation-array cleanup, and `critic_pruned` entries in `excluded_entities`.
@@ -25,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - Strict schema validation now strips `_`-prefixed internal fields before checking `additionalProperties`, preventing false rejections from pipeline-internal metadata.
 
 ### Fixed
+- Fixed a regression where link-checker/runtime errors could be misclassified as invalid URLs and incorrectly prune root entities. Link-veracity checker errors are now fail-open warnings and do not trigger automatic pruning.
 - Fixed `LLMPersonAgentV2` null optional-field leak: `model_dump(by_alias=True, mode="json")` in pydantic-ai returns all fields including `None`-valued optionals. The strict SHACL schema requires absent fields rather than explicit nulls, so top-level `None` values are now stripped from the payload dict before validation (`{k: v for k, v in payload.items() if v is not None}`). The nested `identifiers` sub-object is preserved intact.
 - Fixed `LLMPersonAgentV2` null-list iteration bug: when the LLM returned `"pulse:hasContribution": null` or `"org:hasMembership": null`, `payload.get(key, [])` returned `None` (key exists with null value, default not used), causing `TypeError: 'NoneType' object is not iterable`. Changed to `(payload.get(key) or [])` to handle both absent key and null value.
 - Fixed `V2LLMRuntime` token count extraction: `result.usage` in pydantic-ai 1.5.0 is a method, not a property. Added `if callable(usage): usage = usage()` guard before field access so `tokens_prompt`/`tokens_completion` are populated from the real `RunUsage` object instead of always returning `None`. V1 agents had the same bug but silently fell back to tiktoken estimates; v2 now uses the actual API-reported counts.
@@ -32,6 +37,10 @@ All notable changes to this project will be documented in this file.
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
 
 ### Added
+- Added `LLMContextSummaryAgentV2` (`src/v2/agents/llm/context_summary/agent.py`) as a beginning-of-pipeline LLM context compiler that ingests raw gathered repository material and emits `summary_markdown` for downstream agent grounding.
+- Added `make_repository_corpus_grep_tool` (`src/v2/agents/llm/agent_tools/repository_corpus_grep.py`), a provenance-aware corpus grep tool returning markdown snippets with source metadata and line-numbered context blocks.
+- Added `make_duckduckgo_search_tool` (`src/v2/agents/llm/agent_tools/duckduckgo_search.py`), which exposes `search_on_the_internet` for compact DuckDuckGo-backed external context retrieval (title/url/snippet rows) and wired it into `LLMContextSummaryAgentV2`.
+- Added `hash_user_email_tool` (`src/v2/agents/llm/agent_tools/email_hash.py`) and wired it into `LLMPersonAgentV2` so person extraction can call a canonical email-anonymization tool instead of reimplementing hashing in-prompt.
 - Added `LLMDedupAgentV2` (`src/v2/agents/llm/dedup/agent.py`) and `LLMCriticAgentV2` (`src/v2/agents/llm/critic/agent.py`) with structured JSON outputs for global duplicate-cluster and prune suggestions.
 - Added stage helpers `run_llm_dedup_stage` and `run_llm_critic_stage` (`src/v2/pipeline/stages/llm_dedup.py`, `src/v2/pipeline/stages/llm_critic.py`) plus stage result dataclasses in `src/v2/pipeline/stages/models.py`.
 - Added regression coverage:
@@ -101,18 +110,18 @@ All notable changes to this project will be documented in this file.
 - Updated reconciliation organization normalization to prune unresolved `org:hasUnit` / `org:unitOf` links and emit explicit dropped-reference counters, preventing dangling organization hierarchy edges.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-07-jsonld-literal-to-id-conversion.md` after completing Plan C issues 5 and 6.
 - Updated v2 organization alias propagation and reconciliation lookup matching for membership/source-organization resolution to use `aliases`/`acronyms`/`labels` (without `schema:alternateName`) while preserving accent/punctuation-insensitive token variants and GitHub handle matching with/without `@`.
-- Updated v2 article-author resolution to use richer person-name alias tokens (including ORCID/Infoscience/GitHub display-name style inputs plus comma-order normalization) before strict no-synthetic skip decisions.
-- Updated strict no-synthetic article skip warnings to include per-candidate matched/unmatched author counts for clearer operational diagnostics.
+- Updated v2 article-author resolution to use richer person-name alias tokens (including ORCID/Infoscience/GitHub display-name style inputs plus comma-order normalization) before strict unresolved-author skip decisions.
+- Updated strict article skip warnings to include per-candidate matched/unmatched author counts for clearer operational diagnostics.
 - Updated v2 person-fanout orchestration to skip GitHub contributor accounts whose resolved profile type is `Organization`, preventing organization handles (for example `sdsc-ordes`) from being emitted by `person_agent` as `schema:Person`.
 - Updated reconciliation to model GitHub organization accounts as organization units when they act as repository owners under a canonical organization, adding `org:hasUnit` (canonical org) and `org:unitOf` (GitHub org-account node) links.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-05-schema-identifier-literal-vs-iri.md`.
 - Coerced Infoscience person `profile_url` values to plain strings in `RealInfoscienceProvider.search_person(...)` so `schema:url` is no longer dropped due to `HttpUrl` object typing in permissive agent validation.
 - Updated `PersonAgentV2` payload assembly to omit `schema:email` when anonymization returns `None`, removing noisy optional-field validation warnings without changing SHACL semantics.
 - Updated `AGENTS.md` handoff to set the next entry task to `.internal/plan-c/issue-03-membership-organization-resolution.md` after completing Plan C issues 1 and 2.
-- Enforced v2 production-safe fallback behavior in `/v2/extract` by introducing `V2_ALLOW_SYNTHETIC_FALLBACKS` (default `false`) and wiring it through article generation and reconciliation to prevent synthetic fallback entities/values in default production output.
+- Enforced v2 production-safe fallback behavior in `/v2/extract` by introducing an explicit runtime flag (default `false`) and wiring it through article generation and reconciliation to prevent generated fallback entities/values in default production output.
 - Standardized v2 agent-emitted `identifiers.uuid` generation on shared UUIDv4 helper `src/v2/agents/models.py::generate_uuid()` across person/repository/organization/article/membership/contribution agents.
-- Updated reconciliation controls so unresolved article authors, fallback memberships, and fallback contributions are only synthesized when synthetic fallback mode is explicitly enabled.
-- Updated article-agent handling for no-synthetic mode to drop unresolved author references, reject placeholder-author/date coercion, and skip invalid candidates with explicit warnings.
+- Updated reconciliation controls so unresolved article authors, fallback memberships, and fallback contributions are only generated when explicit fallback mode is enabled.
+- Updated article-agent handling for strict mode to drop unresolved author references, reject placeholder-author/date coercion, and skip invalid candidates with explicit warnings.
 - Normalized repository `schema:dateCreated` values in `RepositoryAgentV2` to strict UTC timestamp format (`YYYY-MM-DDTHH:MM:SSZ`) so live extracts do not fail root strict validation when providers return date-only strings.
 - Updated `AGENTS.md` handoff to the next Phase 8 entry task `.internal/phase-8/P8-02-live-smoke-test-harness.md` after completing live connectivity stabilization in `P8-01`.
 - Updated v2b phase-6 regression coverage to lock extract output contracts and stage ordering across repository/user/organization flows (`tests/v2/test_extract_e2e.py`, `tests/v2/test_extract_golden.py`).
@@ -164,7 +173,7 @@ All notable changes to this project will be documented in this file.
 - Updated `AGENTS.md` handoff to advance the current v2 entry task to `.internal/v2-plan/phase-7-ci-migration/P7-04-ci-roundtrip.md`.
 - Added v2 run-id correlation via `contextvars` so request traces, pipeline/agent spans, structured error events, and response headers share the same `run_id` per request.
 - Changed `/v2/extract` run lifecycle handling to persist a run row up-front, propagate that run identifier through stats and response headers, and finalize run status with completion/failure metadata.
-- Changed `/v2/extract` stats run-id format from synthetic `pipeline-*` strings to canonical UUID run identifiers.
+- Changed `/v2/extract` stats run-id format from generated `pipeline-*` strings to canonical UUID run identifiers.
 - Added v2 structured error event emission (`record_error`) alongside standard Python logging for classified and pipeline execution failures.
 - Added v2 observability metrics primitives for token usage, stage latency, validation failure counts, alias lookup hit/miss tracking, and graph upsert counters.
 - Updated `AGENTS.md` handoff to advance the current v2 entry task to `.internal/v2-plan/phase-7-ci-migration/P7-01-codegen-setup.md`.
@@ -343,7 +352,7 @@ All notable changes to this project will be documented in this file.
 - Added regression test `test_real_infoscience_person_profile_url_is_coerced_to_string` in `tests/v2/test_provider_interfaces.py` to lock `HttpUrl` to `str` coercion in real Infoscience provider person results.
 - Added regression test `test_person_agent_omits_schema_email_when_no_email_is_available` in `tests/v2/test_person_agent.py` to lock `None` email pre-filter behavior.
 - Added v2 UUID helper regression coverage (`tests/v2/test_agent_uuid_generation.py`) asserting UUIDv4 generation semantics.
-- Added reconciliation and extract e2e regression coverage for synthetic-fallback policy, including stress coverage for large unresolved Infoscience author lists to prevent fallback-entity explosions in production mode.
+- Added reconciliation and extract e2e regression coverage for fallback-generation policy, including stress coverage for large unresolved Infoscience author lists to prevent fallback-entity explosions in production mode.
 - Added repository-agent regression coverage for strict date normalization from date-only source values in `tests/v2/test_repository_agent.py`.
 - Added phase-6 extract regression assertions for:
   - explicit clean-break JSON envelope keys and six-bucket output grouping.

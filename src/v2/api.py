@@ -37,6 +37,7 @@ from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import (
     AssembledOutput,
     RootEntityValidationError,
+    apply_link_pruning_to_assembled_output,
     assemble_intermediates,
     assemble_output,
     build_json_output,
@@ -209,7 +210,7 @@ def _build_rootless_assembled_output(
             related_entities.append(deepcopy(payload))
 
     excluded_entities: list[dict[str, Any]] = []
-    warnings = [*reconciled.link_warnings, *reconciled.synthesis_warnings, root_warning]
+    warnings = [*reconciled.link_warnings, root_warning]
     for entity_type, payload, validation in strict_batch.invalid_entities:
         if not isinstance(payload, dict):
             continue
@@ -273,7 +274,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
-    verify_links: Annotated[bool, Query()] = False,
     include_intermediates: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
@@ -339,26 +339,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
         stage_span.set_attribute("agent_runtime", resolved_runtime.value)
 
-    if verify_links and resolved_runtime != AgentRuntime.LLM:
-        failure_message = "verify_links=true requires agent_runtime=llm"
-        store.fail_run(run_id, failure_message)
-        error_payload = V2ErrorResponse(
-            error_type=V2ErrorType.VALIDATION_ERROR,
-            detail=failure_message,
-            source_url=classification.normalized_url,
-            errors=[
-                V2FieldError(
-                    field="verify_links",
-                    message="Link verification is only supported when agent_runtime=llm",
-                    value=verify_links,
-                ),
-            ],
-        )
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=error_payload.model_dump(mode="json", exclude_none=True),
-        )
-
     try:
         orchestrator = _get_orchestrator(request)
         execution_plan = orchestrator.get_execution_plan(classification.detected_type)
@@ -368,7 +348,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             context={
                 "source_url": classification.normalized_url,
                 "url_info": classification,
-                "allow_synthetic_fallbacks": config.V2_ALLOW_SYNTHETIC_FALLBACKS,
                 "agent_runtime": resolved_runtime.value,
                 "run_id": run_id,
                 "pipeline_tracer": tracer.child(),
@@ -510,7 +489,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     ) as stage_span:
         reconciled = reconcile_entities(
             typed_entity_buckets,
-            allow_synthetic_fallbacks=config.V2_ALLOW_SYNTHETIC_FALLBACKS,
         )
         stage_span.set_attributes(
             person_count=len(reconciled.entities.get("persons", [])),
@@ -521,8 +499,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             contribution_count=len(reconciled.contributions),
         )
     for warning in reconciled.link_warnings:
-        _append_unique_warning(warnings, warning)
-    for warning in reconciled.synthesis_warnings:
         _append_unique_warning(warnings, warning)
     if include_intermediates and isinstance(reconciled.reconciliation_debug, dict):
         try:
@@ -681,6 +657,79 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         _append_unique_warning(warnings, warning)
 
     with tracer.trace_stage(
+        STAGE_LINK_VERACITY,
+        detected_type=classification.detected_type.value,
+    ) as stage_span:
+        entities_for_link_validation: list[dict[str, Any]] = []
+        if isinstance(assembled_output.root_entity, dict):
+            entities_for_link_validation.append(deepcopy(assembled_output.root_entity))
+        entities_for_link_validation.extend(
+            deepcopy(entity)
+            for entity in assembled_output.related_entities
+            if isinstance(entity, dict)
+        )
+
+        try:
+            # TODO(graph-cache): Cache link-veracity verdicts by normalized link + model + relation context.
+            # TODO(graph-cache): Define cache invalidation strategy tied to source entity and graph changes.
+            # TODO(graph-cache): Integrate link-veracity lookups with future graph-cache read-through/write-through policy.
+            link_veracity_result = await run_link_veracity_stage(
+                entities=entities_for_link_validation,
+                source_url=classification.normalized_url,
+                providers=providers,
+                max_concurrency=orchestrator.max_concurrent_agents,
+            )
+        except Exception as exc:  # noqa: BLE001
+            stage_span.set_attribute("status", "error")
+            _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
+        else:
+            stage_span.set_attributes(
+                checked_count=link_veracity_result.checked_count,
+                supported_count=link_veracity_result.supported_count,
+                unsupported_count=link_veracity_result.unsupported_count,
+                failed_count=link_veracity_result.failed_count,
+                invalid_link_count=len(link_veracity_result.invalid_links),
+            )
+            _append_unique_warning(
+                warnings,
+                (
+                    "Link veracity summary: "
+                    f"checked={link_veracity_result.checked_count}, "
+                    f"supported={link_veracity_result.supported_count}, "
+                    f"unsupported={link_veracity_result.unsupported_count}, "
+                    f"failed={link_veracity_result.failed_count}"
+                ),
+            )
+            for warning in link_veracity_result.warnings:
+                _append_unique_warning(warnings, warning)
+            for record in link_veracity_result.records:
+                try:
+                    store.insert_intermediate(
+                        source_url=classification.normalized_url,
+                        agent_name=STAGE_LINK_VERACITY,
+                        run_id=run_id,
+                        data=record,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    _append_unique_warning(
+                        warnings,
+                        f"Failed to persist intermediate for {STAGE_LINK_VERACITY}: {exc}",
+                    )
+                else:
+                    persisted_intermediates += 1
+
+            invalid_links = set(link_veracity_result.invalid_links)
+            if invalid_links:
+                assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+                    assembled=assembled_output,
+                    invalid_links=invalid_links,
+                    entity_link_map=link_veracity_result.entity_link_map,
+                    article_identifier_link_map=link_veracity_result.article_identifier_link_map,
+                )
+                for warning in link_pruning_warnings:
+                    _append_unique_warning(warnings, warning)
+
+    with tracer.trace_stage(
         STAGE_JSONLD_BUILD,
         output_format=output_format,
     ) as stage_span:
@@ -809,61 +858,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             mode="upsert",
         )
 
-    link_veracity_executed = False
-    if verify_links:
-        with tracer.trace_stage(
-            STAGE_LINK_VERACITY,
-            detected_type=classification.detected_type.value,
-        ) as stage_span:
-            link_veracity_executed = True
-            try:
-                # TODO(graph-cache): Cache link-veracity verdicts by normalized link + model + relation context.
-                # TODO(graph-cache): Define cache invalidation strategy tied to source entity and graph changes.
-                # TODO(graph-cache): Integrate link-veracity lookups with future graph-cache read-through/write-through policy.
-                link_veracity_result = await run_link_veracity_stage(
-                    jsonld_payload=shacl_graph_payload,
-                    source_url=classification.normalized_url,
-                    providers=providers,
-                    max_concurrency=orchestrator.max_concurrent_agents,
-                )
-            except Exception as exc:  # noqa: BLE001
-                stage_span.set_attribute("status", "error")
-                _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
-            else:
-                stage_span.set_attributes(
-                    checked_count=link_veracity_result.checked_count,
-                    supported_count=link_veracity_result.supported_count,
-                    unsupported_count=link_veracity_result.unsupported_count,
-                    failed_count=link_veracity_result.failed_count,
-                )
-                _append_unique_warning(
-                    warnings,
-                    (
-                        "Link veracity summary: "
-                        f"checked={link_veracity_result.checked_count}, "
-                        f"supported={link_veracity_result.supported_count}, "
-                        f"unsupported={link_veracity_result.unsupported_count}, "
-                        f"failed={link_veracity_result.failed_count}"
-                    ),
-                )
-                for warning in link_veracity_result.warnings:
-                    _append_unique_warning(warnings, warning)
-                for record in link_veracity_result.records:
-                    try:
-                        store.insert_intermediate(
-                            source_url=classification.normalized_url,
-                            agent_name=STAGE_LINK_VERACITY,
-                            run_id=run_id,
-                            data=record,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        _append_unique_warning(
-                            warnings,
-                            f"Failed to persist intermediate for {STAGE_LINK_VERACITY}: {exc}",
-                        )
-                    else:
-                        persisted_intermediates += 1
-
     response_intermediates = None
     if include_intermediates:
         response_intermediates = assemble_intermediates(
@@ -908,6 +902,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         [
             STAGE_STRICT_VALIDATION,
             STAGE_OUTPUT_ASSEMBLY,
+            STAGE_LINK_VERACITY,
             STAGE_JSONLD_BUILD,
             STAGE_SHACL_GATE,
             STAGE_GRAPH_WRITE,
@@ -916,9 +911,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for stage_name in stage_sequence:
         if stage_name not in completed_stages:
             completed_stages.append(stage_name)
-    if link_veracity_executed and STAGE_LINK_VERACITY not in completed_stages:
-        completed_stages.append(STAGE_LINK_VERACITY)
-
     stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
     stats = stats.model_copy(
         update={

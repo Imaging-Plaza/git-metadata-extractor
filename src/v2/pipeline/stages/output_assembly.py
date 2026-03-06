@@ -206,7 +206,7 @@ def assemble_output(  # noqa: C901, PLR0912
                 continue
             related_entities.append(deepcopy(entry))
 
-    warnings = [*reconciled.link_warnings, *reconciled.synthesis_warnings]
+    warnings = [*reconciled.link_warnings]
     for excluded_entity in excluded_entities:
         entity = excluded_entity["entity"]
         entity_id = entity.get("id")

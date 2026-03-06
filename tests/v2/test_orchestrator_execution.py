@@ -295,7 +295,7 @@ def test_execute_can_append_upstream_json_and_verbatim_prompt_text_to_agent_cont
     )
     plan = orchestrator.get_execution_plan("repository")
 
-    asyncio.run(
+    result = asyncio.run(
         orchestrator.execute(
             plan=plan,
             providers=_providers(),
@@ -1479,6 +1479,107 @@ def test_execute_uses_llm_repository_runner_for_repository_runtime() -> None:
     assert rule_repo_calls == 0
     assert result.agent_results["repo_agent"].data["id"] == "llm-repo-root"
     assert result.agent_results["org_agent:github"].data["id"] == "llm-org:github"
+
+
+def test_execute_llm_compiles_context_summary_and_strips_raw_repository_blobs() -> None:
+    summary_calls = 0
+    captured_repo_contexts: list[dict[str, Any]] = []
+
+    class _SummaryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            nonlocal summary_calls
+            summary_calls += 1
+            repository_context = context["gathered_context"]["repository"]
+            assert repository_context["readme_content"] == "README RAW"
+            assert repository_context["gimie_jsonld"] == {"@id": "https://github.com/octocat/Hello-World"}
+            return AgentResult(data={"summary_markdown": "# Compiled Context\n- fact"})
+
+    class _LLMRepositoryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del providers
+            captured_repo_contexts.append(dict(context))
+            repository_context = context.get("repository_context")
+            assert isinstance(repository_context, dict)
+            assert "readme_content" not in repository_context
+            assert "gimie_jsonld" not in repository_context
+            assert "repository_files" not in repository_context
+            return AgentResult(data={"id": "llm-repo-root"})
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: GitHubURLClassification,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="repository",
+            context={
+                "repository": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                    },
+                    "contributors": [],
+                    "languages": {"Python": 1},
+                    "readme_content": "README RAW",
+                    "gimie_jsonld": {"@id": "https://github.com/octocat/Hello-World"},
+                    "repository_files": [
+                        {"path": "pyproject.toml", "content": "[tool.uv]\n"},
+                    ],
+                },
+            },
+        )
+
+    orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_context_summary_agent=_SummaryRunner(),
+        llm_repository_agent=_LLMRepositoryRunner(),
+        llm_person_agent=_LLMNoDataRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_backoff_base=0,
+    )
+    plan = orchestrator.get_execution_plan("repository")
+
+    result = asyncio.run(
+        orchestrator.execute(
+            plan=plan,
+            providers=_providers(),
+            context={
+                "url_info": _classification(),
+                "source_url": "https://github.com/octocat/Hello-World",
+                "agent_runtime": "llm",
+            },
+        ),
+    )
+
+    assert summary_calls == 1
+    assert len(captured_repo_contexts) == 1
+    assert result.gathered_context["compiled_context_markdown"].startswith("# Compiled Context")
+    prompt_appendix = captured_repo_contexts[0].get("user_prompt_appendix")
+    assert isinstance(prompt_appendix, str)
+    assert "## Compiled Source Summary" in prompt_appendix
+    assert "# Compiled Context" in prompt_appendix
 
 
 def test_execute_uses_llm_repository_runner_for_user_and_org_in_llm_mode() -> None:

@@ -8,7 +8,6 @@ from src.v2.config import V2Config
 V2_CONFIG_ENV_KEYS = {
     "GITHUB_TOKEN",
     "LOGFIRE_TOKEN",
-    "V2_ALLOW_SYNTHETIC_FALLBACKS",
     "V2_ENABLE_LOGFIRE",
     "V2_GRAPH_DB_PATH",
     "V2_INTERMEDIATE_HISTORY_LIMIT",
@@ -79,31 +78,6 @@ def test_logfire_token_absent_with_logfire_enabled_is_allowed(
 
     assert config.V2_ENABLE_LOGFIRE is True
     assert config.LOGFIRE_TOKEN is None
-
-
-def test_v2_allow_synthetic_fallbacks_defaults_false(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
-
-    config = V2Config()
-    config.validate_preflight()
-
-    assert config.V2_ALLOW_SYNTHETIC_FALLBACKS is False
-
-
-def test_v2_allow_synthetic_fallbacks_can_be_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
-    monkeypatch.setenv("V2_ALLOW_SYNTHETIC_FALLBACKS", "true")
-
-    config = V2Config()
-    config.validate_preflight()
-
-    assert config.V2_ALLOW_SYNTHETIC_FALLBACKS is True
 
 
 def test_v2_agent_runtime_default_is_llm(

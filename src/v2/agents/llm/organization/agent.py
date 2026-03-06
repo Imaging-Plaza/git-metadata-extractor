@@ -9,6 +9,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm.agent_tools.github_organization import (
+    make_github_organization_metadata_tool,
+)
 from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
     make_infoscience_orgunit_tool,
 )
@@ -176,6 +179,8 @@ class LLMOrganizationAgentV2:
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         tools = [fetch_link_content_via_selenium_tool]
+        if providers.github is not None:
+            tools.append(make_github_organization_metadata_tool(providers.github))
         if providers.ror is not None and providers.infoscience is not None:
             tools.append(
                 make_organization_identity_search_tool(

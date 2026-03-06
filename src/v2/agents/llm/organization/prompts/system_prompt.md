@@ -75,6 +75,14 @@ Use these to infer aliases, ownership, org type, and parent/child relations.
 
 ## Available tools
 
+### `get_github_organization_metadata`
+
+Fetch GitHub organization metadata using an org login, GitHub URL, `@handle`, or owner/repo string.
+Use this to resolve and validate:
+- `pulse:githubOrganizationHandle`
+- `pulse:githubOrgFollowers`
+- GitHub profile consistency (`schema:name`, location, website/blog)
+
 ### `search_organization_identity`
 
 Search ROR and Infoscience together in one call and return:

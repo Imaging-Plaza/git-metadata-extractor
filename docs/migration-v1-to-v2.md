@@ -73,7 +73,6 @@ curl -s \
 - `V2_GRAPH_DB_PATH` (default `data/v2_graph.db`)
 - `V2_INTERMEDIATE_HISTORY_LIMIT` (default `5`)
 - `V2_ENABLE_LOGFIRE` (default `true`)
-- `V2_ALLOW_SYNTHETIC_FALLBACKS` (default `false`, keep disabled in production to avoid synthesized fallback entities)
 - `LOGFIRE_TOKEN` (optional)
 - `GITHUB_TOKEN` (required for healthy provider preflight)
 

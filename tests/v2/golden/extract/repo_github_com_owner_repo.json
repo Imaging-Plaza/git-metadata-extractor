@@ -45,6 +45,7 @@
       "reconciliation",
       "strict_validation",
       "output_assembly",
+      "link_veracity",
       "jsonld_build",
       "shacl_gate",
       "graph_write"

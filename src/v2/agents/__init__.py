@@ -6,6 +6,7 @@ from src.v2.agents.contribution_agent import ContributionAgentV2
 from src.v2.agents.llm import (
     LLMArticleAgentV2,
     LLMContributionAgentV2,
+    LLMContextSummaryAgentV2,
     LLMCriticAgentV2,
     LLMDedupAgentV2,
     LLMLinkVeracityAgentV2,
@@ -37,6 +38,7 @@ __all__ = [
     "ContributionAgentV2",
     "LLMArticleAgentV2",
     "LLMContributionAgentV2",
+    "LLMContextSummaryAgentV2",
     "LLMCriticAgentV2",
     "LLMDedupAgentV2",
     "LLMLinkVeracityAgentV2",

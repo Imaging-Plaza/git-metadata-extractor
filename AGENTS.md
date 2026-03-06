@@ -34,14 +34,19 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - In v2 agent payloads, `identifiers.uuid` must be generated with `src/v2/agents/models.py::generate_uuid()` (UUIDv4 only); avoid deterministic UUIDv5 emitters for agent outputs.
 - LLM agent tools live in `src/v2/agents/llm/agent_tools/`. Tool modules expose either static `Tool` instances or provider-capturing factory functions. Agents build/select tools at `run()` time and pass them as `tools=[...]` to `V2LLMRuntime.run_json_prompt`. Current tools:
   - `list_disciplines_tool` (`disciplines.py`) — static tool, returns the full `DisciplineV2` Wikidata-ID-to-name mapping.
+  - `make_duckduckgo_search_tool()` (`duckduckgo_search.py`) — factory; returns `search_on_the_internet` to query DuckDuckGo and retrieve compact external context (title/url/snippet).
+  - `hash_user_email_tool` (`email_hash.py`) — static tool, anonymizes emails with canonical hashing (`sha256(local-part)[:12]` + original domain).
   - `make_orcid_person_tool(orcid_provider)` (`orcid_person.py`) — factory; returns `get_orcid_record` tool that fetches name, employment, education, and affiliations by ORCID ID.
   - `make_infoscience_search_tool(infoscience_provider)` (`infoscience_search.py`) — factory; returns `search_infoscience_person` tool that searches Infoscience for person records by name/query.
+  - `make_github_organization_metadata_tool(github_provider)` (`github_organization.py`) — factory; returns `get_github_organization_metadata` to fetch and normalize GitHub org profile metadata by handle/URL.
+  - `make_repository_corpus_grep_tool(corpus_documents)` (`repository_corpus_grep.py`) — factory; returns `grep_repository_corpus` to search raw README/GIMIE/repository-file corpus snippets with provenance metadata.
   - `make_organization_identity_search_tool(ror_provider, infoscience_provider)` (`organization_identity.py`) — factory; returns `search_organization_identity` that queries ROR and Infoscience together and emits linked cross-provider candidates.
   - `make_ror_organization_search_tool(ror_provider)` (`ror_organization.py`) — factory; returns `search_ror_organizations` for organization lookup by name.
   - `make_infoscience_orgunit_tool(infoscience_provider)` (`infoscience_orgunit.py`) — factory; returns `search_infoscience_orgunit` for organization-unit lookup.
   - `generate_uuid_v4_tool` / `generate_uuid_v4_batch_tool` (`uuid.py`) — static tools for UUIDv4 generation in single or batch mode.
   - `fetch_link_content_via_selenium_tool` (`selenium_fetch.py`) — static Selenium-backed fetch tool returning rendered page text/title/final URL.
 - `LLMLinkVeracityAgentV2` (`src/v2/agents/llm/link_veracity/agent.py`) runs independent yes/no relationship checks per link and uses `fetch_link_content_via_selenium_tool` to ground verdicts in fetched page content.
+- `/v2/extract` always runs a final `link_veracity` stage (all runtimes): it validates discovered HTTP(S) links, normalizes article DOI identifiers to `https://doi.org/<doi>` for checking, removes explicitly unreachable links, and prunes entities only when canonical URL/DOI checks fail or no valid URL remains. Runtime/checker errors remain warning-only (no automatic pruning).
 - `/v2/extract` in `agent_runtime=llm` always runs two global fail-open stages:
   - `llm_dedup` before reconciliation (LLM candidate clusters + deterministic constrained merge/remap with hierarchy-aware ID resolution and composite-ID propagation).
   - `llm_critic` after reconciliation and before strict validation (LLM drop suggestions + deterministic non-root prune/cascade cleanup).
@@ -55,6 +60,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
   - `include_upstream_stage_outputs_in_prompt` (constructor flag or runtime-context override) injects `upstream_stage_outputs_json` containing serialized accumulated stage outputs.
   - `user_prompt_appendix` (constructor value or runtime-context override) injects verbatim text into each agent prompt without parsing. Use this for pre-concatenated multi-file text blocks.
 - `PipelineOrchestrator` now defaults `include_upstream_stage_outputs_in_prompt=True`; downstream LLM stages receive serialized upstream JSON context unless explicitly disabled via runtime context/constructor override.
+- In `agent_runtime=llm`, `PipelineOrchestrator` runs a fail-open LLM context summary call immediately after `context_gather`; the compiled markdown summary is appended to downstream LLM prompt context and raw README/GIMIE/repository-file blobs are stripped from per-agent runtime contexts.
 - v2 organization identity reconciliation is ROR-first and warning-only: canonicalization enforces `pulse:ror -> pulse:infoscienceOrganizationIdentifier -> pulse:githubOrganizationHandle -> uuid`, reconciliation merges high-confidence org duplicates (ROR/Infoscience/GitHub + contextual cross-source matches), remaps org references to canonical IDs, and prefers ROR-backed orgs on lookup-token collisions.
 - Cross-source org merge equivalence normalizes common spelling variants (for example `center`/`centre`) before deciding whether ROR and Infoscience candidates represent the same organization.
 - `/v2/extract` persists reconciliation diagnostics as an intermediate (`agent_name="reconciliation_debug"`) when `include_intermediates=true` with merge/remap and token-collision summary fields.
@@ -79,7 +85,6 @@ Required environment variables (from `.env.dist` and `.env.example`):
 - `MAX_SELENIUM_SESSIONS`
 - `MAX_CACHE_ENTRIES`
 - `GUNICORN_CMD_ARGS`
-- `V2_ALLOW_SYNTHETIC_FALLBACKS` (optional; defaults `false`)
 
 Rules:
 - Never print, log, or commit secrets.
@@ -88,7 +93,6 @@ Rules:
 - For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
 - Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
 - V2 does not use the v1 TTL cache system. Providers always fetch fresh data. The `force_refresh` query parameter and `V2_DISABLE_CACHE` env var have been removed from v2.
-- For `/v2/extract`, synthetic fallbacks are production-disabled by default. Enable only for explicit test/dev scenarios with `V2_ALLOW_SYNTHETIC_FALLBACKS=true`.
 
 ## Canonical Commands
 `justfile` is the source of truth for routine operations. Prefer `just` commands over ad-hoc shell commands when equivalent recipes exist.
