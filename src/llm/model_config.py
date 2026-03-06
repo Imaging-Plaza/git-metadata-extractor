@@ -18,7 +18,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -55,7 +55,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -83,7 +83,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -111,7 +111,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.1,
@@ -140,7 +140,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -169,7 +169,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -198,7 +198,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -211,7 +211,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -240,7 +240,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -269,7 +269,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -298,7 +298,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -311,7 +311,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -324,7 +324,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -337,7 +337,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -366,7 +366,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
@@ -395,7 +395,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -408,7 +408,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 3,
             "temperature": 0.2,
@@ -437,7 +437,7 @@ MODEL_CONFIGS = {
         {
             "provider": "openai-compatible",
             "model": "openai/gpt-oss-120b",
-            "base_url": "https://inference.rcp.epfl.ch/v1",
+            "base_url": "https://inference-rcp.epfl.ch/v1",
             "api_key_env": "RCP_TOKEN",
             "max_retries": 2,
             "temperature": 0.1,
