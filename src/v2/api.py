@@ -275,6 +275,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
     include_intermediates: Annotated[bool, Query()] = False,
+    include_context_summary: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
     """Run the v2 extraction pipeline for a GitHub path."""
@@ -874,6 +875,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         response_output = V2JSONOutputEnvelope.model_validate(
             build_json_output(assembled_output),
         )
+    context_summary_markdown: str | None = None
+    if include_context_summary:
+        summary_value = gathered_context.get("compiled_context_markdown")
+        if isinstance(summary_value, str):
+            normalized_summary = summary_value.strip()
+            if normalized_summary:
+                context_summary_markdown = summary_value
 
     output_payload = response_output.model_dump(mode="json", by_alias=True)
     extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
@@ -937,6 +945,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         detected_type=classification.detected_type.value,
         output_format=output_format,
         output=response_output,
+        context_summary_markdown=context_summary_markdown,
         warnings=warnings,
         stats=stats,
         intermediates=response_intermediates,

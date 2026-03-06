@@ -164,7 +164,7 @@ if providers.my_provider is not None:
 | File | Export | Type | Used by |
 |---|---|---|---|
 | `agent_tools/disciplines.py` | `list_disciplines_tool` | Static | `LLMRepositoryAgentV2` |
-| `agent_tools/duckduckgo_search.py` | `make_duckduckgo_search_tool()` | Factory | `LLMContextSummaryAgentV2` |
+| `agent_tools/duckduckgo_search.py` | `make_duckduckgo_search_tool()` | Factory | `LLMContextSummaryAgentV2`, `LLMCriticAgentV2` |
 | `agent_tools/email_hash.py` | `hash_user_email_tool` | Static | `LLMPersonAgentV2` |
 | `agent_tools/github_organization.py` | `make_github_organization_metadata_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/repository_corpus_grep.py` | `make_repository_corpus_grep_tool(corpus)` | Factory | `LLMContextSummaryAgentV2` |

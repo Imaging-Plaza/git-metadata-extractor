@@ -198,3 +198,98 @@ def test_extract_rejects_invalid_agent_runtime() -> None:
 
     assert status_code == HTTP_UNPROCESSABLE_ENTITY
     assert "detail" in payload
+
+
+def test_extract_can_include_compiled_context_summary_in_response() -> None:
+    class _SummaryRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={"summary_markdown": "# Compiled Context\n- Key signal"})
+
+    class _LLMPersonRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(
+                data={
+                    "id": "octocat",
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:orcid": None,
+                        "pulse:infosciencePersonIdentifier": None,
+                        "pulse:githubUsername": "octocat",
+                        "uuid": "11111111-1111-4111-8111-111111111111",
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": "octocat",
+                    "schema:url": "https://github.com/octocat",
+                    "pulse:githubUsername": "octocat",
+                    "pulse:orcidIdentifier": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "org:hasMembership": [],
+                    "pulse:hasContribution": [],
+                    "pulse:owns": [],
+                },
+            )
+
+    class _LLMNoDataRunner:
+        async def run(
+            self,
+            context: dict[str, Any],
+            providers: ProviderSet,
+        ) -> AgentResult:
+            del context, providers
+            return AgentResult(data={})
+
+    async def _context_gatherer(
+        _detected_type: str,
+        _url_info: Any,
+        _providers: ProviderSet,
+    ) -> ContextBundle:
+        return ContextBundle(
+            detected_type="user",
+            context={
+                "user": {
+                    "username": "octocat",
+                    "profile": {"login": "octocat"},
+                    "owned_repos": [],
+                    "orcid_data": None,
+                },
+            },
+        )
+
+    app = _build_test_app()
+    app.state.v2_orchestrator = PipelineOrchestrator(
+        context_gatherer=_context_gatherer,
+        llm_context_summary_agent=_SummaryRunner(),
+        llm_person_agent=_LLMPersonRunner(),
+        llm_repository_agent=_LLMNoDataRunner(),
+        llm_organization_agent=_LLMNoDataRunner(),
+        llm_article_agent=_LLMNoDataRunner(),
+        llm_membership_agent=_LLMNoDataRunner(),
+        llm_contribution_agent=_LLMNoDataRunner(),
+        retry_max_retries=0,
+        retry_backoff_base=0,
+    )
+
+    status_code, payload = _get_json_from_app(
+        app,
+        "/v2/extract/github.com/octocat",
+        params={
+            "agent_runtime": "llm",
+            "output_format": "json",
+            "include_context_summary": "true",
+        },
+    )
+
+    assert status_code == HTTP_OK
+    assert payload["context_summary_markdown"].startswith("# Compiled Context")
+    assert V2ExtractResponse.model_validate(payload)

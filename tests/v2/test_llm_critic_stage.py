@@ -200,3 +200,152 @@ def test_llm_critic_root_protection_and_cascade_cleanup() -> None:
         entry["reason"][0]["message"] == "critic_pruned"
         for entry in result.pruned_excluded_entities
     )
+
+
+def test_llm_critic_protects_owner_org_ancestors_from_prune() -> None:
+    repo_id = "https://github.com/sdsc-ordes/gimie"
+    owner_org_id = "https://ror.org/02hdt9m26"
+    host_org_id = "https://ror.org/02s376052"
+
+    reconciled = ReconciledEntities(
+        entities={
+            "repositories": [
+                {
+                    "id": repo_id,
+                    "type": "schema:SoftwareSourceCode",
+                    "pulse:ownedBy": owner_org_id,
+                },
+            ],
+            "persons": [],
+            "organizations": [
+                {
+                    "id": owner_org_id,
+                    "type": "org:Organization",
+                    "org:unitOf": host_org_id,
+                },
+                {
+                    "id": host_org_id,
+                    "type": "org:Organization",
+                    "org:unitOf": None,
+                },
+            ],
+            "articles": [],
+        },
+        memberships=[],
+        contributions=[],
+    )
+
+    result = asyncio.run(
+        run_llm_critic_stage(
+            reconciled=reconciled,
+            source_url=repo_id,
+            detected_type="repository",
+            providers=_providers(),
+            agent=_StaticCriticAgent(
+                {
+                    "organizations": [
+                        {
+                            "id": host_org_id,
+                            "reason": (
+                                "Affiliated institution of a contributor, "
+                                "unrelated to repository ownership"
+                            ),
+                        },
+                    ],
+                    "persons": [],
+                    "repositories": [],
+                    "articles": [],
+                },
+            ),
+        ),
+    )
+
+    organizations = result.reconciled.entities["organizations"]
+    assert {organization["id"] for organization in organizations} == {owner_org_id, host_org_id}
+    assert result.applied["applied_drop_count"] == 0
+    assert host_org_id in result.applied["protected_owner_context_org_ids"]
+    assert any(
+        "owner-context org protection override" in warning
+        for warning in result.warnings
+    )
+
+
+def test_llm_critic_protects_contributor_affiliation_orgs_for_kept_contributors() -> None:
+    repo_id = "https://github.com/sdsc-ordes/gimie"
+    person_id = "https://orcid.org/0000-0002-2961-2655"
+    org_id = "https://ror.org/02s376052"
+
+    reconciled = ReconciledEntities(
+        entities={
+            "repositories": [
+                {
+                    "id": repo_id,
+                    "type": "schema:SoftwareSourceCode",
+                },
+            ],
+            "persons": [
+                {
+                    "id": person_id,
+                    "type": "schema:Person",
+                },
+            ],
+            "organizations": [
+                {
+                    "id": org_id,
+                    "type": "org:Organization",
+                },
+            ],
+            "articles": [],
+        },
+        memberships=[
+            {
+                "id": f"{person_id}_{org_id}",
+                "type": "org:Membership",
+                "_person_ref": person_id,
+                "org:organization": org_id,
+            },
+        ],
+        contributions=[
+            {
+                "id": f"{person_id}_{repo_id}",
+                "type": "pulse:Contribution",
+                "schema:author": person_id,
+                "pulse:contributionTo": repo_id,
+            },
+        ],
+    )
+
+    result = asyncio.run(
+        run_llm_critic_stage(
+            reconciled=reconciled,
+            source_url=repo_id,
+            detected_type="repository",
+            providers=_providers(),
+            agent=_StaticCriticAgent(
+                {
+                    "organizations": [
+                        {
+                            "id": org_id,
+                            "reason": (
+                                "University affiliation only via member profiles, "
+                                "not directly linked to repository ownership or contribution"
+                            ),
+                        },
+                    ],
+                    "persons": [],
+                    "repositories": [],
+                    "articles": [],
+                },
+            ),
+        ),
+    )
+
+    organizations = result.reconciled.entities["organizations"]
+    assert len(organizations) == 1
+    assert organizations[0]["id"] == org_id
+    assert result.applied["applied_drop_count"] == 0
+    assert org_id in result.applied["protected_contributor_affiliation_org_ids"]
+    assert any(
+        "contributor-affiliation org protection override" in warning
+        for warning in result.warnings
+    )

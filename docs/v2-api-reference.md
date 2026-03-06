@@ -39,6 +39,7 @@ Query parameters:
     - user input: `person_agent`
     - organization input: `org_agent`
 - `include_intermediates`: `true|false` (default `false`, returns run-scoped intermediate envelopes for this extract run only)
+- `include_context_summary`: `true|false` (default `false`, includes the compiled LLM context summary markdown used by downstream agents when available)
 
 Examples:
 
@@ -125,6 +126,7 @@ Detected-type execution order before shared gates:
 - `output`
 - `warnings`
 - `stats`
+- optional `context_summary_markdown` (when `include_context_summary=true` and a compiled summary exists)
 - optional `intermediates`
 
 `output_format=json` contract (`output`):

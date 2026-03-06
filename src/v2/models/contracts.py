@@ -48,6 +48,7 @@ class V2ExtractResponse(BaseModel):
     detected_type: Literal["repository", "user", "organization"]
     output_format: Literal["jsonld", "json"]
     output: V2JSONLDOutput | V2JSONOutputEnvelope
+    context_summary_markdown: str | None = None
     graph_update: V2GraphUpdate | None = None
     warnings: list[str] = Field(default_factory=list)
     stats: V2Stats

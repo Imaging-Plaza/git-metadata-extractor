@@ -8,6 +8,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm.agent_tools.duckduckgo_search import (
+    make_duckduckgo_search_tool,
+)
+from src.v2.agents.llm.agent_tools.github_organization import (
+    make_github_organization_metadata_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
@@ -54,11 +60,13 @@ class LLMCriticAgentV2:
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
-        del providers
+        initial_context = context.get("initial_context")
+        owner_provenance = _extract_owner_provenance(initial_context)
         llm_input = {
             "source_url": context.get("source_url"),
             "detected_type": context.get("detected_type"),
-            "initial_context": context.get("initial_context", {}),
+            "initial_context": initial_context if isinstance(initial_context, dict) else {},
+            "owner_provenance": owner_provenance,
             "pipeline_outputs": context.get("pipeline_outputs", {}),
             "reconciled_entities": context.get("reconciled_entities", {}),
             "memberships": context.get("memberships", []),
@@ -67,6 +75,11 @@ class LLMCriticAgentV2:
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
+        tools = [make_duckduckgo_search_tool()]
+        if providers.github is not None:
+            tools.append(
+                make_github_organization_metadata_tool(providers.github),
+            )
 
         try:
             llm_result = await asyncio.wait_for(
@@ -74,6 +87,7 @@ class LLMCriticAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=CriticOutput,
+                    tools=tools,
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )
@@ -110,3 +124,26 @@ class LLMCriticAgentV2:
                 ),
             },
         )
+
+
+def _extract_owner_provenance(initial_context: Any) -> dict[str, Any]:
+    if not isinstance(initial_context, dict):
+        return {}
+
+    repository_context = initial_context.get("repository")
+    if not isinstance(repository_context, dict):
+        return {}
+
+    metadata = repository_context.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    owner = metadata.get("owner")
+    owner_payload = deepcopy(owner) if isinstance(owner, dict) else {}
+    owner_payload = {k: v for k, v in owner_payload.items() if v is not None}
+
+    return {
+        "repository_full_name": repository_context.get("full_name"),
+        "repository_url": metadata.get("html_url") or metadata.get("url"),
+        "owner": owner_payload,
+    }

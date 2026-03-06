@@ -25,6 +25,87 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return deduped
 
 
+def _collect_repository_owner_org_ids(repositories: list[dict[str, Any]]) -> set[str]:
+    owner_org_ids: set[str] = set()
+    for repository in repositories:
+        owner_id = repository.get("pulse:ownedBy")
+        if isinstance(owner_id, str) and owner_id.strip():
+            owner_org_ids.add(owner_id.strip())
+    return owner_org_ids
+
+
+def _collect_repository_ids(repositories: list[dict[str, Any]]) -> set[str]:
+    repository_ids: set[str] = set()
+    for repository in repositories:
+        repository_id = repository.get("id")
+        if isinstance(repository_id, str) and repository_id.strip():
+            repository_ids.add(repository_id.strip())
+    return repository_ids
+
+
+def _collect_contributor_person_ids(
+    contributions: list[dict[str, Any]],
+    *,
+    repository_ids: set[str],
+    dropped_person_ids: set[str],
+) -> set[str]:
+    person_ids: set[str] = set()
+    for contribution in contributions:
+        contribution_repo_id = contribution.get("pulse:contributionTo")
+        if not isinstance(contribution_repo_id, str) or contribution_repo_id not in repository_ids:
+            continue
+        person_id = contribution.get("schema:author")
+        if not isinstance(person_id, str) or not person_id.strip():
+            continue
+        if person_id in dropped_person_ids:
+            continue
+        person_ids.add(person_id.strip())
+    return person_ids
+
+
+def _collect_membership_org_ids_for_persons(
+    memberships: list[dict[str, Any]],
+    *,
+    person_ids: set[str],
+) -> set[str]:
+    organization_ids: set[str] = set()
+    for membership in memberships:
+        person_id = membership.get("_person_ref")
+        if not isinstance(person_id, str) or person_id not in person_ids:
+            continue
+        organization_id = membership.get("org:organization")
+        if not isinstance(organization_id, str) or not organization_id.strip():
+            continue
+        organization_ids.add(organization_id.strip())
+    return organization_ids
+
+
+def _collect_owner_org_ancestor_ids(
+    organizations: list[dict[str, Any]],
+    *,
+    seed_owner_ids: set[str],
+) -> set[str]:
+    by_id: dict[str, dict[str, Any]] = {}
+    for organization in organizations:
+        org_id = organization.get("id")
+        if not isinstance(org_id, str) or not org_id.strip():
+            continue
+        by_id[org_id] = organization
+
+    protected: set[str] = set()
+    queue = [org_id for org_id in seed_owner_ids if org_id in by_id]
+    while queue:
+        current = queue.pop(0)
+        if current in protected:
+            continue
+        protected.add(current)
+        parent_id = by_id.get(current, {}).get("org:unitOf")
+        if isinstance(parent_id, str) and parent_id in by_id and parent_id not in protected:
+            queue.append(parent_id)
+
+    return protected
+
+
 def _normalize_drop_suggestions(raw_payload: Any) -> list[dict[str, Any]]:
     suggestions: list[dict[str, Any]] = []
     if not isinstance(raw_payload, list):
@@ -385,6 +466,15 @@ async def run_llm_critic_stage(  # noqa: PLR0913
             drop_ids_by_bucket[bucket].add(candidate_id)
             reason_by_id_by_bucket[bucket][candidate_id] = suggestion.get("reason")
 
+    owner_org_ids = _collect_repository_owner_org_ids(entities_by_bucket["repositories"])
+    protected_owner_context_org_ids = _collect_owner_org_ancestor_ids(
+        entities_by_bucket["organizations"],
+        seed_owner_ids=owner_org_ids,
+    )
+    for protected_org_id in protected_owner_context_org_ids:
+        drop_ids_by_bucket["organizations"].discard(protected_org_id)
+        reason_by_id_by_bucket["organizations"].pop(protected_org_id, None)
+
     root_bucket = {
         "repository": "repositories",
         "user": "persons",
@@ -397,6 +487,22 @@ async def run_llm_critic_stage(  # noqa: PLR0913
             drop_ids_by_bucket[root_bucket].remove(root_id)
             reason_by_id_by_bucket[root_bucket].pop(root_id, None)
             root_protected.append(root_id)
+
+    protected_contributor_affiliation_org_ids: set[str] = set()
+    repository_ids = _collect_repository_ids(entities_by_bucket["repositories"])
+    if repository_ids:
+        contributing_person_ids = _collect_contributor_person_ids(
+            contributions,
+            repository_ids=repository_ids,
+            dropped_person_ids=drop_ids_by_bucket["persons"],
+        )
+        protected_contributor_affiliation_org_ids = _collect_membership_org_ids_for_persons(
+            memberships,
+            person_ids=contributing_person_ids,
+        )
+        for protected_org_id in protected_contributor_affiliation_org_ids:
+            drop_ids_by_bucket["organizations"].discard(protected_org_id)
+            reason_by_id_by_bucket["organizations"].pop(protected_org_id, None)
 
     pruned_excluded_entities = _drop_primary_entities(
         entities_by_bucket=entities_by_bucket,
@@ -443,6 +549,16 @@ async def run_llm_critic_stage(  # noqa: PLR0913
             "LLM critic root protection override: "
             + ", ".join(root_protected),
         )
+    if protected_owner_context_org_ids:
+        warnings.append(
+            "LLM critic owner-context org protection override: "
+            + ", ".join(sorted(protected_owner_context_org_ids)),
+        )
+    if protected_contributor_affiliation_org_ids:
+        warnings.append(
+            "LLM critic contributor-affiliation org protection override: "
+            + ", ".join(sorted(protected_contributor_affiliation_org_ids)),
+        )
 
     reconciled_output = ReconciledEntities(
         entities=entities_by_bucket,
@@ -457,6 +573,10 @@ async def run_llm_critic_stage(  # noqa: PLR0913
         "applied_drop_count": applied_drop_count,
         "dropped_by_type": dropped_by_type,
         "protected_root_ids": root_protected,
+        "protected_owner_context_org_ids": sorted(protected_owner_context_org_ids),
+        "protected_contributor_affiliation_org_ids": sorted(
+            protected_contributor_affiliation_org_ids,
+        ),
         "cascade_memberships_removed": removed_memberships,
         "cascade_contributions_removed": removed_contributions,
     }
