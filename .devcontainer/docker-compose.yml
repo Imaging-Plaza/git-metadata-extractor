@@ -10,17 +10,15 @@ services:
       dockerfile: .devcontainer/Dockerfile
     env_file:
       - ../.env
+    environment:
+      # Avoid ~/.cache/uv (often root-owned after sshd/common-utils); workspace is bind-mounted as vscode.
+      UV_CACHE_DIR: /workspaces/project/.uv-cache
     ports:
       - "${SSH_PORT:-2222}:2222"
       - "${APP_PORT:-1234}:1234"
       - "${DEV_PORT:-8888}:8888"
     volumes:
       - ..:/workspaces/project:cached
-      - ./persist/config:/home/vscode/.config
-      - ./persist/local-share:/home/vscode/.local/share
-      - ./persist/cache:/home/vscode/.cache
-      - ./persist/pi:/home/vscode/.pi
-      - ./persist/ssh:/home/vscode/.ssh
     command: sleep infinity
     networks:
       - dev
