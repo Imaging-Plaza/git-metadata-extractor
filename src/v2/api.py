@@ -16,10 +16,10 @@ from rdflib import Graph as RDFGraph
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
-from src.v2.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.graph.export import JSONLDExporter
 from src.v2.graph.store import GraphStore
-from src.v2.models import (
+from src.v2.api_models import (
     V2ErrorResponse,
     V2ErrorType,
     V2ExtractRequest,
@@ -50,12 +50,12 @@ from src.v2.pipeline.stages import (
     run_link_veracity_stage,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from src.v2.validation import (
+from src.v2.quality import (
     SHACLValidator,
     StrictSchemaValidator,
     load_ontology_shapes_graph,
 )
-from src.v2.validation.shacl_validation import SHACLRuntimeUnavailableError
+from src.v2.quality.shacl_validation import SHACLRuntimeUnavailableError
 
 DEFAULT_INTERMEDIATE_LIMIT = V2Config().V2_INTERMEDIATE_HISTORY_LIMIT
 MIN_SUPPORTED_PYTHON = (3, 10)

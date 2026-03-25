@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from pydantic_ai import Tool
 
 if TYPE_CHECKING:
-    from src.v2.providers.base import GitHubProvider
+    from src.v2.ingest.providers.base import GitHubProvider
 
 logger = logging.getLogger(__name__)
 MAX_LIST_ITEMS = 20

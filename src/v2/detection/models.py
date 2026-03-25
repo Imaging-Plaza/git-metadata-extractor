@@ -1,25 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+import sys
 
+from src.v2._compat import warn_legacy_import
+from src.v2.ingest.detection import models as _module
 
-class GitHubURLType(str, Enum):
-    REPOSITORY = "repository"
-    USER = "user"
-    ORGANIZATION = "organization"
+warn_legacy_import("src.v2.detection.models", "src.v2.ingest.detection.models")
 
-
-@dataclass(frozen=True)
-class GitHubURLClassification:
-    normalized_url: str
-    detected_type: GitHubURLType
-    owner: str
-    repo: str | None = None
-
-
-class UnsupportedGitHubURL(ValueError):  # noqa: N818
-    def __init__(self, reason: str, normalized_url: str) -> None:
-        self.reason = reason
-        self.normalized_url = normalized_url
-        super().__init__(reason)
+sys.modules[__name__] = _module

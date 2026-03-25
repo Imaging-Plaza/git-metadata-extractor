@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.detection import GitHubURLType, UnsupportedGitHubURL, classify_github_url
+from src.v2.ingest.detection import GitHubURLType, UnsupportedGitHubURL, classify_github_url
 
 UNSUPPORTED_URL_CASES = [
     ("https://github.com/owner/repo/issues/123", "issue URLs not supported"),

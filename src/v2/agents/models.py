@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from jsonschema import Draft7Validator  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
-    from src.v2.providers.base import (
+    from src.v2.ingest.providers.base import (
         GitHubProvider,
         InfoscienceProvider,
         ORCIDProvider,
@@ -214,7 +214,8 @@ def _top_level_field(path_tokens: list[Any]) -> str | None:
 def load_agent_schema(schema_name: str) -> dict[str, Any]:
     schema_path = (
         Path(__file__).resolve().parents[1]
-        / "schemas"
+        / "schema"
+        / "json"
         / "agent"
         / f"{schema_name}.schema.json"
     )

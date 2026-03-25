@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from src.v2.agents import ProviderSet
-from src.v2.detection.models import GitHubURLClassification, GitHubURLType
+from src.v2.ingest.detection.models import GitHubURLClassification, GitHubURLType
 from src.v2.pipeline.stages import gather_context
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from src.v2.providers.base import GitHubProvider, ORCIDProvider, ORCIDRecord
+from src.v2.ingest.providers.base import GitHubProvider, ORCIDProvider, ORCIDRecord
 
 EXPECTED_CONTRIBUTOR_COUNT = 2
 

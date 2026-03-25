@@ -12,7 +12,7 @@ from rdflib import Graph as RDFGraph
 from src.v2.api import v2_router
 from src.v2.graph.export import ENTITY_URI_PREFIX
 from src.v2.graph.store import GraphStore
-from src.v2.models import V2GraphResponse
+from src.v2.api_models import V2GraphResponse
 
 HTTP_OK = 200
 SOURCE_URL_PRIMARY = "https://github.com/owner/repo-a"

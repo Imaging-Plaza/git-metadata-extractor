@@ -1,31 +1,5 @@
-from src.v2.models.contracts import (
-    IntermediateEnvelope,
-    V2ExtractRequest,
-    V2ExtractResponse,
-    V2GraphResponse,
-    V2GraphUpdate,
-    V2HealthResponse,
-    V2JSONLDOutput,
-    V2JSONOutputEnvelope,
-    V2Stats,
-)
-from src.v2.models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
-from src.v2.models.errors import V2ErrorResponse, V2ErrorType, V2FieldError
+from src.v2._compat import warn_legacy_import
+from src.v2.api_models import *  # noqa: F403
+from src.v2.api_models import __all__ as __all__
 
-__all__ = [
-    "DisciplineV2",
-    "IntermediateEnvelope",
-    "OrganizationTypeV2",
-    "RepositoryTypeV2",
-    "V2ErrorResponse",
-    "V2ErrorType",
-    "V2ExtractRequest",
-    "V2ExtractResponse",
-    "V2FieldError",
-    "V2GraphResponse",
-    "V2GraphUpdate",
-    "V2HealthResponse",
-    "V2JSONLDOutput",
-    "V2JSONOutputEnvelope",
-    "V2Stats",
-]
+warn_legacy_import("src.v2.models", "src.v2.api_models")

@@ -6,7 +6,7 @@ from typing import Any
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.pipeline.stages.llm_dedup import run_llm_dedup_stage
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:

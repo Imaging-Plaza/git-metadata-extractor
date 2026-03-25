@@ -1,8 +1,8 @@
 """Agent wrappers for v2 extraction pipeline."""
 
-from src.v2.agents.article_agent import ArticleAgentV2
+from src.v2.agents.rule_based.article_agent import ArticleAgentV2
 from src.v2.agents.contracts import RuntimeAgent
-from src.v2.agents.contribution_agent import ContributionAgentV2
+from src.v2.agents.rule_based.contribution_agent import ContributionAgentV2
 from src.v2.agents.llm import (
     LLMArticleAgentV2,
     LLMContributionAgentV2,
@@ -15,7 +15,7 @@ from src.v2.agents.llm import (
     LLMPersonAgentV2,
     LLMRepositoryAgentV2,
 )
-from src.v2.agents.membership_agent import MembershipAgentV2
+from src.v2.agents.rule_based.membership_agent import MembershipAgentV2
 from src.v2.agents.models import (
     AgentResult,
     ProviderSet,
@@ -23,10 +23,10 @@ from src.v2.agents.models import (
     infer_entity_bucket,
     normalize_entity_bucket_key,
 )
-from src.v2.agents.organization_agent import OrganizationAgentV2
-from src.v2.agents.person_agent import PersonAgentV2
+from src.v2.agents.rule_based.organization_agent import OrganizationAgentV2
+from src.v2.agents.rule_based.person_agent import PersonAgentV2
 from src.v2.agents.registry import AgentRuntimeRegistry
-from src.v2.agents.repository_agent import RepositoryAgentV2
+from src.v2.agents.rule_based.repository_agent import RepositoryAgentV2
 from src.v2.agents.retry import with_retry
 from src.v2.agents.runtime import AgentRuntime, parse_agent_runtime
 

@@ -9,8 +9,8 @@ from jsonschema import validate
 
 from src.v2.agents.llm.repository import LLMRepositoryAgentV2
 from src.v2.agents.models import ProviderSet
-from src.v2.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 _HAS_LLM_CREDENTIALS = bool(
     os.getenv("RCP_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")

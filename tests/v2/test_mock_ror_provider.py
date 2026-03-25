@@ -6,8 +6,8 @@ from typing import Any, Callable
 
 import pytest
 
-from src.v2.providers.base import ProviderNotFoundError, RORProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.base import ProviderNotFoundError, RORProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "ror"
 MIN_FIXTURE_COUNT = 5

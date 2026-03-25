@@ -26,9 +26,9 @@ from src.v2.agents.llm.agent_tools.selenium_fetch import (
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
-from src.v2.generated.agent_entities import AgentOrganizationShape
-from src.v2.generated.entities import OrganizationModel
-from src.v2.llm.runtime import (
+from src.v2.schema.models.agent import AgentOrganizationShape
+from src.v2.schema.models.strict import OrganizationModel
+from src.v2.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )

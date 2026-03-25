@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 
 from src.v2.graph.export import JSONLDExporter
-from src.v2.validation.ontology import ontology_ttl_path
+from src.v2.quality.ontology import ontology_ttl_path
 
 PREFIX_PATTERN = re.compile(r"^@prefix\s+([A-Za-z][A-Za-z0-9_-]*):\s+<[^>]+>\s+\.$")
 
 
 def _context_file_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "src" / "v2" / "schemas" / "context" / "v2.0.jsonld"
+    return Path(__file__).resolve().parents[2] / "src" / "v2" / "schema" / "json" / "context" / "v2.0.jsonld"
 
 
 def _ttl_prefixes(ttl_path: Path) -> set[str]:

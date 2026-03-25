@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.v2.agents import ProviderSet
-from src.v2.canonicalization.organization_alias_map import OrganizationAliasResolver
+from src.v2.normalizers.organization_alias_map import OrganizationAliasResolver
 from src.v2.graph.store import GraphStore
-from src.v2.providers.base import RORProvider
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.base import RORProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 CANONICAL_ROR_ID = "https://ror.org/02s376052"
 HIGH_CONFIDENCE_THRESHOLD = 0.9

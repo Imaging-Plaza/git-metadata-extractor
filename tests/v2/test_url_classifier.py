@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.detection import GitHubURLType, classify_github_url
+from src.v2.ingest.detection import GitHubURLType, classify_github_url
 
 
 def test_repository_url_detected_with_owner_and_repo() -> None:

@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Callable
 
-from src.v2.canonicalization import resolve_article_id
-from src.v2.validation.schema_validation import StrictSchemaValidator
+from src.v2.normalizers import resolve_article_id
+from src.v2.quality.schema_validation import StrictSchemaValidator
 
 UUID_V5_VERSION = 5
 

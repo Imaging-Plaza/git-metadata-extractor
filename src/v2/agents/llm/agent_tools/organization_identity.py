@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
-from src.v2.canonicalization.string_utils import normalize_string
+from src.v2.normalizers.string_utils import normalize_string
 
 if TYPE_CHECKING:
-    from src.v2.providers.base import InfoscienceProvider, RORProvider
+    from src.v2.ingest.providers.base import InfoscienceProvider, RORProvider
 
 logger = logging.getLogger(__name__)
 

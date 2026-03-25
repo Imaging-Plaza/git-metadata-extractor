@@ -14,15 +14,15 @@ from src.v2.api import v2_router
 from src.v2.graph.store import GraphStore
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.providers.base import GitHubProvider, InfoscienceProvider
-from src.v2.providers.github_provider import RealGitHubProvider
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.base import GitHubProvider, InfoscienceProvider
+from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 if TYPE_CHECKING:
-    from src.v2.detection.models import GitHubURLClassification
+    from src.v2.ingest.detection.models import GitHubURLClassification
 
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422

@@ -4,6 +4,7 @@ Cache management utilities and configuration for the API caching system.
 
 import logging
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any, Awaitable, Dict, Optional, Union
 
@@ -83,6 +84,32 @@ class CacheManager:
         details.append(f"force_refresh={str(force_refresh).lower()}")
         return ", ".join(details)
 
+    def _safe_cache_set(
+        self,
+        api_type: str,
+        params: Dict[str, Any],
+        fresh_data: Any,
+        ttl: int,
+        debug_context: str,
+    ) -> None:
+        """Persist to SQLite; log and continue if the DB is locked or data is not serializable."""
+        try:
+            self.cache.set(api_type, params, fresh_data, ttl)
+        except (OSError, sqlite3.OperationalError, TypeError, ValueError) as e:
+            logger.warning(
+                "Cache set skipped for %s (%s): %s",
+                api_type,
+                debug_context,
+                e,
+            )
+            return
+        logger.info(
+            "Cached fresh data for %s (ttl_days=%s, %s)",
+            api_type,
+            ttl,
+            debug_context,
+        )
+
     # Deprecated: in future versions
     def get_cached_or_fetch(
         self,
@@ -140,13 +167,7 @@ class CacheManager:
                 api_type,
                 self.config.DEFAULT_TTL_DAYS,
             )
-            self.cache.set(api_type, params, fresh_data, ttl)
-            logger.info(
-                "Cached fresh data for %s (ttl_days=%s, %s)",
-                api_type,
-                ttl,
-                debug_context,
-            )
+            self._safe_cache_set(api_type, params, fresh_data, ttl, debug_context)
 
         return fresh_data
 
@@ -208,13 +229,7 @@ class CacheManager:
                 api_type,
                 self.config.DEFAULT_TTL_DAYS,
             )
-            self.cache.set(api_type, params, fresh_data, ttl)
-            logger.info(
-                "Cached fresh data for %s (ttl_days=%s, %s)",
-                api_type,
-                ttl,
-                debug_context,
-            )
+            self._safe_cache_set(api_type, params, fresh_data, ttl, debug_context)
 
         return fresh_data
 

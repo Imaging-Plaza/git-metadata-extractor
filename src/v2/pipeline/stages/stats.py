@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from rdflib.namespace import RDF
 from rdflib.term import URIRef
 
-from src.v2.models import V2Stats
+from src.v2.api_models import V2Stats
 
 if TYPE_CHECKING:
     from rdflib import Graph

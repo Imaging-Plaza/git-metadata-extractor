@@ -6,7 +6,7 @@ from typing import Any, Callable
 from jsonschema import validate
 
 from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 class _NoFetchGitHubProvider(MockGitHubProvider):

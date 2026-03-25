@@ -1,27 +1,5 @@
-"""Validation helpers for the v2 extraction pipeline."""
+from src.v2._compat import warn_legacy_import
+from src.v2.quality import *  # noqa: F403
+from src.v2.quality import __all__ as __all__
 
-from src.v2.validation.crossref import CrossRefReport, validate_cross_references
-from src.v2.validation.ontology import load_ontology_shapes_graph, ontology_ttl_path
-from src.v2.validation.schema_validation import (
-    BatchValidationResult,
-    StrictSchemaValidator,
-    ValidationResult,
-)
-from src.v2.validation.shacl_validation import (
-    SHACLRuntimeUnavailableError,
-    SHACLValidationResult,
-    SHACLValidator,
-)
-
-__all__ = [
-    "BatchValidationResult",
-    "CrossRefReport",
-    "SHACLRuntimeUnavailableError",
-    "SHACLValidationResult",
-    "SHACLValidator",
-    "StrictSchemaValidator",
-    "ValidationResult",
-    "load_ontology_shapes_graph",
-    "ontology_ttl_path",
-    "validate_cross_references",
-]
+warn_legacy_import("src.v2.validation", "src.v2.quality")

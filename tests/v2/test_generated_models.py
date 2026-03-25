@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.v2.generated.entities import PersonModel, RepositoryModel
+from src.v2.schema.models.strict import PersonModel, RepositoryModel
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STRICT_FIXTURE_DIR = REPO_ROOT / "tests" / "v2" / "fixtures" / "schema" / "strict"
-GENERATED_MODELS_PATH = REPO_ROOT / "src" / "v2" / "generated" / "entities.py"
+GENERATED_MODELS_PATH = REPO_ROOT / "src" / "v2" / "schema" / "models" / "strict.py"
 
 
 def _load_fixture_list(file_name: str) -> list[dict[str, object]]:

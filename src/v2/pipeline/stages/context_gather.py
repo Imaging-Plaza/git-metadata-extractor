@@ -6,7 +6,7 @@ from src.v2.pipeline.stages.models import ContextBundle
 
 if TYPE_CHECKING:
     from src.v2.agents.models import ProviderSet
-    from src.v2.detection.models import GitHubURLClassification
+    from src.v2.ingest.detection.models import GitHubURLClassification
 
 
 class RequiredProviderUnavailableError(RuntimeError):

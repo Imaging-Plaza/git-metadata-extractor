@@ -6,13 +6,13 @@ from copy import deepcopy
 from typing import Any
 from uuid import uuid4
 
-from src.v2.canonicalization import (
+from src.v2.normalizers import (
     resolve_article_id,
     resolve_organization_id,
     resolve_person_id,
     resolve_repository_id,
 )
-from src.v2.canonicalization.string_utils import normalize_string, strip_accents
+from src.v2.normalizers.string_utils import normalize_string, strip_accents
 from src.v2.pipeline.stages.models import ReconciledEntities
 from src.v2.pipeline.stages.privacy import anonymize_email
 

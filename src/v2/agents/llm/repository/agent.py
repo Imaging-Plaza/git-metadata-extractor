@@ -14,9 +14,9 @@ from src.v2.agents.llm.agent_tools.selenium_fetch import (
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.generated.agent_entities import AgentRepositoryShape
-from src.v2.generated.entities import RepositoryModel
-from src.v2.llm.runtime import (
+from src.v2.schema.models.agent import AgentRepositoryShape
+from src.v2.schema.models.strict import RepositoryModel
+from src.v2.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )

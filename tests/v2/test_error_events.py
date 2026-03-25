@@ -5,7 +5,7 @@ from typing import Any
 
 from src.v2.observability import error_events
 from src.v2.observability.context import RunContext
-from src.v2.providers.base import ProviderNotFoundError
+from src.v2.ingest.providers.base import ProviderNotFoundError
 
 
 @dataclass

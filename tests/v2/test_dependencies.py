@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from starlette.requests import Request
 
 from src.v2.dependencies import get_provider_set
-from src.v2.providers.github_provider import RealGitHubProvider
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 def _build_request(

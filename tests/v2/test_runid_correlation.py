@@ -16,10 +16,10 @@ from src.v2.observability import agent_instrumentation, middleware, pipeline_spa
 from src.v2.observability.context import RunContext
 from src.v2.observability.log_filter import RunIdLogFilter
 from src.v2.observability.middleware import V2TracingMiddleware
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 

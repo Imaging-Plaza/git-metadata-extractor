@@ -15,7 +15,7 @@ from src.v2.agents.llm.agent_tools.repository_corpus_grep import (
     make_repository_corpus_grep_tool,
 )
 from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 logger = logging.getLogger(__name__)
 

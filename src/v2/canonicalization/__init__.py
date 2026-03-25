@@ -1,23 +1,5 @@
-"""Canonical ID resolution for v2 entities."""
+from src.v2._compat import warn_legacy_import
+from src.v2.normalizers import *  # noqa: F403
+from src.v2.normalizers import __all__ as __all__
 
-from src.v2.canonicalization.id_resolution import (
-    resolve_article_id,
-    resolve_organization_id,
-    resolve_person_id,
-    resolve_repository_id,
-)
-from src.v2.canonicalization.organization_alias_map import (
-    AliasResolution,
-    OrganizationAliasResolver,
-)
-from src.v2.canonicalization.string_utils import normalize_string
-
-__all__ = [
-    "AliasResolution",
-    "OrganizationAliasResolver",
-    "normalize_string",
-    "resolve_article_id",
-    "resolve_organization_id",
-    "resolve_person_id",
-    "resolve_repository_id",
-]
+warn_legacy_import("src.v2.canonicalization", "src.v2.normalizers")

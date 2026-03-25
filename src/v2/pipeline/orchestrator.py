@@ -38,8 +38,8 @@ from src.v2.agents.llm.prompt_context import (
     USER_PROMPT_APPENDIX_CONTEXT_KEY,
 )
 from src.v2.agents.models import AgentResult
-from src.v2.canonicalization.string_utils import normalize_string
-from src.v2.detection.models import GitHubURLClassification
+from src.v2.normalizers.string_utils import normalize_string
+from src.v2.ingest.detection.models import GitHubURLClassification
 from src.v2.observability.agent_instrumentation import instrument_agent
 from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage

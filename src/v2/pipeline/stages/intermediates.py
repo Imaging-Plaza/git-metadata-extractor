@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.v2.models import IntermediateEnvelope
+from src.v2.api_models import IntermediateEnvelope
 
 if TYPE_CHECKING:
     from src.v2.graph.store import GraphStore

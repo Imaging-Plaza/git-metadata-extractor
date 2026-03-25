@@ -7,8 +7,8 @@ from typing import Any, Callable
 from jsonschema import validate
 
 from src.v2.agents import ArticleAgentV2, ProviderSet
-from src.v2.providers.base import InfoscienceProvider
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.base import InfoscienceProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 EXPECTED_RANKED_ARTICLE_COUNT = 2
 

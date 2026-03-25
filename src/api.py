@@ -2,13 +2,22 @@
 API
 """
 
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import JSONResponse
 
 from src.v2.api import v2_router
@@ -875,54 +884,86 @@ async def gimie(
     - Statistics (timing and status)
     """
 
-    repository = Repository(full_path, force_refresh=force_refresh)
+    try:
+        repository = Repository(full_path, force_refresh=force_refresh)
 
-    await repository.run_analysis(
-        run_gimie=True,
-        run_llm=False,
-        run_user_enrichment=False,
-        run_organization_enrichment=False,
-    )
+        await repository.run_analysis(
+            run_gimie=True,
+            run_llm=False,
+            run_user_enrichment=False,
+            run_organization_enrichment=False,
+        )
 
-    # Get raw gimie JSON-LD output (not the Pydantic model)
-    gimie_output = repository.gimie
+        # Get raw gimie JSON-LD output (not the Pydantic model)
+        gimie_output = repository.gimie
 
-    # Get usage statistics from the repository (no tokens for gimie-only)
-    usage_stats = repository.get_usage_stats()
+        # Get usage statistics from the repository (no tokens for gimie-only)
+        usage_stats = repository.get_usage_stats()
 
-    # Create APIStats with timing information (no token usage since no LLM)
-    from .data_models.api import APIStats
+        # Create APIStats with timing information (no token usage since no LLM)
+        from .data_models.api import APIStats
 
-    stats = APIStats(
-        agent_input_tokens=0,
-        agent_output_tokens=0,
-        estimated_input_tokens=0,
-        estimated_output_tokens=0,
-        duration=usage_stats["duration"],
-        start_time=usage_stats["start_time"],
-        end_time=usage_stats["end_time"],
-        status_code=usage_stats["status_code"],
-        github_rate_limit=github_info["rate_limit_limit"],
-        github_rate_remaining=github_info["rate_limit_remaining"],
-        github_rate_reset=github_info["rate_limit_reset"],
-    )
-    # Calculate total tokens (will be 0 for gimie-only)
-    stats.calculate_total_tokens()
+        stats = APIStats(
+            agent_input_tokens=0,
+            agent_output_tokens=0,
+            estimated_input_tokens=0,
+            estimated_output_tokens=0,
+            duration=usage_stats["duration"],
+            start_time=usage_stats["start_time"],
+            end_time=usage_stats["end_time"],
+            status_code=usage_stats["status_code"],
+            github_rate_limit=github_info["rate_limit_limit"],
+            github_rate_remaining=github_info["rate_limit_remaining"],
+            github_rate_reset=github_info["rate_limit_reset"],
+        )
+        # Calculate total tokens (will be 0 for gimie-only)
+        stats.calculate_total_tokens()
 
-    # Set rate limit response headers
-    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
-    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
-    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
+        # Set rate limit response headers
+        response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+        response.headers["X-RateLimit-Remaining"] = str(
+            github_info["rate_limit_remaining"],
+        )
+        rate_reset = github_info["rate_limit_reset"]
+        response.headers["X-RateLimit-Reset"] = (
+            rate_reset.isoformat() if rate_reset is not None else ""
+        )
 
-    api_response = APIOutput(
-        link=full_path,
-        type=ResourceType.REPOSITORY,
-        parsedTimestamp=datetime.now(),
-        output=gimie_output,
-        stats=stats,
-    )
+        api_response = APIOutput(
+            link=full_path,
+            type=ResourceType.REPOSITORY,
+            parsedTimestamp=datetime.now(),
+            output=gimie_output,
+            stats=stats,
+        )
 
-    return api_response
+        return api_response
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        # GIMIE raises ConnectionError for GitHub REST/GraphQL failures (incl. secondary rate limits).
+        msg = str(e)
+        lower = msg.lower()
+        logger.warning("GIMIE GitHub API error for %s: %s", full_path, msg)
+        if (
+            "secondary rate limit" in lower
+            or "rate limit exceeded" in lower
+            or "api rate limit exceeded" in lower
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=msg,
+            ) from e
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=msg,
+        ) from e
+    except Exception as e:
+        logger.exception("GIMIE JSON-LD failed for %s", full_path)
+        raise HTTPException(
+            status_code=502,
+            detail=f"GIMIE extraction failed: {e!s}",
+        ) from e
 
 
 @app.get(

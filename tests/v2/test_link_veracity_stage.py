@@ -11,7 +11,7 @@ from src.v2.pipeline.stages import (
     collect_unique_http_link_contexts,
     run_link_veracity_stage,
 )
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:

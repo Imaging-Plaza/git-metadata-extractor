@@ -39,7 +39,7 @@ src/v2/agents/llm/
 
 ## Core concepts
 
-### `V2LLMRuntime` (`src/v2/llm/runtime.py`)
+### `V2LLMRuntime` (`src/v2/agents/llm/runtime.py`)
 
 All LLM agents delegate to `V2LLMRuntime.run_json_prompt()`. This is the single call surface to pydantic-ai.
 
@@ -69,7 +69,7 @@ Every agent validates the LLM output twice:
 | 1st (permissive) | pydantic-ai enforces `output_type` during generation | pydantic-ai retries (configurable `max_retries`) then raises `LLMRuntimeError` |
 | 2nd (strict) | `_strict_validate()` calls `XxxModel.model_validate(payload)` | Appends warnings to `AgentResult.warnings`, never raises |
 
-The strict model comes from `src/v2/generated/entities.py` (TTL-shape-aligned).
+The strict model comes from `src/v2/schema/models/strict.py` (TTL-shape-aligned).
 
 ### `RuntimeAgent` protocol (`src/v2/agents/contracts.py`)
 
@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Tool
 
 if TYPE_CHECKING:
-    from src.v2.providers.base import MyProvider
+    from src.v2.ingest.providers.base import MyProvider
 
 logger = logging.getLogger(__name__)
 
@@ -229,8 +229,8 @@ from pydantic import ValidationError
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.generated.entities import OrganizationModel          # strict model
-from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.schema.models.strict import OrganizationModel          # strict model
+from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -497,7 +497,7 @@ async def test_real_provider_call():
 
 LLM output is validated against two schema layers. When your agent introduces a new entity type, you must update schemas in **all three** locations (see `AGENTS.md` for the triplication rule):
 
-1. `src/v2/schemas/agent/{entity}.schema.json` — permissive, LLM I/O
+1. `src/v2/schema/json/agent/{entity}.schema.json` — permissive, LLM I/O
 2. `dev/ontology-v2-json-response/a-001/json-schema/agent/pulse_{Entity}Shape.schema.json` — promoted
 3. `tests/v2/fixtures/schema/agent/{entity}.schema.json` — test fixture
 
@@ -506,7 +506,7 @@ Then regenerate Pydantic models:
 just v2-models-generate
 ```
 
-The generated model classes land in `src/v2/generated/agent_entities.py` (permissive) and `src/v2/generated/entities.py` (strict).
+The generated model classes land in `src/v2/schema/models/agent.py` (permissive) and `src/v2/schema/models/strict.py` (strict).
 
 ### `generate_uuid()`
 

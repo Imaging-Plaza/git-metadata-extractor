@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.v2.api import v2_router
-from src.v2.models.contracts import V2HealthResponse
+from src.v2.api_models.contracts import V2HealthResponse
 
 HTTP_OK = 200
 PACKAGE_NAME = "git-metadata-extractor"

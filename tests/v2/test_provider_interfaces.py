@@ -8,7 +8,7 @@ import pytest
 from src.data_models.infoscience import InfoscienceAuthor, InfoscienceSearchResult
 from src.parsers.orgs_parser import GitHubOrganizationsParser
 from src.parsers.users_parser import GitHubUsersParser
-from src.v2.providers import (
+from src.v2.ingest.providers import (
     BaseProvider,
     GitHubProvider,
     InfoscienceProvider,
@@ -20,14 +20,14 @@ from src.v2.providers import (
     RORProvider,
     get_provider,
 )
-from src.v2.providers.base import (
+from src.v2.ingest.providers.base import (
     INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
     INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
 )
-from src.v2.providers.github_provider import RealGitHubProvider
-from src.v2.providers.infoscience_provider import RealInfoscienceProvider
-from src.v2.providers.orcid_provider import RealORCIDProvider
-from src.v2.providers.ror_provider import RealRORProvider
+from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from src.v2.ingest.providers.infoscience_provider import RealInfoscienceProvider
+from src.v2.ingest.providers.orcid_provider import RealORCIDProvider
+from src.v2.ingest.providers.ror_provider import RealRORProvider
 
 STATUS_ERROR_THRESHOLD = 400
 

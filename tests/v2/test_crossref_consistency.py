@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.v2.testing.mock_generator import generate_dataset
-from src.v2.validation.crossref import CrossRefReport, validate_cross_references
+from src.v2.quality.crossref import CrossRefReport, validate_cross_references
 
 
 def _remove_repo_from_claiming_owner(dataset: dict[str, list[dict]], repo_id: str) -> None:

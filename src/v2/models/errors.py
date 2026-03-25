@@ -1,28 +1,10 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any
+import sys
 
-from pydantic import BaseModel
+from src.v2._compat import warn_legacy_import
+from src.v2.api_models import errors as _module
 
+warn_legacy_import("src.v2.models.errors", "src.v2.api_models.errors")
 
-class V2ErrorType(str, Enum):
-    UNSUPPORTED_URL = "unsupported_url"
-    VALIDATION_ERROR = "validation_error"
-    PROVIDER_ERROR = "provider_error"
-    PIPELINE_ERROR = "pipeline_error"
-    NOT_FOUND = "not_found"
-
-
-class V2FieldError(BaseModel):
-    field: str
-    message: str
-    value: Any | None = None
-
-
-class V2ErrorResponse(BaseModel):
-    error_type: V2ErrorType
-    detail: str
-    source_url: str | None = None
-    detected_path_kind: str | None = None
-    errors: list[V2FieldError] | None = None
+sys.modules[__name__] = _module

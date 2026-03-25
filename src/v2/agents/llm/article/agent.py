@@ -14,9 +14,9 @@ from src.v2.agents.llm.agent_tools.selenium_fetch import (
 from src.v2.agents.llm.agent_tools.uuid import generate_uuid_v4_tool
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.generated.agent_entities import AgentArticleShape
-from src.v2.generated.entities import ArticleModel
-from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.schema.models.agent import AgentArticleShape
+from src.v2.schema.models.strict import ArticleModel
+from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 README_CONTEXT_MAX_CHARS = 2000
 GIMIE_JSONLD_MAX_CHARS = 4000

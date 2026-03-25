@@ -6,21 +6,21 @@ from typing import Any
 from fastapi import Request  # noqa: TC002
 
 from src.v2.agents import ProviderSet
-from src.v2.detection import UnsupportedGitHubURL, classify_github_url
-from src.v2.providers.base import (
+from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.ingest.providers.base import (
     GitHubProvider,
     InfoscienceProvider,
     ORCIDProvider,
     RORProvider,
 )
-from src.v2.providers.github_provider import RealGitHubProvider
-from src.v2.providers.infoscience_provider import RealInfoscienceProvider
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
-from src.v2.providers.orcid_provider import RealORCIDProvider
-from src.v2.providers.ror_provider import RealRORProvider
+from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from src.v2.ingest.providers.infoscience_provider import RealInfoscienceProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.orcid_provider import RealORCIDProvider
+from src.v2.ingest.providers.ror_provider import RealRORProvider
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 

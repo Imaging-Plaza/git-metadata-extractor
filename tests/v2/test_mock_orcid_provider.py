@@ -6,8 +6,8 @@ from typing import Any, Callable
 
 import pytest
 
-from src.v2.providers.base import ORCIDProvider, ProviderNotFoundError
-from src.v2.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.base import ORCIDProvider, ProviderNotFoundError
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "orcid"
 MIN_FIXTURE_COUNT = 4

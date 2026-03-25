@@ -9,13 +9,13 @@ from httpx import ASGITransport, AsyncClient
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.api import v2_router
-from src.v2.models.contracts import V2ExtractResponse
+from src.v2.api_models.contracts import V2ExtractResponse
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 HTTP_UNPROCESSABLE_ENTITY = 422

@@ -8,10 +8,10 @@ from httpx import ASGITransport, AsyncClient
 from src.api import app as main_app
 from src.api import index
 from src.v2.agents import ProviderSet
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 

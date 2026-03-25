@@ -1,24 +1,10 @@
 from __future__ import annotations
 
-import re
-import unicodedata
+import sys
 
-_PUNCTUATION_RE = re.compile(r"[^\w\s]+")
-_WHITESPACE_RE = re.compile(r"\s+")
+from src.v2._compat import warn_legacy_import
+from src.v2.normalizers import string_utils as _module
 
+warn_legacy_import("src.v2.canonicalization.string_utils", "src.v2.normalizers.string_utils")
 
-def strip_accents(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(char for char in normalized if not unicodedata.combining(char))
-
-
-def collapse_whitespace(value: str) -> str:
-    return _WHITESPACE_RE.sub(" ", value).strip()
-
-
-def normalize_string(value: str) -> str:
-    """Normalize free text for deterministic alias matching."""
-    stripped = strip_accents(value.casefold())
-    without_punctuation = _PUNCTUATION_RE.sub("", stripped)
-    return collapse_whitespace(without_punctuation)
-
+sys.modules[__name__] = _module

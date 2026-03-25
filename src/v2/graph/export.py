@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.v2.graph.store import GraphStore
 
 ENTITY_URI_PREFIX = "urn:pulse:"
-CONTEXT_RELATIVE_PATH = Path("src/v2/schemas/context/v2.0.jsonld")
+CONTEXT_RELATIVE_PATH = Path("src/v2/schema/json/context/v2.0.jsonld")
 
 _ENTITY_TYPE_ALIASES: dict[str, set[str]] = {
     "person": {"person", "schema:person", "pulse:person"},

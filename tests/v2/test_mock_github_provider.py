@@ -6,13 +6,13 @@ from typing import Any, Callable
 
 import pytest
 
-from src.v2.providers.base import (
+from src.v2.ingest.providers.base import (
     GitHubProvider,
     ProviderNotFoundError,
     ProviderPermissionError,
     ProviderRateLimitError,
 )
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "github"
 MIN_CONTRIBUTOR_COUNT = 2

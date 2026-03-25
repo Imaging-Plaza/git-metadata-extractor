@@ -19,8 +19,8 @@ from src.v2.agents.llm.agent_tools.selenium_fetch import (
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
-from src.v2.generated.entities import PersonModel
-from src.v2.llm.runtime import (
+from src.v2.schema.models.strict import PersonModel
+from src.v2.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )

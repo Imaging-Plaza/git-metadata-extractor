@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Tool
 
 if TYPE_CHECKING:
-    from src.v2.providers.base import RORProvider
+    from src.v2.ingest.providers.base import RORProvider
 
 logger = logging.getLogger(__name__)
 

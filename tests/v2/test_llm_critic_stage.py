@@ -7,7 +7,7 @@ from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.pipeline.stages.llm_critic import run_llm_critic_stage
 from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:

@@ -10,10 +10,10 @@ from httpx import ASGITransport, AsyncClient
 
 from src.api import app
 from src.v2.agents import ProviderSet
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
-from src.v2.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 GITHUB_FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "github"
 HTTP_OK = 200

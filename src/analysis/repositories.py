@@ -82,7 +82,7 @@ class Repository:
 
     def run_gimie_analysis(self):
         def fetch_gimie_data():
-            return extract_gimie(self.full_path, format="json-ld")
+            return extract_gimie(self.full_path, serialization_format="json-ld")
 
         # Get GIMIE data
         jsonld_gimie_data = self.cache_manager.get_cached_or_fetch(
@@ -97,6 +97,11 @@ class Repository:
             #     SoftwareSourceCode.convert_jsonld_to_pydantic(jsonld_gimie_data),
             # )
             self.gimie = jsonld_gimie_data
+        else:
+            logger.warning(
+                "GIMIE returned no JSON-LD payload for %s",
+                self.full_path,
+            )
 
     async def run_llm_analysis(self):
         """Run LLM analysis using the atomic agent pipeline."""
@@ -2845,7 +2850,13 @@ class Repository:
         if run_gimie:
             logging.info(f"GIMIE analysis for {self.full_path}")
             self.run_gimie_analysis()
-            logging.info(f"GIMIE analysis completed for {self.full_path}")
+            if self.gimie:
+                logging.info(f"GIMIE analysis completed for {self.full_path}")
+            else:
+                logging.warning(
+                    "GIMIE produced no JSON-LD for %s",
+                    self.full_path,
+                )
 
         # Run LLM analysis
         if run_llm:
@@ -2904,10 +2915,13 @@ class Repository:
                 await self.run_epfl_final_assessment()
                 logging.info(f"Final EPFL assessment completed for {self.full_path}")
 
-        # Only validate and cache if we have data
+        # Validate/cache full SoftwareSourceCode when the LLM pipeline produced it.
+        # GIMIE-only runs expose raw JSON-LD on self.gimie (cached under api_type=gimie).
         if self.data is not None:
             self.run_validation()
             self.save_in_cache()
+            self.analysis_successful = True
+        elif not run_llm and self.gimie:
             self.analysis_successful = True
         else:
             logging.error(f"Analysis failed for {self.full_path}: no data generated")
@@ -2916,35 +2930,47 @@ class Repository:
         # Track end time
         self.end_time = datetime.now()
 
-        # Log duration and final token usage summary
+        # Log duration; token summary only when LLM stages may have run
         if self.start_time and self.end_time:
             duration = (self.end_time - self.start_time).total_seconds()
 
-            # Final token usage summary
-            logger.info("")
-            logger.info("=" * 80)
-            logger.info("FINAL TOKEN USAGE SUMMARY (All Stages)")
-            logger.info("=" * 80)
-            logger.info("  Official API Counts:")
-            logger.info(f"    Input tokens:  {self.total_input_tokens:,}")
-            logger.info(f"    Output tokens: {self.total_output_tokens:,}")
-            logger.info(
-                f"    Total tokens:  {self.total_input_tokens + self.total_output_tokens:,}",
-            )
-            logger.info("")
-            logger.info("  Estimated Counts (tiktoken):")
-            logger.info(f"    Input tokens:  {self.estimated_input_tokens:,}")
-            logger.info(f"    Output tokens: {self.estimated_output_tokens:,}")
-            logger.info(
-                f"    Total tokens:  {self.estimated_input_tokens + self.estimated_output_tokens:,}",
-            )
-            logger.info("")
-            if self.total_input_tokens == 0 and self.total_output_tokens == 0:
-                logger.warning(
-                    "  ⚠️  API returned 0 tokens - using tiktoken estimates as primary metric",
+            if not run_llm:
+                logger.info(
+                    "Analysis completed for %s in %.2fs (%s)",
+                    self.full_path,
+                    duration,
+                    "SUCCESS" if self.analysis_successful else "FAILED",
                 )
-            logger.info(f"  Analysis Duration: {duration:.2f} seconds")
-            logger.info(
-                f"  Status: {'SUCCESS' if self.analysis_successful else 'FAILED'}",
-            )
-            logger.info("=" * 80)
+            else:
+                logger.info("")
+                logger.info("=" * 80)
+                logger.info("FINAL TOKEN USAGE SUMMARY (All Stages)")
+                logger.info("=" * 80)
+                logger.info("  Official API Counts:")
+                logger.info(f"    Input tokens:  {self.total_input_tokens:,}")
+                logger.info(f"    Output tokens: {self.total_output_tokens:,}")
+                logger.info(
+                    f"    Total tokens:  {self.total_input_tokens + self.total_output_tokens:,}",
+                )
+                logger.info("")
+                logger.info("  Estimated Counts (tiktoken):")
+                logger.info(f"    Input tokens:  {self.estimated_input_tokens:,}")
+                logger.info(f"    Output tokens: {self.estimated_output_tokens:,}")
+                logger.info(
+                    f"    Total tokens:  {self.estimated_input_tokens + self.estimated_output_tokens:,}",
+                )
+                logger.info("")
+                if self.total_input_tokens == 0 and self.total_output_tokens == 0:
+                    if (
+                        self.estimated_input_tokens > 0
+                        or self.estimated_output_tokens > 0
+                    ):
+                        logger.warning(
+                            "  ⚠️  API returned 0 tokens - using tiktoken "
+                            "estimates as primary metric",
+                        )
+                logger.info(f"  Analysis Duration: {duration:.2f} seconds")
+                logger.info(
+                    f"  Status: {'SUCCESS' if self.analysis_successful else 'FAILED'}",
+                )
+                logger.info("=" * 80)

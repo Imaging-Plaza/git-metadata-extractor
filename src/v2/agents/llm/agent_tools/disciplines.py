@@ -4,7 +4,7 @@ import logging
 
 from pydantic_ai import Tool
 
-from src.v2.models.enums import DisciplineV2
+from src.v2.api_models.enums import DisciplineV2
 
 logger = logging.getLogger(__name__)
 

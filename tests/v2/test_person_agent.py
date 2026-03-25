@@ -6,10 +6,10 @@ from typing import Any, Callable
 from jsonschema import validate
 
 from src.v2.agents import PersonAgentV2, ProviderSet
-from src.v2.providers.base import GitHubProvider
-from src.v2.providers.mock_github import MockGitHubProvider
-from src.v2.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.providers.mock_orcid import MockORCIDProvider
+from src.v2.ingest.providers.base import GitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
 
 MIN_EXPECTED_MEMBERSHIPS = 2
 INVALID_ORCID_FIELD_VALUE = 123

@@ -13,7 +13,7 @@ from src.v2.agents.llm.agent_tools.selenium_fetch import (
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.link_veracity.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")

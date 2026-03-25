@@ -9,10 +9,10 @@ import pytest
 
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
-from src.v2.detection.models import GitHubURLClassification, GitHubURLType
+from src.v2.ingest.detection.models import GitHubURLClassification, GitHubURLType
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 EXPECTED_PARALLEL_AGENT_COUNT = 2
 MAX_PARALLEL_START_DELTA_SECONDS = 0.04

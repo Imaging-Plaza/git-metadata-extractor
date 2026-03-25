@@ -5,8 +5,8 @@ from typing import Any
 
 from src.v2.agents.llm.context_summary import LLMContextSummaryAgentV2
 from src.v2.agents.models import ProviderSet
-from src.v2.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.providers.mock_github import MockGitHubProvider
+from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:
