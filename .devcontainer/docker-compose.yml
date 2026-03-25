@@ -1,0 +1,30 @@
+# Dev container stack. Compose publishes ports on the host (more reliable than
+# devcontainer forwardPorts in some setups). Interpolation vars (SSH_PORT, etc.)
+# can be set in a file next to this one: `.devcontainer/.env` (see `.env.compose.example`).
+#
+# Internal SSH: devcontainers `sshd` feature listens on 2222, not 22 — map host:2222.
+services:
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    env_file:
+      - ../.env
+    ports:
+      - "${SSH_PORT:-2222}:2222"
+      - "${APP_PORT:-1234}:1234"
+      - "${DEV_PORT:-8888}:8888"
+    volumes:
+      - ..:/workspaces/project:cached
+      - ./persist/config:/home/vscode/.config
+      - ./persist/local-share:/home/vscode/.local/share
+      - ./persist/cache:/home/vscode/.cache
+      - ./persist/pi:/home/vscode/.pi
+      - ./persist/ssh:/home/vscode/.ssh
+    command: sleep infinity
+    networks:
+      - dev
+
+networks:
+  dev:
+    external: true
