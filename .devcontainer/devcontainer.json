@@ -3,6 +3,11 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
   "runArgs": [
     "--env-file",
     "${localWorkspaceFolder}/.env",
@@ -27,7 +32,9 @@
     }
   },
   "forwardPorts": [
-    1234
+    1234,
+    "2220:2222"
   ],
-  "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc"
+  "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc",
+  "postStartCommand": "bash .devcontainer/set-vscode-password.sh"
 }
