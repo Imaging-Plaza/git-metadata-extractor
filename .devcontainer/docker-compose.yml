@@ -1,13 +1,20 @@
 # Dev container stack. Compose publishes ports on the host (more reliable than
 # devcontainer forwardPorts in some setups). Interpolation vars (SSH_PORT, etc.)
-# can be set in a file next to this one: `.devcontainer/.env` (see `.env.compose.example`).
+# can be set in `.devcontainer/.env` (see `.devcontainer/.env.example`).
 #
 # Internal SSH: devcontainers `sshd` feature listens on 2222, not 22 — map host:2222.
+#
+# Explicit DNS: containers on external networks (e.g. `dev`) sometimes get no working resolver
+# and `uv pip` fails with "dns error" / "failed to lookup address information".
+# Override in `.devcontainer/.env`: DEVCONTAINER_DNS_1 / DEVCONTAINER_DNS_2.
 services:
   devcontainer:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+    dns:
+      - "${DEVCONTAINER_DNS_1:-1.1.1.1}"
+      - "${DEVCONTAINER_DNS_2:-8.8.8.8}"
     env_file:
       - ../.env
     environment:
