@@ -24,18 +24,6 @@ def _get_env_bool(name: str, *, default_value: bool) -> bool:
     raise ValueError(message)
 
 
-def _get_env_int(name: str, default: int) -> int:
-    raw_value = os.getenv(name)
-    if raw_value is None or raw_value.strip() == "":
-        return default
-
-    try:
-        return int(raw_value)
-    except ValueError as exc:
-        message = f"Invalid integer value for {name}: {raw_value!r}"
-        raise ValueError(message) from exc
-
-
 def _get_optional_env(name: str) -> str | None:
     value = os.getenv(name)
     if value is None:
@@ -46,12 +34,6 @@ def _get_optional_env(name: str) -> str | None:
 
 @dataclass(slots=True)
 class V2Config:
-    V2_GRAPH_DB_PATH: str = field(
-        default_factory=lambda: os.getenv("V2_GRAPH_DB_PATH", "data/v2_graph.db"),
-    )
-    V2_INTERMEDIATE_HISTORY_LIMIT: int = field(
-        default_factory=lambda: _get_env_int("V2_INTERMEDIATE_HISTORY_LIMIT", 5),
-    )
     V2_ENABLE_LOGFIRE: bool = field(
         default_factory=lambda: _get_env_bool("V2_ENABLE_LOGFIRE", default_value=True),
     )

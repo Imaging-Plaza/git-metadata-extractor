@@ -6,8 +6,10 @@ from copy import deepcopy
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -17,15 +19,13 @@ from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
-from src.v2.graph.export import JSONLDExporter
-from src.v2.graph.store import GraphStore
+from src.v2.schema import load_jsonld_context
 from src.v2.api_models import (
     V2ErrorResponse,
     V2ErrorType,
     V2ExtractRequest,
     V2ExtractResponse,
     V2FieldError,
-    V2GraphResponse,
     V2HealthResponse,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
@@ -39,7 +39,6 @@ from src.v2.pipeline.stages import (
     AssembledOutput,
     RootEntityValidationError,
     apply_link_pruning_to_assembled_output,
-    assemble_intermediates,
     assemble_output,
     build_json_output,
     build_jsonld_output,
@@ -57,7 +56,6 @@ from src.v2.quality import (
 )
 from src.v2.quality.shacl_validation import SHACLRuntimeUnavailableError
 
-DEFAULT_INTERMEDIATE_LIMIT = V2Config().V2_INTERMEDIATE_HISTORY_LIMIT
 MIN_SUPPORTED_PYTHON = (3, 10)
 PACKAGE_NAME = "git-metadata-extractor"
 try:
@@ -67,7 +65,7 @@ except PackageNotFoundError:
 
 MIN_SUBRESOURCE_PATH_SEGMENTS = 3
 SUBRESOURCE_SEGMENT_INDEX = 2
-JSONLD_CONTEXT = {
+JSONLD_CONTEXT_FALLBACK = {
     "schema": "http://schema.org/",
     "pulse": "https://open-pulse.epfl.ch/ontology#",
     "org": "http://www.w3.org/ns/org#",
@@ -80,11 +78,9 @@ STAGE_RECONCILIATION = "reconciliation"
 STAGE_LLM_DEDUP = "llm_dedup"
 STAGE_LLM_CRITIC = "llm_critic"
 STAGE_SHACL_GATE = "shacl_gate"
-STAGE_GRAPH_WRITE = "graph_write"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
-GRAPH_ENTITY_HELPER_KEYS = {"id", "type", "identifiers", "idSource", "shacl"}
 
 v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
 
@@ -97,30 +93,6 @@ def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
         return None
     else:
         return graph
-
-
-def _cap_intermediates_per_agent(
-    intermediates: list[Any],
-    per_agent_limit: int,
-) -> list[Any]:
-    if per_agent_limit <= 0:
-        return []
-
-    capped: list[Any] = []
-    counts_by_agent: dict[str, int] = {}
-    for envelope in intermediates:
-        agent_name = getattr(envelope, "agent_name", None)
-        if not isinstance(agent_name, str):
-            continue
-
-        current_count = counts_by_agent.get(agent_name, 0)
-        if current_count >= per_agent_limit:
-            continue
-
-        counts_by_agent[agent_name] = current_count + 1
-        capped.append(envelope)
-
-    return capped
 
 
 def _extract_path_kind(source_url: str) -> str | None:
@@ -182,13 +154,11 @@ def _iter_reconciled_entities(
     return payloads
 
 
-@lru_cache(maxsize=1)
 def _extract_jsonld_context() -> dict[str, Any]:
-    payload = JSONLDExporter().get_context()
-    raw_context = payload.get("@context")
-    if isinstance(raw_context, dict):
-        return raw_context
-    return dict(JSONLD_CONTEXT)
+    try:
+        return load_jsonld_context()
+    except (OSError, TypeError, ValueError):
+        return dict(JSONLD_CONTEXT_FALLBACK)
 
 
 def _root_entity_type_for_detected_type(
@@ -235,35 +205,6 @@ def _build_rootless_assembled_output(
     )
 
 
-def _to_graph_store_entity_payload(
-    entity: dict[str, Any],
-) -> tuple[str, str, dict[str, Any], dict[str, Any], str] | None:
-    entity_id = entity.get("id")
-    entity_type = entity.get("type")
-    if not isinstance(entity_id, str) or not entity_id:
-        return None
-    if not isinstance(entity_type, str) or not entity_type:
-        return None
-
-    raw_identifiers = entity.get("identifiers")
-    identifiers = raw_identifiers if isinstance(raw_identifiers, dict) else {}
-
-    raw_id_source = entity.get("idSource")
-    id_source = (
-        raw_id_source
-        if isinstance(raw_id_source, str) and raw_id_source
-        else "schema:identifier"
-    )
-
-    data = {
-        key: deepcopy(value)
-        for key, value in entity.items()
-        if key not in GRAPH_ENTITY_HELPER_KEYS and not key.startswith("_") and value is not None
-    }
-
-    return entity_type, entity_id, data, deepcopy(identifiers), id_source
-
-
 @v2_router.get(
     "/extract/{full_path:path}",
     response_model=V2ExtractResponse,
@@ -275,14 +216,12 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
-    include_intermediates: Annotated[bool, Query()] = False,
     include_context_summary: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
 ) -> V2ExtractResponse | JSONResponse:
     """Run the v2 extraction pipeline for a GitHub path."""
 
     config = V2Config()
-    store = GraphStore(config.V2_GRAPH_DB_PATH)
     run_id: str | None = None
 
     try:
@@ -322,10 +261,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
 
-    run_id = store.create_run(
-        classification.normalized_url,
-        classification.detected_type.value,
-    )
+    run_id = str(uuid4())
     request.state.v2_run_id = run_id
     RunContext.set_run_id(run_id)
     tracer = _get_pipeline_tracer(request)
@@ -356,7 +292,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             },
         )
     except RequiredProviderUnavailableError as exc:
-        store.fail_run(run_id, str(exc))
         record_error(
             "provider_preflight",
             exc,
@@ -374,7 +309,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except Exception as exc:  # noqa: BLE001
-        store.fail_run(run_id, str(exc))
         record_error(
             "pipeline_execute",
             exc,
@@ -393,26 +327,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
 
     warnings = list(pipeline_result.warnings)
-
-    persisted_intermediates = 0
-    for agent_name, agent_result in pipeline_result.agent_results.items():
-        payload = agent_result.data
-        if not isinstance(payload, dict) or not payload:
-            continue
-        try:
-            store.insert_intermediate(
-                source_url=classification.normalized_url,
-                agent_name=agent_name,
-                run_id=run_id,
-                data=payload,
-            )
-        except Exception as exc:  # noqa: BLE001
-            _append_unique_warning(
-                warnings,
-                f"Failed to persist intermediate for {agent_name}: {exc}",
-            )
-        else:
-            persisted_intermediates += 1
 
     pipeline_outputs_for_prompt = {
         agent_name: agent_result.data
@@ -463,26 +377,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 for warning in dedup_result.warnings:
                     _append_unique_warning(warnings, warning)
 
-                if include_intermediates:
-                    for agent_name, payload in (
-                        ("llm_dedup_candidates", dedup_result.candidate_clusters),
-                        ("llm_dedup_resolution", dedup_result.resolution),
-                    ):
-                        try:
-                            store.insert_intermediate(
-                                source_url=classification.normalized_url,
-                                agent_name=agent_name,
-                                run_id=run_id,
-                                data=payload,
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            _append_unique_warning(
-                                warnings,
-                                f"Failed to persist intermediate for {agent_name}: {exc}",
-                            )
-                        else:
-                            persisted_intermediates += 1
-
     llm_critic_executed = False
     critic_pruned_excluded_entities: list[dict[str, Any]] = []
     with tracer.trace_stage(
@@ -502,21 +396,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
     for warning in reconciled.link_warnings:
         _append_unique_warning(warnings, warning)
-    if include_intermediates and isinstance(reconciled.reconciliation_debug, dict):
-        try:
-            store.insert_intermediate(
-                source_url=classification.normalized_url,
-                agent_name="reconciliation_debug",
-                run_id=run_id,
-                data=reconciled.reconciliation_debug,
-            )
-        except Exception as exc:  # noqa: BLE001
-            _append_unique_warning(
-                warnings,
-                f"Failed to persist intermediate for reconciliation_debug: {exc}",
-            )
-        else:
-            persisted_intermediates += 1
 
     if resolved_runtime == AgentRuntime.LLM:
         with tracer.trace_stage(
@@ -547,26 +426,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 )
                 for warning in critic_result.warnings:
                     _append_unique_warning(warnings, warning)
-
-                if include_intermediates:
-                    for agent_name, payload in (
-                        ("llm_critic_decisions", critic_result.decisions),
-                        ("llm_critic_applied", critic_result.applied),
-                    ):
-                        try:
-                            store.insert_intermediate(
-                                source_url=classification.normalized_url,
-                                agent_name=agent_name,
-                                run_id=run_id,
-                                data=payload,
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            _append_unique_warning(
-                                warnings,
-                                f"Failed to persist intermediate for {agent_name}: {exc}",
-                            )
-                        else:
-                            persisted_intermediates += 1
 
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,
@@ -603,7 +462,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             failure_message = (
                 f"Root {exc.entity_type} entity '{exc.entity_id}' failed strict validation"
             )
-            store.fail_run(run_id, failure_message)
             error_payload = V2ErrorResponse(
                 error_type=V2ErrorType.VALIDATION_ERROR,
                 detail=failure_message,
@@ -701,21 +559,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
             for warning in link_veracity_result.warnings:
                 _append_unique_warning(warnings, warning)
-            for record in link_veracity_result.records:
-                try:
-                    store.insert_intermediate(
-                        source_url=classification.normalized_url,
-                        agent_name=STAGE_LINK_VERACITY,
-                        run_id=run_id,
-                        data=record,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    _append_unique_warning(
-                        warnings,
-                        f"Failed to persist intermediate for {STAGE_LINK_VERACITY}: {exc}",
-                    )
-                else:
-                    persisted_intermediates += 1
 
             invalid_links = set(link_veracity_result.invalid_links)
             if invalid_links:
@@ -795,77 +638,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                     warning_count=len(shacl_result.warnings),
                 )
 
-    with tracer.trace_stage(
-        STAGE_GRAPH_WRITE,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        final_entities: list[dict[str, Any]] = []
-        if isinstance(assembled_output.root_entity, dict):
-            final_entities.append(assembled_output.root_entity)
-        final_entities.extend(assembled_output.related_entities)
-
-        graph_entities_upserted = 0
-        skipped_entities = 0
-        try:
-            for entity in final_entities:
-                parsed = _to_graph_store_entity_payload(entity)
-                if parsed is None:
-                    skipped_entities += 1
-                    _append_unique_warning(
-                        warnings,
-                        "Skipped graph write for an entity without valid id/type",
-                    )
-                    continue
-
-                entity_type, entity_id, data, identifiers, id_source = parsed
-                store.upsert_entity(
-                    entity_type=entity_type,
-                    entity_id=entity_id,
-                    data=data,
-                    identifiers=identifiers,
-                    id_source=id_source,
-                    source="extract",
-                    run_id=run_id,
-                )
-                graph_entities_upserted += 1
-        except Exception as exc:  # noqa: BLE001
-            stage_span.set_attribute("status", "error")
-            failure_message = f"Graph write failed: {exc}"
-            store.fail_run(run_id, failure_message)
-            record_error(
-                STAGE_GRAPH_WRITE,
-                exc,
-                run_id=run_id,
-                source_url=classification.normalized_url,
-                detected_type=classification.detected_type.value,
-            )
-            error_payload = V2ErrorResponse(
-                error_type=V2ErrorType.PIPELINE_ERROR,
-                detail=failure_message,
-                source_url=classification.normalized_url,
-            )
-            return JSONResponse(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content=error_payload.model_dump(mode="json", exclude_none=True),
-            )
-
-        stage_span.set_attributes(
-            status="success" if skipped_entities == 0 else "warning",
-            entity_count=graph_entities_upserted,
-            skipped_count=skipped_entities,
-            intermediates_written=persisted_intermediates,
-            mode="upsert",
-        )
-
-    response_intermediates = None
-    if include_intermediates:
-        response_intermediates = assemble_intermediates(
-            source_url=classification.normalized_url,
-            store=store,
-            limit=DEFAULT_INTERMEDIATE_LIMIT,
-            run_id=run_id,
-        )
-
     response_output: V2JSONLDOutput | V2JSONOutputEnvelope
     if output_format == "jsonld":
         response_output = V2JSONLDOutput.model_validate(shacl_graph_payload)
@@ -887,14 +659,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     if isinstance(assembled_output.root_entity, dict):
         final_entities.append(assembled_output.root_entity)
     final_entities.extend(assembled_output.related_entities)
-    final_entity_ids = [
-        entity_id
-        for entity_id in (
-            entity.get("id")
-            for entity in final_entities
-        )
-        if isinstance(entity_id, str) and entity_id
-    ]
     final_entity_count = len(final_entities)
 
     completed_stages = list(pipeline_result.stages_completed)
@@ -911,31 +675,17 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             STAGE_LINK_VERACITY,
             STAGE_JSONLD_BUILD,
             STAGE_SHACL_GATE,
-            STAGE_GRAPH_WRITE,
         ],
     )
     for stage_name in stage_sequence:
         if stage_name not in completed_stages:
             completed_stages.append(stage_name)
-    stats = compute_stats(store=store, run_id=run_id, graph=extract_graph)
-    stats = stats.model_copy(
-        update={
-            "run_id": run_id,
-            "entities_count": final_entity_count,
-            "triples_count": stats.triples_count if extract_graph is not None else 0,
-            "duration_ms": pipeline_result.duration_ms,
-            "stages_completed": completed_stages,
-        },
-    )
-    store.complete_run(
-        run_id,
-        {
-            "duration_ms": pipeline_result.duration_ms,
-            "stages_completed": completed_stages,
-            "entity_ids": final_entity_ids,
-            "entities_count": final_entity_count,
-            "excluded_entities_count": len(assembled_output.excluded_entities),
-        },
+    stats = compute_stats(
+        graph=extract_graph,
+        run_id=run_id,
+        duration_ms=pipeline_result.duration_ms,
+        stages_completed=completed_stages,
+        entities_count=final_entity_count,
     )
 
     return V2ExtractResponse(
@@ -946,7 +696,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         context_summary_markdown=context_summary_markdown,
         warnings=warnings,
         stats=stats,
-        intermediates=response_intermediates,
     )
 
 
@@ -968,60 +717,8 @@ async def extract_post(
         request=request,
         output_format=payload.output_format,
         agent_runtime=payload.agent_runtime,
-        include_intermediates=payload.include_intermediates,
         include_context_summary=payload.include_context_summary,
         providers=providers,
-    )
-
-
-@v2_router.get(
-    "/graph",
-    response_model=V2GraphResponse,
-    response_model_exclude_none=True,
-)
-async def graph(
-    *,
-    source_url: Annotated[str | None, Query()] = None,
-    entity_type: Annotated[list[str] | None, Query()] = None,
-    include_intermediates: Annotated[bool, Query()] = True,
-    intermediate_limit: Annotated[int, Query(ge=0)] = DEFAULT_INTERMEDIATE_LIMIT,
-) -> V2GraphResponse:
-    config = V2Config()
-    store = GraphStore(config.V2_GRAPH_DB_PATH)
-    exporter = JSONLDExporter()
-    graph_jsonld = exporter.export_filtered(
-        store.get_rdf_graph(),
-        source_url=source_url,
-        entity_types=entity_type,
-        store=store,
-    )
-
-    response_intermediates = None
-    if include_intermediates:
-        all_intermediates = assemble_intermediates(
-            source_url=source_url,
-            store=store,
-            limit=None,
-        )
-        response_intermediates = _cap_intermediates_per_agent(
-            all_intermediates,
-            intermediate_limit,
-        )
-
-    filtered_graph = _jsonld_to_graph(graph_jsonld)
-    stats = compute_stats(
-        store=store,
-        run_id="graph-export",
-        graph=filtered_graph,
-    )
-    return V2GraphResponse(
-        graph_jsonld=graph_jsonld,
-        intermediates=response_intermediates,
-        stats=stats.model_copy(
-            update={
-                "stages_completed": ["graph_export"],
-            },
-        ),
     )
 
 
@@ -1036,7 +733,6 @@ async def health() -> V2HealthResponse:
             if sys.version_info[:2] >= MIN_SUPPORTED_PYTHON
             else "unhealthy"
         ),
-        "graph_store": "healthy",
     }
 
     config: V2Config | None = None

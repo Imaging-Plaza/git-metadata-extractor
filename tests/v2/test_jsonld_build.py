@@ -5,16 +5,13 @@ from typing import Any
 
 from rdflib import Graph, Literal, URIRef
 
-from src.v2.graph.export import JSONLDExporter
 from src.v2.pipeline.stages.jsonld_build import ENTITY_URI_PREFIX, build_jsonld_output
 from src.v2.pipeline.stages.models import AssembledOutput
+from src.v2.schema import load_jsonld_context
 
 
 def _context() -> dict[str, Any]:
-    payload = JSONLDExporter().get_context()
-    raw_context = payload.get("@context")
-    assert isinstance(raw_context, dict)
-    return raw_context
+    return load_jsonld_context()
 
 
 def _node_by_id(payload: dict[str, Any], *, node_id: str) -> dict[str, Any]:

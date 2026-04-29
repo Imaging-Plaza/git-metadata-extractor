@@ -40,7 +40,7 @@ from src.v2.agents.models import AgentResult, TypedEntityBuckets, infer_entity_b
 from src.v2.normalizers.string_utils import normalize_string, strip_accents
 from src.v2.dependencies import _default_provider_set
 from src.v2.ingest.detection.github_url_classifier import classify_github_url
-from src.v2.graph.export import JSONLDExporter
+from src.v2.schema import load_jsonld_context
 from src.v2.pipeline.stages import (
     AssembledOutput,
     build_jsonld_output,
@@ -1555,7 +1555,7 @@ async def _run(  # noqa: C901, PLR0915
             root_entity=combined_entities[0],
             related_entities=combined_entities[1:],
         ),
-        jsonld_context=JSONLDExporter().get_context()["@context"],
+        jsonld_context=load_jsonld_context(),
     )
 
     print(f"\n{_SEP}")
@@ -1587,7 +1587,7 @@ async def _run(  # noqa: C901, PLR0915
                 root_entity=reconciled_all[0],
                 related_entities=reconciled_all[1:],
             ),
-            jsonld_context=JSONLDExporter().get_context()["@context"],
+            jsonld_context=load_jsonld_context(),
         )
         print(f"\n{_SEP}")
         print("Reconciled JSON-LD (post-reconciliation):")

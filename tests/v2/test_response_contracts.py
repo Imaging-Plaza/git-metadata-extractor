@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from src.v2.api_models.contracts import (
     V2ExtractResponse,
-    V2GraphResponse,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
     V2Stats,
@@ -152,29 +151,3 @@ def test_output_contract_models_support_alias_serialization() -> None:
     assert envelope.root_entity is None
 
 
-def test_extract_response_intermediates_default_to_none() -> None:
-    response = V2ExtractResponse(
-        source_url="https://github.com/owner/repo",
-        detected_type="repository",
-        output_format="jsonld",
-        output={"@context": {}, "@graph": []},
-        stats=_sample_stats(),
-    )
-
-    assert response.intermediates is None
-    assert "intermediates" not in response.model_dump(mode="json", exclude_none=True)
-
-
-def test_graph_response_requires_context_and_graph_keys() -> None:
-    with pytest.raises(ValidationError, match="@context"):
-        V2GraphResponse(
-            graph_jsonld={"@graph": []},
-            stats=_sample_stats(),
-        )
-
-    response = V2GraphResponse(
-        graph_jsonld={"@context": {}, "@graph": []},
-        stats=_sample_stats(),
-    )
-    assert "@context" in response.graph_jsonld
-    assert "@graph" in response.graph_jsonld
