@@ -40,8 +40,6 @@ from src.v2.agents.llm.prompt_context import (
 from src.v2.agents.models import AgentResult
 from src.v2.normalizers.string_utils import normalize_string
 from src.v2.ingest.detection.models import GitHubURLClassification
-from src.v2.observability.agent_instrumentation import instrument_agent
-from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage
 from src.v2.pipeline.stages import ContextBundle, gather_context
 
@@ -299,10 +297,6 @@ class PipelineOrchestrator:
 
         runtime_context = dict(context)
         run_id = runtime_context.get("run_id") if isinstance(runtime_context.get("run_id"), str) else None
-        pipeline_tracer = runtime_context.get("pipeline_tracer")
-        if not isinstance(pipeline_tracer, PipelineTracer):
-            pipeline_tracer = PipelineTracer(run_id=run_id)
-        runtime_context["pipeline_tracer"] = pipeline_tracer
         runtime_context["run_id"] = run_id
         pipeline_outputs: dict[str, dict[str, Any]] = {}
         pipeline_agent_results: dict[str, AgentResult] = {}
@@ -310,23 +304,21 @@ class PipelineOrchestrator:
 
         for stage in plan.stages:
             if stage.name == STAGE_CONTEXT_GATHER:
-                with pipeline_tracer.trace_stage(
+                url_info = self._require_url_info(runtime_context)
+                context_bundle = await _maybe_await(
+                    self._context_gatherer(plan.detected_type, url_info, providers),
+                )
+                runtime_context["context_bundle"] = context_bundle
+                runtime_context["gathered_context"] = context_bundle.context
+                runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
+                for warning in context_bundle.warnings:
+                    _append_unique(warnings, warning)
+                logger.info(
+                    "%s: warnings=%d context_keys=%s",
                     STAGE_CONTEXT_GATHER,
-                    detected_type=plan.detected_type,
-                ) as stage_span:
-                    url_info = self._require_url_info(runtime_context)
-                    context_bundle = await _maybe_await(
-                        self._context_gatherer(plan.detected_type, url_info, providers),
-                    )
-                    runtime_context["context_bundle"] = context_bundle
-                    runtime_context["gathered_context"] = context_bundle.context
-                    runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
-                    for warning in context_bundle.warnings:
-                        _append_unique(warnings, warning)
-                    stage_span.set_attributes(
-                        warning_count=len(context_bundle.warnings),
-                        context_keys=sorted(context_bundle.context.keys()),
-                    )
+                    len(context_bundle.warnings),
+                    sorted(context_bundle.context.keys()),
+                )
 
                 runtime_mode = parse_agent_runtime(
                     runtime_context.get("agent_runtime"),
@@ -402,38 +394,27 @@ class PipelineOrchestrator:
                 stage.name,
                 len(work_items),
             )
-            with pipeline_tracer.trace_stage(
-                STAGE_AGENTS,
-                orchestrator_stage=stage.name,
-                work_item_count=len(work_items),
-            ) as stage_span:
-                if not work_items:
-                    logger.info("[%s] skipped — no items", stage.name)
-                    stage_span.set_attribute("status", "skipped")
-                    stages_completed.append(stage.name)
-                    continue
+            if not work_items:
+                logger.info("[%s] skipped — no items", stage.name)
+                stages_completed.append(stage.name)
+                continue
 
-                stage_started_at = perf_counter()
-                stage_results, stage_warnings, stage_errors = await self._execute_stage(
-                    stage_name=stage.name,
-                    work_items=work_items,
-                    runtime_context=runtime_context,
-                    pipeline_outputs=pipeline_outputs,
-                    providers=providers,
-                    detected_type=plan.detected_type,
-                )
-                logger.info(
-                    "[%s] done — %d result(s), %d error(s) in %.1fs",
-                    stage.name,
-                    len(stage_results),
-                    len(stage_errors),
-                    perf_counter() - stage_started_at,
-                )
-                stage_span.set_attributes(
-                    result_count=len(stage_results),
-                    warning_count=len(stage_warnings),
-                    error_count=len(stage_errors),
-                )
+            stage_started_at = perf_counter()
+            stage_results, stage_warnings, stage_errors = await self._execute_stage(
+                stage_name=stage.name,
+                work_items=work_items,
+                runtime_context=runtime_context,
+                pipeline_outputs=pipeline_outputs,
+                providers=providers,
+                detected_type=plan.detected_type,
+            )
+            logger.info(
+                "[%s] done — %d result(s), %d error(s) in %.1fs",
+                stage.name,
+                len(stage_results),
+                len(stage_errors),
+                perf_counter() - stage_started_at,
+            )
 
             runtime_mode = parse_agent_runtime(
                 runtime_context.get("agent_runtime"),
@@ -643,22 +624,10 @@ class PipelineOrchestrator:
                     invalid_result_checker=invalid_result_checker,
                 )
 
-            run_id = runtime_context.get("run_id")
-            traced_runner = instrument_agent(
-                _run_with_retry,
-                run_id if isinstance(run_id, str) else None,
-                agent_name=work_item.result_key,
-                model=item_context.get("model")
-                if isinstance(item_context.get("model"), str)
-                else None,
-                provider=item_context.get("provider")
-                if isinstance(item_context.get("provider"), str)
-                else None,
-            )
             async with semaphore:
                 logger.info("[%s] %s — started", stage_name, work_item.result_key)
                 item_started_at = perf_counter()
-                result = await _maybe_await(traced_runner(item_context, providers))
+                result = await _maybe_await(_run_with_retry(item_context, providers))
                 logger.info(
                     "[%s] %s — done in %.1fs",
                     stage_name,

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from copy import deepcopy
-from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
-from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -30,10 +29,6 @@ from src.v2.api_models import (
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
 )
-from src.v2.observability.context import RunContext
-from src.v2.observability.error_events import record_error
-from src.v2.observability.middleware import V2TracingMiddleware
-from src.v2.observability.pipeline_spans import PipelineTracer
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import (
     AssembledOutput,
@@ -71,6 +66,8 @@ JSONLD_CONTEXT_FALLBACK = {
     "org": "http://www.w3.org/ns/org#",
 }
 
+logger = logging.getLogger(__name__)
+
 STAGE_CLASSIFY_URL = "classify_url"
 STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
 STAGE_STRICT_VALIDATION = "strict_validation"
@@ -82,7 +79,7 @@ STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
 
-v2_router = APIRouter(prefix="/v2", route_class=V2TracingMiddleware)
+v2_router = APIRouter(prefix="/v2")
 
 
 def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
@@ -115,15 +112,6 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     orchestrator = PipelineOrchestrator()
     request.app.state.v2_orchestrator = orchestrator
     return orchestrator
-
-
-def _get_pipeline_tracer(request: Request) -> PipelineTracer:
-    run_id = getattr(request.state, "v2_run_id", None)
-    if not isinstance(run_id, str) or not run_id:
-        run_id = RunContext.get_run_id()
-    if run_id:
-        return PipelineTracer(run_id=str(run_id))
-    return PipelineTracer()
 
 
 def _append_unique_warning(warnings: list[str], warning: str) -> None:
@@ -227,12 +215,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     try:
         classification = classify_github_url(full_path)
     except UnsupportedGitHubURL as exc:
-        record_error(
-            STAGE_CLASSIFY_URL,
-            exc,
-            run_id=RunContext.get_run_id() or None,
-            source_url=exc.normalized_url,
-        )
+        logger.warning("classify_url: unsupported url=%s reason=%s", exc.normalized_url, exc.reason)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=exc.reason,
@@ -244,12 +227,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except ValueError as exc:
-        record_error(
-            STAGE_CLASSIFY_URL,
-            exc,
-            run_id=RunContext.get_run_id() or None,
-            source_url=full_path,
-        )
+        logger.warning("classify_url: invalid input %s: %s", full_path, exc)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=str(exc),
@@ -263,19 +241,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
     run_id = str(uuid4())
     request.state.v2_run_id = run_id
-    RunContext.set_run_id(run_id)
-    tracer = _get_pipeline_tracer(request)
-
-    with tracer.trace_stage(STAGE_CLASSIFY_URL, source_url=full_path) as stage_span:
-        stage_span.set_attribute("detected_type", classification.detected_type.value)
-        stage_span.set_attribute("normalized_url", classification.normalized_url)
-        # Query-level runtime overrides the configured default when present.
-        resolved_runtime = parse_agent_runtime(
-            agent_runtime,
-            default=config.V2_AGENT_RUNTIME_DEFAULT,
-            field_name="agent_runtime",
-        )
-        stage_span.set_attribute("agent_runtime", resolved_runtime.value)
+    resolved_runtime = parse_agent_runtime(
+        agent_runtime,
+        default=config.V2_AGENT_RUNTIME_DEFAULT,
+        field_name="agent_runtime",
+    )
+    logger.info(
+        "extract: run_id=%s url=%s detected_type=%s runtime=%s",
+        run_id,
+        classification.normalized_url,
+        classification.detected_type.value,
+        resolved_runtime.value,
+    )
 
     try:
         orchestrator = _get_orchestrator(request)
@@ -288,17 +265,10 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 "url_info": classification,
                 "agent_runtime": resolved_runtime.value,
                 "run_id": run_id,
-                "pipeline_tracer": tracer.child(),
             },
         )
     except RequiredProviderUnavailableError as exc:
-        record_error(
-            "provider_preflight",
-            exc,
-            run_id=run_id,
-            source_url=classification.normalized_url,
-            detected_type=classification.detected_type.value,
-        )
+        logger.exception("provider_preflight failed: run_id=%s", run_id)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.PROVIDER_ERROR,
             detail=str(exc),
@@ -309,13 +279,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except Exception as exc:  # noqa: BLE001
-        record_error(
-            "pipeline_execute",
-            exc,
-            run_id=run_id,
-            source_url=classification.normalized_url,
-            detected_type=classification.detected_type.value,
-        )
+        logger.exception("pipeline_execute failed: run_id=%s", run_id)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
             detail=str(exc),
@@ -341,163 +305,133 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
     typed_entity_buckets = pipeline_result.resolved_typed_entity_buckets().to_dict()
     permissive_entity_count = sum(len(bucket) for bucket in typed_entity_buckets.values())
-    with tracer.trace_stage(
-        STAGE_PERMISSIVE_VALIDATION,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        stage_span.set_attribute("entity_count", permissive_entity_count)
+    logger.info("%s: entity_count=%d", STAGE_PERMISSIVE_VALIDATION, permissive_entity_count)
 
     llm_dedup_executed = False
     if resolved_runtime == AgentRuntime.LLM:
-        with tracer.trace_stage(
-            STAGE_LLM_DEDUP,
-            detected_type=classification.detected_type.value,
-        ) as stage_span:
-            llm_dedup_executed = True
-            try:
-                dedup_result = await run_llm_dedup_stage(
-                    typed_entity_buckets=typed_entity_buckets,
-                    source_url=classification.normalized_url,
-                    detected_type=classification.detected_type.value,
-                    providers=providers,
-                    pipeline_outputs=pipeline_outputs_for_prompt,
-                    initial_context=gathered_context,
-                    max_concurrency=orchestrator.max_concurrent_agents,
-                )
-            except Exception as exc:  # noqa: BLE001
-                stage_span.set_attribute("status", "error")
-                _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
-            else:
-                typed_entity_buckets = dedup_result.typed_entity_buckets
-                stage_span.set_attributes(
-                    accepted_cluster_count=dedup_result.accepted_cluster_count,
-                    rejected_cluster_count=dedup_result.rejected_cluster_count,
-                    remap_count=dedup_result.remap_count,
-                )
-                for warning in dedup_result.warnings:
-                    _append_unique_warning(warnings, warning)
+        llm_dedup_executed = True
+        try:
+            dedup_result = await run_llm_dedup_stage(
+                typed_entity_buckets=typed_entity_buckets,
+                source_url=classification.normalized_url,
+                detected_type=classification.detected_type.value,
+                providers=providers,
+                pipeline_outputs=pipeline_outputs_for_prompt,
+                initial_context=gathered_context,
+                max_concurrency=orchestrator.max_concurrent_agents,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("%s stage failed", STAGE_LLM_DEDUP)
+            _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
+        else:
+            typed_entity_buckets = dedup_result.typed_entity_buckets
+            logger.info(
+                "%s: accepted=%d rejected=%d remap=%d",
+                STAGE_LLM_DEDUP,
+                dedup_result.accepted_cluster_count,
+                dedup_result.rejected_cluster_count,
+                dedup_result.remap_count,
+            )
+            for warning in dedup_result.warnings:
+                _append_unique_warning(warnings, warning)
 
     llm_critic_executed = False
     critic_pruned_excluded_entities: list[dict[str, Any]] = []
-    with tracer.trace_stage(
+    reconciled = reconcile_entities(typed_entity_buckets)
+    logger.info(
+        "%s: persons=%d orgs=%d repos=%d articles=%d memberships=%d contributions=%d",
         STAGE_RECONCILIATION,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        reconciled = reconcile_entities(
-            typed_entity_buckets,
-        )
-        stage_span.set_attributes(
-            person_count=len(reconciled.entities.get("persons", [])),
-            organization_count=len(reconciled.entities.get("organizations", [])),
-            repository_count=len(reconciled.entities.get("repositories", [])),
-            article_count=len(reconciled.entities.get("articles", [])),
-            membership_count=len(reconciled.memberships),
-            contribution_count=len(reconciled.contributions),
-        )
+        len(reconciled.entities.get("persons", [])),
+        len(reconciled.entities.get("organizations", [])),
+        len(reconciled.entities.get("repositories", [])),
+        len(reconciled.entities.get("articles", [])),
+        len(reconciled.memberships),
+        len(reconciled.contributions),
+    )
     for warning in reconciled.link_warnings:
         _append_unique_warning(warnings, warning)
 
     if resolved_runtime == AgentRuntime.LLM:
-        with tracer.trace_stage(
-            STAGE_LLM_CRITIC,
-            detected_type=classification.detected_type.value,
-        ) as stage_span:
-            llm_critic_executed = True
-            try:
-                critic_result = await run_llm_critic_stage(
-                    reconciled=reconciled,
-                    source_url=classification.normalized_url,
-                    detected_type=classification.detected_type.value,
-                    providers=providers,
-                    initial_context=gathered_context,
-                    pipeline_outputs=pipeline_outputs_for_prompt,
-                    max_concurrency=orchestrator.max_concurrent_agents,
-                )
-            except Exception as exc:  # noqa: BLE001
-                stage_span.set_attribute("status", "error")
-                _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
-            else:
-                reconciled = critic_result.reconciled
-                critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
-                stage_span.set_attributes(
-                    proposed_drop_count=critic_result.applied.get("proposed_drop_count", 0),
-                    applied_drop_count=critic_result.applied.get("applied_drop_count", 0),
-                    protected_root_count=len(critic_result.applied.get("protected_root_ids", [])),
-                )
-                for warning in critic_result.warnings:
-                    _append_unique_warning(warnings, warning)
+        llm_critic_executed = True
+        try:
+            critic_result = await run_llm_critic_stage(
+                reconciled=reconciled,
+                source_url=classification.normalized_url,
+                detected_type=classification.detected_type.value,
+                providers=providers,
+                initial_context=gathered_context,
+                pipeline_outputs=pipeline_outputs_for_prompt,
+                max_concurrency=orchestrator.max_concurrent_agents,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("%s stage failed", STAGE_LLM_CRITIC)
+            _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
+        else:
+            reconciled = critic_result.reconciled
+            critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
+            logger.info(
+                "%s: proposed_drop=%d applied_drop=%d protected_roots=%d",
+                STAGE_LLM_CRITIC,
+                critic_result.applied.get("proposed_drop_count", 0),
+                critic_result.applied.get("applied_drop_count", 0),
+                len(critic_result.applied.get("protected_root_ids", [])),
+            )
+            for warning in critic_result.warnings:
+                _append_unique_warning(warnings, warning)
 
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,
         memberships=reconciled.memberships,
         contributions=reconciled.contributions,
     )
-    with tracer.trace_stage(
+    strict_batch = StrictSchemaValidator().validate_batch(strict_validation_entities)
+    logger.info(
+        "%s: valid=%d invalid=%d",
         STAGE_STRICT_VALIDATION,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        strict_batch = StrictSchemaValidator().validate_batch(strict_validation_entities)
-        stage_span.set_attributes(
-            valid_count=len(strict_batch.valid_entities),
-            invalid_count=len(strict_batch.invalid_entities),
-        )
+        len(strict_batch.valid_entities),
+        len(strict_batch.invalid_entities),
+    )
     for warning in strict_batch.warnings:
         _append_unique_warning(warnings, f"Strict validation: {warning}")
 
     jsonld_context = _extract_jsonld_context()
-    with tracer.trace_stage(
-        STAGE_OUTPUT_ASSEMBLY,
-        output_format=output_format,
-    ) as stage_span:
-        try:
-            assembled_output = assemble_output(
-                reconciled,
-                strict_batch,
-                root_entity_type=_root_entity_type_for_detected_type(
-                    classification.detected_type.value,
-                ),
-            )
-        except RootEntityValidationError as exc:
-            stage_span.set_attribute("status", "error")
-            failure_message = (
-                f"Root {exc.entity_type} entity '{exc.entity_id}' failed strict validation"
-            )
-            error_payload = V2ErrorResponse(
-                error_type=V2ErrorType.VALIDATION_ERROR,
-                detail=failure_message,
-                source_url=classification.normalized_url,
-                errors=[
-                    V2FieldError(
-                        field=error.get("path", "<root>"),
-                        message=error.get("message", "validation error"),
-                        value=error.get("expected"),
-                    )
-                    for error in exc.validation_errors
-                ],
-            )
-            return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content=error_payload.model_dump(mode="json", exclude_none=True),
-            )
-        except ValueError as exc:
-            stage_span.set_attribute("status", "warning")
-            assembled_output = _build_rootless_assembled_output(
-                reconciled=reconciled,
-                strict_batch=strict_batch,
-                root_warning=str(exc),
-            )
-            stage_span.set_attributes(
-                root_present=False,
-                entity_count=len(assembled_output.related_entities),
-                excluded_count=len(assembled_output.excluded_entities),
-            )
-        else:
-            root_present = isinstance(assembled_output.root_entity, dict)
-            stage_span.set_attributes(
-                root_present=root_present,
-                entity_count=len(assembled_output.related_entities) + (1 if root_present else 0),
-                excluded_count=len(assembled_output.excluded_entities),
-            )
+    try:
+        assembled_output = assemble_output(
+            reconciled,
+            strict_batch,
+            root_entity_type=_root_entity_type_for_detected_type(
+                classification.detected_type.value,
+            ),
+        )
+    except RootEntityValidationError as exc:
+        failure_message = (
+            f"Root {exc.entity_type} entity '{exc.entity_id}' failed strict validation"
+        )
+        logger.warning("%s: %s", STAGE_OUTPUT_ASSEMBLY, failure_message)
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.VALIDATION_ERROR,
+            detail=failure_message,
+            source_url=classification.normalized_url,
+            errors=[
+                V2FieldError(
+                    field=error.get("path", "<root>"),
+                    message=error.get("message", "validation error"),
+                    value=error.get("expected"),
+                )
+                for error in exc.validation_errors
+            ],
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+    except ValueError as exc:
+        logger.warning("%s: rootless output — %s", STAGE_OUTPUT_ASSEMBLY, exc)
+        assembled_output = _build_rootless_assembled_output(
+            reconciled=reconciled,
+            strict_batch=strict_batch,
+            root_warning=str(exc),
+        )
 
     if critic_pruned_excluded_entities:
         for excluded_entity in critic_pruned_excluded_entities:
@@ -516,127 +450,118 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for warning in assembled_output.warnings:
         _append_unique_warning(warnings, warning)
 
-    with tracer.trace_stage(
-        STAGE_LINK_VERACITY,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        entities_for_link_validation: list[dict[str, Any]] = []
-        if isinstance(assembled_output.root_entity, dict):
-            entities_for_link_validation.append(deepcopy(assembled_output.root_entity))
-        entities_for_link_validation.extend(
-            deepcopy(entity)
-            for entity in assembled_output.related_entities
-            if isinstance(entity, dict)
-        )
+    entities_for_link_validation: list[dict[str, Any]] = []
+    if isinstance(assembled_output.root_entity, dict):
+        entities_for_link_validation.append(deepcopy(assembled_output.root_entity))
+    entities_for_link_validation.extend(
+        deepcopy(entity)
+        for entity in assembled_output.related_entities
+        if isinstance(entity, dict)
+    )
 
-        try:
-            link_veracity_result = await run_link_veracity_stage(
-                entities=entities_for_link_validation,
-                source_url=classification.normalized_url,
-                providers=providers,
-                max_concurrency=orchestrator.max_concurrent_agents,
+    try:
+        link_veracity_result = await run_link_veracity_stage(
+            entities=entities_for_link_validation,
+            source_url=classification.normalized_url,
+            providers=providers,
+            max_concurrency=orchestrator.max_concurrent_agents,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("%s stage failed", STAGE_LINK_VERACITY)
+        _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
+    else:
+        logger.info(
+            "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d",
+            STAGE_LINK_VERACITY,
+            link_veracity_result.checked_count,
+            link_veracity_result.supported_count,
+            link_veracity_result.unsupported_count,
+            link_veracity_result.failed_count,
+            len(link_veracity_result.invalid_links),
+        )
+        _append_unique_warning(
+            warnings,
+            (
+                "Link veracity summary: "
+                f"checked={link_veracity_result.checked_count}, "
+                f"supported={link_veracity_result.supported_count}, "
+                f"unsupported={link_veracity_result.unsupported_count}, "
+                f"failed={link_veracity_result.failed_count}"
+            ),
+        )
+        for warning in link_veracity_result.warnings:
+            _append_unique_warning(warnings, warning)
+
+        invalid_links = set(link_veracity_result.invalid_links)
+        if invalid_links:
+            assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+                assembled=assembled_output,
+                invalid_links=invalid_links,
+                entity_link_map=link_veracity_result.entity_link_map,
+                article_identifier_link_map=link_veracity_result.article_identifier_link_map,
             )
-        except Exception as exc:  # noqa: BLE001
-            stage_span.set_attribute("status", "error")
-            _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
-        else:
-            stage_span.set_attributes(
-                checked_count=link_veracity_result.checked_count,
-                supported_count=link_veracity_result.supported_count,
-                unsupported_count=link_veracity_result.unsupported_count,
-                failed_count=link_veracity_result.failed_count,
-                invalid_link_count=len(link_veracity_result.invalid_links),
-            )
-            _append_unique_warning(
-                warnings,
-                (
-                    "Link veracity summary: "
-                    f"checked={link_veracity_result.checked_count}, "
-                    f"supported={link_veracity_result.supported_count}, "
-                    f"unsupported={link_veracity_result.unsupported_count}, "
-                    f"failed={link_veracity_result.failed_count}"
-                ),
-            )
-            for warning in link_veracity_result.warnings:
+            for warning in link_pruning_warnings:
                 _append_unique_warning(warnings, warning)
 
-            invalid_links = set(link_veracity_result.invalid_links)
-            if invalid_links:
-                assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
-                    assembled=assembled_output,
-                    invalid_links=invalid_links,
-                    entity_link_map=link_veracity_result.entity_link_map,
-                    article_identifier_link_map=link_veracity_result.article_identifier_link_map,
-                )
-                for warning in link_pruning_warnings:
-                    _append_unique_warning(warnings, warning)
-
-    with tracer.trace_stage(
+    shacl_graph_payload = build_jsonld_output(
+        assembled=assembled_output,
+        jsonld_context=jsonld_context,
+    )
+    graph_nodes = shacl_graph_payload.get("@graph")
+    logger.info(
+        "%s: entities=%d context_terms=%d",
         STAGE_JSONLD_BUILD,
-        output_format=output_format,
-    ) as stage_span:
-        shacl_graph_payload = build_jsonld_output(
-            assembled=assembled_output,
-            jsonld_context=jsonld_context,
-        )
-        graph_nodes = shacl_graph_payload.get("@graph")
-        stage_span.set_attributes(
-            entity_count=len(graph_nodes) if isinstance(graph_nodes, list) else 0,
-            context_terms=len(jsonld_context),
-        )
+        len(graph_nodes) if isinstance(graph_nodes, list) else 0,
+        len(jsonld_context),
+    )
 
-    with tracer.trace_stage(
-        STAGE_SHACL_GATE,
-        detected_type=classification.detected_type.value,
-    ) as stage_span:
-        shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
-        if shacl_data_graph is None:
-            stage_span.set_attribute("status", "skipped")
-            _append_unique_warning(
-                warnings,
-                "SHACL validation skipped: unable to parse assembled graph payload",
+    shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
+    if shacl_data_graph is None:
+        logger.warning("%s: skipped — unable to parse assembled graph payload", STAGE_SHACL_GATE)
+        _append_unique_warning(
+            warnings,
+            "SHACL validation skipped: unable to parse assembled graph payload",
+        )
+    else:
+        try:
+            shacl_result = SHACLValidator().validate_graph(
+                shacl_data_graph,
+                load_ontology_shapes_graph(),
             )
+        except SHACLRuntimeUnavailableError as exc:
+            logger.warning("%s: skipped — %s", STAGE_SHACL_GATE, exc)
+            _append_unique_warning(warnings, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("%s failed", STAGE_SHACL_GATE)
+            _append_unique_warning(warnings, f"SHACL validation failed: {exc}")
         else:
-            try:
-                shacl_result = SHACLValidator().validate_graph(
-                    shacl_data_graph,
-                    load_ontology_shapes_graph(),
-                )
-            except SHACLRuntimeUnavailableError as exc:
-                stage_span.set_attribute("status", "skipped")
-                _append_unique_warning(warnings, str(exc))
-            except Exception as exc:  # noqa: BLE001
-                stage_span.set_attribute("status", "error")
+            for violation in shacl_result.violations:
                 _append_unique_warning(
                     warnings,
-                    f"SHACL validation failed: {exc}",
+                    (
+                        "SHACL violation: "
+                        f"focus={violation.get('focusNode')}, "
+                        f"path={violation.get('path')}, "
+                        f"message={violation.get('message')}"
+                    ),
                 )
-            else:
-                for violation in shacl_result.violations:
-                    _append_unique_warning(
-                        warnings,
-                        (
-                            "SHACL violation: "
-                            f"focus={violation.get('focusNode')}, "
-                            f"path={violation.get('path')}, "
-                            f"message={violation.get('message')}"
-                        ),
-                    )
-                for shacl_warning in shacl_result.warnings:
-                    _append_unique_warning(
-                        warnings,
-                        (
-                            "SHACL warning: "
-                            f"focus={shacl_warning.get('focusNode')}, "
-                            f"path={shacl_warning.get('path')}, "
-                            f"message={shacl_warning.get('message')}"
-                        ),
-                    )
-                stage_span.set_attributes(
-                    conforms=shacl_result.conforms,
-                    violation_count=len(shacl_result.violations),
-                    warning_count=len(shacl_result.warnings),
+            for shacl_warning in shacl_result.warnings:
+                _append_unique_warning(
+                    warnings,
+                    (
+                        "SHACL warning: "
+                        f"focus={shacl_warning.get('focusNode')}, "
+                        f"path={shacl_warning.get('path')}, "
+                        f"message={shacl_warning.get('message')}"
+                    ),
                 )
+            logger.info(
+                "%s: conforms=%s violations=%d warnings=%d",
+                STAGE_SHACL_GATE,
+                shacl_result.conforms,
+                len(shacl_result.violations),
+                len(shacl_result.warnings),
+            )
 
     response_output: V2JSONLDOutput | V2JSONOutputEnvelope
     if output_format == "jsonld":

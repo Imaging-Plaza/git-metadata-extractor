@@ -48,7 +48,6 @@ dependencies = [
     "griffe<2",
     "httpx",
     "markdownify==1.2.0",
-    "logfire>=4.14.2",
     "pyshacl==0.28.1",
 ]
 

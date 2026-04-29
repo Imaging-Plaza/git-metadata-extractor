@@ -34,9 +34,6 @@ def _get_optional_env(name: str) -> str | None:
 
 @dataclass(slots=True)
 class V2Config:
-    V2_ENABLE_LOGFIRE: bool = field(
-        default_factory=lambda: _get_env_bool("V2_ENABLE_LOGFIRE", default_value=True),
-    )
     V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = field(
         default_factory=lambda: parse_agent_runtime(
             os.getenv("V2_AGENT_RUNTIME_DEFAULT"),
@@ -44,7 +41,6 @@ class V2Config:
             field_name="V2_AGENT_RUNTIME_DEFAULT",
         ),
     )
-    LOGFIRE_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("LOGFIRE_TOKEN"))
     GITHUB_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("GITHUB_TOKEN"))
 
     def validate_preflight(self) -> None:
