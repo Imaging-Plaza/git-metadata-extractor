@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import requests
 from pydantic_ai import Tool
+
+from src.v2.observation.query_log import record_query
+
+if TYPE_CHECKING:
+    from src.v2.ingest.cache import ProviderCache
 
 logger = logging.getLogger(__name__)
 
@@ -127,25 +132,19 @@ def _extract_results(payload: dict[str, Any], *, max_results: int) -> list[dict[
 def make_duckduckgo_search_tool(
     *,
     http_get: Callable[..., Any] | None = None,
+    cache: ProviderCache | None = None,
 ) -> Tool:
-    """Create a DuckDuckGo-backed internet search tool."""
+    """Create a DuckDuckGo-backed internet search tool.
+
+    When `cache` is provided, successful results are persisted under
+    `(query, max_results)` so repeated lookups avoid the network round-trip.
+    Errors and empty-query inputs are never cached so they retry next time.
+    """
 
     requester = http_get or requests.get
 
-    def search_on_the_internet(query: str, max_results: int = DEFAULT_MAX_RESULTS) -> dict[str, Any]:
-        """Search the internet with DuckDuckGo and return compact result context.
-
-        Args:
-            query: Search query string.
-            max_results: Max result rows to return (1..10).
-        """
-
+    def _do_search(query: str, max_results: int) -> dict[str, Any]:
         normalized_query = _to_non_empty_string(query) or ""
-        logger.info(
-            "tool call: search_on_the_internet — query=%r max_results=%r",
-            normalized_query,
-            max_results,
-        )
         if not normalized_query:
             return {
                 "query": normalized_query,
@@ -195,6 +194,51 @@ def make_duckduckgo_search_tool(
             "result_count": len(results),
             "results": results,
         }
+
+    def search_on_the_internet(query: str, max_results: int = DEFAULT_MAX_RESULTS) -> dict[str, Any]:
+        """Search the internet with DuckDuckGo and return compact result context.
+
+        Args:
+            query: Search query string.
+            max_results: Max result rows to return (1..10).
+        """
+
+        normalized_query = _to_non_empty_string(query) or ""
+        logger.info(
+            "tool call: search_on_the_internet — query=%r max_results=%r",
+            normalized_query,
+            max_results,
+        )
+        if normalized_query:
+            record_query(service="duckduckgo.search", query=normalized_query)
+
+        if cache is None or not normalized_query:
+            return _do_search(query, max_results)
+
+        # Lazy import keeps this module free of v2 cache deps when used standalone.
+        from src.v2.ingest.cache import ProviderCache as _PC  # noqa: PLC0415
+
+        limit = _normalize_max_results(max_results)
+        key = _PC.make_key(
+            "duckduckgo",
+            "search_on_the_internet",
+            query=normalized_query,
+            max_results=limit,
+        )
+        cached = cache.get(key)
+        if isinstance(cached, dict):
+            logger.info(
+                "duckduckgo cache hit — query=%r max_results=%d",
+                normalized_query,
+                limit,
+            )
+            return cached
+
+        result = _do_search(query, max_results)
+        # Only cache successful searches; let errors retry next time.
+        if isinstance(result, dict) and not result.get("error"):
+            cache.set(key, result)
+        return result
 
     return Tool(
         search_on_the_internet,

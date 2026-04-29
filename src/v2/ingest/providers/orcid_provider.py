@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import (
     ORCIDAffiliation,
     ORCIDProvider,
@@ -103,11 +104,13 @@ class RealORCIDProvider(ORCIDProvider):
         base_url: str = "https://pub.orcid.org/v3.0",
         timeout: int = 20,
         rate_limiter: RateLimiter | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         super().__init__(provider_name="orcid", rate_limiter=rate_limiter)
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._cache = cache
 
     def _http_client(self) -> requests.Session:
         if self._session is None:
@@ -171,29 +174,39 @@ class RealORCIDProvider(ORCIDProvider):
     def get_person_by_orcid(self, orcid_id: str) -> ORCIDRecord:
         normalized_orcid = self._normalize_orcid(orcid_id)
 
-        person_payload = self._request(f"/{normalized_orcid}/person")
-        employment_payload = self._request(f"/{normalized_orcid}/employments")
-        education_payload = self._request(f"/{normalized_orcid}/educations")
+        def _fetch() -> ORCIDRecord:
+            person_payload = self._request(f"/{normalized_orcid}/person")
+            employment_payload = self._request(f"/{normalized_orcid}/employments")
+            education_payload = self._request(f"/{normalized_orcid}/educations")
 
-        given_name = _get_nested_value(person_payload, ["name", "given-names", "value"])
-        family_name = _get_nested_value(person_payload, ["name", "family-name", "value"])
-        name_parts = [part for part in [given_name, family_name] if part]
-        full_name = " ".join(name_parts) if name_parts else normalized_orcid
+            given_name = _get_nested_value(person_payload, ["name", "given-names", "value"])
+            family_name = _get_nested_value(person_payload, ["name", "family-name", "value"])
+            name_parts = [part for part in [given_name, family_name] if part]
+            full_name = " ".join(name_parts) if name_parts else normalized_orcid
 
-        employment = _extract_affiliations(employment_payload, "employment-summary")
-        education = _extract_affiliations(education_payload, "education-summary")
-        affiliations = sorted(
-            {
-                affiliation["organization"]
-                for affiliation in [*employment, *education]
-                if affiliation.get("organization")
-            },
-        )
+            employment = _extract_affiliations(employment_payload, "employment-summary")
+            education = _extract_affiliations(education_payload, "education-summary")
+            affiliations = sorted(
+                {
+                    affiliation["organization"]
+                    for affiliation in [*employment, *education]
+                    if affiliation.get("organization")
+                },
+            )
 
-        return ORCIDRecord(
-            orcid_id=normalized_orcid,
-            name=full_name,
-            employment=employment,
-            education=education,
-            affiliations=affiliations,
+            return ORCIDRecord(
+                orcid_id=normalized_orcid,
+                name=full_name,
+                employment=employment,
+                education=education,
+                affiliations=affiliations,
+            )
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("orcid", "get_person_by_orcid", orcid=normalized_orcid)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"orcid.get_person_by_orcid({normalized_orcid})",
         )

@@ -5,6 +5,7 @@ import re
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import (
     GitHubProvider,
     ProviderNotFoundError,
@@ -294,6 +295,7 @@ class RealGitHubProvider(GitHubProvider):
         user_lookup: UserLookup | None = None,
         organization_lookup: OrganizationLookup | None = None,
         rate_limiter: RateLimiter | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         super().__init__(provider_name="github", rate_limiter=rate_limiter)
         self._include_user_repositories = include_user_repositories
@@ -301,6 +303,7 @@ class RealGitHubProvider(GitHubProvider):
         self._gimie_extractor = gimie_extractor
         self._user_lookup = user_lookup
         self._organization_lookup = organization_lookup
+        self._cache = cache
 
         self._users_parser: Any | None = None
         self._orgs_parser: Any | None = None
@@ -332,20 +335,52 @@ class RealGitHubProvider(GitHubProvider):
         self._gimie_extractor = extract_gimie
         return extract_gimie
 
+    def _get_or_fetch_gimie_payload(self, repository_url: str) -> Any:
+        """Return the GIMIE JSON-LD payload, fetching once across cache layers.
+
+        Order: in-memory dict → persistent `ProviderCache` → live GIMIE call.
+        Both layers are populated on a fresh fetch.
+        """
+        payload = self._gimie_payload_cache.get(repository_url)
+        if payload is not None:
+            return payload
+
+        cache_key: str | None = None
+        if self._cache is not None:
+            cache_key = ProviderCache.make_key(
+                "github",
+                "gimie_payload",
+                repository_url=repository_url,
+            )
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    "provider cache hit: github.gimie_payload(%s)",
+                    repository_url,
+                )
+                self._gimie_payload_cache[repository_url] = cached
+                return cached
+
+        payload = self._run_with_rate_limit(
+            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
+        )
+        if payload is not None:
+            self._gimie_payload_cache[repository_url] = payload
+            if self._cache is not None and cache_key is not None:
+                self._cache.set(cache_key, payload)
+        return payload
+
     def _get_repository_node(self, full_name: str) -> JSONMapping:
         repository_url = _normalize_repo_url(full_name)
-        gimie_payload = self._gimie_payload_cache.get(repository_url)
-        if gimie_payload is None:
-            gimie_payload = self._run_with_rate_limit(
-                lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
-            )
-            self._gimie_payload_cache[repository_url] = gimie_payload
+        gimie_payload = self._get_or_fetch_gimie_payload(repository_url)
         return _extract_repository_node(gimie_payload)
 
     def get_repository_jsonld(self, full_name: str) -> dict[str, Any]:
-        """Return the cached raw GIMIE JSON-LD payload, or an empty dict."""
+        """Return the raw GIMIE JSON-LD payload, or an empty dict."""
         repository_url = _normalize_repo_url(full_name)
         payload = self._gimie_payload_cache.get(repository_url)
+        if payload is None:
+            payload = self._get_or_fetch_gimie_payload(repository_url)
         return payload if isinstance(payload, dict) else {}
 
     def _resolve_user_lookup(self) -> UserLookup:
@@ -441,20 +476,50 @@ class RealGitHubProvider(GitHubProvider):
         }
 
     def get_user(self, username: str) -> dict[str, Any]:
-        try:
-            return self._run_with_rate_limit(
-                lambda: self._resolve_user_lookup()(username),
-            )
-        except ValueError as exc:
-            raise ProviderNotFoundError(str(exc)) from exc
+        def _fetch() -> dict[str, Any]:
+            try:
+                return self._run_with_rate_limit(
+                    lambda: self._resolve_user_lookup()(username),
+                )
+            except ValueError as exc:
+                raise ProviderNotFoundError(str(exc)) from exc
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github",
+            "get_user",
+            username=username,
+            include_repositories=self._include_user_repositories,
+        )
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_user({username})",
+        )
 
     def get_organization(self, org_name: str) -> dict[str, Any]:
-        try:
-            return self._run_with_rate_limit(
-                lambda: self._resolve_organization_lookup()(org_name),
-            )
-        except ValueError as exc:
-            raise ProviderNotFoundError(str(exc)) from exc
+        def _fetch() -> dict[str, Any]:
+            try:
+                return self._run_with_rate_limit(
+                    lambda: self._resolve_organization_lookup()(org_name),
+                )
+            except ValueError as exc:
+                raise ProviderNotFoundError(str(exc)) from exc
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github",
+            "get_organization",
+            org_name=org_name,
+            include_repositories=self._include_organization_repositories,
+        )
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_organization({org_name})",
+        )
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
         repository_url = _normalize_repo_url(full_name)

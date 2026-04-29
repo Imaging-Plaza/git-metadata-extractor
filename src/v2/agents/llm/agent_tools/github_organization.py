@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 from pydantic_ai import Tool
 
+from src.v2.observation.query_log import record_query
+
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import GitHubProvider
 
@@ -99,6 +101,10 @@ def make_github_organization_metadata_tool(github_provider: GitHubProvider) -> T
             "tool call: get_github_organization_metadata — query=%r normalized=%r",
             org_name,
             normalized_org_name,
+        )
+        record_query(
+            service="github.get_organization",
+            query=normalized_org_name or str(org_name),
         )
         if not normalized_org_name:
             return {

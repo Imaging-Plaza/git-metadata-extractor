@@ -28,7 +28,7 @@ from .v1.data_models import (
     APIOutput,
     ResourceType,
 )
-from .v1.utils.enhanced_logging import AsyncRequestContext, setup_logging
+from .v2.log_context import AsyncRequestContext, setup_logging
 from .v1.utils.github_dependency import validate_github_token
 
 # Setup enhanced logging with colors

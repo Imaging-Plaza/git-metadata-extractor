@@ -9,11 +9,12 @@ from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+    make_fetch_link_content_tool,
 )
-from src.v2.agents.llm.agent_tools.uuid import generate_uuid_v4_tool
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
-from src.v2.agents.models import AgentResult, ProviderSet
+from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentContributionShape
 from src.v2.schema.models.strict import ContributionModel
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
@@ -76,12 +77,14 @@ class LLMContributionAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
 
     async def run(
         self,
@@ -91,8 +94,18 @@ class LLMContributionAgentV2:
         del providers
         contribution_seed = _resolve_contribution_seed(context)
 
+        stamp_current_agent(
+            name="contribution_agent",
+            context={"contribution_seed": contribution_seed},
+        )
+
+        uuid_value = context.get("uuid")
+        if not isinstance(uuid_value, str) or not uuid_value.strip():
+            uuid_value = generate_uuid()
+
         llm_input: dict[str, Any] = {
             "contribution_seed": contribution_seed,
+            "uuid": uuid_value,
             "detected_type": context.get("detected_type"),
             "source_url": context.get("source_url"),
             "known_persons": _list_of_dicts(context.get("known_persons")),
@@ -123,7 +136,7 @@ class LLMContributionAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=AgentContributionShape,
-                    tools=[generate_uuid_v4_tool, fetch_link_content_via_selenium_tool],
+                    tools=[make_fetch_link_content_tool(self._cache)],
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )

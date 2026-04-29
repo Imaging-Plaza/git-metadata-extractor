@@ -60,8 +60,9 @@ def test_run_link_veracity_stage_counts_and_warnings(monkeypatch) -> None:
             *,
             llm_runtime: Any | None = None,
             llm_call_timeout_seconds: float = 180.0,
+            cache: Any | None = None,
         ) -> None:
-            del llm_runtime, llm_call_timeout_seconds
+            del llm_runtime, llm_call_timeout_seconds, cache
 
         async def run(
             self,
@@ -156,8 +157,9 @@ def test_run_link_veracity_stage_scans_entities_and_derives_article_doi_link(mon
             *,
             llm_runtime: Any | None = None,
             llm_call_timeout_seconds: float = 180.0,
+            cache: Any | None = None,
         ) -> None:
-            del llm_runtime, llm_call_timeout_seconds
+            del llm_runtime, llm_call_timeout_seconds, cache
 
         async def run(
             self,

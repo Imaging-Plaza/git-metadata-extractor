@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Callable
 
-from src.v2.quality.schema_validation import (
+from src.v2.validation.schema_validation import (
     BatchValidationResult,
     StrictSchemaValidator,
     ValidationResult,

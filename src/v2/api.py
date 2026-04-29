@@ -2,22 +2,26 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from copy import deepcopy
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
+from time import perf_counter
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Path, Query, Request, status
 from fastapi.responses import JSONResponse
 from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
 from src.v2.dependencies import get_provider_set
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.observation.query_log import QueryLog, query_log_var
 from src.v2.schema import load_jsonld_context
 from src.v2.api_models import (
     V2ErrorResponse,
@@ -38,18 +42,20 @@ from src.v2.pipeline.stages import (
     build_json_output,
     build_jsonld_output,
     compute_stats,
+    promote_failed_id_entities,
     reconcile_entities,
     run_llm_critic_stage,
     run_llm_dedup_stage,
     run_link_veracity_stage,
+    validate_ownership,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from src.v2.quality import (
+from src.v2.validation import (
     SHACLValidator,
     StrictSchemaValidator,
     load_ontology_shapes_graph,
 )
-from src.v2.quality.shacl_validation import SHACLRuntimeUnavailableError
+from src.v2.validation.shacl_validation import SHACLRuntimeUnavailableError
 
 MIN_SUPPORTED_PYTHON = (3, 10)
 PACKAGE_NAME = "git-metadata-extractor"
@@ -82,6 +88,31 @@ STAGE_LINK_VERACITY = "link_veracity"
 v2_router = APIRouter(prefix="/v2")
 
 
+_TRUTHY_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
+
+
+def _is_pipeline_cache_enabled() -> bool:
+    """Read `V2_PIPELINE_CACHE_ENABLED` env var (default true).
+
+    When false, `extract()` neither reads nor writes the pipeline-level cache,
+    so every request runs the full pipeline. Sub-level caches (provider
+    responses, agent verdicts, Selenium fetches, link-veracity) are unaffected.
+    """
+    raw = os.getenv("V2_PIPELINE_CACHE_ENABLED")
+    if raw is None:
+        return True
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def _format_duration(seconds: float) -> str:
+    """Render a duration in compact human form, e.g. '7.3s' or '4m 12s'."""
+    if seconds < 60.0:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    remainder = seconds - minutes * 60
+    return f"{minutes}m {remainder:.0f}s"
+
+
 def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
     try:
         graph = RDFGraph()
@@ -109,7 +140,10 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     if isinstance(existing, PipelineOrchestrator):
         return existing
 
-    orchestrator = PipelineOrchestrator()
+    cache = getattr(request.app.state, "v2_provider_cache", None)
+    if not isinstance(cache, ProviderCache):
+        cache = None
+    orchestrator = PipelineOrchestrator(cache=cache)
     request.app.state.v2_orchestrator = orchestrator
     return orchestrator
 
@@ -199,7 +233,26 @@ def _build_rootless_assembled_output(
     response_model_exclude_none=True,
 )
 async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
-    full_path: str,
+    full_path: Annotated[
+        str,
+        Path(
+            description="GitHub repository, user, or organization URL or handle.",
+            openapi_examples={
+                "gimie": {
+                    "summary": "GIMIE repository",
+                    "value": "https://github.com/sdsc-ordes/gimie",
+                },
+                "sdsc-ordes": {
+                    "summary": "SDSC ORDES organization",
+                    "value": "https://github.com/sdsc-ordes",
+                },
+                "cmdoret": {
+                    "summary": "cmdoret user",
+                    "value": "https://github.com/cmdoret",
+                },
+            },
+        ),
+    ],
     request: Request,
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
@@ -246,6 +299,8 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         default=config.V2_AGENT_RUNTIME_DEFAULT,
         field_name="agent_runtime",
     )
+    total_started_at = perf_counter()
+    link_veracity_seconds = 0.0
     logger.info(
         "extract: run_id=%s url=%s detected_type=%s runtime=%s",
         run_id,
@@ -253,6 +308,52 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         classification.detected_type.value,
         resolved_runtime.value,
     )
+
+    # Per-request query log: every external-service tool call lands here.
+    query_log = QueryLog(
+        run_id=run_id,
+        extract_full_path=classification.normalized_url,
+    )
+    query_log_var.set(query_log)
+
+    # Resolve the cache singleton once. Sub-stages always receive it (so
+    # provider caches, agent verdicts, Selenium fetches, link-veracity, and
+    # DuckDuckGo searches all keep working). The pipeline-level lookup/store
+    # is gated separately by V2_PIPELINE_CACHE_ENABLED so it can be toggled
+    # off without disabling the sub-caches.
+    pipeline_cache = getattr(request.app.state, "v2_provider_cache", None)
+    if not isinstance(pipeline_cache, ProviderCache):
+        pipeline_cache = None
+    pipeline_cache_enabled = pipeline_cache is not None and _is_pipeline_cache_enabled()
+    pipeline_cache_key: str | None = None
+    if pipeline_cache_enabled:
+        pipeline_cache_key = ProviderCache.make_key(
+            "pipeline",
+            "extract",
+            url=classification.normalized_url,
+            output_format=output_format,
+            agent_runtime=resolved_runtime.value,
+            include_context_summary=bool(include_context_summary),
+        )
+        cached_response = pipeline_cache.get(pipeline_cache_key)
+        if isinstance(cached_response, dict):
+            try:
+                response_model = V2ExtractResponse.model_validate(cached_response)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "pipeline cache hit but cached payload failed validation; "
+                    "falling through to fresh extraction (run_id=%s)",
+                    run_id,
+                )
+            else:
+                cached_seconds = perf_counter() - total_started_at
+                logger.info(
+                    "pipeline cache hit: url=%s run_id=%s elapsed=%s",
+                    classification.normalized_url,
+                    run_id,
+                    _format_duration(cached_seconds),
+                )
+                return response_model
 
     try:
         orchestrator = _get_orchestrator(request)
@@ -362,6 +463,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 initial_context=gathered_context,
                 pipeline_outputs=pipeline_outputs_for_prompt,
                 max_concurrency=orchestrator.max_concurrent_agents,
+                cache=pipeline_cache,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("%s stage failed", STAGE_LLM_CRITIC)
@@ -459,12 +561,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         if isinstance(entity, dict)
     )
 
+    provider_cache = getattr(request.app.state, "v2_provider_cache", None)
+    if not isinstance(provider_cache, ProviderCache):
+        provider_cache = None
+
+    link_veracity_started_at = perf_counter()
     try:
         link_veracity_result = await run_link_veracity_stage(
             entities=entities_for_link_validation,
             source_url=classification.normalized_url,
             providers=providers,
             max_concurrency=orchestrator.max_concurrent_agents,
+            cache=provider_cache,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("%s stage failed", STAGE_LINK_VERACITY)
@@ -494,14 +602,51 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
         invalid_links = set(link_veracity_result.invalid_links)
         if invalid_links:
-            assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+            assembled_output, id_rewrites, promotion_warnings = promote_failed_id_entities(
                 assembled=assembled_output,
                 invalid_links=invalid_links,
-                entity_link_map=link_veracity_result.entity_link_map,
-                article_identifier_link_map=link_veracity_result.article_identifier_link_map,
             )
-            for warning in link_pruning_warnings:
+            for warning in promotion_warnings:
                 _append_unique_warning(warnings, warning)
+            if id_rewrites:
+                logger.info(
+                    "%s: promoted %d entity id(s) past failed url(s)",
+                    STAGE_LINK_VERACITY,
+                    len(id_rewrites),
+                )
+                # The rewritten entities now expose their new id; remove the
+                # old urls from invalid_links so we don't also try to prune them.
+                invalid_links = invalid_links - set(id_rewrites)
+                # Rebuild entity_link_map with the new ids so downstream pruning
+                # acts on the right entity references.
+                rebuilt_entity_link_map: dict[str, list[str]] = {}
+                for old_id, links in link_veracity_result.entity_link_map.items():
+                    new_id = id_rewrites.get(old_id, old_id)
+                    rebuilt_entity_link_map.setdefault(new_id, []).extend(links)
+            else:
+                rebuilt_entity_link_map = link_veracity_result.entity_link_map
+
+            if invalid_links:
+                assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+                    assembled=assembled_output,
+                    invalid_links=invalid_links,
+                    entity_link_map=rebuilt_entity_link_map,
+                    article_identifier_link_map=link_veracity_result.article_identifier_link_map,
+                )
+                for warning in link_pruning_warnings:
+                    _append_unique_warning(warnings, warning)
+
+    link_veracity_seconds = perf_counter() - link_veracity_started_at
+
+    assembled_output, ownership_warnings = validate_ownership(assembled_output)
+    if ownership_warnings:
+        logger.info(
+            "ownership_check: dropped %d invalid pulse:owns entr%s",
+            len(ownership_warnings),
+            "y" if len(ownership_warnings) == 1 else "ies",
+        )
+    for warning in ownership_warnings:
+        _append_unique_warning(warnings, warning)
 
     shacl_graph_payload = build_jsonld_output(
         assembled=assembled_output,
@@ -613,7 +758,23 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         entities_count=final_entity_count,
     )
 
-    return V2ExtractResponse(
+    total_seconds = perf_counter() - total_started_at
+    orchestrator_seconds = pipeline_result.duration_ms / 1000.0
+    other_seconds = max(0.0, total_seconds - orchestrator_seconds - link_veracity_seconds)
+    logger.info(
+        "extract complete: run_id=%s url=%s entities=%d warnings=%d "
+        "total=%s (orchestrator=%s, link_veracity=%s, other=%s)",
+        run_id,
+        classification.normalized_url,
+        final_entity_count,
+        len(warnings),
+        _format_duration(total_seconds),
+        _format_duration(orchestrator_seconds),
+        _format_duration(link_veracity_seconds),
+        _format_duration(other_seconds),
+    )
+
+    response_model = V2ExtractResponse(
         source_url=classification.normalized_url,
         detected_type=classification.detected_type.value,
         output_format=output_format,
@@ -622,6 +783,24 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         warnings=warnings,
         stats=stats,
     )
+
+    if pipeline_cache is not None and pipeline_cache_key is not None:
+        try:
+            pipeline_cache.set(
+                pipeline_cache_key,
+                response_model.model_dump(mode="json", exclude_none=True),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "failed to write pipeline cache (run_id=%s)",
+                run_id,
+            )
+
+    written_log_path = query_log.write()
+    if written_log_path is not None:
+        logger.info("query log written: %s", written_log_path)
+
+    return response_model
 
 
 @v2_router.post(

@@ -16,6 +16,8 @@ from src.v2.agents.llm.agent_tools.repository_corpus_grep import (
 )
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +253,10 @@ class LLMContextSummaryAgentV2:
         self,
         *,
         llm_runtime: V2LLMRuntime | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         self._llm_runtime = llm_runtime or V2LLMRuntime()
+        self._cache = cache
 
     async def run(
         self,
@@ -262,6 +266,11 @@ class LLMContextSummaryAgentV2:
         del providers
         detected_type = _to_non_empty_string(context.get("detected_type")) or "repository"
         source_url = _to_non_empty_string(context.get("source_url")) or ""
+
+        stamp_current_agent(
+            name="context_summary_agent",
+            context={"source_url": source_url} if source_url else {},
+        )
         gathered_context = context.get("gathered_context")
         if not isinstance(gathered_context, dict):
             gathered_context = {}
@@ -297,7 +306,7 @@ class LLMContextSummaryAgentV2:
                 output_type=LLMContextSummaryOutput,
                 tools=[
                     make_repository_corpus_grep_tool(corpus_documents),
-                    make_duckduckgo_search_tool(),
+                    make_duckduckgo_search_tool(cache=self._cache),
                 ],
             )
         except LLMRuntimeError as exc:

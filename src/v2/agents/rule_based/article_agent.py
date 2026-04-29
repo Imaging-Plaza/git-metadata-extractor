@@ -12,7 +12,7 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
-from src.v2.normalizers.string_utils import normalize_string, strip_accents
+from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 
 DEFAULT_QUERY_CAP = 8
 DOI_PREFIX = "doi"

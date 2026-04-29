@@ -11,14 +11,20 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._verdict_cache import (
+    get_cached_agent_verdict,
+    store_agent_verdict,
+)
 from src.v2.agents.llm.agent_tools.email_hash import hash_user_email_tool
 from src.v2.agents.llm.agent_tools.infoscience_search import make_infoscience_search_tool
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+    make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.strict import PersonModel
 from src.v2.agents.llm.runtime import (
     LLMRuntimeError,
@@ -182,12 +188,22 @@ class LLMPersonAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
+
+    @staticmethod
+    def _identity_for_cache(context: dict[str, Any]) -> dict[str, Any] | None:
+        for key in ("orcid", "username", "github_username", "infoscience_id", "name"):
+            value = context.get(key)
+            if isinstance(value, str) and value.strip():
+                return {"primary_key": key, "value": value.strip().lower()}
+        return None
 
     async def run(
         self,
@@ -222,6 +238,31 @@ class LLMPersonAgentV2:
         if _extract_person_identifier(context) is None:
             message = "Person context contains no usable identity signal (username, orcid, infoscience_id, or name)"
             raise ValueError(message)
+
+        stamp_current_agent(
+            name="person_agent",
+            context={
+                key: value
+                for key, value in {
+                    "username": context.get("username") or context.get("github_username"),
+                    "orcid": context.get("orcid"),
+                    "infoscience_id": context.get("infoscience_id"),
+                    "name": context.get("name"),
+                }.items()
+                if isinstance(value, str) and value.strip()
+            },
+        )
+
+        identity = self._identity_for_cache(context)
+        is_root = bool(context.get("agent_is_root"))
+        cached_result = get_cached_agent_verdict(
+            self._cache,
+            agent_name="person",
+            identity=identity,
+            is_root=is_root,
+        )
+        if cached_result is not None:
+            return cached_result
 
         warnings: list[str] = []
 
@@ -315,7 +356,7 @@ class LLMPersonAgentV2:
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         # Build provider-dependent tools only when providers are available.
-        tools = [fetch_link_content_via_selenium_tool, hash_user_email_tool]
+        tools = [make_fetch_link_content_tool(self._cache), hash_user_email_tool]
         if providers.infoscience is not None:
             tools.append(make_infoscience_search_tool(providers.infoscience))
         if providers.orcid is not None:
@@ -329,7 +370,13 @@ class LLMPersonAgentV2:
         )
         if not isinstance(identifier, str) or not identifier.strip():
             identifier = "unknown-person"
-        logger.info("%s — calling LLM (%d tool(s) available)", identifier, len(tools))
+        tool_names = [getattr(t, "name", None) or getattr(t, "__name__", "?") for t in tools]
+        logger.info(
+            "%s — calling LLM (%d tool(s) available: %s)",
+            identifier,
+            len(tools),
+            ", ".join(tool_names) if tool_names else "none",
+        )
         try:
             llm_result = await asyncio.wait_for(
                 self._llm_runtime.run_json_prompt(
@@ -381,7 +428,7 @@ class LLMPersonAgentV2:
             ),
         }
 
-        return AgentResult(
+        result = AgentResult(
             data=payload,
             warnings=validation_warnings,
             raw_output=raw_output,
@@ -394,3 +441,10 @@ class LLMPersonAgentV2:
                 "derivation": derivation_stats,
             },
         )
+        store_agent_verdict(
+            self._cache,
+            agent_name="person",
+            identity=identity,
+            result=result,
+        )
+        return result

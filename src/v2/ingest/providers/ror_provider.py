@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import (
     ProviderNotFoundError,
     ProviderPermissionError,
@@ -144,11 +145,13 @@ class RealRORProvider(RORProvider):
         base_url: str = "https://api.ror.org/v2",
         timeout: int = 20,
         rate_limiter: RateLimiter | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         super().__init__(provider_name="ror", rate_limiter=rate_limiter)
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._cache = cache
 
     def _http_client(self) -> requests.Session:
         if self._session is None:
@@ -193,16 +196,37 @@ class RealRORProvider(RORProvider):
 
     def get_organization(self, ror_id: str) -> dict[str, Any]:
         normalized_id = self._normalize_ror_id(ror_id)
-        payload = self._request(f"/organizations/{normalized_id}")
-        return _normalize_ror_organization(payload)
+
+        def _fetch() -> dict[str, Any]:
+            payload = self._request(f"/organizations/{normalized_id}")
+            return _normalize_ror_organization(payload)
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("ror", "get_organization", id=normalized_id)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"ror.get_organization({normalized_id})",
+        )
 
     def search_organizations(self, query: str) -> list[dict[str, Any]]:
-        payload = self._request("/organizations", params={"query": query})
-        items = payload.get("items")
-        if not isinstance(items, list):
-            return []
-        return [
-            _normalize_ror_organization(item)
-            for item in items
-            if isinstance(item, dict)
-        ]
+        def _fetch() -> list[dict[str, Any]]:
+            payload = self._request("/organizations", params={"query": query})
+            items = payload.get("items")
+            if not isinstance(items, list):
+                return []
+            return [
+                _normalize_ror_organization(item)
+                for item in items
+                if isinstance(item, dict)
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("ror", "search_organizations", query=query)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"ror.search_organizations({query!r})",
+        )

@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
+from src.v2.observation.query_log import record_query
+
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import ORCIDProvider
 
@@ -34,6 +36,7 @@ def make_orcid_person_tool(orcid_provider: ORCIDProvider) -> Tool:
         Returns orcid_id, name, employment, education, and affiliations.
         """
         logger.info("tool call: get_orcid_record — orcid_id=%r", orcid_id)
+        record_query(service="orcid.get_person_by_orcid", query=orcid_id)
         record = orcid_provider.get_person_by_orcid(orcid_id)
         return {
             "orcid_id": record.get("orcid_id"),

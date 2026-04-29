@@ -7,7 +7,7 @@ from src.v2.pipeline.stages.output_assembly import (
     RootEntityValidationError,
     assemble_output,
 )
-from src.v2.quality.schema_validation import (
+from src.v2.validation.schema_validation import (
     BatchValidationResult,
     ValidationResult,
 )

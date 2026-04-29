@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
+from src.v2.observation.query_log import record_query
+
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import RORProvider
 
@@ -18,6 +20,7 @@ def make_ror_organization_search_tool(ror_provider: RORProvider) -> Tool:
         """Search ROR organizations by free-text query."""
 
         logger.info("tool call: search_ror_organizations — query=%r", query)
+        record_query(service="ror.search_organizations", query=query)
         return ror_provider.search_organizations(query)
 
     return Tool(

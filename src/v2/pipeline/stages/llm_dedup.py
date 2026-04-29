@@ -6,7 +6,7 @@ from typing import Any
 
 from src.v2.agents import LLMDedupAgentV2, ProviderSet
 from src.v2.agents.models import generate_uuid
-from src.v2.normalizers import (
+from src.v2.canonicalization import (
     resolve_article_id,
     resolve_organization_id,
     resolve_person_id,

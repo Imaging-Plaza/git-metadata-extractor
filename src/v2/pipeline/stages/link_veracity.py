@@ -1,14 +1,61 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
 from src.v2.agents import LLMLinkVeracityAgentV2, ProviderSet
+from src.v2.canonicalization.id_resolution import (
+    resolve_article_id,
+    resolve_organization_id,
+    resolve_person_id,
+    resolve_repository_id,
+)
+from src.v2.ingest.cache import ProviderCache
 from src.v2.pipeline.stages.models import AssembledOutput
 
 HTTP_SCHEMES = {"http", "https"}
+IDENTITY_KEYS = {"id", "@id", "type", "@type"}
+_NESTED_URL_AFTER_UNDERSCORE = re.compile(r"_https?://", flags=re.IGNORECASE)
+
+_ID_RESOLVER_BY_TYPE: dict[str, Any] = {
+    "schema:Person": resolve_person_id,
+    "org:Organization": resolve_organization_id,
+    "schema:SoftwareSourceCode": resolve_repository_id,
+    "schema:ScholarlyArticle": resolve_article_id,
+}
+
+# When promoting past a failed id source, also clear the field that produced it
+# so the priority ladder picks the next rung instead of the same one.
+_ID_SOURCE_TO_FIELD_KEYS: dict[str, tuple[str, ...]] = {
+    "pulse:orcid": ("pulse:orcid", "pulse:orcidIdentifier", "orcid", "orcidIdentifier"),
+    "pulse:infosciencePersonIdentifier": (
+        "pulse:infosciencePersonIdentifier",
+        "infosciencePersonIdentifier",
+    ),
+    "pulse:githubUsername": ("pulse:githubUsername", "githubUsername"),
+    "pulse:ror": ("pulse:ror", "ror"),
+    "pulse:infoscienceOrganizationIdentifier": (
+        "pulse:infoscienceOrganizationIdentifier",
+        "infoscienceOrganizationIdentifier",
+    ),
+    "pulse:githubOrganizationHandle": (
+        "pulse:githubOrganizationHandle",
+        "githubOrganizationHandle",
+    ),
+    "pulse:githubRepositoryHandle": (
+        "pulse:githubRepositoryHandle",
+        "githubRepositoryHandle",
+    ),
+    "schema:identifier": ("schema:identifier", "doi"),
+    "schema:citation": ("schema:citation",),
+    "pulse:infoscienceArticleIdentifier": (
+        "pulse:infoscienceArticleIdentifier",
+        "infoscienceArticleIdentifier",
+    ),
+}
 DOI_BASE_URI = "https://doi.org/"
 DOI_PREFIXES = (
     "https://doi.org/",
@@ -47,7 +94,11 @@ def _is_http_url(value: Any) -> bool:
     if not candidate:
         return False
     parsed = urlparse(candidate)
-    return parsed.scheme in HTTP_SCHEMES and bool(parsed.netloc)
+    if parsed.scheme not in HTTP_SCHEMES or not parsed.netloc:
+        return False
+    if _NESTED_URL_AFTER_UNDERSCORE.search(candidate):
+        return False
+    return True
 
 
 def _normalize_doi(value: Any) -> str | None:
@@ -217,6 +268,8 @@ def _scan_entity_links(
             return
         if isinstance(value, dict):
             for key, nested in value.items():
+                if key in IDENTITY_KEYS:
+                    continue
                 _walk(
                     nested,
                     source_entity_id=source_entity_id,
@@ -257,6 +310,8 @@ def _scan_entity_links(
                 )
 
         for key, value in entity.items():
+            if key in IDENTITY_KEYS:
+                continue
             _walk(
                 value,
                 source_entity_id=source_entity_id,
@@ -301,6 +356,114 @@ def _entity_type_singular(entity: dict[str, Any]) -> str:
     if isinstance(entity_type, str):
         return ENTITY_TYPE_TO_SINGULAR.get(entity_type, "entity")
     return "entity"
+
+
+def _apply_id_rewrites(value: Any, rewrites: dict[str, str]) -> Any:
+    """Replace every occurrence of a rewritten old id anywhere in `value`."""
+    if isinstance(value, str):
+        return rewrites.get(value, value)
+    if isinstance(value, list):
+        return [_apply_id_rewrites(item, rewrites) for item in value]
+    if isinstance(value, dict):
+        return {key: _apply_id_rewrites(item, rewrites) for key, item in value.items()}
+    return value
+
+
+def _entity_with_demoted_source(
+    entity: dict[str, Any],
+    failing_source: str | None,
+) -> dict[str, Any]:
+    """Return a copy of `entity` with the failing identifier and id stripped."""
+    demoted = dict(entity)
+    demoted["id"] = None
+    demoted["idSource"] = None
+    if isinstance(failing_source, str):
+        for field in _ID_SOURCE_TO_FIELD_KEYS.get(failing_source, ()):
+            if field in demoted:
+                demoted[field] = None
+        identifiers = demoted.get("identifiers")
+        if isinstance(identifiers, dict):
+            cloned_identifiers = dict(identifiers)
+            for field in _ID_SOURCE_TO_FIELD_KEYS.get(failing_source, ()):
+                if field in cloned_identifiers:
+                    cloned_identifiers[field] = None
+            demoted["identifiers"] = cloned_identifiers
+    return demoted
+
+
+def promote_failed_id_entities(
+    *,
+    assembled: AssembledOutput,
+    invalid_links: set[str],
+) -> tuple[AssembledOutput, dict[str, str], list[str]]:
+    """Re-resolve entity ids whose URL failed link veracity.
+
+    For each Person/Org/Repo/Article entity whose `id` is in `invalid_links`,
+    strip the failing identifier source and re-run the priority resolver. If
+    the new id differs, record the rewrite and propagate it across every
+    `@id`/`id` reference and every string-id occurrence in the assembled
+    output.
+
+    Composite entities (Membership, Contribution) have no resolver entry and
+    are left unchanged.
+
+    Returns the (possibly mutated) assembled output, the `old_id -> new_id`
+    rewrite map, and human-readable warnings to surface on the response.
+    """
+    if not invalid_links:
+        return assembled, {}, []
+
+    rewrites: dict[str, str] = {}
+    warnings: list[str] = []
+    candidates: list[dict[str, Any]] = []
+    if isinstance(assembled.root_entity, dict):
+        candidates.append(assembled.root_entity)
+    candidates.extend(e for e in assembled.related_entities if isinstance(e, dict))
+
+    for entity in candidates:
+        old_id = entity.get("id")
+        if not isinstance(old_id, str) or old_id not in invalid_links:
+            continue
+        entity_type = entity.get("type")
+        resolver = _ID_RESOLVER_BY_TYPE.get(entity_type) if isinstance(entity_type, str) else None
+        if resolver is None:
+            continue
+
+        old_id_source = entity.get("idSource") if isinstance(entity.get("idSource"), str) else None
+        demoted = _entity_with_demoted_source(entity, old_id_source)
+        try:
+            new_id, new_id_source = resolver(demoted)
+        except Exception:  # noqa: BLE001
+            continue
+        if not isinstance(new_id, str) or new_id == old_id:
+            continue
+
+        entity["id"] = new_id
+        entity["idSource"] = new_id_source
+        rewrites[old_id] = new_id
+        warnings.append(
+            f"Promoted entity id {old_id} → {new_id} "
+            f"(failed source: {old_id_source}, new source: {new_id_source})",
+        )
+
+    if not rewrites:
+        return assembled, {}, []
+
+    new_root = (
+        _apply_id_rewrites(assembled.root_entity, rewrites)
+        if isinstance(assembled.root_entity, dict)
+        else assembled.root_entity
+    )
+    new_related = [_apply_id_rewrites(entity, rewrites) for entity in assembled.related_entities]
+    new_excluded = [_apply_id_rewrites(entity, rewrites) for entity in assembled.excluded_entities]
+
+    promoted = AssembledOutput(
+        root_entity=new_root if isinstance(new_root, dict) else assembled.root_entity,
+        related_entities=new_related,
+        excluded_entities=new_excluded,
+        warnings=list(assembled.warnings),
+    )
+    return promoted, rewrites, warnings
 
 
 def apply_link_pruning_to_assembled_output(
@@ -399,6 +562,7 @@ async def run_link_veracity_stage(
     llm_call_timeout_seconds: float = 120.0,
     jsonld_payload: dict[str, Any] | None = None,
     entities: list[dict[str, Any]] | None = None,
+    cache: ProviderCache | None = None,
 ) -> LinkVeracityStageResult:
     entity_link_map: dict[str, set[str]] = {}
     article_identifier_link_map: dict[str, str] = {}
@@ -428,6 +592,7 @@ async def run_link_veracity_stage(
     semaphore = asyncio.Semaphore(resolved_concurrency)
     verifier = LLMLinkVeracityAgentV2(
         llm_call_timeout_seconds=llm_call_timeout_seconds,
+        cache=cache,
     )
 
     async def _run_link_context(link_context: dict[str, Any]) -> dict[str, Any]:

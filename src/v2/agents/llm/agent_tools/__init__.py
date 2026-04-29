@@ -14,6 +14,9 @@ from src.v2.agents.llm.agent_tools.github_organization import (
 from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
     make_infoscience_orgunit_tool,
 )
+from src.v2.agents.llm.agent_tools.infoscience_publications import (
+    make_infoscience_publications_search_tool,
+)
 from src.v2.agents.llm.agent_tools.infoscience_search import (
     make_infoscience_search_tool,
 )
@@ -45,6 +48,7 @@ __all__ = [
     "make_duckduckgo_search_tool",
     "make_github_organization_metadata_tool",
     "make_infoscience_orgunit_tool",
+    "make_infoscience_publications_search_tool",
     "make_infoscience_search_tool",
     "make_organization_identity_search_tool",
     "make_orcid_person_tool",

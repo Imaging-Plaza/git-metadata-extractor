@@ -10,6 +10,7 @@ from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.api import v2_router
 from src.v2.api_models.contracts import V2ExtractResponse
+from src.v2.ingest.cache import ProviderCache
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
 from src.v2.ingest.providers.mock_github import MockGitHubProvider
@@ -431,3 +432,65 @@ def test_extract_post_can_include_compiled_context_summary_in_response() -> None
     assert status_code == HTTP_OK
     assert payload["context_summary_markdown"].startswith("# Compiled Context")
     assert V2ExtractResponse.model_validate(payload)
+
+
+def test_pipeline_cache_round_trip_returns_identical_response(tmp_path: Any) -> None:
+    """Two consecutive extract calls with a pipeline cache return the same payload."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict, int, dict, int]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            r1 = await client.get("/v2/extract/github.com/octocat/Hello-World")
+            r2 = await client.get("/v2/extract/github.com/octocat/Hello-World")
+        rows = list(
+            app.state.v2_provider_cache._connect().execute(  # noqa: SLF001
+                "SELECT 1 FROM responses",
+            ),
+        )
+        return r1.status_code, r1.json(), r2.status_code, r2.json(), len(rows)
+
+    sc1, payload1, sc2, payload2, row_count = asyncio.run(_run())
+    assert sc1 == HTTP_OK
+    assert sc2 == HTTP_OK
+    assert payload1 == payload2
+    assert row_count >= 1
+
+
+def test_pipeline_cache_distinguishes_output_format(tmp_path: Any) -> None:
+    """Different output_format values produce distinct cache entries."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, str, int, str]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            r_jsonld = await client.get(
+                "/v2/extract/github.com/octocat/Hello-World",
+                params={"output_format": "jsonld"},
+            )
+            r_json = await client.get(
+                "/v2/extract/github.com/octocat/Hello-World",
+                params={"output_format": "json"},
+            )
+        return (
+            r_jsonld.status_code,
+            r_jsonld.json()["output_format"],
+            r_json.status_code,
+            r_json.json()["output_format"],
+        )
+
+    sc1, fmt1, sc2, fmt2 = asyncio.run(_run())
+    assert sc1 == HTTP_OK
+    assert fmt1 == "jsonld"
+    assert sc2 == HTTP_OK
+    assert fmt2 == "json"

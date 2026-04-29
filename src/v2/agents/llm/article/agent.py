@@ -8,12 +8,20 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
-from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+from src.v2.agents.llm._verdict_cache import (
+    get_cached_agent_verdict,
+    store_agent_verdict,
 )
-from src.v2.agents.llm.agent_tools.uuid import generate_uuid_v4_tool
+from src.v2.agents.llm.agent_tools.infoscience_publications import (
+    make_infoscience_publications_search_tool,
+)
+from src.v2.agents.llm.agent_tools.selenium_fetch import (
+    make_fetch_link_content_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
-from src.v2.agents.models import AgentResult, ProviderSet
+from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentArticleShape
 from src.v2.schema.models.strict import ArticleModel
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
@@ -111,23 +119,50 @@ class LLMArticleAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
 
     async def run(
         self,
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
-        del providers
         article_seed = _resolve_article_seed(context)
+
+        stamp_current_agent(
+            name="article_agent",
+            context={"article_seed": article_seed} if isinstance(article_seed, str) else {},
+        )
+
+        full_name = context.get("full_name")
+        identity = (
+            {"full_name": full_name.strip().lower()}
+            if isinstance(full_name, str) and full_name.strip()
+            else None
+        )
+        is_root = bool(context.get("agent_is_root"))
+        cached_result = get_cached_agent_verdict(
+            self._cache,
+            agent_name="article",
+            identity=identity,
+            is_root=is_root,
+        )
+        if cached_result is not None:
+            return cached_result
+
+        uuid_value = context.get("uuid")
+        if not isinstance(uuid_value, str) or not uuid_value.strip():
+            uuid_value = generate_uuid()
 
         llm_input: dict[str, Any] = {
             "article_seed": article_seed,
+            "uuid": uuid_value,
             "detected_type": context.get("detected_type"),
             "source_url": context.get("source_url"),
             "full_name": context.get("full_name"),
@@ -159,13 +194,19 @@ class LLMArticleAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
+        tools = [make_fetch_link_content_tool(self._cache)]
+        if providers.infoscience is not None:
+            tools.append(
+                make_infoscience_publications_search_tool(providers.infoscience),
+            )
+
         try:
             llm_result = await asyncio.wait_for(
                 self._llm_runtime.run_json_prompt(
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=AgentArticleShape,
-                    tools=[generate_uuid_v4_tool, fetch_link_content_via_selenium_tool],
+                    tools=tools,
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )
@@ -188,7 +229,7 @@ class LLMArticleAgentV2:
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)
 
-        return AgentResult(
+        result = AgentResult(
             data=payload,
             warnings=validation_warnings,
             raw_output=raw_output,
@@ -209,3 +250,10 @@ class LLMArticleAgentV2:
                 },
             },
         )
+        store_agent_verdict(
+            self._cache,
+            agent_name="article",
+            identity=identity,
+            result=result,
+        )
+        return result

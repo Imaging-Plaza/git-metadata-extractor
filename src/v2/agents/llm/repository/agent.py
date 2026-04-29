@@ -8,12 +8,18 @@ from urllib.parse import urlparse
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._verdict_cache import (
+    get_cached_agent_verdict,
+    store_agent_verdict,
+)
 from src.v2.agents.llm.agent_tools.disciplines import list_disciplines_tool
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+    make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentRepositoryShape
 from src.v2.schema.models.strict import RepositoryModel
 from src.v2.agents.llm.runtime import (
@@ -120,8 +126,10 @@ class LLMRepositoryAgentV2:
         self,
         *,
         llm_runtime: V2LLMRuntime | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         self._llm_runtime = llm_runtime or V2LLMRuntime()
+        self._cache = cache
 
     async def run(
         self,
@@ -149,6 +157,26 @@ class LLMRepositoryAgentV2:
 
         del providers
         full_name = _ensure_repo_handle(context)
+
+        stamp_current_agent(
+            name="repo_agent",
+            context={"full_name": full_name} if isinstance(full_name, str) else {},
+        )
+
+        identity = (
+            {"full_name": full_name.strip().lower()}
+            if isinstance(full_name, str) and full_name.strip()
+            else None
+        )
+        is_root = bool(context.get("agent_is_root"))
+        cached_result = get_cached_agent_verdict(
+            self._cache,
+            agent_name="repository",
+            identity=identity,
+            is_root=is_root,
+        )
+        if cached_result is not None:
+            return cached_result
 
         repository_context = context.get("repository_context")
         if not isinstance(repository_context, dict):
@@ -187,7 +215,7 @@ class LLMRepositoryAgentV2:
                 system_prompt=_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 output_type=AgentRepositoryShape,
-                tools=[list_disciplines_tool, fetch_link_content_via_selenium_tool],
+                tools=[list_disciplines_tool, make_fetch_link_content_tool(self._cache)],
             )
         except LLMRuntimeError:
             raise
@@ -223,7 +251,7 @@ class LLMRepositoryAgentV2:
             "language_names": language_names,
         }
 
-        return AgentResult(
+        result = AgentResult(
             data=payload,
             warnings=validation_warnings,
             raw_output=raw_output,
@@ -236,3 +264,10 @@ class LLMRepositoryAgentV2:
                 "derivation": derivation_stats,
             },
         )
+        store_agent_verdict(
+            self._cache,
+            agent_name="repository",
+            identity=identity,
+            result=result,
+        )
+        return result

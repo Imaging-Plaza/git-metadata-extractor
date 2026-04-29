@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.v2.agents import LLMCriticAgentV2, ProviderSet
+from src.v2.ingest.cache import ProviderCache
 from src.v2.pipeline.stages.models import LLMCriticStageResult, ReconciledEntities
 
 BUCKET_TO_SINGULAR = {
@@ -403,6 +404,7 @@ async def run_llm_critic_stage(  # noqa: PLR0913
     max_concurrency: int = 3,
     llm_call_timeout_seconds: float = 180.0,
     agent: LLMCriticAgentV2 | None = None,
+    cache: ProviderCache | None = None,
 ) -> LLMCriticStageResult:
     del max_concurrency
     entities_by_bucket = {
@@ -416,6 +418,7 @@ async def run_llm_critic_stage(  # noqa: PLR0913
 
     critic_agent = agent or LLMCriticAgentV2(
         llm_call_timeout_seconds=llm_call_timeout_seconds,
+        cache=cache,
     )
     agent_result = await critic_agent.run(
         {

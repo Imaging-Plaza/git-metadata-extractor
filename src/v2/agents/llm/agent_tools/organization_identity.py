@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
-from src.v2.normalizers.string_utils import normalize_string
+from src.v2.canonicalization.string_utils import normalize_string
+from src.v2.observation.query_log import record_query
 
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import InfoscienceProvider, RORProvider
@@ -127,6 +128,11 @@ def make_organization_identity_search_tool(
 
         normalized_query = query.strip()
         logger.info("tool call: search_organization_identity — query=%r", normalized_query)
+        if normalized_query:
+            record_query(
+                service="organization_identity.search",
+                query=normalized_query,
+            )
         if not normalized_query:
             return {
                 "query": "",

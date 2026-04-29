@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -10,6 +10,12 @@ from pydantic_ai import Tool
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support.ui import WebDriverWait
+
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import record_query
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +71,7 @@ def fetch_link_content_via_selenium(
     """Fetch rendered page content from a URL via Selenium Grid."""
 
     logger.info("tool call: fetch_link_content_via_selenium — url=%r", url)
+    record_query(service="selenium.fetch_link_content", query=str(url) if url else "")
     normalized_url = url.strip() if isinstance(url, str) else ""
     if not normalized_url or not _is_http_url(normalized_url):
         return {
@@ -120,3 +127,51 @@ fetch_link_content_via_selenium_tool = Tool(
         "(SELENIUM_REMOTE_URL). Returns fetch status, final URL, title, and page text excerpt."
     ),
 )
+
+
+def make_fetch_link_content_tool(cache: ProviderCache | None = None) -> Tool:
+    """Return a Selenium-fetch tool optionally backed by a `ProviderCache`.
+
+    When `cache` is None, returns the cacheless module-level singleton.
+    Otherwise wraps the fetch in a cache lookup; only successful fetches
+    (`fetched=True`) are stored, so transient errors retry next time.
+    """
+    if cache is None:
+        return fetch_link_content_via_selenium_tool
+
+    def _cached_fetch(
+        url: str,
+        max_chars: int = DEFAULT_MAX_CHARS,
+    ) -> dict[str, Any]:
+        normalized_url = url.strip() if isinstance(url, str) else ""
+        if not normalized_url or not _is_http_url(normalized_url):
+            return fetch_link_content_via_selenium(url, max_chars)
+
+        bounded_max_chars = max(1, min(int(max_chars), MAX_ALLOWED_CHARS))
+        key = ProviderCache.make_key(
+            "selenium",
+            "fetch_link_content_via_selenium",
+            url=normalized_url,
+            max_chars=bounded_max_chars,
+        )
+        cached = cache.get(key)
+        if cached is not None:
+            logger.info(
+                "fetch_link_content_via_selenium cache hit — url=%r",
+                normalized_url,
+            )
+            return cached
+
+        result = fetch_link_content_via_selenium(url, max_chars)
+        if isinstance(result, dict) and result.get("fetched"):
+            cache.set(key, result)
+        return result
+
+    return Tool(
+        _cached_fetch,
+        name="fetch_link_content_via_selenium",
+        description=(
+            "Fetch rendered page content from an http(s) URL using Selenium Grid "
+            "(SELENIUM_REMOTE_URL). Returns fetch status, final URL, title, and page text excerpt."
+        ),
+    )

@@ -17,6 +17,8 @@ from src.v2.agents.llm.agent_tools.github_organization import (
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.critic.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
@@ -48,18 +50,27 @@ class LLMCriticAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
 
     async def run(
         self,
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
+        stamp_current_agent(
+            name="critic_agent",
+            context={"source_url": context.get("source_url")}
+            if isinstance(context.get("source_url"), str)
+            else {},
+        )
+
         initial_context = context.get("initial_context")
         owner_provenance = _extract_owner_provenance(initial_context)
         llm_input = {
@@ -75,7 +86,7 @@ class LLMCriticAgentV2:
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
-        tools = [make_duckduckgo_search_tool()]
+        tools = [make_duckduckgo_search_tool(cache=self._cache)]
         if providers.github is not None:
             tools.append(
                 make_github_organization_metadata_tool(providers.github),

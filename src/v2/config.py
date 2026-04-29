@@ -24,6 +24,17 @@ def _get_env_bool(name: str, *, default_value: bool) -> bool:
     raise ValueError(message)
 
 
+def _get_env_int(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        message = f"Invalid integer value for {name}: {raw_value!r}"
+        raise ValueError(message) from exc
+
+
 def _get_optional_env(name: str) -> str | None:
     value = os.getenv(name)
     if value is None:
@@ -40,6 +51,15 @@ class V2Config:
             default=AgentRuntime.LLM,
             field_name="V2_AGENT_RUNTIME_DEFAULT",
         ),
+    )
+    V2_PROVIDER_CACHE_PATH: str = field(
+        default_factory=lambda: os.getenv(
+            "V2_PROVIDER_CACHE_PATH",
+            ".cache/v2/providers.db",
+        ),
+    )
+    V2_PROVIDER_CACHE_TTL_DAYS: int = field(
+        default_factory=lambda: _get_env_int("V2_PROVIDER_CACHE_TTL_DAYS", 30),
     )
     GITHUB_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("GITHUB_TOKEN"))
 

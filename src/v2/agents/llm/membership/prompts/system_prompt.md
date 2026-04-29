@@ -31,3 +31,7 @@ Available tools:
 - `get_orcid_record(orcid_id)`:
   - Returns ORCID employment and education affiliations.
   - Use it to ground membership role/date fields when `target_person` has `pulse:orcidIdentifier`.
+
+Identifiers:
+- Use the `uuid` value already provided in your input verbatim for the
+  `uuid` identifier slot. Do not generate a new one.

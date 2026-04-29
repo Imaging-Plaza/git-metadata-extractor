@@ -9,6 +9,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._verdict_cache import (
+    get_cached_agent_verdict,
+    store_agent_verdict,
+)
 from src.v2.agents.llm.agent_tools.github_organization import (
     make_github_organization_metadata_tool,
 )
@@ -22,10 +26,12 @@ from src.v2.agents.llm.agent_tools.ror_organization import (
     make_ror_organization_search_tool,
 )
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+    make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentOrganizationShape
 from src.v2.schema.models.strict import OrganizationModel
 from src.v2.agents.llm.runtime import (
@@ -73,12 +79,14 @@ class LLMOrganizationAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
 
     async def run(  # noqa: C901, PLR0912, PLR0915
         self,
@@ -86,6 +94,31 @@ class LLMOrganizationAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         org_name = _resolve_org_name(context)
+
+        stamp_current_agent(
+            name="org_agent",
+            context={"org_name": org_name},
+        )
+
+        github_lookup_enabled_flag = context.get("github_lookup_enabled")
+        cache_lookup_flag = (
+            github_lookup_enabled_flag
+            if isinstance(github_lookup_enabled_flag, bool)
+            else True
+        )
+        identity = {
+            "org_name": org_name.strip().lower(),
+            "github_lookup_enabled": cache_lookup_flag,
+        }
+        is_root = bool(context.get("agent_is_root"))
+        cached_result = get_cached_agent_verdict(
+            self._cache,
+            agent_name="organization",
+            identity=identity,
+            is_root=is_root,
+        )
+        if cached_result is not None:
+            return cached_result
 
         github_lookup_enabled = context.get("github_lookup_enabled")
         if not isinstance(github_lookup_enabled, bool):
@@ -178,7 +211,7 @@ class LLMOrganizationAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
-        tools = [fetch_link_content_via_selenium_tool]
+        tools = [make_fetch_link_content_tool(self._cache)]
         if providers.github is not None:
             tools.append(make_github_organization_metadata_tool(providers.github))
         if providers.ror is not None and providers.infoscience is not None:
@@ -194,7 +227,13 @@ class LLMOrganizationAgentV2:
             tools.append(make_infoscience_orgunit_tool(providers.infoscience))
 
         identifier = org_name
-        logger.info("%s — calling LLM (%d tool(s) available)", identifier, len(tools))
+        tool_names = [getattr(t, "name", None) or getattr(t, "__name__", "?") for t in tools]
+        logger.info(
+            "%s — calling LLM (%d tool(s) available: %s)",
+            identifier,
+            len(tools),
+            ", ".join(tool_names) if tool_names else "none",
+        )
         try:
             llm_result = await asyncio.wait_for(
                 self._llm_runtime.run_json_prompt(
@@ -260,7 +299,7 @@ class LLMOrganizationAgentV2:
             else [],
         }
 
-        return AgentResult(
+        result = AgentResult(
             data=payload,
             warnings=validation_warnings,
             raw_output=raw_output,
@@ -273,3 +312,10 @@ class LLMOrganizationAgentV2:
                 "derivation": derivation_stats,
             },
         )
+        store_agent_verdict(
+            self._cache,
+            agent_name="organization",
+            identity=identity,
+            result=result,
+        )
+        return result

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import InfoscienceProvider, InfosciencePublicationRecord
 
 if TYPE_CHECKING:
@@ -14,6 +16,14 @@ InfoscienceSearch = Callable[[str, int], Awaitable[Any]]
 
 
 def _run_async(sync_or_async: Awaitable[Any] | Any) -> Any:
+    """Run a coroutine synchronously, preserving the calling ContextVar state.
+
+    The caller is typically an async pipeline running this from a sync wrapper
+    in a worker thread. The bridge below copies the current `Context` so that
+    `request_id_var` (and any other ContextVars) survive into the worker's
+    fresh event loop — without that, log records emitted by the v1 callee
+    lose the request-id prefix set by the FastAPI middleware.
+    """
     if not asyncio.iscoroutine(sync_or_async):
         return sync_or_async
     try:
@@ -21,8 +31,9 @@ def _run_async(sync_or_async: Awaitable[Any] | Any) -> Any:
     except RuntimeError:
         return asyncio.run(sync_or_async)
 
+    ctx = contextvars.copy_context()
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(asyncio.run, sync_or_async)
+        future = executor.submit(ctx.run, asyncio.run, sync_or_async)
         return future.result()
 
 
@@ -86,17 +97,19 @@ class RealInfoscienceProvider(InfoscienceProvider):
         search_labs_func: InfoscienceSearch | None = None,
         search_publications_func: InfoscienceSearch | None = None,
         rate_limiter: RateLimiter | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         super().__init__(provider_name="infoscience", rate_limiter=rate_limiter)
         self._max_results = max_results
         self._search_authors_func = search_authors_func
         self._search_labs_func = search_labs_func
         self._search_publications_func = search_publications_func
+        self._cache = cache
 
     def _resolve_search_authors(self) -> InfoscienceSearch:
         if self._search_authors_func is not None:
             return self._search_authors_func
-        from src.v1.context.infoscience import search_authors  # noqa: PLC0415
+        from src.v2.ingest.infoscience import search_authors  # noqa: PLC0415
 
         self._search_authors_func = search_authors
         return search_authors
@@ -104,7 +117,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
     def _resolve_search_labs(self) -> InfoscienceSearch:
         if self._search_labs_func is not None:
             return self._search_labs_func
-        from src.v1.context.infoscience import search_labs  # noqa: PLC0415
+        from src.v2.ingest.infoscience import search_labs  # noqa: PLC0415
 
         self._search_labs_func = search_labs
         return search_labs
@@ -112,58 +125,103 @@ class RealInfoscienceProvider(InfoscienceProvider):
     def _resolve_search_publications(self) -> InfoscienceSearch:
         if self._search_publications_func is not None:
             return self._search_publications_func
-        from src.v1.context.infoscience import search_publications  # noqa: PLC0415
+        from src.v2.ingest.infoscience import search_publications  # noqa: PLC0415
 
         self._search_publications_func = search_publications
         return search_publications
 
     def search_person(self, query: str) -> list[dict[str, Any]]:
-        result = self._run_with_rate_limit(
-            lambda: _run_async(self._resolve_search_authors()(query, self._max_results)),
+        def _fetch() -> list[dict[str, Any]]:
+            result = self._run_with_rate_limit(
+                lambda: _run_async(self._resolve_search_authors()(query, self._max_results)),
+            )
+            payload = _to_dict(result)
+            authors = _ensure_list(payload.get("authors"))
+            return [
+                {
+                    "infosciencePersonIdentifier": author.get("uuid"),
+                    "name": author.get("name"),
+                    "orcid": author.get("orcid"),
+                    "affiliations": (
+                        [author["affiliation"]]
+                        if isinstance(author.get("affiliation"), str)
+                        else []
+                    ),
+                    "profileUrl": (
+                        str(author["profile_url"])
+                        if author.get("profile_url") is not None
+                        else None
+                    ),
+                }
+                for author in authors
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "infoscience",
+            "search_person",
+            query=query,
+            max_results=self._max_results,
         )
-        payload = _to_dict(result)
-        authors = _ensure_list(payload.get("authors"))
-        return [
-            {
-                "infosciencePersonIdentifier": author.get("uuid"),
-                "name": author.get("name"),
-                "orcid": author.get("orcid"),
-                "affiliations": (
-                    [author["affiliation"]]
-                    if isinstance(author.get("affiliation"), str)
-                    else []
-                ),
-                "profileUrl": (
-                    str(author["profile_url"])
-                    if author.get("profile_url") is not None
-                    else None
-                ),
-            }
-            for author in authors
-        ]
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"infoscience.search_person({query!r})",
+        )
 
     def search_orgunit(self, query: str) -> list[dict[str, Any]]:
-        result = self._run_with_rate_limit(
-            lambda: _run_async(self._resolve_search_labs()(query, self._max_results)),
+        def _fetch() -> list[dict[str, Any]]:
+            result = self._run_with_rate_limit(
+                lambda: _run_async(self._resolve_search_labs()(query, self._max_results)),
+            )
+            payload = _to_dict(result)
+            labs = _ensure_list(payload.get("labs"))
+            return [
+                {
+                    "infoscienceOrgUnitIdentifier": lab.get("uuid"),
+                    "name": lab.get("name"),
+                    "parentOrganization": lab.get("parent_organization"),
+                    "url": lab.get("url"),
+                }
+                for lab in labs
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "infoscience",
+            "search_orgunit",
+            query=query,
+            max_results=self._max_results,
         )
-        payload = _to_dict(result)
-        labs = _ensure_list(payload.get("labs"))
-        return [
-            {
-                "infoscienceOrgUnitIdentifier": lab.get("uuid"),
-                "name": lab.get("name"),
-                "parentOrganization": lab.get("parent_organization"),
-                "url": lab.get("url"),
-            }
-            for lab in labs
-        ]
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"infoscience.search_orgunit({query!r})",
+        )
 
     def search_publications(self, query: str) -> list[InfosciencePublicationRecord]:
-        result = self._run_with_rate_limit(
-            lambda: _run_async(
-                self._resolve_search_publications()(query, self._max_results),
-            ),
+        def _fetch() -> list[InfosciencePublicationRecord]:
+            result = self._run_with_rate_limit(
+                lambda: _run_async(
+                    self._resolve_search_publications()(query, self._max_results),
+                ),
+            )
+            payload = _to_dict(result)
+            publications = _ensure_list(payload.get("publications"))
+            return [_normalize_publication(publication) for publication in publications]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "infoscience",
+            "search_publications",
+            query=query,
+            max_results=self._max_results,
         )
-        payload = _to_dict(result)
-        publications = _ensure_list(payload.get("publications"))
-        return [_normalize_publication(publication) for publication in publications]
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"infoscience.search_publications({query!r})",
+        )

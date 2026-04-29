@@ -37,7 +37,7 @@ from src.v2.agents.llm.organization import LLMOrganizationAgentV2
 from src.v2.agents.llm.person import LLMPersonAgentV2
 from src.v2.agents.llm.repository import LLMRepositoryAgentV2
 from src.v2.agents.models import AgentResult, TypedEntityBuckets, infer_entity_bucket
-from src.v2.normalizers.string_utils import normalize_string, strip_accents
+from src.v2.canonicalization.string_utils import normalize_string, strip_accents
 from src.v2.dependencies import _default_provider_set
 from src.v2.ingest.detection.github_url_classifier import classify_github_url
 from src.v2.schema import load_jsonld_context

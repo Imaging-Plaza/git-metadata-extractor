@@ -24,3 +24,16 @@ Rules:
 - Do not invent unknown people or organizations when canonical IDs are available in context.
 - Do not emit fields outside the schema.
 - Use `null` only where nullable fields are permitted.
+
+Tools:
+- `search_infoscience_publications(query)` — query EPFL Infoscience for the
+  scholarly publication referenced by this repository (CITATION.cff, README,
+  or seed). Use it to recover `pulse:infoscienceArticleIdentifier`, fill in a
+  missing DOI (`schema:identifier`), or confirm `schema:datePublished`. Try
+  the article title first; fall back to author + keyword if that misses.
+- `fetch_link_content_via_selenium(url)` — fetch a candidate publication URL
+  to verify its existence and extract metadata when needed.
+
+Identifiers:
+- Use the `uuid` value already provided in your input verbatim for the
+  `uuid` identifier slot. Do not generate a new one.

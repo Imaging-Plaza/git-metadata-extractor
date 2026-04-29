@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
+from src.v2.observation.query_log import record_query
+
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import InfoscienceProvider
 
@@ -35,6 +37,7 @@ def make_infoscience_search_tool(infoscience_provider: InfoscienceProvider) -> T
         Pick the highest-score result for pulse:infosciencePersonIdentifier.
         """
         logger.info("tool call: search_infoscience_person — query=%r", query)
+        record_query(service="infoscience.search_person", query=query)
         results = infoscience_provider.search_person(query)
         return [
             {

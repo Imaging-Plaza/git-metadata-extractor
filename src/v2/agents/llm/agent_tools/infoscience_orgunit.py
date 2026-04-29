@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Tool
 
+from src.v2.observation.query_log import record_query
+
 if TYPE_CHECKING:
     from src.v2.ingest.providers.base import InfoscienceProvider
 
@@ -18,6 +20,7 @@ def make_infoscience_orgunit_tool(infoscience_provider: InfoscienceProvider) -> 
         """Search Infoscience organization units by free-text query."""
 
         logger.info("tool call: search_infoscience_orgunit — query=%r", query)
+        record_query(service="infoscience.search_orgunit", query=query)
         return infoscience_provider.search_orgunit(query)
 
     return Tool(

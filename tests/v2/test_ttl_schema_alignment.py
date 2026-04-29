@@ -8,7 +8,7 @@ import pytest
 from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, XSD
 
-from src.v2.quality.ontology import ontology_ttl_path
+from src.v2.validation.ontology import ontology_ttl_path
 
 SH = Namespace("http://www.w3.org/ns/shacl#")
 SCHEMA = Namespace("http://schema.org/")

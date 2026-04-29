@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 if TYPE_CHECKING:
-    from src.v2.quality.schema_validation import (
+    from src.v2.validation.schema_validation import (
         BatchValidationResult,
         ValidationResult,
     )

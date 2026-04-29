@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import (
@@ -30,13 +31,19 @@ INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS: tuple[str, ...] = ("sourceOrganization"
 
 
 def _run_awaitable(value: Coroutine[Any, Any, ResponseT]) -> ResponseT:
+    """Run a coroutine to completion, preserving the calling ContextVar state.
+
+    See `src/v2/ingest/providers/infoscience_provider.py:_run_async` for why
+    we copy the context (request-id propagation into worker threads).
+    """
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(value)
 
+    ctx = contextvars.copy_context()
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(asyncio.run, value)
+        future = executor.submit(ctx.run, asyncio.run, value)
         return future.result()
 
 

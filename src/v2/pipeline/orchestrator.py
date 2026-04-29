@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -10,6 +11,8 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 logger = logging.getLogger(__name__)
+
+_HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 from src.v2.agents import (
     AgentRuntime,
@@ -38,7 +41,8 @@ from src.v2.agents.llm.prompt_context import (
     USER_PROMPT_APPENDIX_CONTEXT_KEY,
 )
 from src.v2.agents.models import AgentResult
-from src.v2.normalizers.string_utils import normalize_string
+from src.v2.canonicalization.string_utils import normalize_string
+from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection.models import GitHubURLClassification
 from src.v2.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage
 from src.v2.pipeline.stages import ContextBundle, gather_context
@@ -202,6 +206,7 @@ class PipelineOrchestrator:
         max_concurrent_agents: int = 3,
         include_upstream_stage_outputs_in_prompt: bool = True,
         user_prompt_appendix: str | None = None,
+        cache: ProviderCache | None = None,
     ) -> None:
         """Initialize stage runners and runtime-aware routing infrastructure."""
 
@@ -212,15 +217,19 @@ class PipelineOrchestrator:
         self._article_agent = article_agent or ArticleAgentV2()
         self._membership_agent = membership_agent or MembershipAgentV2()
         self._contribution_agent = contribution_agent or ContributionAgentV2()
-        self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2()
-        self._llm_person_agent = llm_person_agent or LLMPersonAgentV2()
-        self._llm_organization_agent = llm_organization_agent or LLMOrganizationAgentV2()
-        self._llm_context_summary_agent = (
-            llm_context_summary_agent or LLMContextSummaryAgentV2()
+        self._llm_repository_agent = llm_repository_agent or LLMRepositoryAgentV2(cache=cache)
+        self._llm_person_agent = llm_person_agent or LLMPersonAgentV2(cache=cache)
+        self._llm_organization_agent = (
+            llm_organization_agent or LLMOrganizationAgentV2(cache=cache)
         )
-        self._llm_article_agent = llm_article_agent or LLMArticleAgentV2()
-        self._llm_membership_agent = llm_membership_agent or LLMMembershipAgentV2()
-        self._llm_contribution_agent = llm_contribution_agent or LLMContributionAgentV2()
+        self._llm_context_summary_agent = (
+            llm_context_summary_agent or LLMContextSummaryAgentV2(cache=cache)
+        )
+        self._llm_article_agent = llm_article_agent or LLMArticleAgentV2(cache=cache)
+        self._llm_membership_agent = llm_membership_agent or LLMMembershipAgentV2(cache=cache)
+        self._llm_contribution_agent = (
+            llm_contribution_agent or LLMContributionAgentV2(cache=cache)
+        )
 
         self._rule_based_runners: dict[str, AgentRunner] = {
             STAGE_REPO_AGENT: self._repository_agent.run,
@@ -560,9 +569,28 @@ class PipelineOrchestrator:
         stage_errors: list[str] = []
         stage_results: dict[str, AgentResult] = {}
 
+        total_items = len(work_items)
+        done_counter = [0]
         semaphore = asyncio.Semaphore(self._max_concurrent_agents)
 
-        async def _run_item(work_item: _StageWorkItem) -> tuple[str, AgentResult]:
+        async def _heartbeat(key: str, started_at: float) -> None:
+            try:
+                while True:
+                    await asyncio.sleep(_HEARTBEAT_INTERVAL_SECONDS)
+                    elapsed = perf_counter() - started_at
+                    logger.info(
+                        "[%s] %s — still running (elapsed=%.0fs)",
+                        stage_name,
+                        key,
+                        elapsed,
+                    )
+            except asyncio.CancelledError:
+                return
+
+        async def _run_item(
+            index_one_based: int,
+            work_item: _StageWorkItem,
+        ) -> tuple[str, AgentResult]:
             runtime_mode = parse_agent_runtime(
                 runtime_context.get("agent_runtime"),
                 default=AgentRuntime.RULE_BASED,
@@ -625,19 +653,41 @@ class PipelineOrchestrator:
                 )
 
             async with semaphore:
-                logger.info("[%s] %s — started", stage_name, work_item.result_key)
                 item_started_at = perf_counter()
-                result = await _maybe_await(_run_with_retry(item_context, providers))
                 logger.info(
-                    "[%s] %s — done in %.1fs",
+                    "[%s] (%d/%d) %s — started",
                     stage_name,
+                    index_one_based,
+                    total_items,
+                    work_item.result_key,
+                )
+                heartbeat_task = asyncio.create_task(
+                    _heartbeat(work_item.result_key, item_started_at),
+                )
+                try:
+                    result = await _maybe_await(
+                        _run_with_retry(item_context, providers),
+                    )
+                finally:
+                    heartbeat_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await heartbeat_task
+                done_counter[0] += 1
+                logger.info(
+                    "[%s] (%d/%d done) %s — finished in %.1fs",
+                    stage_name,
+                    done_counter[0],
+                    total_items,
                     work_item.result_key,
                     perf_counter() - item_started_at,
                 )
             return work_item.result_key, result
 
         gathered = await asyncio.gather(
-            *(_run_item(item) for item in work_items),
+            *(
+                _run_item(index + 1, item)
+                for index, item in enumerate(work_items)
+            ),
             return_exceptions=True,
         )
 
@@ -703,29 +753,35 @@ class PipelineOrchestrator:
     ) -> list[_StageWorkItem]:
         normalized_type = _to_detected_type(detected_type)
         if stage_name == STAGE_REPO_AGENT and normalized_type == "repository":
+            root_context = self._repository_root_context(runtime_context)
+            root_context["agent_is_root"] = True
             return [
                 _StageWorkItem(
                     result_key=STAGE_REPO_AGENT,
                     runner_key=STAGE_REPO_AGENT,
-                    context=self._repository_root_context(runtime_context),
+                    context=root_context,
                 ),
             ]
 
         if stage_name == STAGE_PERSON_AGENT and normalized_type == "user":
+            root_context = self._person_root_context(runtime_context)
+            root_context["agent_is_root"] = True
             return [
                 _StageWorkItem(
                     result_key=STAGE_PERSON_AGENT,
                     runner_key=STAGE_PERSON_AGENT,
-                    context=self._person_root_context(runtime_context),
+                    context=root_context,
                 ),
             ]
 
         if stage_name == STAGE_ORG_AGENT and normalized_type == "organization":
+            root_context = self._organization_root_context(runtime_context)
+            root_context["agent_is_root"] = True
             return [
                 _StageWorkItem(
                     result_key=STAGE_ORG_AGENT,
                     runner_key=STAGE_ORG_AGENT,
-                    context=self._organization_root_context(runtime_context),
+                    context=root_context,
                 ),
             ]
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from copy import deepcopy
 from typing import Any
 
@@ -9,15 +10,19 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
-    fetch_link_content_via_selenium_tool,
+    make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
-from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
+from src.v2.agents.models import AgentResult, ProviderSet
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.link_veracity.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
 _USER_PROMPT_TEMPLATE = load_prompt(_PROMPTS_PACKAGE, "user_prompt.md")
+
+logger = logging.getLogger(__name__)
 
 
 class LinkVeracityOutput(BaseModel):
@@ -56,12 +61,15 @@ class LLMLinkVeracityAgentV2:
         *,
         llm_runtime: V2LLMRuntime | None = None,
         llm_call_timeout_seconds: float = 180.0,
+        cache: ProviderCache | None = None,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"
             raise ValueError(message)
         self._llm_runtime = llm_runtime or V2LLMRuntime()
         self._llm_call_timeout_seconds = float(llm_call_timeout_seconds)
+        self._cache = cache
+        self._fetch_tool = make_fetch_link_content_tool(cache)
 
     async def run(
         self,
@@ -71,6 +79,11 @@ class LLMLinkVeracityAgentV2:
         del providers
         link = _resolve_link(context)
 
+        stamp_current_agent(
+            name="link_veracity_agent",
+            context={"link": link},
+        )
+
         llm_input = {
             "link": link,
             "source_entity_id": context.get("source_entity_id"),
@@ -78,6 +91,39 @@ class LLMLinkVeracityAgentV2:
             "relationships": context.get("relationships"),
             "source_url": context.get("source_url"),
         }
+
+        cache_key: str | None = None
+        if self._cache is not None:
+            cache_key = ProviderCache.make_key(
+                "link_veracity",
+                "verdict",
+                **llm_input,
+            )
+            cached_payload = self._cache.get(cache_key)
+            if isinstance(cached_payload, dict):
+                logger.info(
+                    "link_veracity cache hit — link=%r supported=%s",
+                    link,
+                    bool(cached_payload.get("relationship_supported")),
+                )
+                return AgentResult(
+                    data=dict(cached_payload),
+                    warnings=[],
+                    raw_output=deepcopy(cached_payload),
+                    model=None,
+                    provider=None,
+                    tokens_prompt=0,
+                    tokens_completion=0,
+                    stats={
+                        "agent_runtime": "llm",
+                        "link": link,
+                        "relationship_supported": bool(
+                            cached_payload.get("relationship_supported"),
+                        ),
+                        "cached": True,
+                    },
+                )
+
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
@@ -88,7 +134,7 @@ class LLMLinkVeracityAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=LinkVeracityOutput,
-                    tools=[fetch_link_content_via_selenium_tool],
+                    tools=[self._fetch_tool],
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )
@@ -109,6 +155,9 @@ class LLMLinkVeracityAgentV2:
         if "relationship_summary" not in payload:
             payload["relationship_summary"] = None
         raw_output = deepcopy(payload)
+
+        if cache_key is not None and self._cache is not None:
+            self._cache.set(cache_key, payload)
 
         return AgentResult(
             data=payload,
