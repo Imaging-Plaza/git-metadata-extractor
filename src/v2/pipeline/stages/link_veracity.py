@@ -400,9 +400,6 @@ async def run_link_veracity_stage(
     jsonld_payload: dict[str, Any] | None = None,
     entities: list[dict[str, Any]] | None = None,
 ) -> LinkVeracityStageResult:
-    # TODO(graph-cache): Cache link-veracity verdicts by normalized link + model + relation context.
-    # TODO(graph-cache): Define cache invalidation strategy tied to source entity and graph changes.
-    # TODO(graph-cache): Integrate link-veracity lookups with future graph-cache read-through/write-through policy.
     entity_link_map: dict[str, set[str]] = {}
     article_identifier_link_map: dict[str, str] = {}
     if entities is not None:

@@ -672,9 +672,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
 
         try:
-            # TODO(graph-cache): Cache link-veracity verdicts by normalized link + model + relation context.
-            # TODO(graph-cache): Define cache invalidation strategy tied to source entity and graph changes.
-            # TODO(graph-cache): Integrate link-veracity lookups with future graph-cache read-through/write-through policy.
             link_veracity_result = await run_link_veracity_stage(
                 entities=entities_for_link_validation,
                 source_url=classification.normalized_url,
