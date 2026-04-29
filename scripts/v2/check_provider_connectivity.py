@@ -18,9 +18,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 
-from src.v2.providers.infoscience_provider import RealInfoscienceProvider  # noqa: E402
-from src.v2.providers.orcid_provider import RealORCIDProvider  # noqa: E402
-from src.v2.providers.ror_provider import RealRORProvider  # noqa: E402
+from src.v2.ingest.providers.infoscience_provider import RealInfoscienceProvider  # noqa: E402
+from src.v2.ingest.providers.orcid_provider import RealORCIDProvider  # noqa: E402
+from src.v2.ingest.providers.ror_provider import RealRORProvider  # noqa: E402
 
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_PROVIDERS = ("github", "ror", "orcid", "infoscience", "logfire", "selenium")

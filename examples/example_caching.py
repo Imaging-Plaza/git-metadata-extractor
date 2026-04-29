@@ -126,7 +126,7 @@ async def example_gimie_caching():
 
     def fetch_gimie_data():
         print(f"  🔍 Fetching fresh GIMIE data for {repo_url}...")
-        return extract_gimie(repo_url, format="json-ld")
+        return extract_gimie(repo_url, serialization_format="json-ld")
 
     # First call - will fetch from GIMIE
     print("1. First call (cache miss):")

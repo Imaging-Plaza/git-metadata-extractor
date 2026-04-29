@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
 - Fixed `V2LLMRuntime` token count extraction: `result.usage` in pydantic-ai 1.5.0 is a method, not a property. Added `if callable(usage): usage = usage()` guard before field access so `tokens_prompt`/`tokens_completion` are populated from the real `RunUsage` object instead of always returning `None`. V1 agents had the same bug but silently fell back to tiktoken estimates; v2 now uses the actual API-reported counts.
 - Fixed v2 provider rate-limiter cross-loop lock reuse: shared `asyncio.Lock` instances could be reused across different event loops and fail with `"... is bound to a different event loop"`. Locks are now keyed per `(provider, event-loop-id)` to support mixed loop execution safely (script and orchestrator paths).
 - Fixed person-stage unbounded waits in LLM fanout by adding a hard timeout around `LLMPersonAgentV2` runtime calls (`llm_call_timeout_seconds`, default `180s`) with explicit timeout errors per contributor.
+- Fixed GIMIE-only repository runs when LLM is disabled: if GIMIE returns JSON-LD on `self.gimie`, the run is now marked successful instead of failing with `no data generated`.
+- Fixed end-of-run logging noise for GIMIE-only runs (`run_llm=False`): suppress the LLM token-usage summary banner.
+- Fixed `/v1/repository/gimie/json-ld` GitHub rate-limit surfacing: map GIMIE `ConnectionError` messages (secondary/primary rate limits) to clearer HTTP `429` / `503` responses instead of generic failures.
 
 ### Added
 - Added prototype body-based extract endpoint `POST /v2/extract` (keeps existing `GET /v2/extract/{full_path}` intact). Request body mirrors extract options (`source_url`, `output_format`, `agent_runtime`, `include_intermediates`, `include_context_summary`) and returns the same `V2ExtractResponse` contract.

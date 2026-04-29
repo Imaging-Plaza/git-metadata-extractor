@@ -3,6 +3,7 @@
 .claude/
 .opentix-worktree/
 .ruff_cache
+.uv-cache/
 data
 api_cache.db
 .env2

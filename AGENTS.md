@@ -26,7 +26,7 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 - Current entry task: `.internal/plan-d/PD-02-runtime-enum-and-config.md` (Plan D wave-1 runtime migration is active: `rule_based|llm` runtime split with repository-first LLM rollout and hard-fail no-fallback policy when `agent_runtime=llm`.)
 - Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
 - Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
-- For schema promotion tasks, schemas live in **three** locations that must stay byte-identical: `src/v2/schemas/{type}/{entity}.schema.json` (source), `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted), and `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture). After any schema edit, copy to all three locations and run `just v2-models-generate` to regenerate Pydantic models.
+- For schema promotion tasks, schemas live in **three** locations that must stay byte-identical: `src/v2/schema/json/{type}/{entity}.schema.json` (source), `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted), and `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture). After any schema edit, copy to all three locations and run `just v2-models-generate` to regenerate Pydantic models.
 - Repository identifier DOI/citation is stored as `schema:citation` (not `schema:identifier`) in both `identifiers` and `idSource`. Articles continue to use `schema:identifier` for their canonical identifier.
 - Entity `@id` values use canonical dereferenceable URLs when available: `https://orcid.org/{orcid}` for persons, `https://github.com/{handle}` for GitHub-identified entities, `https://ror.org/{id}` for organizations, `https://doi.org/{doi}` for DOI-identified entities. The fallback prefix for bare identifiers (UUID, pre-reconciliation handles) is `urn:pulse:` (not `urn:git-metadata-extractor:entity:`). Composite entities (memberships, contributions) use `{person_canonical_url}_{org_or_repo_canonical_url}` as their `@id`.
 - Membership entities carry an internal `_person_ref` field (set during reconciliation) that stores the canonical person ID. This field is stripped before JSON-LD output, RDF serialization, strict validation, and graph storage. It is used by crossref validation and person-membership linking. All `_`-prefixed fields are treated as internal pipeline metadata and automatically excluded from output paths.
@@ -116,8 +116,8 @@ Rules:
 - CI-like local validation:
   - `just ci`
 - V2 schema validation checks:
-  - `python -m json.tool src/v2/schemas/strict/*.json`
-  - `python -m json.tool src/v2/schemas/agent/*.json`
+  - `python -m json.tool src/v2/schema/json/strict/*.json`
+  - `python -m json.tool src/v2/schema/json/agent/*.json`
   - `.venv/bin/python -m pytest tests/v2/ --collect-only`
   - `.venv/bin/python -m pytest tests/v2 -m v2 --collect-only`
   - `just test-file tests/v2/test_test_infrastructure.py`

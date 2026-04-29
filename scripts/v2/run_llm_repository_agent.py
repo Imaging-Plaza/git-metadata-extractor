@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 from src.v2.agents.llm.repository import LLMRepositoryAgentV2
 from src.v2.agents.models import ProviderSet
 from src.v2.dependencies import _default_provider_set
-from src.v2.detection.github_url_classifier import classify_github_url
+from src.v2.ingest.detection.github_url_classifier import classify_github_url
 from src.v2.pipeline.stages import gather_context
 
 _SEP = "─" * 60

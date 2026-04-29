@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Final
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STRICT_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schemas" / "strict"
-AGENT_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schemas" / "agent"
-GENERATED_MODELS_PATH = REPO_ROOT / "src" / "v2" / "generated" / "entities.py"
-GENERATED_AGENT_MODELS_PATH = REPO_ROOT / "src" / "v2" / "generated" / "agent_entities.py"
+STRICT_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schema" / "json" / "strict"
+AGENT_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schema" / "json" / "agent"
+GENERATED_MODELS_PATH = REPO_ROOT / "src" / "v2" / "schema" / "models" / "strict.py"
+GENERATED_AGENT_MODELS_PATH = REPO_ROOT / "src" / "v2" / "schema" / "models" / "agent.py"
 
 MODEL_SCHEMA_FILES: Final[dict[str, str]] = {
     "PersonModel": "person.schema.json",
