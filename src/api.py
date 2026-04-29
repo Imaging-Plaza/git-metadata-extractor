@@ -22,14 +22,14 @@ from fastapi.responses import JSONResponse
 
 from src.v2.api import v2_router
 
-from .analysis import Organization, Repository, User
-from .cache import get_cache_manager
-from .data_models import (
+from .v1.analysis import Organization, Repository, User
+from .v1.cache import get_cache_manager
+from .v1.data_models import (
     APIOutput,
     ResourceType,
 )
-from .utils.enhanced_logging import AsyncRequestContext, setup_logging
-from .utils.github_dependency import validate_github_token
+from .v1.utils.enhanced_logging import AsyncRequestContext, setup_logging
+from .v1.utils.github_dependency import validate_github_token
 
 # Setup enhanced logging with colors
 # Allow LOG_LEVEL environment variable to override (DEBUG, INFO, WARNING, ERROR)
@@ -52,7 +52,7 @@ async def shutdown_event():
 
     # Cleanup PydanticAI agents
     try:
-        from .agents.agents_management import cleanup_agents
+        from .v1.agents.agents_management import cleanup_agents
 
         await cleanup_agents()
         logger.info("✅ Cleaned up PydanticAI agents")
@@ -61,7 +61,7 @@ async def shutdown_event():
 
     # Cleanup user enrichment agents
     try:
-        from .agents.user_enrichment import cleanup_user_agents
+        from .v1.agents.user_enrichment import cleanup_user_agents
 
         await cleanup_user_agents()
         logger.info("✅ Cleaned up user enrichment agents")
@@ -70,7 +70,7 @@ async def shutdown_event():
 
     # Cleanup organization enrichment agents
     try:
-        from .agents.organization_enrichment import cleanup_org_agents
+        from .v1.agents.organization_enrichment import cleanup_org_agents
 
         await cleanup_org_agents()
         logger.info("✅ Cleaned up organization enrichment agents")
@@ -637,7 +637,7 @@ async def get_org_json(
     usage_stats = organization.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -766,7 +766,7 @@ async def get_user_json(
     usage_stats = user.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -901,7 +901,7 @@ async def gimie(
         usage_stats = repository.get_usage_stats()
 
         # Create APIStats with timing information (no token usage since no LLM)
-        from .data_models.api import APIStats
+        from .v1.data_models.api import APIStats
 
         stats = APIStats(
             agent_input_tokens=0,
@@ -1153,7 +1153,7 @@ async def llm_jsonld(
     usage_stats = repository.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -1269,7 +1269,7 @@ async def llm_json(
     usage_stats = repository.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],

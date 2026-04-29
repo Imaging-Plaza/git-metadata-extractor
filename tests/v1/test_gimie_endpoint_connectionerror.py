@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
-from src.utils.github_dependency import validate_github_token
+from src.v1.utils.github_dependency import validate_github_token
 
 
 async def _github_info_override() -> dict:

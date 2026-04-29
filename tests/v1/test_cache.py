@@ -10,10 +10,10 @@ import requests
 import pytest
 
 # Add src to path for imports
-import src.cache.cache as cache_module
-import src.cache.cache_manager as cache_manager_module
-from src.cache.cache import get_cache
-from src.cache.cache_manager import get_cache_manager
+import src.v1.cache.cache as cache_module
+import src.v1.cache.cache_manager as cache_manager_module
+from src.v1.cache.cache import get_cache
+from src.v1.cache.cache_manager import get_cache_manager
 
 
 @pytest.fixture(autouse=True)

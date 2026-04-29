@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from src.gimie_utils.gimie_methods import extract_gimie
+from src.v1.gimie_utils.gimie_methods import extract_gimie
 
 
 @pytest.mark.skipif(

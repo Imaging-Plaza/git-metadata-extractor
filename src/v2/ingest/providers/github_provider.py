@@ -327,7 +327,7 @@ class RealGitHubProvider(GitHubProvider):
     def _resolve_gimie_extractor(self) -> GimieExtractor:
         if self._gimie_extractor is not None:
             return self._gimie_extractor
-        from src.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
+        from src.v1.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
 
         self._gimie_extractor = extract_gimie
         return extract_gimie
@@ -353,7 +353,7 @@ class RealGitHubProvider(GitHubProvider):
             return self._user_lookup
 
         if self._users_parser is None:
-            from src.parsers.users_parser import GitHubUsersParser  # noqa: PLC0415
+            from src.v1.parsers.users_parser import GitHubUsersParser  # noqa: PLC0415
 
             self._users_parser = GitHubUsersParser()
         parser = self._users_parser
@@ -373,7 +373,7 @@ class RealGitHubProvider(GitHubProvider):
             return self._organization_lookup
 
         if self._orgs_parser is None:
-            from src.parsers.orgs_parser import (  # noqa: PLC0415
+            from src.v1.parsers.orgs_parser import (  # noqa: PLC0415
                 GitHubOrganizationsParser,
             )
 

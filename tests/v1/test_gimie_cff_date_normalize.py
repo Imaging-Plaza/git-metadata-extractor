@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import yaml
 
-from src.gimie_utils import gimie_methods as gm
+from src.v1.gimie_utils import gimie_methods as gm
 
 
 def test_normalize_cff_swaps_day_month_when_middle_gt_12():

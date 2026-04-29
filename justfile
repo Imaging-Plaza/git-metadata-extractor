@@ -57,14 +57,6 @@ serve-gunicorn:
 # CLI Commands
 # ============================================================================
 
-# Run the CLI tool to extract metadata from a repository
-extract URL OUTPUT="output_file.json":
-    python src/main.py --url {{URL}} --output_path {{OUTPUT}}
-
-# Extract metadata from a default test repository
-extract-test:
-    python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path test_output.json
-
 # ============================================================================
 # Docker Commands
 # ============================================================================
@@ -102,15 +94,15 @@ docker-up: docker-build docker-run
 
 # Run fast local tests (impacted tests via testmon, no coverage, parallelized) TOKEN are provided empty to avoid trigering a real API call.
 test:
-    OPENAI_API_KEY= OPENROUTER_API_KEY= RCP_TOKEN= .venv/bin/python -m pytest tests/ -q --testmon --no-cov -n auto --dist=loadfile
+    OPENAI_API_KEY= OPENROUTER_API_KEY= RCP_TOKEN= .venv/bin/python -m pytest tests/v2/ -q --testmon --no-cov -n auto --dist=loadfile
 
 # Run full local tests (parallelized, deterministic selection)
 test-full:
-    .venv/bin/python -m pytest tests/ -q -n auto --dist=loadfile -m 'not live_provider and not llm_integration'
+    .venv/bin/python -m pytest tests/v2/ -q -n auto --dist=loadfile -m 'not live_provider and not llm_integration'
 
 # Run tests with coverage
 test-coverage:
-    .venv/bin/python -m pytest tests/ --cov=src --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'
+    .venv/bin/python -m pytest tests/v2/ --cov=src/v2 --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'
 
 # Run specific test file
 test-file FILE:
@@ -122,7 +114,7 @@ test-llm-integration:
 
 # Run tests in watch mode (requires pytest-watch)
 test-watch:
-    PYTHONPATH=src ptw tests/
+    PYTHONPATH=src ptw tests/v2/
 
 # Run Phase 8 preflight connectivity checks against live providers
 preflight-live:

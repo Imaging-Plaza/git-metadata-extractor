@@ -96,7 +96,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
     def _resolve_search_authors(self) -> InfoscienceSearch:
         if self._search_authors_func is not None:
             return self._search_authors_func
-        from src.context.infoscience import search_authors  # noqa: PLC0415
+        from src.v1.context.infoscience import search_authors  # noqa: PLC0415
 
         self._search_authors_func = search_authors
         return search_authors
@@ -104,7 +104,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
     def _resolve_search_labs(self) -> InfoscienceSearch:
         if self._search_labs_func is not None:
             return self._search_labs_func
-        from src.context.infoscience import search_labs  # noqa: PLC0415
+        from src.v1.context.infoscience import search_labs  # noqa: PLC0415
 
         self._search_labs_func = search_labs
         return search_labs
@@ -112,7 +112,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
     def _resolve_search_publications(self) -> InfoscienceSearch:
         if self._search_publications_func is not None:
             return self._search_publications_func
-        from src.context.infoscience import search_publications  # noqa: PLC0415
+        from src.v1.context.infoscience import search_publications  # noqa: PLC0415
 
         self._search_publications_func = search_publications
         return search_publications

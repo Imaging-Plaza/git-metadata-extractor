@@ -57,10 +57,6 @@ Homepage = "https://imaging-plaza.epfl.ch"
 Repository = "https://github.com/Imaging-Plaza/git-metadata-extractor"
 Issues = "https://github.com/Imaging-Plaza/git-metadata-extractor/issues"
 
-[project.scripts]
-# This assumes your CLI entry point is a function named 'main' in src/main.py
-llm-finder = "src.main:main"
-
 [project.optional-dependencies]
 dev = [
     "pre-commit>=3.0.0",

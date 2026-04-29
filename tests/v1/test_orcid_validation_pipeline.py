@@ -8,16 +8,16 @@ import asyncio
 from fastapi import Response
 
 import src.api as api_module
-import src.analysis.repositories as repositories_module
-import src.cache.cache_manager as cache_manager_module
-from src.analysis.repositories import Repository
-from src.data_models.conversion import (
+import src.v1.analysis.repositories as repositories_module
+import src.v1.cache.cache_manager as cache_manager_module
+from src.v1.analysis.repositories import Repository
+from src.v1.data_models.conversion import (
     convert_pydantic_to_jsonld,
     create_simplified_model,
 )
-from src.data_models.models import Person
-from src.data_models.repository import SoftwareSourceCode
-from src.utils.url_validation import (
+from src.v1.data_models.models import Person
+from src.v1.data_models.repository import SoftwareSourceCode
+from src.v1.utils.url_validation import (
     normalize_orcid_id,
     normalize_orcid_url,
     validate_author_urls,

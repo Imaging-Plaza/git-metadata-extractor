@@ -7,12 +7,10 @@ The goal is safe, reproducible contributions with minimal human back-and-forth.
 ## Project Snapshot
 - Language/runtime: Python project with package code under `src/`.
 - Main runtime surfaces:
-  - API: `src/api.py`
-  - CLI: `src/main.py`
-  - Analysis orchestration: `src/analysis/`
-  - Agent pipelines: `src/agents/`
-  - Data models/contracts: `src/data_models/`
-  - Tests: `tests/`
+  - API: `src/api.py` (thin shell — mounts both V1 and V2 routers)
+  - V1 (legacy pipeline, frozen): `src/v1/` — `analysis/`, `agents/`, `data_models/`, `cache/`, `context/`, plus legacy CLI at `src/v1/main.py`
+  - V2 (canonical extraction runtime): `src/v2/` — pipeline of small single-purpose agents under `src/v2/agents/llm/` and `src/v2/agents/rule_based/`, coordinated by `src/v2/pipeline/orchestrator.py`
+  - Tests: `tests/v2/` (default test target). V1 tests live under `tests/v1/` and are not run by default.
 - Core references:
   - `README.md`
   - `.internal/RISKS.md`
@@ -136,19 +134,28 @@ Testing command guidance:
 - Avoid ad-hoc `PYTHONPATH=...` unless explicitly required for a non-module script workflow.
 
 ## Architecture Map For Agents
-- Repository analysis flow entrypoints: `src/analysis/repositories.py`
+
+V1 (legacy, under `src/v1/`):
+- Repository analysis flow entrypoints: `src/v1/analysis/repositories.py`
 - User and organization analysis entrypoints:
-  - `src/analysis/user.py`
-  - `src/analysis/organization.py`
+  - `src/v1/analysis/user.py`
+  - `src/v1/analysis/organization.py`
 - Agent implementations:
-  - `src/agents/`
-  - Atomic subpipeline: `src/agents/atomic_agents/`
+  - `src/v1/agents/`
+  - Atomic subpipeline: `src/v1/agents/atomic_agents/`
 - Data contracts:
-  - `src/data_models/`
+  - `src/v1/data_models/`
 - Context and external lookups:
-  - `src/context/`
+  - `src/v1/context/`
 - Cache layer:
-  - `src/cache/`
+  - `src/v1/cache/`
+
+V2 (canonical, under `src/v2/`):
+- Pipeline orchestrator: `src/v2/pipeline/orchestrator.py`
+- LLM agents (one concern each): `src/v2/agents/llm/{person,repository,organization,article,membership,contribution,context_summary,critic,dedup,link_veracity}/agent.py`
+- Rule-based agents: `src/v2/agents/rule_based/`
+- Provider clients (GitHub, ORCID, Infoscience, ROR): `src/v2/ingest/providers/`
+- API surface: `src/v2/api.py`
 
 ## Editing Rules (Strict)
 - Keep diffs minimal and scoped to the requested task.
@@ -193,8 +200,8 @@ For changes to FastAPI endpoints in `src/api.py`, include:
 - Compatibility or migration notes.
 - Test coverage for changed endpoint behavior.
 
-For changes to models in `src/data_models/`, include:
-- Impact notes on downstream usage (`src/analysis/`, `src/agents/`, API surface).
+For changes to V1 models in `src/v1/data_models/`, include:
+- Impact notes on downstream usage (`src/v1/analysis/`, `src/v1/agents/`, API surface).
 - Tests for new/changed fields and validation behavior.
 
 ## Output/Reporting Contract For Agents
@@ -223,7 +230,7 @@ No vague "done" messages. Reports must include verifiable evidence.
 - Expectation: Agent halts and reports the missing variable explicitly; no fabricated results.
 
 3. Workflow consistency
-- Scenario: Bug fix in `src/agents/organization_enrichment.py`.
+- Scenario: Bug fix in `src/v1/agents/organization_enrichment.py`.
 - Expectation: Agent follows the bug-fix playbook and runs targeted tests first.
 
 4. Safety guardrails

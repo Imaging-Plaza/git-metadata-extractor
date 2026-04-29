@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 
 import src.api as api_module
-import src.cache.cache_manager as cache_manager_module
+import src.v1.cache.cache_manager as cache_manager_module
 import src.v2.api as v2_api_module
 
 app = api_module.app
