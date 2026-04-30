@@ -850,7 +850,11 @@ class PipelineOrchestrator:
             )
             return [
                 _StageWorkItem(
-                    result_key=f"{STAGE_CONTRIBUTION_AGENT}:{context['contribution_seed']}",
+                    result_key=(
+                        f"{STAGE_CONTRIBUTION_AGENT}:"
+                        f"{context['target_person']['id']}_"
+                        f"{context['contribution_seed']}"
+                    ),
                     runner_key=STAGE_CONTRIBUTION_AGENT,
                     context=context,
                 )
@@ -1680,6 +1684,13 @@ class PipelineOrchestrator:
         runtime_context: dict[str, Any],
         detected_type: str,
     ) -> list[dict[str, Any]]:
+        """One context per `(person, repository)` pair.
+
+        Each pair yields exactly one work item, because the data model says a
+        person contributes to a repo exactly once. With multi-author repos
+        this means N people × M repos = N×M agent calls; the agent verdict
+        cache makes repeats cheap on re-runs.
+        """
         base_context = self._class_agent_base_context(runtime_context, detected_type)
         known_persons = base_context.get("known_persons")
         known_repositories = base_context.get("known_repositories")
@@ -1688,11 +1699,12 @@ class PipelineOrchestrator:
         if not known_persons or not known_repositories:
             return []
 
+        person_derivations = self._person_derivations_by_id(runtime_context)
         repository_derivations = self._repository_derivations_by_id(runtime_context)
         contexts: list[dict[str, Any]] = []
-        seen_seeds: set[str] = set()
+        seen_pairs: set[tuple[str, str]] = set()
 
-        for repository in sorted(
+        sorted_repositories = sorted(
             [item for item in known_repositories if isinstance(item, dict)],
             key=lambda item: str(
                 item.get("id")
@@ -1700,22 +1712,40 @@ class PipelineOrchestrator:
                 or item.get("full_name")
                 or "",
             ),
-        ):
+        )
+        sorted_persons = sorted(
+            [item for item in known_persons if isinstance(item, dict)],
+            key=lambda item: str(item.get("id", "")),
+        )
+
+        for repository in sorted_repositories:
             repository_id = repository.get("id")
             if not isinstance(repository_id, str) or not repository_id:
                 continue
-            if repository_id in seen_seeds:
-                continue
-            seen_seeds.add(repository_id)
-
             merged_repository = self._merge_repository_with_derivation(
                 repository,
                 repository_derivations.get(repository_id),
             )
-            context = deepcopy(base_context)
-            context["contribution_seed"] = repository_id
-            context["known_persons"] = deepcopy(known_persons)
-            context["known_repositories"] = [merged_repository]
-            contexts.append(context)
+
+            for person in sorted_persons:
+                person_id = person.get("id")
+                if not isinstance(person_id, str) or not person_id:
+                    continue
+                pair = (person_id, repository_id)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+
+                merged_person = self._merge_person_with_derivation(
+                    person,
+                    person_derivations.get(person_id),
+                )
+                context = deepcopy(base_context)
+                context["contribution_seed"] = repository_id
+                context["known_persons"] = [merged_person]
+                context["known_repositories"] = [merged_repository]
+                context["target_person"] = merged_person
+                context["target_repository"] = merged_repository
+                contexts.append(context)
 
         return contexts

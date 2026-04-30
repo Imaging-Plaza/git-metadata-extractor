@@ -1,4 +1,7 @@
 from src.v2.api_models.contracts import (
+    V2ExtractJob,
+    V2ExtractJobAccepted,
+    V2ExtractJobStatus,
     V2ExtractRequest,
     V2ExtractResponse,
     V2HealthResponse,
@@ -15,6 +18,9 @@ __all__ = [
     "RepositoryTypeV2",
     "V2ErrorResponse",
     "V2ErrorType",
+    "V2ExtractJob",
+    "V2ExtractJobAccepted",
+    "V2ExtractJobStatus",
     "V2ExtractRequest",
     "V2ExtractResponse",
     "V2FieldError",

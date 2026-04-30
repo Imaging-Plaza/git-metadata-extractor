@@ -8,7 +8,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._payload_helpers import force_server_uuid
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
+from src.v2.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
@@ -139,6 +141,7 @@ class LLMMembershipAgentV2:
         tools = [make_fetch_link_content_tool(self._cache)]
         if providers.orcid is not None:
             tools.append(make_orcid_person_tool(providers.orcid))
+            tools.append(make_query_orcid_tool(providers.orcid))
 
         try:
             llm_result = await asyncio.wait_for(
@@ -165,6 +168,8 @@ class LLMMembershipAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        force_server_uuid(payload, uuid_value)
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)

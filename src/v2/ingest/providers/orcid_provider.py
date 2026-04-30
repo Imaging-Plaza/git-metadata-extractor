@@ -10,10 +10,20 @@ from src.v2.ingest.providers.base import (
     ORCIDAffiliation,
     ORCIDProvider,
     ORCIDRecord,
+    ORCIDSearchHit,
     ProviderNotFoundError,
     ProviderPermissionError,
     ProviderRateLimitError,
 )
+
+EXPANDED_SEARCH_EDISMAX = (
+    '{!edismax qf="given-and-family-names^50.0 family-name^10.0 '
+    'given-names^10.0 credit-name^10.0 other-names^5.0 text^1.0" '
+    'pf="given-and-family-names^50.0" '
+    'bq="current-institution-affiliation-name:[* TO *]^100.0 '
+    'past-institution-affiliation-name:[* TO *]^70" mm=1}'
+)
+EXPANDED_SEARCH_MAX_ROWS = 200
 
 if TYPE_CHECKING:
     from src.v2.ingest.providers.rate_limiter import RateLimiter
@@ -117,10 +127,16 @@ class RealORCIDProvider(ORCIDProvider):
             self._session = requests.Session()
         return self._session
 
-    def _request(self, endpoint: str) -> dict[str, Any]:
+    def _request(
+        self,
+        endpoint: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         response = self._run_with_rate_limit(
             lambda: self._http_client().get(
                 f"{self._base_url}{endpoint}",
+                params=params,
                 headers={"Accept": "application/json"},
                 timeout=self._timeout,
             ),
@@ -210,3 +226,69 @@ class RealORCIDProvider(ORCIDProvider):
             _fetch,
             label=f"orcid.get_person_by_orcid({normalized_orcid})",
         )
+
+    def search_persons(
+        self,
+        query: str,
+        *,
+        rows: int = 50,
+        start: int = 0,
+    ) -> list[ORCIDSearchHit]:
+        cleaned_query = query.strip()
+        if not cleaned_query:
+            return []
+        bounded_rows = max(1, min(rows, EXPANDED_SEARCH_MAX_ROWS))
+        bounded_start = max(0, start)
+
+        def _fetch() -> list[ORCIDSearchHit]:
+            payload = self._request(
+                "/expanded-search/",
+                params={
+                    "q": f"{EXPANDED_SEARCH_EDISMAX}{cleaned_query}",
+                    "start": bounded_start,
+                    "rows": bounded_rows,
+                },
+            )
+            results = payload.get("expanded-result")
+            if not isinstance(results, list):
+                return []
+            return [
+                _normalize_search_hit(item)
+                for item in results
+                if isinstance(item, dict)
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "orcid",
+            "search_persons",
+            query=cleaned_query,
+            rows=bounded_rows,
+            start=bounded_start,
+        )
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"orcid.search_persons({cleaned_query!r})",
+        )
+
+
+def _normalize_search_hit(item: dict[str, Any]) -> ORCIDSearchHit:
+    def _str_or_none(value: Any) -> str | None:
+        return value if isinstance(value, str) and value else None
+
+    def _str_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [entry for entry in value if isinstance(entry, str) and entry]
+
+    return ORCIDSearchHit(
+        orcid_id=_str_or_none(item.get("orcid-id")),
+        given_names=_str_or_none(item.get("given-names")),
+        family_names=_str_or_none(item.get("family-names")),
+        credit_name=_str_or_none(item.get("credit-name")),
+        other_names=_str_list(item.get("other-name")),
+        institution_names=_str_list(item.get("institution-name")),
+        emails=_str_list(item.get("email")),
+    )

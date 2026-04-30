@@ -113,6 +113,22 @@ class GitHubProvider(BaseProvider, ABC):
     def get_languages(self, full_name: str) -> dict[str, int]:
         """Return language byte counts for ``owner/repo``."""
 
+    def get_repository_sbom(self, full_name: str) -> list[dict[str, Any]] | None:
+        """Return the parsed SPDX dependency list for ``owner/repo``.
+
+        Each entry is a dict with keys ``name``, ``ecosystem``, ``version``,
+        and ``spdxId``. Returns ``None`` when the repository has no SBOM
+        available (e.g. dependency graph disabled, private repo without the
+        required scope, or 404).
+
+        Default implementation returns ``None`` so providers that do not
+        expose dependency data (test fakes, partial mocks) need not stub
+        this. Implementations must not raise on missing SBOMs — only on
+        transport-level failures.
+        """
+        del full_name
+        return None
+
     def get_repository_jsonld(self, full_name: str) -> dict[str, Any]:
         """Return the raw GIMIE JSON-LD payload for ``owner/repo``, or an empty dict."""
         return {}
@@ -190,9 +206,31 @@ class ORCIDRecord(TypedDict):
     affiliations: list[str]
 
 
+class ORCIDSearchHit(TypedDict):
+    """Single hit returned by the ORCID expanded-search endpoint."""
+
+    orcid_id: str | None
+    given_names: str | None
+    family_names: str | None
+    credit_name: str | None
+    other_names: list[str]
+    institution_names: list[str]
+    emails: list[str]
+
+
 class ORCIDProvider(BaseProvider, ABC):
     """Adapter interface for ORCID person record lookups."""
 
     @abstractmethod
     def get_person_by_orcid(self, orcid_id: str) -> ORCIDRecord:
         """Return normalized ORCID profile data for a canonical ORCID identifier."""
+
+    @abstractmethod
+    def search_persons(
+        self,
+        query: str,
+        *,
+        rows: int = 50,
+        start: int = 0,
+    ) -> list[ORCIDSearchHit]:
+        """Search ORCID expanded-search for persons matching ``query``."""

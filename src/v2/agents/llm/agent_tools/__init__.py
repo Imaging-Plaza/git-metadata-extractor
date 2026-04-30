@@ -24,6 +24,10 @@ from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
 from src.v2.agents.llm.agent_tools.organization_identity import (
     make_organization_identity_search_tool,
 )
+from src.v2.agents.llm.agent_tools.query_dependencies import (
+    make_query_dependencies_tool,
+)
+from src.v2.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
 from src.v2.agents.llm.agent_tools.repository_corpus_grep import (
     make_repository_corpus_grep_tool,
 )
@@ -52,6 +56,8 @@ __all__ = [
     "make_infoscience_search_tool",
     "make_organization_identity_search_tool",
     "make_orcid_person_tool",
+    "make_query_dependencies_tool",
+    "make_query_orcid_tool",
     "make_ror_organization_search_tool",
     "make_repository_corpus_grep_tool",
 ]

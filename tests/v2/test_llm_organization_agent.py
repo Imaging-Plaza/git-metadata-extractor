@@ -171,12 +171,7 @@ def test_llm_organization_agent_timeout_includes_identifier_and_timeout_seconds(
 
 def test_llm_organization_agent_records_strict_schema_warnings() -> None:
     payload = _valid_organization_payload()
-    payload["identifiers"] = {
-        "pulse:ror": None,
-        "pulse:infoscienceOrganizationIdentifier": None,
-        "pulse:githubOrganizationHandle": "github",
-        "uuid": "not-a-valid-uuid",
-    }
+    payload["pulse:OrganizationType"] = "pulse:NotAValidEnumValue"
 
     agent = LLMOrganizationAgentV2(llm_runtime=_FakeLLMRuntime(payload))
 

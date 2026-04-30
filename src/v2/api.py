@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import sys
 from copy import deepcopy
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from time import perf_counter
@@ -18,14 +20,18 @@ from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.config import V2Config
-from src.v2.dependencies import get_provider_set
+from src.v2.dependencies import _resolve_provider_cache, get_provider_set
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.jobs import JobStore
 from src.v2.observation.query_log import QueryLog, query_log_var
 from src.v2.schema import load_jsonld_context
 from src.v2.api_models import (
     V2ErrorResponse,
     V2ErrorType,
+    V2ExtractJob,
+    V2ExtractJobAccepted,
+    V2ExtractJobStatus,
     V2ExtractRequest,
     V2ExtractResponse,
     V2FieldError,
@@ -42,11 +48,14 @@ from src.v2.pipeline.stages import (
     build_json_output,
     build_jsonld_output,
     compute_stats,
+    infer_org_units,
+    infer_owners,
     promote_failed_id_entities,
     reconcile_entities,
     run_llm_critic_stage,
     run_llm_dedup_stage,
     run_link_veracity_stage,
+    validate_articles,
     validate_ownership,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
@@ -104,6 +113,19 @@ def _is_pipeline_cache_enabled() -> bool:
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
 
 
+def _should_apply_critic_pruning() -> bool:
+    """Read `V2_APPLY_CRITIC_PRUNING` env var (default false).
+
+    When false (the default), the LLM critic stage is skipped entirely so no
+    entities get dropped from the output. Set to true to re-enable the critic
+    stage's drop suggestions.
+    """
+    raw = os.getenv("V2_APPLY_CRITIC_PRUNING")
+    if raw is None:
+        return False
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
 def _format_duration(seconds: float) -> str:
     """Render a duration in compact human form, e.g. '7.3s' or '4m 12s'."""
     if seconds < 60.0:
@@ -146,6 +168,94 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     orchestrator = PipelineOrchestrator(cache=cache)
     request.app.state.v2_orchestrator = orchestrator
     return orchestrator
+
+
+def _resolve_job_store(request: Request) -> JobStore | None:
+    """Resolve a JobStore backed by the shared ProviderCache, if available."""
+    cache = _resolve_provider_cache(request.app.state)
+    if not isinstance(cache, ProviderCache):
+        return None
+    return JobStore(cache)
+
+
+def _track_background_task(request: Request, task: asyncio.Task[Any]) -> None:
+    """Hold a strong reference to a background task so it isn't GC'd mid-flight."""
+    tasks: set[asyncio.Task[Any]] | None = getattr(
+        request.app.state,
+        "_v2_job_tasks",
+        None,
+    )
+    if tasks is None:
+        tasks = set()
+        request.app.state._v2_job_tasks = tasks  # noqa: SLF001
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)
+
+
+def _job_status_path(job_id: str) -> str:
+    return f"/v2/jobs/{job_id}"
+
+
+async def _run_extract_job(
+    *,
+    payload: V2ExtractRequest,
+    request: Request,
+    providers: ProviderSet,
+    job_store: JobStore,
+    job_id: str,
+) -> None:
+    """Execute the extract pipeline for a job and persist the outcome.
+
+    Runs the existing GET handler as a plain async function, then unwraps the
+    success/error result onto the persisted V2ExtractJob record.
+    """
+    try:
+        existing = job_store.get(job_id)
+        if existing is None:
+            return
+        existing.status = V2ExtractJobStatus.RUNNING
+        existing.started_at = datetime.now(timezone.utc)
+        job_store.set(existing)
+
+        result = await extract(
+            full_path=payload.source_url,
+            request=request,
+            output_format=payload.output_format,
+            agent_runtime=payload.agent_runtime,
+            include_context_summary=payload.include_context_summary,
+            providers=providers,
+        )
+
+        finished = job_store.get(job_id) or existing
+        finished.completed_at = datetime.now(timezone.utc)
+        if isinstance(result, V2ExtractResponse):
+            finished.status = V2ExtractJobStatus.COMPLETED
+            finished.result = result
+        else:
+            finished.status = V2ExtractJobStatus.FAILED
+            try:
+                error_payload = json.loads(result.body)
+                finished.error = V2ErrorResponse.model_validate(error_payload)
+            except Exception:  # noqa: BLE001
+                finished.error = V2ErrorResponse(
+                    error_type=V2ErrorType.PIPELINE_ERROR,
+                    detail="extraction failed with non-decodable error payload",
+                    source_url=payload.source_url,
+                )
+        job_store.set(finished)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("extract job %s failed", job_id)
+        record = job_store.get(job_id)
+        if record is None:
+            return
+        record.status = V2ExtractJobStatus.FAILED
+        record.completed_at = datetime.now(timezone.utc)
+        record.error = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail=str(exc),
+            source_url=payload.source_url,
+        )
+        job_store.set(record)
 
 
 def _append_unique_warning(warnings: list[str], warning: str) -> None:
@@ -452,7 +562,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for warning in reconciled.link_warnings:
         _append_unique_warning(warnings, warning)
 
-    if resolved_runtime == AgentRuntime.LLM:
+    apply_critic_pruning = _should_apply_critic_pruning()
+    if resolved_runtime == AgentRuntime.LLM and not apply_critic_pruning:
+        logger.info(
+            "%s: skipped (V2_APPLY_CRITIC_PRUNING=false — entities preserved)",
+            STAGE_LLM_CRITIC,
+        )
+    if resolved_runtime == AgentRuntime.LLM and apply_critic_pruning:
         llm_critic_executed = True
         try:
             critic_result = await run_llm_critic_stage(
@@ -636,6 +752,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 for warning in link_pruning_warnings:
                     _append_unique_warning(warnings, warning)
 
+        assembled_output, article_validation_warnings = validate_articles(
+            assembled_output,
+            veracity_records=link_veracity_result.records,
+        )
+        for warning in article_validation_warnings:
+            _append_unique_warning(warnings, warning)
+
     link_veracity_seconds = perf_counter() - link_veracity_started_at
 
     assembled_output, ownership_warnings = validate_ownership(assembled_output)
@@ -646,6 +769,24 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             "y" if len(ownership_warnings) == 1 else "ies",
         )
     for warning in ownership_warnings:
+        _append_unique_warning(warnings, warning)
+
+    assembled_output, owner_inference_warnings = infer_owners(assembled_output)
+    if owner_inference_warnings:
+        logger.info(
+            "owner_inference: stamped %d ownership relationship(s)",
+            len(owner_inference_warnings),
+        )
+    for warning in owner_inference_warnings:
+        _append_unique_warning(warnings, warning)
+
+    assembled_output, org_unit_warnings = infer_org_units(assembled_output)
+    if org_unit_warnings:
+        logger.info(
+            "org_unit_inference: stamped %d unit relationship(s)",
+            len(org_unit_warnings),
+        )
+    for warning in org_unit_warnings:
         _append_unique_warning(warnings, warning)
 
     shacl_graph_payload = build_jsonld_output(
@@ -805,25 +946,126 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
 @v2_router.post(
     "/extract",
-    response_model=V2ExtractResponse,
+    response_model=V2ExtractJobAccepted,
     response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def extract_post(
     payload: V2ExtractRequest,
     request: Request,
     *,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
-) -> V2ExtractResponse | JSONResponse:
-    """Prototype POST variant of v2 extraction with body-based inputs."""
+) -> V2ExtractJobAccepted | JSONResponse:
+    """Submit an extraction asynchronously. Returns a job id to poll via GET."""
 
-    return await extract(
-        full_path=payload.source_url,
-        request=request,
-        output_format=payload.output_format,
-        agent_runtime=payload.agent_runtime,
-        include_context_summary=payload.include_context_summary,
-        providers=providers,
+    try:
+        classification = classify_github_url(payload.source_url)
+    except UnsupportedGitHubURL as exc:
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.UNSUPPORTED_URL,
+            detail=exc.reason,
+            source_url=exc.normalized_url,
+            detected_path_kind=_extract_path_kind(payload.source_url),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+    except ValueError as exc:
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.UNSUPPORTED_URL,
+            detail=str(exc),
+            source_url=payload.source_url,
+            detected_path_kind=_extract_path_kind(payload.source_url),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+
+    job_store = _resolve_job_store(request)
+    if job_store is None:
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail="async job store unavailable: provider cache is disabled",
+            source_url=classification.normalized_url,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    normalized_payload = payload.model_copy(
+        update={"source_url": classification.normalized_url},
     )
+    job = V2ExtractJob(
+        job_id=job_id,
+        status=V2ExtractJobStatus.PENDING,
+        request=normalized_payload,
+        submitted_at=submitted_at,
+    )
+    job_store.set(job)
+
+    task = asyncio.create_task(
+        _run_extract_job(
+            payload=normalized_payload,
+            request=request,
+            providers=providers,
+            job_store=job_store,
+            job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+
+    logger.info(
+        "extract job submitted: job_id=%s url=%s detected_type=%s",
+        job_id,
+        classification.normalized_url,
+        classification.detected_type.value,
+    )
+    return V2ExtractJobAccepted(
+        job_id=job_id,
+        status=V2ExtractJobStatus.PENDING,
+        status_url=_job_status_path(job_id),
+        submitted_at=submitted_at,
+    )
+
+
+@v2_router.get(
+    "/jobs/{job_id}",
+    response_model=V2ExtractJob,
+    response_model_exclude_none=True,
+)
+async def extract_job(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+) -> V2ExtractJob | JSONResponse:
+    """Retrieve a previously submitted extraction job by id."""
+
+    job_store = _resolve_job_store(request)
+    if job_store is None:
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail="async job store unavailable: provider cache is disabled",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+
+    record = job_store.get(job_id)
+    if record is None:
+        error_payload = V2ErrorResponse(
+            error_type=V2ErrorType.NOT_FOUND,
+            detail=f"no extract job found with id '{job_id}'",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content=error_payload.model_dump(mode="json", exclude_none=True),
+        )
+    return record
 
 
 @v2_router.get(

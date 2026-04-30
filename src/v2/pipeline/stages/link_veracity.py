@@ -73,6 +73,37 @@ ENTITY_TYPE_TO_SINGULAR = {
 }
 _DROP = object()
 
+# Predicates whose evidence lives on the SOURCE side, not the link target.
+# Fetching the link target and asking "does this page support
+# `<source> <predicate> <link>`?" produces false negatives because the target
+# page never mentions the source. We skip these to avoid wasted Selenium
+# fetches + LLM calls and noisy warnings.
+_ASYMMETRIC_PREDICATES: frozenset[str] = frozenset(
+    {
+        "schema:author",
+        "schema:contributor",
+        "schema:memberOf",
+        "pulse:owns",
+        "pulse:contributionTo",
+        "pulse:firstContributionDate",
+        "pulse:lastContributionDate",
+        "org:hasUnit",
+        "org:unitOf",
+        "org:organization",
+        "org:role",
+        "time:hasBeginning",
+        "time:hasEnd",
+    },
+)
+
+
+def _is_supportable_predicate(predicate: Any) -> bool:
+    """Predicates whose evidence plausibly lives on the link target's page."""
+
+    if not isinstance(predicate, str) or not predicate:
+        return False
+    return predicate not in _ASYMMETRIC_PREDICATES
+
 
 @dataclass(slots=True)
 class LinkVeracityStageResult:
@@ -137,6 +168,11 @@ def collect_unique_http_link_contexts(
         normalized_link = link.strip()
         if not normalized_link or not _is_http_url(normalized_link):
             return
+        if not _is_supportable_predicate(predicate):
+            return
+        if isinstance(source_entity_id, str) and source_entity_id == normalized_link:
+            # Self-reference: identifying URL recorded against the entity it identifies.
+            return
 
         context = link_contexts.setdefault(
             normalized_link,
@@ -170,20 +206,20 @@ def collect_unique_http_link_contexts(
 
         if isinstance(value, dict):
             at_id = value.get("@id")
-            if isinstance(at_id, str):
+            if isinstance(at_id, str) and predicate is not None:
                 _record_link(
                     link=at_id,
                     source_entity_id=source_entity_id,
                     predicate=predicate,
                 )
+                return
             for key, nested in value.items():
                 if key == "@id":
                     continue
-                next_predicate = predicate if predicate else key
                 _walk(
                     nested,
                     source_entity_id=source_entity_id,
-                    predicate=next_predicate,
+                    predicate=key,
                 )
             return
 
@@ -229,6 +265,13 @@ def _scan_entity_links(
             return
 
         entity_link_map.setdefault(source_entity_id, set()).add(normalized_link)
+
+        if not _is_supportable_predicate(predicate):
+            return
+        if source_entity_id == normalized_link:
+            # Self-reference: identifying URL recorded against the entity it identifies.
+            return
+
         context = link_contexts.setdefault(
             normalized_link,
             {
@@ -267,13 +310,21 @@ def _scan_entity_links(
                 )
             return
         if isinstance(value, dict):
+            at_id = value.get("@id")
+            if isinstance(at_id, str) and predicate is not None:
+                _record_link(
+                    link=at_id,
+                    source_entity_id=source_entity_id,
+                    predicate=predicate,
+                )
+                return
             for key, nested in value.items():
                 if key in IDENTITY_KEYS:
                     continue
                 _walk(
                     nested,
                     source_entity_id=source_entity_id,
-                    predicate=key if predicate is None else predicate,
+                    predicate=key,
                 )
 
     for index, entity in enumerate(entities):

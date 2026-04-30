@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._payload_helpers import force_server_uuid
 from src.v2.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
@@ -18,6 +19,7 @@ from src.v2.agents.llm._verdict_cache import (
 from src.v2.agents.llm.agent_tools.email_hash import hash_user_email_tool
 from src.v2.agents.llm.agent_tools.infoscience_search import make_infoscience_search_tool
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
+from src.v2.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
@@ -361,6 +363,7 @@ class LLMPersonAgentV2:
             tools.append(make_infoscience_search_tool(providers.infoscience))
         if providers.orcid is not None:
             tools.append(make_orcid_person_tool(providers.orcid))
+            tools.append(make_query_orcid_tool(providers.orcid))
 
         identifier = (
             github_username
@@ -410,6 +413,8 @@ class LLMPersonAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        force_server_uuid(payload, uuid_value)
 
         raw_output = deepcopy(payload)
 

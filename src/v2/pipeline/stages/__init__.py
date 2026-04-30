@@ -1,5 +1,6 @@
 """Pipeline stages for the v2 extraction orchestrator."""
 
+from src.v2.pipeline.stages.article_validation import validate_articles
 from src.v2.pipeline.stages.context_gather import gather_context
 from src.v2.pipeline.stages.jsonld_build import build_jsonld_output
 from src.v2.pipeline.stages.link_veracity import (
@@ -23,7 +24,11 @@ from src.v2.pipeline.stages.output_assembly import (
     assemble_output,
     build_json_output,
 )
-from src.v2.pipeline.stages.ownership_check import validate_ownership
+from src.v2.pipeline.stages.ownership_check import (
+    infer_org_units,
+    infer_owners,
+    validate_ownership,
+)
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.pipeline.stages.stats import compute_stats
 
@@ -42,8 +47,11 @@ __all__ = [
     "LLMDedupStageResult",
     "LinkVeracityStageResult",
     "apply_link_pruning_to_assembled_output",
+    "infer_org_units",
+    "infer_owners",
     "promote_failed_id_entities",
     "reconcile_entities",
+    "validate_articles",
     "validate_ownership",
     "run_llm_critic_stage",
     "run_llm_dedup_stage",

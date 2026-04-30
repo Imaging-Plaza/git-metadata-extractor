@@ -195,9 +195,12 @@ def test_run_link_veracity_stage_scans_entities_and_derives_article_doi_link(mon
         ),
     )
 
-    assert result.checked_count == 2
+    # DOI url == entity id, so it's a self-reference and skipped by veracity.
+    # Only the distinct schema:url link is checked.
+    assert result.checked_count == 1
     assert result.article_identifier_link_map["https://doi.org/10.1000/example"] == "https://doi.org/10.1000/example"
     assert "https://example.org/article" in result.entity_link_map["https://doi.org/10.1000/example"]
+    assert "https://doi.org/10.1000/example" in result.entity_link_map["https://doi.org/10.1000/example"]
 
 
 def test_apply_link_pruning_to_assembled_output_prunes_links_and_drops_entity() -> None:

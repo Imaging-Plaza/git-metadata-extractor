@@ -19,7 +19,14 @@ Optional fields:
 - `pulse:lastContributionDate` (`YYYY-MM-DDTHH:MM:SSZ`)
 
 Rules:
+- The Contribution you must emit is for **`target_person` → `target_repository`** —
+  these two entities are the authoritative pair for this invocation. Set
+  `schema:author` to `target_person.id` and `pulse:contributionTo` to
+  `target_repository.id`.
 - Use canonical person and repository IDs from known entities.
-- Prefer `contribution_seed` as the repository target when present.
-- Build deterministic composite ID when possible: `{personId}_{repositoryId}`.
+- Build the composite id deterministically: `{target_person.id}_{target_repository.id}`,
+  set `idSource = "pulse:composite"`, and put the same composite into
+  `identifiers["pulse:composite"]`.
+- `contribution_seed` is the repository id (kept for backwards compatibility) —
+  prefer `target_repository.id` over it when both are present.
 - Do not invent unsupported fields.

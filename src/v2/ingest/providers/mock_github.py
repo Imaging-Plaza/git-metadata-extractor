@@ -94,3 +94,21 @@ class MockGitHubProvider(GitHubProvider):
 
         self._raise_repo_error(full_name)
         raise AssertionError
+
+    def get_repository_sbom(self, full_name: str) -> list[dict[str, Any]] | None:
+        if full_name != "octocat/Hello-World":
+            return None
+        return [
+            {
+                "name": "requests",
+                "ecosystem": "pypi",
+                "version": "2.31.0",
+                "spdxId": "SPDXRef-pypi-requests",
+            },
+            {
+                "name": "left-pad",
+                "ecosystem": "npm",
+                "version": "1.3.0",
+                "spdxId": "SPDXRef-npm-left-pad",
+            },
+        ]

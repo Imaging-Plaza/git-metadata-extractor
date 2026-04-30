@@ -124,6 +124,23 @@ Returns:
 Use the ORCID `name` for `schema:name` if it is more complete than the GitHub display name.
 Use `affiliations` to build `org:hasMembership` entries.
 
+### `query_orcid`
+
+Call this tool with a free-text name (and optional affiliation keywords) to discover candidate ORCID identifiers when no ORCID is provided in the context and `search_infoscience_person` did not return one.
+
+Args:
+- `query` — name to search (e.g. `"noemie mazare"`); affiliation keywords are accepted but ranking is dominated by the boosted name fields
+- `rows` — max hits to return (default 50, capped at 200)
+- `start` — offset for pagination (default 0)
+
+Returns a list of hits, each with:
+- `orcid_id` — candidate ORCID identifier
+- `given_names`, `family_names`, `credit_name`, `other_names`
+- `institution_names` — current/past affiliation strings (use these to disambiguate homonyms)
+- `emails` — public emails when available
+
+**Pick the hit whose `institution_names` overlap the repository or contributor's known affiliations**, then pass that `orcid_id` to `get_orcid_record` for the full employment/education profile. Do not assign `pulse:orcid` from `query_orcid` alone — only after `get_orcid_record` confirms the record.
+
 ### `hash_user_email`
 
 Call this tool with a raw email string and use the output as `schema:email`.

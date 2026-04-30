@@ -193,7 +193,6 @@ def test_llm_membership_agent_appends_runtime_prompt_context_blocks() -> None:
     assert upstream_json in prompt
     assert "## Additional Context (verbatim text)" in prompt
     assert prompt_appendix in prompt
-    assert "generate_uuid_v4" in captured_tool_names
     assert "fetch_link_content_via_selenium" in captured_tool_names
     assert "get_orcid_record" not in captured_tool_names
 
@@ -233,7 +232,6 @@ def test_llm_membership_agent_adds_orcid_tool_when_provider_available() -> None:
         ),
     )
 
-    assert "generate_uuid_v4" in captured_tool_names
     assert "fetch_link_content_via_selenium" in captured_tool_names
     assert "get_orcid_record" in captured_tool_names
 

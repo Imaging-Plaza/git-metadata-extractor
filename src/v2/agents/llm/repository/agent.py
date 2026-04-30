@@ -8,16 +8,20 @@ from urllib.parse import urlparse
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._payload_helpers import force_server_uuid
 from src.v2.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
 from src.v2.agents.llm.agent_tools.disciplines import list_disciplines_tool
+from src.v2.agents.llm.agent_tools.query_dependencies import (
+    make_query_dependencies_tool,
+)
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
-from src.v2.agents.models import AgentResult, ProviderSet
+from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.ingest.cache import ProviderCache
 from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentRepositoryShape
@@ -147,7 +151,8 @@ class LLMRepositoryAgentV2:
                   as assembled by the pipeline's context-gather stage.
                 - ``agent_overrides`` (dict, optional): Field overrides applied
                   after the LLM call, before validation.
-            providers: Injected provider bundle (not used by this agent).
+            providers: Injected provider bundle. ``providers.github`` is used
+                to back the optional ``query_dependencies`` agent tool.
 
         Returns:
             AgentResult with the validated repository payload, merged warnings
@@ -155,7 +160,6 @@ class LLMRepositoryAgentV2:
             derivation stats.
         """
 
-        del providers
         full_name = _ensure_repo_handle(context)
 
         stamp_current_agent(
@@ -178,6 +182,10 @@ class LLMRepositoryAgentV2:
         if cached_result is not None:
             return cached_result
 
+        uuid_value = context.get("uuid")
+        if not isinstance(uuid_value, str) or not uuid_value.strip():
+            uuid_value = generate_uuid()
+
         repository_context = context.get("repository_context")
         if not isinstance(repository_context, dict):
             repository_context = {}
@@ -195,6 +203,7 @@ class LLMRepositoryAgentV2:
 
         llm_input = {
             "full_name": full_name,
+            "uuid": uuid_value,
             "metadata": metadata,
             "contributors": contributors,
             "languages": languages,
@@ -215,7 +224,11 @@ class LLMRepositoryAgentV2:
                 system_prompt=_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 output_type=AgentRepositoryShape,
-                tools=[list_disciplines_tool, make_fetch_link_content_tool(self._cache)],
+                tools=[
+                    list_disciplines_tool,
+                    make_fetch_link_content_tool(self._cache),
+                    make_query_dependencies_tool(providers.github),
+                ],
             )
         except LLMRuntimeError:
             raise
@@ -226,6 +239,30 @@ class LLMRepositoryAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        # Stars and forks come from the GitHub API directly. Trust the API
+        # over the LLM's guess (which has been observed to hallucinate).
+        stargazers_count = metadata.get("stargazers_count")
+        if isinstance(stargazers_count, int) and stargazers_count >= 0:
+            payload["pulse:githubRepoStars"] = stargazers_count
+        forks_count = metadata.get("forks_count")
+        if isinstance(forks_count, int) and forks_count >= 0:
+            payload["pulse:githubRepoForks"] = forks_count
+
+        # Discipline guarantee: every repo entity must carry at least one
+        # `pulse:discipline` Wikidata IRI. The system prompt requires 1–2,
+        # but the LLM occasionally returns null/empty. Fall back to a
+        # broad-but-honest default (computer engineering) so downstream
+        # consumers never see a discipline-less repository.
+        existing_disciplines = payload.get("pulse:discipline")
+        if not isinstance(existing_disciplines, list) or not [
+            value
+            for value in existing_disciplines
+            if isinstance(value, str) and value.strip()
+        ]:
+            payload["pulse:discipline"] = ["wd:Q428691"]  # computer engineering
+
+        force_server_uuid(payload, uuid_value)
 
         raw_output = deepcopy(payload)
 

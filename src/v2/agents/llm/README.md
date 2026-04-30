@@ -21,6 +21,8 @@ src/v2/agents/llm/
 │   ├── infoscience_search.py    # Factory: make_infoscience_search_tool(provider)
 │   ├── organization_identity.py # Factory: make_organization_identity_search_tool(ror, infoscience)
 │   ├── orcid_person.py          # Factory: make_orcid_person_tool(provider)
+│   ├── query_dependencies.py    # Factory: make_query_dependencies_tool(github_provider)
+│   ├── query_orcid.py           # Factory: make_query_orcid_tool(provider)
 │   ├── repository_corpus_grep.py # Factory: make_repository_corpus_grep_tool(corpus)
 │   ├── ror_organization.py      # Factory: make_ror_organization_search_tool(provider)
 │   ├── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
@@ -173,6 +175,8 @@ if providers.my_provider is not None:
 | `agent_tools/infoscience_orgunit.py` | `make_infoscience_orgunit_tool(provider)` | Factory | `LLMOrganizationAgentV2` |
 | `agent_tools/infoscience_search.py` | `make_infoscience_search_tool(provider)` | Factory | `LLMPersonAgentV2` |
 | `agent_tools/orcid_person.py` | `make_orcid_person_tool(provider)` | Factory | `LLMPersonAgentV2`, `LLMMembershipAgentV2` |
+| `agent_tools/query_dependencies.py` | `make_query_dependencies_tool(github_provider)` | Factory | `LLMRepositoryAgentV2` |
+| `agent_tools/query_orcid.py` | `make_query_orcid_tool(provider)` | Factory | `LLMPersonAgentV2`, `LLMMembershipAgentV2` |
 | `agent_tools/uuid.py` | `generate_uuid_v4_tool`, `generate_uuid_v4_batch_tool` | Static | `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2` |
 | `agent_tools/selenium_fetch.py` | `fetch_link_content_via_selenium_tool` | Static | `LLMRepositoryAgentV2`, `LLMPersonAgentV2`, `LLMOrganizationAgentV2`, `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2`, `LLMLinkVeracityAgentV2` |
 
@@ -302,7 +306,7 @@ class LLMOrganizationAgentV2:
 Key conventions:
 - Strip `None` top-level optional fields before strict validation (`{k: v for k, v in ... if v is not None}`).
 - Apply `agent_overrides` from context after the LLM call, before validation.
-- `del providers` only if the agent genuinely needs no providers (like `LLMRepositoryAgentV2`). If you build tools from providers, keep the reference.
+- `del providers` only if the agent genuinely needs no providers. If you build tools from providers (as `LLMRepositoryAgentV2` does for `query_dependencies`, `LLMPersonAgentV2` does for ORCID/Infoscience tools, etc.), keep the reference.
 - For long-running person extraction, wrap runtime calls with an explicit timeout (see `LLMPersonAgentV2.llm_call_timeout_seconds`).
 
 ### Step 4 — Write the prompts

@@ -38,12 +38,14 @@ serve:
     uvicorn src.api:app --host {{HOST}} --port {{PORT}} --workers {{WORKERS}}
 
 # Serve the FastAPI app in development mode with auto-reload
+# Watches only `src/` for `.py` changes — keeps in-flight requests alive
+# when extraction outputs, logs, or test files change.
 serve-dev:
-    uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload
+    uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --reload-dir src --reload-include '*.py'
 
 # Serve in development mode with debug logging
 serve-dev-debug:
-    LOG_LEVEL=DEBUG uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --log-level debug
+    LOG_LEVEL=DEBUG uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --reload-dir src --reload-include '*.py' --log-level debug
 
 # Serve with single worker (useful for debugging)
 serve-single:
@@ -52,6 +54,29 @@ serve-single:
 # Serve using gunicorn (production-ready)
 serve-gunicorn:
     gunicorn src.api:app --workers {{WORKERS}} --worker-class uvicorn.workers.UvicornWorker --bind {{HOST}}:{{PORT}}
+
+# Stop any uvicorn/gunicorn process listening on PORT.
+# SIGTERM first; falls back to SIGKILL if anything is still bound after 2s.
+serve-stop:
+    #!/usr/bin/env bash
+    set -u
+    pids=$(lsof -ti :{{PORT}} 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo "no server listening on :{{PORT}}"
+        exit 0
+    fi
+    echo "stopping pids on :{{PORT}}: $pids"
+    kill $pids 2>/dev/null || true
+    sleep 2
+    pids=$(lsof -ti :{{PORT}} 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        echo "force-killing: $pids"
+        kill -9 $pids 2>/dev/null || true
+    fi
+    if lsof -i :{{PORT}} >/dev/null 2>&1; then
+        echo "port :{{PORT}} still in use"; exit 1
+    fi
+    echo "port :{{PORT}} free"
 
 # ============================================================================
 # CLI Commands

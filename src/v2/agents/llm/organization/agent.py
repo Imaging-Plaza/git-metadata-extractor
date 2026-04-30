@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._payload_helpers import force_server_uuid
 from src.v2.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
@@ -268,6 +269,8 @@ class LLMOrganizationAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        force_server_uuid(payload, uuid_value)
 
         raw_output = deepcopy(payload)
 

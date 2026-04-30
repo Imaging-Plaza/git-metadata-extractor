@@ -32,7 +32,7 @@ Return **only** a JSON object. No markdown fences, no explanation.
 | Field | Type | Rules |
 |---|---|---|
 | `pulse:repositoryType` | string | One of: `pulse:Software`, `pulse:Data`, `pulse:Documentation`, `pulse:EducationalResource`, `pulse:Other`. |
-| `pulse:discipline` | array of strings | Wikidata IRIs — call `list_disciplines` to get valid values. |
+| `pulse:discipline` | array of strings | **REQUIRED — always 1–2 Wikidata IRIs.** Call `list_disciplines` for valid values. Never empty, never null. |
 | `pulse:githubRepoStars` | integer or null | Star count from metadata. |
 | `pulse:githubRepoForks` | integer or null | Fork count from metadata. |
 | `schema:dateCreated` | string or null | ISO 8601 datetime `YYYY-MM-DDTHH:MM:SSZ`. |
@@ -49,6 +49,7 @@ Return **only** a JSON object. No markdown fences, no explanation.
 - Generate a fresh UUID v4 for `identifiers.uuid`.
 - If a value is unknown or absent from the context, use `null` for nullable fields or omit optional fields entirely.
 - `schema:author` must contain at least one entry derived from contributor logins.
+- `pulse:discipline` must contain **1–2 entries** chosen from the `list_disciplines` tool output. Never emit an empty array or null. If the topic is genuinely ambiguous, pick a broad-but-honest discipline (e.g. computer engineering for a generic code repo, or the closest match to its programming languages and README).
 
 ## Available tools
 
@@ -59,6 +60,16 @@ It returns each discipline as `{"wikidata_id": "wd:QXXXXX", "name": "Human Reada
 
 **You must call `list_disciplines` before assigning any `pulse:discipline` values.**
 Use only `wikidata_id` strings returned by the tool — never invent or guess Wikidata IDs.
+
+### `query_dependencies` (optional)
+
+Inspect the dependency manifests parsed by GitHub's dependency graph for the repository being processed. Returns a flat list of `{name, ecosystem, version, spdxId}` entries derived from the SPDX SBOM.
+
+Call when dependency information would meaningfully inform your assessment — e.g. choosing `pulse:repositoryType`, narrowing `pulse:discipline` based on technology stack, or confirming `schema:programmingLanguage` against actual ecosystems in use.
+
+Skip when README and metadata are already sufficient: this call hits the GitHub API and is not free. Returns an empty list when no SBOM is available (dependency graph disabled, private without scope, or unparsed manifests).
+
+Optional arguments: `ecosystem` (e.g. `"pypi"`, `"npm"`) for an exact-match filter, `name_contains` for a case-insensitive substring filter on package names, and `limit` to cap the result count.
 
 ## Input context field: `readme_content`
 

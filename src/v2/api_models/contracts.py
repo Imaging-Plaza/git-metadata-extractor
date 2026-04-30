@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from src.v2.api_models.errors import V2ErrorResponse
 
 
 class V2Stats(BaseModel):
@@ -61,3 +65,28 @@ class V2HealthResponse(BaseModel):
     status: Literal["healthy", "degraded", "unhealthy"]
     components: dict[str, Literal["healthy", "degraded", "unhealthy"]]
     version: str
+
+
+class V2ExtractJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class V2ExtractJob(BaseModel):
+    job_id: str
+    status: V2ExtractJobStatus
+    request: V2ExtractRequest
+    submitted_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    result: V2ExtractResponse | None = None
+    error: V2ErrorResponse | None = None
+
+
+class V2ExtractJobAccepted(BaseModel):
+    job_id: str
+    status: V2ExtractJobStatus
+    status_url: str
+    submitted_at: datetime

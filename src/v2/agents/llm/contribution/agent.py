@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.v2.agents.llm._loader import load_prompt
+from src.v2.agents.llm._payload_helpers import force_server_uuid
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
@@ -155,6 +156,45 @@ class LLMContributionAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        # Authoritative pair: the orchestrator decided which (person, repo)
+        # this invocation is for. The LLM is told the same in the system
+        # prompt, but in practice it sometimes ignores `target_person` and
+        # echoes whatever person was in `pipeline_outputs`. Force the
+        # authoritative ids here so downstream dedup-by-id can't collapse
+        # distinct contributions, regardless of LLM compliance.
+        target_person = context.get("target_person")
+        target_repository = context.get("target_repository")
+        target_person_id = (
+            target_person.get("id")
+            if isinstance(target_person, dict)
+            else None
+        )
+        target_repository_id = (
+            target_repository.get("id")
+            if isinstance(target_repository, dict)
+            else None
+        )
+        if isinstance(target_person_id, str) and target_person_id:
+            payload["schema:author"] = target_person_id
+        if isinstance(target_repository_id, str) and target_repository_id:
+            payload["pulse:contributionTo"] = target_repository_id
+        if (
+            isinstance(target_person_id, str)
+            and target_person_id
+            and isinstance(target_repository_id, str)
+            and target_repository_id
+        ):
+            composite_id = f"{target_person_id}_{target_repository_id}"
+            payload["id"] = composite_id
+            payload["idSource"] = "pulse:composite"
+            identifiers = payload.get("identifiers")
+            if not isinstance(identifiers, dict):
+                identifiers = {}
+                payload["identifiers"] = identifiers
+            identifiers["pulse:composite"] = composite_id
+
+        force_server_uuid(payload, uuid_value)
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)

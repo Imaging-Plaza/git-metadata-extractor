@@ -6,7 +6,15 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Optional
+
+
+def _resolve_package_version(name: str) -> str:
+    try:
+        return package_version(name)
+    except PackageNotFoundError:
+        return "unknown"
 
 from fastapi import (
     Depends,
@@ -18,7 +26,7 @@ from fastapi import (
     Response,
     status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.v2.api import v2_router
 
@@ -153,7 +161,127 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
         {"name": "System", "description": "System information and health checks"},
     ],
     lifespan=lifespan,
+    docs_url=None,
 )
+
+
+_SWAGGER_DARK_CSS = (
+    "https://cdn.jsdelivr.net/gh/Amoenus/SwaggerDark@master/SwaggerDark.css"
+)
+_SWAGGER_LIGHT_CSS = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+_SWAGGER_BUNDLE_JS = (
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"
+)
+_FAVICON_URL = "https://fastapi.tiangolo.com/img/favicon.png"
+
+
+@app.get("/docs", include_in_schema=False)
+def custom_swagger_ui_html() -> HTMLResponse:
+    title = f"{app.title} - Swagger UI"
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<link rel="shortcut icon" href="{_FAVICON_URL}">
+<script>
+  (function () {{
+    // Resolve theme override before stylesheets are parsed to avoid FOUC.
+    var override = null;
+    try {{ override = localStorage.getItem('docs-theme'); }} catch (e) {{}}
+    if (override === 'dark') document.documentElement.classList.add('dark');
+    if (override === 'light') document.documentElement.classList.add('light');
+    window.__docsThemeOverride = override;
+  }})();
+</script>
+<link rel="stylesheet" href="{_SWAGGER_LIGHT_CSS}">
+<link id="swagger-dark-css" rel="stylesheet" href="{_SWAGGER_DARK_CSS}"
+      media="(prefers-color-scheme: dark)">
+<style>
+  #theme-toggle {{
+    position: fixed; top: 12px; right: 16px; z-index: 9999;
+    background: rgba(255,255,255,0.85); color: #222;
+    border: 1px solid #ccc; border-radius: 999px;
+    padding: 6px 12px; font-size: 14px; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15); user-select: none;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    html:not(.light) #theme-toggle {{
+      background: rgba(40,40,40,0.85); color: #eee; border-color: #555;
+    }}
+  }}
+  html.dark #theme-toggle {{
+    background: rgba(40,40,40,0.85); color: #eee; border-color: #555;
+  }}
+</style>
+</head>
+<body>
+<button id="theme-toggle" type="button" aria-label="Toggle dark mode">Theme</button>
+<div id="swagger-ui"></div>
+<script src="{_SWAGGER_BUNDLE_JS}"></script>
+<script>
+  const ui = SwaggerUIBundle({{
+    url: '/openapi.json',
+    dom_id: '#swagger-ui',
+    layout: 'BaseLayout',
+    deepLinking: true,
+    showExtensions: true,
+    showCommonExtensions: true,
+    oauth2RedirectUrl: window.location.origin + '/docs/oauth2-redirect',
+    presets: [
+      SwaggerUIBundle.presets.apis,
+      SwaggerUIBundle.SwaggerUIStandalonePreset
+    ],
+  }});
+  (function () {{
+    var darkLink = document.getElementById('swagger-dark-css');
+    var btn = document.getElementById('theme-toggle');
+    var html = document.documentElement;
+    var systemDarkQuery = window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function activeTheme() {{
+      if (html.classList.contains('dark')) return 'dark';
+      if (html.classList.contains('light')) return 'light';
+      return systemDarkQuery && systemDarkQuery.matches ? 'dark' : 'light';
+    }}
+
+    function apply(override) {{
+      html.classList.remove('dark');
+      html.classList.remove('light');
+      if (override === 'dark') html.classList.add('dark');
+      if (override === 'light') html.classList.add('light');
+
+      // Force-on / force-off / system: tweak the media attribute on the
+      // dark CSS so the override works without unloading the stylesheet.
+      if (darkLink) {{
+        if (override === 'dark') darkLink.media = 'all';
+        else if (override === 'light') darkLink.media = 'not all';
+        else darkLink.media = '(prefers-color-scheme: dark)';
+      }}
+      btn.textContent = activeTheme() === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }}
+
+    apply(window.__docsThemeOverride);
+
+    btn.addEventListener('click', function () {{
+      var next = activeTheme() === 'dark' ? 'light' : 'dark';
+      try {{ localStorage.setItem('docs-theme', next); }} catch (e) {{}}
+      apply(next);
+    }});
+
+    if (systemDarkQuery && systemDarkQuery.addEventListener) {{
+      systemDarkQuery.addEventListener('change', function () {{
+        var stored = null;
+        try {{ stored = localStorage.getItem('docs-theme'); }} catch (e) {{}}
+        if (!stored) apply(null);
+      }});
+    }}
+  }})();
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 app.include_router(v2_router)
 
@@ -192,10 +320,29 @@ def index():
     """
     Get API welcome message and system information.
 
-    Returns basic information about the API version, GIMIE version, and configured LLM model.
+    Versions are resolved at runtime from installed package metadata
+    (`git-metadata-extractor`, `gimie`). The LLM model line reports what the
+    v2 runtime would resolve right now from `MODEL_CONFIGS`
+    (`src/v1/llm/model_config.py`) given the credentials available in the
+    environment.
     """
+    from src.v2.agents.llm.runtime import LLMRuntimeConfigError, V2LLMRuntime
+
+    try:
+        resolved = V2LLMRuntime()._resolve_model_config()  # noqa: SLF001
+        provider = resolved.get("provider", "unknown")
+        model_name = resolved.get("model", "unknown")
+        llm_model = f"{provider}:{model_name}"
+    except LLMRuntimeConfigError as exc:
+        llm_model = f"unconfigured ({exc})"
+
     return {
-        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.1. Gimie Version 0.7.2. LLM Model {os.environ.get('MODEL', 'N/A (configured via model configs)')}",
+        "title": (
+            "Hello, welcome to the Git Metadata Extractor "
+            f"v{_resolve_package_version('git-metadata-extractor')}. "
+            f"Gimie Version {_resolve_package_version('gimie')}. "
+            f"LLM Model {llm_model}"
+        ),
     }
 
 

@@ -153,13 +153,7 @@ def test_llm_person_agent_timeout_includes_identifier_and_timeout_seconds() -> N
 def test_llm_person_agent_records_strict_schema_warnings() -> None:
     """Strict-schema violations produce warnings without raising."""
     payload = _valid_person_payload()
-    # Corrupt uuid to fail the strict UUID4 regex pattern in PersonModel.
-    payload["identifiers"] = {
-        "pulse:orcid": None,
-        "pulse:infosciencePersonIdentifier": None,
-        "pulse:githubUsername": "octocat",
-        "uuid": "not-a-valid-uuid",
-    }
+    payload["idSource"] = "not-a-valid-id-source"
 
     agent = LLMPersonAgentV2(llm_runtime=_FakeLLMRuntime(payload))
 

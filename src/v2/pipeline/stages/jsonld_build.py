@@ -42,6 +42,9 @@ def _iri_typed_context_terms(jsonld_context: dict[str, Any]) -> set[str]:
     return iri_typed_terms
 
 
+_IRI_PREFIXES: tuple[str, ...] = ("http://", "https://", "urn:", "doi:")
+
+
 def _normalize_jsonld_value(
     value: Any,
     *,
@@ -54,6 +57,11 @@ def _normalize_jsonld_value(
             target_id = id_map.get(value)
             if target_id is not None:
                 return {"@id": target_id}
+            # External IRI (not in our graph): wrap in `{"@id": ...}` for
+            # consistent shape across all iri-typed property values, so
+            # downstream consumers don't have to handle two forms.
+            if value.startswith(_IRI_PREFIXES):
+                return {"@id": value}
         return value
     if isinstance(value, list):
         return [

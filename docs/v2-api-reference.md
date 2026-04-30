@@ -63,15 +63,26 @@ curl -s \
 
 ### `POST /v2/extract`
 
-Prototype body-based variant of extract. It keeps `GET /v2/extract/{full_path}` unchanged.
+Submits an extraction asynchronously. The handler validates the URL synchronously, creates a `pending` job in the `ProviderCache`-backed job store, schedules the pipeline as a background task, and returns `202 Accepted` with a `job_id`. Poll `GET /v2/jobs/{job_id}` to retrieve the result. `GET /v2/extract/{full_path}` remains synchronous and unchanged.
 
 Request body:
 
 - `source_url` (required): GitHub path or URL (for example `github.com/octocat/Hello-World`)
 - `output_format`: `jsonld|json` (default `jsonld`)
 - `agent_runtime`: `rule_based|llm` (optional)
-- `include_intermediates`: `true|false` (default `false`)
 - `include_context_summary`: `true|false` (default `false`)
+
+Response (`202 Accepted`):
+
+- `job_id`: opaque UUID to poll
+- `status`: `pending`
+- `status_url`: convenience path (`/v2/jobs/{job_id}`) for the companion GET
+- `submitted_at`: ISO-8601 timestamp
+
+Error responses:
+
+- `422 Unprocessable Entity` if `source_url` is unsupported (returned synchronously, no job is created).
+- `503 Service Unavailable` if the provider cache is disabled — the async job store has no backing storage.
 
 Example:
 
@@ -85,6 +96,42 @@ curl -s -X POST "http://localhost:1234/v2/extract" \
     "include_context_summary": true
   }' | jq
 ```
+
+```json
+{
+  "job_id": "5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31",
+  "status": "pending",
+  "status_url": "/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31",
+  "submitted_at": "2026-04-29T10:31:00.000Z"
+}
+```
+
+### `GET /v2/jobs/{job_id}`
+
+Companion retrieval endpoint for jobs submitted via `POST /v2/extract`. Returns the persisted `V2ExtractJob` record with the latest status.
+
+Response fields:
+
+- `job_id`
+- `status`: `pending|running|completed|failed`
+- `request`: the original `V2ExtractRequest` payload (with `source_url` normalized)
+- `submitted_at`, `started_at`, `completed_at`
+- `result`: present only when `status == "completed"`. Same `V2ExtractResponse` contract as `GET /v2/extract/{full_path}` (`source_url`, `detected_type`, `output_format`, `output`, `warnings`, `stats`, optional `context_summary_markdown`).
+- `error`: present only when `status == "failed"`. Same `V2ErrorResponse` shape as the error responses on `GET /v2/extract/{full_path}` (`error_type`, `detail`, `source_url`, optional `errors[]`).
+
+Status responses:
+
+- `200 OK` — record found (any status).
+- `404 Not Found` — no job exists with that id (also returned for jobs that have aged past the `ProviderCache` TTL).
+- `503 Service Unavailable` — provider cache disabled, job store unavailable.
+
+Example:
+
+```bash
+curl -s "http://localhost:1234/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31" | jq
+```
+
+Persistence: jobs share the SQLite-backed `ProviderCache` (`V2_PROVIDER_CACHE_PATH`, TTL `V2_PROVIDER_CACHE_TTL_DAYS`) under the `v2-extract-job` namespace. `V2_PROVIDER_CACHE_ENABLED=false` disables the job store entirely.
 
 ### `GET /v2/graph`
 
@@ -205,6 +252,7 @@ Shared tools live in `src/v2/agents/llm/agent_tools/`. Add a new module there to
 | Tool name | Module | Used by | Description |
 |---|---|---|---|
 | `list_disciplines` | `agent_tools/disciplines.py` | `LLMRepositoryAgentV2` | Returns the complete `DisciplineV2` mapping as `[{"wikidata_id": "wd:QXXXXX", "name": "..."}]`. Logs at INFO on each call. |
+| `query_dependencies` | `agent_tools/query_dependencies.py` | `LLMRepositoryAgentV2` | Optional. Fetches the parsed SPDX SBOM for the repository via GitHub's dependency-graph REST endpoint and returns a flat `[{name, ecosystem, version, spdxId}]` list. Supports `ecosystem` exact-match and `name_contains` substring filters plus a `limit` cap. Returns `[]` when no SBOM is available (dep graph disabled, private repo without scope, 404). |
 
 ### Observability
 

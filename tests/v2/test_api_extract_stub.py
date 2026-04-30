@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -9,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from src.v2.agents import ProviderSet
 from src.v2.agents.models import AgentResult
 from src.v2.api import v2_router
-from src.v2.api_models.contracts import V2ExtractResponse
+from src.v2.api_models.contracts import V2ExtractJob, V2ExtractResponse
 from src.v2.ingest.cache import ProviderCache
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages.models import ContextBundle
@@ -19,7 +20,10 @@ from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
 from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
+HTTP_ACCEPTED = 202
+HTTP_NOT_FOUND = 404
 HTTP_UNPROCESSABLE_ENTITY = 422
+HTTP_SERVICE_UNAVAILABLE = 503
 
 
 def _build_test_app() -> FastAPI:
@@ -112,15 +116,59 @@ def test_extract_user_url_returns_detected_user() -> None:
     assert V2ExtractResponse.model_validate(payload)
 
 
-def test_extract_post_repository_url_returns_detected_repository() -> None:
-    status_code, payload = _post_json(
-        "/v2/extract",
-        {"source_url": "github.com/octocat/Hello-World"},
-    )
+async def _wait_for_job_completion(
+    client: AsyncClient,
+    job_id: str,
+    *,
+    timeout_seconds: float = 180.0,
+) -> dict[str, Any]:
+    """Poll GET /v2/jobs/{job_id} until status is completed or failed."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        response = await client.get(f"/v2/jobs/{job_id}")
+        body = response.json()
+        if response.status_code == HTTP_OK and body.get("status") in {
+            "completed",
+            "failed",
+        }:
+            return body
+        await asyncio.sleep(0.1)
+    message = f"job {job_id} did not finish within {timeout_seconds}s"
+    raise AssertionError(message)
 
-    assert status_code == HTTP_OK
-    assert payload["detected_type"] == "repository"
-    assert V2ExtractResponse.model_validate(payload)
+
+def test_extract_post_repository_url_runs_async_job(tmp_path: Any) -> None:
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any], dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            submit = await client.post(
+                "/v2/extract",
+                json={
+                    "source_url": "github.com/octocat/Hello-World",
+                    "agent_runtime": "rule_based",
+                },
+            )
+            submit_payload = submit.json()
+            job = await _wait_for_job_completion(client, submit_payload["job_id"])
+        return submit.status_code, submit_payload, job
+
+    submit_status, submit_payload, job = asyncio.run(_run())
+
+    assert submit_status == HTTP_ACCEPTED
+    assert submit_payload["status"] == "pending"
+    assert submit_payload["status_url"] == f"/v2/jobs/{submit_payload['job_id']}"
+
+    assert job["status"] == "completed"
+    assert job["result"]["detected_type"] == "repository"
+    V2ExtractJob.model_validate(job)
+    V2ExtractResponse.model_validate(job["result"])
 
 
 def test_extract_unsupported_issue_url_returns_typed_422() -> None:
@@ -338,7 +386,9 @@ def test_extract_can_include_compiled_context_summary_in_response() -> None:
     assert V2ExtractResponse.model_validate(payload)
 
 
-def test_extract_post_can_include_compiled_context_summary_in_response() -> None:
+def test_extract_post_can_include_compiled_context_summary_in_response(
+    tmp_path: Any,
+) -> None:
     class _SummaryRunner:
         async def run(
             self,
@@ -404,34 +454,117 @@ def test_extract_post_can_include_compiled_context_summary_in_response() -> None
             },
         )
 
-    app = _build_test_app()
-    app.state.v2_orchestrator = PipelineOrchestrator(
-        context_gatherer=_context_gatherer,
-        llm_context_summary_agent=_SummaryRunner(),
-        llm_person_agent=_LLMPersonRunner(),
-        llm_repository_agent=_LLMNoDataRunner(),
-        llm_organization_agent=_LLMNoDataRunner(),
-        llm_article_agent=_LLMNoDataRunner(),
-        llm_membership_agent=_LLMNoDataRunner(),
-        llm_contribution_agent=_LLMNoDataRunner(),
-        retry_max_retries=0,
-        retry_backoff_base=0,
-    )
+    cache_db = tmp_path / "providers.db"
 
-    status_code, payload = _post_json_from_app(
-        app,
-        "/v2/extract",
-        {
-            "source_url": "github.com/octocat",
-            "agent_runtime": "llm",
-            "output_format": "json",
-            "include_context_summary": True,
-        },
-    )
+    async def _run() -> dict[str, Any]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        app.state.v2_orchestrator = PipelineOrchestrator(
+            context_gatherer=_context_gatherer,
+            llm_context_summary_agent=_SummaryRunner(),
+            llm_person_agent=_LLMPersonRunner(),
+            llm_repository_agent=_LLMNoDataRunner(),
+            llm_organization_agent=_LLMNoDataRunner(),
+            llm_article_agent=_LLMNoDataRunner(),
+            llm_membership_agent=_LLMNoDataRunner(),
+            llm_contribution_agent=_LLMNoDataRunner(),
+            retry_max_retries=0,
+            retry_backoff_base=0,
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            submit = await client.post(
+                "/v2/extract",
+                json={
+                    "source_url": "github.com/octocat",
+                    "agent_runtime": "llm",
+                    "output_format": "json",
+                    "include_context_summary": True,
+                },
+            )
+            assert submit.status_code == HTTP_ACCEPTED
+            return await _wait_for_job_completion(client, submit.json()["job_id"])
 
-    assert status_code == HTTP_OK
-    assert payload["context_summary_markdown"].startswith("# Compiled Context")
-    assert V2ExtractResponse.model_validate(payload)
+    job = asyncio.run(_run())
+    assert job["status"] == "completed"
+    assert job["result"]["context_summary_markdown"].startswith("# Compiled Context")
+    V2ExtractResponse.model_validate(job["result"])
+
+
+def test_extract_post_returns_422_for_unsupported_url(tmp_path: Any) -> None:
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.post(
+                "/v2/extract",
+                json={"source_url": "github.com/owner/repo/issues/1"},
+            )
+        return response.status_code, response.json()
+
+    status_code, payload = asyncio.run(_run())
+    assert status_code == HTTP_UNPROCESSABLE_ENTITY
+    assert payload["error_type"] == "unsupported_url"
+    assert payload["detected_path_kind"] == "issues"
+
+
+def test_get_job_returns_404_for_unknown_id(tmp_path: Any) -> None:
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/v2/jobs/does-not-exist")
+        return response.status_code, response.json()
+
+    status_code, payload = asyncio.run(_run())
+    assert status_code == HTTP_NOT_FOUND
+    assert payload["error_type"] == "not_found"
+
+
+def test_extract_post_persists_job_in_provider_cache(tmp_path: Any) -> None:
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[str, dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            submit = await client.post(
+                "/v2/extract",
+                json={
+                    "source_url": "github.com/octocat/Hello-World",
+                    "agent_runtime": "rule_based",
+                },
+            )
+            job_id = submit.json()["job_id"]
+            await _wait_for_job_completion(client, job_id)
+        cached = app.state.v2_provider_cache.get(
+            ProviderCache.make_key("v2-extract-job", "record", job_id=job_id),
+        )
+        return job_id, cached
+
+    job_id, cached = asyncio.run(_run())
+    assert isinstance(cached, dict)
+    assert cached["job_id"] == job_id
+    assert cached["status"] == "completed"
 
 
 def test_pipeline_cache_round_trip_returns_identical_response(tmp_path: Any) -> None:

@@ -6,7 +6,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
-from src.v2.ingest.providers.base import ORCIDProvider, ORCIDRecord, ProviderNotFoundError
+from src.v2.ingest.providers.base import (
+    ORCIDProvider,
+    ORCIDRecord,
+    ORCIDSearchHit,
+    ProviderNotFoundError,
+)
 
 ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 REQUIRED_RECORD_FIELDS = {"orcid_id", "name", "employment", "education", "affiliations"}
@@ -107,3 +112,33 @@ class MockORCIDProvider(ORCIDProvider):
             raise ProviderNotFoundError(message)
 
         return deepcopy(record)
+
+    def search_persons(
+        self,
+        query: str,
+        *,
+        rows: int = 50,
+        start: int = 0,
+    ) -> list[ORCIDSearchHit]:
+        needle = query.strip().casefold()
+        if not needle:
+            return []
+
+        hits: list[ORCIDSearchHit] = []
+        for record in self._record_by_orcid.values():
+            name = record.get("name", "")
+            if needle not in name.casefold():
+                continue
+            given_name, _, family_name = name.partition(" ")
+            hits.append(
+                ORCIDSearchHit(
+                    orcid_id=record.get("orcid_id"),
+                    given_names=given_name or None,
+                    family_names=family_name or None,
+                    credit_name=name or None,
+                    other_names=[],
+                    institution_names=list(record.get("affiliations", [])),
+                    emails=[],
+                ),
+            )
+        return hits[start : start + rows]

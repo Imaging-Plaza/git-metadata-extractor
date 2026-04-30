@@ -184,5 +184,4 @@ def test_llm_article_agent_appends_runtime_prompt_context_blocks() -> None:
     assert upstream_json in prompt
     assert "## Additional Context (verbatim text)" in prompt
     assert prompt_appendix in prompt
-    assert "generate_uuid_v4" in captured_tool_names
     assert "fetch_link_content_via_selenium" in captured_tool_names
