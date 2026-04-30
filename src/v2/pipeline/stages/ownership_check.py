@@ -27,7 +27,7 @@ from copy import deepcopy
 from typing import Any
 from urllib.parse import urlparse
 
-from src.v2.pipeline.stages.models import AssembledOutput
+from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 OWNS_KEY = "pulse:owns"
 OWNERS_BY_TYPE: dict[str, str] = {
@@ -518,4 +518,114 @@ def infer_org_units(
     )
 
 
-__all__ = ["infer_org_units", "infer_owners", "validate_ownership"]
+def _index_owners_and_orgs_by_handle(
+    reconciled: ReconciledEntities,
+) -> dict[str, dict[str, Any]]:
+    """Build `lower-cased handle -> entity` for both Persons and Organizations
+    sourced from the reconciled bucket dict (not from an `AssembledOutput`)."""
+
+    index: dict[str, dict[str, Any]] = {}
+    for bucket in ("persons", "organizations"):
+        for entity in reconciled.entities.get(bucket, []) or []:
+            if not isinstance(entity, dict):
+                continue
+            handle = _entity_owner_handle(entity)
+            if handle:
+                index.setdefault(handle, entity)
+    return index
+
+
+def guarantee_repo_author(
+    reconciled: ReconciledEntities,
+) -> tuple[ReconciledEntities, list[str]]:
+    """Salvage Repository entities whose `schema:author` array is empty.
+
+    Known bug: occasionally the LLM repo agent emits `schema:author`
+    references that reconciliation can't canonicalize, and after dropping
+    the unresolvable references the array ends up empty. Strict validation
+    requires `schema:author` to be **non-empty**, which would fail the
+    entire extraction. This is a workaround, not a real fix — the real fix
+    is to teach reconciliation to keep the LLM-emitted reference verbatim
+    when it can't canonicalize.
+
+    Mitigation: when a repository has empty `schema:author`, look at the
+    repo's GitHub `<owner>` handle (parsed from `pulse:githubRepositoryHandle`
+    or its `id` URL). If a Person or Organization with the same handle
+    exists in the reconciled graph, stamp its `id` into `schema:author`.
+    Always emits a warning so this stays visible in the output.
+
+    Mutates a copy; the original `reconciled` is unchanged.
+    """
+
+    repositories = reconciled.entities.get("repositories")
+    if not isinstance(repositories, list) or not repositories:
+        return reconciled, []
+
+    owner_index = _index_owners_and_orgs_by_handle(reconciled)
+    warnings: list[str] = []
+    new_repos: list[dict[str, Any]] = []
+    changed = False
+
+    for entity in repositories:
+        if not isinstance(entity, dict):
+            new_repos.append(entity)
+            continue
+        author_value = entity.get("schema:author")
+        is_empty = (
+            author_value is None
+            or (isinstance(author_value, list) and len(author_value) == 0)
+        )
+        if not is_empty:
+            new_repos.append(entity)
+            continue
+
+        repo_id = entity.get("id") if isinstance(entity.get("id"), str) else "<unknown>"
+        owner_handle = _owner_handle_for_repo(entity)
+        cloned = deepcopy(entity)
+        if owner_handle and owner_handle in owner_index:
+            owner_entity = owner_index[owner_handle]
+            owner_id = owner_entity.get("id")
+            if isinstance(owner_id, str) and owner_id:
+                cloned["schema:author"] = [owner_id]
+                changed = True
+                warnings.append(
+                    "KNOWN BUG (schema:author empty after reconciliation): "
+                    f"stamped fallback owner '{owner_id}' as schema:author on "
+                    f"{repo_id} (handle '{owner_handle}'). The LLM repo agent "
+                    "likely emitted a contributor reference that reconciliation "
+                    "couldn't canonicalize.",
+                )
+                new_repos.append(cloned)
+                continue
+        # No fallback available — leave the empty array in place. Strict
+        # validation will still reject the root, but at least the warning
+        # tells the user *why*.
+        warnings.append(
+            "KNOWN BUG (schema:author empty after reconciliation): could not "
+            f"recover an owner fallback for {repo_id} (handle "
+            f"'{owner_handle or '<none>'}'). Strict validation will reject "
+            "this root.",
+        )
+        new_repos.append(cloned)
+
+    if not changed and not warnings:
+        return reconciled, []
+
+    new_entities = {bucket: list(value) for bucket, value in reconciled.entities.items()}
+    new_entities["repositories"] = new_repos
+    new_reconciled = ReconciledEntities(
+        entities=new_entities,
+        memberships=list(reconciled.memberships),
+        contributions=list(reconciled.contributions),
+        link_warnings=list(reconciled.link_warnings),
+        reconciliation_debug=dict(reconciled.reconciliation_debug),
+    )
+    return new_reconciled, warnings
+
+
+__all__ = [
+    "guarantee_repo_author",
+    "infer_org_units",
+    "infer_owners",
+    "validate_ownership",
+]

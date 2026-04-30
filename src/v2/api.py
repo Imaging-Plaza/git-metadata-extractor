@@ -48,6 +48,7 @@ from src.v2.pipeline.stages import (
     build_json_output,
     build_jsonld_output,
     compute_stats,
+    guarantee_repo_author,
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
@@ -632,6 +633,14 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
             for warning in critic_result.warnings:
                 _append_unique_warning(warnings, warning)
+
+    # KNOWN BUG salvage: when reconciliation drops unresolvable
+    # `schema:author` references, a repository can end up with an empty
+    # author array, which strict validation rejects (schema requires
+    # non-empty). Fall back to the github owner if it's in the graph.
+    reconciled, repo_author_warnings = guarantee_repo_author(reconciled)
+    for warning in repo_author_warnings:
+        _append_unique_warning(warnings, warning)
 
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,

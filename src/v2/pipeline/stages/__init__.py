@@ -26,6 +26,7 @@ from src.v2.pipeline.stages.output_assembly import (
 )
 from src.v2.pipeline.stages.org_relationships import run_org_relationships_stage
 from src.v2.pipeline.stages.ownership_check import (
+    guarantee_repo_author,
     infer_org_units,
     infer_owners,
     validate_ownership,
@@ -48,6 +49,7 @@ __all__ = [
     "LLMDedupStageResult",
     "LinkVeracityStageResult",
     "apply_link_pruning_to_assembled_output",
+    "guarantee_repo_author",
     "infer_org_units",
     "infer_owners",
     "promote_failed_id_entities",
