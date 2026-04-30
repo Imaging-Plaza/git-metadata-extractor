@@ -24,6 +24,7 @@ from src.v2.pipeline.stages.output_assembly import (
     assemble_output,
     build_json_output,
 )
+from src.v2.pipeline.stages.org_relationships import run_org_relationships_stage
 from src.v2.pipeline.stages.ownership_check import (
     infer_org_units,
     infer_owners,
@@ -56,4 +57,5 @@ __all__ = [
     "run_llm_critic_stage",
     "run_llm_dedup_stage",
     "run_link_veracity_stage",
+    "run_org_relationships_stage",
 ]

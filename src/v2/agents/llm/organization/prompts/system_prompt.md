@@ -63,6 +63,34 @@ Use the `uuid` provided in the input context; do not invent deterministic IDs.
 - If multiple near-match candidates remain ambiguous, leave `pulse:ror` as `null` instead of guessing.
 - When combining provider fields, prefer a single coherent candidate record rather than mixing conflicting organizations.
 
+## One organization per invocation — do not conflate
+
+You are extracting **exactly one** organization per call. The input context
+often contains data about siblings, parents, and children (other GitHub
+orgs, ROR records, Infoscience units the org belongs to or contains).
+**Do not bleed those into your output.**
+
+Specifically:
+
+- `schema:name` MUST describe the entity identified by `id` (the canonical
+  full name of *that* org), never the name of a parent, a sibling, or a
+  child. Example: if `id` is `https://ror.org/02s376052` (EPFL), then
+  `schema:name` is `"École Polytechnique Fédérale de Lausanne"` —
+  **never** `"EPFL Open Science"` (a sub-unit) or `"ETH Domain"` (a parent).
+- `pulse:githubOrganizationHandle` belongs to the same entity as `id`.
+  If the entity is a ROR-backed parent (e.g. EPFL), only set this field
+  when EPFL itself has a GitHub organization. Do not set it to a child
+  org's handle (e.g. `EPFL-Open-Science`).
+- When the input context describes multiple plausible orgs (parent + child),
+  pick the one that the invocation's `org_name` / `org_seed` /
+  `target_organization` field points to and ignore the rest. Use
+  `org:unitOf` and `org:hasUnit` to express the hierarchy — do not encode
+  it by mislabelling fields.
+
+If the input doesn't clearly identify a single canonical org, prefer
+emitting fewer fields (with `null`s) over emitting confidently-wrong
+ones derived from a sibling or relative.
+
 ## Input context guidance
 
 The context may include:

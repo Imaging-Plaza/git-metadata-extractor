@@ -52,9 +52,10 @@ from src.v2.pipeline.stages import (
     infer_owners,
     promote_failed_id_entities,
     reconcile_entities,
+    run_link_veracity_stage,
     run_llm_critic_stage,
     run_llm_dedup_stage,
-    run_link_veracity_stage,
+    run_org_relationships_stage,
     validate_articles,
     validate_ownership,
 )
@@ -779,6 +780,25 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
     for warning in owner_inference_warnings:
         _append_unique_warning(warnings, warning)
+
+    if resolved_runtime == AgentRuntime.LLM:
+        try:
+            assembled_output, org_relationship_warnings = await run_org_relationships_stage(
+                assembled=assembled_output,
+                source_url=classification.normalized_url,
+                providers=providers,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("org_relationships stage failed")
+            _append_unique_warning(warnings, f"org_relationships stage failed: {exc}")
+        else:
+            if org_relationship_warnings:
+                logger.info(
+                    "org_relationships: %d edge decision(s)",
+                    len(org_relationship_warnings),
+                )
+            for warning in org_relationship_warnings:
+                _append_unique_warning(warnings, warning)
 
     assembled_output, org_unit_warnings = infer_org_units(assembled_output)
     if org_unit_warnings:
