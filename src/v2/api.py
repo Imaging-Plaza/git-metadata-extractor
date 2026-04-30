@@ -114,6 +114,20 @@ def _is_pipeline_cache_enabled() -> bool:
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
 
 
+def _is_link_veracity_enabled() -> bool:
+    """Read `V2_LINK_VERACITY_ENABLED` env var (default true).
+
+    When false, the link-veracity LLM stage is skipped entirely. Useful for
+    broad batch runs where you want fast extraction and don't need every
+    URL re-verified against fetched page content. Saves ~1–3 minutes per
+    repo and a chunk of LLM calls.
+    """
+    raw = os.getenv("V2_LINK_VERACITY_ENABLED")
+    if raw is None:
+        return True
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
 def _should_apply_critic_pruning() -> bool:
     """Read `V2_APPLY_CRITIC_PRUNING` env var (default false).
 
@@ -158,6 +172,24 @@ def _extract_path_kind(source_url: str) -> str | None:
     return None
 
 
+def _resolve_max_concurrent_agents() -> int:
+    """Read `V2_MAX_CONCURRENT_AGENTS` env var (default 6).
+
+    Caps how many work items per stage (person agents, contribution agents,
+    link-veracity calls, etc.) run in parallel within a single /extract
+    request. Higher values speed up wide-fanout repos at the cost of more
+    concurrent LLM calls — keep within the LLM provider's rate limit.
+    """
+    raw = os.getenv("V2_MAX_CONCURRENT_AGENTS")
+    if raw is None:
+        return 6
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return 6
+    return max(1, value)
+
+
 def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     existing = getattr(request.app.state, "v2_orchestrator", None)
     if isinstance(existing, PipelineOrchestrator):
@@ -166,7 +198,10 @@ def _get_orchestrator(request: Request) -> PipelineOrchestrator:
     cache = getattr(request.app.state, "v2_provider_cache", None)
     if not isinstance(cache, ProviderCache):
         cache = None
-    orchestrator = PipelineOrchestrator(cache=cache)
+    orchestrator = PipelineOrchestrator(
+        cache=cache,
+        max_concurrent_agents=_resolve_max_concurrent_agents(),
+    )
     request.app.state.v2_orchestrator = orchestrator
     return orchestrator
 
@@ -683,82 +718,96 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         provider_cache = None
 
     link_veracity_started_at = perf_counter()
-    try:
-        link_veracity_result = await run_link_veracity_stage(
-            entities=entities_for_link_validation,
-            source_url=classification.normalized_url,
-            providers=providers,
-            max_concurrency=orchestrator.max_concurrent_agents,
-            cache=provider_cache,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("%s stage failed", STAGE_LINK_VERACITY)
-        _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
-    else:
+    link_veracity_result = None
+    if not _is_link_veracity_enabled():
         logger.info(
-            "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d",
+            "%s: skipped (V2_LINK_VERACITY_ENABLED=false)",
             STAGE_LINK_VERACITY,
-            link_veracity_result.checked_count,
-            link_veracity_result.supported_count,
-            link_veracity_result.unsupported_count,
-            link_veracity_result.failed_count,
-            len(link_veracity_result.invalid_links),
         )
-        _append_unique_warning(
-            warnings,
-            (
-                "Link veracity summary: "
-                f"checked={link_veracity_result.checked_count}, "
-                f"supported={link_veracity_result.supported_count}, "
-                f"unsupported={link_veracity_result.unsupported_count}, "
-                f"failed={link_veracity_result.failed_count}"
-            ),
-        )
-        for warning in link_veracity_result.warnings:
-            _append_unique_warning(warnings, warning)
-
-        invalid_links = set(link_veracity_result.invalid_links)
-        if invalid_links:
-            assembled_output, id_rewrites, promotion_warnings = promote_failed_id_entities(
-                assembled=assembled_output,
-                invalid_links=invalid_links,
+    else:
+        try:
+            link_veracity_result = await run_link_veracity_stage(
+                entities=entities_for_link_validation,
+                source_url=classification.normalized_url,
+                providers=providers,
+                max_concurrency=orchestrator.max_concurrent_agents,
+                cache=provider_cache,
             )
-            for warning in promotion_warnings:
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("%s stage failed", STAGE_LINK_VERACITY)
+            _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
+        else:
+            logger.info(
+                "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d",
+                STAGE_LINK_VERACITY,
+                link_veracity_result.checked_count,
+                link_veracity_result.supported_count,
+                link_veracity_result.unsupported_count,
+                link_veracity_result.failed_count,
+                len(link_veracity_result.invalid_links),
+            )
+            _append_unique_warning(
+                warnings,
+                (
+                    "Link veracity summary: "
+                    f"checked={link_veracity_result.checked_count}, "
+                    f"supported={link_veracity_result.supported_count}, "
+                    f"unsupported={link_veracity_result.unsupported_count}, "
+                    f"failed={link_veracity_result.failed_count}"
+                ),
+            )
+            for warning in link_veracity_result.warnings:
                 _append_unique_warning(warnings, warning)
-            if id_rewrites:
-                logger.info(
-                    "%s: promoted %d entity id(s) past failed url(s)",
-                    STAGE_LINK_VERACITY,
-                    len(id_rewrites),
-                )
-                # The rewritten entities now expose their new id; remove the
-                # old urls from invalid_links so we don't also try to prune them.
-                invalid_links = invalid_links - set(id_rewrites)
-                # Rebuild entity_link_map with the new ids so downstream pruning
-                # acts on the right entity references.
-                rebuilt_entity_link_map: dict[str, list[str]] = {}
-                for old_id, links in link_veracity_result.entity_link_map.items():
-                    new_id = id_rewrites.get(old_id, old_id)
-                    rebuilt_entity_link_map.setdefault(new_id, []).extend(links)
-            else:
-                rebuilt_entity_link_map = link_veracity_result.entity_link_map
 
+            invalid_links = set(link_veracity_result.invalid_links)
             if invalid_links:
-                assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+                assembled_output, id_rewrites, promotion_warnings = promote_failed_id_entities(
                     assembled=assembled_output,
                     invalid_links=invalid_links,
-                    entity_link_map=rebuilt_entity_link_map,
-                    article_identifier_link_map=link_veracity_result.article_identifier_link_map,
                 )
-                for warning in link_pruning_warnings:
+                for warning in promotion_warnings:
                     _append_unique_warning(warnings, warning)
+                if id_rewrites:
+                    logger.info(
+                        "%s: promoted %d entity id(s) past failed url(s)",
+                        STAGE_LINK_VERACITY,
+                        len(id_rewrites),
+                    )
+                    # The rewritten entities now expose their new id; remove the
+                    # old urls from invalid_links so we don't also try to prune them.
+                    invalid_links = invalid_links - set(id_rewrites)
+                    # Rebuild entity_link_map with the new ids so downstream pruning
+                    # acts on the right entity references.
+                    rebuilt_entity_link_map: dict[str, list[str]] = {}
+                    for old_id, links in link_veracity_result.entity_link_map.items():
+                        new_id = id_rewrites.get(old_id, old_id)
+                        rebuilt_entity_link_map.setdefault(new_id, []).extend(links)
+                else:
+                    rebuilt_entity_link_map = link_veracity_result.entity_link_map
 
-        assembled_output, article_validation_warnings = validate_articles(
-            assembled_output,
-            veracity_records=link_veracity_result.records,
-        )
-        for warning in article_validation_warnings:
-            _append_unique_warning(warnings, warning)
+                if invalid_links:
+                    assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
+                        assembled=assembled_output,
+                        invalid_links=invalid_links,
+                        entity_link_map=rebuilt_entity_link_map,
+                        article_identifier_link_map=link_veracity_result.article_identifier_link_map,
+                    )
+                    for warning in link_pruning_warnings:
+                        _append_unique_warning(warnings, warning)
+
+    # Article-validation runs whether or not link-veracity ran. If
+    # link-veracity was skipped, supported/unsupported sets will be empty,
+    # and the stage will only drop articles with placeholder/sentinel DOIs
+    # (i.e. its non-veracity-dependent rules still apply).
+    veracity_records = (
+        link_veracity_result.records if link_veracity_result is not None else []
+    )
+    assembled_output, article_validation_warnings = validate_articles(
+        assembled_output,
+        veracity_records=veracity_records,
+    )
+    for warning in article_validation_warnings:
+        _append_unique_warning(warnings, warning)
 
     link_veracity_seconds = perf_counter() - link_veracity_started_at
 

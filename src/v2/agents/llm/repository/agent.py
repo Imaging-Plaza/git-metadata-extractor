@@ -269,9 +269,15 @@ class LLMRepositoryAgentV2:
         # Second validation pass: strict schema (warnings only, never raises).
         validation_warnings = _strict_validate(payload)
 
+        # NB: dict.get returns the value, not the default, when the key is
+        # present but null. The LLM occasionally emits
+        # "schema:programmingLanguage": null, so guard the iteration.
+        raw_languages = payload.get("schema:programmingLanguage")
+        if not isinstance(raw_languages, list):
+            raw_languages = []
         language_names = sorted(
             language
-            for language in payload.get("schema:programmingLanguage", [])
+            for language in raw_languages
             if isinstance(language, str) and language
         )
         derivation_stats = {

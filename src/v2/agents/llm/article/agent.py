@@ -31,6 +31,68 @@ README_CONTEXT_MAX_CHARS = 2000
 GIMIE_JSONLD_MAX_CHARS = 4000
 MAX_CONTEXT_ENTITIES = 30
 
+# Sentinel strings the LLM emits when it has no real identifier but tries to
+# emit an article anyway. These bypass placeholder-DOI checks (which look
+# for `10.0000/...`) so we catch them explicitly here.
+_IDENTIFIER_SENTINELS: frozenset[str] = frozenset(
+    {"unknown", "n/a", "na", "none", "null", "tbd", "todo", "?", "-"},
+)
+
+
+def _is_real_doi(value: Any) -> bool:
+    """Return True for a string that *plausibly* looks like a real DOI.
+
+    A real DOI starts with `10.` followed by a 4-9 digit registrant prefix,
+    a slash, and a non-empty suffix. Placeholder DOIs `10.0000/...` are also
+    rejected as they're a known LLM-hallucination pattern.
+    """
+    if not isinstance(value, str):
+        return False
+    candidate = value.strip()
+    if not candidate:
+        return False
+    for prefix in (
+        "https://doi.org/",
+        "http://doi.org/",
+        "https://dx.doi.org/",
+        "http://dx.doi.org/",
+    ):
+        if candidate.lower().startswith(prefix):
+            candidate = candidate[len(prefix) :]
+            break
+    if not candidate.startswith("10.") or "/" not in candidate:
+        return False
+    # `10.0000/` is reserved for testing — never a real DOI.
+    if candidate.lower().startswith("10.0000/"):
+        return False
+    return True
+
+
+def _has_real_article_identifier(payload: dict[str, Any]) -> bool:
+    """An article must carry at least one verifiable identifier."""
+
+    schema_identifier = payload.get("schema:identifier")
+    if isinstance(schema_identifier, str) and schema_identifier.strip().lower() in _IDENTIFIER_SENTINELS:
+        schema_identifier = None
+    if _is_real_doi(schema_identifier):
+        return True
+    identifiers = payload.get("identifiers")
+    if isinstance(identifiers, dict):
+        nested_identifier = identifiers.get("schema:identifier")
+        if (
+            isinstance(nested_identifier, str)
+            and nested_identifier.strip().lower() not in _IDENTIFIER_SENTINELS
+            and _is_real_doi(nested_identifier)
+        ):
+            return True
+        infosci = identifiers.get("pulse:infoscienceArticleIdentifier")
+        if isinstance(infosci, str) and infosci.strip():
+            return True
+    direct_infosci = payload.get("pulse:infoscienceArticleIdentifier")
+    if isinstance(direct_infosci, str) and direct_infosci.strip():
+        return True
+    return False
+
 _PROMPTS_PACKAGE = "src.v2.agents.llm.article.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
 _USER_PROMPT_TEMPLATE = load_prompt(_PROMPTS_PACKAGE, "user_prompt.md")
@@ -226,6 +288,48 @@ class LLMArticleAgentV2:
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)
+
+        # Drop the article entirely if the LLM didn't ground it in a real
+        # identifier. The agent should not emit an entity whose only
+        # `schema:identifier` is a placeholder DOI (`10.0000/...`) or a
+        # sentinel like `UNKNOWN` / `N/A` / `TBD`. The downstream
+        # `validate_articles` stage would catch these too, but dropping
+        # them here keeps `excluded_entities` and the prompt context for
+        # later stages clean.
+        if payload and not _has_real_article_identifier(payload):
+            warning = (
+                f"{article_seed} — article dropped: no real DOI or "
+                f"infoscience identifier (got "
+                f"schema:identifier={payload.get('schema:identifier')!r})."
+            )
+            empty_result = AgentResult(
+                data={},
+                warnings=[warning],
+                raw_output=deepcopy(payload),
+                model=llm_result.model,
+                provider=llm_result.provider,
+                tokens_prompt=llm_result.tokens_prompt,
+                tokens_completion=llm_result.tokens_completion,
+                stats={
+                    "agent_runtime": "llm",
+                    "articles": [],
+                    "article_count": 0,
+                    "derivation": {
+                        "article_seed": article_seed,
+                        "dropped_reason": "no_real_identifier",
+                        "rejected_schema_identifier": payload.get(
+                            "schema:identifier",
+                        ),
+                    },
+                },
+            )
+            store_agent_verdict(
+                self._cache,
+                agent_name="article",
+                identity=identity,
+                result=empty_result,
+            )
+            return empty_result
 
         force_server_uuid(payload, uuid_value)
 

@@ -24,6 +24,18 @@ Rules:
 - Do not invent unknown people or organizations when canonical IDs are available in context.
 - Do not emit fields outside the schema.
 - Use `null` only where nullable fields are permitted.
+- **No identifier, no article.** If the input does not let you ground the
+  article in a real `schema:identifier` (a real DOI such as
+  `10.1038/s41586-024-...`) **or** a real `pulse:infoscienceArticleIdentifier`,
+  return an empty JSON object `{}` rather than a fabricated entity. **Never**
+  emit a sentinel value like `"UNKNOWN"`, `"N/A"`, `"TBD"`, `"none"`, `""`, or
+  the placeholder DOI prefix `10.0000/...` for `schema:identifier`. The
+  pipeline rejects entities with these values; emitting them just adds noise.
+- A repository is **not** automatically a publication. Only emit a
+  `schema:ScholarlyArticle` when the input clearly references a published
+  paper (e.g. CITATION.cff with a DOI, an Infoscience publication record,
+  or a README citation block). If the only "article" you can find is the
+  repo itself, emit `{}`.
 
 Tools:
 - `search_infoscience_publications(query)` — query EPFL Infoscience for the
