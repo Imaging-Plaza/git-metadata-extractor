@@ -115,6 +115,58 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+# Keyword sets for `pulse:repositoryType` classification. Order matters: the
+# first matching set wins, so the more-specific categories come first.
+_REPO_TYPE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "pulse:EducationalResource",
+        ("course", "tutorial", "training", "workshop", "exercise", "lesson"),
+    ),
+    (
+        "pulse:Documentation",
+        (
+            "documentation",
+            "best-practice-documentation",
+            "best practice",
+            "user guide",
+            "handbook",
+            "spec",
+            "specification",
+            "rfc",
+        ),
+    ),
+    (
+        "pulse:Data",
+        ("dataset", "data-archive", "corpus", "benchmark"),
+    ),
+)
+# Languages that, on their own, indicate a documentation-shaped repo.
+_DOC_ONLY_LANGUAGES: frozenset[str] = frozenset(
+    {"markdown", "rst", "text", "asciidoc", "tex", "html"},
+)
+
+
+def _classify_repository_type(*, language_names: list[str], haystack: str) -> str:
+    """Pick a `pulse:repositoryType` value from language + name/description signals.
+
+    Priority:
+    1. Keyword match in repo name/description (most specific first).
+    2. Language-only signal: if every detected language is a doc-shaped one,
+       call it Documentation.
+    3. Default: Software.
+    """
+
+    for repo_type, keywords in _REPO_TYPE_KEYWORDS:
+        for keyword in keywords:
+            if keyword in haystack:
+                return repo_type
+    if language_names and all(
+        language in _DOC_ONLY_LANGUAGES for language in language_names
+    ):
+        return "pulse:Documentation"
+    return "pulse:Software"
+
+
 class RepositoryAgentV2:
     """Repository agent wrapper with permissive output validation."""
 
@@ -265,13 +317,29 @@ class RepositoryAgentV2:
             if isinstance(language, str)
         ] if isinstance(languages, dict) else []
 
-        repository_type = "pulse:Software"
-        if language_names and all(language in {"markdown", "rst", "text"} for language in language_names):
-            repository_type = "pulse:Documentation"
+        repository = compiled_context.get("repository") or {}
+        repo_handle = compiled_context.get("full_name") or ""
+        repo_name = (
+            (repository.get("name") if isinstance(repository, dict) else None)
+            or repo_handle.split("/", maxsplit=1)[-1]
+            or ""
+        )
+        repo_description = (
+            repository.get("description") if isinstance(repository, dict) else None
+        ) or ""
+        # Lowercased haystack we'll match keyword heuristics against.
+        haystack = f"{repo_name} {repo_description}".lower()
+
+        repository_type = _classify_repository_type(
+            language_names=language_names,
+            haystack=haystack,
+        )
 
         disciplines = _to_list_of_strings(context.get("disciplines"))
         if not disciplines:
-            disciplines = ["wd:Q8434"]
+            # Match the LLM agent's fallback so both runtimes emit the same
+            # "broad code repo" default (Wikidata: computer engineering).
+            disciplines = ["wd:Q428691"]
 
         return {
             "pulse:repositoryType": repository_type,

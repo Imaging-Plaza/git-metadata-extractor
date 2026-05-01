@@ -59,8 +59,31 @@ def _build_context(*, detected_type: str = "repository") -> dict[str, Any]:
     }
 
 
-def test_article_agent_query_blend_repository_mode_dedupes_and_caps() -> None:
+def test_article_agent_query_blend_repository_mode_default_is_repo_only() -> None:
+    """By default, the article agent only queries Infoscience by repo terms.
+
+    Searching by contributor name or org name returns those people's full
+    bibliography and over-attributes unrelated publications to the repo
+    (real DOIs, false attribution). The default repo-only blend keeps
+    the precision high.
+    """
+
     agent = ArticleAgentV2(max_queries=5)
+
+    queries = agent.build_query_blend(_build_context())
+
+    assert queries == [
+        "sdsc-ordes/gimie",
+        "gimie",
+    ]
+
+
+def test_article_agent_query_blend_widens_when_explicitly_enabled() -> None:
+    agent = ArticleAgentV2(
+        max_queries=5,
+        include_person_queries=True,
+        include_organization_queries=True,
+    )
 
     queries = agent.build_query_blend(_build_context())
 
@@ -130,7 +153,13 @@ def test_article_agent_ranks_dedupes_and_maps_links(
         github=MockGitHubProvider(),
         infoscience=provider,
     )
-    agent = ArticleAgentV2(max_queries=6)
+    # This test exercises ranking/dedup over a wide blend (repo + persons +
+    # orgs); explicitly enable the wide blend since the default is repo-only.
+    agent = ArticleAgentV2(
+        max_queries=6,
+        include_person_queries=True,
+        include_organization_queries=True,
+    )
 
     result = asyncio.run(agent.run(_build_context(), providers))
 

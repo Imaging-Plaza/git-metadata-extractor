@@ -26,6 +26,7 @@ import re
 from copy import deepcopy
 from typing import Any
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
@@ -518,6 +519,317 @@ def infer_org_units(
     )
 
 
+# Tokens we drop when extracting query terms from a github handle. These are
+# generic enough that searching for them on ROR gives mostly noise.
+_GITHUB_HANDLE_GENERIC_TOKENS: frozenset[str] = frozenset(
+    {
+        "lab",
+        "labs",
+        "team",
+        "group",
+        "org",
+        "project",
+        "projects",
+        "research",
+        "code",
+        "open",
+        "source",
+        "data",
+        "science",  # too generic on its own; "data science" or "swiss data science" is fine
+        "center",
+        "centre",
+        "institute",
+        "institut",
+        "the",
+        "an",
+        "and",
+        "of",
+        "for",
+        "in",
+        "at",
+    },
+)
+
+
+def _github_handle_query_terms(handle: str, name: str | None) -> list[str]:
+    """Build candidate ROR query strings from a github handle + display name.
+
+    Strategy:
+    1. Use the display name as-is when it's longer than the handle (more useful for ROR).
+    2. Use the full handle (e.g. `SwissDataScienceCenter`) as a single query.
+    3. Tokenize the handle on `-`/`_`, drop generic + short tokens.
+    4. Return the most distinctive 2-3 tokens.
+
+    Cap is intentional — each query becomes a ROR API call, so we trade recall
+    for cost.
+    """
+
+    queries: list[str] = []
+
+    name = (name or "").strip()
+    handle = handle.strip()
+    if name and name.lower() != handle.lower() and len(name) >= 3:
+        queries.append(name)
+
+    if handle and handle not in queries:
+        queries.append(handle)
+
+    # Tokenize handle on -/_, keep the meaningful parts.
+    tokens = [
+        part.lower()
+        for part in re.split(r"[-_]+", handle)
+        if len(part) >= 3 and part.lower() not in _GITHUB_HANDLE_GENERIC_TOKENS
+    ]
+    # Add the longest tokens first (most distinctive).
+    tokens.sort(key=lambda token: -len(token))
+    for token in tokens[:2]:
+        if token not in {q.lower() for q in queries}:
+            queries.append(token)
+
+    return queries
+
+
+def _ror_record_score(
+    *,
+    handle: str,
+    name: str | None,
+    ror_record: dict[str, Any],
+) -> int:
+    """Heuristic match score between a github org and a ROR record.
+
+    Counts overlap between the github org's tokens (handle + display name)
+    and the ROR org's name + aliases + acronyms. Higher = better.
+    """
+
+    gh_tokens = set(_handle_aliases(handle))
+    if isinstance(name, str):
+        gh_tokens.update(_name_aliases(name))
+    if not gh_tokens:
+        return 0
+
+    ror_tokens: set[str] = set()
+    ror_tokens.update(_name_aliases(ror_record.get("name")))
+    aliases = ror_record.get("aliases")
+    if isinstance(aliases, list):
+        for alias in aliases:
+            ror_tokens.update(_name_aliases(alias))
+    acronyms = ror_record.get("acronyms")
+    if isinstance(acronyms, list):
+        for acronym in acronyms:
+            if isinstance(acronym, str):
+                ror_tokens.add(acronym.lower())
+
+    return len(gh_tokens & ror_tokens)
+
+
+def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
+    """Construct a minimal `org:Organization` entity from a ROR search hit.
+
+    Returns None if the record lacks an id or name (can't be a useful org).
+    """
+
+    ror_id = ror_record.get("id")
+    name = ror_record.get("name")
+    if not isinstance(ror_id, str) or not ror_id or not isinstance(name, str) or not name:
+        return None
+    return {
+        "id": ror_id,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            "pulse:ror": ror_id,
+            "pulse:infoscienceOrganizationIdentifier": None,
+            "pulse:githubOrganizationHandle": None,
+            "uuid": str(uuid4()),
+        },
+        "idSource": "pulse:ror",
+        "schema:name": name,
+        "pulse:ror": ror_id,
+        "pulse:githubOrganizationHandle": None,
+        "pulse:infoscienceOrganizationIdentifier": None,
+        "pulse:OrganizationType": None,
+        "pulse:githubOrgFollowers": None,
+        "org:hasUnit": [],
+        "org:unitOf": None,
+        "pulse:owns": [],
+    }
+
+
+def infer_github_handle_parents(
+    assembled: AssembledOutput,
+    *,
+    providers: Any = None,
+    max_candidates_per_handle: int = 5,
+    min_match_score: int = 1,
+) -> tuple[AssembledOutput, list[str]]:
+    """For every github-only org in the graph, fuzzy-search ROR for matching
+    parent organizations and add them to the graph.
+
+    The github org always remains as a standalone entity (its `id` and other
+    fields are untouched). The fuzzy matching:
+
+    1. Builds 1-3 query strings from the github org's handle + display name
+       (full name, full handle, top distinctive tokens).
+    2. Calls `providers.ror.search_organizations(query)` for each (cached).
+    3. Scores each ROR hit by token overlap against the github org's
+       handle + name + aliases + acronyms.
+    4. Adds candidate ROR records with score ≥ `min_match_score` to the
+       graph as minimal entities (only id, ROR id, and canonical name —
+       leaves the rest null and lets downstream stages / agents enrich).
+    5. Picks the highest-scoring candidate as the github org's `unitOf`
+       parent and stamps the reciprocal `hasUnit`.
+
+    No-ops gracefully when `providers.ror` is None — the github orgs stay
+    in the graph untouched.
+
+    `max_candidates_per_handle` caps how many ROR matches per github org
+    we add to the graph (top-K by score). `min_match_score` is the
+    minimum token-overlap to count a hit as plausible.
+
+    Never overwrites an existing `org:unitOf` value, and reuses an already-
+    in-graph ROR entity rather than duplicating.
+    """
+
+    ror_provider = getattr(providers, "ror", None) if providers is not None else None
+    if ror_provider is None:
+        return assembled, []
+
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(entity) if isinstance(entity, dict) else entity
+        for entity in assembled.related_entities
+    ]
+    new_candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        new_candidates.append(new_root)
+    new_candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    organizations = [
+        entity for entity in new_candidates if entity.get("type") == ORGANIZATION_TYPE
+    ]
+    # Index existing orgs so we don't duplicate a ROR entity that's already
+    # been brought into the graph (either by an upstream stage or by a
+    # previous github org in this same loop).
+    by_id: dict[str, dict[str, Any]] = {}
+    by_ror: dict[str, dict[str, Any]] = {}
+    for org in organizations:
+        org_id = org.get("id")
+        if isinstance(org_id, str) and org_id:
+            by_id.setdefault(org_id, org)
+        ror = _entity_ror_id(org)
+        if isinstance(ror, str) and ror:
+            by_ror.setdefault(ror, org)
+
+    warnings: list[str] = []
+    inserted: dict[str, dict[str, Any]] = {}
+
+    for org in organizations:
+        # Skip orgs that already have a ROR id (they're already canonical).
+        if _entity_ror_id(org) is not None:
+            continue
+        handle = _entity_github_org_handle(org)
+        if not handle:
+            continue
+        org_id = org.get("id") if isinstance(org.get("id"), str) else None
+        if not org_id:
+            continue
+        org_name = org.get("schema:name") if isinstance(org.get("schema:name"), str) else None
+
+        # Build query terms then search ROR. Cache hits make repeated runs cheap.
+        queries = _github_handle_query_terms(handle, org_name)
+        if not queries:
+            continue
+        scored: dict[str, tuple[int, dict[str, Any]]] = {}
+        for query in queries:
+            try:
+                hits = ror_provider.search_organizations(query)
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(
+                    f"github_handle_parents: ROR search failed for query "
+                    f"'{query}' (handle '{handle}'): {exc}",
+                )
+                continue
+            for hit in hits:
+                if not isinstance(hit, dict):
+                    continue
+                ror_id = hit.get("id")
+                if not isinstance(ror_id, str) or not ror_id:
+                    continue
+                score = _ror_record_score(
+                    handle=handle,
+                    name=org_name,
+                    ror_record=hit,
+                )
+                if score < min_match_score:
+                    continue
+                # Keep the best score we've seen for this ROR id.
+                existing = scored.get(ror_id)
+                if existing is None or existing[0] < score:
+                    scored[ror_id] = (score, hit)
+
+        if not scored:
+            continue
+
+        # Top-K by score (highest first). The first one becomes the unitOf
+        # parent; the rest are added as siblings.
+        top_candidates = sorted(scored.items(), key=lambda item: -item[1][0])[
+            :max_candidates_per_handle
+        ]
+
+        ranked_entities: list[dict[str, Any]] = []
+        for ror_id, (score, hit) in top_candidates:
+            existing_entity = by_ror.get(ror_id) or by_id.get(ror_id) or inserted.get(ror_id)
+            if existing_entity is None:
+                new_entity = _build_minimal_ror_org(hit)
+                if new_entity is None:
+                    continue
+                inserted[ror_id] = new_entity
+                by_id[ror_id] = new_entity
+                by_ror[ror_id] = new_entity
+                ranked_entities.append(new_entity)
+                warnings.append(
+                    f"Inserted ROR organization '{ror_id}' "
+                    f"({hit.get('name')}) from github handle '{handle}' "
+                    f"(score={score}).",
+                )
+            else:
+                ranked_entities.append(existing_entity)
+
+        # Best match becomes the parent.
+        if not ranked_entities:
+            continue
+        parent_entity = ranked_entities[0]
+        parent_id = parent_entity.get("id")
+        if not isinstance(parent_id, str) or not parent_id:
+            continue
+        unit_of_set = _set_unit_of(org, parent_id)
+        has_unit_set = _add_to_has_unit(parent_entity, org_id)
+        if unit_of_set:
+            warnings.append(
+                f"Inferred org:unitOf on {org_id} → {parent_id} "
+                f"(github handle '{handle}' fuzzy-matched ROR record "
+                f"'{parent_entity.get('schema:name')}').",
+            )
+        if has_unit_set:
+            warnings.append(f"Inferred org:hasUnit on {parent_id} → {org_id}.")
+
+    # Append the newly-inserted ROR org entities to the related list.
+    for ror_id, entity in inserted.items():
+        new_related.append(entity)
+
+    updated = AssembledOutput(
+        root_entity=new_root if new_root is not None else assembled.root_entity,
+        related_entities=new_related,
+        excluded_entities=list(assembled.excluded_entities),
+        warnings=list(assembled.warnings),
+    )
+    return updated, warnings
+
+
 def _index_owners_and_orgs_by_handle(
     reconciled: ReconciledEntities,
 ) -> dict[str, dict[str, Any]]:
@@ -625,6 +937,7 @@ def guarantee_repo_author(
 
 __all__ = [
     "guarantee_repo_author",
+    "infer_github_handle_parents",
     "infer_org_units",
     "infer_owners",
     "validate_ownership",

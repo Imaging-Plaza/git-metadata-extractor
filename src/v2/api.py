@@ -49,6 +49,7 @@ from src.v2.pipeline.stages import (
     build_jsonld_output,
     compute_stats,
     guarantee_repo_author,
+    infer_github_handle_parents,
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
@@ -837,6 +838,25 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             len(owner_inference_warnings),
         )
     for warning in owner_inference_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Fuzzy-search ROR for parent organizations of every github-only org in
+    # the graph. The github org always remains as a standalone entity; ROR
+    # matches get added as additional org entities and the best match
+    # becomes the github org's `unitOf` parent.
+    # Runs before the LLM relationship stage so it sees the new ROR entities
+    # and can refine the unitOf decision; runs before `infer_org_units` so
+    # the token-overlap fallback also gets the broader graph.
+    assembled_output, github_parent_warnings = infer_github_handle_parents(
+        assembled_output,
+        providers=providers,
+    )
+    if github_parent_warnings:
+        logger.info(
+            "github_handle_parents: %d action(s) (insertions + edges)",
+            len(github_parent_warnings),
+        )
+    for warning in github_parent_warnings:
         _append_unique_warning(warnings, warning)
 
     if resolved_runtime == AgentRuntime.LLM:

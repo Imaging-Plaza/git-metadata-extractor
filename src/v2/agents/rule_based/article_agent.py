@@ -639,18 +639,56 @@ def _build_article_payload(
 
 
 class ArticleAgentV2:
-    """Article agent with deterministic query blending, ranking, and linkage mapping."""
+    """Article agent with deterministic query blending, ranking, and linkage mapping.
 
-    def __init__(self, *, max_queries: int = DEFAULT_QUERY_CAP) -> None:
+    The default query blend is **repo-name only** (the repository's GitHub
+    handle, slug, owner). This is narrow on purpose: when we widen the blend
+    to also search by every contributor's name and every org's name, the
+    Infoscience search returns those people's *entire* bibliography, and
+    the result is that publications unrelated to the repo get attributed to
+    it (real DOIs, false attribution). The original intent of the wider
+    blend was to recover citation papers, but in practice the over-attribution
+    rate dwarfs the recall benefit.
+
+    Set `include_person_queries=True` and/or `include_organization_queries=True`
+    explicitly when running on a single-author / single-lab repo where the
+    over-attribution risk is low. Default to repo-only.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_queries: int = DEFAULT_QUERY_CAP,
+        include_person_queries: bool = False,
+        include_organization_queries: bool = False,
+    ) -> None:
         self._max_queries = max_queries
+        self._include_person_queries = include_person_queries
+        self._include_organization_queries = include_organization_queries
 
     def build_query_blend(self, context: dict[str, Any]) -> list[str]:
-        persons = _collect_known_persons(context)
-        organizations = _collect_known_organizations(context)
+        # Per-request override wins over the constructor default. Useful for
+        # CLI / test cases that want a wider blend without rebuilding the
+        # agent.
+        include_person = bool(
+            context.get("include_person_queries", self._include_person_queries),
+        )
+        include_org = bool(
+            context.get(
+                "include_organization_queries",
+                self._include_organization_queries,
+            ),
+        )
 
         query_terms = _extract_root_terms(context)
-        query_terms.extend(_extract_person_terms(persons))
-        query_terms.extend(_extract_organization_terms(organizations))
+        if include_person:
+            query_terms.extend(
+                _extract_person_terms(_collect_known_persons(context)),
+            )
+        if include_org:
+            query_terms.extend(
+                _extract_organization_terms(_collect_known_organizations(context)),
+            )
         query_terms = _dedupe_preserve_order(query_terms)
         if self._max_queries <= 0:
             return []
