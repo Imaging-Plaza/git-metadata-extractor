@@ -172,6 +172,12 @@ class ProviderSet:
     orcid: ORCIDProvider | None = None
     infoscience: InfoscienceProvider | None = None
     ror: RORProvider | None = None
+    infoscience_rag: Any | None = None
+    huggingface_rag: Any | None = None
+    openalex_rag: Any | None = None
+    zenodo_rag: Any | None = None
+    orcid_rag: Any | None = None
+    ror_rag: Any | None = None
 
 
 @dataclass(slots=True)

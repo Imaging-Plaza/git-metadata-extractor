@@ -20,6 +20,7 @@ services:
     environment:
       # Avoid ~/.cache/uv (often root-owned after sshd/common-utils); workspace is bind-mounted as vscode.
       UV_CACHE_DIR: /workspaces/project/.uv-cache
+      SELENIUM_REMOTE_URL: ${SELENIUM_REMOTE_URL:-http://gme-selenium-firefox:4444}
     ports:
       - "${SSH_PORT:-2222}:2222"
       - "${APP_PORT:-1234}:1234"
@@ -29,14 +30,28 @@ services:
     command: sleep infinity
     networks:
       - dev
-  qdrant:
+  gme-qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant
+    container_name: gme-qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
       - ../data/qdrant/storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - dev
+  # README "Option B": multi-session standalone Firefox (ORCID, Selenium-backed tools).
+  gme-selenium-firefox:
+    image: selenium/standalone-firefox
+    container_name: gme-selenium-firefox
+    ports:
+      - "${SELENIUM_GRID_PORT:-4444}:4444"
+      - "${SELENIUM_VNC_PORT:-7900}:7900"
+    shm_size: "2g"
+    environment:
+      SE_NODE_MAX_SESSIONS: "5"
+      SE_NODE_SESSION_TIMEOUT: "300"
     restart: unless-stopped
     networks:
       - dev

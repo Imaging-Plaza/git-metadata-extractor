@@ -1,0 +1,497 @@
+{
+  "id": "87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e",
+  "uuid": "87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e",
+  "name": "Schrimpf, Martin",
+  "handle": "20.500.14299/715",
+  "metadata": {
+    "cris.lastimport.scopus-person": [
+      {
+        "value": "2026-05-01T02:30:55Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "cris.sourceId": [
+      {
+        "value": "SCIPER-ID::365581",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "cris.virtual.parent-organization": [
+      {
+        "value": "INX-SV",
+        "language": null,
+        "authority": "372d8be7-b45f-47ce-8689-2f7872fd4c2f",
+        "confidence": 600,
+        "place": 0
+      },
+      {
+        "value": "SV",
+        "language": null,
+        "authority": "d026b261-5306-4998-b7f2-7057fdbec621",
+        "confidence": 600,
+        "place": 1
+      },
+      {
+        "value": "EPFL",
+        "language": null,
+        "authority": "41674f42-ba15-4612-9817-2a6f60985c01",
+        "confidence": 600,
+        "place": 2
+      },
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 3
+      }
+    ],
+    "cris.virtualsource.parent-organization": [
+      {
+        "value": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      },
+      {
+        "value": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      },
+      {
+        "value": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 2
+      },
+      {
+        "value": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 3
+      }
+    ],
+    "crisrp.name.variant": [
+      {
+        "value": "Schrimpf, M.",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0,
+        "securityLevel": 0
+      },
+      {
+        "value": "Schrimpf, M",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 1,
+        "securityLevel": 0
+      }
+    ],
+    "datacite.rights": [
+      {
+        "value": "openaccess",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.accessioned": [
+      {
+        "value": "2024-07-08T17:39:26Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.available": [
+      {
+        "value": "2024-07-08T17:39:26Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.created": [
+      {
+        "value": "2024-07-08",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.modified": [
+      {
+        "value": "2025-12-31T09:56:19.732836Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.identifier.uri": [
+      {
+        "value": "https://infoscience.epfl.ch/handle/20.500.14299/715",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.title": [
+      {
+        "value": "Schrimpf, Martin",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dspace.entity.type": [
+      {
+        "value": "Person",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dspace.file.type": [
+      {
+        "value": "personal picture",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dspace.iiif.enabled": [
+      {
+        "value": "true",
+        "language": "*",
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dspace.object.owner": [
+      {
+        "value": "martin.schrimpf@epfl.ch",
+        "language": null,
+        "authority": "b45c2d99-7d92-467c-baa7-a680a3fb13aa",
+        "confidence": 600,
+        "place": 0
+      }
+    ],
+    "epfl.sciper.active": [
+      {
+        "value": "true",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.sciperId": [
+      {
+        "value": "365581",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.synchronization.date": [
+      {
+        "value": "2024-10-10T15:54:36Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "oairecerif.affiliation.endDate": [
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      },
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      },
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 2
+      },
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 3
+      },
+      {
+        "value": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 4
+      }
+    ],
+    "oairecerif.affiliation.role": [
+      {
+        "value": "Tenure Track Assistant Professor",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      },
+      {
+        "value": "Tenure Track Assistant Professor",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      },
+      {
+        "value": "Tenure Track Assistant Professor",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 2
+      },
+      {
+        "value": "Tenure Track Assistant Professor",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 3
+      },
+      {
+        "value": "Tenure Track Assistant Professor",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 4
+      }
+    ],
+    "oairecerif.affiliation.startDate": [
+      {
+        "value": "2024-10-09",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      },
+      {
+        "value": "2024-10-09",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      },
+      {
+        "value": "2024-10-09",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 2
+      },
+      {
+        "value": "2024-10-09",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 3
+      },
+      {
+        "value": "2024-10-09",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 4
+      }
+    ],
+    "oairecerif.identifier.url": [
+      {
+        "value": "https://people.epfl.ch/martin.schrimpf",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "oairecerif.person.affiliation": [
+      {
+        "value": "UPSCHRIMPF1",
+        "language": null,
+        "authority": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "confidence": 600,
+        "place": 0
+      },
+      {
+        "value": "UPSCHRIMPF2",
+        "language": null,
+        "authority": "9fe108b1-0134-4288-b727-20e275e0b032",
+        "confidence": 600,
+        "place": 1
+      },
+      {
+        "value": "SIN-ENS",
+        "language": null,
+        "authority": "e7a34d7e-dbc8-4dde-83ab-425d8c53be5b",
+        "confidence": 600,
+        "place": 2
+      },
+      {
+        "value": "SSC-ENS",
+        "language": null,
+        "authority": "cd02f71b-73fb-4af6-8010-c4f06b907b5b",
+        "confidence": 600,
+        "place": 3
+      },
+      {
+        "value": "SSV-ENS",
+        "language": null,
+        "authority": "0b003daa-ff26-477c-a32f-290483e5f9d1",
+        "confidence": 600,
+        "place": 4
+      }
+    ],
+    "person.affiliation.name": [
+      {
+        "value": "UPSCHRIMPF1",
+        "language": null,
+        "authority": "a7bc3696-16f4-49a8-a0d1-fabc1d9ad261",
+        "confidence": 600,
+        "place": 0
+      }
+    ],
+    "person.email": [
+      {
+        "value": "martin.schrimpf@epfl.ch",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "person.familyName": [
+      {
+        "value": "Schrimpf",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "person.givenName": [
+      {
+        "value": "Martin",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "person.identifier.openalex": [
+      {
+        "value": "https://openalex.org/a5034283312",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0,
+        "securityLevel": 0
+      }
+    ],
+    "person.identifier.rid": [
+      {
+        "value": "GCD-2279-2022",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0,
+        "securityLevel": 0
+      }
+    ],
+    "person.identifier.scopus-author-id": [
+      {
+        "value": "57203923817",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ]
+  },
+  "inArchive": true,
+  "discoverable": true,
+  "withdrawn": false,
+  "lastModified": "2025-12-31T09:56:19.732+00:00",
+  "entityType": "Person",
+  "type": "item",
+  "uniqueType": "core.item",
+  "_links": {
+    "accessStatus": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/accessStatus"
+    },
+    "bundles": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/bundles"
+    },
+    "identifiers": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/identifiers"
+    },
+    "mappedCollections": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/mappedCollections"
+    },
+    "owningCollection": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/owningCollection"
+    },
+    "relationships": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/relationships"
+    },
+    "version": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/version"
+    },
+    "templateItemOf": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/templateItemOf"
+    },
+    "metrics": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/metrics"
+    },
+    "thumbnail": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/thumbnail"
+    },
+    "submitter": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e/submitter"
+    },
+    "self": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/87c3d6e1-5ad5-4b4c-9b24-f4cd46bd700e"
+    }
+  }
+}

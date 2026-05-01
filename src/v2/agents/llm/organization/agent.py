@@ -20,6 +20,11 @@ from src.v2.agents.llm.agent_tools.github_organization import (
 from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
     make_infoscience_orgunit_tool,
 )
+from src.v2.agents.llm.agent_tools.infoscience_rag import (
+    make_infoscience_rag_fetch_chunks_tool,
+    make_infoscience_rag_fetch_records_tool,
+    make_infoscience_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.organization_identity import (
     make_organization_identity_search_tool,
 )
@@ -226,6 +231,14 @@ class LLMOrganizationAgentV2:
             tools.append(make_ror_organization_search_tool(providers.ror))
         elif providers.infoscience is not None:
             tools.append(make_infoscience_orgunit_tool(providers.infoscience))
+        if providers.infoscience_rag is not None:
+            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
+            tools.append(
+                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
+            )
+            tools.append(
+                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
+            )
 
         identifier = org_name
         tool_names = [getattr(t, "name", None) or getattr(t, "__name__", "?") for t in tools]

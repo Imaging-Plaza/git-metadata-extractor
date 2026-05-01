@@ -1,247 +1,252 @@
 # Agent Operating Guide for git-metadata-extractor
 
-## Title + Purpose
-This guide defines the operating contract for autonomous and semi-autonomous coding agents working in this repository.
-The goal is safe, reproducible contributions with minimal human back-and-forth.
+Operating contract for autonomous and semi-autonomous coding agents working
+in this repository. Goal: safe, reproducible contributions with minimal
+human back-and-forth.
 
-## Project Snapshot
-- Language/runtime: Python project with package code under `src/`.
-- Main runtime surfaces:
-  - API: `src/api.py` (thin shell — mounts both V1 and V2 routers)
-  - V1 (legacy pipeline, frozen): `src/v1/` — `analysis/`, `agents/`, `data_models/`, `cache/`, `context/`, plus legacy CLI at `src/v1/main.py`
-  - V2 (canonical extraction runtime): `src/v2/` — pipeline of small single-purpose agents under `src/v2/agents/llm/` and `src/v2/agents/rule_based/`, coordinated by `src/v2/pipeline/orchestrator.py`
-  - Tests: `tests/v2/` (default test target). V1 tests live under `tests/v1/` and are not run by default.
-- Core references:
-  - `README.md`
-  - `.internal/RISKS.md`
-  - `docs/AGENT_STRATEGY.md`
-  - `.internal/v2-plan/README.md`
+## What this tool is
 
-## V2 Progress Track
-- V2 work starts in `.internal/v2-plan/phase-0-tdd-foundation/`.
-- Execute tasks in dependency order from `.internal/v2-plan/README.md`.
-- V2B continuation work is tracked in `.internal/v2b-plan/` and executes in dependency order from `.internal/v2b-plan/README.md`.
-- Current entry task: `.internal/plan-d/PD-02-runtime-enum-and-config.md` (Plan D wave-1 runtime migration is active: `rule_based|llm` runtime split with repository-first LLM rollout and hard-fail no-fallback policy when `agent_runtime=llm`.)
-- Phase 8 live-provider snapshot work is tracked separately in `.internal/phase-8/` (not part of the dependency graph in `.internal/v2-plan/README.md`).
-- Canonical Infoscience IDs in v2 should resolve to `https://infoscience.epfl.ch/server/api/core/items/{uuid}` while accepting `entities/*` and `core/items/*` input forms.
-- For schema promotion tasks, schemas live in **three** locations that must stay byte-identical: `src/v2/schema/json/{type}/{entity}.schema.json` (source), `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted), and `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture). After any schema edit, copy to all three locations and run `just v2-models-generate` to regenerate Pydantic models.
-- Repository identifier DOI/citation is stored as `schema:citation` (not `schema:identifier`) in both `identifiers` and `idSource`. Articles continue to use `schema:identifier` for their canonical identifier.
-- Entity `@id` values use canonical dereferenceable URLs when available: `https://orcid.org/{orcid}` for persons, `https://github.com/{handle}` for GitHub-identified entities, `https://ror.org/{id}` for organizations, `https://doi.org/{doi}` for DOI-identified entities. The fallback prefix for bare identifiers (UUID, pre-reconciliation handles) is `urn:pulse:` (not `urn:git-metadata-extractor:entity:`). Composite entities (memberships, contributions) use `{person_canonical_url}_{org_or_repo_canonical_url}` as their `@id`.
-- Membership entities carry an internal `_person_ref` field (set during reconciliation) that stores the canonical person ID. This field is stripped before JSON-LD output, RDF serialization, strict validation, and graph storage. It is used by crossref validation and person-membership linking. All `_`-prefixed fields are treated as internal pipeline metadata and automatically excluded from output paths.
-- In v2 repository-mode extracts, GitHub traversal is direct-only (source repo + direct owner + direct contributors). Keep ORCID/Infoscience/ROR enrichment enabled for discovered person/org entities.
-- In v2 agent payloads, `identifiers.uuid` must be generated with `src/v2/agents/models.py::generate_uuid()` (UUIDv4 only); avoid deterministic UUIDv5 emitters for agent outputs.
-- LLM agent tools live in `src/v2/agents/llm/agent_tools/`. Tool modules expose either static `Tool` instances or provider-capturing factory functions. Agents build/select tools at `run()` time and pass them as `tools=[...]` to `V2LLMRuntime.run_json_prompt`. Current tools:
-  - `list_disciplines_tool` (`disciplines.py`) — static tool, returns the full `DisciplineV2` Wikidata-ID-to-name mapping.
-  - `make_duckduckgo_search_tool()` (`duckduckgo_search.py`) — factory; returns `search_on_the_internet` to query DuckDuckGo and retrieve compact external context (title/url/snippet).
-  - `hash_user_email_tool` (`email_hash.py`) — static tool, anonymizes emails with canonical hashing (`sha256(local-part)[:12]` + original domain).
-  - `make_orcid_person_tool(orcid_provider)` (`orcid_person.py`) — factory; returns `get_orcid_record` tool that fetches name, employment, education, and affiliations by ORCID ID.
-  - `make_query_orcid_tool(orcid_provider)` (`query_orcid.py`) — factory; returns `query_orcid` tool that searches ORCID expanded-search by free-text name (edismax boosts on given/family/credit names + current/past institution affiliations) and returns candidate hits (orcid_id, names, institution_names, emails). Used to discover an ORCID before calling `get_orcid_record`. Cached via `ProviderCache` keyed on `(query, rows, start)`.
-  - `make_infoscience_search_tool(infoscience_provider)` (`infoscience_search.py`) — factory; returns `search_infoscience_person` tool that searches Infoscience for person records by name/query.
-  - `make_github_organization_metadata_tool(github_provider)` (`github_organization.py`) — factory; returns `get_github_organization_metadata` to fetch and normalize GitHub org profile metadata by handle/URL.
-  - `make_repository_corpus_grep_tool(corpus_documents)` (`repository_corpus_grep.py`) — factory; returns `grep_repository_corpus` to search raw README/GIMIE/repository-file corpus snippets with provenance metadata.
-  - `make_organization_identity_search_tool(ror_provider, infoscience_provider)` (`organization_identity.py`) — factory; returns `search_organization_identity` that queries ROR and Infoscience together and emits linked cross-provider candidates.
-  - `make_ror_organization_search_tool(ror_provider)` (`ror_organization.py`) — factory; returns `search_ror_organizations` for organization lookup by name.
-  - `make_infoscience_orgunit_tool(infoscience_provider)` (`infoscience_orgunit.py`) — factory; returns `search_infoscience_orgunit` for organization-unit lookup.
-  - `generate_uuid_v4_tool` / `generate_uuid_v4_batch_tool` (`uuid.py`) — static tools for UUIDv4 generation in single or batch mode.
-  - `fetch_link_content_via_selenium_tool` (`selenium_fetch.py`) — static Selenium-backed fetch tool returning rendered page text/title/final URL.
-- `LLMLinkVeracityAgentV2` (`src/v2/agents/llm/link_veracity/agent.py`) runs independent yes/no relationship checks per link and uses `fetch_link_content_via_selenium_tool` to ground verdicts in fetched page content.
-- `/v2/extract` always runs a final `link_veracity` stage (all runtimes): it validates discovered HTTP(S) links, normalizes article DOI identifiers to `https://doi.org/<doi>` for checking, removes explicitly unreachable links, and prunes entities only when canonical URL/DOI checks fail or no valid URL remains. Runtime/checker errors remain warning-only (no automatic pruning).
-- `/v2/extract` in `agent_runtime=llm` always runs two global fail-open stages:
-  - `llm_dedup` before reconciliation (LLM candidate clusters + deterministic constrained merge/remap with hierarchy-aware ID resolution and composite-ID propagation).
-  - `llm_critic` after reconciliation and before strict validation (LLM drop suggestions + deterministic non-root prune/cascade cleanup).
-  Both stages emit warnings on failure and continue the pipeline; they never hard-fail extract requests.
-- When `include_intermediates=true`, `/v2/extract` persists LLM dedup/critic debug envelopes as `llm_dedup_candidates`, `llm_dedup_resolution`, `llm_critic_decisions`, and `llm_critic_applied`.
-- `LLMRepositoryAgentV2` is a **single-call agent** (one pydantic-ai `Agent` run). V1 used two sequential LLM calls: a general extraction agent plus a dedicated classifier for `repositoryType`/`discipline`. The single-call approach tends to leave `pulse:discipline` null; a separate discipline sub-agent (wave 2) would improve classification reliability.
-- `LLMPersonAgentV2` is a **single-call agent** that accepts any combination of person identifiers (GitHub username, ORCID, Infoscience ID, or display name). It optionally fetches the GitHub profile when a username is available, then builds live tool closures over the provided `ORCIDProvider` and `InfoscienceProvider` (omitted if the respective provider is `None`) and delegates to `V2LLMRuntime`. Top-level `None` optional fields are stripped from the output before strict validation to satisfy SHACL absent-field requirements.
-- `LLMPersonAgentV2` enforces a hard per-call timeout via `llm_call_timeout_seconds` (default `180.0`) around the runtime call (`asyncio.wait_for(...)`) and raises `LLMRuntimeError` with identifier+seconds when exceeded.
-- `PipelineOrchestrator` limits fanout concurrency via `max_concurrent_agents` (default `3`). A fresh `asyncio.Semaphore` is created per `_execute_stage` call and wraps each individual agent execution. This prevents unbounded parallelism from saturating the LLM endpoint when many person/org/article agents run simultaneously. Set `max_concurrent_agents` in the orchestrator constructor to tune throughput vs. latency.
-- `PipelineOrchestrator` supports prompt-context propagation for downstream LLM agents:
-  - `include_upstream_stage_outputs_in_prompt` (constructor flag or runtime-context override) injects `upstream_stage_outputs_json` containing serialized accumulated stage outputs.
-  - `user_prompt_appendix` (constructor value or runtime-context override) injects verbatim text into each agent prompt without parsing. Use this for pre-concatenated multi-file text blocks.
-- `PipelineOrchestrator` now defaults `include_upstream_stage_outputs_in_prompt=True`; downstream LLM stages receive serialized upstream JSON context unless explicitly disabled via runtime context/constructor override.
-- In `agent_runtime=llm`, `PipelineOrchestrator` runs a fail-open LLM context summary call immediately after `context_gather`; the compiled markdown summary is appended to downstream LLM prompt context and raw README/GIMIE/repository-file blobs are stripped from per-agent runtime contexts.
-- v2 organization identity reconciliation is ROR-first and warning-only: canonicalization enforces `pulse:ror -> pulse:infoscienceOrganizationIdentifier -> pulse:githubOrganizationHandle -> uuid`, reconciliation merges high-confidence org duplicates (ROR/Infoscience/GitHub + contextual cross-source matches), remaps org references to canonical IDs, and prefers ROR-backed orgs on lookup-token collisions.
-- Cross-source org merge equivalence normalizes common spelling variants (for example `center`/`centre`) before deciding whether ROR and Infoscience candidates represent the same organization.
-- `/v2/extract` persists reconciliation diagnostics as an intermediate (`agent_name="reconciliation_debug"`) when `include_intermediates=true` with merge/remap and token-collision summary fields.
-- LLM org/membership prompts include acronym-disambiguation guidance: acronym-only matches are insufficient, context grounding is required, and `pulse:ror` should remain null when candidates are ambiguous.
-- Reconciliation ownership semantics are direct-only: `pulse:owns` is rebuilt from canonical `repository.pulse:ownedBy` links and is not propagated from GitHub org-account units to canonical parent organizations.
-- GitHub organization accounts that own repositories are still modeled as `org:Organization` nodes and linked in hierarchy (`org:unitOf`/`org:hasUnit`) where applicable; synthesized GitHub org-account unit IDs use canonical URLs (`https://github.com/<handle>`).
-- Organization lookup hints (`aliases`, `acronyms`, `labels`) are reconciliation-internal only and must be stripped before strict validation/output because strict organization schemas disallow extra properties.
-- `V2LLMRuntime` extracts token counts by calling `result.usage()` — pydantic-ai 1.5.0 exposes `usage` as a method, not a property. Do not access it as `result.usage` without calling it, or counts will always be `None`/`0`.
-- `V2LLMRuntime` also surfaces `usage.requests` and `usage.tool_calls` in `LLMRuntimeResult` and logs them for runtime observability.
+A FastAPI service that turns a GitHub URL (repository / user / org) into
+JSON-LD aligned with **Open Pulse Ontology v2.0.0**. The service runs the
+input through a multi-stage pipeline that combines deterministic rules,
+provider lookups (GitHub REST, ROR, ORCID, Infoscience), and optional LLM
+agents to produce a graph of `schema:SoftwareSourceCode`,
+`schema:Person`, `org:Organization`, `org:Membership`,
+`pulse:Contribution`, and `schema:ScholarlyArticle` entities.
 
-## Environment & Prerequisites
-Required environment variables (from `.env.dist` and `.env.example`):
-- `OPENAI_API_KEY`
-- `OPENROUTER_API_KEY`
-- `GITHUB_TOKEN`
-- `GITLAB_TOKEN`
-- `INFOSCIENCE_TOKEN`
-- `MODEL`
-- `PROVIDER`
-- `SELENIUM_REMOTE_URL`
-- `CACHE_DB_PATH`
-- `MAX_SELENIUM_SESSIONS`
-- `MAX_CACHE_ENTRIES`
-- `GUNICORN_CMD_ARGS`
+V1 (under `src/v1/`) is a **frozen** legacy pipeline kept around for
+backwards-compatible endpoints. **All new work targets V2** under
+`src/v2/`.
+
+## Code map
+
+```
+src/api.py                       # FastAPI app, mounts /v1 and /v2 routers, /docs UI
+src/v1/                          # frozen legacy pipeline (no new work)
+src/v2/
+  api.py                         # /v2/extract endpoint + pipeline driver
+  jobs.py                        # async job store backing POST /v2/extract
+  config.py                      # config knobs
+  dependencies.py                # provider wiring, cache resolver
+  log_context.py                 # request-id logging context
+  observation/query_log.py       # per-request external-query log
+
+  agents/
+    models.py                    # AgentResult, ProviderSet, TypedEntityBuckets
+    registry.py                  # runtime → runner table
+    llm/                         # LLM-backed agents
+      _payload_helpers.py        # force_server_uuid + shared post-LLM stamps
+      _verdict_cache.py          # per-agent result cache
+      <kind>/agent.py            # per-entity LLM agents (one Pydantic AI run each)
+      agent_tools/               # Tool factories (selenium, ROR, ORCID, etc.)
+                                  #   *_rag.py: per-index Qdrant search tools
+                                  #   (infoscience, huggingface, openalex,
+                                  #    zenodo, orcid, ror) — see
+                                  #    docs/v2-rag-tools.md
+    rule_based/
+      <kind>_agent.py            # deterministic counterparts (no LLM)
+
+  ingest/
+    cache.py                     # ProviderCache (SQLite, WAL)
+    providers/                   # github / ror / orcid / infoscience clients
+                                  # *_rag.py: async Qdrant-backed RAG providers
+                                  # _rag_helpers.py: shared filter/rerank utils
+
+  pipeline/
+    orchestrator.py              # stage runner, fan-out concurrency, retries
+    stages/                      # the actual stages — see "Pipeline" below
+
+  schema/                        # JSON Schemas (agent + strict) + JSON-LD context
+  validation/                    # strict-schema + SHACL validators
+  canonicalization/              # ID resolution, string normalisation
+
+tests/v2/                        # default test target
+```
+
+## Pipeline (the actual stages, in order)
+
+`/v2/extract` runs the same pipeline regardless of `agent_runtime`. The
+runtime only controls which agent implementations execute (LLM agents vs.
+deterministic rule-based agents). All other stages run unconditionally.
+
+```
+1.  classify_url               classify the input as repository / user / org
+2.  gather_context             fetch GitHub metadata + GIMIE JSON-LD
+3.  context_summary  [LLM]     compile a markdown summary; raw blobs are stripped
+                               from per-agent prompts in LLM mode
+4.  repo_agent                 produce the root repository entity
+5.  person_agents (fan-out)    one agent per discovered contributor / user
+6.  org_agents    (fan-out)    one agent per discovered organisation
+7.  article_agents (fan-out)   discover scholarly articles tied to the repo
+8.  membership_agents (fan-out) one agent per (person, org) pair
+9.  contribution_agents (fan-out) one agent per (person, repo) pair
+10. llm_dedup       [LLM]      cross-bucket entity dedup + ID remap (fail-open)
+11. reconcile_entities         deterministic ID canonicalisation + linkage
+12. llm_critic      [LLM, gated] drop-suggestion stage (off by default)
+13. guarantee_repo_author      stamp github-owner as schema:author when empty
+14. strict_validation          per-entity strict JSON Schema check
+15. assemble_output            split graph into root + related + excluded
+16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
+17. validate_articles          drop placeholder/sentinel-DOI articles
+18. validate_ownership         strip mismatched pulse:owns
+19. infer_owners               stamp pulse:owns / pulse:ownedBy from handles
+20. infer_github_handle_parents  fuzzy-search ROR for parent of every github
+                                 org; add ROR org entities, stamp unitOf
+21. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
+22. infer_org_units            deterministic name-token fallback for unitOf
+23. build_jsonld_output        produce the final JSON-LD graph
+```
+
+**Gates:**
+
+- Stages tagged `[LLM]` only run in `agent_runtime=llm`.
+- `link_veracity` is `[LLM]`-only too: in `agent_runtime=rule_based` it is **always skipped** (rule-based mode is guaranteed LLM-free).
+- `llm_critic` is **off by default**. Set `V2_APPLY_CRITIC_PRUNING=true` to enable (LLM mode only).
+- `link_veracity` is **on by default in LLM mode**. Set `V2_LINK_VERACITY_ENABLED=false` to skip even in LLM mode (recommended for batch runs).
+
+**Hallucination guards baked into agents:**
+
+- `force_server_uuid` overwrites whatever UUID the LLM emitted with a server-generated one in `identifiers.uuid` only — never as a top-level field (additionalProperties violations).
+- Repository agent post-LLM: stars/forks from GitHub REST (deterministic, not LLM-derived); discipline fallback `wd:Q428691` (computer engineering) when LLM emits empty/null; `pulse:repositoryType` keyword heuristic in rule-based mode.
+- Contribution agent post-LLM: stamps `schema:author = target_person.id` and `pulse:contributionTo = target_repository.id` from the orchestrator's authoritative pair, regardless of what the LLM emits.
+- Article agent post-LLM: drops the entity if `schema:identifier` is a placeholder DOI (`10.0000/...`) or sentinel string (`UNKNOWN`, `N/A`, `TBD`, etc.) and no `pulse:infoscienceArticleIdentifier` is present.
+- Article agent (rule-based) defaults to repo-name-only Infoscience queries; opt in to the wider `include_person_queries=True` / `include_organization_queries=True` blend only when over-attribution risk is low.
+
+## API surface
+
+- `GET  /v2/health` — health check
+- `POST /v2/extract` — async job. Body: `{source_url, agent_runtime?, output_format?, include_context_summary?}`. Returns `{job_id, status, status_url}`; poll `GET /v2/jobs/{job_id}`.
+- `GET  /v2/jobs/{job_id}` — job status + result when complete
+- `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
+- `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
+
+V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen.
+
+## Configuration (env vars)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `GITHUB_TOKEN` | — | required for live GitHub provider |
+| `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | — | one is required for LLM mode |
+| `INFOSCIENCE_TOKEN` | unset | only for protected Infoscience routes |
+| `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |
+| `V2_AGENT_RUNTIME_DEFAULT` | `llm` | default runtime when `/v2/extract` omits `agent_runtime` |
+| `V2_USE_MOCK_PROVIDERS` | `true` | swap in mock GitHub/ORCID/Infoscience/ROR providers |
+| `V2_GITHUB_BASE_URL` | `https://github.com` | for GitHub Enterprise |
+| `V2_LINK_VERACITY_ENABLED` | `true` | turn off to skip the link-veracity stage in LLM mode (rule-based mode skips unconditionally) |
+| `V2_INFOSCIENCE_RAG_ENABLED` | `true` | enables the Infoscience RAG agent tools (Qdrant-backed semantic search + on-demand chunk/record fetch). Construction degrades gracefully when Qdrant or RCP is unreachable. |
+| `V2_HUGGINGFACE_RAG_ENABLED` | `true` | enables the HuggingFace Hub RAG search tool (collections: `hf_models`, `hf_datasets`, `hf_spaces`, `hf_orgs`). |
+| `V2_OPENALEX_RAG_ENABLED` | `true` | enables the OpenAlex RAG search tool (collections: `works`, `authors`, `institutions`, `sources`, `topics`, `concepts`). |
+| `V2_ZENODO_RAG_ENABLED` | `true` | enables the Zenodo RAG search tool (collection: `zenodo_records`). |
+| `V2_ORCID_RAG_ENABLED` | `true` | enables the ORCID RAG search tool (entities: `persons`, `employments`, `educations`; collections namespaced by scope). |
+| `V2_ROR_RAG_ENABLED` | `true` | enables the ROR RAG search tool (scopes: `epfl_ethz`, `switzerland`, `europe`, `worldwide`). |
+| `INDEX_QDRANT_URL` | `http://qdrant:6333` (yaml default) | Qdrant endpoint for every RAG index. Inside the devcontainer use `http://gme-qdrant:6333`. |
+| `V2_APPLY_CRITIC_PRUNING` | `false` | turn on to enable critic drop suggestions |
+| `V2_MAX_CONCURRENT_AGENTS` | `6` | per-stage fan-out concurrency |
+| `V2_PROVIDER_CACHE_PATH` | `.cache/v2/providers.db` | SQLite path for the provider+verdict+pipeline cache. Use a different path per run profile (e.g. LLM vs rule-based) for isolation. |
+| `V2_PROVIDER_CACHE_TTL_DAYS` | `30` | TTL for cached entries |
+| `V2_PROVIDER_CACHE_ENABLED` | `true` | when `false`, every external lookup is fresh |
+| `V2_PIPELINE_CACHE_ENABLED` | `true` | when `false`, every `/extract` re-runs the full pipeline |
+| `V2_QUERY_LOG_DIR` | `logs/v2_queries` | per-request external-query log destination |
+| `LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
+
+Required environment **for serving requests**: `GITHUB_TOKEN` and at least
+one LLM credential (when LLM mode is the default).
 
 Rules:
 - Never print, log, or commit secrets.
-- Never modify secret-bearing files (`.env`, `.env2`, similar secret files) unless explicitly asked.
-- If required variables are missing for the requested task, fail fast and report exactly which variables are missing.
-- For live-provider preflight/capture tasks, validate and report env var names only; never echo token values.
-- Selenium checks require `SELENIUM_REMOTE_URL` when `selenium` is part of selected providers.
-- V2 does not use the v1 TTL cache system. Providers always fetch fresh data. The `force_refresh` query parameter and `V2_DISABLE_CACHE` env var have been removed from v2.
+- Never modify `.env`, `.env2`, or other secret-bearing files unless explicitly asked.
+- Fail fast and report the missing variable name (no value) when a required var is absent.
 
-## Canonical Commands
-`justfile` is the source of truth for routine operations. Prefer `just` commands over ad-hoc shell commands when equivalent recipes exist.
+## Common commands
 
-- Setup:
-  - `just install-dev`
-  - `just setup`
-- Run API:
-  - `just serve-dev`
-  - `just serve`
-- LLM debug pipelines:
-  - `just v2-run-repo-persons-and-orgs <owner/repo>` (full 7-stage LLM repo pipeline)
-  - `just v2-run-repo-full-llm <owner/repo>` (7-stage pipeline plus final `--verify-links` link-veracity pass)
-- Tests:
-  - `just test`
-  - `just test-file tests/<file>.py`
-- Quality:
-  - `just lint`
-  - `just type-check`
-  - `just check`
-- CI-like local validation:
-  - `just ci`
-- V2 schema validation checks:
-  - `python -m json.tool src/v2/schema/json/strict/*.json`
-  - `python -m json.tool src/v2/schema/json/agent/*.json`
-  - `.venv/bin/python -m pytest tests/v2/ --collect-only`
-  - `.venv/bin/python -m pytest tests/v2 -m v2 --collect-only`
-  - `just test-file tests/v2/test_test_infrastructure.py`
-  - `just test-file tests/v2/test_promoted_strict_schemas.py`
-  - `just test-file tests/v2/test_promoted_agent_schemas.py`
-- Phase 8 live-provider checks:
-  - `just preflight-live` (defaults to `github`, `ror`, `orcid`, `infoscience`, `logfire`, `selenium`)
-  - `just capture-live`
-  - `just test-live` (runs `.venv/bin/python -m pytest -m live_provider`)
-  - `just test-offline`
-  - `python scripts/v2/check_provider_connectivity.py --providers github ror orcid infoscience logfire` (optional: skip Selenium)
+The `justfile` is the source of truth. Prefer `just <recipe>` over ad-hoc shell.
 
-Testing command guidance:
-- Prefer `just` test recipes to avoid shell-specific setup.
-- When running pytest directly, prefer `.venv/bin/python -m pytest ...` instead of `pytest ...`.
-- Avoid ad-hoc `PYTHONPATH=...` unless explicitly required for a non-module script workflow.
+| Recipe | Purpose |
+|---|---|
+| `just install-dev` | install with dev extras |
+| `just setup` | install + scaffold `.env` |
+| `just serve-dev` | uvicorn + auto-reload (watches only `src/**/*.py`) |
+| `just serve-gunicorn` | gunicorn with 4 workers (production-shape) |
+| `just serve-stop` | stop whatever's bound to `:$PORT` |
+| `just test` | fast tests via testmon |
+| `just test-full` | full deterministic test run |
+| `just test-file <path>` | one file |
+| `just lint` / `just type-check` / `just check` | quality gates |
+| `just v2-models-generate` | regenerate Pydantic models from strict schemas |
+| `just v2-models-check` | assert generated models are in sync |
 
-## Architecture Map For Agents
+For batch extractions over many repos: `scripts/v2/batch_extract.sh` reads
+a hardcoded URL list and runs them through `/v2/extract` with configurable
+parallelism. Resumable: skips repos whose result file already exists with
+a non-`running` status.
 
-V1 (legacy, under `src/v1/`):
-- Repository analysis flow entrypoints: `src/v1/analysis/repositories.py`
-- User and organization analysis entrypoints:
-  - `src/v1/analysis/user.py`
-  - `src/v1/analysis/organization.py`
-- Agent implementations:
-  - `src/v1/agents/`
-  - Atomic subpipeline: `src/v1/agents/atomic_agents/`
-- Data contracts:
-  - `src/v1/data_models/`
-- Context and external lookups:
-  - `src/v1/context/`
-- Cache layer:
-  - `src/v1/cache/`
+## Pipeline cache topology
 
-V2 (canonical, under `src/v2/`):
-- Pipeline orchestrator: `src/v2/pipeline/orchestrator.py`
-- LLM agents (one concern each): `src/v2/agents/llm/{person,repository,organization,article,membership,contribution,context_summary,critic,dedup,link_veracity}/agent.py`
-- Rule-based agents: `src/v2/agents/rule_based/`
-- Provider clients (GitHub, ORCID, Infoscience, ROR): `src/v2/ingest/providers/`
-- API surface: `src/v2/api.py`
+Three caches share a single SQLite DB (path: `V2_PROVIDER_CACHE_PATH`):
 
-## Editing Rules (Strict)
+1. **Provider cache** — gimie payloads, GitHub REST responses, ROR / ORCID / Infoscience hits. Deterministic, content-addressed.
+2. **Agent verdict cache** — LLM agent results keyed on agent name + identity. Skips a repeat LLM call for a known-good payload.
+3. **Pipeline cache** — full `/v2/extract` response for a given source URL.
+
+Set `V2_PROVIDER_CACHE_PATH` to a different file per run profile (e.g.,
+`.cache/v2-rule-based/providers.db` for rule-based runs) to keep them
+isolated and independently invalidatable.
+
+## Editing rules
+
 - Keep diffs minimal and scoped to the requested task.
 - Preserve existing code style, project conventions, and import patterns.
 - Do not rename or move public modules unless explicitly requested.
-- Do not modify `.env`, `.env2`, or other secret-bearing files unless explicitly requested.
-- Never run destructive git/file operations unless explicitly requested.
-- If unrelated local changes exist, do not revert them; work around them and report context in the completion summary.
-- Record newly discovered high-impact operational risks in `.internal/RISKS.md`.
+- Do not modify secret-bearing files unless explicitly requested.
+- Do not run destructive git/file operations unless explicitly requested.
+- If unrelated local changes exist, do not revert them — work around them and report context.
 
-## Task Playbooks
-### Bug Fix Playbook
-1. Reproduce the issue with a targeted test (or nearest equivalent validation).
-2. Patch the minimal root cause.
-3. Run focused tests first; run broader checks if shared paths were touched.
-4. Report behavior change and residual risk.
+## Schema change rules
 
-### Feature Playbook
-1. Identify API/data-model impact before coding.
-2. Implement required model, pipeline, and endpoint wiring.
-3. Add or adjust tests in `tests/`.
-4. Validate with `just test` plus relevant lint/type checks.
+JSON Schemas live in **three byte-identical copies** that must stay in sync:
 
-### Refactor Playbook
-1. Preserve behavior unless behavior change is explicitly requested.
-2. Keep API contracts stable.
-3. Prove parity with tests and checks.
+1. `src/v2/schema/json/{type}/{entity}.schema.json` (source)
+2. `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted)
+3. `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture)
 
-## Testing & Validation Requirements
-Minimum before completion:
-- Run the nearest relevant tests.
-- Run lint/type checks for touched Python modules when feasible.
+After any schema edit: copy to all three and run `just v2-models-generate`
+to regenerate Pydantic models in `src/v2/schema/models/`. `just v2-models-check`
+in CI catches drift.
 
-If validation cannot be completed (missing dependencies, missing env vars, time constraints, external service constraints), report:
-- What was attempted.
-- What failed and why.
-- The exact command(s) to run later.
+## Identifier conventions
 
-## API/Schema Change Rules
-For changes to FastAPI endpoints in `src/api.py`, include:
-- Updated request/response behavior notes.
-- Compatibility or migration notes.
-- Test coverage for changed endpoint behavior.
+- **Person**: `https://orcid.org/{orcid}` when ORCID known, else `https://github.com/{login}`, else `urn:pulse:{uuid}`
+- **Organization**: `https://ror.org/{id}` when ROR known, else `https://github.com/{handle}`, else `urn:pulse:{uuid}`
+- **Repository**: `https://github.com/{owner}/{name}`
+- **Article**: `https://doi.org/{doi}` when DOI known
+- **Membership**: `{person_id}_{org_id}` composite
+- **Contribution**: `{person_id}_{repo_id}` composite
 
-For changes to V1 models in `src/v1/data_models/`, include:
-- Impact notes on downstream usage (`src/v1/analysis/`, `src/v1/agents/`, API surface).
-- Tests for new/changed fields and validation behavior.
+`identifiers.uuid` is always a server-generated UUIDv4 (via
+`src/v2/agents/models.py::generate_uuid()`); the LLM never controls it.
 
-## Output/Reporting Contract For Agents
+## Internal pipeline metadata
+
+Fields whose names start with `_` (e.g. `_person_ref` on Memberships) are
+internal pipeline metadata. They are **stripped** before strict
+validation, JSON-LD output, RDF serialisation, and any external
+artefact. Never expose `_`-prefixed fields in API responses.
+
+## Reporting contract
+
 Completion reports must include:
 - Files changed
-- Behavior change
-- Commands run and key results
+- Behaviour change
+- Commands run + key results
 - Risks / follow-ups
 
-No vague "done" messages. Reports must include verifiable evidence.
+No vague "done". Reports must include verifiable evidence.
 
-## Definition of Done
-- Requested scope implemented.
-- Relevant tests/checks passed, or blockers explicitly documented.
-- No secret leakage.
-- No unrelated mutations.
-- No undocumented behavior changes.
+## Definition of done
 
-## Test Cases & Scenarios For This Guide
-1. Discoverability
-- Scenario: A new agent opens the repository root.
-- Expectation: `AGENTS.md` is present with quick-start commands and architecture map.
-
-2. Fail-fast behavior
-- Scenario: A task requires `OPENAI_API_KEY`, but it is missing.
-- Expectation: Agent halts and reports the missing variable explicitly; no fabricated results.
-
-3. Workflow consistency
-- Scenario: Bug fix in `src/v1/agents/organization_enrichment.py`.
-- Expectation: Agent follows the bug-fix playbook and runs targeted tests first.
-
-4. Safety guardrails
-- Scenario: Dirty worktree with unrelated changes.
-- Expectation: Agent avoids reverting unrelated files and reports context.
-
-5. Reporting quality
-- Scenario: Agent completes a task.
-- Expectation: Final report includes changed files, commands, outcomes, and risks.
-
-## Public API/Type Impact
-- No code/API/type changes are introduced by this document.
-- This file defines a repository-local agent policy contract only.
+- Requested scope implemented
+- Relevant tests/checks passed (or blockers explicitly documented)
+- No secret leakage
+- No unrelated mutations
+- No undocumented behaviour changes

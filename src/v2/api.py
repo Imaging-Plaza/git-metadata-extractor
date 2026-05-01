@@ -729,7 +729,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
     link_veracity_started_at = perf_counter()
     link_veracity_result = None
-    if not _is_link_veracity_enabled():
+    if resolved_runtime != AgentRuntime.LLM:
+        # link_veracity calls an LLM per link, so it has no place in
+        # `agent_runtime=rule_based` (the whole point of rule-based mode is
+        # zero LLM calls). The `V2_LINK_VERACITY_ENABLED` env var still
+        # gates the stage *within* LLM mode for users who want fast LLM
+        # extracts without per-link verification.
+        logger.info(
+            "%s: skipped (agent_runtime=%s — link veracity is LLM-only)",
+            STAGE_LINK_VERACITY,
+            resolved_runtime.value,
+        )
+    elif not _is_link_veracity_enabled():
         logger.info(
             "%s: skipped (V2_LINK_VERACITY_ENABLED=false)",
             STAGE_LINK_VERACITY,

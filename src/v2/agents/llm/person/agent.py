@@ -17,6 +17,11 @@ from src.v2.agents.llm._verdict_cache import (
     store_agent_verdict,
 )
 from src.v2.agents.llm.agent_tools.email_hash import hash_user_email_tool
+from src.v2.agents.llm.agent_tools.infoscience_rag import (
+    make_infoscience_rag_fetch_chunks_tool,
+    make_infoscience_rag_fetch_records_tool,
+    make_infoscience_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.infoscience_search import make_infoscience_search_tool
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
 from src.v2.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
@@ -364,6 +369,14 @@ class LLMPersonAgentV2:
         if providers.orcid is not None:
             tools.append(make_orcid_person_tool(providers.orcid))
             tools.append(make_query_orcid_tool(providers.orcid))
+        if providers.infoscience_rag is not None:
+            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
+            tools.append(
+                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
+            )
+            tools.append(
+                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
+            )
 
         identifier = (
             github_username

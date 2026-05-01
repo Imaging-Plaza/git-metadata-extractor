@@ -49,6 +49,14 @@ dependencies = [
     "httpx",
     "markdownify==1.2.0",
     "pyshacl==0.28.1",
+    "click>=8.1.0",
+    "faiss-cpu>=1.8.0",
+    "numpy>=1.26",
+    "pyalex>=0.15",
+    "duckdb>=1.0",
+    "qdrant-client>=1.10",
+    "tenacity>=8",
+    "huggingface_hub>=1.2.0",
 ]
 
 [project.urls]
@@ -67,6 +75,8 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "datamodel-code-generator>=0.54.0",
+    "respx>=0.21",
+    "requests-mock>=1.12",
 ]
 docs = [
     "mkdocs>=1.6.0",
@@ -93,6 +103,7 @@ markers = [
     "v2: tests for the v2 extraction pipeline and schema validation track",
     "live_provider: opt-in tests that hit live external provider APIs",
     "llm_integration: opt-in tests that call real LLM providers",
+    "openalex: tests for the src/index/openalex module",
 ]
 
 [tool.datamodel-codegen]

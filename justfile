@@ -370,3 +370,219 @@ pre-commit-update:
 # Clean pre-commit cache
 pre-commit-clean:
     pre-commit clean
+
+# ============================================================================
+# Infoscience indexer (src/index/infoscience)
+# ============================================================================
+
+# Solr fulltext discover for configured filter terms.
+index-infoscience-discover *ARGS:
+    .venv/bin/python -m src.index.infoscience discover {{ARGS}}
+
+# Download TEXT bundle plaintext for each discovered item.
+index-infoscience-fetch-text *ARGS:
+    .venv/bin/python -m src.index.infoscience fetch-text {{ARGS}}
+
+# Regex-extract GitHub/HuggingFace URLs from fetched text.
+index-infoscience-extract-matches:
+    .venv/bin/python -m src.index.infoscience extract-matches
+
+# Pull Person/Org authority UUIDs from matched articles.
+index-infoscience-extract-relations:
+    .venv/bin/python -m src.index.infoscience extract-relations
+
+# Fetch raw JSON for each linked Person/OrgUnit.
+index-infoscience-fetch-related *ARGS:
+    .venv/bin/python -m src.index.infoscience fetch-related {{ARGS}}
+
+# Chunk + embed + populate LanceDB tables.
+index-infoscience-embed *ARGS:
+    .venv/bin/python -m src.index.infoscience embed {{ARGS}}
+
+# Hybrid query (filter → vector → rerank). Pass the query as the first arg.
+index-infoscience-query QUERY *ARGS:
+    .venv/bin/python -m src.index.infoscience query "{{QUERY}}" {{ARGS}}
+
+# Ingest the on-disk raw/* JSON tree into the infoscience DuckDB store.
+# Optional: --links-dump=<path> to merge a dump_link_articles.py output
+# into the article_links table.
+index-infoscience-ingest-duckdb *ARGS:
+    .venv/bin/python -m src.index.infoscience ingest-duckdb {{ARGS}}
+
+# Show pipeline + LanceDB counts and paths.
+index-infoscience-status:
+    .venv/bin/python -m src.index.infoscience status
+
+# ============================================================================
+# OpenAlex indexer (src/index/openalex)
+# ============================================================================
+
+# Pull OpenAlex entities into DuckDB. Pass --scope epfl|switzerland.
+openalex-ingest *ARGS:
+    .venv/bin/python -m src.index.openalex.cli ingest {{ARGS}}
+
+# Discover Swiss/EPFL Works mentioning github.com URLs (test set for v2).
+openalex-find-github *ARGS:
+    .venv/bin/python -m src.index.openalex.cli find-github {{ARGS}}
+
+# Embed DuckDB rows into Qdrant via the RCP embedding endpoint.
+openalex-embed *ARGS:
+    .venv/bin/python -m src.index.openalex.cli embed {{ARGS}}
+
+# Re-push existing DuckDB chunks into Qdrant (re-embeds chunks.text via RCP).
+# Use after a Qdrant wipe — does NOT modify DuckDB.
+openalex-rebuild-qdrant *ARGS:
+    .venv/bin/python -m src.index.openalex.cli rebuild-qdrant {{ARGS}}
+
+# Semantic retrieval (vector + rerank). First positional is the query.
+openalex-search QUERY *ARGS:
+    .venv/bin/python -m src.index.openalex.cli search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the DuckDB dump (predefined or guarded ad-hoc).
+openalex-query *ARGS:
+    .venv/bin/python -m src.index.openalex.cli query {{ARGS}}
+
+# Run the FastAPI app.
+openalex-serve *ARGS:
+    .venv/bin/python -m src.index.openalex.cli serve {{ARGS}}
+
+# Run the OpenAlex test suite only.
+openalex-test:
+    .venv/bin/python -m pytest tests/index/openalex/ -v -m openalex
+
+# ============================================================================
+# ORCID indexer (src/index/orcid)
+# ============================================================================
+
+# Build the seed ORCID list (OpenAlex authors + ORCID expanded-search).
+# Pass --scope epfl|switzerland and optionally --source openalex|orcid_search|both.
+orcid-discover *ARGS:
+    .venv/bin/python -m src.index.orcid discover {{ARGS}}
+
+# Fetch full ORCID records for seeded IDs, post-filter, persist to DuckDB.
+orcid-ingest *ARGS:
+    .venv/bin/python -m src.index.orcid ingest {{ARGS}}
+
+# Chunk + embed in-scope rows, push to Qdrant via the RCP embedding endpoint.
+orcid-embed *ARGS:
+    .venv/bin/python -m src.index.orcid embed {{ARGS}}
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+orcid-search QUERY *ARGS:
+    .venv/bin/python -m src.index.orcid search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the ORCID DuckDB (predefined or guarded ad-hoc).
+orcid-query *ARGS:
+    .venv/bin/python -m src.index.orcid query {{ARGS}}
+
+# Show counts + paths for the chosen scope.
+orcid-status *ARGS:
+    .venv/bin/python -m src.index.orcid status {{ARGS}}
+
+# Run the FastAPI app on port 8002 by default.
+orcid-serve *ARGS:
+    .venv/bin/python -m src.index.orcid serve {{ARGS}}
+
+# Run the ORCID test suite only.
+orcid-test:
+    .venv/bin/python -m pytest tests/index/orcid/ -v
+
+# ============================================================================
+# HuggingFace indexer (src/index/huggingface)
+# ============================================================================
+
+# Pull HuggingFace metadata + cards into DuckDB. Pass --scope epfl|switzerland
+# and optionally --types models,datasets,spaces.
+hf-ingest *ARGS:
+    .venv/bin/python -m src.index.huggingface ingest {{ARGS}}
+
+# Substring-search the Hub for unknown EPFL/Swiss orgs; writes candidates to
+# logs/discover_orgs.jsonl for human review (never auto-promotes to seed).
+hf-discover-orgs *ARGS:
+    .venv/bin/python -m src.index.huggingface discover-orgs {{ARGS}}
+
+# Chunk + embed cards, push vectors to Qdrant via the RCP embedding endpoint.
+hf-embed *ARGS:
+    .venv/bin/python -m src.index.huggingface embed {{ARGS}}
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+hf-search QUERY *ARGS:
+    .venv/bin/python -m src.index.huggingface search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the HuggingFace DuckDB (predefined or guarded ad-hoc).
+hf-query *ARGS:
+    .venv/bin/python -m src.index.huggingface query {{ARGS}}
+
+# Show DuckDB row counts + Qdrant collection size + paths.
+hf-status:
+    .venv/bin/python -m src.index.huggingface status
+
+# Run the FastAPI app (default port 8002).
+hf-serve *ARGS:
+    .venv/bin/python -m src.index.huggingface serve {{ARGS}}
+
+# Run the HuggingFace test suite only.
+hf-test:
+    .venv/bin/python -m pytest tests/index/huggingface/ -v
+
+# ============================================================================
+# Zenodo indexer (src/index/zenodo)
+# ============================================================================
+
+# Pull Zenodo records into DuckDB. Pass --scope epfl|switzerland.
+zenodo-ingest *ARGS:
+    .venv/bin/python -m src.index.zenodo ingest {{ARGS}}
+
+# Chunk + embed records, push vectors to Qdrant via the RCP embedding endpoint.
+zenodo-embed *ARGS:
+    .venv/bin/python -m src.index.zenodo embed {{ARGS}}
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+zenodo-search QUERY *ARGS:
+    .venv/bin/python -m src.index.zenodo search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the Zenodo DuckDB (predefined or guarded ad-hoc).
+zenodo-query *ARGS:
+    .venv/bin/python -m src.index.zenodo query {{ARGS}}
+
+# Show DuckDB row counts + Qdrant collection size + paths.
+zenodo-status:
+    .venv/bin/python -m src.index.zenodo status
+
+# Run the FastAPI app (default port 8003).
+zenodo-serve *ARGS:
+    .venv/bin/python -m src.index.zenodo serve {{ARGS}}
+
+# ============================================================================
+# GitHub repository indexer (src/index/github)
+# ============================================================================
+
+# Fetch GitHub repo metadata + README into DuckDB. Pass --scope epfl|switzerland,
+# optionally --repos owner/name,... and/or --from-openalex.
+gh-ingest *ARGS:
+    .venv/bin/python -m src.index.github ingest {{ARGS}}
+
+# Chunk + embed repos, push vectors to Qdrant via the RCP embedding endpoint.
+gh-embed *ARGS:
+    .venv/bin/python -m src.index.github embed {{ARGS}}
+
+# Recovery path: re-derive Qdrant points from the existing chunks table.
+# Use after a Qdrant wipe (instead of `gh-embed`, which would skip everything).
+gh-rebuild-qdrant:
+    .venv/bin/python -m src.index.github rebuild-qdrant
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+gh-search QUERY *ARGS:
+    .venv/bin/python -m src.index.github search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the GitHub DuckDB (predefined or guarded ad-hoc).
+gh-query *ARGS:
+    .venv/bin/python -m src.index.github query {{ARGS}}
+
+# Show DuckDB row counts + Qdrant collection size + paths.
+gh-status:
+    .venv/bin/python -m src.index.github status
+
+# Run the FastAPI app (default port 8004).
+gh-serve *ARGS:
+    .venv/bin/python -m src.index.github serve {{ARGS}}

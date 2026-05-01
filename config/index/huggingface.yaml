@@ -1,0 +1,244 @@
+# HuggingFace RAG indexer config.
+# Resolved by `src/index/huggingface/config.py` and merged with env vars
+# (RCP_TOKEN, HF_TOKEN, INDEX_QDRANT_URL, INDEX_QDRANT_API_KEY,
+# INDEX_QDRANT_PREFER_GRPC, INDEX_HUGGINGFACE_SCOPE, INDEX_DATA_DIR)
+# at startup.
+
+rcp:
+  # OpenAI-compatible inference endpoint. Same RCP deployment as the
+  # infoscience and openalex indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  # Native dim for Qwen3-Embedding-8B is 4096. Configurable down to 32 if
+  # RCP deploys with Matryoshka truncation.
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant model and dataset cards"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+huggingface:
+  api_base: https://huggingface.co
+  # Default page size for HfApi list endpoints. Hub max is 100 (anonymous)
+  # and 100 (authenticated); leave at 100.
+  per_page: 100
+  max_concurrency: 4
+  # When true, snapshot_download README + *.json + *.yaml + *.md alongside
+  # the metadata pull. Weight files are always ignored.
+  full_cards: false
+  # Skip embedding rows whose card is shorter than this many characters —
+  # avoids embedding "# My Demo" placeholder cards as standalone chunks.
+  min_card_chars: 64
+
+scope:
+  # epfl | switzerland — picks which seed list to use. Override via
+  # INDEX_HUGGINGFACE_SCOPE.
+  active: epfl
+  seeds:
+    # Curated by hand. Add new entries below the relevant section header so
+    # the file stays scannable. The `discover-orgs` subcommand never edits
+    # this file — it only proposes candidates in logs/discover_orgs.jsonl.
+    epfl:
+      # Original seed (institutional + flagship lab orgs).
+      - epfl-llm
+      - epfl-nlp
+      - EPFL-VILAB
+      - epfl-ml4ed
+      - EPFL-ECEO
+      # Promoted from discover-orgs run on 2026-05-01 (EPFL labs/projects).
+      - epfl-dlab
+      - LIONS-EPFL
+      - EPFL-IVRL
+      - SAGESSE-EPFL
+      - EPFL-CVLAB-SPACECRAFT
+      - ADP-EPFL
+      - epfl-ml-ytf
+      - epfl-dhlab
+      - EPFL-LNMC
+      - EPFL-CVLab
+      - EPFL-DrivingVQA
+      - structure-epflai
+      - asl-epfl
+      - epfl-ihl
+      - epfl-radio-astro
+      # Promoted personal user accounts (EPFL-affiliated researchers).
+      - vanek-epfl
+      - rapieniuta-epfl
+      # Promoted from wider discover-orgs run on 2026-05-01 (EPFL projects).
+      - EPFL-DL-CER-project
+      # Promoted from extended-terms discover-orgs run on 2026-05-01.
+      - Idiap                # Idiap Research Institute, Martigny (EPFL-affiliated)
+      - epfml                # EPFL ML group (Jaggi/MLO alt namespace)
+    switzerland:
+      # EPFL block (mirrors `epfl` seed above).
+      - epfl-llm
+      - epfl-nlp
+      - EPFL-VILAB
+      - epfl-ml4ed
+      - EPFL-ECEO
+      - epfl-dlab
+      - LIONS-EPFL
+      - EPFL-IVRL
+      - SAGESSE-EPFL
+      - EPFL-CVLAB-SPACECRAFT
+      - ADP-EPFL
+      - epfl-ml-ytf
+      - epfl-dhlab
+      - EPFL-LNMC
+      - EPFL-CVLab
+      - EPFL-DrivingVQA
+      - structure-epflai
+      - asl-epfl
+      - epfl-ihl
+      - epfl-radio-astro
+      - vanek-epfl
+      - rapieniuta-epfl
+      - EPFL-DL-CER-project
+      - Idiap
+      - epfml
+      # Original ETH + Swiss block.
+      - swiss-ai
+      - swiss-ai-center
+      - ethz
+      - ETHZurich
+      - ETH-CVG
+      - prs-eth
+      - ethz-spylab
+      - lasgroup
+      - camlab-ethz
+      - ethzanalytics
+      - eth-student-project-house
+      - ZurichNLP
+      - rcds
+      # Promoted from discover-orgs run on 2026-05-01 (ETH labs/projects).
+      - ethz-mtc
+      - ethz-vlg
+      - eth-nlped
+      - eth-easl
+      - adhd-ethz
+      # Promoted personal user accounts (ETH-affiliated researchers).
+      - arahmoun-ethz
+      - jayzhang-ethz
+      - ethzhou
+      - liushu-ethz
+      # Promoted from wider discover-orgs run on 2026-05-01
+      # (other Swiss universities + national centres).
+      - SDSC                 # Swiss Data Science Center (EPFL/ETH joint)
+      - dh-unibe             # Universität Bern, Digital Humanities
+      - cvg-unibe            # Universität Bern, Computer Vision Group
+      - prg-unibe            # Universität Bern, Pattern Recognition Group
+      - ivis-UZH             # UZH, Interactive Visualization
+      - CTPLab-DBE-UniBas    # UniBas D-BSSE Cellular Therapy & Pathology Lab
+      - unige-fti            # Université de Genève, Faculté de Traduction
+      - ALIRE-HESSO          # HES-SO ALIRE project
+      - HSLU-AAI             # Hochschule Luzern, Applied AI
+      - fhnw                 # FHNW institutional
+      - fhnwrover            # FHNW robotics project
+
+discovery:
+  # Substrings fed to list_models(search=...) / list_datasets(search=...).
+  # Hits grouped by namespace; new namespaces written to
+  # logs/discover_orgs.jsonl for human review before promoting into
+  # `scope.seeds`. Never auto-added.
+  search_terms:
+    # EPFL institutional + adjacent institute / lab tokens. Substring
+    # matches are noisy by design — review the resulting jsonl before
+    # promoting any namespace to `scope.seeds`.
+    epfl:
+      # Institutional + city.
+      - epfl
+      - lausanne
+      # Affiliated / adjacent institutes.
+      - idiap          # Idiap Research Institute (Martigny, EPFL-affiliated)
+      - martigny
+      - c4dt           # Center for Digital Trust
+      - ai-center      # EPFL AI Center
+      # Lab / group acronyms commonly used as namespace prefixes.
+      - mlo            # Machine Learning and Optimization (Jaggi)
+      - lasa           # Learning Algorithms and Systems (Billard)
+      - vita           # Visual Intelligence for Transportation
+      - cvlab          # Computer Vision Lab (Fua)
+      - ivrl           # Image and Visual Representation Lab (Süsstrunk)
+      - vilab          # Visual Intelligence and Learning (Zamir)
+      - chili          # Computer-Human Interaction in Learning & Instruction
+      - lions          # Laboratory for Information and Inference Systems (Cevher)
+      - dlab           # Data Science Lab (West)
+      - dhlab          # Digital Humanities Lab (Kaplan)
+      - nlp            # NLP labs (paired with EPFL via namespace)
+      - lts2           # Signal Processing Lab 2 (Vandergheynst)
+      - lts4           # Signal Processing Lab 4 (Frossard)
+      - lcav           # Audiovisual Communications Lab (Vetterli)
+      - mlbio          # Machine Learning for Biology
+      - sage           # Scalable Computing Systems Lab
+    # Cast a wide net — discover-orgs only surfaces candidates for review,
+    # never auto-adds. Mix of institutional acronyms, university initials,
+    # and city names. False positives are expected (e.g. "bern" matches
+    # "Bernarderfds"); the human-review step in logs/discover_orgs.jsonl
+    # is where they get filtered out.
+    switzerland:
+      # Institutional acronyms.
+      - epfl
+      - eth
+      - ethz
+      - bsse        # D-BSSE Basel — ETH Zurich systems biology dept
+      - cscs        # Swiss National Supercomputing Centre
+      - empa        # Federal Laboratories for Materials Science
+      - psi         # Paul Scherrer Institute
+      - paul-scherrer
+      - sdsc        # Swiss Data Science Center
+      # Swiss university acronyms.
+      - usi         # Università della Svizzera italiana
+      - uzh         # Universität Zürich
+      - unibe       # Universität Bern
+      - unibas      # Universität Basel
+      - unil        # Université de Lausanne
+      - unige       # Université de Genève
+      - unifr       # Universität Freiburg
+      - unine       # Université de Neuchâtel
+      - hesso       # HES-SO (Western Switzerland)
+      - hslu        # Hochschule Luzern
+      - fhnw        # Fachhochschule Nordwestschweiz
+      # City + country tokens (noisy but catch the long tail).
+      - lausanne
+      - zurich
+      - geneva
+      - basel
+      - bern
+      - swiss
+      # EPFL adjacent / lab tokens (mirrors `epfl` scope).
+      - idiap
+      - martigny
+      - c4dt
+      - ai-center
+      - mlo
+      - lasa
+      - vita
+      - cvlab
+      - ivrl
+      - vilab
+      - chili
+      - lions
+      - dlab
+      - dhlab
+      - nlp
+      - lts2
+      - lts4
+      - lcav
+      - mlbio
+      - sage
+
+qdrant:
+  # Compose service `gme-qdrant` on the `dev` network. Use the service name
+  # (not localhost) so this resolves correctly from inside the devcontainer.
+  # See `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  # Cards are short — bigger chunks than openalex's 256.
+  size_tokens: 512
+  overlap_tokens: 64
+  # tiktoken encoding name. cl100k_base is a reasonable proxy for the Qwen3
+  # tokenizer; counts are within ~10% for English text.
+  tokenizer: cl100k_base

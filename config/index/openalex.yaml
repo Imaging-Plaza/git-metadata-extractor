@@ -1,0 +1,48 @@
+# OpenAlex RAG indexer config.
+# Resolved by `src/index/openalex/config.py` and merged with env vars
+# (`RCP_TOKEN`, `OPENALEX_MAILTO`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`)
+# at startup.
+
+rcp:
+  # OpenAI-compatible inference endpoint. Same RCP deployment as the
+  # infoscience indexer (config/index/infoscience.yaml).
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  # Native dim for Qwen3-Embedding-8B is 4096. Configurable down to 32
+  # if RCP deploys with Matryoshka truncation.
+  embedding_dim: 4096
+  # Prepended to every query (not passages) per Qwen3-Embedding instruction format.
+  query_instruction: "Given a search query, retrieve relevant scholarly works"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  # Per-batch input count for /v1/embeddings. Smaller default given 8B params.
+  batch_size: 32
+  # Concurrent in-flight embed/rerank calls.
+  max_concurrency: 4
+  # Generous to accommodate RCP cold-start (model load can take minutes).
+  timeout_seconds: 120
+
+openalex:
+  base_url: https://api.openalex.org
+  # OpenAlex max page size.
+  per_page: 200
+  # Thread-pool size when fanning out across entity types.
+  max_concurrency: 4
+
+scope:
+  # EPFL ROR (Phase 1 default). Override via INDEX_OPENALEX_SCOPE_ROR.
+  ror: https://ror.org/02s376052
+  # Switzerland country code (Phase 2). Override via INDEX_OPENALEX_SCOPE_COUNTRY.
+  country: ch
+
+qdrant:
+  # Compose service exposes 6333 HTTP / 6334 gRPC.
+  url: http://gme-qdrant:6333
+  # Set true to use 6334 (faster bulk upserts).
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  # tiktoken encoding name. cl100k_base is a reasonable proxy for the
+  # Qwen3 tokenizer; counts are within ~10% for English/code text.
+  tokenizer: cl100k_base

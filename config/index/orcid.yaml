@@ -1,0 +1,50 @@
+# ORCID RAG indexer config.
+# Resolved by `src/index/orcid/config.py` and merged with env vars
+# (`RCP_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`,
+# `INDEX_ORCID_SCOPE`) at startup.
+
+rcp:
+  # Same RCP deployment as openalex/infoscience.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant ORCID person profiles"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+orcid:
+  # Public ORCID API. Member API requires OAuth and is not used here.
+  base_url: https://pub.orcid.org/v3.0
+  timeout_seconds: 20
+  # Hard cap from ORCID's expanded-search endpoint.
+  search_max_rows: 200
+
+scope:
+  # EPFL ROR (Phase 1 default). Override via INDEX_ORCID_SCOPE_ROR.
+  ror: https://ror.org/02s376052
+  # Switzerland country code (Phase 2). Override via INDEX_ORCID_SCOPE_COUNTRY.
+  country: ch
+  # Strings used by ORCID's `expanded-search` enrichment path.
+  affiliation_aliases:
+    - "EPFL"
+    - "École polytechnique fédérale de Lausanne"
+    - "Ecole polytechnique federale de Lausanne"
+    - "Swiss Federal Institute of Technology Lausanne"
+
+discovery:
+  # `openalex` | `orcid_search` | `both`. Override via INDEX_ORCID_DISCOVERY_SOURCE.
+  source: both
+  # Path to a previously-built openalex DuckDB (the seed of source A).
+  # Override via INDEX_ORCID_OPENALEX_DB.
+  openalex_db: data/index/openalex/duckdb/openalex.duckdb
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

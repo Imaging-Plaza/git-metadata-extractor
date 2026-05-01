@@ -1,0 +1,49 @@
+# Zenodo RAG indexer config.
+# Resolved by `src/index/zenodo/config.py` and merged with env vars
+# (`RCP_TOKEN`, `ZENODO_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`)
+# at startup.
+
+rcp:
+  # Same RCP deployment as openalex + infoscience indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant Zenodo records"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+zenodo:
+  base_url: https://zenodo.org/api
+  # Authenticated max is 100; anonymous is capped at 25 server-side.
+  page_size: 100
+  # Zenodo's documented hard limit is 30/min — leave a small buffer.
+  rate_per_minute: 25
+  # Conservative default; raise once rate limiter is verified safe.
+  max_concurrency: 1
+
+scope:
+  default: epfl
+  # Curated EPFL community list. Add more as discovered via
+  # https://zenodo.org/api/communities?q=epfl during ingest.
+  epfl_communities:
+    - epfl
+    - eesd_at_epfl
+    - ivrl-epfl-switzerland
+  # Phase 2: union with the EPFL list. Swiss-wide community slugs go here.
+  switzerland_communities:
+    - supsi
+    - sweco25
+    - plato-ch
+
+qdrant:
+  # Devcontainer compose service name — REST 6333, gRPC 6334.
+  # Use http://localhost:6333 from a host shell instead.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

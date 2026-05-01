@@ -16,6 +16,11 @@ from src.v2.agents.llm._verdict_cache import (
 from src.v2.agents.llm.agent_tools.infoscience_publications import (
     make_infoscience_publications_search_tool,
 )
+from src.v2.agents.llm.agent_tools.infoscience_rag import (
+    make_infoscience_rag_fetch_chunks_tool,
+    make_infoscience_rag_fetch_records_tool,
+    make_infoscience_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
@@ -261,6 +266,14 @@ class LLMArticleAgentV2:
         if providers.infoscience is not None:
             tools.append(
                 make_infoscience_publications_search_tool(providers.infoscience),
+            )
+        if providers.infoscience_rag is not None:
+            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
+            tools.append(
+                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
+            )
+            tools.append(
+                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
             )
 
         try:
