@@ -115,6 +115,8 @@ def build_jsonld_output(
         for key, value in entity.items():
             if key in HELPER_ONLY_FIELDS or key in {"id", "type"}:
                 continue
+            if isinstance(key, str) and key.startswith("_"):
+                continue
             node[key] = _normalize_jsonld_value(
                 value,
                 id_map=id_map,

@@ -32,6 +32,7 @@ def ingest_datasets(
     limit: int | None = None,
 ) -> int:
     upserted = 0
+    skipped = 0
     for slug in scope.seeds:
         store.upsert_org(slug=slug, scope=scope.name, source="seed")
         listed = list(client.list_datasets(slug, limit=limit))
@@ -39,6 +40,10 @@ def ingest_datasets(
         for stub in listed:
             repo_id = getattr(stub, "id", None) or getattr(stub, "datasetId", None)
             if not repo_id:
+                continue
+            stub_sha = getattr(stub, "sha", None)
+            if stub_sha and store.repo_sha("datasets", repo_id) == stub_sha:
+                skipped += 1
                 continue
             info = client.dataset_info(repo_id, expand=DATASET_EXPAND_FIELDS)
             if info is None:
@@ -65,6 +70,7 @@ def ingest_datasets(
             upserted += 1
             if limit is not None and upserted >= limit * len(scope.seeds):
                 return upserted
+    LOGGER.info("datasets: ingest summary upserted=%d skipped_unchanged=%d", upserted, skipped)
     return upserted
 
 

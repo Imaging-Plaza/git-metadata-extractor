@@ -2,8 +2,19 @@
 
 Reads the resolved `RorIndexConfig`, fetches the latest dump (or reuses a
 cached one), filters to the configured subset, embeds all docs via RCP, and
-writes `index.faiss` + `records.jsonl` + `manifest.json` under
-`<data_dir>/ror/index/<scope_mode>/`.
+writes:
+
+  - the **full ROR dump** (~125k records) into the DuckDB `records` table
+    (replaces what was there from the previous release);
+  - this run's scope rows (text + Qdrant point id) into `scope_records`;
+  - a manifest entry for this scope into `manifests`;
+  - and the embedded vectors into the matching Qdrant collection
+    `ror_<scope_mode>` (recreated each build).
+
+D16 (see `.internal/ror/duckdb-migration.md`) collapsed the per-scope
+`records.jsonl` + `manifest.json` sidecars and the in-memory `dump_index`
+into one DuckDB file at `<INDEX_DATA_DIR>/ror/duckdb/ror.duckdb`. The Qdrant
+collection layout is unchanged.
 """
 
 from __future__ import annotations
@@ -17,9 +28,14 @@ from .config import RorIndexConfig
 from .document import display_name, to_document
 from .embed import embed_passages
 from .filter import EUROPE_COUNTRY_CODES, filter_countries, filter_country_code, filter_subtree
-from .models import IndexedRecord, IndexManifest
 from .qdrant_store import QdrantRorStore
-from .store import now_iso, write_sidecar
+from .storage.duckdb_store import (
+    DuckDBStore,
+    ScopeRecord,
+    StoreManifest,
+    extract_record_columns,
+    vector_id_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,57 +95,67 @@ async def build(cfg: RorIndexConfig, *, refresh: bool = False) -> Dict[str, Any]
     texts = [to_document(r) for r in subset]
     embeddings = await embed_passages(cfg.rcp, texts, normalize=True)
 
-    rows: List[IndexedRecord] = []
-    for i, (record, text) in enumerate(zip(subset, texts)):
-        rows.append(IndexedRecord(
-            row=i,
-            ror_id=str(record.get("id", "")),
-            name=display_name(record),
-            text=text,
-            record=record,
+    # ---- DuckDB writes (records + scope_records + manifests) ------------
+    duck = DuckDBStore.open()
+    try:
+        duck_records_count = duck.bulk_replace_records(
+            extract_record_columns(r, ror_release_version=cached.release_version)
+            for r in all_records
+        )
+        logger.info(
+            "DuckDB: replaced `records` with %d rows (release=%s)",
+            duck_records_count, cached.release_version,
+        )
+
+        scope_rows = [
+            ScopeRecord(
+                scope_mode=cfg.scope.mode,
+                ror_id=str(record.get("id", "")).rstrip("/"),
+                text=text,
+                vector_id=vector_id_for(str(record.get("id", "")).rstrip("/")),
+            )
+            for record, text in zip(subset, texts)
+        ]
+        duck.set_scope_records(cfg.scope.mode, scope_rows)
+        duck.set_manifest(StoreManifest(
+            scope_mode=cfg.scope.mode,
+            record_count=len(scope_rows),
+            embedding_model=cfg.rcp.embedding_model,
+            embedding_dim=cfg.rcp.embedding_dim,
+            reranker_model=cfg.rcp.reranker_model,
+            ror_release_version=cached.release_version,
+            ror_release_doi=cached.release_doi,
         ))
+    finally:
+        duck.close()
 
-    manifest = IndexManifest(
-        scope_mode=cfg.scope.mode,
-        record_count=len(rows),
-        embedding_model=cfg.rcp.embedding_model,
-        embedding_dim=cfg.rcp.embedding_dim,
-        reranker_model=cfg.rcp.reranker_model,
-        ror_release_version=cached.release_version,
-        ror_release_doi=cached.release_doi,
-        built_at_iso=now_iso(),
-    )
-
-    # Sidecar (records.jsonl + manifest.json) — keep on disk for portability.
-    write_sidecar(cfg.scope.mode, rows, manifest)
-
-    # Vectors → Qdrant collection ror_<scope_mode>.
-    store = QdrantRorStore(cfg)
-    store.recreate_collection(cfg.scope.mode)
-    payloads = [_build_payload(row) for row in rows]
-    store.upsert_records(
+    # ---- Qdrant writes (vectors + payload) -------------------------------
+    qstore = QdrantRorStore(cfg)
+    qstore.recreate_collection(cfg.scope.mode)
+    payloads = [_build_payload(record, text) for record, text in zip(subset, texts)]
+    qstore.upsert_records(
         cfg.scope.mode,
-        ror_ids=[row.ror_id for row in rows],
+        ror_ids=[scope_rows[i].ror_id for i in range(len(scope_rows))],
         vectors=embeddings.tolist(),
         payloads=payloads,
     )
     logger.info(
         "Upserted %d records to qdrant collection %s",
-        len(rows), store.collection_name(cfg.scope.mode),
+        len(scope_rows), qstore.collection_name(cfg.scope.mode),
     )
 
     return {
         "scope_mode": cfg.scope.mode,
-        "record_count": len(rows),
+        "record_count": len(scope_rows),
         "release_version": cached.release_version,
         "json_path": str(cached.json_path),
-        "qdrant_collection": store.collection_name(cfg.scope.mode),
+        "qdrant_collection": qstore.collection_name(cfg.scope.mode),
+        "duckdb_records": duck_records_count,
     }
 
 
-def _build_payload(row: IndexedRecord) -> Dict[str, Any]:
-    """Qdrant payload for one row: kept compact but searchable."""
-    record = row.record
+def _build_payload(record: Dict[str, Any], text: str) -> Dict[str, Any]:
+    """Qdrant payload for one scope row: kept compact but searchable."""
     cc: Optional[str] = None
     for loc in record.get("locations") or []:
         details = loc.get("geonames_details") if isinstance(loc, dict) else None
@@ -139,9 +165,9 @@ def _build_payload(row: IndexedRecord) -> Dict[str, Any]:
                 cc = value.upper()
                 break
     return {
-        "ror_id": row.ror_id,
-        "name": row.name,
-        "text": row.text,
+        "ror_id": str(record.get("id", "")).rstrip("/"),
+        "name": display_name(record),
+        "text": text,
         "country_code": cc,
         "types": record.get("types") or [],
         "record": record,

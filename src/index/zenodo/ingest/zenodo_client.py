@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -86,7 +86,7 @@ class ZenodoClient:
         @retry(
             stop=stop_after_attempt(5),
             wait=wait_exponential(multiplier=1, min=2, max=30),
-            retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError)),
+            retry=retry_if_exception(_is_retryable),
             reraise=True,
         )
         async def _call() -> dict[str, Any]:
@@ -96,6 +96,7 @@ class ZenodoClient:
                 params=params,
                 headers=self._headers,
                 timeout=httpx.Timeout(60.0),
+                follow_redirects=True,
             )
             try:
                 response.raise_for_status()
@@ -161,3 +162,22 @@ class ZenodoClient:
             if exc.response.status_code == 404:
                 return None
             raise
+
+    async def fetch_record(
+        self,
+        record_id: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+    ) -> dict[str, Any] | None:
+        own_client = client is None
+        if own_client:
+            client = httpx.AsyncClient()
+        try:
+            return await self._get(client, f"/records/{record_id}", {})
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (404, 410):
+                return None
+            raise
+        finally:
+            if own_client:
+                await client.aclose()

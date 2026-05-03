@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .query import lookup_dump, query_rag_sync
-from .store import read_manifest
+from .storage.duckdb_store import DuckDBStore
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p_lookup.add_argument("--name", default=None, help="Name / token query")
     p_lookup.add_argument("--ror-id", default=None, help="Exact ROR ID (URL or bare)")
     p_lookup.add_argument("--country", default=None, help="ISO-3166 alpha-2 (e.g. CH)")
+    p_lookup.add_argument("--type", dest="type_", default=None, help="ROR type (e.g. education, facility)")
+    p_lookup.add_argument("--status", default=None, help="Status filter (active, inactive, withdrawn)")
     p_lookup.add_argument("--limit", type=int, default=20)
 
     sub.add_parser("stats", help="Show manifest for the configured scope mode")
@@ -120,6 +122,8 @@ def main(argv=None) -> int:
             text=args.name,
             ror_id=args.ror_id,
             country=args.country,
+            type_=args.type_,
+            status=args.status,
             limit=args.limit,
         )
         _print_json([
@@ -130,12 +134,22 @@ def main(argv=None) -> int:
 
     if args.cmd == "stats":
         cfg = load_config(args.config)
+        store = DuckDBStore.open()
         try:
-            manifest = read_manifest(cfg.scope.mode)
-        except FileNotFoundError as exc:
-            print(str(exc), file=sys.stderr)
+            manifest = store.fetch_manifest(cfg.scope.mode)
+        finally:
+            store.close()
+        if manifest is None:
+            print(
+                f"No manifest in DuckDB for scope {cfg.scope.mode!r}. "
+                f"Run `python -m src.index.ror build` or `migrate-storage` first.",
+                file=sys.stderr,
+            )
             return 1
-        _print_json(manifest.model_dump())
+        # `built_at_iso` comes back as a datetime — JSON it out as ISO string.
+        if "built_at_iso" in manifest and manifest["built_at_iso"] is not None:
+            manifest["built_at_iso"] = manifest["built_at_iso"].isoformat()
+        _print_json(manifest)
         return 0
 
     if args.cmd == "migrate":

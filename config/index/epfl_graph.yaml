@@ -1,0 +1,45 @@
+# EPFL Graph disciplines RAG indexer config.
+#
+# Source: graphai.epfl.ch /ontology/* — a curated tree of academic
+# disciplines (~2226 categories, depth 1..5) where each leaf is backed by
+# 50-110 anchor Wikipedia concepts. This index turns the tree into a
+# semantic-search surface so callers can find the closest EPFL discipline
+# for a given README / abstract / arbitrary text.
+#
+# Resolved by `src/index/epfl_graph/config.py` and merged with env vars
+# (`RCP_TOKEN`, `EPFL_GRAPH_USERNAME`, `EPFL_GRAPH_PASSWORD`,
+# `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`) at startup.
+
+rcp:
+  # Same RCP deployment as openalex / zenodo / infoscience indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a README or abstract, retrieve the closest EPFL Graph academic disciplines"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+graphai:
+  base_url: https://graphai.epfl.ch
+  port: 443
+  # Polite pacing for the ~2226-call tree walk during ingest. ~5 req/s is
+  # well under graphai's per-token rate limit and finishes the full walk
+  # in ~8 minutes.
+  rate_per_second: 5
+  max_concurrency: 4
+  # Number of top anchor concepts to keep per category for embedding
+  # context. Most leaf categories ship 50-110; embedding text quality
+  # plateaus well below that.
+  anchor_concepts_per_category: 12
+
+qdrant:
+  url: http://localhost:6333
+  prefer_grpc: false
+
+filter:
+  # Skip categories shallower than this depth — depth 1 is "academic
+  # disciplines" / depth 2 is "applied-sciences" etc., too broad to be
+  # useful matches.
+  min_depth: 3

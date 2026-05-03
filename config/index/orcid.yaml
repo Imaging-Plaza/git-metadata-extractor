@@ -20,18 +20,93 @@ orcid:
   timeout_seconds: 20
   # Hard cap from ORCID's expanded-search endpoint.
   search_max_rows: 200
+  # Rate-limit pacing — tightened after a 429 storm at ~8200/10072 on a fresh
+  # IP. The public API doesn't return x-ratelimit-remaining, so the proactive
+  # throttle in v2 RateLimiter never fires; we cap effective rate here instead.
+  max_retries: 6                       # 7 total attempts; worst-case backoff ≈ 60s
+  base_delay_seconds: 0.5
+  max_delay_seconds: 60.0
+  request_min_interval_seconds: 1.5    # ≤ 0.67 req/s steady-state
+  # Identify ourselves on every request — ORCID may fingerprint UA in addition
+  # to IP. Override via INDEX_ORCID_USER_AGENT. Leave blank/null to fall back
+  # to the requests default.
+  user_agent: "git-metadata-extractor-orcid-index/0.1"
 
 scope:
-  # EPFL ROR (Phase 1 default). Override via INDEX_ORCID_SCOPE_ROR.
+  # EPFL ROR (used by the `epfl` scope). Override via INDEX_ORCID_SCOPE_ROR.
   ror: https://ror.org/02s376052
-  # Switzerland country code (Phase 2). Override via INDEX_ORCID_SCOPE_COUNTRY.
+  # Switzerland country code (used by the `switzerland` scope). Override via INDEX_ORCID_SCOPE_COUNTRY.
   country: ch
-  # Strings used by ORCID's `expanded-search` enrichment path.
+  # Per-scope affiliation aliases, used both by ORCID `expanded-search`
+  # discovery (one search per alias) and by the post-filter that decides
+  # `in_scope` for ORCID-search-only seeds. Aliases are case-insensitive
+  # substring-matched against employment.organization / education.organization
+  # — keep them distinctive (avoid 3-4 letter abbreviations like "PSI", "USI",
+  # "WSL", "SDSC" that would over-match in non-Swiss contexts).
+  # `load_config` collapses this dict to the active scope's list at load-time.
   affiliation_aliases:
-    - "EPFL"
-    - "École polytechnique fédérale de Lausanne"
-    - "Ecole polytechnique federale de Lausanne"
-    - "Swiss Federal Institute of Technology Lausanne"
+    epfl:
+      - "EPFL"
+      - "École polytechnique fédérale de Lausanne"
+      - "Ecole polytechnique federale de Lausanne"
+      - "Swiss Federal Institute of Technology Lausanne"
+    switzerland:
+      # EPFL family
+      - "EPFL"
+      - "École polytechnique fédérale de Lausanne"
+      - "Ecole polytechnique federale de Lausanne"
+      - "Swiss Federal Institute of Technology Lausanne"
+      # ETHZ family
+      - "ETH Zurich"
+      - "ETH Zürich"
+      - "Eidgenössische Technische Hochschule Zürich"
+      # Cantonal universities
+      - "University of Lausanne"
+      - "Université de Lausanne"
+      - "University of Geneva"
+      - "Université de Genève"
+      - "University of Zurich"
+      - "Universität Zürich"
+      - "University of Bern"
+      - "Universität Bern"
+      - "Université de Berne"
+      - "University of Basel"
+      - "Universität Basel"
+      - "University of Fribourg"
+      - "Université de Fribourg"
+      - "Universität Freiburg"
+      - "University of Neuchâtel"
+      - "Université de Neuchâtel"
+      - "University of St. Gallen"
+      - "Universität St. Gallen"
+      - "Università della Svizzera italiana"
+      # Universities of applied sciences
+      - "Haute école spécialisée de Suisse occidentale"
+      - "HES-SO"
+      # National research institutes (long-form aliases only)
+      - "Paul Scherrer Institute"
+      - "Paul Scherrer Institut"
+      - "Empa"
+      - "Swiss Federal Laboratories for Materials Science and Technology"
+      - "Eawag"
+      - "Swiss Federal Institute of Aquatic Science and Technology"
+      - "Swiss Federal Institute for Forest"   # WSL — long form to disambiguate
+      - "Idiap Research Institute"
+      - "CSEM"
+      - "CERN"
+      - "European Organization for Nuclear Research"
+      - "Swiss Data Science Center"
+      # University hospitals
+      - "Centre Hospitalier Universitaire Vaudois"
+      - "CHUV"
+      - "Hôpitaux Universitaires de Genève"
+      - "University Hospital of Lausanne"
+      - "University Hospital Zurich"
+      - "Universitätsspital Zürich"
+      - "University Hospital Basel"
+      # Industry research
+      - "IBM Research - Zurich"
+      - "IBM Research Zurich"
 
 discovery:
   # `openalex` | `orcid_search` | `both`. Override via INDEX_ORCID_DISCOVERY_SOURCE.

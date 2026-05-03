@@ -6,11 +6,23 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from qdrant_client import QdrantClient, models
+from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 if TYPE_CHECKING:
     from src.index.openalex.config import OpenAlexIndexConfig
 
 LOGGER = logging.getLogger(__name__)
+
+# Qdrant HTTP client default timeout is too short for 4096-dim batch upserts;
+# bump it. Transient failures are retried with exponential backoff.
+QDRANT_HTTP_TIMEOUT_S = 60
+QDRANT_RETRY_ATTEMPTS = 5
 
 PER_ENTITY_COLLECTIONS: tuple[str, ...] = (
     "works",
@@ -31,6 +43,7 @@ class QdrantStore:
             url=config.qdrant.url,
             api_key=config.qdrant.api_key,
             prefer_grpc=config.qdrant.prefer_grpc,
+            timeout=QDRANT_HTTP_TIMEOUT_S,
         )
         self._dim = config.rcp.embedding_dim
 
@@ -69,7 +82,19 @@ class QdrantStore:
             models.PointStruct(id=pid, vector=vec, payload=payload)
             for pid, vec, payload in zip(ids, vectors, payloads, strict=False)
         ]
-        self._client.upsert(collection_name=collection, points=points)
+
+        @retry(
+            stop=stop_after_attempt(QDRANT_RETRY_ATTEMPTS),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            retry=retry_if_exception_type(
+                (ResponseHandlingException, UnexpectedResponse),
+            ),
+            reraise=True,
+        )
+        def _do_upsert() -> None:
+            self._client.upsert(collection_name=collection, points=points)
+
+        _do_upsert()
 
     def search(
         self,

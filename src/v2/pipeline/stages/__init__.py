@@ -1,6 +1,20 @@
 """Pipeline stages for the v2 extraction orchestrator."""
 
 from src.v2.pipeline.stages.article_validation import validate_articles
+from src.v2.pipeline.stages.concept_tagging import (
+    BACKEND_EPFL_GRAPH,
+    BACKEND_LLM,
+    BACKEND_WIKIPEDIA,
+    SUPPORTED_BACKENDS,
+    ConceptTaggingResult,
+    run_concept_tagging_stage,
+)
+from src.v2.pipeline.stages.concept_tagging import (
+    is_enabled as concept_tagging_is_enabled,
+)
+from src.v2.pipeline.stages.concept_tagging import (
+    resolve_backend as concept_tagging_resolve_backend,
+)
 from src.v2.pipeline.stages.context_gather import gather_context
 from src.v2.pipeline.stages.jsonld_build import build_jsonld_output
 from src.v2.pipeline.stages.link_veracity import (
@@ -19,12 +33,12 @@ from src.v2.pipeline.stages.models import (
     LLMDedupStageResult,
     ReconciledEntities,
 )
+from src.v2.pipeline.stages.org_relationships import run_org_relationships_stage
 from src.v2.pipeline.stages.output_assembly import (
     RootEntityValidationError,
     assemble_output,
     build_json_output,
 )
-from src.v2.pipeline.stages.org_relationships import run_org_relationships_stage
 from src.v2.pipeline.stages.ownership_check import (
     guarantee_repo_author,
     infer_github_handle_parents,
@@ -36,30 +50,38 @@ from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.pipeline.stages.stats import compute_stats
 
 __all__ = [
+    "BACKEND_EPFL_GRAPH",
+    "BACKEND_LLM",
+    "BACKEND_WIKIPEDIA",
+    "SUPPORTED_BACKENDS",
     "AssembledOutput",
+    "ConceptTaggingResult",
     "ContextBundle",
+    "LLMCriticStageResult",
+    "LLMDedupStageResult",
+    "LinkVeracityStageResult",
     "ReconciledEntities",
     "RootEntityValidationError",
+    "apply_link_pruning_to_assembled_output",
     "assemble_output",
     "build_json_output",
     "build_jsonld_output",
     "collect_unique_http_link_contexts",
     "compute_stats",
+    "concept_tagging_is_enabled",
+    "concept_tagging_resolve_backend",
     "gather_context",
-    "LLMCriticStageResult",
-    "LLMDedupStageResult",
-    "LinkVeracityStageResult",
-    "apply_link_pruning_to_assembled_output",
     "guarantee_repo_author",
     "infer_github_handle_parents",
     "infer_org_units",
     "infer_owners",
     "promote_failed_id_entities",
     "reconcile_entities",
-    "validate_articles",
-    "validate_ownership",
+    "run_concept_tagging_stage",
+    "run_link_veracity_stage",
     "run_llm_critic_stage",
     "run_llm_dedup_stage",
-    "run_link_veracity_stage",
     "run_org_relationships_stage",
+    "validate_articles",
+    "validate_ownership",
 ]

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, Iterator
 
 import duckdb
+import requests
 
 from src.index.orcid.ingest.orcid_client import build_orcid_provider
 
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 ORCID_RE = re.compile(r"\b(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\b")
+# ORCID's expanded-search rejects start>=10000 with HTTP 400. Stop before then.
+ORCID_EXPANDED_SEARCH_DEEP_LIMIT = 10000
+HTTP_BAD_REQUEST = 400
 
 
 def discover_seeds(
@@ -142,12 +146,38 @@ def _paged_search(
     start = 0
     query = f'affiliation-org-name:"{alias}"'
     while True:
-        # Provider type is duck-typed here; signature comes from RealORCIDProvider.
-        hits = provider.search_persons(  # type: ignore[attr-defined]
-            query,
-            rows=rows_per_page,
-            start=start,
-        )
+        # ORCID's expanded-search caps deep pagination at start=10000 and
+        # returns HTTP 400 above that. The start=10000 call itself succeeds
+        # and yields up to 200 hits; the next page at start=10200 fails.
+        # Stop proactively right after the last accepted page; the HTTP 400
+        # catch below is the safety net if the threshold drifts.
+        if start > ORCID_EXPANDED_SEARCH_DEEP_LIMIT:
+            LOGGER.info(
+                "alias %r: stopping at ORCID deep-pagination limit (start=%d); "
+                "may be missing rare matches beyond the first %d hits",
+                alias,
+                start,
+                ORCID_EXPANDED_SEARCH_DEEP_LIMIT,
+            )
+            return
+        try:
+            # Provider type is duck-typed here; signature comes from RealORCIDProvider.
+            hits = provider.search_persons(  # type: ignore[attr-defined]
+                query,
+                rows=rows_per_page,
+                start=start,
+            )
+        except requests.exceptions.HTTPError as exc:
+            response = exc.response
+            if response is not None and response.status_code == HTTP_BAD_REQUEST:
+                LOGGER.info(
+                    "alias %r: ORCID expanded-search HTTP 400 at start=%d "
+                    "(treating as end of pagination)",
+                    alias,
+                    start,
+                )
+                return
+            raise
         if not hits:
             return
         seen_in_page = 0

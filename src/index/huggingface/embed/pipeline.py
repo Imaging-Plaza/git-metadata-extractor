@@ -138,9 +138,29 @@ def _row_to_payload(*, entity_type_singular: str, row: dict[str, Any]) -> dict[s
     if entity_type_singular == "model":
         payload["pipeline_tag"] = row.get("pipeline_tag")
         payload["library_name"] = row.get("library_name")
+        # Surface base_models as a payload list so `--filter base_model=X` can
+        # match via Qdrant's MatchAny semantics for "fine-tuned from X" queries.
+        base_models = _coerce_base_models(row.get("base_models"))
+        if base_models:
+            payload["base_model"] = base_models
     if entity_type_singular == "space":
         payload["sdk"] = row.get("sdk")
     return payload
+
+
+def _coerce_base_models(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(v) for v in value if v]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+        if isinstance(parsed, list):
+            return [str(v) for v in parsed if v]
+    return None
 
 
 async def _embed_table_async(
@@ -371,4 +391,52 @@ def embed_entities(
     return summary
 
 
-__all__ = ["embed_entities", "_chunk_id"]
+def backfill_model_base_payloads(
+    *,
+    config: HuggingFaceIndexConfig,
+    store: DuckDBStore,
+) -> int:
+    """One-shot: for every model in DuckDB with non-empty `base_models`, push the
+    `base_model` payload field to its existing Qdrant points without re-embedding.
+
+    Used to retrofit chunks created before `base_model` was added to the
+    payload builder. Cheap — pure metadata update, no RCP calls.
+    """
+    qdrant = QdrantStore(config)
+    collection = COLLECTION_FOR_TABLE["models"]
+    cur = store.connect().execute(
+        "SELECT m.repo_id, m.base_models, c.chunk_id "
+        "FROM models m JOIN chunks c "
+        "  ON c.entity_type='model' AND c.repo_id = m.repo_id "
+        "WHERE m.base_models IS NOT NULL "
+        "  AND m.base_models != 'null' AND m.base_models != '[]'",
+    )
+    rows = cur.fetchall()
+    by_repo: dict[str, dict[str, Any]] = {}
+    for repo_id, base_json, chunk_id in rows:
+        bm = _coerce_base_models(base_json)
+        if not bm:
+            continue
+        bucket = by_repo.setdefault(repo_id, {"base_model": bm, "chunk_ids": []})
+        bucket["chunk_ids"].append(chunk_id)
+
+    updated = 0
+    for repo_id, info in by_repo.items():
+        try:
+            qdrant.client.set_payload(
+                collection_name=collection,
+                payload={"base_model": info["base_model"]},
+                points=info["chunk_ids"],
+            )
+            updated += len(info["chunk_ids"])
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("backfill payload failed for %s: %s", repo_id, exc)
+    LOGGER.info(
+        "backfill: %d models, %d chunk payloads updated",
+        len(by_repo),
+        updated,
+    )
+    return updated
+
+
+__all__ = ["embed_entities", "_chunk_id", "backfill_model_base_payloads"]

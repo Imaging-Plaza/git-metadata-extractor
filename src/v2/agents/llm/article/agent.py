@@ -13,6 +13,14 @@ from src.v2.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
+from src.v2.agents.llm.agent_tools.epfl_graph_rag import (
+    make_epfl_graph_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.ethz_research_collection_rag import (
+    make_ethz_research_collection_rag_fetch_chunks_tool,
+    make_ethz_research_collection_rag_fetch_records_tool,
+    make_ethz_research_collection_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.infoscience_publications import (
     make_infoscience_publications_search_tool,
 )
@@ -21,16 +29,29 @@ from src.v2.agents.llm.agent_tools.infoscience_rag import (
     make_infoscience_rag_fetch_records_tool,
     make_infoscience_rag_search_tool,
 )
+from src.v2.agents.llm.agent_tools.openalex_rag import (
+    make_openalex_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.renkulab_rag import (
+    make_renkulab_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
+from src.v2.agents.llm.agent_tools.swissubase_rag import (
+    make_swissubase_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.zenodo_rag import (
+    make_zenodo_rag_fetch_records_tool,
+    make_zenodo_rag_search_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
+from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.ingest.cache import ProviderCache
 from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentArticleShape
 from src.v2.schema.models.strict import ArticleModel
-from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 README_CONTEXT_MAX_CHARS = 2000
 GIMIE_JSONLD_MAX_CHARS = 4000
@@ -275,6 +296,33 @@ class LLMArticleAgentV2:
             tools.append(
                 make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
             )
+        if providers.ethz_research_collection_rag is not None:
+            tools.append(
+                make_ethz_research_collection_rag_search_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_chunks_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_records_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+        if providers.openalex_rag is not None:
+            tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
+        if providers.zenodo_rag is not None:
+            tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
+            tools.append(make_zenodo_rag_fetch_records_tool(providers.zenodo_rag))
+        if providers.renkulab_rag is not None:
+            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
+        if providers.swissubase_rag is not None:
+            tools.append(make_swissubase_rag_search_tool(providers.swissubase_rag))
+        if providers.epfl_graph_rag is not None:
+            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
 
         try:
             llm_result = await asyncio.wait_for(

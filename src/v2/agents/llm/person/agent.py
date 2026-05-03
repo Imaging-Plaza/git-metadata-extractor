@@ -17,26 +17,45 @@ from src.v2.agents.llm._verdict_cache import (
     store_agent_verdict,
 )
 from src.v2.agents.llm.agent_tools.email_hash import hash_user_email_tool
+from src.v2.agents.llm.agent_tools.epfl_graph_rag import (
+    make_epfl_graph_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.ethz_research_collection_rag import (
+    make_ethz_research_collection_rag_fetch_chunks_tool,
+    make_ethz_research_collection_rag_fetch_records_tool,
+    make_ethz_research_collection_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.infoscience_rag import (
     make_infoscience_rag_fetch_chunks_tool,
     make_infoscience_rag_fetch_records_tool,
     make_infoscience_rag_search_tool,
 )
-from src.v2.agents.llm.agent_tools.infoscience_search import make_infoscience_search_tool
+from src.v2.agents.llm.agent_tools.infoscience_search import (
+    make_infoscience_search_tool,
+)
 from src.v2.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
+from src.v2.agents.llm.agent_tools.orcid_rag import (
+    make_orcid_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
+from src.v2.agents.llm.agent_tools.renkulab_rag import (
+    make_renkulab_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
+from src.v2.agents.llm.agent_tools.snsf_rag import (
+    make_snsf_rag_search_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
-from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
-from src.v2.ingest.cache import ProviderCache
-from src.v2.observation.query_log import stamp_current_agent
-from src.v2.schema.models.strict import PersonModel
 from src.v2.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )
+from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
+from src.v2.ingest.cache import ProviderCache
+from src.v2.observation.query_log import stamp_current_agent
+from src.v2.schema.models.strict import PersonModel
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.person.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
@@ -53,7 +72,7 @@ class _PersonIdentifiers(BaseModel):
 
     pulse_orcid: str | None = Field(None, alias="pulse:orcid")
     pulse_infosciencePersonIdentifier: str | None = Field(
-        None, alias="pulse:infosciencePersonIdentifier"
+        None, alias="pulse:infosciencePersonIdentifier",
     )
     pulse_githubUsername: str | None = Field(None, alias="pulse:githubUsername")
     uuid: str | None = Field(None)
@@ -77,7 +96,7 @@ class LLMPersonOutputShape(BaseModel):
     type: str = Field(..., description="RDF type. Must be 'schema:Person'.")
     shacl: str = Field(..., description="SHACL shape. Must be 'pulse:PersonShape'.")
     identifiers: _PersonIdentifiers = Field(
-        ..., description="All available identifiers for this person."
+        ..., description="All available identifiers for this person.",
     )
     idSource: str = Field(
         ...,
@@ -88,17 +107,17 @@ class LLMPersonOutputShape(BaseModel):
         ),
     )
     schema_name: str = Field(
-        ..., alias="schema:name", description="Full display name of the person."
+        ..., alias="schema:name", description="Full display name of the person.",
     )
     schema_email: str | None = Field(
-        None, alias="schema:email", description="Anonymized email address."
+        None, alias="schema:email", description="Anonymized email address.",
     )
     schema_url: str | None = Field(None, alias="schema:url", description="Profile URL.")
     pulse_githubUsername: str | None = Field(
-        None, alias="pulse:githubUsername", description="GitHub login."
+        None, alias="pulse:githubUsername", description="GitHub login.",
     )
     pulse_orcidIdentifier: str | None = Field(
-        None, alias="pulse:orcidIdentifier", description="ORCID identifier."
+        None, alias="pulse:orcidIdentifier", description="ORCID identifier.",
     )
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
@@ -353,7 +372,7 @@ class LLMPersonAgentV2:
                 repo_ctx_summary["readme_content"] = repo_readme[:README_CONTEXT_MAX_CHARS]
             if isinstance(repo_gimie_jsonld, dict) and repo_gimie_jsonld:
                 repo_ctx_summary["gimie_jsonld"] = json.dumps(
-                    repo_gimie_jsonld, ensure_ascii=True
+                    repo_gimie_jsonld, ensure_ascii=True,
                 )[:GIMIE_JSONLD_MAX_CHARS]
             if repo_ctx_summary:
                 llm_input["repository_context"] = repo_ctx_summary
@@ -377,6 +396,30 @@ class LLMPersonAgentV2:
             tools.append(
                 make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
             )
+        if providers.ethz_research_collection_rag is not None:
+            tools.append(
+                make_ethz_research_collection_rag_search_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_chunks_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_records_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+        if providers.orcid_rag is not None:
+            tools.append(make_orcid_rag_search_tool(providers.orcid_rag))
+        if providers.renkulab_rag is not None:
+            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
+        if providers.snsf_rag is not None:
+            tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
+        if providers.epfl_graph_rag is not None:
+            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
 
         identifier = (
             github_username

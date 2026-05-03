@@ -49,7 +49,33 @@ class ZenodoStore:
         return self._conn
 
     def bootstrap(self) -> None:
-        self.connect().execute(_load_schema_sql())
+        conn = self.connect()
+        # Migration: existing DBs created before `concept_recid` existed must
+        # gain the column BEFORE schema.sql runs (schema.sql creates an index
+        # on it). The backfill UPDATE must also run BEFORE the index is
+        # created — DuckDB has hit internal errors when an UPDATE rewrites
+        # every row of a freshly-created index in the same transaction.
+        records_exists = (
+            conn.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='main' AND table_name='records'",
+            ).fetchone()
+            is not None
+        )
+        if records_exists:
+            cols = {
+                r[1]
+                for r in conn.execute("PRAGMA table_info('records')").fetchall()
+            }
+            if "concept_recid" not in cols:
+                conn.execute("ALTER TABLE records ADD COLUMN concept_recid TEXT")
+                conn.execute(
+                    "UPDATE records SET concept_recid = "
+                    "  CAST(json_extract_string(raw, '$.conceptrecid') AS TEXT) "
+                    "WHERE raw IS NOT NULL "
+                    "  AND json_extract_string(raw, '$.conceptrecid') IS NOT NULL",
+                )
+        conn.execute(_load_schema_sql())
 
     def close(self) -> None:
         if self._conn is not None:
@@ -69,10 +95,11 @@ class ZenodoStore:
     def upsert_record(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
         sql = (
             "INSERT INTO records "
-            "(zenodo_id, doi, title, description, publication_date, "
+            "(zenodo_id, concept_recid, doi, title, description, publication_date, "
             " resource_type, access_right, license_id, keywords_json, raw, ingested_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (zenodo_id) DO UPDATE SET "
+            "  concept_recid = excluded.concept_recid, "
             "  doi = excluded.doi, title = excluded.title, "
             "  description = excluded.description, "
             "  publication_date = excluded.publication_date, "
@@ -86,6 +113,7 @@ class ZenodoStore:
             sql,
             [
                 row["zenodo_id"],
+                row.get("concept_recid"),
                 row.get("doi"),
                 row.get("title"),
                 row.get("description"),
@@ -218,10 +246,50 @@ class ZenodoStore:
         result = self.connect().execute(f"SELECT count(*) FROM {table}").fetchone()
         return int(result[0]) if result else 0
 
+    def existing_record_ids(self, zenodo_ids: list[str]) -> set[str]:
+        """Return the subset of `zenodo_ids` already known to the store.
+
+        Matches against either the canonical `zenodo_id` (post-redirect
+        version-record) OR the `concept_recid` (Zenodo's "all versions"
+        identifier). A discovery source typically extracts whichever ID
+        appears in the citation, so checking both prevents redundant
+        re-fetches when a paper cites the concept ID but we persisted
+        the latest version.
+        """
+        if not zenodo_ids:
+            return set()
+        placeholders = ",".join(["?"] * len(zenodo_ids))
+        cur = self.connect().execute(
+            f"SELECT zenodo_id FROM records WHERE zenodo_id IN ({placeholders}) "
+            f"UNION "
+            f"SELECT concept_recid FROM records "
+            f"WHERE concept_recid IN ({placeholders})",
+            [*zenodo_ids, *zenodo_ids],
+        )
+        return {str(r[0]) for r in cur.fetchall() if r[0] is not None}
+
     def fetch_record(self, zenodo_id: str) -> dict[str, Any] | None:
         cur = self.connect().execute(
             "SELECT * FROM records WHERE zenodo_id = ?",
             [zenodo_id],
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        cols = [d[0] for d in cur.description]
+        return dict(zip(cols, row, strict=False))
+
+    def fetch_record_by_concept(self, concept_recid: str) -> dict[str, Any] | None:
+        """Find any version-record under the given concept_recid.
+
+        When a citation references the concept (parent) ID, our store only
+        keeps the canonical version-record. This returns the most recent
+        ingested version so callers can still resolve the citation.
+        """
+        cur = self.connect().execute(
+            "SELECT * FROM records WHERE concept_recid = ? "
+            "ORDER BY ingested_at DESC LIMIT 1",
+            [concept_recid],
         )
         row = cur.fetchone()
         if row is None:

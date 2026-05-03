@@ -196,8 +196,18 @@ class OrcidDuckDBStore:
         cols = [d[0] for d in cur.description]
         return dict(zip(cols, row, strict=False))
 
-    def stream_seeds(self, *, only_unfetched: bool = True) -> Iterator[dict[str, Any]]:
+    def stream_seeds(
+        self,
+        *,
+        only_unfetched: bool = True,
+        priority_hints: list[str] | None = None,
+    ) -> Iterator[dict[str, Any]]:
         """Yield seed rows. With `only_unfetched`, skip ORCIDs already in `persons`.
+
+        `priority_hints` is a list of case-insensitive substrings; seeds whose
+        `hint` matches any of them are yielded first. Useful for steering an
+        ingest with a daily quota toward a target sub-corpus (e.g. ETHZ
+        aliases) before the rest of the seed pool.
 
         Materializes the result upfront because callers (e.g. the persons
         ingester) write into `persons` between iterations, which would
@@ -209,8 +219,17 @@ class OrcidDuckDBStore:
         )
         if only_unfetched:
             sql += "WHERE p.orcid_id IS NULL "
-        sql += "ORDER BY s.discovered_at"
-        cur = self.connect().execute(sql)
+
+        params: list[Any] = []
+        order_clauses: list[str] = []
+        if priority_hints:
+            like_conditions = " OR ".join(["LOWER(s.hint) LIKE ?"] * len(priority_hints))
+            order_clauses.append(f"CASE WHEN ({like_conditions}) THEN 0 ELSE 1 END")
+            params.extend(f"%{h.lower().strip()}%" for h in priority_hints if h and h.strip())
+        order_clauses.append("s.discovered_at")
+        sql += "ORDER BY " + ", ".join(order_clauses)
+
+        cur = self.connect().execute(sql, params) if params else self.connect().execute(sql)
         cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
         for row in rows:

@@ -2,7 +2,8 @@
 
 Subcommands:
 
-- `ingest`     — pull Zenodo records into DuckDB (community-filtered).
+- `discover`   — find candidate Zenodo IDs from external sources (e.g. Infoscience).
+- `ingest`     — pull Zenodo records into DuckDB (community- or id-filtered).
 - `embed`      — chunk + embed records, push vectors to Qdrant.
 - `search`     — semantic retrieval (vector + RCP rerank).
 - `query`      — read-only SQL over DuckDB (predefined or guarded ad-hoc).
@@ -20,7 +21,8 @@ from typing import Any
 
 from src.index.zenodo.config import load_config
 from src.index.zenodo.embed.pipeline import ZENODO_COLLECTION, embed_records
-from src.index.zenodo.ingest.records import ingest_records
+from src.index.zenodo.ingest.discover import discover_from_infoscience
+from src.index.zenodo.ingest.records import ingest_by_ids, ingest_records, load_ids_file
 from src.index.zenodo.ingest.scope import resolve_scope
 from src.index.zenodo.retrieval.semantic import semantic_search
 from src.index.zenodo.retrieval.sql import (
@@ -40,6 +42,39 @@ def _emit_json(obj: Any) -> None:
 
 def _cmd_ingest(args: argparse.Namespace) -> int:
     config = load_config()
+    if args.ids:
+        from pathlib import Path
+
+        ids = load_ids_file(Path(args.ids))
+        if not ids:
+            message = f"no parseable Zenodo IDs found in {args.ids}"
+            raise SystemExit(message)
+        store = ZenodoStore.open()
+        try:
+            summary = ingest_by_ids(
+                config=config,
+                store=store,
+                ids=ids,
+                refresh=args.refresh,
+            )
+        finally:
+            store.close()
+        _emit_json(
+            {
+                "mode": "ids",
+                "source_file": args.ids,
+                "requested": summary["requested"],
+                "skipped_existing_count": len(summary["skipped_existing"]),
+                "fetched": summary["fetched"],
+                "persisted_count": len(summary["persisted"]),
+                "missing_count": len(summary["missing"]),
+                "failed_count": len(summary["failed"]),
+                "missing": summary["missing"],
+                "failed": summary["failed"],
+            },
+        )
+        return 0
+
     scope = resolve_scope(args.scope, config)
     if not scope.communities:
         message = (
@@ -157,6 +192,70 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_discover(args: argparse.Namespace) -> int:
+    if args.source != "infoscience":
+        message = f"unknown discovery source: {args.source!r} (only 'infoscience' is supported)"
+        raise SystemExit(message)
+    from pathlib import Path
+
+    config = load_config()
+    store = ZenodoStore.open()
+    try:
+        result = discover_from_infoscience(store=store)
+        if args.out:
+            Path(args.out).write_text(
+                json.dumps(
+                    {
+                        "files_scanned": result.files_scanned,
+                        "io_errors": result.io_errors,
+                        "files_with_zenodo": result.files_with_zenodo,
+                        "distinct_ids": result.distinct_ids,
+                        "new_ids": result.new_ids,
+                        "overlap_ids": result.overlap_ids,
+                        "communities_in_urls": result.communities_in_urls,
+                        "file_to_rec": result.file_to_rec,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+        ingest_summary: dict[str, Any] | None = None
+        if args.ingest and result.new_ids:
+            ingest_summary = ingest_by_ids(
+                config=config,
+                store=store,
+                ids=result.new_ids,
+                refresh=False,
+            )
+    finally:
+        store.close()
+
+    payload: dict[str, Any] = {
+        "source": args.source,
+        "files_scanned": result.files_scanned,
+        "io_errors": result.io_errors,
+        "files_with_zenodo": result.files_with_zenodo,
+        "distinct_ids_count": len(result.distinct_ids),
+        "overlap_count": len(result.overlap_ids),
+        "new_count": len(result.new_ids),
+        "communities_in_urls": result.communities_in_urls,
+    }
+    if args.out:
+        payload["output_file"] = args.out
+    if ingest_summary is not None:
+        payload["ingest"] = {
+            "requested": ingest_summary["requested"],
+            "fetched": ingest_summary["fetched"],
+            "persisted_count": len(ingest_summary["persisted"]),
+            "missing_count": len(ingest_summary["missing"]),
+            "failed_count": len(ingest_summary["failed"]),
+        }
+    _emit_json(payload)
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -173,10 +272,40 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="src.index.zenodo")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
+    p_discover = sub.add_parser(
+        "discover",
+        help="Find candidate Zenodo IDs from external sources (e.g. Infoscience)",
+    )
+    p_discover.add_argument(
+        "--source",
+        default="infoscience",
+        choices=["infoscience"],
+        help="Discovery source (only 'infoscience' is supported today)",
+    )
+    p_discover.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write the full discovery payload (JSON)",
+    )
+    p_discover.add_argument(
+        "--ingest",
+        action="store_true",
+        help="After discovery, fetch + persist the new IDs in the same process",
+    )
+    p_discover.set_defaults(func=_cmd_discover)
+
     p_ingest = sub.add_parser("ingest", help="Pull Zenodo records into DuckDB")
     p_ingest.add_argument("--scope", default="epfl", help="Scope name (epfl, switzerland)")
     p_ingest.add_argument("--limit", type=int, default=None, help="Per-community record cap")
     p_ingest.add_argument("--refresh", action="store_true", help="Re-ingest completed communities")
+    p_ingest.add_argument(
+        "--ids",
+        default=None,
+        help=(
+            "Path to a newline-delimited file of Zenodo record IDs / DOIs / URLs. "
+            "When set, --scope is ignored and records are fetched one-by-one via /api/records/{id}."
+        ),
+    )
     p_ingest.set_defaults(func=_cmd_ingest)
 
     p_embed = sub.add_parser("embed", help="Chunk + embed records, push to Qdrant")

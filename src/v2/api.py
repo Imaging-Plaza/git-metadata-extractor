@@ -19,13 +19,6 @@ from fastapi.responses import JSONResponse
 from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
-from src.v2.config import V2Config
-from src.v2.dependencies import _resolve_provider_cache, get_provider_set
-from src.v2.ingest.cache import ProviderCache
-from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
-from src.v2.jobs import JobStore
-from src.v2.observation.query_log import QueryLog, query_log_var
-from src.v2.schema import load_jsonld_context
 from src.v2.api_models import (
     V2ErrorResponse,
     V2ErrorType,
@@ -39,6 +32,12 @@ from src.v2.api_models import (
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
 )
+from src.v2.config import V2Config
+from src.v2.dependencies import _resolve_provider_cache, get_provider_set
+from src.v2.ingest.cache import ProviderCache
+from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
+from src.v2.jobs import JobStore
+from src.v2.observation.query_log import QueryLog, query_log_var
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import (
     AssembledOutput,
@@ -54,6 +53,7 @@ from src.v2.pipeline.stages import (
     infer_owners,
     promote_failed_id_entities,
     reconcile_entities,
+    run_concept_tagging_stage,
     run_link_veracity_stage,
     run_llm_critic_stage,
     run_llm_dedup_stage,
@@ -61,7 +61,20 @@ from src.v2.pipeline.stages import (
     validate_articles,
     validate_ownership,
 )
+from src.v2.pipeline.stages.concept_tagging import (
+    is_enabled as _concept_tagging_is_enabled,
+)
+from src.v2.pipeline.stages.concept_tagging import (
+    resolve_backend as _resolve_concept_tagging_backend,
+)
+from src.v2.pipeline.stages.concept_tagging import (
+    resolve_epfl_min_score as _resolve_concept_tagging_epfl_min_score,
+)
+from src.v2.pipeline.stages.concept_tagging import (
+    resolve_related_enrichment as _resolve_concept_tagging_related_enrichment,
+)
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
+from src.v2.schema import load_jsonld_context
 from src.v2.validation import (
     SHACLValidator,
     StrictSchemaValidator,
@@ -281,7 +294,7 @@ async def _run_extract_job(
                     source_url=payload.source_url,
                 )
         job_store.set(finished)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("extract job %s failed", job_id)
         record = job_store.get(job_id)
         if record is None:
@@ -527,7 +540,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             status_code=status.HTTP_502_BAD_GATEWAY,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("pipeline_execute failed: run_id=%s", run_id)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
@@ -569,7 +582,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 initial_context=gathered_context,
                 max_concurrency=orchestrator.max_concurrent_agents,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_LLM_DEDUP)
             _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
         else:
@@ -619,7 +632,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 max_concurrency=orchestrator.max_concurrent_agents,
                 cache=pipeline_cache,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_LLM_CRITIC)
             _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
         else:
@@ -754,7 +767,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 max_concurrency=orchestrator.max_concurrent_agents,
                 cache=provider_cache,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_LINK_VERACITY)
             _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
         else:
@@ -877,7 +890,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 source_url=classification.normalized_url,
                 providers=providers,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("org_relationships stage failed")
             _append_unique_warning(warnings, f"org_relationships stage failed: {exc}")
         else:
@@ -897,6 +910,41 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
     for warning in org_unit_warnings:
         _append_unique_warning(warnings, warning)
+
+    if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":
+        repository_context = (
+            gathered_context.get("repository")
+            if isinstance(gathered_context, dict)
+            else None
+        )
+        readme_text = (
+            repository_context.get("readme_content")
+            if isinstance(repository_context, dict)
+            else None
+        )
+        backend = _resolve_concept_tagging_backend()
+        try:
+            tagged_root, tagging_result = await run_concept_tagging_stage(
+                root_entity=assembled_output.root_entity,
+                readme_text=readme_text,
+                backend=backend,
+                epfl_min_score=_resolve_concept_tagging_epfl_min_score(),
+                enable_related_openalex=_resolve_concept_tagging_related_enrichment(),
+            )
+        except Exception as exc:
+            logger.exception("concept_tagging stage failed")
+            _append_unique_warning(warnings, f"concept_tagging stage failed: {exc}")
+        else:
+            assembled_output.root_entity = tagged_root
+            logger.info(
+                "concept_tagging: backend=%s keywords=%d concepts=%d disciplines=%d",
+                tagging_result.backend,
+                len(tagging_result.keywords),
+                len(tagging_result.concepts),
+                len(tagging_result.disciplines),
+            )
+            for warning in tagging_result.warnings:
+                _append_unique_warning(warnings, warning)
 
     shacl_graph_payload = build_jsonld_output(
         assembled=assembled_output,
@@ -926,7 +974,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         except SHACLRuntimeUnavailableError as exc:
             logger.warning("%s: skipped — %s", STAGE_SHACL_GATE, exc)
             _append_unique_warning(warnings, str(exc))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("%s failed", STAGE_SHACL_GATE)
             _append_unique_warning(warnings, f"SHACL validation failed: {exc}")
         else:
@@ -1040,7 +1088,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 pipeline_cache_key,
                 response_model.model_dump(mode="json", exclude_none=True),
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "failed to write pipeline cache (run_id=%s)",
                 run_id,

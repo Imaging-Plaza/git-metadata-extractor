@@ -47,6 +47,33 @@ logger = logging.getLogger(__name__)
 
 CollectionName = Literal["models", "datasets", "spaces", "orgs"]
 
+
+async def lineage(
+    repo_id: str,
+    *,
+    depth: int = 3,
+) -> dict[str, Any]:
+    """Walk the HuggingFace `base_models` graph from `repo_id`.
+
+    Returns ancestors (parent models), descendants (models fine-tuned from
+    `repo_id`), and the explicit edge list. Pure local DuckDB lookup —
+    no RCP / Qdrant calls. Cheap (sub-second).
+    """
+    if not isinstance(repo_id, str) or not repo_id.strip():
+        return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
+    try:
+        from src.index.huggingface.retrieval.lineage import compute_lineage as _compute
+        from src.index.huggingface.storage.duckdb_store import DuckDBStore as _Store
+        return await asyncio.to_thread(_walk_lineage, repo_id, depth, _compute, _Store)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("huggingface.rag.lineage(%r) failed — %s", repo_id, exc)
+        return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
+
+
+def _walk_lineage(repo_id: str, depth: int, compute_fn: Any, store_cls: Any) -> dict[str, Any]:
+    store = store_cls.open()
+    return compute_fn(repo_id, store=store, depth=depth)
+
 # Maps the LLM-facing collection name to the actual Qdrant collection.
 # Extends the upstream COLLECTION_FOR_TABLE (which only knows about the
 # three indexed entity tables) with `orgs` for the hf_orgs collection.
@@ -140,6 +167,15 @@ class HuggingFaceRagProvider:
             embedder=RCPEmbeddingClient(cfg),
             reranker=RCPRerankerClient(cfg),
         )
+
+    async def lineage(
+        self,
+        repo_id: str,
+        *,
+        depth: int = 3,
+    ) -> dict[str, Any]:
+        """Walk the HF base_models DAG. Pure local DuckDB; no RCP."""
+        return await lineage(repo_id, depth=depth)
 
     async def search(  # noqa: PLR0911 — each early return is a graceful-fail check
         self,

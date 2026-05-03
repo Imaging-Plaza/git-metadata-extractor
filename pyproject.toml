@@ -57,6 +57,7 @@ dependencies = [
     "qdrant-client>=1.10",
     "tenacity>=8",
     "huggingface_hub>=1.2.0",
+    "graphai-client>=1.16.0",
 ]
 
 [project.urls]

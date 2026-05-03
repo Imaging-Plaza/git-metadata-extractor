@@ -29,9 +29,17 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.index.zenodo.config import ZenodoIndexConfig
 
 logger = logging.getLogger(__name__)
+
+_FETCH_RECORDS_DESCRIPTION_KEYS: tuple[str, ...] = (
+    "zenodo_id", "concept_recid", "title", "doi", "publication_date",
+    "resource_type", "access_right", "license_id", "description",
+)
+_DESCRIPTION_CAP_CHARS = 2000
 
 _ALLOWED_FILTER_KEYS: frozenset[str] = frozenset({
     "year",
@@ -139,6 +147,66 @@ class ZenodoRagProvider:
             )
             for hit in hits
         ]
+
+    async def fetch_records(
+        self,
+        ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Hydrate Zenodo records from DuckDB by ``zenodo_id`` or ``concept_recid``.
+
+        Used by the LLM agent tool to expand thin search hits into full
+        records (title, DOI, description, license, ...). Unlike Infoscience
+        — which stores rich payloads on Qdrant points — Zenodo's full
+        record body lives in DuckDB, so we go to the store rather than
+        Qdrant. Falls back to the latest version under a concept_recid
+        when the requested ID is the parent (citation) ID.
+        """
+        clean_ids = [
+            i.strip() for i in ids
+            if isinstance(i, str) and i.strip()
+        ]
+        if not clean_ids:
+            return []
+        return await asyncio.to_thread(self._fetch_records_sync, clean_ids)
+
+    @staticmethod
+    def _fetch_records_sync(ids: list[str]) -> list[dict[str, Any]]:
+        from src.index.zenodo.storage.duckdb_store import (  # noqa: PLC0415
+            ZenodoStore,
+        )
+
+        try:
+            store = ZenodoStore.open()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("%s: cannot open store — %s", _LOG_LABEL, exc)
+            return []
+        try:
+            out: list[dict[str, Any]] = []
+            for rid in ids:
+                row = store.fetch_record(rid)
+                if row is None:
+                    row = store.fetch_record_by_concept(rid)
+                if row is None:
+                    continue
+                description = row.get("description") or ""
+                out.append({
+                    "zenodo_id": row.get("zenodo_id"),
+                    "concept_recid": row.get("concept_recid"),
+                    "title": row.get("title"),
+                    "doi": row.get("doi"),
+                    "publication_date": (
+                        row.get("publication_date").isoformat()
+                        if hasattr(row.get("publication_date"), "isoformat")
+                        else row.get("publication_date")
+                    ),
+                    "resource_type": row.get("resource_type"),
+                    "access_right": row.get("access_right"),
+                    "license_id": row.get("license_id"),
+                    "description": description[:_DESCRIPTION_CAP_CHARS],
+                })
+            return out
+        finally:
+            store.close()
 
     async def _maybe_rerank(
         self,

@@ -14,22 +14,41 @@ from src.v2.agents.llm._verdict_cache import (
     store_agent_verdict,
 )
 from src.v2.agents.llm.agent_tools.disciplines import list_disciplines_tool
+from src.v2.agents.llm.agent_tools.epfl_graph_rag import (
+    make_epfl_graph_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.federated_rag import (
+    make_federated_rag_lookup_tool,
+    make_federated_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.github_rag import (
+    make_github_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.huggingface_lineage import (
+    make_huggingface_lineage_tool,
+)
+from src.v2.agents.llm.agent_tools.huggingface_rag import (
+    make_huggingface_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.query_dependencies import (
     make_query_dependencies_tool,
+)
+from src.v2.agents.llm.agent_tools.renkulab_rag import (
+    make_renkulab_rag_search_tool,
 )
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
+from src.v2.agents.llm.runtime import (
+    LLMRuntimeError,
+    V2LLMRuntime,
+)
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.ingest.cache import ProviderCache
 from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentRepositoryShape
 from src.v2.schema.models.strict import RepositoryModel
-from src.v2.agents.llm.runtime import (
-    LLMRuntimeError,
-    V2LLMRuntime,
-)
 
 MIN_REPOSITORY_SEGMENTS = 2
 README_CONTENT_MAX_CHARS = 4000
@@ -219,16 +238,30 @@ class LLMRepositoryAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
+        tools = [
+            list_disciplines_tool,
+            make_fetch_link_content_tool(self._cache),
+            make_query_dependencies_tool(providers.github),
+        ]
+        if providers.huggingface_rag is not None:
+            tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
+            tools.append(make_huggingface_lineage_tool(providers.huggingface_rag))
+        if providers.renkulab_rag is not None:
+            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
+        if providers.github_rag is not None:
+            tools.append(make_github_rag_search_tool(providers.github_rag))
+        if providers.epfl_graph_rag is not None:
+            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+        if providers.federated_rag is not None:
+            tools.append(make_federated_rag_search_tool(providers.federated_rag))
+            tools.append(make_federated_rag_lookup_tool(providers.federated_rag))
+
         try:
             llm_result = await self._llm_runtime.run_json_prompt(
                 system_prompt=_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 output_type=AgentRepositoryShape,
-                tools=[
-                    list_disciplines_tool,
-                    make_fetch_link_content_tool(self._cache),
-                    make_query_dependencies_tool(providers.github),
-                ],
+                tools=tools,
             )
         except LLMRuntimeError:
             raise

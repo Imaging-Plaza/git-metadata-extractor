@@ -2,7 +2,8 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS records (
-    zenodo_id          TEXT PRIMARY KEY,            -- numeric, stored as TEXT for parity with openalex_id
+    zenodo_id          TEXT PRIMARY KEY,            -- canonical version-record ID (post-redirect)
+    concept_recid      TEXT,                         -- Zenodo concept record (groups all versions)
     doi                TEXT,
     title              TEXT,
     description        TEXT,                         -- HTML-stripped
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS idx_records_pubdate     ON records (publication_date);
 CREATE INDEX IF NOT EXISTS idx_records_type        ON records (resource_type);
 CREATE INDEX IF NOT EXISTS idx_records_access      ON records (access_right);
+CREATE INDEX IF NOT EXISTS idx_records_concept     ON records (concept_recid);
 CREATE INDEX IF NOT EXISTS idx_creators_orcid      ON creators (orcid);
 CREATE INDEX IF NOT EXISTS idx_chunks_entity       ON chunks (entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_record_creators_ck  ON record_creators (creator_key);

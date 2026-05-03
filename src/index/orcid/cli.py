@@ -74,6 +74,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         store=store,
         scope=args.scope,
         limit=args.limit,
+        priority_hints=args.priority_hint or None,
     )
     _emit_json({"scope": args.scope, "ingested": summary})
     return 0
@@ -197,6 +198,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_i = sub.add_parser("ingest", help="Fetch full records + persist")
     _add_scope_arg(p_i)
     p_i.add_argument("--limit", type=int, default=None)
+    p_i.add_argument(
+        "--priority-hint",
+        action="append",
+        default=None,
+        help=(
+            "Substring to prioritise in the seed `hint` column "
+            "(case-insensitive). Repeat to add multiple. Matching seeds "
+            "are fetched before the rest of the unfetched pool. "
+            "Example: --priority-hint 'ETH Zurich' --priority-hint 'ETHZ'"
+        ),
+    )
     p_i.set_defaults(func=_cmd_ingest)
 
     p_e = sub.add_parser("embed", help="Embed in-scope rows into Qdrant via RCP")

@@ -14,8 +14,23 @@ from src.v2.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
+from src.v2.agents.llm.agent_tools.epfl_graph_rag import (
+    make_epfl_graph_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.ethz_research_collection_rag import (
+    make_ethz_research_collection_rag_fetch_chunks_tool,
+    make_ethz_research_collection_rag_fetch_records_tool,
+    make_ethz_research_collection_rag_search_tool,
+)
+from src.v2.agents.llm.agent_tools.federated_rag import (
+    make_federated_rag_lookup_tool,
+    make_federated_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.github_organization import (
     make_github_organization_metadata_tool,
+)
+from src.v2.agents.llm.agent_tools.huggingface_rag import (
+    make_huggingface_rag_search_tool,
 )
 from src.v2.agents.llm.agent_tools.infoscience_orgunit import (
     make_infoscience_orgunit_tool,
@@ -25,25 +40,37 @@ from src.v2.agents.llm.agent_tools.infoscience_rag import (
     make_infoscience_rag_fetch_records_tool,
     make_infoscience_rag_search_tool,
 )
+from src.v2.agents.llm.agent_tools.openalex_rag import (
+    make_openalex_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.organization_identity import (
     make_organization_identity_search_tool,
+)
+from src.v2.agents.llm.agent_tools.renkulab_rag import (
+    make_renkulab_rag_search_tool,
 )
 from src.v2.agents.llm.agent_tools.ror_organization import (
     make_ror_organization_search_tool,
 )
+from src.v2.agents.llm.agent_tools.ror_rag import (
+    make_ror_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
+from src.v2.agents.llm.agent_tools.snsf_rag import (
+    make_snsf_rag_search_tool,
+)
 from src.v2.agents.llm.prompt_context import append_runtime_prompt_context
+from src.v2.agents.llm.runtime import (
+    LLMRuntimeError,
+    V2LLMRuntime,
+)
 from src.v2.agents.models import AgentResult, ProviderSet, generate_uuid
 from src.v2.ingest.cache import ProviderCache
 from src.v2.observation.query_log import stamp_current_agent
 from src.v2.schema.models.agent import AgentOrganizationShape
 from src.v2.schema.models.strict import OrganizationModel
-from src.v2.agents.llm.runtime import (
-    LLMRuntimeError,
-    V2LLMRuntime,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +266,37 @@ class LLMOrganizationAgentV2:
             tools.append(
                 make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
             )
+        if providers.ethz_research_collection_rag is not None:
+            tools.append(
+                make_ethz_research_collection_rag_search_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_chunks_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+            tools.append(
+                make_ethz_research_collection_rag_fetch_records_tool(
+                    providers.ethz_research_collection_rag,
+                ),
+            )
+        if providers.ror_rag is not None:
+            tools.append(make_ror_rag_search_tool(providers.ror_rag))
+        if providers.snsf_rag is not None:
+            tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
+        if providers.huggingface_rag is not None:
+            tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
+        if providers.openalex_rag is not None:
+            tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
+        if providers.renkulab_rag is not None:
+            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
+        if providers.federated_rag is not None:
+            tools.append(make_federated_rag_search_tool(providers.federated_rag))
+            tools.append(make_federated_rag_lookup_tool(providers.federated_rag))
+        if providers.epfl_graph_rag is not None:
+            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
 
         identifier = org_name
         tool_names = [getattr(t, "name", None) or getattr(t, "__name__", "?") for t in tools]

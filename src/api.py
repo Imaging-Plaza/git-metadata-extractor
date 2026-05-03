@@ -10,6 +10,32 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Optional
 
 
+def _normalize_github_token_pool() -> None:
+    """Split a comma-separated GITHUB_TOKEN into a per-process token pool.
+
+    Runs before any v1/gimie import so module-level `os.environ["GITHUB_TOKEN"]`
+    reads see a single valid token. The full list (deduped, order preserved) is
+    exported as GITHUB_TOKEN_POOL for v2 REST hot paths to round-robin over.
+    """
+    raw = os.environ.get("GITHUB_TOKEN", "")
+    if "," not in raw:
+        return
+    seen: set[str] = set()
+    tokens: list[str] = []
+    for piece in raw.split(","):
+        token = piece.strip()
+        if token and token not in seen:
+            seen.add(token)
+            tokens.append(token)
+    if not tokens:
+        return
+    os.environ["GITHUB_TOKEN_POOL"] = ",".join(tokens)
+    os.environ["GITHUB_TOKEN"] = tokens[0]
+
+
+_normalize_github_token_pool()
+
+
 def _resolve_package_version(name: str) -> str:
     try:
         return package_version(name)

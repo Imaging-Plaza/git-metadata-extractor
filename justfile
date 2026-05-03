@@ -554,6 +554,94 @@ zenodo-serve *ARGS:
     .venv/bin/python -m src.index.zenodo serve {{ARGS}}
 
 # ============================================================================
+# EPFL Graph disciplines indexer (src/index/epfl_graph)
+# ============================================================================
+# RAG index over the curated EPFL Graph academic ontology (~2226 categories,
+# 6 levels deep, each backed by 50-110 anchor Wikipedia concepts). Requires
+# EPFL_GRAPH_USERNAME / EPFL_GRAPH_PASSWORD for ingest, RCP_TOKEN for embed.
+
+# Walk the ontology tree and persist categories to DuckDB.
+epfl-graph-ingest *ARGS:
+    .venv/bin/python -m src.index.epfl_graph ingest {{ARGS}}
+
+# Embed categories and push them into Qdrant collection `epfl_graph_disciplines`.
+epfl-graph-embed *ARGS:
+    .venv/bin/python -m src.index.epfl_graph embed {{ARGS}}
+
+# Semantic retrieval over the disciplines index. First positional is the query.
+epfl-graph-search QUERY *ARGS:
+    .venv/bin/python -m src.index.epfl_graph search "{{QUERY}}" {{ARGS}}
+
+# DuckDB row counts + Qdrant collection name + paths.
+epfl-graph-status:
+    .venv/bin/python -m src.index.epfl_graph status
+
+# ============================================================================
+# SWISSUbase indexer (src/index/swissubase)
+# ============================================================================
+# SWISSUbase has no public REST API — every catalogue endpoint requires
+# the SPA's session cookie. Ingest drives a Selenium browser session and
+# calls the JSON endpoints from inside it, so SELENIUM_REMOTE_URL must
+# be set. Default scope `epfl_sdsc_ethz` ingests everything but only
+# embeds studies whose institution string matches EPFL / ETHZ / SDSC.
+
+# Drive the catalogue via Selenium and persist studies/persons/institutions.
+# Pass --scope epfl_sdsc_ethz|switzerland and --limit N for smoke runs.
+swissubase-ingest *ARGS:
+    .venv/bin/python -m src.index.swissubase ingest {{ARGS}}
+
+# Chunk + embed in-scope entities, push vectors to Qdrant.
+# Pass --entity studies|datasets|persons|institutions to restrict.
+swissubase-embed *ARGS:
+    .venv/bin/python -m src.index.swissubase embed {{ARGS}}
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+swissubase-search QUERY *ARGS:
+    .venv/bin/python -m src.index.swissubase search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the SWISSUbase DuckDB (predefined or guarded ad-hoc).
+swissubase-query *ARGS:
+    .venv/bin/python -m src.index.swissubase query {{ARGS}}
+
+# Show DuckDB row counts + Qdrant collection size + paths.
+swissubase-status:
+    .venv/bin/python -m src.index.swissubase status
+
+# Run the FastAPI app (default port 8004).
+swissubase-serve *ARGS:
+    .venv/bin/python -m src.index.swissubase serve {{ARGS}}
+
+# ============================================================================
+# RenkuLab indexer (src/index/renkulab)
+# ============================================================================
+
+# Pull RenkuLab projects/groups/users/data_connectors into DuckDB.
+# Pass --scope all|epfl|switzerland and optionally --only entity1,entity2.
+renku-ingest *ARGS:
+    .venv/bin/python -m src.index.renkulab ingest {{ARGS}}
+
+# Chunk + embed entities, push vectors to Qdrant via the RCP embedding endpoint.
+# Pass --entities projects,groups,users,data_connectors to restrict (default: all).
+renku-embed *ARGS:
+    .venv/bin/python -m src.index.renkulab embed {{ARGS}}
+
+# Semantic retrieval (vector + RCP rerank). First positional is the query.
+renku-search QUERY *ARGS:
+    .venv/bin/python -m src.index.renkulab search "{{QUERY}}" {{ARGS}}
+
+# Read-only SQL over the RenkuLab DuckDB (predefined or guarded ad-hoc).
+renku-query *ARGS:
+    .venv/bin/python -m src.index.renkulab query {{ARGS}}
+
+# Show DuckDB row counts + Qdrant collection sizes + paths.
+renku-status:
+    .venv/bin/python -m src.index.renkulab status
+
+# Run the FastAPI app (default port 8004).
+renku-serve *ARGS:
+    .venv/bin/python -m src.index.renkulab serve {{ARGS}}
+
+# ============================================================================
 # GitHub repository indexer (src/index/github)
 # ============================================================================
 
@@ -586,3 +674,26 @@ gh-status:
 # Run the FastAPI app (default port 8004).
 gh-serve *ARGS:
     .venv/bin/python -m src.index.github serve {{ARGS}}
+
+# ============================================================================
+# Federated cross-index layer (src/index/_federated)
+# ============================================================================
+
+# Federated semantic search across every registered index in parallel.
+# Pass `--indices huggingface,openalex` to scope; `--filter k=v` (repeatable);
+# `--entity-type X` to restrict each adapter to one type.
+gme-search QUERY *ARGS:
+    .venv/bin/python -m src.index._federated search "{{QUERY}}" {{ARGS}}
+
+# Cross-index entity lookup. Pass any identifier — slug, URL, ORCID, ROR,
+# DOI, UUID — and every adapter that recognises it returns matches.
+gme-entity ID *ARGS:
+    .venv/bin/python -m src.index._federated entity "{{ID}}" {{ARGS}}
+
+# List registered adapters and the entity types each exposes.
+gme-indices:
+    .venv/bin/python -m src.index._federated indices
+
+# Walk the HF base_models DAG (ancestors + descendants) from a repo_id.
+hf-lineage REPO_ID *ARGS:
+    .venv/bin/python -m src.index.huggingface lineage "{{REPO_ID}}" {{ARGS}}

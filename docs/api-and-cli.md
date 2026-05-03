@@ -1,66 +1,157 @@
 # API and CLI
 
+Quick reference for both the extraction service and the per-index CLIs.
+For the full v2 contract see [V2 API Reference](v2-api-reference.md); for
+RAG indices see [RAG Indices Overview](rag-indices.md).
+
 ## Main entrypoints
 
-- API app: `src/api.py`
-- Repository analysis orchestrator: `src/analysis/repositories.py`
-- User analysis orchestrator: `src/analysis/user.py`
-- Organization analysis orchestrator: `src/analysis/organization.py`
+- API app: `src/api.py` — mounts `/v1/*` (frozen) and `/v2/*` (active).
+- V2 router: `src/v2/api.py`.
+- V2 pipeline driver: `src/v2/pipeline/orchestrator.py`.
+- V1 analysis (frozen): `src/v1/analysis/`.
 
-## Active API endpoints
+## Active endpoints
 
-- `GET /v1/repository/gimie/json-ld/{full_path:path}`: GIMIE-only JSON-LD extraction.
-- `GET /v1/repository/llm/json/{full_path:path}`: repository Pydantic output.
-- `GET /v1/repository/llm/json-ld/{full_path:path}`: repository JSON-LD output.
-- `GET /v1/user/llm/json/{full_path:path}`: user profile analysis.
-- `GET /v1/org/llm/json/{full_path:path}`: organization analysis.
-- Cache management endpoints under `/v1/cache/*`.
+### V2 (use these for new clients)
 
-Common query flags:
+- `GET  /v2/health` — health check + provider preflight.
+- `GET  /v2/extract/{full_path:path}` — synchronous extraction. Path is a
+  GitHub URL or path (`github.com/owner/name`).
+- `POST /v2/extract` — async submission. Returns `202` + `job_id`. Body:
+  `{source_url, agent_runtime?, output_format?, include_context_summary?}`.
+- `GET  /v2/jobs/{job_id}` — poll for async job status / result.
 
-- `force_refresh=true`: bypass cache.
-- `enrich_orgs=true`: run organization enrichment.
-- `enrich_users=true`: run user enrichment (repository/user routes).
+Common query parameters on `GET /v2/extract`:
 
-## Response shape
+- `output_format` — `jsonld` (default) or `json`.
+- `agent_runtime` — `rule_based` or `llm` (defaults to
+  `V2_AGENT_RUNTIME_DEFAULT`, which itself defaults to `llm`).
+- `include_context_summary` — `true|false` (default `false`).
 
-All analysis endpoints return `APIOutput` (`src/data_models/api.py`):
-
-- `link`
-- `type` (`repository`, `user`, `organization`)
-- `parsedTimestamp`
-- `output` (model object or JSON-LD dict)
-- `stats` (`APIStats` token usage, duration, GitHub rate-limit headers)
-
-## Endpoint-to-pipeline map
-
-```mermaid
-flowchart LR
-    A[/repository/llm/*] --> R[Repository.run_analysis]
-    B[/user/llm/json/*] --> U[User.run_analysis]
-    C[/org/llm/json/*] --> O[Organization.run_analysis]
-
-    R --> RA[Atomic repository pipeline + optional enrichments]
-    U --> UA[GitHub parse + user/org enrich + linked entities + EPFL]
-    O --> OA[Atomic organization pipeline]
-```
-
-## Run the API
+Example requests:
 
 ```bash
-just serve-dev
+# sync, JSON-LD
+curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" | jq
+
+# sync, JSON, rule-based
+curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
+
+# async
+curl -s -X POST http://localhost:1234/v2/extract \
+  -H "Content-Type: application/json" \
+  -d '{"source_url": "github.com/octocat/Hello-World", "output_format": "json", "agent_runtime": "llm"}' | jq
+# → {"job_id": "...", "status": "pending", "status_url": "/v2/jobs/..."}
+
+# poll
+curl -s "http://localhost:1234/v2/jobs/<job_id>" | jq
 ```
+
+### V1 (frozen, kept for backwards compatibility)
+
+- `GET  /v1/repository/gimie/json-ld/{full_path:path}` — GIMIE-only JSON-LD.
+- `GET  /v1/repository/llm/json/{full_path:path}` — repository pydantic output.
+- `GET  /v1/repository/llm/json-ld/{full_path:path}` — repository JSON-LD.
+- `GET  /v1/user/llm/json/{full_path:path}` — user profile.
+- `GET  /v1/org/llm/json/{full_path:path}` — organization analysis.
+- `GET  /v1/cache/stats|entries`, `POST /v1/cache/{cleanup,clear,enable,disable}`,
+  `DELETE /v1/cache/invalidate/{api_type}` — v1 cache controls.
+
+V1 query flags:
+
+- `force_refresh=true` — bypass cache.
+- `enrich_orgs=true` — run organization enrichment.
+- `enrich_users=true` — run user enrichment (repository / user routes).
+
+For mapping V1 calls to V2 see
+[Migration: V1 → V2](migration-v1-to-v2.md).
+
+## V2 response shape
+
+`GET /v2/extract` and the `result` field of a completed job both return
+`V2ExtractResponse`:
+
+- `source_url`
+- `detected_type` — `repository | user | organization`
+- `output_format` — `jsonld | json`
+- `output` — see below
+- `warnings` — non-fatal pipeline warnings
+- `stats` — run-scoped counts + duration
+- optional `context_summary_markdown` (when requested and available)
+
+`output_format=json`:
+
+- `root_entity: object | null`
+- `related_entities: list[object]`
+- `excluded_entities: list[object]`
+- `entities_by_type: {repositories, persons, organizations, articles, memberships, contributions}`
+
+`output_format=jsonld`:
+
+- `@context: object`
+- `@graph: list[object]`
+- optional `excluded_entities`
+
+## Per-index CLIs
+
+Every RAG index ships its own CLI (`python -m src.index.<name>`) plus
+`just <prefix>-*` recipes. Common shape:
+
+```bash
+just <prefix>-status                  # counts + paths
+just <prefix>-ingest --scope <scope>  # populate DuckDB
+just <prefix>-embed                   # push vectors to Qdrant
+just <prefix>-search "<query>"        # semantic retrieval
+just <prefix>-query --predefined ...  # SQL over DuckDB
+```
+
+Recipes registered in the justfile:
+
+| Index | Prefix | Notes |
+|---|---|---|
+| HuggingFace | `hf-*` | adds `hf-discover-orgs`, `hf-lineage` |
+| OpenAlex | `openalex-*` | adds `openalex-find-github`, `openalex-rebuild-qdrant`, `openalex-serve` |
+| ORCID | `orcid-*` | adds `orcid-discover`, `orcid-serve` |
+| Zenodo | `zenodo-*` | adds `zenodo-serve` |
+| GitHub | `gh-*` | adds `gh-rebuild-qdrant`, `gh-serve` |
+| Infoscience | `index-infoscience-*` | full lifecycle + `ingest-duckdb` + `query` |
+| ROR | (per-CLI) | `python -m src.index.ror …` |
+| ETH Research Collection | (per-CLI) | `python -m src.index.ethz_research_collection …` |
+| SNSF | (per-CLI) | `python -m src.index.snsf …` |
+| Federated | `gme-*` | `gme-search`, `gme-entity`, `gme-indices` |
 
 ## Smoke tests
 
 ```bash
+# v2
+curl -s "http://localhost:1234/v2/health" | jq
+curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
+
+# v1 (legacy)
 just api-test-gimie
 just api-test-extract
 just api-test-extract-refresh
 ```
 
-## CLI status and alternatives
+## Batch extraction
 
-- `just extract ...` currently calls `src/main.py`, which still imports legacy `core.*` modules.
-- Use API endpoints for full extraction flows.
-- Use `scripts/convert_json_jsonld.py` for JSON <-> JSON-LD conversion workflows.
+`scripts/v2/batch_extract.sh` reads a hardcoded URL list and drives
+`/v2/extract` with configurable parallelism. Resumable: skips repos whose
+result file already exists with a non-`running` status.
+
+## Endpoint-to-pipeline map
+
+```mermaid
+flowchart LR
+    A[GET /v2/extract] --> P[Pipeline orchestrator]
+    B[POST /v2/extract] --> J[Job store<br/>SQLite-backed]
+    J --> P
+    P --> S1[context_summary]
+    S1 --> S2[per-entity agents]
+    S2 --> S3[dedup → reconcile → critic]
+    S3 --> S4[strict + assemble + link veracity]
+    S4 --> S5[ownership + org-hierarchy inference]
+    S5 --> S6[build_jsonld_output]
+    GJ[GET /v2/jobs/id] --> J
+```

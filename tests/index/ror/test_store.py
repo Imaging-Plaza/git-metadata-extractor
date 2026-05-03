@@ -1,15 +1,19 @@
+"""Legacy sidecar reader tests.
+
+After D16, `store.py` is read-only legacy support. These tests ensure
+`read_records` / `read_manifest` still parse pre-D16 sidecars (so the
+`migrate-storage` porter and the D15 FAISS→Qdrant migrator keep working).
+"""
+
 from __future__ import annotations
+
+import json
 
 import pytest
 
 from src.index.ror import paths as ror_paths
 from src.index.ror.models import IndexedRecord, IndexManifest
-from src.index.ror.store import (
-    now_iso,
-    read_manifest,
-    read_records,
-    write_sidecar,
-)
+from src.index.ror.store import now_iso, read_manifest, read_records
 
 
 @pytest.fixture
@@ -18,8 +22,11 @@ def isolated_index_dir(monkeypatch, tmp_path):
     yield tmp_path
 
 
-def _make_rows(n: int):
-    return [
+def _seed_legacy_sidecar(scope_mode: str, n: int) -> None:
+    sdir = ror_paths.index_dir(scope_mode)
+    rp = sdir / "records.jsonl"
+    mp = sdir / "manifest.json"
+    rows = [
         IndexedRecord(
             row=i,
             ror_id=f"https://ror.org/test{i:04d}",
@@ -29,11 +36,11 @@ def _make_rows(n: int):
         )
         for i in range(n)
     ]
-
-
-def _make_manifest(n: int) -> IndexManifest:
-    return IndexManifest(
-        scope_mode="epfl_ethz",
+    with rp.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row.model_dump(), ensure_ascii=False) + "\n")
+    manifest = IndexManifest(
+        scope_mode=scope_mode,
         record_count=n,
         embedding_model="Qwen/Qwen3-Embedding-8B",
         embedding_dim=8,
@@ -42,20 +49,27 @@ def _make_manifest(n: int) -> IndexManifest:
         ror_release_doi=None,
         built_at_iso=now_iso(),
     )
+    mp.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
 
 
-def test_round_trip_sidecar_records_and_manifest(isolated_index_dir):
-    n = 5
-    rows = _make_rows(n)
-    write_sidecar("epfl_ethz", rows, _make_manifest(n))
-
+def test_read_records_parses_legacy_sidecar(isolated_index_dir):
+    _seed_legacy_sidecar("epfl_ethz", 5)
     read_back = read_records("epfl_ethz")
-    assert [r.row for r in read_back] == list(range(n))
-    assert [r.ror_id for r in read_back] == [r.ror_id for r in rows]
+    assert [r.row for r in read_back] == list(range(5))
+    assert read_back[0].ror_id == "https://ror.org/test0000"
 
-    manifest = read_manifest("epfl_ethz")
-    assert manifest.record_count == n
+
+def test_read_manifest_parses_legacy_sidecar(isolated_index_dir):
+    _seed_legacy_sidecar("switzerland", 3)
+    manifest = read_manifest("switzerland")
+    assert manifest.record_count == 3
     assert manifest.embedding_dim == 8
+    assert manifest.scope_mode == "switzerland"
+
+
+def test_read_records_raises_when_sidecar_missing(isolated_index_dir):
+    with pytest.raises(FileNotFoundError):
+        read_records("ghost_scope")
 
 
 def test_paths_respect_env_var(isolated_index_dir):

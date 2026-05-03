@@ -23,7 +23,9 @@ infoscience:
   page_size: 100
   # Infoscience's edge layer 405s under burst; keep concurrency modest.
   # `dspace.py` retries 405/429/5xx with exponential backoff.
-  max_concurrency: 2
+  # Bumped from 2 to 8 for the bulk fetch-text run (the dump-script
+  # ran fine at 8 with the existing retry/backoff behaviour).
+  max_concurrency: 8
 
 filter:
   # Solr `fulltext:` qualifier is applied per-term against

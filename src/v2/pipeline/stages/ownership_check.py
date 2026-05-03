@@ -182,25 +182,32 @@ def _extract_owner_from_repo_handle(handle: Any) -> str | None:
     return owner or None
 
 
-def _owner_handle_for_repo(entity: dict[str, Any]) -> str | None:
-    """Best-effort owner-handle lookup for a Repository entity.
+def _owner_handle_for_repo_original_case(entity: dict[str, Any]) -> str | None:
+    """Return the repo's github `<owner>` preserving the user's chosen case.
 
-    Tries `pulse:githubRepositoryHandle` first, then parses the github URL in
-    `id` / `@id`. Returns the owner segment lower-cased.
+    Used when the handle is stamped onto new entities (e.g. a synthesized
+    Person stub) where canonical casing matters for the resulting URL/name.
     """
     owner = _extract_owner_from_repo_handle(entity.get(REPO_HANDLE_KEY))
     if owner:
-        return owner.lower()
+        return owner
     identifiers = entity.get("identifiers")
     if isinstance(identifiers, dict):
         owner = _extract_owner_from_repo_handle(identifiers.get(REPO_HANDLE_KEY))
         if owner:
-            return owner.lower()
-    # Fall back to parsing the id URL
-    owner = _extract_github_owner_from_url(entity.get("id") or entity.get("@id"))
-    if owner:
-        return owner.lower()
-    return None
+            return owner
+    return _extract_github_owner_from_url(entity.get("id") or entity.get("@id"))
+
+
+def _owner_handle_for_repo(entity: dict[str, Any]) -> str | None:
+    """Best-effort owner-handle lookup for a Repository entity (lower-cased).
+
+    Lower-cased so it can match the index built by
+    `_index_owners_and_orgs_by_handle`. For inserts that need canonical case,
+    use `_owner_handle_for_repo_original_case`.
+    """
+    owner = _owner_handle_for_repo_original_case(entity)
+    return owner.lower() if owner else None
 
 
 def _index_owners(entities: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -847,6 +854,38 @@ def _index_owners_and_orgs_by_handle(
     return index
 
 
+def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
+    """Build a minimal valid `schema:Person` from a github owner handle.
+
+    Used by `guarantee_repo_author` when the repository's owner handle has no
+    Person or Organization entity in the reconciled graph (typical of solo
+    repos with no extracted contributors). The stub satisfies the strict
+    Person schema so it survives validation and can be referenced as
+    `schema:author` on the root repository.
+    """
+    profile_url = f"https://github.com/{handle}"
+    return {
+        "id": profile_url,
+        "type": "schema:Person",
+        "shacl": "pulse:PersonShape",
+        "identifiers": {
+            "pulse:orcid": None,
+            "pulse:infosciencePersonIdentifier": None,
+            "pulse:githubUsername": handle,
+            "uuid": str(uuid4()),
+        },
+        "idSource": "pulse:githubUsername",
+        "schema:name": handle,
+        "schema:url": profile_url,
+        "pulse:githubUsername": handle,
+        "pulse:orcidIdentifier": None,
+        "pulse:infosciencePersonIdentifier": None,
+        "org:hasMembership": [],
+        "pulse:hasContribution": [],
+        "pulse:owns": [],
+    }
+
+
 def guarantee_repo_author(
     reconciled: ReconciledEntities,
 ) -> tuple[ReconciledEntities, list[str]]:
@@ -860,11 +899,15 @@ def guarantee_repo_author(
     is to teach reconciliation to keep the LLM-emitted reference verbatim
     when it can't canonicalize.
 
-    Mitigation: when a repository has empty `schema:author`, look at the
-    repo's GitHub `<owner>` handle (parsed from `pulse:githubRepositoryHandle`
-    or its `id` URL). If a Person or Organization with the same handle
-    exists in the reconciled graph, stamp its `id` into `schema:author`.
-    Always emits a warning so this stays visible in the output.
+    Mitigation, two-tier:
+    1. If a Person or Organization with the same github handle as the repo's
+       `<owner>` already exists in the graph, stamp its `id` into
+       `schema:author`.
+    2. Otherwise, synthesize a minimal `schema:Person` stub from the github
+       owner handle, insert it into the persons bucket, and stamp its id.
+       This recovers solo-user repos where no contributor data was extracted.
+
+    Always emits a warning so the salvage stays visible in the output.
 
     Mutates a copy; the original `reconciled` is unchanged.
     """
@@ -876,6 +919,8 @@ def guarantee_repo_author(
     owner_index = _index_owners_and_orgs_by_handle(reconciled)
     warnings: list[str] = []
     new_repos: list[dict[str, Any]] = []
+    synthesized_persons: list[dict[str, Any]] = []
+    synthesized_handles: set[str] = set()
     changed = False
 
     for entity in repositories:
@@ -909,14 +954,31 @@ def guarantee_repo_author(
                 )
                 new_repos.append(cloned)
                 continue
-        # No fallback available — leave the empty array in place. Strict
-        # validation will still reject the root, but at least the warning
-        # tells the user *why*.
+        if owner_handle:
+            handle_original_case = _owner_handle_for_repo_original_case(entity) or owner_handle
+            stub_id = f"https://github.com/{handle_original_case}"
+            if owner_handle not in synthesized_handles:
+                synthesized_persons.append(
+                    _synthesize_owner_person_stub(handle_original_case),
+                )
+                synthesized_handles.add(owner_handle)
+            cloned["schema:author"] = [stub_id]
+            changed = True
+            warnings.append(
+                "KNOWN BUG (schema:author empty after reconciliation): "
+                f"synthesized owner Person stub '{stub_id}' as schema:author on "
+                f"{repo_id} (handle '{handle_original_case}'). No matching Person "
+                "or Organization existed in the graph — typical of solo-user "
+                "repositories with no extracted contributor data.",
+            )
+            new_repos.append(cloned)
+            continue
+        # Could not derive a github owner handle — leave the empty array.
+        # Strict validation will still reject the root.
         warnings.append(
             "KNOWN BUG (schema:author empty after reconciliation): could not "
-            f"recover an owner fallback for {repo_id} (handle "
-            f"'{owner_handle or '<none>'}'). Strict validation will reject "
-            "this root.",
+            f"derive a github owner handle for {repo_id}. Strict validation "
+            "will reject this root.",
         )
         new_repos.append(cloned)
 
@@ -925,6 +987,8 @@ def guarantee_repo_author(
 
     new_entities = {bucket: list(value) for bucket, value in reconciled.entities.items()}
     new_entities["repositories"] = new_repos
+    if synthesized_persons:
+        new_entities["persons"] = list(new_entities.get("persons") or []) + synthesized_persons
     new_reconciled = ReconciledEntities(
         entities=new_entities,
         memberships=list(reconciled.memberships),

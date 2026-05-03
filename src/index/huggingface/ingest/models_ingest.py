@@ -39,6 +39,7 @@ def ingest_models(
 ) -> int:
     """Return the number of models upserted across the scope."""
     upserted = 0
+    skipped = 0
     for slug in scope.seeds:
         store.upsert_org(slug=slug, scope=scope.name, source="seed")
         listed = list(client.list_models(slug, limit=limit))
@@ -46,6 +47,11 @@ def ingest_models(
         for stub in listed:
             repo_id = getattr(stub, "id", None) or getattr(stub, "modelId", None)
             if not repo_id:
+                continue
+            stub_sha = getattr(stub, "sha", None)
+            if stub_sha and store.repo_sha("models", repo_id) == stub_sha:
+                # Already in DB at this revision — skip the heavy info+readme fetch.
+                skipped += 1
                 continue
             info = client.model_info(repo_id, expand=MODEL_EXPAND_FIELDS)
             if info is None:
@@ -72,6 +78,7 @@ def ingest_models(
             upserted += 1
             if limit is not None and upserted >= limit * len(scope.seeds):
                 return upserted
+    LOGGER.info("models: ingest summary upserted=%d skipped_unchanged=%d", upserted, skipped)
     return upserted
 
 

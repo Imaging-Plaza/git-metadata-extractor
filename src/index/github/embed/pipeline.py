@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -24,6 +25,12 @@ from typing import TYPE_CHECKING, Any
 from src.index.openalex.embed.chunker import Chunk, chunk_text
 from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
+
+# Qdrant upsert retry policy. The qdrant_client default 5s read timeout is too
+# tight under sustained load; transient timeouts shouldn't kill a multi-hour
+# embed run. Exponential backoff: 5s, 15s, 45s, 135s — total ~3.5min before
+# giving up on a single batch.
+_QDRANT_RETRY_DELAYS_SECONDS: tuple[int, ...] = (5, 15, 45, 135)
 
 if TYPE_CHECKING:
     from src.index.github.config import GitHubIndexConfig
@@ -128,25 +135,59 @@ async def _embed_repos_async(
         vectors = await client.embed_all(texts)
         ids: list[str] = []
         payloads: list[dict[str, Any]] = []
+        chunk_rows: list[dict[str, Any]] = []
         for entity_id, base_payload, chunk in pending:
             cid = _chunk_id("repos", entity_id, chunk.index)
             ids.append(cid)
             payloads.append({**base_payload, "chunk_index": chunk.index})
-            store.upsert_chunk(
-                chunk_id=cid,
-                entity_type="repos",
-                entity_id=entity_id,
-                chunk_index=chunk.index,
-                text=chunk.text,
-                token_count=chunk.token_count,
-                vector_id=cid,
+            chunk_rows.append(
+                {
+                    "chunk_id": cid,
+                    "entity_id": entity_id,
+                    "chunk_index": chunk.index,
+                    "text": chunk.text,
+                    "token_count": chunk.token_count,
+                },
             )
-        qdrant.upsert_points(
-            GITHUB_COLLECTION,
-            ids=ids,
-            vectors=vectors,
-            payloads=payloads,
-        )
+        # Qdrant upsert FIRST, with retry. If we wrote chunks to DuckDB before
+        # this, a Qdrant timeout would leave orphan rows that block re-embed
+        # on the same batch. Order is: vectors land in Qdrant, then DuckDB
+        # records "this batch is embedded" — a crash between the two means
+        # a wasted batch (re-embedded on resume) but no inconsistency.
+        last_exc: Exception | None = None
+        for attempt, delay in enumerate((0, *_QDRANT_RETRY_DELAYS_SECONDS)):
+            if delay:
+                LOGGER.warning(
+                    "qdrant upsert retry %d/%d in %ds (last error: %s)",
+                    attempt,
+                    len(_QDRANT_RETRY_DELAYS_SECONDS),
+                    delay,
+                    last_exc,
+                )
+                time.sleep(delay)
+            try:
+                qdrant.upsert_points(
+                    GITHUB_COLLECTION,
+                    ids=ids,
+                    vectors=vectors,
+                    payloads=payloads,
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 — qdrant_client raises a wide variety
+                last_exc = exc
+        else:
+            LOGGER.error("qdrant upsert giving up after %d attempts", len(_QDRANT_RETRY_DELAYS_SECONDS))
+            raise last_exc  # type: ignore[misc]
+        for row in chunk_rows:
+            store.upsert_chunk(
+                chunk_id=row["chunk_id"],
+                entity_type="repos",
+                entity_id=row["entity_id"],
+                chunk_index=row["chunk_index"],
+                text=row["text"],
+                token_count=row["token_count"],
+                vector_id=row["chunk_id"],
+            )
         total += len(pending)
         pending.clear()
 

@@ -44,6 +44,7 @@ MODEL_EXPAND_FIELDS: tuple[str, ...] = (
     "likes",
     "pipeline_tag",
     "private",
+    "sha",
     "siblings",
     "tags",
 )
@@ -58,6 +59,7 @@ DATASET_EXPAND_FIELDS: tuple[str, ...] = (
     "lastModified",
     "likes",
     "private",
+    "sha",
     "siblings",
     "tags",
 )
@@ -71,6 +73,7 @@ SPACE_EXPAND_FIELDS: tuple[str, ...] = (
     "private",
     "runtime",
     "sdk",
+    "sha",
     "siblings",
     "tags",
 )

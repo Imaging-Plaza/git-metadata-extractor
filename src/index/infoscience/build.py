@@ -16,8 +16,12 @@ ignores it via the cosine score).
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import logging
+import os
+import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -53,6 +57,22 @@ from .store import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _release_memory() -> None:
+    """Force CPython to drop freed pages back to the OS.
+
+    `gc.collect()` on its own only collects unreachable objects; it does
+    not return arena pages to glibc. The follow-up `malloc_trim(0)`
+    asks glibc to release any free pages above the heap top. Together
+    they keep RSS bounded across the long streaming chunks loop.
+    """
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:  # noqa: BLE001  (Linux/glibc-specific; ignore elsewhere)
+        pass
 
 
 def _load_json(path: Path) -> Optional[dict]:
@@ -168,37 +188,156 @@ def _article_embed_text(rec: ArticleRecord) -> str:
 
 
 async def build_chunks(cfg: InfoscienceIndexConfig) -> dict:
+    """Streaming embed: process articles in groups, embed-then-upsert each
+    group, free memory, repeat. Resumable across crashes — if Qdrant
+    already has any chunk for an article, the article is skipped on the
+    next run.
+
+    The previous all-at-once design buffered ~225k chunks in memory
+    (peaked at ~21 GB RSS and was killed when an RCP DNS hiccup raised
+    EmbedError mid-run, losing the entire embedding pass).
+    """
     matches = matches_by_uuid()
     articles = _articles_with_matches(matches)
     if not articles:
         logger.warning("No matched articles. Run discover/fetch-text/extract-matches first.")
         return {"chunks": 0, "articles": 0}
 
-    chunk_records: List[ChunkRecord] = []
-    chunk_counts_per_article: Dict[str, int] = {}
-    for article in articles:
-        text_path = text_dir() / f"{article.article_uuid}.txt"
-        text = text_path.read_text(encoding="utf-8") if text_path.exists() else ""
-        recs = _chunks_for_article(cfg, article, text)
-        chunk_counts_per_article[article.article_uuid] = len(recs)
-        chunk_records.extend(recs)
-
-    if not chunk_records:
-        logger.warning("Articles have no extractable chunk text yet.")
-        return {"chunks": 0, "articles": len(articles)}
-
     store = QdrantStore.from_config(cfg)
     store.ensure_collection(CHUNKS_COLLECTION)
 
-    async with RCPEmbedder(cfg.rcp) as embedder:
-        texts = [c.text for c in chunk_records]
-        embeddings = await embedder.embed_passages_batched(texts)
+    # Resume: skip articles that already have any chunk in Qdrant.
+    already_done: set[str] = set()
+    try:
+        next_offset = None
+        while True:
+            points, next_offset = store.client.scroll(
+                collection_name=CHUNKS_COLLECTION,
+                limit=4096,
+                with_payload=["article_uuid"],
+                with_vectors=False,
+                offset=next_offset,
+            )
+            for p in points:
+                au = (p.payload or {}).get("article_uuid")
+                if au:
+                    already_done.add(au)
+            if next_offset is None:
+                break
+        logger.info("build_chunks resume: %d articles already in qdrant", len(already_done))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("build_chunks resume scroll failed (will reprocess all): %s", exc)
+        already_done = set()
 
-    upsert_chunks(store, chunk_records, embeddings)
+    todo = [a for a in articles if a.article_uuid not in already_done]
+    logger.info(
+        "build_chunks: %d articles total, %d todo (%d skipped as already-embedded)",
+        len(articles), len(todo), len(articles) - len(todo),
+    )
+
+    group_size = max(1, int(getattr(cfg.chunking, "stream_group_size", 100) or 100))
+    total_chunks = 0
+    total_upserted = 0
+    skipped_no_text = 0
+    chunk_counts_per_article: Dict[str, int] = {}
+    worker_mode = os.getenv("INFOSCIENCE_EMBED_WORKER_MODE", "inproc").lower()
+    n_groups = (len(todo) + group_size - 1) // group_size
+
+    if worker_mode == "subprocess":
+        # OS-level reclaim: each group runs in a fresh subprocess and dies
+        # cleanly, returning all heap pages to the kernel. Adds ~3-5 s of
+        # interpreter+import startup per group.
+        for start in range(0, len(todo), group_size):
+            group = todo[start : start + group_size]
+            uuids_payload = json.dumps([a.article_uuid for a in group])
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "src.index.infoscience._embed_worker"],
+                    input=uuids_payload,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                    check=False,
+                    env={**os.environ, "PYTHONPATH": os.environ.get("PYTHONPATH", ".")},
+                )
+            except subprocess.TimeoutExpired:
+                logger.exception(
+                    "build_chunks: worker group %d timed out (will retry next run)",
+                    (start // group_size) + 1,
+                )
+                raise
+            if proc.returncode != 0:
+                logger.error(
+                    "build_chunks: worker group %d failed (rc=%d)\n--stderr tail--\n%s",
+                    (start // group_size) + 1, proc.returncode,
+                    "\n".join(proc.stderr.splitlines()[-30:]),
+                )
+                raise RuntimeError(f"embed worker failed (rc={proc.returncode})")
+            # Last non-empty stdout line is the JSON summary.
+            summary_line = next(
+                (ln for ln in reversed(proc.stdout.splitlines()) if ln.strip()),
+                "{}",
+            )
+            try:
+                summary = json.loads(summary_line)
+            except json.JSONDecodeError:
+                logger.warning("worker stdout was not JSON: %r", summary_line)
+                summary = {}
+            upserted = int(summary.get("upserted") or 0)
+            chunks_in_group = int(summary.get("chunks") or 0)
+            skipped_no_text += int(summary.get("skipped_no_text") or 0)
+            total_chunks += chunks_in_group
+            total_upserted += upserted
+            logger.info(
+                "build_chunks[worker]: group %d/%d (%d articles) -> %d chunks upserted (cum %d)",
+                (start // group_size) + 1, n_groups,
+                len(group), chunks_in_group, total_chunks,
+            )
+    else:
+        async with RCPEmbedder(cfg.rcp) as embedder:
+            for start in range(0, len(todo), group_size):
+                group = todo[start : start + group_size]
+                chunk_records: List[ChunkRecord] = []
+                for article in group:
+                    text_path = text_dir() / f"{article.article_uuid}.txt"
+                    if not text_path.exists():
+                        skipped_no_text += 1
+                        continue
+                    text = text_path.read_text(encoding="utf-8", errors="replace")
+                    recs = _chunks_for_article(cfg, article, text)
+                    chunk_counts_per_article[article.article_uuid] = len(recs)
+                    chunk_records.extend(recs)
+                if not chunk_records:
+                    continue
+                texts = [c.text for c in chunk_records]
+                try:
+                    embeddings = await embedder.embed_passages_batched(texts)
+                except Exception:
+                    logger.exception(
+                        "build_chunks: embed failed at group %d-%d (will be retried on next run)",
+                        start, start + len(group),
+                    )
+                    raise
+                upserted = upsert_chunks(store, chunk_records, embeddings)
+                total_chunks += len(chunk_records)
+                total_upserted += upserted
+                logger.info(
+                    "build_chunks: group %d/%d (%d articles) -> %d chunks upserted (cum %d)",
+                    (start // group_size) + 1, n_groups,
+                    len(group), len(chunk_records), total_chunks,
+                )
+                # Free per-group state explicitly to keep the working set bounded.
+                del chunk_records, texts, embeddings
+                _release_memory()
+
     return {
-        "chunks": len(chunk_records),
-        "articles": len(articles),
-        "chunk_counts_per_article": chunk_counts_per_article,
+        "chunks": total_chunks,
+        "chunks_upserted": total_upserted,
+        "articles_total": len(articles),
+        "articles_skipped_already_embedded": len(articles) - len(todo),
+        "articles_skipped_no_text": skipped_no_text,
+        "articles_processed": len(todo) - skipped_no_text,
+        "worker_mode": worker_mode,
     }
 
 

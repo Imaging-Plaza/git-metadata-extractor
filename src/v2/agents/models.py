@@ -173,11 +173,18 @@ class ProviderSet:
     infoscience: InfoscienceProvider | None = None
     ror: RORProvider | None = None
     infoscience_rag: Any | None = None
+    ethz_research_collection_rag: Any | None = None
     huggingface_rag: Any | None = None
     openalex_rag: Any | None = None
     zenodo_rag: Any | None = None
     orcid_rag: Any | None = None
     ror_rag: Any | None = None
+    snsf_rag: Any | None = None
+    swissubase_rag: Any | None = None
+    renkulab_rag: Any | None = None
+    github_rag: Any | None = None
+    epfl_graph_rag: Any | None = None
+    federated_rag: Any | None = None
 
 
 @dataclass(slots=True)

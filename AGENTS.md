@@ -41,7 +41,8 @@ src/v2/
       agent_tools/               # Tool factories (selenium, ROR, ORCID, etc.)
                                   #   *_rag.py: per-index Qdrant search tools
                                   #   (infoscience, huggingface, openalex,
-                                  #    zenodo, orcid, ror) — see
+                                  #    zenodo, orcid, ror, renkulab,
+                                  #    epfl_graph_rag) — see
                                   #    docs/v2-rag-tools.md
     rule_based/
       <kind>_agent.py            # deterministic counterparts (no LLM)
@@ -59,6 +60,19 @@ src/v2/
   schema/                        # JSON Schemas (agent + strict) + JSON-LD context
   validation/                    # strict-schema + SHACL validators
   canonicalization/              # ID resolution, string normalisation
+
+src/index/                       # 11 sibling RAG indices (DuckDB + Qdrant per index) +
+                                 # _federated/ adapter layer.
+                                 #   epfl_graph/  — disciplines ontology RAG
+                                 #                  (see docs/epfl-graph-disciplines.md)
+                                 # See docs/rag-indices.md for the full inventory.
+
+src/module/                      # Standalone analytical modules complementing v2.
+                                 #   dependents/  — GitHub `/network/dependents` scraper
+                                 #   epfl_graph/  — graphai-client wrapper + ontology
+                                 #                  endpoints + OpenAlex bridge.
+                                 #                  Used by concept_tagging and the
+                                 #                  src/index/epfl_graph/ ingest pass.
 
 tests/v2/                        # default test target
 ```
@@ -94,7 +108,12 @@ deterministic rule-based agents). All other stages run unconditionally.
                                  org; add ROR org entities, stamp unitOf
 21. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
 22. infer_org_units            deterministic name-token fallback for unitOf
-23. build_jsonld_output        produce the final JSON-LD graph
+23. concept_tagging  [gated]   pull EPFL Graph concepts/keywords/disciplines
+                               from the README onto the root repo entity as
+                               internal `_concepts`/`_keywords`/`_disciplines`
+                               metadata (off by default; opt-in with
+                               `V2_CONCEPT_TAGGING_ENABLED=true`)
+24. build_jsonld_output        produce the final JSON-LD graph
 ```
 
 **Gates:**
@@ -103,6 +122,7 @@ deterministic rule-based agents). All other stages run unconditionally.
 - `link_veracity` is `[LLM]`-only too: in `agent_runtime=rule_based` it is **always skipped** (rule-based mode is guaranteed LLM-free).
 - `llm_critic` is **off by default**. Set `V2_APPLY_CRITIC_PRUNING=true` to enable (LLM mode only).
 - `link_veracity` is **on by default in LLM mode**. Set `V2_LINK_VERACITY_ENABLED=false` to skip even in LLM mode (recommended for batch runs).
+- `concept_tagging` is **off by default**. Set `V2_CONCEPT_TAGGING_ENABLED=true` to opt in. Backends are pluggable via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph` (default, calls graphai), `wikipedia` (credential-free MediaWiki opensearch), `llm` (pydantic-ai)}. Stamps `_concepts` / `_keywords` / `_disciplines` as internal `_*` metadata (stripped before JSON-LD output and strict validation). Optional OpenAlex enrichment per discipline via `V2_CONCEPT_TAGGING_OPENALEX_RELATED_ENABLED=true` (publications, people, units). Full reference at [`docs/concept-tagging.md`](docs/concept-tagging.md).
 
 **Hallucination guards baked into agents:**
 
@@ -135,11 +155,17 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen.
 | `V2_GITHUB_BASE_URL` | `https://github.com` | for GitHub Enterprise |
 | `V2_LINK_VERACITY_ENABLED` | `true` | turn off to skip the link-veracity stage in LLM mode (rule-based mode skips unconditionally) |
 | `V2_INFOSCIENCE_RAG_ENABLED` | `true` | enables the Infoscience RAG agent tools (Qdrant-backed semantic search + on-demand chunk/record fetch). Construction degrades gracefully when Qdrant or RCP is unreachable. |
+| `V2_ETHZ_RESEARCH_COLLECTION_RAG_ENABLED` | `true` | enables the ETH Research Collection RAG agent tools (DSpace-backed sister index to Infoscience for ETHZ research outputs). Same shape: search + fetch_chunks + fetch_records. |
 | `V2_HUGGINGFACE_RAG_ENABLED` | `true` | enables the HuggingFace Hub RAG search tool (collections: `hf_models`, `hf_datasets`, `hf_spaces`, `hf_orgs`). |
 | `V2_OPENALEX_RAG_ENABLED` | `true` | enables the OpenAlex RAG search tool (collections: `works`, `authors`, `institutions`, `sources`, `topics`, `concepts`). |
 | `V2_ZENODO_RAG_ENABLED` | `true` | enables the Zenodo RAG search tool (collection: `zenodo_records`). |
 | `V2_ORCID_RAG_ENABLED` | `true` | enables the ORCID RAG search tool (entities: `persons`, `employments`, `educations`; collections namespaced by scope). |
 | `V2_ROR_RAG_ENABLED` | `true` | enables the ROR RAG search tool (scopes: `epfl_ethz`, `switzerland`, `europe`, `worldwide`). |
+| `V2_SWISSUBASE_RAG_ENABLED` | `true` | enables the SWISSUbase RAG search tool (collection: `swissubase_entities`; entities: `studies`, `datasets`, `persons`, `institutions`). Ingest is Selenium-driven; default scope embeds only EPFL/ETHZ/SDSC-affiliated studies. |
+| `V2_RENKULAB_RAG_ENABLED` | `true` | enables the RenkuLab RAG search tool (renkulab.io). One Qdrant collection per entity type: `renkulab_projects`, `renkulab_groups`, `renkulab_users`, `renkulab_data_connectors`. The single tool searches across all four by default; the `entity_types` argument scopes to a subset. |
+| `RENKULAB_TOKEN` | unset | optional; without it the indexer can still ingest public projects/groups/data_connectors and harvest users via `/search/query?q=type:User`. With it, set on `https://renkulab.io/api/data` for richer user records. |
+| `V2_EPFL_GRAPH_RAG_ENABLED` | `true` | enables the EPFL Graph disciplines RAG search tool (`search_epfl_graph_disciplines`). Single Qdrant collection `epfl_graph_disciplines` over the curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5, embeddings built from `name + canonical Wikipedia lead-section + top anchor concept names`). Wired into the repository, person, organization, and article LLM agents. Refresh with `just epfl-graph-{ingest,enrich-wikipedia,embed}`. See [`docs/epfl-graph-disciplines.md`](docs/epfl-graph-disciplines.md). |
+| `EPFL_GRAPH_USERNAME`, `EPFL_GRAPH_PASSWORD` | unset | required by the `epfl-graph-ingest` recipe (the auth handshake against `graphai.epfl.ch`). Not needed at runtime once the index is hydrated — `search_epfl_graph_disciplines` only hits Qdrant + RCP. |
 | `INDEX_QDRANT_URL` | `http://qdrant:6333` (yaml default) | Qdrant endpoint for every RAG index. Inside the devcontainer use `http://gme-qdrant:6333`. |
 | `V2_APPLY_CRITIC_PRUNING` | `false` | turn on to enable critic drop suggestions |
 | `V2_MAX_CONCURRENT_AGENTS` | `6` | per-stage fan-out concurrency |

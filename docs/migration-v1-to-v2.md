@@ -15,7 +15,9 @@ This guide describes how to run v1 and v2 side by side and migrate clients incre
 | `GET /v1/repository/llm/json-ld/{full_path}` | `GET /v2/extract/{full_path}?output_format=jsonld` |
 | `GET /v1/repository/llm/json/{full_path}` | `GET /v2/extract/{full_path}?output_format=json` |
 | `GET /v1/repository/gimie/json-ld/{full_path}` | `GET /v2/extract/{full_path}?output_format=jsonld` |
-| n/a | `GET /v2/graph` |
+| `GET /v1/user/llm/json/{full_path}` | `GET /v2/extract/{full_path}?output_format=json` (user URL) |
+| `GET /v1/org/llm/json/{full_path}` | `GET /v2/extract/{full_path}?output_format=json` (org URL) |
+| n/a | `POST /v2/extract` (async) + `GET /v2/jobs/{id}` |
 | n/a | `GET /v2/health` |
 
 ## Copy-Paste Migration Examples
@@ -59,22 +61,24 @@ curl -s \
 ## Response Format Differences
 
 - v1 repository endpoints return `APIOutput` (`link`, `output`, `cached`).
-- v2 extract returns `V2ExtractResponse` (`source_url`, `detected_type`, `output_format`, `output`, `warnings`, `stats`, optional `intermediates`).
-- v2 graph export is explicit via `/v2/graph` and returns `graph_jsonld` + `stats`.
-
-## Graph Store Setup (V2)
-
-1. Set `V2_GRAPH_DB_PATH` (or accept default `data/v2_graph.db`).
-2. Run v2 extract endpoints to populate run metadata and graph entities.
-3. Use `/v2/graph` for filtered JSON-LD export.
+- v2 extract returns `V2ExtractResponse` (`source_url`, `detected_type`,
+  `output_format`, `output`, `warnings`, `stats`, optional
+  `context_summary_markdown`).
+- v2 also offers an **async** submission flow (`POST /v2/extract` →
+  `GET /v2/jobs/{id}`); the job record carries the same response payload
+  in its `result` field once `status == "completed"`.
 
 ## New/Relevant V2 Environment Variables
 
-- `V2_GRAPH_DB_PATH` (default `data/v2_graph.db`)
-- `V2_INTERMEDIATE_HISTORY_LIMIT` (default `5`)
-- `V2_ENABLE_LOGFIRE` (default `true`)
-- `LOGFIRE_TOKEN` (optional)
-- `GITHUB_TOKEN` (required for healthy provider preflight)
+See [V2 API Reference — V2 Environment Variables](v2-api-reference.md#v2-environment-variables)
+for the full list. Notable additions vs. v1:
+
+- `V2_AGENT_RUNTIME_DEFAULT` (default `llm`) — runtime selector.
+- `V2_USE_MOCK_PROVIDERS` (default `true`) — set `false` in production.
+- `V2_PROVIDER_CACHE_*` — shared provider + verdict + pipeline + job-store cache.
+- `V2_<INDEX>_RAG_ENABLED` — toggle each RAG tool family.
+- `INDEX_QDRANT_URL` — Qdrant endpoint for the RAG indices.
+- `GITHUB_TOKEN` — required for healthy provider preflight (same as v1).
 
 ## Breaking/Behavior Changes
 

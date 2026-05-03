@@ -1,16 +1,16 @@
-"""Sidecar files for the ROR index.
+"""Legacy sidecar readers for the ROR index.
 
-Vector storage now lives in Qdrant (see `qdrant_store.py`). This module only
-manages the on-disk artifacts that travel alongside the vectors:
+After D16 (see `.internal/ror/duckdb-migration.md`), all writes go through
+`storage.duckdb_store.DuckDBStore`. This module survives only to support:
 
-  - `records.jsonl` — one JSON object per row, keyed by `row` index. Carries
-    the full ROR record so we can return it from queries without a Qdrant
-    payload round-trip when the caller already has the row index.
-  - `manifest.json` — release / model / count metadata for the build.
+  - reading existing `records.jsonl` / `manifest.json` files left on disk
+    by pre-D16 builds (used by the `migrate-storage` porter and the
+    one-shot D15 FAISS→Qdrant migrator),
+  - the `read_legacy_faiss()` helper that opens an `index.faiss` file when
+    present (D15).
 
-The legacy `index.faiss` file is still readable here via `read_legacy_faiss()`
-to support a one-time migration from FAISS-built indexes to Qdrant. New builds
-do not write a `.faiss` file.
+New code should not call `write_sidecar` — it has been removed. New builds
+write to DuckDB only.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-from typing import List, Optional
+from typing import List
 
 from .models import IndexedRecord, IndexManifest
 from .paths import faiss_path, manifest_path, records_path
@@ -28,28 +28,6 @@ logger = logging.getLogger(__name__)
 
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
-
-
-def write_sidecar(
-    scope_mode: str,
-    rows: List[IndexedRecord],
-    manifest: IndexManifest,
-) -> None:
-    """Persist `records.jsonl` + `manifest.json` atomically (per-file)."""
-    rp = records_path(scope_mode)
-    mp = manifest_path(scope_mode)
-
-    rp_tmp = rp.with_suffix(rp.suffix + ".part")
-    mp_tmp = mp.with_suffix(mp.suffix + ".part")
-
-    with rp_tmp.open("w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row.model_dump(), ensure_ascii=False) + "\n")
-    mp_tmp.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
-
-    rp_tmp.replace(rp)
-    mp_tmp.replace(mp)
-    logger.info("Wrote ROR sidecar scope=%s rows=%d to %s", scope_mode, len(rows), rp.parent)
 
 
 def read_records(scope_mode: str) -> List[IndexedRecord]:
@@ -102,5 +80,4 @@ __all__: List[str] = [
     "read_legacy_faiss",
     "read_manifest",
     "read_records",
-    "write_sidecar",
 ]

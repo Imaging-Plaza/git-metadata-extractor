@@ -57,7 +57,7 @@ def migrate_scope(cfg: RorIndexConfig, scope_mode: str) -> Dict[str, Any]:
 
     store = QdrantRorStore(cfg)
     store.recreate_collection(scope_mode)
-    payloads = [_build_payload(row) for row in rows]
+    payloads = [_build_payload(row.record, row.text) for row in rows]
     store.upsert_records(
         scope_mode,
         ror_ids=[row.ror_id for row in rows],

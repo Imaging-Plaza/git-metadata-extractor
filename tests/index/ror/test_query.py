@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 
-from src.index.ror import dump_index as dump_index_mod
 from src.index.ror.config import QdrantConfig, RcpConfig, RorIndexConfig, ScopeConfig
 from src.index.ror.models import DumpMatch
-from src.index.ror.paths import dump_dir
+from src.index.ror.paths import ror_data_dir
 from src.index.ror.query import lookup_dump, query, query_rag
 from src.index.ror.rerank import RerankResult
+from src.index.ror.storage.duckdb_store import DuckDBStore, extract_record_columns
 
 
 @pytest.fixture
 def isolated(monkeypatch, tmp_path):
     monkeypatch.setenv("INDEX_DATA_DIR", str(tmp_path))
-    dump_index_mod.reset_cached_dump_index()
     yield tmp_path
-    dump_index_mod.reset_cached_dump_index()
 
 
 def _make_cfg(mode="epfl_ethz"):
@@ -33,17 +33,18 @@ def _make_cfg(mode="epfl_ethz"):
         ),
         scope=ScopeConfig(mode=mode),
         qdrant=QdrantConfig(),
-        data_dir=dump_dir().parent,
+        data_dir=ror_data_dir().parent,
     )
 
 
-def _seed_dump_cache(mini_dump_path):
-    """Copy the mini dump JSON into a fake release dir under dump cache."""
-    target_dir = dump_dir() / "v-test"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / "v-test-ror-data.json"
-    target.write_text(mini_dump_path.read_text(encoding="utf-8"), encoding="utf-8")
-    return target
+def _seed_duckdb(mini_dump_path: Path) -> None:
+    """Populate the DuckDB `records` table from the mini dump fixture."""
+    records = json.loads(mini_dump_path.read_text(encoding="utf-8"))
+    store = DuckDBStore.open()
+    try:
+        store.bulk_replace_records(extract_record_columns(r) for r in records)
+    finally:
+        store.close()
 
 
 class _FakeQdrantStore:
@@ -100,7 +101,7 @@ def test_lookup_dump_finds_record_outside_embedded_subset(isolated, mini_dump_pa
     """Universität Bern is in the dump but not in the embedded EPFL/ETHZ subset.
     lookup_dump must still find it — proving the 'query the whole dump' path works."""
     cfg = _make_cfg()
-    _seed_dump_cache(mini_dump_path)
+    _seed_duckdb(mini_dump_path)
 
     results = lookup_dump(cfg, text="Universität Bern", country="CH", limit=5)
     ids = [r.ror_id for r in results]
@@ -109,7 +110,7 @@ def test_lookup_dump_finds_record_outside_embedded_subset(isolated, mini_dump_pa
 
 def test_lookup_dump_exact_ror_id(isolated, mini_dump_path):
     cfg = _make_cfg()
-    _seed_dump_cache(mini_dump_path)
+    _seed_duckdb(mini_dump_path)
 
     results = lookup_dump(cfg, ror_id="02s376052")
     assert len(results) == 1
@@ -118,14 +119,14 @@ def test_lookup_dump_exact_ror_id(isolated, mini_dump_path):
 
 def test_lookup_dump_requires_at_least_one_arg(isolated, mini_dump_path):
     cfg = _make_cfg()
-    _seed_dump_cache(mini_dump_path)
+    _seed_duckdb(mini_dump_path)
     with pytest.raises(ValueError):
         lookup_dump(cfg)
 
 
 def test_query_auto_falls_back_to_lookup_when_no_rag_hits(isolated, mini_dump_path):
     """When semantic returns nothing above floor, auto mode falls back to lexical."""
-    _seed_dump_cache(mini_dump_path)
+    _seed_duckdb(mini_dump_path)
     cfg = _make_cfg()
 
     fake_candidates = [

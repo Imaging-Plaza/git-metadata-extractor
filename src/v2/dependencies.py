@@ -15,7 +15,31 @@ from src.v2.ingest.providers.base import (
     ORCIDProvider,
     RORProvider,
 )
+from src.v2.ingest.providers.epfl_graph_rag import (
+    EpflGraphRagProvider,
+)
+from src.v2.ingest.providers.epfl_graph_rag import (
+    build_default_provider as build_default_epfl_graph_rag_provider,
+)
+from src.v2.ingest.providers.ethz_research_collection_rag import (
+    EthzResearchCollectionRagProvider,
+)
+from src.v2.ingest.providers.ethz_research_collection_rag import (
+    build_default_provider as build_default_ethz_research_collection_rag_provider,
+)
+from src.v2.ingest.providers.federated_rag import (
+    FederatedRagProvider,
+)
+from src.v2.ingest.providers.federated_rag import (
+    build_default_provider as build_default_federated_rag_provider,
+)
 from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from src.v2.ingest.providers.github_rag import (
+    GitHubRagProvider,
+)
+from src.v2.ingest.providers.github_rag import (
+    build_default_provider as build_default_github_rag_provider,
+)
 from src.v2.ingest.providers.huggingface_rag import (
     HuggingFaceRagProvider,
 )
@@ -39,6 +63,7 @@ from src.v2.ingest.providers.openalex_rag import (
 from src.v2.ingest.providers.openalex_rag import (
     build_default_provider as build_default_openalex_rag_provider,
 )
+from src.v2.ingest.providers.orcid_oauth import fetch_access_token as _fetch_orcid_token
 from src.v2.ingest.providers.orcid_provider import RealORCIDProvider
 from src.v2.ingest.providers.orcid_rag import (
     OrcidRagProvider,
@@ -46,12 +71,30 @@ from src.v2.ingest.providers.orcid_rag import (
 from src.v2.ingest.providers.orcid_rag import (
     build_default_provider as build_default_orcid_rag_provider,
 )
+from src.v2.ingest.providers.renkulab_rag import (
+    RenkulabRagProvider,
+)
+from src.v2.ingest.providers.renkulab_rag import (
+    build_default_provider as build_default_renkulab_rag_provider,
+)
 from src.v2.ingest.providers.ror_provider import RealRORProvider
 from src.v2.ingest.providers.ror_rag import (
     RorRagProvider,
 )
 from src.v2.ingest.providers.ror_rag import (
     build_default_provider as build_default_ror_rag_provider,
+)
+from src.v2.ingest.providers.snsf_rag import (
+    SnsfRagProvider,
+)
+from src.v2.ingest.providers.snsf_rag import (
+    build_default_provider as build_default_snsf_rag_provider,
+)
+from src.v2.ingest.providers.swissubase_rag import (
+    SwissubaseRagProvider,
+)
+from src.v2.ingest.providers.swissubase_rag import (
+    build_default_provider as build_default_swissubase_rag_provider,
 )
 from src.v2.ingest.providers.zenodo_rag import (
     ZenodoRagProvider,
@@ -114,6 +157,18 @@ def _resolve_infoscience_rag_provider(app_state: Any) -> InfoscienceRagProvider 
     )
 
 
+def _resolve_ethz_research_collection_rag_provider(
+    app_state: Any,
+) -> EthzResearchCollectionRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_ethz_research_collection_rag_provider",
+        env_var="V2_ETHZ_RESEARCH_COLLECTION_RAG_ENABLED",
+        builder=build_default_ethz_research_collection_rag_provider,
+        expected_type=EthzResearchCollectionRagProvider,
+    )
+
+
 def _resolve_huggingface_rag_provider(app_state: Any) -> HuggingFaceRagProvider | None:
     return _resolve_rag_provider(
         app_state,
@@ -134,6 +189,16 @@ def _resolve_openalex_rag_provider(app_state: Any) -> OpenAlexRagProvider | None
     )
 
 
+def _resolve_epfl_graph_rag_provider(app_state: Any) -> EpflGraphRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_epfl_graph_rag_provider",
+        env_var="V2_EPFL_GRAPH_RAG_ENABLED",
+        builder=build_default_epfl_graph_rag_provider,
+        expected_type=EpflGraphRagProvider,
+    )
+
+
 def _resolve_zenodo_rag_provider(app_state: Any) -> ZenodoRagProvider | None:
     return _resolve_rag_provider(
         app_state,
@@ -141,6 +206,26 @@ def _resolve_zenodo_rag_provider(app_state: Any) -> ZenodoRagProvider | None:
         env_var="V2_ZENODO_RAG_ENABLED",
         builder=build_default_zenodo_rag_provider,
         expected_type=ZenodoRagProvider,
+    )
+
+
+def _resolve_github_rag_provider(app_state: Any) -> GitHubRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_github_rag_provider",
+        env_var="V2_GITHUB_RAG_ENABLED",
+        builder=build_default_github_rag_provider,
+        expected_type=GitHubRagProvider,
+    )
+
+
+def _resolve_renkulab_rag_provider(app_state: Any) -> RenkulabRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_renkulab_rag_provider",
+        env_var="V2_RENKULAB_RAG_ENABLED",
+        builder=build_default_renkulab_rag_provider,
+        expected_type=RenkulabRagProvider,
     )
 
 
@@ -161,6 +246,36 @@ def _resolve_ror_rag_provider(app_state: Any) -> RorRagProvider | None:
         env_var="V2_ROR_RAG_ENABLED",
         builder=build_default_ror_rag_provider,
         expected_type=RorRagProvider,
+    )
+
+
+def _resolve_snsf_rag_provider(app_state: Any) -> SnsfRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_snsf_rag_provider",
+        env_var="V2_SNSF_RAG_ENABLED",
+        builder=build_default_snsf_rag_provider,
+        expected_type=SnsfRagProvider,
+    )
+
+
+def _resolve_swissubase_rag_provider(app_state: Any) -> SwissubaseRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_swissubase_rag_provider",
+        env_var="V2_SWISSUBASE_RAG_ENABLED",
+        builder=build_default_swissubase_rag_provider,
+        expected_type=SwissubaseRagProvider,
+    )
+
+
+def _resolve_federated_rag_provider(app_state: Any) -> FederatedRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_federated_rag_provider",
+        env_var="V2_FEDERATED_RAG_ENABLED",
+        builder=build_default_federated_rag_provider,
+        expected_type=FederatedRagProvider,
     )
 
 
@@ -186,19 +301,33 @@ def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
     include_organization_repositories: bool = True,
     cache: ProviderCache | None = None,
     infoscience_rag: InfoscienceRagProvider | None = None,
+    ethz_research_collection_rag: EthzResearchCollectionRagProvider | None = None,
     huggingface_rag: HuggingFaceRagProvider | None = None,
     openalex_rag: OpenAlexRagProvider | None = None,
     zenodo_rag: ZenodoRagProvider | None = None,
     orcid_rag: OrcidRagProvider | None = None,
     ror_rag: RorRagProvider | None = None,
+    snsf_rag: SnsfRagProvider | None = None,
+    swissubase_rag: SwissubaseRagProvider | None = None,
+    renkulab_rag: RenkulabRagProvider | None = None,
+    github_rag: GitHubRagProvider | None = None,
+    epfl_graph_rag: EpflGraphRagProvider | None = None,
+    federated_rag: FederatedRagProvider | None = None,
 ) -> ProviderSet:
     rag_kwargs: dict[str, Any] = {
         "infoscience_rag": infoscience_rag,
+        "ethz_research_collection_rag": ethz_research_collection_rag,
         "huggingface_rag": huggingface_rag,
         "openalex_rag": openalex_rag,
         "zenodo_rag": zenodo_rag,
         "orcid_rag": orcid_rag,
         "ror_rag": ror_rag,
+        "snsf_rag": snsf_rag,
+        "swissubase_rag": swissubase_rag,
+        "renkulab_rag": renkulab_rag,
+        "github_rag": github_rag,
+        "epfl_graph_rag": epfl_graph_rag,
+        "federated_rag": federated_rag,
     }
     if use_mock_providers:
         return ProviderSet(
@@ -214,11 +343,35 @@ def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
             include_organization_repositories=include_organization_repositories,
             cache=cache,
         ),
-        orcid=RealORCIDProvider(cache=cache),
+        orcid=RealORCIDProvider(cache=cache, session=_optional_orcid_oauth_session()),
         infoscience=RealInfoscienceProvider(cache=cache),
         ror=RealRORProvider(cache=cache),
         **rag_kwargs,
     )
+
+
+def _optional_orcid_oauth_session() -> Any:
+    """Build an authenticated `requests.Session` if ORCID OAuth credentials
+    are present in the environment; return `None` otherwise so the provider
+    falls back to anonymous public-API access.
+
+    Reads `ORCID_CLIENT_ID` and `ORCID_CLIENT_SECRET` (free `/read-public`
+    client registered at https://orcid.org/developer-tools). Both must be
+    set; either one missing → anonymous fallback.
+    """
+    import requests  # noqa: PLC0415 — local import keeps base import budget tight.
+
+    client_id = os.getenv("ORCID_CLIENT_ID") or None
+    client_secret = os.getenv("ORCID_CLIENT_SECRET") or None
+    if not client_id or not client_secret:
+        return None
+    token = _fetch_orcid_token(client_id=client_id, client_secret=client_secret)
+    if not token:
+        return None
+    session = requests.Session()
+    session.headers["Authorization"] = f"Bearer {token}"
+    session.headers["User-Agent"] = "git-metadata-extractor/0.1"
+    return session
 
 
 def _is_repository_extract_request(request: Request) -> bool:
@@ -251,11 +404,18 @@ async def get_provider_set(request: Request) -> ProviderSet:
         include_organization_repositories=not repository_extract_scope,
         cache=provider_cache,
         infoscience_rag=_resolve_infoscience_rag_provider(app_state),
+        ethz_research_collection_rag=_resolve_ethz_research_collection_rag_provider(app_state),
         huggingface_rag=_resolve_huggingface_rag_provider(app_state),
         openalex_rag=_resolve_openalex_rag_provider(app_state),
         zenodo_rag=_resolve_zenodo_rag_provider(app_state),
         orcid_rag=_resolve_orcid_rag_provider(app_state),
         ror_rag=_resolve_ror_rag_provider(app_state),
+        snsf_rag=_resolve_snsf_rag_provider(app_state),
+        swissubase_rag=_resolve_swissubase_rag_provider(app_state),
+        renkulab_rag=_resolve_renkulab_rag_provider(app_state),
+        github_rag=_resolve_github_rag_provider(app_state),
+        epfl_graph_rag=_resolve_epfl_graph_rag_provider(app_state),
+        federated_rag=_resolve_federated_rag_provider(app_state),
     )
 
     github_provider = _resolve_provider_override(app_state, "v2_github_provider")
@@ -273,9 +433,15 @@ async def get_provider_set(request: Request) -> ProviderSet:
         ),
         ror=ror_provider if isinstance(ror_provider, RORProvider) else default_provider_set.ror,
         infoscience_rag=default_provider_set.infoscience_rag,
+        ethz_research_collection_rag=default_provider_set.ethz_research_collection_rag,
         huggingface_rag=default_provider_set.huggingface_rag,
         openalex_rag=default_provider_set.openalex_rag,
         zenodo_rag=default_provider_set.zenodo_rag,
         orcid_rag=default_provider_set.orcid_rag,
         ror_rag=default_provider_set.ror_rag,
+        snsf_rag=default_provider_set.snsf_rag,
+        swissubase_rag=default_provider_set.swissubase_rag,
+        renkulab_rag=default_provider_set.renkulab_rag,
+        epfl_graph_rag=default_provider_set.epfl_graph_rag,
+        federated_rag=default_provider_set.federated_rag,
     )

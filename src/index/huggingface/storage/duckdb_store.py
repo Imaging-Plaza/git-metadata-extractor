@@ -314,6 +314,17 @@ class DuckDBStore:
         for row in rows:
             yield dict(zip(cols, row, strict=False))
 
+    def repo_sha(self, entity_table: str, repo_id: str) -> str | None:
+        """Return the stored `sha` for a repo, or None if the repo isn't in the table."""
+        if entity_table not in ENTITY_TABLES:
+            return None
+        cur = self.connect().execute(
+            f"SELECT sha FROM {entity_table} WHERE repo_id = ?",  # noqa: S608
+            [repo_id],
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
     def fetch_repo(self, entity_table: str, repo_id: str) -> dict[str, Any] | None:
         if entity_table not in ENTITY_TABLES:
             return None

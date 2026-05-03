@@ -117,19 +117,63 @@ def _cmd_embed(args: argparse.Namespace) -> int:
 
 
 def _cmd_search(args: argparse.Namespace) -> int:
-    from src.index.huggingface.retrieval.semantic import semantic_search
+    from src.index.huggingface.retrieval.semantic import (
+        semantic_search,
+        semantic_search_with_facets,
+    )
 
     config = load_config()
     config.require_rcp()
-    hits = semantic_search(
-        config=config,
-        query=args.query,
-        entity_type=args.type,
-        top_k=args.top_k,
-        candidate_k=args.candidate_k,
+    filter_payload = _parse_filter(args.filter or [])
+    facet_keys: tuple[str, ...] = tuple(
+        k.strip() for k in (args.facets or "").split(",") if k.strip()
     )
-    _emit_json(hits)
+    if facet_keys:
+        hits, facets = semantic_search_with_facets(
+            config=config,
+            query=args.query,
+            entity_type=args.type,
+            top_k=args.top_k,
+            candidate_k=args.candidate_k,
+            filter_payload=filter_payload,
+            facet_keys=facet_keys,
+            facet_top_n=args.facet_top_n,
+        )
+        _emit_json({"hits": hits, "facets": facets})
+    else:
+        hits = semantic_search(
+            config=config,
+            query=args.query,
+            entity_type=args.type,
+            top_k=args.top_k,
+            candidate_k=args.candidate_k,
+            filter_payload=filter_payload,
+        )
+        _emit_json(hits)
     return 0
+
+
+def _parse_filter(raw: list[str]) -> dict[str, object] | None:
+    """Parse `key=value` flags into a Qdrant payload filter dict.
+
+    Repeated keys collapse to a list (Qdrant's `MatchAny`). Values that look
+    like ints are coerced; everything else is kept as a string.
+    """
+    if not raw:
+        return None
+    parsed: dict[str, object] = {}
+    for item in raw:
+        if "=" not in item:
+            message = f"--filter must be key=value, got {item!r}"
+            raise SystemExit(message)
+        key, value = item.split("=", 1)
+        coerced: object = int(value) if value.lstrip("-").isdigit() else value
+        if key in parsed:
+            existing = parsed[key]
+            parsed[key] = [*existing, coerced] if isinstance(existing, list) else [existing, coerced]
+        else:
+            parsed[key] = coerced
+    return parsed
 
 
 def _cmd_query(args: argparse.Namespace) -> int:
@@ -150,6 +194,25 @@ def _cmd_query(args: argparse.Namespace) -> int:
     else:
         raise SystemExit("Pass --predefined NAME or a positional SQL string")
     _emit_json(rows)
+    return 0
+
+
+def _cmd_lineage(args: argparse.Namespace) -> int:
+    from src.index.huggingface.retrieval.lineage import compute_lineage
+
+    store = DuckDBStore.open()
+    result = compute_lineage(args.repo_id, store=store, depth=args.depth)
+    _emit_json(result)
+    return 0
+
+
+def _cmd_backfill_payloads(_: argparse.Namespace) -> int:
+    from src.index.huggingface.embed.pipeline import backfill_model_base_payloads
+
+    config = load_config()
+    store = DuckDBStore.open()
+    n = backfill_model_base_payloads(config=config, store=store)
+    _emit_json({"chunks_updated": n})
     return 0
 
 
@@ -245,6 +308,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_s.add_argument("--top-k", type=int, default=10)
     p_s.add_argument("--candidate-k", type=int, default=50)
+    p_s.add_argument(
+        "--filter",
+        action="append",
+        help="Qdrant payload filter, key=value (repeatable). "
+        "E.g. --filter namespace_kind=user --filter scope=switzerland",
+    )
+    p_s.add_argument(
+        "--facets",
+        default="",
+        help="Comma-separated payload keys to aggregate alongside hits. "
+        "E.g. --facets license,pipeline_tag,author. "
+        "Counts entities (deduped on repo_id) over the candidate pool.",
+    )
+    p_s.add_argument("--facet-top-n", type=int, default=10)
     p_s.set_defaults(func=_cmd_search)
 
     p_q = sub.add_parser("query", help="Read-only SQL over the DuckDB dump")
@@ -259,6 +336,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_st = sub.add_parser("status", help="Show counts + paths")
     p_st.set_defaults(func=_cmd_status)
+
+    p_bf = sub.add_parser(
+        "backfill-payloads",
+        help="One-shot: push base_model payload to existing Qdrant points without re-embedding",
+    )
+    p_bf.set_defaults(func=_cmd_backfill_payloads)
+
+    p_l = sub.add_parser(
+        "lineage",
+        help="Walk the base_models DAG from a repo_id (ancestors + descendants).",
+    )
+    p_l.add_argument("repo_id", help="e.g. epfl-llm/meditron-7b")
+    p_l.add_argument("--depth", type=int, default=3)
+    p_l.set_defaults(func=_cmd_lineage)
 
     p_v = sub.add_parser("serve", help="Run the FastAPI app")
     p_v.add_argument("--host", default="0.0.0.0")  # noqa: S104

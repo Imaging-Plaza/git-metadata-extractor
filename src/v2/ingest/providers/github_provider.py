@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import os
 import re
+import threading
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
@@ -27,6 +29,49 @@ GITHUB_NOREPLY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 logger = logging.getLogger(__name__)
+
+
+# Per-process round-robin over comma-separated tokens in GITHUB_TOKEN. With
+# multiple gunicorn workers the rotation is independent per worker, which is
+# fine — overall calls split roughly evenly across tokens and the effective
+# rate-limit ceiling is N * 5000/h for N tokens.
+_GITHUB_TOKEN_LOCK = threading.Lock()
+_GITHUB_TOKEN_CYCLE: itertools.cycle | None = None
+_GITHUB_TOKEN_SOURCE: str | None = None
+
+
+def _parse_github_tokens(raw: str) -> list[str]:
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+def _next_github_token() -> str:
+    """Return the next GitHub token (round-robin), or '' if none configured.
+
+    Prefers `GITHUB_TOKEN_POOL` (comma-separated, set by the api startup
+    normalization) over `GITHUB_TOKEN`. Falls back to `GITHUB_TOKEN` when no
+    pool is configured.
+    """
+    global _GITHUB_TOKEN_CYCLE, _GITHUB_TOKEN_SOURCE
+    raw = os.environ.get("GITHUB_TOKEN_POOL", "") or os.environ.get("GITHUB_TOKEN", "")
+    with _GITHUB_TOKEN_LOCK:
+        if raw != _GITHUB_TOKEN_SOURCE or _GITHUB_TOKEN_CYCLE is None:
+            tokens = _parse_github_tokens(raw)
+            _GITHUB_TOKEN_CYCLE = itertools.cycle(tokens) if tokens else None
+            _GITHUB_TOKEN_SOURCE = raw
+        if _GITHUB_TOKEN_CYCLE is None:
+            return ""
+        return next(_GITHUB_TOKEN_CYCLE)
+
+
+def _github_auth_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Build GitHub request headers with a rotated bearer token."""
+    headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
+    if extra:
+        headers.update(extra)
+    token = _next_github_token()
+    if token:
+        headers["Authorization"] = f"token {token}"
+    return headers
 
 
 def _first_non_empty_string(*values: Any) -> str | None:
@@ -583,14 +628,10 @@ class RealGitHubProvider(GitHubProvider):
         """
 
         def _fetch() -> dict[str, Any]:
-            token = os.environ.get("GITHUB_TOKEN", "").strip()
-            headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
-            if token:
-                headers["Authorization"] = f"token {token}"
             url = f"https://api.github.com/repos/{full_name}"
             try:
                 response = self._run_with_rate_limit(
-                    lambda: requests.get(url, headers=headers, timeout=15),
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
                 )
             except Exception:  # noqa: BLE001
                 logger.exception("github REST repo fetch failed: %s", full_name)
@@ -636,14 +677,10 @@ class RealGitHubProvider(GitHubProvider):
         """
 
         def _fetch() -> list[dict[str, Any]] | None:
-            token = os.environ.get("GITHUB_TOKEN", "").strip()
-            headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
-            if token:
-                headers["Authorization"] = f"token {token}"
             url = f"https://api.github.com/repos/{full_name}/dependency-graph/sbom"
             try:
                 response = self._run_with_rate_limit(
-                    lambda: requests.get(url, headers=headers, timeout=30),
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=30),
                 )
             except Exception:  # noqa: BLE001
                 logger.exception("github SBOM fetch failed: %s", full_name)

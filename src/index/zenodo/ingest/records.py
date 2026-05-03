@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from bs4 import BeautifulSoup
 
 from src.index.zenodo.ingest.scope import Scope
@@ -76,8 +77,10 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
         )
     else:
         resource_type = str(resource_type_block) if resource_type_block else None
+    concept_recid = item.get("conceptrecid")
     return {
         "zenodo_id": str(item.get("id") or item.get("conceptrecid") or ""),
+        "concept_recid": str(concept_recid) if concept_recid is not None else None,
         "doi": item.get("doi") or metadata.get("doi"),
         "title": metadata.get("title"),
         "description": _strip_html(metadata.get("description")),
@@ -272,4 +275,101 @@ def ingest_records(
             limit=limit,
             refresh=refresh,
         ),
+    )
+
+
+_DOI_TO_ID_RE = re.compile(r"10\.5281/zenodo\.(\d+)", re.IGNORECASE)
+
+
+def _normalize_id_token(token: str) -> str | None:
+    """Accept a numeric ID, a Zenodo DOI, or a Zenodo URL; return the numeric ID."""
+    s = token.strip()
+    if not s:
+        return None
+    m = _DOI_TO_ID_RE.search(s)
+    if m:
+        return m.group(1)
+    m = re.search(r"zenodo\.org/(?:record/|records/|deposit/)?(\d+)", s)
+    if m:
+        return m.group(1)
+    if s.isdigit():
+        return s
+    return None
+
+
+def load_ids_file(path: Path) -> list[str]:
+    """Read a newline-delimited file of Zenodo IDs / DOIs / URLs."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        rid = _normalize_id_token(line)
+        if rid is None:
+            LOGGER.warning("skip unparseable id token: %r", raw)
+            continue
+        if rid in seen:
+            continue
+        seen.add(rid)
+        out.append(rid)
+    return out
+
+
+async def _ingest_by_ids_async(
+    *,
+    config: ZenodoIndexConfig,
+    store: ZenodoStore,
+    ids: list[str],
+    refresh: bool,
+) -> dict[str, Any]:
+    existing = store.existing_record_ids(ids) if not refresh else set()
+    pending = [rid for rid in ids if rid not in existing]
+    client = ZenodoClient(config)
+
+    persisted: list[str] = []
+    missing: list[str] = []
+    failed: list[dict[str, str]] = []
+    fetched = 0
+
+    async with httpx.AsyncClient() as http:
+        for rid in pending:
+            try:
+                payload = await client.fetch_record(rid, client=http)
+            except Exception as exc:  # noqa: BLE001
+                failed.append({"id": rid, "error": str(exc)[:200]})
+                continue
+            if payload is None:
+                missing.append(rid)
+                continue
+            fetched += 1
+            persisted_id = persist_record(store, payload)
+            if persisted_id:
+                persisted.append(persisted_id)
+            if fetched % 100 == 0:
+                LOGGER.info("fetched %d/%d records", fetched, len(pending))
+
+    return {
+        "requested": len(ids),
+        "skipped_existing": sorted(existing),
+        "fetched": fetched,
+        "persisted": persisted,
+        "missing": missing,
+        "failed": failed,
+    }
+
+
+def ingest_by_ids(
+    *,
+    config: ZenodoIndexConfig,
+    store: ZenodoStore,
+    ids: list[str],
+    refresh: bool = False,
+) -> dict[str, Any]:
+    """Fetch a list of Zenodo records by ID and persist them.
+
+    Skips IDs already present unless `refresh=True`.
+    """
+    return asyncio.run(
+        _ingest_by_ids_async(config=config, store=store, ids=ids, refresh=refresh),
     )

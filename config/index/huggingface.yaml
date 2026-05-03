@@ -70,6 +70,24 @@ scope:
       # Promoted from extended-terms discover-orgs run on 2026-05-01.
       - Idiap                # Idiap Research Institute, Martigny (EPFL-affiliated)
       - epfml                # EPFL ML group (Jaggi/MLO alt namespace)
+      # Promoted 2026-05-01 from EPFL org member rosters (high-confidence:
+      # every HF org membership is an EPFL org).
+      - ViktorDo             # Viktor Domazetoski (EPFL-ECEO) — 94 models
+      - inrainbws            # Zhuoqian Yang (EPFL-IVRL) — 10 models, 1 dataset
+      - mdelmas              # Maxime Delmas (Idiap) — 6 models, 2 datasets
+      - faruk-zahiragic      # Faruk Zahiragic (epfl-ml-ytf) — 4 models
+      - matsant01            # Matteo Santelmo (SAGESSE-EPFL) — 2 models, 1 dataset
+      - Yusif-EPFL           # Yusif Askari (epfl-ml-ytf) — 2 models
+      - miaw1419             # Mahdi Shafiei (EPFL-VILAB) — 2 models
+      - ZhitongGao           # Zhitong Gao (EPFL-VILAB) — 1 model, 1 dataset
+      - Moglul               # Mog (structure-epflai) — 1 model
+      - cmlavo               # Christophe Michaud-Lavoie (EPFL-DL-CER-project) — 1 model
+      - natasa-jovanovic     # Nataša Jovanović (EPFL-VILAB) — 1 model
+      - sogandstormesalehi   # Sogand Salehi (EPFL-VILAB) — 1 model
+      - SkyeLu               # Skye Lu (EPFL-IVRL) — 1 dataset
+      - chrisfinlay          # Chris Finlay (epfl-radio-astro) — 1 dataset
+      - mxxsc                # Oscar Ma (epfl-dlab) — 1 dataset
+      - sraimund             # Raimund Schnürer (epfl-dhlab) — 1 dataset
     switzerland:
       # EPFL block (mirrors `epfl` seed above).
       - epfl-llm
@@ -97,6 +115,22 @@ scope:
       - EPFL-DL-CER-project
       - Idiap
       - epfml
+      - ViktorDo
+      - inrainbws
+      - mdelmas
+      - faruk-zahiragic
+      - matsant01
+      - Yusif-EPFL
+      - miaw1419
+      - ZhitongGao
+      - Moglul
+      - cmlavo
+      - natasa-jovanovic
+      - sogandstormesalehi
+      - SkyeLu
+      - chrisfinlay
+      - mxxsc
+      - sraimund
       # Original ETH + Swiss block.
       - swiss-ai
       - swiss-ai-center
@@ -135,6 +169,91 @@ scope:
       - HSLU-AAI             # Hochschule Luzern, Applied AI
       - fhnw                 # FHNW institutional
       - fhnwrover            # FHNW robotics project
+      # Promoted 2026-05-01 from extended Swiss probe (ZHAW + SWE-Swiss).
+      - ZHAW                 # Zürcher Hochschule für Angewandte Wissenschaften
+      - SWE-Swiss            # Swiss SWE benchmark (SWE-Swiss-32B-SFT, SWESwiss-Repair-RL)
+      # Promoted 2026-05-01 from ETH/SDSC/UniBe org member rosters.
+      # High-confidence: every member's HF org affiliations are within our Swiss seed.
+      # Sorted by upload activity descending; top hauler `mtc` has 225 models.
+      - mtc                  # MTC (ETH Media Technology Center) — 225 models
+      - Stern5497            # Ronja Stern @ rcds — 20 models
+      - briannnyee           # Brian Lee @ ethz — 11 models, 8 datasets
+      - qchapp               # Quentin Chappuis @ SDSC
+      - AleBurzio            # Alessandro Burzio @ ethzanalytics
+      - Fuqianshi            # ChenruiFan @ cvg-unibe
+      - Paviththiren         # Sivasothilingam @ ethz
+      - haofeixu             # Haofei Xu @ ETH-CVG
+      - slochmann            # Sebastian Lochmann @ ethz
+      - mstupk               # Michael Stupka @ dh-unibe
+      - pstroe               # Phillip Benjamin Ströbel @ ZurichNLP/dh-unibe
+      - rbai86               # Radek @ ETHZurich
+      - yunkao               # Yunke Ao @ ethz
+      - yyyyifan             # Yifan Hou @ eth-nlped
+      - SinanAkkoyun         # Sinan Akkoyun @ ETHZurich
+      - javirandor           # Javier Rando @ ethz-spylab
+      - RoyYang0714          # Yung-Hsu Yang @ ETH-CVG
+      - davidhightown        # David Hohenstatt @ ethz
+      - hohs                 # Ho @ ethz
+      - igupta               # Isha Gupta @ ethz
+      - moritzmiller         # Moritz Miller @ ETHZurich/ethz
+      - rllover123           # Nicolas @ ethz
+      - ruili3               # Rui Li @ ETHZurich
+      - shtosti              # Hanna Hubarava @ ZurichNLP
+      - xarthurx             # Arthur MA @ ETHZurich
+      - SinaAhmadi           # Sina Ahmadi @ ZurichNLP
+      - alexpin03            # Wei Pin @ ethz
+      - feradauto            # Fernando Gonzalez Adauto @ ethzanalytics
+      - gerchowl             # lars gerchow @ ethz
+      - jmathys              # Joel Mathys @ ethz
+      - leosct               # Leo Schmidt-Traub @ lasgroup
+      - miwytt               # Michelle Wastl @ ZurichNLP
+      - nkristina            # Kristina Nikolic @ ethz-spylab
+      - ollibolli            # Oliver @ ethz/ethzanalytics
+      - pasztorb             # Barna Pasztor @ ethz
+      - AkmalAshirmatov      # Akmal Ashirmatov @ lasgroup
+      - AlexandreBinninger   # Alexandre Binninger @ ethz
+      - LheaB                # B @ ethz
+      - Pavidiran            # Pavidiran Ramanathan @ ethz
+      - abbatea              # Alessandro @ eth-nlped
+      - agrd                 # Arthur Girard @ ethz
+      - daemonkiller         # Himanshu Bansal @ ETHZurich
+      - dmacjam              # Jakub Macina @ eth-nlped
+      - isideris             # Iason Sideris @ ethz
+      - kadeck               # Karl D @ ethz
+      - BatofGo              # Ray @ ethz
+      - Danieldcglp          # Daniel Gaivao Lozano @ ethz
+      - MFerrari             # Marcel Ferrari @ ethz
+      - MariusWenk           # Marius Wenk @ ETHZurich
+      - PeterTor             # Torben Peters @ prs-eth
+      - Rsebti               # Rayane Sebti @ ethz
+      - SaraFlick            # Sara Flick @ dh-unibe
+      - Zixiang-Zhao         # Zixiang Zhao @ ethz
+      - cgoeldel             # Constantin Goeldel @ ethz
+      - david-e-g            # Davide Guidobene @ ETHZurich/ethz
+      - debaumann            # Dennis Baumann @ ethz
+      - eishatirraazia19     # Eisha Tir Raazia @ SDSC
+      - fedecomi             # Federico Cominelli @ ethz
+      - henning101           # Henning Metzmacher @ ethz
+      - imertan              # Ipek Mertan @ ethz
+      - mchami               # Mamoun Chami @ ETHZurich
+      - mikhaeljohanes       # Mikhael Johanes @ ethz
+      - mlichtsteiner        # Lichtsteiner @ ethz
+      - mortezajkhkhj        # Morteza Esmaeilpour @ ethz
+      - mwertich             # Martin Wertich @ ethz
+      - sarathsuresh         # Sarath Suresh @ ETHZurich
+      - shibuyanights        # Jenu @ ethz
+      - suvodip1212          # suvodip chakraborty @ ethz
+      - tobinski404          # t @ dh-unibe/prg-unibe
+      - veichta              # Alexander Veicht @ ethz
+      - zhopto3              # Zachary Hopton @ ZurichNLP
+      # Promoted 2026-05-02 from targeted Swiss-company probe.
+      # Verified Swiss-headquartered companies (not big tech) with HF presence.
+      - lakera               # Lakera AI — ETH spin-off, Zurich, AI security (19 repos)
+      - swisscom             # Swisscom — Swiss national telecom, Bern HQ
+      - LatticeFlow          # LatticeFlow AI — ETH spin-off, Zurich, model validation
+      - squirro              # Squirro — Zurich enterprise AI / insight engine
+      - eraneos              # Eraneos — Zurich IT consulting (formerly AWK)
+      - ubs-ai               # UBS AI Community — Swiss bank, Zurich HQ
 
 discovery:
   # Substrings fed to list_models(search=...) / list_datasets(search=...).

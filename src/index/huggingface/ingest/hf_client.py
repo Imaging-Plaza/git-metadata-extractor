@@ -77,23 +77,34 @@ class HFClient:
 
     # ---- Listing ---------------------------------------------------------
 
+    # When listing repos for ingest we ask for sha + lastModified upfront so
+    # *_ingest.py can short-circuit the per-repo `<type>_info` call when the
+    # row is already up-to-date in DuckDB.
+    _STUB_EXPAND: tuple[str, ...] = ("lastModified", "sha")
+
     def list_models(self, author: str, *, limit: int | None = None) -> Iterable[Any]:
         try:
-            return self._api.list_models(author=author, limit=limit, full=False)
+            return self._api.list_models(
+                author=author, limit=limit, expand=list(self._STUB_EXPAND),
+            )
         except HfHubHTTPError as exc:
             LOGGER.warning("list_models(%s) failed: %s", author, exc)
             return []
 
     def list_datasets(self, author: str, *, limit: int | None = None) -> Iterable[Any]:
         try:
-            return self._api.list_datasets(author=author, limit=limit, full=False)
+            return self._api.list_datasets(
+                author=author, limit=limit, expand=list(self._STUB_EXPAND),
+            )
         except HfHubHTTPError as exc:
             LOGGER.warning("list_datasets(%s) failed: %s", author, exc)
             return []
 
     def list_spaces(self, author: str, *, limit: int | None = None) -> Iterable[Any]:
         try:
-            return self._api.list_spaces(author=author, limit=limit, full=False)
+            return self._api.list_spaces(
+                author=author, limit=limit, expand=list(self._STUB_EXPAND),
+            )
         except HfHubHTTPError as exc:
             LOGGER.warning("list_spaces(%s) failed: %s", author, exc)
             return []

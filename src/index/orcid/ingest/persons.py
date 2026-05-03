@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from src.index.orcid.ingest.orcid_client import build_orcid_provider
@@ -26,16 +27,29 @@ def ingest_persons(
     store: OrcidDuckDBStore,
     scope: str,
     limit: int | None = None,
+    priority_hints: list[str] | None = None,
 ) -> dict[str, int]:
-    """Fetch unfetched seeds, post-filter, persist. Returns counts summary."""
+    """Fetch unfetched seeds, post-filter, persist. Returns counts summary.
+
+    `priority_hints` is forwarded to `store.stream_seeds` so callers can
+    steer the daily-quota slice toward a sub-corpus (e.g. ETHZ aliases).
+    """
     provider = build_orcid_provider(config)
     summary = {"fetched": 0, "in_scope": 0, "out_of_scope": 0, "errors": 0}
 
-    for seed in store.stream_seeds(only_unfetched=True):
+    min_interval = max(0.0, float(config.orcid.request_min_interval_seconds))
+    last_request_at = 0.0
+
+    for seed in store.stream_seeds(only_unfetched=True, priority_hints=priority_hints):
         if limit is not None and summary["fetched"] >= limit:
             break
         orcid_id = seed["orcid_id"]
         discovered_via = seed["discovered_via"]
+        if min_interval > 0:
+            elapsed = time.monotonic() - last_request_at
+            if elapsed < min_interval:
+                time.sleep(min_interval - elapsed)
+        last_request_at = time.monotonic()
         try:
             record = provider.get_person_by_orcid(orcid_id)
         except ProviderNotFoundError:

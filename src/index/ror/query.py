@@ -1,43 +1,29 @@
 """Public query API: semantic RAG over the embedded subset, plus lexical
 lookup over the full ROR dump.
 
-`query_rag` runs FAISS retrieval and reranks via the RCP cross-encoder.
+`query_rag` runs Qdrant retrieval and reranks via the RCP cross-encoder.
 `lookup_dump` searches the full registry by ROR ID, name tokens, and/or
-country code — no RCP calls. `query(mode='auto')` tries RAG first and falls
-back to `lookup_dump` when the top score is below `score_floor`.
+country code (no RCP calls) — backed by `DuckDBStore` (D16). `query(mode='auto')`
+tries RAG first and falls back to `lookup_dump` when the top score is below
+`score_floor`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import List, Literal, Optional
 
 import numpy as np
 
 from .config import RorIndexConfig
-from .dump_index import DumpIndex, get_dump_index
 from .embed import embed_query
 from .models import DumpMatch, ScoredRecord
-from .paths import dump_dir
 from .qdrant_store import QdrantRorStore
 from .rerank import rerank
+from .storage.duckdb_store import DuckDBStore
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_dump_json_path() -> Optional[Path]:
-    """Find the most-recently-modified `*-ror-data*.json` under the dump dir."""
-    base = dump_dir()
-    candidates: List[Path] = []
-    for child in base.glob("*/*.json"):
-        name = child.name
-        if "ror-data" in name:
-            candidates.append(child)
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 async def query_rag(
@@ -81,31 +67,49 @@ async def query_rag(
     return out
 
 
-def _load_full_dump_index(cfg: RorIndexConfig) -> DumpIndex:
-    json_path = _resolve_dump_json_path()
-    if json_path is None:
-        msg = (
-            "No ROR dump JSON found under the dump cache. "
-            "Run `python -m src.index.ror build` first to download the dump."
-        )
-        raise FileNotFoundError(msg)
-    return get_dump_index(json_path)
-
-
 def lookup_dump(
     cfg: RorIndexConfig,
     *,
     text: Optional[str] = None,
     ror_id: Optional[str] = None,
     country: Optional[str] = None,
+    type_: Optional[str] = None,
+    status: Optional[str] = None,
     limit: int = 20,
 ) -> List[DumpMatch]:
-    """Lexical / exact lookup over the full ROR dump (no RCP calls)."""
-    if not (text or ror_id or country):
-        msg = "lookup_dump requires at least one of text, ror_id, country."
+    """Lexical / exact lookup over the full ROR dump (no RCP calls).
+
+    Backed by the `records` table in `<INDEX_DATA_DIR>/ror/duckdb/ror.duckdb`
+    (D16). Run `python -m src.index.ror build` or `migrate-storage` to
+    populate the table from the cached Zenodo dump.
+    """
+    if not (text or ror_id or country or type_ or status):
+        msg = "lookup_dump requires at least one filter (text, ror_id, country, type_, status)."
         raise ValueError(msg)
-    idx = _load_full_dump_index(cfg)
-    return idx.search(text=text, ror_id=ror_id, country=country, limit=limit)
+
+    store = DuckDBStore.open()
+    try:
+        rows = store.lookup(
+            text=text,
+            ror_id=ror_id,
+            country=country,
+            type_=type_,
+            status=status,
+            limit=limit,
+        )
+    finally:
+        store.close()
+
+    out: List[DumpMatch] = []
+    for row in rows:
+        record = row.get("record") or {}
+        out.append(DumpMatch(
+            ror_id=row.get("ror_id") or str(record.get("id") or ""),
+            name=row.get("name"),
+            record=record,
+            matched_tokens=[],
+        ))
+    return out
 
 
 async def query(
