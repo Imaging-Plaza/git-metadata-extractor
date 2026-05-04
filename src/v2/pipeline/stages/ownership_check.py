@@ -296,8 +296,18 @@ def infer_owners(
             continue
 
         # Stamp the inverse direction on the repo (only fill the gap).
+        # A bare-login string (e.g. "AlexanderBaltaian") emitted by the
+        # repository agent is treated as missing — the JSON-LD context
+        # types `pulse:ownedBy` as `@id`, so a bare token resolves to a
+        # `<file:///CWD/{token}>` URI under SHACL. Only IRI-shaped values
+        # are kept.
         existing_owned_by = entity.get(OWNED_BY_KEY)
-        if existing_owned_by in (None, "", {}):
+        existing_is_bare_handle = (
+            isinstance(existing_owned_by, str)
+            and bool(existing_owned_by)
+            and not existing_owned_by.startswith(("http://", "https://", "urn:"))
+        )
+        if existing_owned_by in (None, "", {}) or existing_is_bare_handle:
             entity[OWNED_BY_KEY] = {"@id": owner_id}
             warnings.append(
                 f"Inferred pulse:ownedBy on {repo_id} → {owner_id} "
@@ -320,6 +330,22 @@ def infer_owners(
                 f"Inferred pulse:owns on {owner_id} → {repo_id} "
                 f"(handle '{owner_handle}').",
             )
+
+    # Final sweep: any repository that still carries a plain-string
+    # `pulse:ownedBy` (because no matching owner entity was found in the
+    # graph — typical of solo-user repos) is coerced to IRI shape. This
+    # guarantees the property is SHACL-conformant even without an
+    # explicit Person/Organization stub in the graph.
+    for entity in new_candidates:
+        if entity.get("type") != REPOSITORY_TYPE:
+            continue
+        value = entity.get(OWNED_BY_KEY)
+        if not isinstance(value, str) or not value:
+            continue
+        if value.startswith(("http://", "https://", "urn:")):
+            entity[OWNED_BY_KEY] = {"@id": value}
+        else:
+            entity[OWNED_BY_KEY] = {"@id": f"https://github.com/{value}"}
 
     return (
         AssembledOutput(

@@ -210,7 +210,8 @@ def test_execute_pipeline_completes_full_repository_plan() -> None:
     assert "article_agent:octocat/Hello-World" in result.agent_results
     assert "membership_agent:alice" in result.agent_results
     assert "membership_agent:bob" in result.agent_results
-    assert "contribution_agent:repo-root" in result.agent_results
+    assert "contribution_agent:alice_repo-root" in result.agent_results
+    assert "contribution_agent:bob_repo-root" in result.agent_results
     assert result.agent_results["person_agent:alice"].data["repo_visible"] is True
 
     typed_buckets = result.resolved_typed_entity_buckets().to_dict()
@@ -380,10 +381,14 @@ def test_execute_includes_upstream_stage_outputs_in_prompt_context_by_default() 
         ),
     )
 
-    assert len(captured_person_contexts) == 1
-    upstream_json = captured_person_contexts[0].get("upstream_stage_outputs_json")
-    assert isinstance(upstream_json, str)
-    assert json.loads(upstream_json) == {"repo_agent": {"id": "repo-root"}}
+    # Two person fanouts: one for the listed contributor `alice`, one
+    # for the User-type owner `octocat` materialised by the orchestrator.
+    assert len(captured_person_contexts) == 2
+    assert {ctx["username"] for ctx in captured_person_contexts} == {"alice", "octocat"}
+    for captured in captured_person_contexts:
+        upstream_json = captured.get("upstream_stage_outputs_json")
+        assert isinstance(upstream_json, str)
+        assert json.loads(upstream_json) == {"repo_agent": {"id": "repo-root"}}
 
 
 def test_execute_skips_github_organization_accounts_from_person_fanout() -> None:
@@ -1002,7 +1007,9 @@ def test_class_stage_work_items_include_upstream_references_and_typed_buckets() 
         "alice",
         "bob",
     ]
+    # One contribution per (person, repo) pair: alice→repo-root and bob→repo-root.
     assert [context["contribution_seed"] for context in captured_contribution_contexts] == [
+        "repo-root",
         "repo-root",
     ]
 
@@ -1164,9 +1171,12 @@ def test_class_stage_fanout_is_deterministic_for_user_and_organization_roots() -
 
     assert captured_article_seeds == ["octocat", "github"]
     assert captured_membership_seeds == ["octocat", "alice", "bob"]
+    # In the org run, both `alice` and `bob` produce a contribution
+    # against `github/repo-a` (one (person, repo) pair each).
     assert captured_contribution_seeds == [
         "octocat/repo-a",
         "octocat/repo-b",
+        "github/repo-a",
         "github/repo-a",
     ]
 
@@ -1365,7 +1375,7 @@ def test_class_stage_partial_failures_keep_sibling_and_downstream_execution() ->
 
     assert result.agent_results["membership_agent:alice"].is_partial is True
     assert result.agent_results["membership_agent:bob"].is_partial is False
-    assert result.agent_results["contribution_agent:repo-root"].is_partial is False
+    assert result.agent_results["contribution_agent:alice_repo-root"].is_partial is False
     assert attempt_count["bob"] == EXPECTED_BOB_RETRY_ATTEMPTS
 
 
@@ -2072,7 +2082,7 @@ def test_execute_uses_llm_class_runners_for_repository_runtime() -> None:
     assert rule_class_calls == 0
     assert "article_agent:octocat/Hello-World" in result.agent_results
     assert "membership_agent:alice" in result.agent_results
-    assert "contribution_agent:octocat/Hello-World" in result.agent_results
+    assert "contribution_agent:alice_octocat/Hello-World" in result.agent_results
 
 
 def test_execute_hard_fails_when_llm_repository_runner_errors() -> None:

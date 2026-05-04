@@ -134,19 +134,26 @@ deterministic rule-based agents). All other stages run unconditionally.
 
 ## API surface
 
-- `GET  /v2/health` — health check
+- `GET  /v2/health` — health check (open, no auth)
 - `POST /v2/extract` — async job. Body: `{source_url, agent_runtime?, output_format?, include_context_summary?}`. Returns `{job_id, status, status_url}`; poll `GET /v2/jobs/{job_id}`.
 - `GET  /v2/jobs/{job_id}` — job status + result when complete
 - `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
 - `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
 
-V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen.
+**Auth:** every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}` requires
+`Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
+`/docs`, and `/v2/health` are open. The dependency lives in
+`src/v2/auth.py::verify_token`.
+
+V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
+(and now also bearer-protected).
 
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
 |---|---|---|
 | `GITHUB_TOKEN` | — | required for live GitHub provider |
+| `API_TOKEN` | — | bearer token guarding every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | — | one is required for LLM mode |
 | `INFOSCIENCE_TOKEN` | unset | only for protected Infoscience routes |
 | `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |

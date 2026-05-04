@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from copy import deepcopy
+from datetime import date
 from typing import Any
 
 from pydantic import ValidationError
@@ -170,6 +171,19 @@ class LLMMembershipAgentV2:
             payload.update(overrides)
 
         force_server_uuid(payload, uuid_value)
+
+        # Defend against inverted Membership dates: ORCID employment
+        # records (and occasionally the LLM itself) emit `time:hasBeginning`
+        # after `time:hasEnd`. The SHACL shape requires
+        # `hasBeginning <= hasEnd`. Swap when both parse as ISO dates.
+        beg = payload.get("time:hasBeginning")
+        end = payload.get("time:hasEnd")
+        if isinstance(beg, str) and isinstance(end, str):
+            try:
+                if date.fromisoformat(beg[:10]) > date.fromisoformat(end[:10]):
+                    payload["time:hasBeginning"], payload["time:hasEnd"] = end, beg
+            except ValueError:
+                pass
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)

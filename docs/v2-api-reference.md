@@ -2,11 +2,35 @@
 
 This document describes the mounted v2 API surface under `/v2`.
 
+## Authentication
+
+`/v2/extract` (both `GET` and `POST`) and `/v2/jobs/{job_id}` require a
+bearer token in the `Authorization` header. `/v2/health` is the only v2
+endpoint that stays open.
+
+```http
+Authorization: Bearer <API_TOKEN>
+```
+
+The expected token comes from the server-side `API_TOKEN` env var
+(generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`).
+The check uses `hmac.compare_digest` for constant-time comparison.
+
+| Condition | Status | Notes |
+|---|---|---|
+| `API_TOKEN` unset on the server | `503` | Fails closed; no dev bypass. |
+| Header missing | `401` | Includes `WWW-Authenticate: Bearer`. |
+| Wrong token | `401` | Same response shape as missing header. |
+| Valid token | route's normal response | |
+
+`/v1/*` routes share the same `API_TOKEN` and behave the same way.
+Implementation lives in `src/v2/auth.py` (`verify_token` dependency).
+
 ## Endpoints
 
 ### `GET /v2/health`
 
-Returns service readiness for v2 dependencies.
+Returns service readiness for v2 dependencies. Open (no auth required).
 
 Example:
 
@@ -43,19 +67,19 @@ Query parameters:
 Examples:
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" \
   | jq
 ```
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" \
   | jq
 ```
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=llm" \
   | jq
 ```
@@ -87,6 +111,7 @@ Example:
 
 ```bash
 curl -s -X POST "http://localhost:1234/v2/extract" \
+  -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source_url": "github.com/octocat/Hello-World",
@@ -127,7 +152,8 @@ Status responses:
 Example:
 
 ```bash
-curl -s "http://localhost:1234/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31" | jq
 ```
 
 Persistence: jobs share the SQLite-backed `ProviderCache` (`V2_PROVIDER_CACHE_PATH`, TTL `V2_PROVIDER_CACHE_TTL_DAYS`) under the `v2-extract-job` namespace. `V2_PROVIDER_CACHE_ENABLED=false` disables the job store entirely.
@@ -279,6 +305,7 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 
 | Variable | Default | Notes |
 | --- | --- | --- |
+| `API_TOKEN` | unset | Bearer token guarding `/v1/*` and protected `/v2/*` routes. Missing → 503 (no dev bypass). See [Authentication](#authentication). |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | Swap in mock GitHub/ORCID/Infoscience/ROR providers |
 | `V2_LINK_VERACITY_ENABLED` | `true` | Skip the link-veracity stage in LLM mode (rule-based skips unconditionally) |

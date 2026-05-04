@@ -19,6 +19,11 @@ cp .env.example .env
 Required to serve `/v2/extract`:
 
 - `GITHUB_TOKEN` — `/v2/health` flips to `degraded` without it.
+- `API_TOKEN` — bearer token guarding every `/v1/*` route plus
+  `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
+  every protected request returns `503` (no dev bypass). Generate with
+  `python -c "import secrets; print(secrets.token_urlsafe(32))"`. See
+  [Authentication](v2-api-reference.md#authentication).
 - One LLM credential (validated at startup against the active model
   profile in `src/v2/agents/llm/model_config.py`):
   - `RCP_TOKEN` (EPFL RCP), or
@@ -70,19 +75,27 @@ Default port is `1234`. Override with `HOST=0.0.0.0 PORT=8080 just serve-dev`.
 - v2 health: <http://localhost:1234/v2/health>
 - Stop the server: `just serve-stop`
 
-Smoke-test extraction:
+Smoke-test extraction (export `API_TOKEN` first so the snippets work as-is):
 
 ```bash
+export API_TOKEN=...   # value from .env
+
 # sync, JSON-LD
-curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" | jq
 
 # sync, JSON, rule-based runtime
-curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
 
 # async (returns 202 + job_id; poll /v2/jobs/{id})
 curl -s -X POST "http://localhost:1234/v2/extract" \
+  -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source_url": "github.com/octocat/Hello-World", "output_format": "json"}' | jq
+
+# health check (no auth needed)
+curl -s "http://localhost:1234/v2/health" | jq
 ```
 
 ## 4. Run tests and checks

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from datetime import date
 from typing import Any
 
 from src.v2.agents.models import (
@@ -350,6 +351,15 @@ def _build_membership_payload(
     start_date: str | None,
     end_date: str | None,
 ) -> dict[str, Any]:
+    # Defend against inverted dates from upstream sources (ORCID returns
+    # employment entries with `start_date` and `end_date` reversed in some
+    # records). The SHACL shape requires `time:hasBeginning <= time:hasEnd`.
+    if isinstance(start_date, str) and isinstance(end_date, str):
+        try:
+            if date.fromisoformat(start_date[:10]) > date.fromisoformat(end_date[:10]):
+                start_date, end_date = end_date, start_date
+        except ValueError:
+            pass
     return {
         "id": composite_id,
         "type": "org:Membership",

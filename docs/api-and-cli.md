@@ -11,6 +11,26 @@ RAG indices see [RAG Indices Overview](rag-indices.md).
 - V2 pipeline driver: `src/v2/pipeline/orchestrator.py`.
 - V1 analysis (frozen): `src/v1/analysis/`.
 
+## Authentication
+
+All `/v1/*` routes plus `/v2/extract` and `/v2/jobs/{id}` require a bearer
+token; `/`, `/docs`, and `/v2/health` stay open. Send the token from the
+server-side `API_TOKEN` env var:
+
+```http
+Authorization: Bearer <API_TOKEN>
+```
+
+Missing or wrong token → `401` (with `WWW-Authenticate: Bearer`). Server
+without `API_TOKEN` set → `503`. Generate a value with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Full failure-mode table at
+[v2-api-reference.md#authentication](v2-api-reference.md#authentication).
+
 ## Active endpoints
 
 ### V2 (use these for new clients)
@@ -29,23 +49,29 @@ Common query parameters on `GET /v2/extract`:
   `V2_AGENT_RUNTIME_DEFAULT`, which itself defaults to `llm`).
 - `include_context_summary` — `true|false` (default `false`).
 
-Example requests:
+Example requests (export `API_TOKEN` first so the snippets work as-is):
 
 ```bash
+export API_TOKEN=...   # value from .env
+
 # sync, JSON-LD
-curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" | jq
 
 # sync, JSON, rule-based
-curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
 
 # async
 curl -s -X POST http://localhost:1234/v2/extract \
+  -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source_url": "github.com/octocat/Hello-World", "output_format": "json", "agent_runtime": "llm"}' | jq
 # → {"job_id": "...", "status": "pending", "status_url": "/v2/jobs/..."}
 
 # poll
-curl -s "http://localhost:1234/v2/jobs/<job_id>" | jq
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/jobs/<job_id>" | jq
 ```
 
 ### V1 (frozen, kept for backwards compatibility)
@@ -124,11 +150,14 @@ Recipes registered in the justfile:
 ## Smoke tests
 
 ```bash
-# v2
+# v2 — health is open
 curl -s "http://localhost:1234/v2/health" | jq
-curl -s "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
 
-# v1 (legacy)
+# v2 extract requires the bearer token
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
+
+# v1 (legacy) — recipes also need API_TOKEN; they pick it up from .env via just
 just api-test-gimie
 just api-test-extract
 just api-test-extract-refresh

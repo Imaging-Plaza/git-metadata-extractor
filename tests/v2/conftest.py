@@ -68,6 +68,10 @@ def _isolate_v2_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "true")
     # Most tests exercise deterministic rule-based behavior unless they opt into LLM explicitly.
     monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "rule_based")
+    # Default bearer token for `verify_token`. `tests/v2/test_auth.py`
+    # overrides or deletes this var inside individual tests to exercise
+    # the unauthorised / unconfigured paths.
+    monkeypatch.setenv("API_TOKEN", "test-api-token")
 
 
 @pytest.fixture(autouse=True)

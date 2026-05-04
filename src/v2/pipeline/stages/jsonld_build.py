@@ -124,6 +124,18 @@ def build_jsonld_output(
                 current_property=key,
             )
 
+        # Strip `pulse:ror` when redundant with the node's own `@id`. The
+        # `org:Organization` SHACL shape is `sh:closed` and does not
+        # declare `pulse:ror`; emitting the field on a ROR-id'd node
+        # triggers a closed-shape violation. The `@id` is already the
+        # ROR, so the field carries no additional information.
+        node_iri = node.get("@id")
+        if (
+            isinstance(node_iri, str)
+            and node.get("pulse:ror") == node_iri
+        ):
+            node.pop("pulse:ror", None)
+
         graph.append(node)
 
     graph.sort(key=lambda item: str(item.get("@id", "")))

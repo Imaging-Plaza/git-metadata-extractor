@@ -32,6 +32,7 @@ from src.v2.api_models import (
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
 )
+from src.v2.auth import verify_token
 from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
 from src.v2.ingest.cache import ProviderCache
@@ -59,6 +60,7 @@ from src.v2.pipeline.stages import (
     run_llm_dedup_stage,
     run_org_relationships_stage,
     validate_articles,
+    validate_author_classes,
     validate_ownership,
 )
 from src.v2.pipeline.stages.concept_tagging import (
@@ -275,6 +277,7 @@ async def _run_extract_job(
             agent_runtime=payload.agent_runtime,
             include_context_summary=payload.include_context_summary,
             providers=providers,
+            _token="",
         )
 
         finished = job_store.get(job_id) or existing
@@ -420,6 +423,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
     include_context_summary: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
+    _token: Annotated[str, Depends(verify_token)],
 ) -> V2ExtractResponse | JSONResponse:
     """Run the v2 extraction pipeline for a GitHub path."""
 
@@ -572,6 +576,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     llm_dedup_executed = False
     if resolved_runtime == AgentRuntime.LLM:
         llm_dedup_executed = True
+        stage_started_at = perf_counter()
         try:
             dedup_result = await run_llm_dedup_stage(
                 typed_entity_buckets=typed_entity_buckets,
@@ -588,20 +593,22 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         else:
             typed_entity_buckets = dedup_result.typed_entity_buckets
             logger.info(
-                "%s: accepted=%d rejected=%d remap=%d",
+                "%s: accepted=%d rejected=%d remap=%d in %.2fs",
                 STAGE_LLM_DEDUP,
                 dedup_result.accepted_cluster_count,
                 dedup_result.rejected_cluster_count,
                 dedup_result.remap_count,
+                perf_counter() - stage_started_at,
             )
             for warning in dedup_result.warnings:
                 _append_unique_warning(warnings, warning)
 
     llm_critic_executed = False
     critic_pruned_excluded_entities: list[dict[str, Any]] = []
+    stage_started_at = perf_counter()
     reconciled = reconcile_entities(typed_entity_buckets)
     logger.info(
-        "%s: persons=%d orgs=%d repos=%d articles=%d memberships=%d contributions=%d",
+        "%s: persons=%d orgs=%d repos=%d articles=%d memberships=%d contributions=%d in %.2fs",
         STAGE_RECONCILIATION,
         len(reconciled.entities.get("persons", [])),
         len(reconciled.entities.get("organizations", [])),
@@ -609,6 +616,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         len(reconciled.entities.get("articles", [])),
         len(reconciled.memberships),
         len(reconciled.contributions),
+        perf_counter() - stage_started_at,
     )
     for warning in reconciled.link_warnings:
         _append_unique_warning(warnings, warning)
@@ -621,6 +629,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
     if resolved_runtime == AgentRuntime.LLM and apply_critic_pruning:
         llm_critic_executed = True
+        stage_started_at = perf_counter()
         try:
             critic_result = await run_llm_critic_stage(
                 reconciled=reconciled,
@@ -639,11 +648,12 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             reconciled = critic_result.reconciled
             critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
             logger.info(
-                "%s: proposed_drop=%d applied_drop=%d protected_roots=%d",
+                "%s: proposed_drop=%d applied_drop=%d protected_roots=%d in %.2fs",
                 STAGE_LLM_CRITIC,
                 critic_result.applied.get("proposed_drop_count", 0),
                 critic_result.applied.get("applied_drop_count", 0),
                 len(critic_result.applied.get("protected_root_ids", [])),
+                perf_counter() - stage_started_at,
             )
             for warning in critic_result.warnings:
                 _append_unique_warning(warnings, warning)
@@ -652,10 +662,17 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # `schema:author` references, a repository can end up with an empty
     # author array, which strict validation rejects (schema requires
     # non-empty). Fall back to the github owner if it's in the graph.
+    stage_started_at = perf_counter()
     reconciled, repo_author_warnings = guarantee_repo_author(reconciled)
+    logger.info(
+        "guarantee_repo_author: salvaged=%d in %.2fs",
+        len(repo_author_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in repo_author_warnings:
         _append_unique_warning(warnings, warning)
 
+    stage_started_at = perf_counter()
     strict_validation_entities = _iter_reconciled_entities(
         reconciled_entities=reconciled.entities,
         memberships=reconciled.memberships,
@@ -663,15 +680,17 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     )
     strict_batch = StrictSchemaValidator().validate_batch(strict_validation_entities)
     logger.info(
-        "%s: valid=%d invalid=%d",
+        "%s: valid=%d invalid=%d in %.2fs",
         STAGE_STRICT_VALIDATION,
         len(strict_batch.valid_entities),
         len(strict_batch.invalid_entities),
+        perf_counter() - stage_started_at,
     )
     for warning in strict_batch.warnings:
         _append_unique_warning(warnings, f"Strict validation: {warning}")
 
     jsonld_context = _extract_jsonld_context()
+    stage_started_at = perf_counter()
     try:
         assembled_output = assemble_output(
             reconciled,
@@ -709,6 +728,14 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             strict_batch=strict_batch,
             root_warning=str(exc),
         )
+    logger.info(
+        "%s: related=%d excluded=%d warnings=%d in %.2fs",
+        STAGE_OUTPUT_ASSEMBLY,
+        len(assembled_output.related_entities),
+        len(assembled_output.excluded_entities),
+        len(assembled_output.warnings),
+        perf_counter() - stage_started_at,
+    )
 
     if critic_pruned_excluded_entities:
         for excluded_entity in critic_pruned_excluded_entities:
@@ -772,13 +799,14 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
         else:
             logger.info(
-                "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d",
+                "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d in %.2fs",
                 STAGE_LINK_VERACITY,
                 link_veracity_result.checked_count,
                 link_veracity_result.supported_count,
                 link_veracity_result.unsupported_count,
                 link_veracity_result.failed_count,
                 len(link_veracity_result.invalid_links),
+                perf_counter() - link_veracity_started_at,
             )
             _append_unique_warning(
                 warnings,
@@ -836,31 +864,48 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     veracity_records = (
         link_veracity_result.records if link_veracity_result is not None else []
     )
+    stage_started_at = perf_counter()
     assembled_output, article_validation_warnings = validate_articles(
         assembled_output,
         veracity_records=veracity_records,
     )
+    logger.info(
+        "validate_articles: warnings=%d in %.2fs",
+        len(article_validation_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in article_validation_warnings:
+        _append_unique_warning(warnings, warning)
+
+    stage_started_at = perf_counter()
+    assembled_output, author_class_warnings = validate_author_classes(assembled_output)
+    logger.info(
+        "author_class_validation: pruned=%d in %.2fs",
+        len(author_class_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in author_class_warnings:
         _append_unique_warning(warnings, warning)
 
     link_veracity_seconds = perf_counter() - link_veracity_started_at
 
+    stage_started_at = perf_counter()
     assembled_output, ownership_warnings = validate_ownership(assembled_output)
-    if ownership_warnings:
-        logger.info(
-            "ownership_check: dropped %d invalid pulse:owns entr%s",
-            len(ownership_warnings),
-            "y" if len(ownership_warnings) == 1 else "ies",
-        )
+    logger.info(
+        "ownership_check: dropped=%d in %.2fs",
+        len(ownership_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in ownership_warnings:
         _append_unique_warning(warnings, warning)
 
+    stage_started_at = perf_counter()
     assembled_output, owner_inference_warnings = infer_owners(assembled_output)
-    if owner_inference_warnings:
-        logger.info(
-            "owner_inference: stamped %d ownership relationship(s)",
-            len(owner_inference_warnings),
-        )
+    logger.info(
+        "owner_inference: stamped=%d in %.2fs",
+        len(owner_inference_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in owner_inference_warnings:
         _append_unique_warning(warnings, warning)
 
@@ -871,19 +916,21 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # Runs before the LLM relationship stage so it sees the new ROR entities
     # and can refine the unitOf decision; runs before `infer_org_units` so
     # the token-overlap fallback also gets the broader graph.
+    stage_started_at = perf_counter()
     assembled_output, github_parent_warnings = infer_github_handle_parents(
         assembled_output,
         providers=providers,
     )
-    if github_parent_warnings:
-        logger.info(
-            "github_handle_parents: %d action(s) (insertions + edges)",
-            len(github_parent_warnings),
-        )
+    logger.info(
+        "github_handle_parents: actions=%d in %.2fs",
+        len(github_parent_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in github_parent_warnings:
         _append_unique_warning(warnings, warning)
 
     if resolved_runtime == AgentRuntime.LLM:
+        stage_started_at = perf_counter()
         try:
             assembled_output, org_relationship_warnings = await run_org_relationships_stage(
                 assembled=assembled_output,
@@ -894,20 +941,21 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             logger.exception("org_relationships stage failed")
             _append_unique_warning(warnings, f"org_relationships stage failed: {exc}")
         else:
-            if org_relationship_warnings:
-                logger.info(
-                    "org_relationships: %d edge decision(s)",
-                    len(org_relationship_warnings),
-                )
+            logger.info(
+                "org_relationships: edges=%d in %.2fs",
+                len(org_relationship_warnings),
+                perf_counter() - stage_started_at,
+            )
             for warning in org_relationship_warnings:
                 _append_unique_warning(warnings, warning)
 
+    stage_started_at = perf_counter()
     assembled_output, org_unit_warnings = infer_org_units(assembled_output)
-    if org_unit_warnings:
-        logger.info(
-            "org_unit_inference: stamped %d unit relationship(s)",
-            len(org_unit_warnings),
-        )
+    logger.info(
+        "org_unit_inference: stamped=%d in %.2fs",
+        len(org_unit_warnings),
+        perf_counter() - stage_started_at,
+    )
     for warning in org_unit_warnings:
         _append_unique_warning(warnings, warning)
 
@@ -923,6 +971,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             else None
         )
         backend = _resolve_concept_tagging_backend()
+        stage_started_at = perf_counter()
         try:
             tagged_root, tagging_result = await run_concept_tagging_stage(
                 root_entity=assembled_output.root_entity,
@@ -937,25 +986,28 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         else:
             assembled_output.root_entity = tagged_root
             logger.info(
-                "concept_tagging: backend=%s keywords=%d concepts=%d disciplines=%d",
+                "concept_tagging: backend=%s keywords=%d concepts=%d disciplines=%d in %.2fs",
                 tagging_result.backend,
                 len(tagging_result.keywords),
                 len(tagging_result.concepts),
                 len(tagging_result.disciplines),
+                perf_counter() - stage_started_at,
             )
             for warning in tagging_result.warnings:
                 _append_unique_warning(warnings, warning)
 
+    stage_started_at = perf_counter()
     shacl_graph_payload = build_jsonld_output(
         assembled=assembled_output,
         jsonld_context=jsonld_context,
     )
     graph_nodes = shacl_graph_payload.get("@graph")
     logger.info(
-        "%s: entities=%d context_terms=%d",
+        "%s: entities=%d context_terms=%d in %.2fs",
         STAGE_JSONLD_BUILD,
         len(graph_nodes) if isinstance(graph_nodes, list) else 0,
         len(jsonld_context),
+        perf_counter() - stage_started_at,
     )
 
     shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
@@ -1112,6 +1164,7 @@ async def extract_post(
     request: Request,
     *,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
+    _token: Annotated[str, Depends(verify_token)],
 ) -> V2ExtractJobAccepted | JSONResponse:
     """Submit an extraction asynchronously. Returns a job id to poll via GET."""
 
@@ -1198,6 +1251,7 @@ async def extract_post(
 async def extract_job(
     job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
     request: Request,
+    _token: Annotated[str, Depends(verify_token)],
 ) -> V2ExtractJob | JSONResponse:
     """Retrieve a previously submitted extraction job by id."""
 

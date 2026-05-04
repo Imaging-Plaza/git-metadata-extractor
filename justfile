@@ -1,6 +1,9 @@
 # Git Metadata Extractor - Task Runner
 # Usage: just <command>
 
+# Auto-load .env so API_TOKEN (and other vars) are visible to recipes.
+set dotenv-load := true
+
 # Default host and port (can be overridden with HOST=value PORT=value just serve)
 HOST := env_var_or_default("HOST", "0.0.0.0")
 PORT := env_var_or_default("PORT", "1234")
@@ -192,23 +195,23 @@ v2-run-repo-full-llm REPO:
 
 # Get cache statistics
 cache-stats:
-    curl -X GET http://localhost:{{PORT}}/v1/cache/stats | python -m json.tool
+    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/stats | python -m json.tool
 
 # Clean up expired cache entries
 cache-cleanup:
-    curl -X POST http://localhost:{{PORT}}/v1/cache/cleanup | python -m json.tool
+    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/cleanup | python -m json.tool
 
 # Clear all cache entries
 cache-clear:
-    curl -X POST http://localhost:{{PORT}}/v1/cache/clear | python -m json.tool
+    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/clear | python -m json.tool
 
 # Enable caching
 cache-enable:
-    curl -X POST http://localhost:{{PORT}}/v1/cache/enable | python -m json.tool
+    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/enable | python -m json.tool
 
 # Disable caching
 cache-disable:
-    curl -X POST http://localhost:{{PORT}}/v1/cache/disable | python -m json.tool
+    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/disable | python -m json.tool
 
 # ============================================================================
 # Development Utilities
@@ -275,17 +278,21 @@ docs-deploy-release VERSION:
 docs-set-default VERSION:
     mike set-default --push --branch gh-pages {{VERSION}}
 
-# Test the main extract endpoint
+# Test the main extract endpoint (was /v1/extract/json — that route is commented out;
+# this hits the active /v1/repository/llm/json equivalent).
 api-test-extract:
-    curl -X GET "http://localhost:{{PORT}}/v1/extract/json/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
+    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
+        "http://localhost:{{PORT}}/v1/repository/llm/json/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
 
 # Test the extract endpoint with force refresh
 api-test-extract-refresh:
-    curl -X GET "http://localhost:{{PORT}}/v1/extract/json/https://github.com/qchapp/lungs-segmentation?force_refresh=true" | python -m json.tool
+    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
+        "http://localhost:{{PORT}}/v1/repository/llm/json/https://github.com/qchapp/lungs-segmentation?force_refresh=true" | python -m json.tool
 
 # Test the GIMIE endpoint
 api-test-gimie:
-    curl -X GET "http://localhost:{{PORT}}/v1/repository/gimie/json-ld/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
+    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
+        "http://localhost:{{PORT}}/v1/repository/gimie/json-ld/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
 
 # ============================================================================
 # Cleanup

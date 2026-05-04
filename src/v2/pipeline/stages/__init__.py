@@ -1,6 +1,7 @@
 """Pipeline stages for the v2 extraction orchestrator."""
 
 from src.v2.pipeline.stages.article_validation import validate_articles
+from src.v2.pipeline.stages.author_validation import validate_author_classes
 from src.v2.pipeline.stages.concept_tagging import (
     BACKEND_EPFL_GRAPH,
     BACKEND_LLM,
@@ -83,5 +84,6 @@ __all__ = [
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
     "validate_articles",
+    "validate_author_classes",
     "validate_ownership",
 ]

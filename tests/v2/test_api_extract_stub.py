@@ -25,6 +25,12 @@ HTTP_NOT_FOUND = 404
 HTTP_UNPROCESSABLE_ENTITY = 422
 HTTP_SERVICE_UNAVAILABLE = 503
 
+# Matches the value seeded by the `_isolate_v2_runtime_env` autouse
+# fixture in `tests/v2/conftest.py`. Every protected request needs a
+# matching bearer header — see `src/v2/auth.py::verify_token`.
+TEST_API_TOKEN = "test-api-token"  # noqa: S105 — test fixture
+_AUTH_HEADERS = {"Authorization": f"Bearer {TEST_API_TOKEN}"}
+
 
 def _build_test_app() -> FastAPI:
     app = FastAPI()
@@ -45,6 +51,7 @@ def _get_json(path: str, params: dict[str, str] | None = None) -> tuple[int, Any
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.get(path, params=params)
         return response.status_code, response.json()
@@ -62,6 +69,7 @@ def _get_json_from_app(
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.get(path, params=params)
         return response.status_code, response.json()
@@ -76,6 +84,7 @@ def _post_json(path: str, payload: dict[str, Any]) -> tuple[int, Any]:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.post(path, json=payload)
         return response.status_code, response.json()
@@ -93,6 +102,7 @@ def _post_json_from_app(
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.post(path, json=payload)
         return response.status_code, response.json()
@@ -147,6 +157,7 @@ def test_extract_post_repository_url_runs_async_job(tmp_path: Any) -> None:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             submit = await client.post(
                 "/v2/extract",
@@ -475,6 +486,7 @@ def test_extract_post_can_include_compiled_context_summary_in_response(
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             submit = await client.post(
                 "/v2/extract",
@@ -504,6 +516,7 @@ def test_extract_post_returns_422_for_unsupported_url(tmp_path: Any) -> None:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.post(
                 "/v2/extract",
@@ -527,6 +540,7 @@ def test_get_job_returns_404_for_unknown_id(tmp_path: Any) -> None:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             response = await client.get("/v2/jobs/does-not-exist")
         return response.status_code, response.json()
@@ -546,6 +560,7 @@ def test_extract_post_persists_job_in_provider_cache(tmp_path: Any) -> None:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             submit = await client.post(
                 "/v2/extract",
@@ -578,6 +593,7 @@ def test_pipeline_cache_round_trip_returns_identical_response(tmp_path: Any) -> 
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             r1 = await client.get("/v2/extract/github.com/octocat/Hello-World")
             r2 = await client.get("/v2/extract/github.com/octocat/Hello-World")
@@ -606,6 +622,7 @@ def test_pipeline_cache_distinguishes_output_format(tmp_path: Any) -> None:
         async with AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers=_AUTH_HEADERS,
         ) as client:
             r_jsonld = await client.get(
                 "/v2/extract/github.com/octocat/Hello-World",

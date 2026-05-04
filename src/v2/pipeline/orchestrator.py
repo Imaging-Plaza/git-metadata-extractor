@@ -313,6 +313,7 @@ class PipelineOrchestrator:
 
         for stage in plan.stages:
             if stage.name == STAGE_CONTEXT_GATHER:
+                stage_started_at = perf_counter()
                 url_info = self._require_url_info(runtime_context)
                 context_bundle = await _maybe_await(
                     self._context_gatherer(plan.detected_type, url_info, providers),
@@ -323,10 +324,11 @@ class PipelineOrchestrator:
                 for warning in context_bundle.warnings:
                     _append_unique(warnings, warning)
                 logger.info(
-                    "%s: warnings=%d context_keys=%s",
+                    "%s: warnings=%d context_keys=%s in %.2fs",
                     STAGE_CONTEXT_GATHER,
                     len(context_bundle.warnings),
                     sorted(context_bundle.context.keys()),
+                    perf_counter() - stage_started_at,
                 )
 
                 runtime_mode = parse_agent_runtime(
@@ -393,6 +395,13 @@ class PipelineOrchestrator:
             work_items = self._build_work_items(stage.name, plan.detected_type, runtime_context)
             if stage.name == STAGE_PERSON_AGENTS and work_items:
                 work_items, pre_stage_warnings = self._filter_person_work_items(
+                    work_items,
+                    providers,
+                )
+                for warning in pre_stage_warnings:
+                    _append_unique(warnings, warning)
+            elif stage.name == STAGE_ORG_AGENTS and work_items:
+                work_items, pre_stage_warnings = self._filter_org_work_items(
                     work_items,
                     providers,
                 )
@@ -915,6 +924,60 @@ class PipelineOrchestrator:
 
         return filtered_items, warnings
 
+    @staticmethod
+    def _filter_org_work_items(
+        work_items: list[_StageWorkItem],
+        providers: ProviderSet,
+    ) -> tuple[list[_StageWorkItem], list[str]]:
+        """Drop work items whose `org_name` is a GitHub User account.
+
+        Mirrors `_filter_person_work_items`: probes `GET /users/{login}`
+        (cached) once per handle and skips when `type == "user"`. This
+        prevents 4× retry loops in `org_agent` for personal handles
+        encoded in `org:hasMembership` composite ids.
+
+        404s and other lookup failures are passed through — the
+        downstream `org_agent` will exhaust its retries the same way it
+        does today, but only once per truly-unknown handle (not per
+        every personal account).
+        """
+        filtered_items: list[_StageWorkItem] = []
+        warnings: list[str] = []
+        account_type_by_handle: dict[str, str | None] = {}
+
+        for work_item in work_items:
+            org_name = work_item.context.get("org_name")
+            if not isinstance(org_name, str) or not org_name:
+                filtered_items.append(work_item)
+                continue
+
+            if org_name not in account_type_by_handle:
+                account_type: str | None = None
+                if providers.github is not None:
+                    try:
+                        github_user = providers.github.get_user(org_name)
+                    except Exception:  # noqa: BLE001
+                        github_user = {}
+                    if isinstance(github_user, dict):
+                        raw_type = github_user.get("type")
+                        if isinstance(raw_type, str) and raw_type:
+                            account_type = raw_type.lower()
+                account_type_by_handle[org_name] = account_type
+
+            if account_type_by_handle.get(org_name) == "user":
+                _append_unique(
+                    warnings,
+                    (
+                        "Skipping org fanout for GitHub user account: "
+                        f"{org_name}"
+                    ),
+                )
+                continue
+
+            filtered_items.append(work_item)
+
+        return filtered_items, warnings
+
     def _repository_root_context(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
         bundle = runtime_context.get("context_bundle")
         repository_context = (
@@ -1029,6 +1092,32 @@ class PipelineOrchestrator:
                     usernames.append(normalized_login)
                     if account_type_hint and normalized_login not in account_type_hint_by_username:
                         account_type_hint_by_username[normalized_login] = account_type_hint
+
+            # Materialize a User-account owner as a Person when missing
+            # from `contributors` (abandoned repos, empty repos, repos
+            # whose owner never committed). Without this, the owner
+            # surfaces as a bare-string ref in `pulse:ownedBy` /
+            # `schema:author` and triggers SHACL violations because no
+            # `schema:Person` entity exists at the inferred id.
+            # `_filter_person_work_items` re-checks the type via
+            # `get_user`, so an Organization owner that slipped past
+            # the `owner_is_org` heuristic still gets pruned later.
+            if (
+                not owner_is_org
+                and isinstance(owner_login, str)
+                and _is_valid_github_login(owner_login)
+            ):
+                normalized_owner = owner_login.strip()
+                already_present = any(
+                    existing.casefold() == normalized_owner.casefold()
+                    for existing in usernames
+                )
+                if not already_present:
+                    usernames.append(normalized_owner)
+                    if isinstance(owner_type, str) and owner_type:
+                        account_type_hint_by_username.setdefault(
+                            normalized_owner, owner_type.lower(),
+                        )
         if detected_type == "organization":
             organization_context = bundle.context.get("organization", {})
             members = organization_context.get("members", [])

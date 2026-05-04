@@ -8,6 +8,23 @@ This guide describes how to run v1 and v2 side by side and migrate clients incre
 - v2 endpoints are mounted under `/v2/...`.
 - v2 does not require v1 route changes and can be adopted per client.
 
+## Authentication (applies to v1 and v2)
+
+Both v1 and v2 routes are now bearer-protected. Every `/v1/*` route, plus
+`/v2/extract` and `/v2/jobs/{id}`, requires:
+
+```http
+Authorization: Bearer <API_TOKEN>
+```
+
+`/`, `/docs`, and `/v2/health` stay open. See
+[v2-api-reference.md#authentication](v2-api-reference.md#authentication)
+for failure modes (401 / 503).
+
+If you're migrating an existing v1 client, you must add the bearer header
+**before** switching to v2 — otherwise the v1 client will already be
+returning 401 against the new server.
+
 ## Endpoint Mapping
 
 | V1 usage | V2 equivalent |
@@ -27,7 +44,7 @@ This guide describes how to run v1 and v2 side by side and migrate clients incre
 V1:
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v1/repository/llm/json-ld/https://github.com/octocat/Hello-World" \
   | jq
 ```
@@ -35,7 +52,7 @@ curl -s \
 V2:
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld" \
   | jq
 ```
@@ -45,7 +62,7 @@ curl -s \
 V1:
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v1/repository/llm/json/https://github.com/octocat/Hello-World" \
   | jq
 ```
@@ -53,7 +70,7 @@ curl -s \
 V2:
 
 ```bash
-curl -s \
+curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json" \
   | jq
 ```
@@ -73,6 +90,8 @@ curl -s \
 See [V2 API Reference — V2 Environment Variables](v2-api-reference.md#v2-environment-variables)
 for the full list. Notable additions vs. v1:
 
+- `API_TOKEN` (required) — bearer token guarding both v1 and v2 routes;
+  missing → 503.
 - `V2_AGENT_RUNTIME_DEFAULT` (default `llm`) — runtime selector.
 - `V2_USE_MOCK_PROVIDERS` (default `true`) — set `false` in production.
 - `V2_PROVIDER_CACHE_*` — shared provider + verdict + pipeline + job-store cache.
