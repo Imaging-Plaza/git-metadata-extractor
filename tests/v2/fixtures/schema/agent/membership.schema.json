@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:MembershipShape.schema.json",
   "title": "MembershipShape",
-  "description": "Schema for Membership entities following Open Pulse Ontology v2.0.0. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: composite (personId_orgId) → uuid. SHACL requires: org:organization only. Role and dates are optional.",
+  "description": "Schema for Membership entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: composite (personId_orgId) → uuid. SHACL requires: org:organization only. Role and dates are optional.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "org:organization"],

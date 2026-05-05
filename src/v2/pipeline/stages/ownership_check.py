@@ -333,9 +333,11 @@ def infer_owners(
 
     # Final sweep: any repository that still carries a plain-string
     # `pulse:ownedBy` (because no matching owner entity was found in the
-    # graph — typical of solo-user repos) is coerced to IRI shape. This
-    # guarantees the property is SHACL-conformant even without an
-    # explicit Person/Organization stub in the graph.
+    # graph — typical of solo-user repos) is coerced to IRI shape and a
+    # minimal Person stub is materialized when the target is a github
+    # user URL with no matching Person/Org in the graph. Without the stub,
+    # SHACL fails because `pulse:ownedBy` requires the target to be a
+    # `schema:Person` or `org:Organization`.
     for entity in new_candidates:
         if entity.get("type") != REPOSITORY_TYPE:
             continue
@@ -346,6 +348,55 @@ def infer_owners(
             entity[OWNED_BY_KEY] = {"@id": value}
         else:
             entity[OWNED_BY_KEY] = {"@id": f"https://github.com/{value}"}
+
+    # Materialize Person stubs for github-user `pulse:ownedBy` targets that
+    # have no matching Person/Organization in the graph. These are typically
+    # solo-author repos where the owner never produced a contributor record.
+    existing_ids = {
+        e.get("id") or e.get("@id")
+        for e in new_candidates
+        if isinstance(e, dict) and (e.get("id") or e.get("@id"))
+    }
+    new_stubs: list[dict[str, Any]] = []
+    seen_stubs: set[str] = set()
+    for entity in new_candidates:
+        if entity.get("type") != REPOSITORY_TYPE:
+            continue
+        value = entity.get(OWNED_BY_KEY)
+        if not isinstance(value, dict):
+            continue
+        target_id = value.get("@id")
+        if not isinstance(target_id, str) or not target_id:
+            continue
+        if target_id in existing_ids or target_id in seen_stubs:
+            continue
+        if not target_id.startswith("https://github.com/"):
+            continue
+        handle = target_id.removeprefix("https://github.com/").strip("/").split("/")[0]
+        if not handle:
+            continue
+        stub_uuid = str(uuid4())
+        new_stubs.append(
+            {
+                "id": target_id,
+                "type": "schema:Person",
+                "shacl": "pulse:PersonShape",
+                "identifiers": {
+                    "pulse:githubUsername": handle,
+                    "uuid": stub_uuid,
+                },
+                "idSource": "pulse:githubUsername",
+                "schema:name": handle,
+                "pulse:githubUsername": handle,
+            },
+        )
+        seen_stubs.add(target_id)
+        warnings.append(
+            f"Inferred minimal Person stub for github owner '{handle}' "
+            f"({target_id}) referenced by repository {entity.get('id')}.",
+        )
+    if new_stubs:
+        new_related = list(new_related) + new_stubs
 
     return (
         AssembledOutput(
@@ -413,11 +464,21 @@ def _handle_aliases(handle: str) -> set[str]:
 
 
 def _set_unit_of(child: dict[str, Any], parent_id: str) -> bool:
-    """Set `org:unitOf` on child only if currently null/missing. Returns True if set."""
+    """Set `org:unitOf` on child only if currently empty. Returns True if set.
+
+    `org:unitOf` is a list of parent IDs (multi-parent allowed by SHACL). This
+    helper preserves the historical "never overwrite an existing value"
+    semantics: it only stamps when the list is empty / missing / null.
+    """
     existing = child.get(UNIT_OF_KEY)
-    if existing in (None, "", {}):
-        child[UNIT_OF_KEY] = parent_id
+    if existing in (None, "", {}, []):
+        child[UNIT_OF_KEY] = [parent_id]
         return True
+    if isinstance(existing, list):
+        for entry in existing:
+            if (isinstance(entry, dict) and entry.get("@id") == parent_id) or entry == parent_id:
+                return False
+        return False
     if (isinstance(existing, dict) and existing.get("@id") == parent_id) or existing == parent_id:
         return False
     return False
@@ -683,7 +744,7 @@ def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
         "pulse:OrganizationType": None,
         "pulse:githubOrgFollowers": None,
         "org:hasUnit": [],
-        "org:unitOf": None,
+        "org:unitOf": [],
         "pulse:owns": [],
     }
 

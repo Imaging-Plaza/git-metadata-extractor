@@ -70,6 +70,55 @@ def _list_of_dicts(value: Any, *, max_items: int = MAX_CONTEXT_ENTITIES) -> list
     return collected
 
 
+def _person_github_login(person: Any) -> str | None:
+    """Best-effort GitHub login for a person entity.
+
+    Prefers the explicit `pulse:githubUsername`; falls back to parsing
+    `id` when shaped like `https://github.com/{login}`.
+    """
+    if not isinstance(person, dict):
+        return None
+    handle = person.get("pulse:githubUsername")
+    if isinstance(handle, str) and handle.strip():
+        return handle.strip()
+    identifier = person.get("id")
+    if isinstance(identifier, str) and identifier.startswith("https://github.com/"):
+        candidate = identifier.removeprefix("https://github.com/").strip("/")
+        if candidate and "/" not in candidate:
+            return candidate
+    return None
+
+
+def _find_target_contributor_record(
+    target_person: Any,
+    target_repository: Any,
+) -> dict[str, Any] | None:
+    """Locate the contributor entry that matches `target_person` in
+    `target_repository.contributors`.
+
+    Returns the dict carrying the deterministic GitHub bookends
+    (``firstContributionDate`` / ``lastContributionDate`` /
+    ``contributions``) populated by ``gather_context``, or ``None``
+    when no match is found.
+    """
+    if not isinstance(target_repository, dict):
+        return None
+    contributors = target_repository.get("contributors")
+    if not isinstance(contributors, list) or not contributors:
+        return None
+    login = _person_github_login(target_person)
+    if not login:
+        return None
+    target_login = login.casefold()
+    for entry in contributors:
+        if not isinstance(entry, dict):
+            continue
+        candidate = entry.get("login")
+        if isinstance(candidate, str) and candidate.casefold() == target_login:
+            return entry
+    return None
+
+
 class LLMContributionAgentV2:
     """LLM-backed agent that produces a pulse:Contribution entity."""
 
@@ -193,6 +242,26 @@ class LLMContributionAgentV2:
                 identifiers = {}
                 payload["identifiers"] = identifiers
             identifiers["pulse:composite"] = composite_id
+
+        # Stamp count/first/last from the deterministic GitHub bookends
+        # carried on `target_repository.contributors`. Without this, the
+        # LLM tends to copy the lead contributor's stats onto every
+        # Contribution (observed: cmdoret's 128 commits stamped on every
+        # person in the repo, plus the repo-wide first/last commit dates
+        # in place of per-person dates).
+        contributor_record = _find_target_contributor_record(
+            target_person, target_repository,
+        )
+        if contributor_record is not None:
+            count = contributor_record.get("contributions")
+            if isinstance(count, int) and count > 0:
+                payload["pulse:contributionCount"] = count
+            first_date = contributor_record.get("firstContributionDate")
+            if isinstance(first_date, str) and first_date:
+                payload["pulse:firstContributionDate"] = first_date
+            last_date = contributor_record.get("lastContributionDate")
+            if isinstance(last_date, str) and last_date:
+                payload["pulse:lastContributionDate"] = last_date
 
         force_server_uuid(payload, uuid_value)
 

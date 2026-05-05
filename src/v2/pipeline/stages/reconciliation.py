@@ -427,7 +427,6 @@ def _organization_metadata_score(organization: dict[str, Any]) -> int:
         "pulse:OrganizationType",
         "pulse:githubOrganizationHandle",
         "pulse:infoscienceOrganizationIdentifier",
-        "org:unitOf",
     ):
         value = organization.get(field)
         if isinstance(value, str) and value:
@@ -435,7 +434,7 @@ def _organization_metadata_score(organization: dict[str, Any]) -> int:
     followers = organization.get("pulse:githubOrgFollowers")
     if isinstance(followers, int):
         score += 1
-    for field in ("aliases", "acronyms", "labels", "org:hasUnit", "pulse:owns"):
+    for field in ("aliases", "acronyms", "labels", "org:hasUnit", "org:unitOf", "pulse:owns"):
         value = organization.get(field)
         if isinstance(value, list) and value:
             score += 1
@@ -586,14 +585,14 @@ def _merge_organization_payload(
     ):
         canonical["pulse:githubOrgFollowers"] = candidate["pulse:githubOrgFollowers"]
 
-    if (
-        not isinstance(canonical.get("org:unitOf"), str)
-        and isinstance(candidate.get("org:unitOf"), str)
-        and candidate.get("org:unitOf")
+    for field in (
+        "aliases",
+        "acronyms",
+        "labels",
+        "org:hasUnit",
+        "org:unitOf",
+        "pulse:owns",
     ):
-        canonical["org:unitOf"] = candidate["org:unitOf"]
-
-    for field in ("aliases", "acronyms", "labels", "org:hasUnit", "pulse:owns"):
         merged_values: list[Any] = []
         existing_values = canonical.get(field)
         if isinstance(existing_values, list):
@@ -835,7 +834,15 @@ def _apply_org_remap_to_entities(
             )
         unit_of = organization.get("org:unitOf")
         if isinstance(unit_of, str):
-            organization["org:unitOf"] = _apply_organization_id_remap(unit_of, org_id_remap)
+            unit_of = [unit_of]
+        if isinstance(unit_of, list):
+            organization["org:unitOf"] = _dedupe_preserve_order(
+                [
+                    _apply_organization_id_remap(parent_id, org_id_remap)
+                    for parent_id in unit_of
+                    if isinstance(parent_id, str) and parent_id
+                ],
+            )
 
 
 def _organization_lookup_tokens(organization: dict[str, Any]) -> list[str]:
@@ -1053,7 +1060,7 @@ def _build_github_org_account_unit(
         "pulse:OrganizationType": "pulse:OtherOrganizationType",
         "pulse:githubOrgFollowers": None,
         "org:hasUnit": [],
-        "org:unitOf": parent_org_id,
+        "org:unitOf": [parent_org_id] if isinstance(parent_org_id, str) and parent_org_id else [],
         "pulse:owns": [],
     }
 
@@ -1122,7 +1129,7 @@ def _ensure_github_org_units_for_repository_owners(
             organizations.append(github_unit)
             organizations_by_id[github_org_id] = github_unit
 
-        github_unit["org:unitOf"] = canonical_org_id
+        github_unit["org:unitOf"] = [canonical_org_id]
         github_unit["type"] = "org:Organization"
         github_unit["shacl"] = "pulse:OrganizationShape"
         github_unit["pulse:githubOrganizationHandle"] = github_handle
@@ -1171,17 +1178,23 @@ def _prune_unresolved_organization_hierarchy_links(
                 canonical_has_units.append(canonical_has_unit)
         organization["org:hasUnit"] = _dedupe_preserve_order(canonical_has_units)
 
-        unit_of_ref = organization.get("org:unitOf")
-        if not isinstance(unit_of_ref, str) or not unit_of_ref:
-            organization["org:unitOf"] = None
+        unit_of_refs = organization.get("org:unitOf")
+        if isinstance(unit_of_refs, str):
+            unit_of_refs = [unit_of_refs]
+        if not isinstance(unit_of_refs, list) or not unit_of_refs:
+            organization["org:unitOf"] = []
             continue
 
-        canonical_unit_of = _resolve_lookup_token(organization_lookup, unit_of_ref)
-        if canonical_unit_of is None or canonical_unit_of not in organization_ids:
-            organization["org:unitOf"] = None
-            dropped_unit_of += 1
-            continue
-        organization["org:unitOf"] = canonical_unit_of
+        canonical_unit_of: list[str] = []
+        for ref in unit_of_refs:
+            if not isinstance(ref, str) or not ref:
+                continue
+            resolved = _resolve_lookup_token(organization_lookup, ref)
+            if resolved is None or resolved not in organization_ids:
+                dropped_unit_of += 1
+                continue
+            canonical_unit_of.append(resolved)
+        organization["org:unitOf"] = _dedupe_preserve_order(canonical_unit_of)
 
     warnings: list[str] = []
     if dropped_has_unit > 0 or dropped_unit_of > 0:

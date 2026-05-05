@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:RepositoryShape.schema.json",
   "title": "RepositoryShape",
-  "description": "Schema for Repository entities following Open Pulse Ontology v2.0.0. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: githubRepositoryHandle → doi → uuid. SHACL requires: schema:name, pulse:githubRepositoryHandle, schema:author (min 1).",
+  "description": "Schema for Repository entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: githubRepositoryHandle → doi → uuid. SHACL requires: schema:name, pulse:githubRepositoryHandle, schema:author (min 1).",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "pulse:githubRepositoryHandle", "schema:author"],
@@ -60,7 +60,7 @@
       "description": "Array of Wikidata IRIs for disciplines. Format: wd:QXXXXX. Example: ['wd:Q21201', 'wd:Q8434']",
       "items": {
         "type": "string",
-        "enum": ["http://www.wikipedia.org/wiki/Information_engineering", "wd:Q101333", "wd:Q1071", "wd:Q11680831", "wd:Q12271", "wd:Q12483", "wd:Q18351432", "wd:Q188847", "wd:Q192386", "wd:Q21201", "wd:Q2167061", "wd:Q2329", "wd:Q23404", "wd:Q2878974", "wd:Q309", "wd:Q333", "wd:Q3353193", "wd:Q34749", "wd:Q3606845", "wd:Q395", "wd:Q413", "wd:Q420", "wd:Q42240", "wd:Q428691", "wd:Q43035", "wd:Q4830453", "wd:Q580689", "wd:Q5891", "wd:Q7112556", "wd:Q7163", "wd:Q735", "wd:Q7748", "wd:Q77590", "wd:Q7991", "wd:Q8008", "wd:Q80083", "wd:Q8078", "wd:Q8134", "wd:Q8162", "wd:Q816264", "wd:Q8242", "wd:Q83588", "wd:Q8434", "wd:Q843601", "wd:Q9174", "wd:Q9418"]
+        "enum": ["wd:Q1254373", "wd:Q101333", "wd:Q1071", "wd:Q11680831", "wd:Q12271", "wd:Q12483", "wd:Q18351432", "wd:Q188847", "wd:Q192386", "wd:Q21201", "wd:Q2167061", "wd:Q2329", "wd:Q23404", "wd:Q2878974", "wd:Q309", "wd:Q333", "wd:Q3353193", "wd:Q34749", "wd:Q3606845", "wd:Q395", "wd:Q413", "wd:Q420", "wd:Q42240", "wd:Q428691", "wd:Q43035", "wd:Q4830453", "wd:Q580689", "wd:Q5891", "wd:Q7112556", "wd:Q7163", "wd:Q735", "wd:Q7748", "wd:Q77590", "wd:Q7991", "wd:Q8008", "wd:Q80083", "wd:Q8078", "wd:Q8134", "wd:Q8162", "wd:Q816264", "wd:Q8242", "wd:Q83588", "wd:Q8434", "wd:Q843601", "wd:Q9174", "wd:Q9418"]
       }
     },
     "schema:author": {

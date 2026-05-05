@@ -257,18 +257,22 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str,
             org_id,
         )
         _register_lookup_token(lookup, organization.get("schema:identifier"), org_id)
-        for key in ("aliases", "acronyms"):
+        # Read both the public (legacy) and internal (`_`-prefixed) variants
+        # of these fields. Org agents emit them under the underscore variant
+        # so they get stripped before strict validation and JSON-LD output.
+        for key in ("aliases", "_aliases", "acronyms", "_acronyms"):
             values = organization.get(key)
             if isinstance(values, list):
                 for value in values:
                     _register_organization_name_lookup_tokens(lookup, value, org_id)
-        labels = organization.get("labels")
-        if isinstance(labels, list):
-            for label_payload in labels:
-                label = label_payload
-                if isinstance(label_payload, dict):
-                    label = label_payload.get("label")
-                _register_organization_name_lookup_tokens(lookup, label, org_id)
+        for label_key in ("labels", "_labels"):
+            labels = organization.get(label_key)
+            if isinstance(labels, list):
+                for label_payload in labels:
+                    label = label_payload
+                    if isinstance(label_payload, dict):
+                        label = label_payload.get("label")
+                    _register_organization_name_lookup_tokens(lookup, label, org_id)
 
         identifiers = organization.get("identifiers")
         if isinstance(identifiers, dict):
@@ -351,15 +355,22 @@ def _build_membership_payload(
     start_date: str | None,
     end_date: str | None,
 ) -> dict[str, Any]:
-    # Defend against inverted dates from upstream sources (ORCID returns
-    # employment entries with `start_date` and `end_date` reversed in some
-    # records). The SHACL shape requires `time:hasBeginning <= time:hasEnd`.
-    if isinstance(start_date, str) and isinstance(end_date, str):
+    # Defend against malformed and inverted dates from upstream sources:
+    # ORCID occasionally returns invalid dates like "2000-09-31" (Sept has
+    # 30 days) that fail SHACL `xsd:date`, plus some records have start/end
+    # reversed. Drop unparseable values; swap inverted ones.
+    def _safe_date(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
         try:
-            if date.fromisoformat(start_date[:10]) > date.fromisoformat(end_date[:10]):
-                start_date, end_date = end_date, start_date
+            return date.fromisoformat(value[:10]).isoformat()
         except ValueError:
-            pass
+            return None
+
+    start_date = _safe_date(start_date)
+    end_date = _safe_date(end_date)
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
     return {
         "id": composite_id,
         "type": "org:Membership",

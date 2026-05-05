@@ -43,16 +43,3 @@ def test_url_encoded_owner_and_repo_are_decoded() -> None:
     assert result.owner == "open-pulse"
     assert result.repo == "repo-name"
     assert result.normalized_url == "https://github.com/open-pulse/repo-name"
-
-
-def test_enterprise_base_url_is_supported(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("V2_GITHUB_BASE_URL", "https://github.enterprise.local/scm")
-
-    result = classify_github_url(
-        "http://github.enterprise.local/scm/owner/repo.git?utm_source=test#readme",
-    )
-
-    assert result.detected_type == GitHubURLType.REPOSITORY
-    assert result.owner == "owner"
-    assert result.repo == "repo"
-    assert result.normalized_url == "https://github.enterprise.local/scm/owner/repo"

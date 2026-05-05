@@ -53,15 +53,20 @@ from src.v2.pipeline.stages import (
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
+    prune_dangling_refs,
     reconcile_entities,
     run_concept_tagging_stage,
     run_link_veracity_stage,
     run_llm_critic_stage,
     run_llm_dedup_stage,
     run_org_relationships_stage,
+    run_refine_with_llm_stage,
     validate_articles,
     validate_author_classes,
     validate_ownership,
+)
+from src.v2.pipeline.stages.refine_with_llm import (
+    is_enabled as _hybrid_refiner_is_enabled,
 )
 from src.v2.pipeline.stages.concept_tagging import (
     is_enabled as _concept_tagging_is_enabled,
@@ -111,6 +116,7 @@ STAGE_SHACL_GATE = "shacl_gate"
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
+STAGE_REFINE_WITH_LLM = "refine_with_llm"
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -420,7 +426,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     request: Request,
     *,
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
-    agent_runtime: Annotated[Literal["rule_based", "llm"] | None, Query()] = None,
+    agent_runtime: Annotated[Literal["rule_based", "llm", "hybrid"] | None, Query()] = None,
     include_context_summary: Annotated[bool, Query()] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
     _token: Annotated[str, Depends(verify_token)],
@@ -656,6 +662,34 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 perf_counter() - stage_started_at,
             )
             for warning in critic_result.warnings:
+                _append_unique_warning(warnings, warning)
+
+    if resolved_runtime == AgentRuntime.HYBRID and _hybrid_refiner_is_enabled():
+        stage_started_at = perf_counter()
+        try:
+            refine_result = await run_refine_with_llm_stage(
+                reconciled=reconciled,
+                gathered_context=gathered_context,
+                epfl_graph_provider=providers.epfl_graph_rag,
+                max_concurrency=orchestrator.max_concurrent_agents,
+            )
+        except Exception as exc:
+            logger.exception("%s stage failed", STAGE_REFINE_WITH_LLM)
+            _append_unique_warning(
+                warnings,
+                f"refine_with_llm stage failed: {exc}",
+            )
+        else:
+            reconciled = refine_result.reconciled
+            logger.info(
+                "%s: refined=%d skipped=%d failed=%d in %.2fs",
+                STAGE_REFINE_WITH_LLM,
+                refine_result.refined_count,
+                refine_result.skipped_count,
+                refine_result.failed_count,
+                perf_counter() - stage_started_at,
+            )
+            for warning in refine_result.warnings:
                 _append_unique_warning(warnings, warning)
 
     # KNOWN BUG salvage: when reconciliation drops unresolvable
@@ -899,6 +933,10 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for warning in ownership_warnings:
         _append_unique_warning(warnings, warning)
 
+    # Run `infer_owners` BEFORE `prune_dangling_refs` so it can materialise
+    # minimal Person stubs for github owners that have no matching entity
+    # (otherwise prune would clear `pulse:ownedBy` first and the stub
+    # opportunity is lost).
     stage_started_at = perf_counter()
     assembled_output, owner_inference_warnings = infer_owners(assembled_output)
     logger.info(
@@ -907,6 +945,16 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         perf_counter() - stage_started_at,
     )
     for warning in owner_inference_warnings:
+        _append_unique_warning(warnings, warning)
+
+    stage_started_at = perf_counter()
+    assembled_output, prune_warnings = prune_dangling_refs(assembled_output)
+    logger.info(
+        "prune_dangling_refs: actions=%d in %.2fs",
+        len(prune_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in prune_warnings:
         _append_unique_warning(warnings, warning)
 
     # Fuzzy-search ROR for parent organizations of every github-only org in

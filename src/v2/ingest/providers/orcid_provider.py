@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import calendar
+import logging
 import re
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import (
@@ -48,6 +53,22 @@ def _get_nested_value(payload: dict[str, Any], path: list[str]) -> str | None:
 
 
 def _normalize_date(date_payload: Any) -> str | None:
+    """Convert an ORCID date payload (`{year, month, day}` substructures) to
+    an ISO ``YYYY-MM-DD`` string.
+
+    Missing month/day default to ``01``. ORCID accepts user-typed dates
+    without strict validation, so impossible combinations (e.g.
+    ``2000-09-31``) reach this function. The strategy:
+
+    1. Try the literal year/month/day. If valid, return it.
+    2. If invalid (e.g. day=31 in September), clamp the day to the last
+       valid day of that month and return the clamped value. The user's
+       intent ("end of September 2000") is preserved with 1-day drift,
+       which is much better than losing the whole date.
+    3. If still invalid (year+month combination is bogus, non-numeric
+       components, etc.), return ``None``.
+    """
+
     if not isinstance(date_payload, dict):
         return None
     year = _get_nested_value(date_payload, ["year", "value"])
@@ -55,7 +76,36 @@ def _normalize_date(date_payload: Any) -> str | None:
     day = _get_nested_value(date_payload, ["day", "value"]) or "01"
     if not year:
         return None
-    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+
+    try:
+        year_int, month_int, day_int = int(year), int(month), int(day)
+    except (ValueError, TypeError):
+        logger.info(
+            "orcid_provider: dropped non-numeric date year=%r month=%r day=%r",
+            year, month, day,
+        )
+        return None
+
+    try:
+        return date(year_int, month_int, day_int).isoformat()
+    except ValueError:
+        pass
+
+    # Day overflow (e.g. Sept 31, Feb 30) — clamp to the last day of the month.
+    try:
+        last_day = calendar.monthrange(year_int, month_int)[1]
+        clamped = date(year_int, month_int, last_day).isoformat()
+        logger.info(
+            "orcid_provider: clamped invalid day year=%d month=%d day=%d → day=%d",
+            year_int, month_int, day_int, last_day,
+        )
+        return clamped
+    except (ValueError, calendar.IllegalMonthError):
+        logger.info(
+            "orcid_provider: dropped unrecoverable date year=%d month=%d day=%d",
+            year_int, month_int, day_int,
+        )
+        return None
 
 
 def _extract_affiliations(payload: dict[str, Any], summary_key: str) -> list[ORCIDAffiliation]:

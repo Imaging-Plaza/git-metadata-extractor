@@ -361,7 +361,9 @@ class LLMOrganizationAgentV2:
             )
             if isinstance(payload.get("pulse:owns"), list)
             else [],
-            "parent_organization": payload.get("org:unitOf"),
+            "parent_organization": deepcopy(payload.get("org:unitOf"))
+            if isinstance(payload.get("org:unitOf"), list)
+            else payload.get("org:unitOf"),
             "unit_ids": deepcopy(
                 [
                     unit_id

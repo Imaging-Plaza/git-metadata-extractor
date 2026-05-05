@@ -221,21 +221,44 @@ done
 
 ## Storage layout
 
+Each per-index directory carries its own DuckDB store and any
+ingest-time scratch (raw downloads, fetch caches, run logs). Qdrant
+runs as a single shared service whose persistence lives **outside**
+`data/index/` because it backs all indices simultaneously.
+
 ```
-data/index/
-  huggingface/{duckdb,cards,logs,cache}/
-  openalex/{duckdb,cache}/
-  infoscience/{duckdb,raw,chunks,dumps}/
-  orcid/{duckdb,records,cache}/
-  ror/{duckdb,dump,cache}/
-  zenodo/{duckdb,records}/
-  ethz_research_collection/{duckdb,raw,chunks}/
-  github/{duckdb,readmes}/
-  snsf/{duckdb,records}/
-  qdrant/storage/                         # shared by ALL indices, one collection per (index, entity_type)
+data/
+  index/
+    huggingface/{duckdb,cards,cache,logs}/
+    openalex/{duckdb,cache,logs}/
+    infoscience/{duckdb,raw,text,dumps,chroma,matches.jsonl,organizations.txt,persons.txt,relations.jsonl,discover_state.json}/
+    orcid-epfl/{duckdb,cache,logs}/
+    orcid-switzerland/{duckdb,cache,logs,discover.log,discover_resume.log}/
+    ror/{duckdb,dump,index}/
+    zenodo/{duckdb,cache,logs,state}/
+    ethz-research-collection/{duckdb,raw,text,matches.jsonl,organizations.txt,persons.txt,relations.jsonl,discover_state.json}/
+    github/{duckdb,cards,cache,logs}/
+    snsf/{duckdb,raw}/
+    renkulab/{duckdb,cache,logs,state}/
+    epfl_graph/{duckdb,cache,logs}/
+    swissubase/{duckdb,cache,logs,state}/
+  qdrant/storage/                          # shared by ALL indices, one collection per (index, entity_type)
 ```
 
-Backups: each `.duckdb` file is a self-contained SQLite-ish snapshot — `cp` it. The Qdrant collections can be regenerated from DuckDB via `<index>-embed`, so they don't strictly need to be backed up.
+Per-subdir convention:
+
+- `duckdb/` — the canonical DuckDB store (`<index>.duckdb` + WAL).
+- `raw/` — bulk inputs from the upstream source (CSVs, JSON dumps).
+  Used by indices whose ingest is local-file-driven (SNSF, Infoscience,
+  ETHZ Research Collection).
+- `cache/` — per-record HTTP / API cache for incremental ingest.
+- `logs/` — ingest run logs.
+- `state/` — resumable ingest checkpoints (Zenodo, RenkuLab, SWISSUbase).
+- `cards/`, `text/`, `dumps/`, `discover_state.json`, `matches.jsonl`,
+  `organizations.txt`, `persons.txt`, `relations.jsonl` — index-specific
+  intermediate artefacts. See the per-index docs and CLI help.
+
+Backups: each `.duckdb` file is a self-contained SQLite-ish snapshot — `cp` it. The Qdrant collections can be regenerated from DuckDB via `<index>-embed`, so they don't strictly need to be backed up. Qdrant persistence lives in `data/qdrant/storage/` (bind-mounted into the `gme-qdrant` container at `/qdrant/storage`).
 
 ## Related documentation
 

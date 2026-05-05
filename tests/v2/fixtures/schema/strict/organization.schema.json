@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:OrganizationShape.schema.json",
   "title": "OrganizationShape",
-  "description": "Schema for validating Organization entities following Open Pulse Ontology v2.0.0. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid",
+  "description": "Schema for validating Organization entities following Open Pulse Ontology v2.1.2. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name AND at least ONE of (schema:identifier, pulse:githubOrganizationHandle, pulse:infoscienceOrganizationIdentifier).",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
@@ -87,8 +87,11 @@
       }
     },
     "org:unitOf": {
-      "type": ["string", "null"],
-      "description": "Reference to parent OrganizationShape ID (hierarchical)"
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Reference to parent OrganizationShape ID (hierarchical)"
+      }
     },
     "pulse:owns": {
       "type": "array",
@@ -97,5 +100,34 @@
         "description": "Reference to RepositoryShape ID (GitHub handle)"
       }
     }
-  }
+  },
+  "anyOf": [
+    {
+      "description": "At least schema:identifier required",
+      "required": ["schema:identifier"],
+      "properties": {
+        "schema:identifier": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least githubOrganizationHandle required",
+      "required": ["pulse:githubOrganizationHandle"],
+      "properties": {
+        "pulse:githubOrganizationHandle": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least infoscienceOrganizationIdentifier required",
+      "required": ["pulse:infoscienceOrganizationIdentifier"],
+      "properties": {
+        "pulse:infoscienceOrganizationIdentifier": {
+          "type": "string"
+        }
+      }
+    }
+  ]
 }

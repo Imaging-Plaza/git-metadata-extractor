@@ -209,6 +209,11 @@ class GitHubUserMetadata(BaseModel):
     """Pydantic model to store GitHub user metadata with validation"""
 
     login: str = Field(..., description="GitHub username")
+    account_type: Optional[str] = Field(
+        None,
+        description="GitHub account type ('User' or 'Organization'). Used by v2 to skip "
+        "org_agent fanout when a handle is actually a personal account.",
+    )
     name: Optional[str] = Field(None, description="User's display name")
     bio: Optional[str] = Field(None, description="User's bio")
     email: Optional[str] = Field(None, description="User's public email")

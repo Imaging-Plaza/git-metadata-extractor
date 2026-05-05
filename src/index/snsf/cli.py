@@ -42,7 +42,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_load.add_argument(
         "--source-dir", type=Path, default=None,
-        help="Directory holding the CSV set (default: data/data.snf.ch/)",
+        help="Directory holding the CSV set (default: data/index/snsf/raw/)",
     )
     p_load.add_argument(
         "--db-path", type=Path, default=None,

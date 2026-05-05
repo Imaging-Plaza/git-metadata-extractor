@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:PersonShape.schema.json",
   "title": "PersonShape",
-  "description": "Schema for validating Person entities following Open Pulse Ontology v2.0.0. ID hierarchy: orcid → infosciencePersonIdentifier → githubUsername → uuid",
+  "description": "Schema for validating Person entities following Open Pulse Ontology v2.1.2. ID hierarchy: orcid → infosciencePersonIdentifier → githubUsername → uuid",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
@@ -114,6 +114,15 @@
       "required": ["pulse:infosciencePersonIdentifier"],
       "properties": {
         "pulse:infosciencePersonIdentifier": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "description": "At least orcidIdentifier required",
+      "required": ["pulse:orcidIdentifier"],
+      "properties": {
+        "pulse:orcidIdentifier": {
           "type": "string"
         }
       }

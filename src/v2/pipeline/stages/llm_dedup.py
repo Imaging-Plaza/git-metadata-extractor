@@ -499,7 +499,19 @@ def _apply_remaps(typed_entity_buckets: dict[str, list[dict[str, Any]]], remaps:
                     if isinstance(unit_id, str) and unit_id
                 ],
             )
-        organization["org:unitOf"] = _remap_string(organization.get("org:unitOf"), org_map)
+        unit_of_raw = organization.get("org:unitOf")
+        if isinstance(unit_of_raw, str):
+            unit_of_raw = [unit_of_raw]
+        if isinstance(unit_of_raw, list):
+            organization["org:unitOf"] = _dedupe_strings(
+                [
+                    _remap_string(parent_id, org_map)
+                    for parent_id in unit_of_raw
+                    if isinstance(parent_id, str) and parent_id
+                ],
+            )
+        else:
+            organization["org:unitOf"] = []
         owns = organization.get("pulse:owns")
         if isinstance(owns, list):
             organization["pulse:owns"] = _dedupe_strings(

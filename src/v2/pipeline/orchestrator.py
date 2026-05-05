@@ -905,7 +905,9 @@ class PipelineOrchestrator:
                 except Exception:  # noqa: BLE001
                     github_user = {}
                 if isinstance(github_user, dict):
-                    raw_type = github_user.get("type")
+                    raw_type = github_user.get("type") or github_user.get(
+                        "account_type",
+                    )
                     if isinstance(raw_type, str) and raw_type:
                         account_type = raw_type.lower()
                 account_type_by_username[username] = account_type
@@ -959,7 +961,12 @@ class PipelineOrchestrator:
                     except Exception:  # noqa: BLE001
                         github_user = {}
                     if isinstance(github_user, dict):
-                        raw_type = github_user.get("type")
+                        # GitHub REST returns the field as `type`; v1's
+                        # `GitHubUserMetadata` exposes it as `account_type`.
+                        # Accept either to stay robust.
+                        raw_type = github_user.get("type") or github_user.get(
+                            "account_type",
+                        )
                         if isinstance(raw_type, str) and raw_type:
                             account_type = raw_type.lower()
                 account_type_by_handle[org_name] = account_type
@@ -1557,7 +1564,11 @@ class PipelineOrchestrator:
 
         parent_organization = derivation.get("parent_organization")
         if isinstance(parent_organization, str) and parent_organization:
-            merged["org:unitOf"] = parent_organization
+            merged["org:unitOf"] = [parent_organization]
+        elif isinstance(parent_organization, list):
+            merged["org:unitOf"] = [
+                value for value in parent_organization if isinstance(value, str) and value
+            ]
 
         unit_ids = derivation.get("unit_ids")
         if isinstance(unit_ids, list):

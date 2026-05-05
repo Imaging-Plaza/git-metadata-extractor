@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rdflib import Graph
 
-ONTOLOGY_RELATIVE_PATH = Path("dev/ontology-v2-json-response/open-pulse-ontology-v2.0.1.ttl")
+ONTOLOGY_RELATIVE_PATH = Path("dev/ontology-v2-json-response/open-pulse-ontology-v2.1.2.ttl")
 
 
 def ontology_ttl_path() -> Path:

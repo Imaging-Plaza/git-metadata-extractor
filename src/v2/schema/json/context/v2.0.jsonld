@@ -1,6 +1,6 @@
 {
-  "context_version": "2.0.0",
-  "ontology_version": "open-pulse-ontology-v2.0.1",
+  "context_version": "2.1.2",
+  "ontology_version": "open-pulse-ontology-v2.1.2",
   "@context": {
     "sh": "http://www.w3.org/ns/shacl#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",

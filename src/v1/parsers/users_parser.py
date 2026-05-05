@@ -98,6 +98,7 @@ class GitHubUsersParser:
         # Combine all data and create Pydantic model
         user_data = {
             "login": rest_data["login"],
+            "account_type": rest_data.get("type"),
             "name": rest_data.get("name"),
             "bio": rest_data.get("bio"),
             "email": rest_data.get("email"),

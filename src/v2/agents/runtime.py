@@ -8,6 +8,7 @@ class AgentRuntime(str, Enum):
 
     RULE_BASED = "rule_based"
     LLM = "llm"
+    HYBRID = "hybrid"
 
 
 def parse_agent_runtime(

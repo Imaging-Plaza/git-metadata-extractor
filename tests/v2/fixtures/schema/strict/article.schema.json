@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:ArticleShape.schema.json",
   "title": "ArticleShape",
-  "description": "Schema for validating Article entities following Open Pulse Ontology v2.0.0. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. Cross-references use hierarchical IDs when available.",
+  "description": "Schema for validating Article entities following Open Pulse Ontology v2.1.2. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. Cross-references use hierarchical IDs when available.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "schema:identifier", "schema:datePublished", "schema:author"],

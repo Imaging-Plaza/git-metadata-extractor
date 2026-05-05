@@ -142,7 +142,12 @@ class LLMMembershipAgentV2:
         tools = [make_fetch_link_content_tool(self._cache)]
         if providers.orcid is not None:
             tools.append(make_orcid_person_tool(providers.orcid))
-            tools.append(make_query_orcid_tool(providers.orcid))
+            tools.append(
+                make_query_orcid_tool(
+                    providers.orcid,
+                    orcid_rag_provider=providers.orcid_rag,
+                ),
+            )
 
         try:
             llm_result = await asyncio.wait_for(
@@ -172,18 +177,26 @@ class LLMMembershipAgentV2:
 
         force_server_uuid(payload, uuid_value)
 
-        # Defend against inverted Membership dates: ORCID employment
-        # records (and occasionally the LLM itself) emit `time:hasBeginning`
-        # after `time:hasEnd`. The SHACL shape requires
-        # `hasBeginning <= hasEnd`. Swap when both parse as ISO dates.
-        beg = payload.get("time:hasBeginning")
-        end = payload.get("time:hasEnd")
-        if isinstance(beg, str) and isinstance(end, str):
+        # Defend against malformed and inverted Membership dates from ORCID:
+        # invalid dates like "2000-09-31" (Sept has 30 days) trip the SHACL
+        # `xsd:date` literal check; inverted ranges trip `lessThanOrEquals`.
+        # Drop unparseable values, then swap when needed.
+        def _safe_date(value: object) -> str | None:
+            if not isinstance(value, str):
+                return None
             try:
-                if date.fromisoformat(beg[:10]) > date.fromisoformat(end[:10]):
-                    payload["time:hasBeginning"], payload["time:hasEnd"] = end, beg
+                return date.fromisoformat(value[:10]).isoformat()
             except ValueError:
-                pass
+                return None
+
+        beg = _safe_date(payload.get("time:hasBeginning"))
+        end = _safe_date(payload.get("time:hasEnd"))
+        if "time:hasBeginning" in payload:
+            payload["time:hasBeginning"] = beg
+        if "time:hasEnd" in payload:
+            payload["time:hasEnd"] = end
+        if beg and end and beg > end:
+            payload["time:hasBeginning"], payload["time:hasEnd"] = end, beg
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)

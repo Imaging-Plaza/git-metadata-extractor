@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:MembershipShape.schema.json",
   "title": "MembershipShape",
-  "description": "Schema for validating Membership entities following Open Pulse Ontology v2.0.0. ID hierarchy: composite (personId_orgId) → uuid",
+  "description": "Schema for validating Membership entities following Open Pulse Ontology v2.1.2. ID hierarchy: composite (personId_orgId) → uuid",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "org:organization"],

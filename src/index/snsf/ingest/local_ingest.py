@@ -1,9 +1,9 @@
 """Local-CSV ingest pipeline.
 
 Reads the SNSF P3 bulk CSV set the user manually downloaded and dropped
-into a directory (default: `data/data.snf.ch/`). Loads each CSV into the
-matching DuckDB table via `read_csv_auto`, then derives the active scope's
-membership rows from the `grants` table.
+into a directory (default: `data/index/snsf/raw/`). Loads each CSV into
+the matching DuckDB table via `read_csv_auto`, then derives the active
+scope's membership rows from the `grants` table.
 
 This is the canonical Phase 1 ingest path. The earlier API-based path is
 parked (see `.internal/snsf/README.md` for why).
@@ -26,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Default location where the user is expected to drop the manual CSV download.
 # Configurable via `--source-dir` on the CLI or `SNSF_SOURCE_DIR` env override.
-DEFAULT_SOURCE_DIR = Path("data/data.snf.ch")
+DEFAULT_SOURCE_DIR = Path("data/index/snsf/raw")
 
 # Filenames the loader looks for. Missing files just skip that loader (the
 # CSV set may be partial — e.g. user only wants grants without persons).

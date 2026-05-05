@@ -172,6 +172,35 @@ class OrganizationAgentV2:
                 if isinstance(repo_name, str) and repo_name
             ]
 
+        # Build the alias set from the ROR record + the original search
+        # query. The lookup phase in `membership_agent` indexes orgs by
+        # `aliases` so any text we feed here becomes a valid resolution key.
+        # Without this, an ORCID-derived employment at "Aalto-yliopisto"
+        # resolves to ROR "Aalto University" but the membership agent can
+        # only see the canonical name and emits "Unresolved membership
+        # organization mapping" — losing the affiliation.
+        ror_aliases: list[str] = []
+        ror_acronyms: list[str] = []
+        ror_labels: list[Any] = []
+        if isinstance(ror_record, dict):
+            raw_aliases = ror_record.get("aliases")
+            if isinstance(raw_aliases, list):
+                ror_aliases = [v for v in raw_aliases if isinstance(v, str) and v]
+            raw_acronyms = ror_record.get("acronyms")
+            if isinstance(raw_acronyms, list):
+                ror_acronyms = [v for v in raw_acronyms if isinstance(v, str) and v]
+            raw_labels = ror_record.get("labels")
+            if isinstance(raw_labels, list):
+                ror_labels = [v for v in raw_labels if v]
+
+        # Always add the original search-string as an alias when the
+        # canonical name differs — preserves the upstream label that was
+        # used to find this org.
+        merged_aliases: list[str] = list(ror_aliases)
+        if isinstance(org_name, str) and org_name and org_name != resolved_name:
+            if org_name not in merged_aliases:
+                merged_aliases.append(org_name)
+
         payload = {
             "id": resolved_id,
             "type": "org:Organization",
@@ -196,8 +225,16 @@ class OrganizationAgentV2:
             "pulse:OrganizationType": organization_type,
             "pulse:githubOrgFollowers": github_org.get("followers"),
             "org:hasUnit": has_units,
-            "org:unitOf": parent_org,
+            "org:unitOf": [parent_org] if isinstance(parent_org, str) and parent_org else [],
             "pulse:owns": owns,
+            # Internal lookup keys (`_`-prefix is stripped before strict
+            # validation and JSON-LD output). Used by `membership_agent` to
+            # resolve `org:hasMembership` composite IDs whose org token is
+            # the original ORCID-supplied name (e.g. "Aalto-yliopisto")
+            # rather than the canonical ROR display name.
+            "_aliases": merged_aliases,
+            "_acronyms": ror_acronyms,
+            "_labels": ror_labels,
         }
 
         overrides = context.get("agent_overrides")

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:OrganizationShape.schema.json",
   "title": "OrganizationShape",
-  "description": "Schema for Organization entities following Open Pulse Ontology v2.0.0. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name only. All other fields optional.",
+  "description": "Schema for Organization entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name AND at least ONE of (schema:identifier, pulse:githubOrganizationHandle, pulse:infoscienceOrganizationIdentifier).",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
@@ -79,8 +79,11 @@
       }
     },
     "org:unitOf": {
-      "type": ["string", "null"],
-      "description": "Parent OrganizationShape ID (hierarchical). Example: 'https://ror.org/02s376052'"
+      "type": "array",
+      "description": "Parent OrganizationShape IDs (hierarchical). Most orgs have 0 or 1 parent; arrays support joint affiliations (e.g. a research center jointly run by two universities). Example: ['https://ror.org/02s376052']",
+      "items": {
+        "type": "string"
+      }
     },
     "pulse:owns": {
       "type": "array",

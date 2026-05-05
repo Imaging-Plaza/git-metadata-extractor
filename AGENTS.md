@@ -7,7 +7,7 @@ human back-and-forth.
 ## What this tool is
 
 A FastAPI service that turns a GitHub URL (repository / user / org) into
-JSON-LD aligned with **Open Pulse Ontology v2.0.0**. The service runs the
+JSON-LD aligned with **Open Pulse Ontology v2.1.2**. The service runs the
 input through a multi-stage pipeline that combines deterministic rules,
 provider lookups (GitHub REST, ROR, ORCID, Infoscience), and optional LLM
 agents to produce a graph of `schema:SoftwareSourceCode`,
@@ -46,6 +46,11 @@ src/v2/
                                   #    docs/v2-rag-tools.md
     rule_based/
       <kind>_agent.py            # deterministic counterparts (no LLM)
+    refiners/                    # hybrid-runtime LLM refiners — propose targeted
+      <kind>/agent.py            # patches over rule-based output, whitelisted fields only
+                                 #   organization/agent.py — pulse:OrganizationType
+                                 #   repository/agent.py   — pulse:discipline, pulse:repositoryType
+                                 #   person/agent.py       — schema:name (handle→canonical)
 
   ingest/
     cache.py                     # ProviderCache (SQLite, WAL)
@@ -102,24 +107,36 @@ deterministic rule-based agents). All other stages run unconditionally.
 15. assemble_output            split graph into root + related + excluded
 16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
 17. validate_articles          drop placeholder/sentinel-DOI articles
-18. validate_ownership         strip mismatched pulse:owns
-19. infer_owners               stamp pulse:owns / pulse:ownedBy from handles
-20. infer_github_handle_parents  fuzzy-search ROR for parent of every github
+18. validate_author_classes    drop `schema:author` refs whose target is
+                               not a `schema:Person` (closes a SHACL
+                               class-shape violation that was previously
+                               warning-only)
+19. validate_ownership         strip mismatched pulse:owns
+20. infer_owners               stamp pulse:owns / pulse:ownedBy from handles;
+                               also coerces any residual bare-login string
+                               on `pulse:ownedBy` (e.g. "luzpaz") to the
+                               IRI shape `{"@id": "https://github.com/luzpaz"}`
+                               so SHACL never sees a `<file:///CWD/...>` URI
+21. infer_github_handle_parents  fuzzy-search ROR for parent of every github
                                  org; add ROR org entities, stamp unitOf
-21. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
-22. infer_org_units            deterministic name-token fallback for unitOf
-23. concept_tagging  [gated]   pull EPFL Graph concepts/keywords/disciplines
+22. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
+23. infer_org_units            deterministic name-token fallback for unitOf
+24. concept_tagging  [gated]   pull EPFL Graph concepts/keywords/disciplines
                                from the README onto the root repo entity as
                                internal `_concepts`/`_keywords`/`_disciplines`
                                metadata (off by default; opt-in with
                                `V2_CONCEPT_TAGGING_ENABLED=true`)
-24. build_jsonld_output        produce the final JSON-LD graph
+25. build_jsonld_output        produce the final JSON-LD graph; also
+                               strips redundant `pulse:ror` from any
+                               `org:Organization` whose `@id` is already
+                               the ROR (closed-shape violation fix)
 ```
 
 **Gates:**
 
 - Stages tagged `[LLM]` only run in `agent_runtime=llm`.
 - `link_veracity` is `[LLM]`-only too: in `agent_runtime=rule_based` it is **always skipped** (rule-based mode is guaranteed LLM-free).
+- `agent_runtime=hybrid` runs the rule-based generators (stages 4-9) **and** an LLM refiner stage (`refine_with_llm`, between reconciliation and `guarantee_repo_author`). The refiner proposes whitelisted-field patches per entity type: organizations (`pulse:OrganizationType`), repositories (`pulse:discipline`, `pulse:repositoryType` only when current is `pulse:Other`), and persons (`schema:name` only when current looks like a GitHub handle). LLM-only stages (`llm_dedup`, `llm_critic`, `link_veracity`, `org_relationships`) are **skipped** in hybrid mode. Toggle with `V2_HYBRID_REFINER_ENABLED` (default `true`).
 - `llm_critic` is **off by default**. Set `V2_APPLY_CRITIC_PRUNING=true` to enable (LLM mode only).
 - `link_veracity` is **on by default in LLM mode**. Set `V2_LINK_VERACITY_ENABLED=false` to skip even in LLM mode (recommended for batch runs).
 - `concept_tagging` is **off by default**. Set `V2_CONCEPT_TAGGING_ENABLED=true` to opt in. Backends are pluggable via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph` (default, calls graphai), `wikipedia` (credential-free MediaWiki opensearch), `llm` (pydantic-ai)}. Stamps `_concepts` / `_keywords` / `_disciplines` as internal `_*` metadata (stripped before JSON-LD output and strict validation). Optional OpenAlex enrichment per discipline via `V2_CONCEPT_TAGGING_OPENALEX_RELATED_ENABLED=true` (publications, people, units). Full reference at [`docs/concept-tagging.md`](docs/concept-tagging.md).
@@ -131,6 +148,43 @@ deterministic rule-based agents). All other stages run unconditionally.
 - Contribution agent post-LLM: stamps `schema:author = target_person.id` and `pulse:contributionTo = target_repository.id` from the orchestrator's authoritative pair, regardless of what the LLM emits.
 - Article agent post-LLM: drops the entity if `schema:identifier` is a placeholder DOI (`10.0000/...`) or sentinel string (`UNKNOWN`, `N/A`, `TBD`, etc.) and no `pulse:infoscienceArticleIdentifier` is present.
 - Article agent (rule-based) defaults to repo-name-only Infoscience queries; opt in to the wider `include_person_queries=True` / `include_organization_queries=True` blend only when over-attribution risk is low.
+- Membership agents (both rule-based and LLM): swap `time:hasBeginning` / `time:hasEnd` when ORCID returns the pair inverted, so `hasBeginning <= hasEnd` always holds.
+
+**SHACL conformance auto-fixes (warning-only `shacl_gate`, but the graph is fixed in place):**
+
+The SHACL gate emits violations as `result.warnings` rather than aborting,
+so the responsibility for producing a SHACL-clean graph lives in the
+upstream stages and agents. The four most common violations are
+addressed deterministically:
+
+1. `pulse:ownedBy` IRI shape — `infer_owners` rewrites bare-login strings
+   to `{"@id": "https://github.com/{handle}"}`. Without this, SHACL
+   resolves the bare token against the working-directory base URI
+   (`<file:///workspaces/project/luzpaz>`) and the closed-shape check on
+   `schema:Person | org:Organization` fails.
+2. `pulse:ror` redundancy — `build_jsonld_output` strips the field on
+   any `org:Organization` whose `@id` is already the ROR. The
+   Organization shape is `sh:closed` and rejects `pulse:ror`; the
+   `@id` already carries that information.
+3. `Membership` date order — both membership agents swap inverted dates
+   (above).
+4. `schema:author` class — `validate_author_classes` filters refs whose
+   target is missing from the graph or not typed `schema:Person`.
+   Catches Membership / Contribution ids leaking into author lists.
+
+**Orchestrator fanout filtering:**
+
+- `_filter_person_work_items` skips a queued person fanout when the
+  GitHub handle resolves to `type=Organization` (cached
+  `provider.github.get_user(login)` lookup).
+- `_filter_org_work_items` mirrors the rule for org fanouts: skips
+  handles whose GitHub `type` is `User`. This prevents the 4× retry
+  loop in `org_agent` for personal handles encoded into
+  `org:hasMembership` composite ids.
+- `_person_fanout_contexts` materialises a User-account repo owner as a
+  Person when missing from `contributors` (abandoned repos, empty
+  repos). Prevents the owner from leaking as a bare-string ref in
+  `pulse:ownedBy` / `schema:author` with no backing entity.
 
 ## API surface
 
@@ -159,8 +213,8 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
 | `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | swap in mock GitHub/ORCID/Infoscience/ROR providers |
-| `V2_GITHUB_BASE_URL` | `https://github.com` | for GitHub Enterprise |
 | `V2_LINK_VERACITY_ENABLED` | `true` | turn off to skip the link-veracity stage in LLM mode (rule-based mode skips unconditionally) |
+| `V2_CONTEXT_SUMMARY_SCOUT_MODE` | `false` | upgrade `context_summary` LLM stage to scout mode: broad RAG-search toolkit (orcid/ror/infoscience/openalex/zenodo/ethz/huggingface/renkulab/snsf/epfl_graph + selenium_fetch) on top of the legacy `grep_repository_corpus` + DuckDuckGo pair, plus a structured-brief prompt with explicit People / Organizations / Articles / Affiliations / Caveats sections. Per-entity LLM agents (person, org, article, membership, contribution) automatically benefit since they already consume the `summary_markdown`. Trade-off: heavier upfront LLM call, but per-entity calls send less context and duplicate ORCID/ROR lookups across entities collapse into the scout's shared brief. |
 | `V2_INFOSCIENCE_RAG_ENABLED` | `true` | enables the Infoscience RAG agent tools (Qdrant-backed semantic search + on-demand chunk/record fetch). Construction degrades gracefully when Qdrant or RCP is unreachable. |
 | `V2_ETHZ_RESEARCH_COLLECTION_RAG_ENABLED` | `true` | enables the ETH Research Collection RAG agent tools (DSpace-backed sister index to Infoscience for ETHZ research outputs). Same shape: search + fetch_chunks + fetch_records. |
 | `V2_HUGGINGFACE_RAG_ENABLED` | `true` | enables the HuggingFace Hub RAG search tool (collections: `hf_models`, `hf_datasets`, `hf_spaces`, `hf_orgs`). |

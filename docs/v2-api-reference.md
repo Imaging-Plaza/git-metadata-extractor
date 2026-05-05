@@ -183,13 +183,20 @@ deterministic rule-based agents). Other stages run unconditionally.
 15. assemble_output            split graph into root + related + excluded
 16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
 17. validate_articles          drop placeholder / sentinel-DOI articles
-18. validate_ownership         strip mismatched pulse:owns
-19. infer_owners               stamp pulse:owns / pulse:ownedBy from handles
-20. infer_github_handle_parents  fuzzy-search ROR for parent of every github
+18. validate_author_classes    drop `schema:author` refs whose target is
+                               not a `schema:Person`
+19. validate_ownership         strip mismatched pulse:owns
+20. infer_owners               stamp pulse:owns / pulse:ownedBy from handles;
+                               coerces residual bare-login strings on
+                               `pulse:ownedBy` to `{"@id": "https://github.com/{handle}"}`
+21. infer_github_handle_parents  fuzzy-search ROR for parent of every github
                                  org; add ROR org entities, stamp unitOf
-21. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
-22. infer_org_units            deterministic name-token fallback for unitOf
-23. build_jsonld_output        produce the final JSON-LD graph
+22. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
+23. infer_org_units            deterministic name-token fallback for unitOf
+24. build_jsonld_output        produce the final JSON-LD graph; strips
+                               redundant `pulse:ror` from any
+                               `org:Organization` whose `@id` is already
+                               the ROR (closed-shape fix)
 ```
 
 **Gates:**

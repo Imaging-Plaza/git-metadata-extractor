@@ -47,7 +47,15 @@ from src.v2.pipeline.stages.ownership_check import (
     infer_owners,
     validate_ownership,
 )
+from src.v2.pipeline.stages.prune_dangling_refs import prune_dangling_refs
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
+from src.v2.pipeline.stages.refine_with_llm import (
+    RefineWithLLMResult,
+    run_refine_with_llm_stage,
+)
+from src.v2.pipeline.stages.refine_with_llm import (
+    is_enabled as hybrid_refiner_is_enabled,
+)
 from src.v2.pipeline.stages.stats import compute_stats
 
 __all__ = [
@@ -62,6 +70,7 @@ __all__ = [
     "LLMDedupStageResult",
     "LinkVeracityStageResult",
     "ReconciledEntities",
+    "RefineWithLLMResult",
     "RootEntityValidationError",
     "apply_link_pruning_to_assembled_output",
     "assemble_output",
@@ -73,16 +82,19 @@ __all__ = [
     "concept_tagging_resolve_backend",
     "gather_context",
     "guarantee_repo_author",
+    "hybrid_refiner_is_enabled",
     "infer_github_handle_parents",
     "infer_org_units",
     "infer_owners",
     "promote_failed_id_entities",
+    "prune_dangling_refs",
     "reconcile_entities",
     "run_concept_tagging_stage",
     "run_link_veracity_stage",
     "run_llm_critic_stage",
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
+    "run_refine_with_llm_stage",
     "validate_articles",
     "validate_author_classes",
     "validate_ownership",

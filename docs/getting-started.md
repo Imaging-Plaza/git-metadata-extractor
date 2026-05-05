@@ -35,7 +35,6 @@ Optional integrations:
 - `INFOSCIENCE_TOKEN` — protected Infoscience routes only.
 - `SELENIUM_REMOTE_URL` — enables the link-veracity pipeline stage and
   the `fetch_link_content_via_selenium` LLM tool.
-- `V2_GITHUB_BASE_URL` — for GitHub Enterprise.
 
 Per-indexer politeness (only needed when running the corresponding
 indexer):

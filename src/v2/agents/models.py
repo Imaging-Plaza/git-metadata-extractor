@@ -256,9 +256,21 @@ def validate_permissive(
     validated_payload = deepcopy(payload)
     warnings: list[str] = []
 
+    # `_`-prefixed keys are internal pipeline metadata (per the convention
+    # documented in CLAUDE.md): stripped before strict validation, JSON-LD
+    # output, and RDF serialisation. They don't need to appear in the agent
+    # JSON Schema — pull them aside before running the schema validator so
+    # they don't trip `additionalProperties`, then restore them at the end.
+    internal_metadata = {
+        key: validated_payload.pop(key)
+        for key in list(validated_payload)
+        if isinstance(key, str) and key.startswith("_")
+    }
+
     for _ in range(MAX_PERMISSIVE_PASSES):
         errors = sorted(validator.iter_errors(validated_payload), key=lambda err: list(err.path))
         if not errors:
+            validated_payload.update(internal_metadata)
             return validated_payload, warnings
 
         changed = False
@@ -313,5 +325,8 @@ def validate_permissive(
             warnings,
             f"Validation warning at {_json_path(list(error.path))}: {error.message}",
         )
+
+    # Re-attach internal metadata pulled aside before the schema check.
+    validated_payload.update(internal_metadata)
 
     return validated_payload, warnings

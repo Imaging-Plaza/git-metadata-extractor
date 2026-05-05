@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:ContributionShape.schema.json",
   "title": "ContributionShape",
-  "description": "Schema for validating Contribution entities following Open Pulse Ontology v2.0.0. ID hierarchy: composite (personId_repoId) → uuid",
+  "description": "Schema for validating Contribution entities following Open Pulse Ontology v2.1.2. ID hierarchy: composite (personId_repoId) → uuid",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "pulse:contributionTo", "pulse:contributionCount", "schema:author"],

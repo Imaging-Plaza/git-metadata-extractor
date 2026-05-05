@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from copy import deepcopy
 from typing import Any
 
@@ -24,6 +25,25 @@ logger = logging.getLogger(__name__)
 _PROMPTS_PACKAGE = "src.v2.agents.llm.context_summary.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
 _USER_PROMPT_TEMPLATE = load_prompt(_PROMPTS_PACKAGE, "user_prompt.md")
+# Loaded lazily only when scout mode is enabled, so projects that don't
+# opt in never pay the import + read cost. The scout prompt produces the
+# same `{summary_markdown}` shape as the default prompt — downstream
+# agents are unchanged.
+_SCOUT_PROMPT_FILENAME = "system_prompt_scout.md"
+
+
+def _is_scout_mode_enabled() -> bool:
+    """`V2_CONTEXT_SUMMARY_SCOUT_MODE=true` opts into the broader recon stage.
+
+    Off by default — the existing 2-tool (corpus_grep + DuckDuckGo)
+    summary keeps producing the historical brief shape. Turn on to give
+    the summary agent the per-entity RAG search toolkit (orcid_rag,
+    ror_rag, infoscience_rag, openalex_rag, selenium_fetch, etc.) so it
+    consolidates discovery work that downstream agents currently
+    duplicate.
+    """
+    raw = os.environ.get("V2_CONTEXT_SUMMARY_SCOUT_MODE", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 MAX_DOCUMENT_COUNT = 120
 MAX_SINGLE_DOCUMENT_CHARS = 120_000
@@ -225,6 +245,91 @@ def _build_corpus_documents(
     return documents
 
 
+def _build_scout_tools(
+    *,
+    providers: ProviderSet,
+    cache: ProviderCache | None,
+    corpus_documents: list[dict[str, Any]],
+) -> list[Any]:
+    """Assemble the broad recon toolset for context_summary in scout mode.
+
+    Mirrors the per-entity agents' tool sets (person, org, article,
+    membership, contribution) so the scout sees the same search
+    capabilities collectively. Only RAG `search_*` factories are
+    pulled in — the heavier `fetch_chunks` / `fetch_records` stay out
+    so the scout doesn't burn its budget on full-record retrieval.
+
+    Each `provider.* is not None` guard mirrors how the per-entity
+    agents wire tools — a missing index degrades silently.
+    """
+    # Local imports keep the legacy (non-scout) code path import-cost-free.
+    from src.v2.agents.llm.agent_tools.epfl_graph_rag import (  # noqa: PLC0415
+        make_epfl_graph_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.ethz_research_collection_rag import (  # noqa: PLC0415
+        make_ethz_research_collection_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.huggingface_rag import (  # noqa: PLC0415
+        make_huggingface_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
+        make_infoscience_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.openalex_rag import (  # noqa: PLC0415
+        make_openalex_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.orcid_rag import (  # noqa: PLC0415
+        make_orcid_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.renkulab_rag import (  # noqa: PLC0415
+        make_renkulab_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.ror_rag import (  # noqa: PLC0415
+        make_ror_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.selenium_fetch import (  # noqa: PLC0415
+        make_fetch_link_content_tool,
+    )
+    from src.v2.agents.llm.agent_tools.snsf_rag import (  # noqa: PLC0415
+        make_snsf_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.zenodo_rag import (  # noqa: PLC0415
+        make_zenodo_rag_search_tool,
+    )
+
+    tools: list[Any] = [
+        # Always-on baseline (no provider dependency).
+        make_repository_corpus_grep_tool(corpus_documents),
+        make_duckduckgo_search_tool(cache=cache),
+        make_fetch_link_content_tool(cache),
+    ]
+    if providers.orcid_rag is not None:
+        tools.append(make_orcid_rag_search_tool(providers.orcid_rag))
+    if providers.ror_rag is not None:
+        tools.append(make_ror_rag_search_tool(providers.ror_rag))
+    if providers.infoscience_rag is not None:
+        tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
+    if providers.openalex_rag is not None:
+        tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
+    if providers.zenodo_rag is not None:
+        tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
+    if providers.ethz_research_collection_rag is not None:
+        tools.append(
+            make_ethz_research_collection_rag_search_tool(
+                providers.ethz_research_collection_rag,
+            ),
+        )
+    if providers.huggingface_rag is not None:
+        tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
+    if providers.renkulab_rag is not None:
+        tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
+    if providers.snsf_rag is not None:
+        tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
+    if providers.epfl_graph_rag is not None:
+        tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+    return tools
+
+
 def _document_manifest(corpus_documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for document in corpus_documents:
@@ -263,7 +368,10 @@ class LLMContextSummaryAgentV2:
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
-        del providers
+        # Scout mode (off by default) needs `providers` to wire RAG
+        # search tools; the legacy path never used them but we keep the
+        # parameter for ABI stability.
+        scout_mode = _is_scout_mode_enabled()
         detected_type = _to_non_empty_string(context.get("detected_type")) or "repository"
         source_url = _to_non_empty_string(context.get("source_url")) or ""
 
@@ -299,15 +407,34 @@ class LLMContextSummaryAgentV2:
                 "context_summary_agent: no raw corpus documents available; using empty summary context",
             )
 
+        # Pick prompt + tool catalog based on scout mode. Default path
+        # is unchanged (2 tools, original prompt). Scout mode adds the
+        # RAG providers' search tools so people / orgs / articles get
+        # recon'd up-front.
+        if scout_mode:
+            system_prompt = load_prompt(_PROMPTS_PACKAGE, _SCOUT_PROMPT_FILENAME)
+            tools = _build_scout_tools(
+                providers=providers,
+                cache=self._cache,
+                corpus_documents=corpus_documents,
+            )
+            logger.info(
+                "context_summary_agent: scout mode ON (%d tools)",
+                len(tools),
+            )
+        else:
+            system_prompt = _SYSTEM_PROMPT
+            tools = [
+                make_repository_corpus_grep_tool(corpus_documents),
+                make_duckduckgo_search_tool(cache=self._cache),
+            ]
+
         try:
             llm_result = await self._llm_runtime.run_json_prompt(
-                system_prompt=_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 output_type=LLMContextSummaryOutput,
-                tools=[
-                    make_repository_corpus_grep_tool(corpus_documents),
-                    make_duckduckgo_search_tool(cache=self._cache),
-                ],
+                tools=tools,
             )
         except LLMRuntimeError as exc:
             warning = f"context_summary_agent: LLM call failed; proceeding without compiled summary ({exc})"

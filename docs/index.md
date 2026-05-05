@@ -1,7 +1,7 @@
 # Git Metadata Extractor
 
 A FastAPI service that turns a GitHub URL (repository / user / org) into
-JSON-LD aligned with **Open Pulse Ontology v2.0.0**, plus nine sibling RAG
+JSON-LD aligned with **Open Pulse Ontology v2.1.2**, plus nine sibling RAG
 indices over EPFL/Swiss research catalogues that the v2 LLM agents can
 query during extraction.
 

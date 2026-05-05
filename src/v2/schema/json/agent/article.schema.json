@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "pulse:ArticleShape.schema.json",
   "title": "ArticleShape",
-  "description": "Schema for Article entities following Open Pulse Ontology v2.0.0. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. SHACL requires: schema:name, schema:identifier (DOI), schema:datePublished, schema:author (min 1).",
+  "description": "Schema for Article entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. SHACL requires: schema:name, schema:identifier (DOI), schema:datePublished, schema:author (min 1).",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "schema:identifier", "schema:datePublished", "schema:author"],

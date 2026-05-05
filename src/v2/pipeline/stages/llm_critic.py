@@ -100,9 +100,17 @@ def _collect_owner_org_ancestor_ids(
         if current in protected:
             continue
         protected.add(current)
-        parent_id = by_id.get(current, {}).get("org:unitOf")
-        if isinstance(parent_id, str) and parent_id in by_id and parent_id not in protected:
-            queue.append(parent_id)
+        parents = by_id.get(current, {}).get("org:unitOf") or []
+        if isinstance(parents, str):
+            parents = [parents]
+        if isinstance(parents, list):
+            for parent_id in parents:
+                if (
+                    isinstance(parent_id, str)
+                    and parent_id in by_id
+                    and parent_id not in protected
+                ):
+                    queue.append(parent_id)
 
     return protected
 
@@ -293,8 +301,16 @@ def _cleanup_relationships_after_prune(
             )
 
         unit_of = organization.get("org:unitOf")
-        if isinstance(unit_of, str) and unit_of in dropped_org_ids:
-            organization["org:unitOf"] = None
+        if isinstance(unit_of, str):
+            organization["org:unitOf"] = (
+                [] if unit_of in dropped_org_ids else [unit_of]
+            )
+        elif isinstance(unit_of, list):
+            organization["org:unitOf"] = [
+                parent_id
+                for parent_id in unit_of
+                if isinstance(parent_id, str) and parent_id and parent_id not in dropped_org_ids
+            ]
 
         owns = organization.get("pulse:owns")
         if isinstance(owns, list):

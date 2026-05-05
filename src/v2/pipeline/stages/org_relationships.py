@@ -71,10 +71,16 @@ def _collect_organizations(
 
 
 def _set_unit_of(child: dict[str, Any], parent_id: str) -> bool:
+    """Set `org:unitOf` on child only if currently empty. Returns True if set."""
     existing = child.get(UNIT_OF_KEY)
-    if existing in (None, "", {}):
-        child[UNIT_OF_KEY] = parent_id
+    if existing in (None, "", {}, []):
+        child[UNIT_OF_KEY] = [parent_id]
         return True
+    if isinstance(existing, list):
+        for entry in existing:
+            if (isinstance(entry, dict) and entry.get("@id") == parent_id) or entry == parent_id:
+                return False
+        return False
     if (isinstance(existing, dict) and existing.get("@id") == parent_id) or existing == parent_id:
         return False
     return False
@@ -99,21 +105,24 @@ def _add_to_has_unit(parent: dict[str, Any], child_id: str) -> bool:
 def _would_create_cycle(
     child_id: str,
     parent_id: str,
-    edges: dict[str, str],
+    edges: dict[str, list[str]],
 ) -> bool:
     """Return True if adding `child unitOf parent` produces a cycle.
 
-    Walks up from `parent_id` along existing edges; if we encounter
-    `child_id` along the way, the new edge closes a loop.
+    Walks up from `parent_id` along all existing parent edges (multi-parent
+    DAG); if we encounter `child_id` along the way, the new edge closes a loop.
     """
 
     visited: set[str] = set()
-    current: str | None = parent_id
-    while isinstance(current, str) and current not in visited:
+    queue: list[str] = [parent_id]
+    while queue:
+        current = queue.pop()
         if current == child_id:
             return True
+        if current in visited:
+            continue
         visited.add(current)
-        current = edges.get(current)
+        queue.extend(edges.get(current) or [])
     return False
 
 
@@ -178,15 +187,21 @@ async def run_org_relationships_stage(
     if not isinstance(proposals, list):
         proposals = []
 
-    # Existing parent edges (one per child) for cycle detection.
-    existing_edges: dict[str, str] = {}
+    # Existing parent edges (multi-parent DAG) for cycle detection.
+    existing_edges: dict[str, list[str]] = {}
     for entity in new_organizations:
         child_id = entity.get("id")
-        parent_ref = entity.get(UNIT_OF_KEY)
-        if isinstance(parent_ref, dict):
-            parent_ref = parent_ref.get("@id")
-        if isinstance(child_id, str) and isinstance(parent_ref, str) and parent_ref:
-            existing_edges[child_id] = parent_ref
+        if not isinstance(child_id, str) or not child_id:
+            continue
+        raw = entity.get(UNIT_OF_KEY) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        if isinstance(raw, list):
+            for parent_ref in raw:
+                if isinstance(parent_ref, dict):
+                    parent_ref = parent_ref.get("@id")
+                if isinstance(parent_ref, str) and parent_ref:
+                    existing_edges.setdefault(child_id, []).append(parent_ref)
 
     seen_children: set[str] = set()
     applied_count = 0
@@ -234,7 +249,7 @@ async def run_org_relationships_stage(
         parent_entity = org_index[parent_id]
         unit_of_set = _set_unit_of(child_entity, parent_id)
         has_unit_set = _add_to_has_unit(parent_entity, child_id)
-        existing_edges[child_id] = parent_id
+        existing_edges.setdefault(child_id, []).append(parent_id)
         seen_children.add(child_id)
 
         if unit_of_set or has_unit_set:

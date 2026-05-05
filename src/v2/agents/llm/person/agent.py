@@ -387,7 +387,12 @@ class LLMPersonAgentV2:
             tools.append(make_infoscience_search_tool(providers.infoscience))
         if providers.orcid is not None:
             tools.append(make_orcid_person_tool(providers.orcid))
-            tools.append(make_query_orcid_tool(providers.orcid))
+            tools.append(
+                make_query_orcid_tool(
+                    providers.orcid,
+                    orcid_rag_provider=providers.orcid_rag,
+                ),
+            )
         if providers.infoscience_rag is not None:
             tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
             tools.append(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from src.v2.pipeline.stages.models import ContextBundle
@@ -7,6 +9,36 @@ from src.v2.pipeline.stages.models import ContextBundle
 if TYPE_CHECKING:
     from src.v2.agents.models import ProviderSet
     from src.v2.ingest.detection.models import GitHubURLClassification
+
+logger = logging.getLogger(__name__)
+
+_BOOKENDS_TOP_N_DEFAULT = 50
+
+
+def _resolve_bookends_top_n() -> int:
+    """How many contributors get a `get_commit_bookends` lookup.
+
+    GitHub returns `/repos/.../contributors` ordered by commit count
+    desc, so capping to the top N keeps the heaviest contributors and
+    skips the long tail. Each contributor costs up to 2 GitHub API
+    calls (cached for `V2_PROVIDER_CACHE_TTL_DAYS`); without the cap a
+    repo with 4 000 contributors burns through the 5 000/h auth quota
+    on a single extraction.
+
+    `0` (or negative) disables the enrichment entirely.
+    """
+    raw = os.getenv("V2_CONTRIBUTOR_BOOKENDS_TOP_N")
+    if raw is None or raw.strip() == "":
+        return _BOOKENDS_TOP_N_DEFAULT
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid V2_CONTRIBUTOR_BOOKENDS_TOP_N=%r; falling back to %d",
+            raw,
+            _BOOKENDS_TOP_N_DEFAULT,
+        )
+        return _BOOKENDS_TOP_N_DEFAULT
 
 
 class RequiredProviderUnavailableError(RuntimeError):
@@ -25,6 +57,69 @@ def _first_non_empty_string(*candidates: Any) -> str | None:
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
+    return None
+
+
+def _enrich_contributors_with_commit_bookends(
+    full_name: str,
+    contributors: list[dict[str, Any]],
+    providers: ProviderSet,
+) -> str | None:
+    """Populate `firstContributionDate` / `lastContributionDate` /
+    `contributions` on each contributor in place.
+
+    Uses ``GitHubProvider.get_commit_bookends`` (cached, two API calls
+    per contributor). Failures degrade silently — the contribution
+    agent simply sees `None` for those fields.
+
+    Capped to the top N contributors (`V2_CONTRIBUTOR_BOOKENDS_TOP_N`,
+    default 50) to keep jumbo repos within the GitHub auth quota. The
+    upstream contributor list is already ordered by commit count desc,
+    so the top N captures the heaviest contributors. Returns a warning
+    string when the cap dropped at least one contributor, otherwise
+    `None`.
+    """
+    if not contributors or providers.github is None:
+        return None
+    fetcher = getattr(providers.github, "get_commit_bookends", None)
+    if not callable(fetcher):
+        return None
+
+    top_n = _resolve_bookends_top_n()
+    if top_n <= 0:
+        return None
+
+    targets = contributors[:top_n]
+    for contributor in targets:
+        if not isinstance(contributor, dict):
+            continue
+        login = contributor.get("login")
+        if not isinstance(login, str) or not login:
+            continue
+        try:
+            bookends = fetcher(full_name, login)
+        except Exception:  # noqa: BLE001
+            continue
+        if not isinstance(bookends, dict):
+            continue
+        first_date = bookends.get("first_date")
+        last_date = bookends.get("last_date")
+        count = bookends.get("count")
+        if isinstance(first_date, str) and not contributor.get("firstContributionDate"):
+            contributor["firstContributionDate"] = first_date
+        if isinstance(last_date, str) and not contributor.get("lastContributionDate"):
+            contributor["lastContributionDate"] = last_date
+        if isinstance(count, int) and count > 0 and not contributor.get("contributions"):
+            contributor["contributions"] = count
+
+    skipped = max(0, len(contributors) - top_n)
+    if skipped > 0:
+        return (
+            f"Commit-bookend enrichment capped at top {top_n} contributors "
+            f"for {full_name}; {skipped} tail contributor(s) left without "
+            "first/last/contributions dates "
+            "(adjust V2_CONTRIBUTOR_BOOKENDS_TOP_N to widen)."
+        )
     return None
 
 
@@ -111,6 +206,12 @@ def _optional_repository_context(
             f"Repository contributors lookup failed for {full_name}: {exc}",
         )
         contributors = []
+    else:
+        cap_warning = _enrich_contributors_with_commit_bookends(
+            full_name, contributors, providers,
+        )
+        if cap_warning:
+            warnings.append(cap_warning)
 
     try:
         languages = providers.github.get_languages(full_name)
@@ -194,6 +295,12 @@ async def gather_context(  # noqa: C901, PLR0915
                 operation="repository contributors lookup",
                 cause=exc,
             ) from exc
+
+        cap_warning = _enrich_contributors_with_commit_bookends(
+            full_name, contributors, providers,
+        )
+        if cap_warning:
+            warnings.append(cap_warning)
 
         try:
             languages = providers.github.get_languages(full_name)

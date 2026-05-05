@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from urllib.parse import unquote, urlparse
 
 from src.v2.ingest.detection.models import (
@@ -28,7 +27,7 @@ UNSUPPORTED_REPO_PATH_REASONS = {
 }
 
 EMPTY_URL_ERROR = "GitHub URL cannot be empty"
-BASE_PATH_MISMATCH_ERROR = "GitHub URL does not match configured V2_GITHUB_BASE_URL path"
+BASE_PATH_MISMATCH_ERROR = "GitHub URL does not match the github.com base path"
 MISSING_PATH_ERROR = "GitHub URL must include a user, organization, or repository path"
 MISSING_ORGANIZATION_NAME_ERROR = "Organization URL must include an organization name"
 EMPTY_REPOSITORY_NAME_ERROR = "Repository name cannot be empty"
@@ -57,13 +56,14 @@ def _parse_url(raw_url: str) -> tuple[str, str, list[str]]:
 
 
 def _parse_github_base_url() -> tuple[str, list[str]]:
-    configured_base = os.getenv("V2_GITHUB_BASE_URL", DEFAULT_GITHUB_BASE_URL).strip()
-    if not configured_base:
-        configured_base = DEFAULT_GITHUB_BASE_URL
-    if "://" not in configured_base:
-        configured_base = f"https://{configured_base}"
+    """Parse `DEFAULT_GITHUB_BASE_URL` into (host, path_segments).
 
-    _, hostname, path_segments = _parse_url(configured_base)
+    The base URL is hardcoded to `https://github.com`; we previously
+    exposed `V2_GITHUB_BASE_URL` for GitHub Enterprise but the project
+    has only ever targeted public GitHub, so the env var has been
+    retired.
+    """
+    _, hostname, path_segments = _parse_url(DEFAULT_GITHUB_BASE_URL)
     return hostname, path_segments
 
 

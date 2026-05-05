@@ -37,7 +37,7 @@ class V2JSONOutputEnvelope(BaseModel):
 class V2ExtractRequest(BaseModel):
     source_url: str
     output_format: Literal["jsonld", "json"] = "jsonld"
-    agent_runtime: Literal["rule_based", "llm"] | None = None
+    agent_runtime: Literal["rule_based", "llm", "hybrid"] | None = None
     include_context_summary: bool = False
 
 

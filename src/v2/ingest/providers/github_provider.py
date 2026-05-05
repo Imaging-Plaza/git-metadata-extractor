@@ -74,6 +74,28 @@ def _github_auth_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
     return headers
 
 
+_LINK_LAST_PAGE_RE = re.compile(r"[?&]page=(\d+)")
+
+
+def _parse_link_last_page(link_header: str) -> int:
+    """Return the `?page=N` value from the segment of `Link:` tagged
+    `rel="last"`, or 0 if absent / unparseable.
+    """
+    if not link_header:
+        return 0
+    for part in link_header.split(","):
+        chunk = part.strip()
+        if 'rel="last"' not in chunk:
+            continue
+        match = _LINK_LAST_PAGE_RE.search(chunk)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                return 0
+    return 0
+
+
 def _first_non_empty_string(*values: Any) -> str | None:
     for value in values:
         if isinstance(value, str) and value.strip():
@@ -714,6 +736,132 @@ class RealGitHubProvider(GitHubProvider):
             _fetch,
             label=f"github.get_repository_sbom({full_name})",
         )
+
+    def get_commit_bookends(
+        self,
+        full_name: str,
+        login: str,
+    ) -> dict[str, Any]:
+        """Return `(first, last)` commit dates and total count for `login`.
+
+        Always issues two API calls (regardless of repo age) so we
+        capture the exact first and last commit dates rather than the
+        52-week approximation from `/stats/contributors`:
+
+        1. ``GET /repos/{full_name}/commits?author={login}&per_page=1``
+           — the most recent commit (`last_date`). The `Link: ...
+           rel="last"` header carries `?page=N` where `N` is the total
+           number of commits by this author.
+        2. ``GET /repos/{full_name}/commits?author={login}&per_page=1&page={N}``
+           — the oldest commit (`first_date`).
+
+        When the repo has only one commit by this author, both calls
+        return the same record (`first_date == last_date`, `count == 1`).
+
+        Failures (network, non-200, malformed response) collapse to
+        `{first_date: None, last_date: None, count: 0}`. Result is
+        cached per the standard `V2_PROVIDER_CACHE_TTL_DAYS` TTL — a
+        miss won't re-hit GitHub until the cache entry expires (one
+        month by default), so transient failures don't trigger
+        per-request retry storms.
+        """
+
+        def _fetch() -> dict[str, Any]:
+            last_date, count = self._fetch_commit_page(
+                full_name, login, page=1,
+            )
+            if count <= 0 or last_date is None:
+                return {"first_date": None, "last_date": None, "count": 0}
+            if count == 1:
+                return {
+                    "first_date": last_date,
+                    "last_date": last_date,
+                    "count": 1,
+                }
+            first_date, _ = self._fetch_commit_page(
+                full_name, login, page=count,
+            )
+            return {
+                "first_date": first_date,
+                "last_date": last_date,
+                "count": count,
+            }
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github",
+            "get_commit_bookends",
+            full_name=full_name,
+            login=login,
+        )
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_commit_bookends({full_name},{login})",
+        )
+
+    def _fetch_commit_page(
+        self,
+        full_name: str,
+        login: str,
+        *,
+        page: int,
+    ) -> tuple[str | None, int]:
+        """Return ``(commit_date_iso, total_count)`` for one page of size 1.
+
+        ``total_count`` is parsed from the ``Link: rel="last"`` header
+        (page index when ``per_page=1``). If the header is absent the
+        result set fits in one page, so we return ``len(body)``.
+        """
+        url = f"https://api.github.com/repos/{full_name}/commits"
+        params = {"author": login, "per_page": "1", "page": str(page)}
+        try:
+            response = self._run_with_rate_limit(
+                lambda: requests.get(
+                    url,
+                    params=params,
+                    headers=_github_auth_headers(),
+                    timeout=15,
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github commit page fetch failed: %s author=%s page=%d",
+                full_name,
+                login,
+                page,
+            )
+            return None, 0
+        if response.status_code != 200:
+            logger.warning(
+                "github commit page returned %d for %s author=%s page=%d",
+                response.status_code,
+                full_name,
+                login,
+                page,
+            )
+            return None, 0
+        try:
+            payload = response.json()
+        except ValueError:
+            logger.exception(
+                "github commit page response not JSON: %s author=%s",
+                full_name,
+                login,
+            )
+            return None, 0
+        if not isinstance(payload, list) or not payload:
+            return None, 0
+        commit = payload[0].get("commit") if isinstance(payload[0], dict) else None
+        date: str | None = None
+        if isinstance(commit, dict):
+            committer = commit.get("committer") if isinstance(commit.get("committer"), dict) else {}
+            author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+            date = committer.get("date") or author.get("date")
+        last_page = _parse_link_last_page(response.headers.get("Link", ""))
+        count = last_page if last_page > 0 else len(payload)
+        return date if isinstance(date, str) else None, count
 
     def get_user(self, username: str) -> dict[str, Any]:
         def _fetch() -> dict[str, Any]:
