@@ -237,6 +237,26 @@ def _build_contribution_payload(  # noqa: PLR0913
     }
 
 
+def _person_github_login(person: Any) -> str | None:
+    """Best-effort GitHub login for a person entity.
+
+    Mirrors the LLM contribution agent's helper: prefers the explicit
+    `pulse:githubUsername`, falls back to parsing `id` when shaped like
+    `https://github.com/{login}`.
+    """
+    if not isinstance(person, dict):
+        return None
+    handle = person.get("pulse:githubUsername")
+    if isinstance(handle, str) and handle.strip():
+        return handle.strip()
+    identifier = person.get("id")
+    if isinstance(identifier, str) and identifier.startswith("https://github.com/"):
+        candidate = identifier.removeprefix("https://github.com/").strip("/")
+        if candidate and "/" not in candidate:
+            return candidate
+    return None
+
+
 class ContributionAgentV2:
     """Deterministic contribution agent from repository contributor metadata."""
 
@@ -252,6 +272,17 @@ class ContributionAgentV2:
         organization_lookup = _build_organization_lookup(_collect_known_organizations(context))
         repositories = _collect_known_repositories(context)
 
+        # The orchestrator fans out one work item per (person, repo) pair and
+        # passes both `target_person` and `target_repository`. Honour that
+        # scoping: only emit a contribution for the target person, never warn
+        # about other contributors that happen to share the repo's signal list
+        # (they have their own fanout work item).
+        target_person = context.get("target_person")
+        target_login = _person_github_login(target_person)
+        normalized_target_login = (
+            target_login.casefold() if isinstance(target_login, str) else None
+        )
+
         contribution_data_by_composite: dict[str, dict[str, Any]] = {}
         for repository in repositories:
             repository_id = _as_string(
@@ -266,6 +297,12 @@ class ContributionAgentV2:
                 contributor_login = signal.get("login")
                 normalized_login = _normalize_token(contributor_login)
                 if normalized_login is None:
+                    continue
+
+                if (
+                    normalized_target_login is not None
+                    and normalized_login != normalized_target_login
+                ):
                     continue
 
                 person_id = person_lookup.get(normalized_login)

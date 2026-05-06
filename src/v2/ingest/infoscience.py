@@ -121,6 +121,39 @@ def _parse_metadata_list(metadata: Dict[str, Any], field: str) -> List[str]:
     return []
 
 
+def _parse_metadata_list_with_authority(
+    metadata: Dict[str, Any],
+    field: str,
+) -> List[tuple[str, Optional[str]]]:
+    """Extract metadata values paired with their DSpace `authority` UUIDs.
+
+    DSpace stores authority-controlled fields as ``[{"value": ..., "authority": ...}, ...]``.
+    For ``dc.contributor.author``, the ``authority`` is the Infoscience person UUID
+    when the author is EPFL-affiliated (and ``None``/empty for external authors).
+
+    Returns:
+        List of ``(value, authority_or_none)`` tuples in the original order. Skips
+        entries whose ``value`` is missing or empty.
+    """
+    values = metadata.get(field, [])
+    out: List[tuple[str, Optional[str]]] = []
+    if not isinstance(values, list):
+        return out
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if not isinstance(value, str) or not value:
+            continue
+        authority = item.get("authority")
+        # DSpace uses confidence=-1 to mean "not authority-controlled"; treat
+        # any non-string or empty authority as None to keep the contract simple.
+        if not isinstance(authority, str) or not authority.strip():
+            authority = None
+        out.append((value, authority))
+    return out
+
+
 def _parse_publication(item: Dict[str, Any]) -> InfosciencePublication:
     """
     Parse a DSpace item into an InfosciencePublication model.
@@ -151,10 +184,15 @@ def _parse_publication(item: Dict[str, Any]) -> InfosciencePublication:
             repository_url = rel
             break
 
+    author_pairs = _parse_metadata_list_with_authority(metadata, "dc.contributor.author")
+    author_names = [name for name, _ in author_pairs]
+    author_authorities = [authority for _, authority in author_pairs]
+
     return InfosciencePublication(
         uuid=uuid,
         title=_parse_metadata(metadata, "dc.title") or "Untitled",
-        authors=_parse_metadata_list(metadata, "dc.contributor.author"),
+        authors=author_names,
+        author_authorities=author_authorities,
         abstract=_parse_metadata(metadata, "dc.description.abstract"),
         doi=_parse_metadata(metadata, "dc.identifier.doi"),
         publication_date=_parse_metadata(metadata, "dc.date.issued"),

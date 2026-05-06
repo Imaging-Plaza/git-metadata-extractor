@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import itertools
+import json
 import logging
 import os
 import re
 import threading
+import time
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
@@ -29,6 +31,55 @@ GITHUB_NOREPLY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 logger = logging.getLogger(__name__)
+
+
+def _resolve_max_github_repo_retries() -> int:
+    """Read V2_GITHUB_REPO_MAX_RETRIES (default 3).
+
+    Bounds transient retries when gimie returns malformed JSON (typically
+    GitHub responding with an empty body / 502 HTML during rate-limit or
+    momentary outages). Returns 0 to disable retries entirely.
+    """
+    raw = os.getenv("V2_GITHUB_REPO_MAX_RETRIES", "3")
+    try:
+        return max(0, int(raw))
+    except (ValueError, TypeError):
+        return 3
+
+
+def _is_json_decode_error(exc: BaseException) -> bool:
+    """Return True if the exception (or its cause chain) is a JSON parse error.
+
+    gimie wraps the underlying ``json.JSONDecodeError`` in its own
+    exception class, so we walk ``__cause__`` / ``__context__`` and also
+    fall back to a substring match against the error message.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, json.JSONDecodeError):
+            return True
+        message = str(current)
+        if "Expecting value" in message and "line 1 column 1" in message:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _is_unicode_decode_error(exc: BaseException) -> bool:
+    """Return True if a UnicodeDecodeError appears anywhere in the cause chain."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, UnicodeDecodeError):
+            return True
+        message = str(current).lower()
+        if "codec can't decode" in message or "'utf-8' codec" in message:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 # Per-process round-robin over comma-separated tokens in GITHUB_TOKEN. With
@@ -515,9 +566,49 @@ class RealGitHubProvider(GitHubProvider):
                 self._gimie_payload_cache[repository_url] = cached
                 return cached
 
-        payload = self._run_with_rate_limit(
-            lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
-        )
+        # Fetch with bounded retries for transient JSON-decode errors (GitHub
+        # returning empty body / 502 HTML during rate-limit) and a graceful
+        # fallback to a minimal payload on UnicodeDecodeError (non-UTF8 README
+        # content). Tunable via `V2_GITHUB_REPO_MAX_RETRIES` (default 3).
+        max_retries = _resolve_max_github_repo_retries()
+        payload = None
+        last_exc: BaseException | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                payload = self._run_with_rate_limit(
+                    lambda: self._resolve_gimie_extractor()(repository_url, "json-ld"),
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 — broad catch needed; we re-raise non-retryable errors below
+                last_exc = exc
+                if _is_unicode_decode_error(exc):
+                    logger.warning(
+                        "github gimie hit UnicodeDecodeError for %s; falling back to "
+                        "minimal payload (REST metadata still applies downstream): %s",
+                        repository_url,
+                        exc,
+                    )
+                    payload = {"@graph": []}
+                    break
+                if _is_json_decode_error(exc) and attempt < max_retries:
+                    backoff_seconds = (2**attempt) * 0.5
+                    logger.warning(
+                        "github gimie returned non-JSON for %s (attempt %d/%d); "
+                        "retrying in %.1fs",
+                        repository_url,
+                        attempt + 1,
+                        max_retries + 1,
+                        backoff_seconds,
+                    )
+                    time.sleep(backoff_seconds)
+                    continue
+                raise
+        if payload is None:
+            # Retries exhausted on a JSONDecodeError — re-raise the last exception
+            # so the caller surfaces the failure (same behaviour as before this fix).
+            if last_exc is not None:
+                raise last_exc
+            return None
         if payload is not None:
             self._gimie_payload_cache[repository_url] = payload
             if self._cache is not None and cache_key is not None:

@@ -1139,6 +1139,16 @@ class PipelineOrchestrator:
             else []
         )
 
+        # source_repositories drives `pulse:owns` in the rule-based person agent.
+        # Only the User-account owner of the repo should claim ownership — every
+        # other contributor would be a false positive. Track the eligible login
+        # so we can scope the injection at fanout time.
+        owner_login_for_source_repos: str | None = None
+        if detected_type == "repository" and source_repositories:
+            owner_login_for_source_repos = (
+                normalized_owner_login if not owner_is_org else None
+            )
+
         # Forward repository context (README, metadata) so person agents can
         # scan it for ORCID identifiers, affiliations, and author credits.
         repository_context_for_person: dict[str, Any] | None = None
@@ -1156,7 +1166,10 @@ class PipelineOrchestrator:
             account_type_hint = account_type_hint_by_username.get(username)
             if account_type_hint:
                 context["account_type_hint"] = account_type_hint
-            if source_repositories:
+            if source_repositories and (
+                owner_login_for_source_repos is not None
+                and username.casefold() == owner_login_for_source_repos
+            ):
                 context["source_repositories"] = list(source_repositories)
             if repository_context_for_person is not None:
                 context["repository_context"] = repository_context_for_person

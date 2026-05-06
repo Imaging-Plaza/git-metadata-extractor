@@ -168,6 +168,7 @@ class InfosciencePublicationRecord(TypedDict, total=False):
     infosciencePublicationIdentifier: Required[str | None]
     title: Required[str | None]
     authors: Required[list[str]]
+    author_authorities: NotRequired[list[str | None]]
     publicationDate: Required[str | None]
     doi: Required[str | None]
     url: Required[str | None]

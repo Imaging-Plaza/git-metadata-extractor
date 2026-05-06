@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.v2.api_models.errors import V2ErrorResponse
+from src.v2.observation.github_rate_limit import GitHubRateLimitSummary
 
 
 class V2Stats(BaseModel):
@@ -65,6 +66,7 @@ class V2HealthResponse(BaseModel):
     status: Literal["healthy", "degraded", "unhealthy"]
     components: dict[str, Literal["healthy", "degraded", "unhealthy"]]
     version: str
+    github_rate_limit: GitHubRateLimitSummary | None = None
 
 
 class V2ExtractJobStatus(str, Enum):

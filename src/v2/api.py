@@ -38,6 +38,10 @@ from src.v2.dependencies import _resolve_provider_cache, get_provider_set
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.jobs import JobStore
+from src.v2.observation.github_rate_limit import (
+    GitHubRateLimitSummary,
+    probe_github_rate_limit,
+)
 from src.v2.observation.query_log import QueryLog, query_log_var
 from src.v2.pipeline import PipelineOrchestrator
 from src.v2.pipeline.stages import (
@@ -64,6 +68,9 @@ from src.v2.pipeline.stages import (
     validate_articles,
     validate_author_classes,
     validate_ownership,
+)
+from src.v2.pipeline.stages.validate_org_github_handles import (
+    validate_org_github_handles,
 )
 from src.v2.pipeline.stages.refine_with_llm import (
     is_enabled as _hybrid_refiner_is_enabled,
@@ -704,6 +711,19 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         perf_counter() - stage_started_at,
     )
     for warning in repo_author_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Validate `@handle`-style org names against GitHub before strict
+    # validation so we either stamp the missing handle or drop the
+    # hallucinated entity (rather than just losing it to anyOf).
+    stage_started_at = perf_counter()
+    reconciled, org_handle_warnings = validate_org_github_handles(reconciled, providers)
+    logger.info(
+        "validate_org_github_handles: actions=%d in %.2fs",
+        len(org_handle_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in org_handle_warnings:
         _append_unique_warning(warnings, warning)
 
     stage_started_at = perf_counter()
@@ -1347,9 +1367,18 @@ async def health() -> V2HealthResponse:
     except ValueError:
         component_statuses["config"] = "unhealthy"
 
-    component_statuses["github_token"] = (
-        "healthy" if config and config.GITHUB_TOKEN else "degraded"
-    )
+    rate_limit_summary: GitHubRateLimitSummary | None = None
+    if config and config.GITHUB_TOKEN:
+        try:
+            rate_limit_summary = probe_github_rate_limit()
+        except Exception:  # noqa: BLE001 — probe must never crash health
+            logger.exception("github rate-limit probe failed")
+            rate_limit_summary = None
+        component_statuses["github_token"] = (
+            rate_limit_summary.status if rate_limit_summary is not None else "degraded"
+        )
+    else:
+        component_statuses["github_token"] = "degraded"
 
     overall_status: Literal["healthy", "degraded", "unhealthy"]
     if "unhealthy" in component_statuses.values():
@@ -1363,4 +1392,5 @@ async def health() -> V2HealthResponse:
         status=overall_status,
         components=component_statuses,
         version=PACKAGE_VERSION,
+        github_rate_limit=rate_limit_summary,
     )

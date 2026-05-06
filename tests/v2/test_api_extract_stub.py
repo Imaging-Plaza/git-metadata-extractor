@@ -295,7 +295,7 @@ def test_extract_accepts_agent_runtime_llm_for_user_routes() -> None:
 def test_extract_rejects_invalid_agent_runtime() -> None:
     status_code, payload = _get_json(
         "/v2/extract/github.com/octocat/Hello-World",
-        params={"agent_runtime": "hybrid"},
+        params={"agent_runtime": "not-a-runtime"},
     )
 
     assert status_code == HTTP_UNPROCESSABLE_ENTITY

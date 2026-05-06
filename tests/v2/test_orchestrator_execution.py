@@ -390,6 +390,13 @@ def test_execute_includes_upstream_stage_outputs_in_prompt_context_by_default() 
         assert isinstance(upstream_json, str)
         assert json.loads(upstream_json) == {"repo_agent": {"id": "repo-root"}}
 
+    # source_repositories drives `pulse:owns` in the rule-based person agent.
+    # Only the User-account owner (octocat) should get it — contributors who
+    # are not the repo owner must not claim ownership of the source repo.
+    contexts_by_login = {ctx["username"]: ctx for ctx in captured_person_contexts}
+    assert contexts_by_login["octocat"].get("source_repositories") == ["octocat/Hello-World"]
+    assert "source_repositories" not in contexts_by_login["alice"]
+
 
 def test_execute_skips_github_organization_accounts_from_person_fanout() -> None:
     class _GitHubProviderWithOrgContributor(MockGitHubProvider):

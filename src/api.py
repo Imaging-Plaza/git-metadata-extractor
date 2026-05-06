@@ -75,9 +75,24 @@ setup_logging(level=log_level, use_colors=True)
 logger = logging.getLogger(__name__)
 
 
-async def startup_event():
-    """Initialize resources on application startup"""
+async def startup_event(app: FastAPI | None = None):
+    """Initialize resources on application startup."""
     logger.info("🚀 Application startup - initializing resources")
+
+    # Pre-warm the v2 provider cache so the SQLite file exists in WAL mode
+    # before any request hits a worker. Without this, multi-worker uvicorn
+    # against a cold .cache/ races on first-request to create+init the
+    # file and the losing workers raise `database is locked`, surfacing
+    # as 500s for the first 1-2 jobs of a batch run.
+    if app is not None:
+        try:
+            from src.v2.dependencies import _resolve_provider_cache
+
+            cache = _resolve_provider_cache(app.state)
+            if cache is not None:
+                logger.info("✅ v2 provider cache initialized")
+        except Exception as exc:  # noqa: BLE001 — startup must not crash on cache issues
+            logger.warning(f"v2 provider cache pre-warm skipped: {exc}")
 
 
 async def shutdown_event():
@@ -119,8 +134,8 @@ async def shutdown_event():
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    await startup_event()
+async def lifespan(app: FastAPI):
+    await startup_event(app)
     try:
         yield
     finally:

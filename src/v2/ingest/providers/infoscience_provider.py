@@ -72,6 +72,15 @@ def _normalize_publication(publication: dict[str, Any]) -> InfosciencePublicatio
     if source_organization is None:
         source_organization = _as_string(publication.get("lab"))
 
+    raw_authorities = publication.get("author_authorities")
+    if isinstance(raw_authorities, list):
+        author_authorities: list[str | None] = [
+            item if isinstance(item, str) and item else None
+            for item in raw_authorities
+        ]
+    else:
+        author_authorities = []
+
     return {
         "infosciencePublicationIdentifier": _as_string(
             publication.get("infosciencePublicationIdentifier"),
@@ -79,6 +88,7 @@ def _normalize_publication(publication: dict[str, Any]) -> InfosciencePublicatio
         or _as_string(publication.get("uuid")),
         "title": _as_string(publication.get("title")),
         "authors": _as_string_list(publication.get("authors")),
+        "author_authorities": author_authorities,
         "publicationDate": publication_date,
         "doi": _as_string(publication.get("doi")),
         "url": _as_string(publication.get("url")),

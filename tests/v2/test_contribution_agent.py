@@ -166,3 +166,34 @@ def test_contribution_agent_ignores_organization_contributor_entries() -> None:
     result = asyncio.run(agent.run(context, providers))
 
     assert not any("contributor=sdsc-ordes" in warning for warning in result.warnings)
+
+
+def test_contribution_agent_scopes_to_target_person_when_provided() -> None:
+    """The orchestrator passes one (person, repo) pair per fanout via
+    `target_person`. The rule-based agent must scope its iteration to that
+    person — emitting one Contribution and not warning about other
+    contributors that belong to a different fanout work item.
+    """
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = ContributionAgentV2()
+    context = deepcopy(_contribution_context())
+    context["known_persons"] = [
+        {
+            "id": "https://github.com/bob",
+            "schema:name": "Bob Example",
+            "pulse:githubUsername": "bob",
+        },
+    ]
+    context["target_person"] = context["known_persons"][0]
+
+    result = asyncio.run(agent.run(context, providers))
+
+    contributions = result.stats["contributions"]
+    assert len(contributions) == 1
+    assert contributions[0]["schema:author"] == "https://github.com/bob"
+    # Other contributors (alice, unknown-contributor) belong to other fanout
+    # items and must not surface as "Unresolved" here.
+    assert not any(
+        "Unresolved contribution person mapping" in warning
+        for warning in result.warnings
+    )

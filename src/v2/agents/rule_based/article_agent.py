@@ -274,8 +274,15 @@ def _build_person_lookup(
     persons: list[dict[str, Any]],
     *,
     person_derivations: Any = None,
-) -> dict[str, str]:
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Build the alias→person_id lookup plus an infoscience-authority→person_id map.
+
+    The authority lookup is keyed on raw DSpace authority UUIDs (``pulse:infosciencePersonIdentifier``)
+    so article authors can be mapped directly without name fuzzy-matching when DSpace returned
+    an authority on the publication.
+    """
     lookup: dict[str, str] = {}
+    authority_lookup: dict[str, str] = {}
     derivation_by_id: dict[str, dict[str, Any]] = {}
     if isinstance(person_derivations, list):
         for derivation in person_derivations:
@@ -296,7 +303,17 @@ def _build_person_lookup(
             derivation_by_id=derivation_by_id,
         ):
             _register_lookup_token(lookup, alias_token, person_id)
-    return lookup
+
+        infoscience_id = _as_string(person.get("pulse:infosciencePersonIdentifier"))
+        if infoscience_id is None:
+            identifiers = person.get("identifiers")
+            if isinstance(identifiers, dict):
+                infoscience_id = _as_string(
+                    identifiers.get("pulse:infosciencePersonIdentifier"),
+                )
+        if infoscience_id:
+            authority_lookup.setdefault(infoscience_id, person_id)
+    return lookup, authority_lookup
 
 
 def _build_organization_lookup(organizations: list[dict[str, Any]]) -> dict[str, str]:  # noqa: C901
@@ -489,6 +506,7 @@ def _map_author_ids(
     publication: dict[str, Any],
     *,
     person_lookup: dict[str, str],
+    authority_lookup: dict[str, str],
     publication_reference: str,
 ) -> tuple[list[str], list[str], list[str], int, int]:
     warnings: list[str] = []
@@ -497,8 +515,22 @@ def _map_author_ids(
     matched_authors = 0
     unresolved_count = 0
     author_names = _as_string_list(publication.get("authors"))
-    for author_name in author_names:
-        resolved_author = _resolve_lookup_token(person_lookup, author_name)
+    raw_authorities = publication.get("author_authorities")
+    authority_values: list[str | None]
+    if isinstance(raw_authorities, list) and len(raw_authorities) == len(author_names):
+        authority_values = [
+            item if isinstance(item, str) and item.strip() else None
+            for item in raw_authorities
+        ]
+    else:
+        authority_values = [None] * len(author_names)
+
+    for author_name, authority in zip(author_names, authority_values, strict=False):
+        resolved_author: str | None = None
+        if authority is not None:
+            resolved_author = authority_lookup.get(authority)
+        if resolved_author is None:
+            resolved_author = _resolve_lookup_token(person_lookup, author_name)
         if isinstance(resolved_author, str):
             mapped_authors.append(resolved_author)
             matched_authors += 1
@@ -749,7 +781,7 @@ class ArticleAgentV2:
                 stats={"queries": queries, "articles": []},
             )
 
-        person_lookup = _build_person_lookup(
+        person_lookup, authority_lookup = _build_person_lookup(
             _collect_known_persons(context),
             person_derivations=context.get("person_derivations"),
         )
@@ -773,6 +805,7 @@ class ArticleAgentV2:
             ) = _map_author_ids(
                 candidate.publication,
                 person_lookup=person_lookup,
+                authority_lookup=authority_lookup,
                 publication_reference=publication_reference,
             )
             for unresolved_author in unresolved_authors:

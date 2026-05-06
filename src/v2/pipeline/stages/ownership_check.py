@@ -738,6 +738,12 @@ def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
         },
         "idSource": "pulse:ror",
         "schema:name": name,
+        # The v2.1.2 OrganizationShape requires at least one of
+        # schema:identifier, pulse:githubOrganizationHandle, or
+        # pulse:infoscienceOrganizationIdentifier. Surface the ROR id as
+        # schema:identifier so the stub satisfies the constraint without
+        # needing additional enrichment.
+        "schema:identifier": ror_id,
         "pulse:ror": ror_id,
         "pulse:githubOrganizationHandle": None,
         "pulse:infoscienceOrganizationIdentifier": None,
@@ -1026,8 +1032,16 @@ def guarantee_repo_author(
         repo_id = entity.get("id") if isinstance(entity.get("id"), str) else "<unknown>"
         owner_handle = _owner_handle_for_repo(entity)
         cloned = deepcopy(entity)
-        if owner_handle and owner_handle in owner_index:
-            owner_entity = owner_index[owner_handle]
+        owner_entity = owner_index.get(owner_handle) if owner_handle else None
+        owner_is_person = (
+            isinstance(owner_entity, dict)
+            and owner_entity.get("type") == "schema:Person"
+        )
+        owner_is_org = (
+            isinstance(owner_entity, dict)
+            and owner_entity.get("type") == "org:Organization"
+        )
+        if owner_is_person:
             owner_id = owner_entity.get("id")
             if isinstance(owner_id, str) and owner_id:
                 cloned["schema:author"] = [owner_id]
@@ -1043,21 +1057,41 @@ def guarantee_repo_author(
                 continue
         if owner_handle:
             handle_original_case = _owner_handle_for_repo_original_case(entity) or owner_handle
-            stub_id = f"https://github.com/{handle_original_case}"
-            if owner_handle not in synthesized_handles:
-                synthesized_persons.append(
-                    _synthesize_owner_person_stub(handle_original_case),
-                )
-                synthesized_handles.add(owner_handle)
+            # When the github account is already taken by an Organization
+            # entity in the graph, the synthesized Person needs a distinct
+            # id so the two don't collide. Use a urn-shaped id rooted at
+            # the repository so the placeholder is uniquely scoped.
+            if owner_is_org:
+                stub_id = f"urn:pulse:repo-author:{handle_original_case}/{handle_original_case}"
+                synthesis_key = f"org-owner:{owner_handle}"
+            else:
+                stub_id = f"https://github.com/{handle_original_case}"
+                synthesis_key = owner_handle
+            if synthesis_key not in synthesized_handles:
+                stub = _synthesize_owner_person_stub(handle_original_case)
+                if owner_is_org:
+                    stub["id"] = stub_id
+                    stub["idSource"] = "uuid"
+                synthesized_persons.append(stub)
+                synthesized_handles.add(synthesis_key)
             cloned["schema:author"] = [stub_id]
             changed = True
-            warnings.append(
-                "KNOWN BUG (schema:author empty after reconciliation): "
-                f"synthesized owner Person stub '{stub_id}' as schema:author on "
-                f"{repo_id} (handle '{handle_original_case}'). No matching Person "
-                "or Organization existed in the graph — typical of solo-user "
-                "repositories with no extracted contributor data.",
-            )
+            if owner_is_org:
+                warnings.append(
+                    "KNOWN BUG (schema:author empty after reconciliation): "
+                    f"github owner '{handle_original_case}' is an Organization "
+                    "and SHACL requires schema:author targets to be Person — "
+                    f"synthesized Person placeholder '{stub_id}' as schema:author "
+                    f"on {repo_id}.",
+                )
+            else:
+                warnings.append(
+                    "KNOWN BUG (schema:author empty after reconciliation): "
+                    f"synthesized owner Person stub '{stub_id}' as schema:author on "
+                    f"{repo_id} (handle '{handle_original_case}'). No matching Person "
+                    "or Organization existed in the graph — typical of solo-user "
+                    "repositories with no extracted contributor data.",
+                )
             new_repos.append(cloned)
             continue
         # Could not derive a github owner handle — leave the empty array.

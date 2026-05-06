@@ -24,6 +24,17 @@ class InfosciencePublication(BaseModel):
         description="List of author names",
         default_factory=list,
     )
+    author_authorities: List[Optional[str]] = Field(
+        description=(
+            "Parallel array to `authors` (same length, same order) holding "
+            "the DSpace `authority` UUID for each author when available "
+            "(EPFL-affiliated, authority-controlled). `None` for non-EPFL "
+            "authors that DSpace stores as bare names. Used by v2 to bind "
+            "publication authors directly to Infoscience person entities "
+            "without name-based fuzzy matching."
+        ),
+        default_factory=list,
+    )
     abstract: Optional[str] = Field(
         description="Publication abstract or description",
         default=None,

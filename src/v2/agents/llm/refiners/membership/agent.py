@@ -51,7 +51,7 @@ class MembershipRefinerAgent:
         self,
         *,
         llm_runtime: V2LLMRuntime | None = None,
-        llm_call_timeout_seconds: float = 30.0,
+        llm_call_timeout_seconds: float = 120.0,
     ) -> None:
         if llm_call_timeout_seconds <= 0:
             message = "llm_call_timeout_seconds must be > 0"

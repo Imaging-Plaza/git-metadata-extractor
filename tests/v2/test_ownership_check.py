@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from src.v2.pipeline.stages.models import AssembledOutput
-from src.v2.pipeline.stages.ownership_check import infer_owners, validate_ownership
+from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
+from src.v2.pipeline.stages.ownership_check import (
+    guarantee_repo_author,
+    infer_owners,
+    validate_ownership,
+)
 
 
 def _person(*, github_username: str, owns: list) -> dict:
@@ -246,3 +250,71 @@ def test_infer_owners_skips_non_repository_entities() -> None:
     )
     assert warnings == []
     assert article in promoted.related_entities
+
+
+def test_guarantee_repo_author_org_owner_synthesizes_distinct_person_stub() -> None:
+    """When the github owner is an Organization (not a Person), `schema:author`
+    can't carry the org id (SHACL requires Person). The stage must synthesize a
+    Person placeholder with a non-clashing id so it survives `validate_author_classes`
+    and the org entity stays untouched at its github URL.
+    """
+    repo = {
+        "id": "https://github.com/BWHCNI/OpenMIMS",
+        "type": "schema:SoftwareSourceCode",
+        "schema:name": "OpenMIMS",
+        "pulse:githubRepositoryHandle": "BWHCNI/OpenMIMS",
+        "schema:author": [],
+    }
+    org = {
+        "id": "https://github.com/BWHCNI",
+        "type": "org:Organization",
+        "schema:name": "BWHCNI",
+        "pulse:githubOrganizationHandle": "BWHCNI",
+    }
+    reconciled = ReconciledEntities(
+        entities={"repositories": [repo], "persons": [], "organizations": [org]},
+    )
+
+    new_reconciled, warnings = guarantee_repo_author(reconciled)
+
+    repos = new_reconciled.entities["repositories"]
+    persons = new_reconciled.entities["persons"]
+    assert len(repos) == 1
+    assert len(repos[0]["schema:author"]) == 1
+    assert len(persons) == 1
+    stub_id = repos[0]["schema:author"][0]
+    # Stub id must NOT collide with the existing Org id at github.com/BWHCNI
+    assert stub_id != "https://github.com/BWHCNI"
+    assert persons[0]["id"] == stub_id
+    assert persons[0]["type"] == "schema:Person"
+    # Org entity should still exist and be untouched
+    assert new_reconciled.entities["organizations"] == [org]
+    assert any("github owner 'BWHCNI' is an Organization" in w for w in warnings)
+
+
+def test_guarantee_repo_author_person_owner_uses_person_id() -> None:
+    """Existing behavior: when a Person owner exists in the graph, stamp it
+    directly without synthesizing a stub."""
+    repo = {
+        "id": "https://github.com/alice/repo",
+        "type": "schema:SoftwareSourceCode",
+        "pulse:githubRepositoryHandle": "alice/repo",
+        "schema:author": [],
+    }
+    alice = {
+        "id": "https://github.com/alice",
+        "type": "schema:Person",
+        "schema:name": "Alice",
+        "pulse:githubUsername": "alice",
+    }
+    reconciled = ReconciledEntities(
+        entities={"repositories": [repo], "persons": [alice], "organizations": []},
+    )
+
+    new_reconciled, warnings = guarantee_repo_author(reconciled)
+
+    repos = new_reconciled.entities["repositories"]
+    assert repos[0]["schema:author"] == ["https://github.com/alice"]
+    # No new persons synthesized — Person owner was reused.
+    assert new_reconciled.entities["persons"] == [alice]
+    assert any("stamped fallback owner 'https://github.com/alice'" in w for w in warnings)
