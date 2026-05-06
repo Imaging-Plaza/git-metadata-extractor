@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+  push:
+    branches: ["main", "develop"]
+  workflow_dispatch:
+    inputs:
+      run_llm_integration:
+        description: "Run opt-in LLM integration tests"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  v2-ci-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Check generated v2 models freshness
+        run: just v2-models-check
+
+      - name: Run TTL schema alignment gate
+        run: python -m pytest tests/v2/test_ttl_schema_alignment.py -q
+
+      - name: Run JSON-LD roundtrip gate
+        run: python -m pytest tests/v2/test_roundtrip.py -q
+
+      - name: Run scoped v2 test suite
+        run: python -m pytest tests/v2/ -n 4 --dist=loadfile -m "not live_provider and not llm_integration"
+
+      - name: Run v1 parity regression tests
+        run: |
+          mkdir -p .tmp
+          CACHE_DB_PATH=.tmp/cache.db python -m pytest tests/test_cache.py tests/test_orcid_validation_pipeline.py tests/test_v1_parity.py
+
+  llm-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_llm_integration == 'true')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run LLM integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          RCP_TOKEN: ${{ secrets.RCP_TOKEN }}
+        run: python -m pytest tests/v2/test_llm_repository_agent.py -m llm_integration -v

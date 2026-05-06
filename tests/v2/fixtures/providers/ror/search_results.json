@@ -1,0 +1,46 @@
+{
+  "query": "epfl",
+  "items": [
+    {
+      "id": "https://ror.org/02s376052",
+      "name": "Ecole Polytechnique Federale de Lausanne",
+      "score": 0.99,
+      "aliases": [
+        "EPF Lausanne"
+      ],
+      "acronyms": [
+        "EPFL"
+      ],
+      "types": [
+        "Education"
+      ],
+      "country": {
+        "country_name": "Switzerland",
+        "country_code": "CH"
+      },
+      "parent": null
+    },
+    {
+      "id": "https://ror.org/04f4a0c74",
+      "name": "EPFL Valais Wallis",
+      "score": 0.87,
+      "aliases": [
+        "EPFL Valais"
+      ],
+      "acronyms": [
+        "EPFL-VW"
+      ],
+      "types": [
+        "Facility"
+      ],
+      "country": {
+        "country_name": "Switzerland",
+        "country_code": "CH"
+      },
+      "parent": {
+        "id": "https://ror.org/02s376052",
+        "name": "Ecole Polytechnique Federale de Lausanne"
+      }
+    }
+  ]
+}

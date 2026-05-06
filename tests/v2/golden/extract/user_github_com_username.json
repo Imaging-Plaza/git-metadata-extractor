@@ -1,0 +1,49 @@
+{
+  "source_url": "https://github.com/octocat",
+  "detected_type": "user",
+  "output_format": "json",
+  "output": {
+    "root_entity": {
+      "id": "https://github.com/octocat",
+      "type": "schema:Person",
+      "pulse:githubUsername": "octocat"
+    },
+    "related_entities": [],
+    "excluded_entities": [],
+    "entities_by_type": {
+      "repositories": [],
+      "persons": [
+        {
+          "id": "https://github.com/octocat",
+          "type": "schema:Person",
+          "pulse:githubUsername": "octocat"
+        }
+      ],
+      "organizations": [],
+      "articles": [],
+      "memberships": [],
+      "contributions": []
+    }
+  },
+  "stats": {
+    "entities_count": 1,
+    "triples_count": 0,
+    "stages_completed": [
+      "context_gather",
+      "person_agent",
+      "repo_agents",
+      "org_agents",
+      "article_agents",
+      "membership_agents",
+      "contribution_agents",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate",
+      "graph_write"
+    ]
+  }
+}

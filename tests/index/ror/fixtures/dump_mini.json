@@ -1,0 +1,95 @@
+[
+  {
+    "id": "https://ror.org/02s376052",
+    "names": [
+      {"value": "École polytechnique fédérale de Lausanne", "lang": "fr", "types": ["ror_display", "label"]},
+      {"value": "Swiss Federal Institute of Technology Lausanne", "lang": "en", "types": ["label"]},
+      {"value": "EPFL", "types": ["acronym"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "CH", "name": "Lausanne", "country_name": "Switzerland", "country_subdivision_name": "Vaud"}}
+    ],
+    "types": ["education", "facility"],
+    "status": "active",
+    "domains": ["epfl.ch"],
+    "links": [{"type": "website", "value": "https://www.epfl.ch"}],
+    "external_ids": [{"type": "wikidata", "preferred": "Q262760"}],
+    "relationships": [
+      {"type": "child", "id": "https://ror.org/000epfl-cim", "label": "Center for Imaging EPFL"}
+    ]
+  },
+  {
+    "id": "https://ror.org/000epfl-cim",
+    "names": [
+      {"value": "Center for Imaging at EPFL", "lang": "en", "types": ["ror_display", "label"]},
+      {"value": "CIM", "types": ["acronym"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "CH", "name": "Lausanne", "country_name": "Switzerland"}}
+    ],
+    "types": ["facility"],
+    "status": "active",
+    "links": [],
+    "relationships": [
+      {"type": "parent", "id": "https://ror.org/02s376052", "label": "École polytechnique fédérale de Lausanne"}
+    ]
+  },
+  {
+    "id": "https://ror.org/05a28rw58",
+    "names": [
+      {"value": "ETH Zurich", "lang": "en", "types": ["ror_display", "label"]},
+      {"value": "Eidgenössische Technische Hochschule Zürich", "lang": "de", "types": ["label"]},
+      {"value": "ETHZ", "types": ["acronym"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "CH", "name": "Zürich", "country_name": "Switzerland"}}
+    ],
+    "types": ["education", "facility"],
+    "status": "active",
+    "domains": ["ethz.ch"],
+    "links": [{"type": "website", "value": "https://ethz.ch"}],
+    "external_ids": [{"type": "wikidata", "preferred": "Q11942"}],
+    "relationships": []
+  },
+  {
+    "id": "https://ror.org/02k7v4d05",
+    "names": [
+      {"value": "Universität Bern", "lang": "de", "types": ["ror_display", "label"]},
+      {"value": "University of Bern", "lang": "en", "types": ["label"]},
+      {"value": "UniBE", "types": ["acronym"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "CH", "name": "Bern", "country_name": "Switzerland"}}
+    ],
+    "types": ["education"],
+    "status": "active",
+    "links": [{"type": "website", "value": "https://www.unibe.ch"}],
+    "relationships": []
+  },
+  {
+    "id": "https://ror.org/0042zzz00",
+    "names": [
+      {"value": "Inactive Swiss Lab", "types": ["ror_display"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "CH", "name": "Geneva", "country_name": "Switzerland"}}
+    ],
+    "types": ["facility"],
+    "status": "inactive",
+    "relationships": []
+  },
+  {
+    "id": "https://ror.org/042nb2s44",
+    "names": [
+      {"value": "Massachusetts Institute of Technology", "lang": "en", "types": ["ror_display", "label"]},
+      {"value": "MIT", "types": ["acronym"]}
+    ],
+    "locations": [
+      {"geonames_details": {"country_code": "US", "name": "Cambridge", "country_name": "United States"}}
+    ],
+    "types": ["education"],
+    "status": "active",
+    "links": [{"type": "website", "value": "https://www.mit.edu"}],
+    "relationships": []
+  }
+]

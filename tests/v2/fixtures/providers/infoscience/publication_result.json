@@ -1,0 +1,31 @@
+{
+  "query": "geodata",
+  "total_results": 2,
+  "results": [
+    {
+      "infosciencePublicationIdentifier": "ac893a20-d10d-4f8a-91ec-9cb7631f60fc",
+      "title": "Geodata Toolkit for Environmental Monitoring",
+      "doi": "10.5075/epfl-geodata-2024",
+      "authors": [
+        "Alice Smith",
+        "Marco Weber"
+      ],
+      "publicationDate": "2024-05-12",
+      "sourceOrganization": "EPFL ENAC",
+      "score": 97.4,
+      "url": "https://infoscience.epfl.ch/entities/publication/ac893a20-d10d-4f8a-91ec-9cb7631f60fc"
+    },
+    {
+      "infosciencePublicationIdentifier": "8f946f6f-f9f9-4f0e-ab2c-9f635a36b2bc",
+      "title": "Structural Analysis Pipelines in Open Research",
+      "doi": "10.5075/epfl-structural-2023",
+      "authors": [
+        "Alain Smith"
+      ],
+      "publicationDate": "2023-11-19",
+      "sourceOrganization": null,
+      "score": 88.2,
+      "url": "https://infoscience.epfl.ch/entities/publication/8f946f6f-f9f9-4f0e-ab2c-9f635a36b2bc"
+    }
+  ]
+}

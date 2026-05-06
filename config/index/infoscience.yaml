@@ -1,0 +1,51 @@
+# Infoscience RAG indexer config.
+# Resolved by `src/index/infoscience/config.py` and merged with env vars
+# (`RCP_TOKEN`, `INFOSCIENCE_TOKEN`, `INDEX_DATA_DIR`) at startup.
+
+rcp:
+  # EPFL RCP OpenAI-compatible inference endpoint.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  # Native dim for Qwen3-Embedding-8B is 4096. Configurable down to 32.
+  embedding_dim: 4096
+  # Prepended to every query (not passages) per Qwen3-Embedding instruction format.
+  query_instruction: "Given a web search query, retrieve relevant passages that answer the query"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  # Per-batch input count for /v1/embeddings. Smaller default given 8B params.
+  batch_size: 16
+  # Concurrent in-flight embed/rerank calls.
+  max_concurrency: 4
+  # Generous to accommodate RCP cold-start (model load can take minutes).
+  timeout_seconds: 120
+
+infoscience:
+  base_url: https://infoscience.epfl.ch/server/api
+  page_size: 100
+  # Infoscience's edge layer 405s under burst; keep concurrency modest.
+  # `dspace.py` retries 405/429/5xx with exponential backoff.
+  # Bumped from 2 to 8 for the bulk fetch-text run (the dump-script
+  # ran fine at 8 with the existing retry/backoff behaviour).
+  max_concurrency: 8
+
+filter:
+  # Solr `fulltext:` qualifier is applied per-term against
+  # /discover/search/objects?configuration=researchoutputs. The same
+  # terms drive the URL-extraction regex in extract_matches.py.
+  terms:
+    - github.com
+    - huggingface.co
+    - hf.co
+
+chunking:
+  size_tokens: 1024
+  overlap_tokens: 128
+  # tiktoken encoding name. cl100k_base is a reasonable proxy for the
+  # Qwen3 tokenizer; counts are within ~10% for English/code text.
+  tokenizer: cl100k_base
+
+qdrant:
+  # Devcontainer default. Overridden by INDEX_QDRANT_URL / INDEX_QDRANT_API_KEY
+  # / INDEX_QDRANT_PREFER_GRPC env vars at load time.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+  api_key: null

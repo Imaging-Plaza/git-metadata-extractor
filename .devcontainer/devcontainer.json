@@ -1,16 +1,18 @@
 {
   "name": "git-metadata-extractor-dev",
-  "build": {
-    "dockerfile": "Dockerfile"
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/project",
+  "containerEnv": {
+    "UV_CACHE_DIR": "/workspaces/project/.uv-cache"
   },
-  "runArgs": [
-    "--env-file",
-    "${localWorkspaceFolder}/.env",
-    "--network",
-    "dev"
-  ],
+  "overrideCommand": false,
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
   "remoteUser": "vscode",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "customizations": {
     "vscode": {
       "settings": {
@@ -26,8 +28,6 @@
       ]
     }
   },
-  "forwardPorts": [
-    1234
-  ],
-  "postCreateCommand": "rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc"
+  "postCreateCommand": "mkdir -p .uv-cache && rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc",
+  "postStartCommand": "bash .devcontainer/set-vscode-password.sh"
 }

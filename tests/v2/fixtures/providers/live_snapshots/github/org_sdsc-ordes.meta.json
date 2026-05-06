@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-02-24T14:18:29Z",
+  "case": "org_sdsc-ordes",
+  "provider": "github",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {},
+    "url": "https://api.github.com/orgs/sdsc-ordes"
+  },
+  "response": {
+    "elapsed_ms": 214,
+    "headers": {
+      "cache-control": "private, max-age=60, s-maxage=60",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Tue, 24 Feb 2026 14:18:29 GMT",
+      "etag": "W/\"f00ffdfed1fffd6e31a0bc0492820fc4114252a03e68908b0db76cc2c86aa87e\"",
+      "last-modified": "Sat, 24 May 2025 10:38:49 GMT",
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "4982",
+      "x-ratelimit-reset": "1771945475",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-used": "18"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "source_url": "https://github.com/octocat/Hello-World",
+  "detected_type": "repository",
+  "output_format": "jsonld",
+  "output": {
+    "@context": {
+      "org": "http://www.w3.org/ns/org#",
+      "schema": "http://schema.org/",
+      "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#"
+    },
+    "@graph": [
+      {
+        "@id": "https://github.com/octocat",
+        "@type": "schema:Person",
+        "pulse:githubUsername": "octocat"
+      },
+      {
+        "@id": "https://github.com/octocat/Hello-World",
+        "@type": "schema:SoftwareSourceCode"
+      },
+      {
+        "@type": "org:Membership"
+      },
+      {
+        "@type": "pulse:Contribution"
+      },
+      {
+        "@type": "org:Organization"
+      }
+    ]
+  },
+  "stats": {
+    "entities_count": 5,
+    "triples_count": 28,
+    "stages_completed": [
+      "context_gather",
+      "repo_agent",
+      "person_agents",
+      "org_agents",
+      "article_agents",
+      "membership_agents",
+      "contribution_agents",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate",
+      "graph_write"
+    ]
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "id": "41674f42-ba15-4612-9817-2a6f60985c01",
+  "uuid": "41674f42-ba15-4612-9817-2a6f60985c01",
+  "name": "Ecole polytechnique fédérale de Lausanne",
+  "handle": "20.500.14299/30",
+  "metadata": {
+    "cris.sourceId": [
+      {
+        "value": "ACRONYM::EPFL",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "crisou.director": [
+      {
+        "value": "Fontcuberta i Morral, Anna",
+        "language": null,
+        "authority": "7326d96a-a2b3-46f7-8f91-fb485d21258e",
+        "confidence": 600,
+        "place": 0
+      }
+    ],
+    "datacite.rights": [
+      {
+        "value": "metadata-only",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.accessioned": [
+      {
+        "value": "2024-07-08T17:22:11Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.available": [
+      {
+        "value": "2024-07-08T17:22:11Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.created": [
+      {
+        "value": "2024-07-08",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.date.modified": [
+      {
+        "value": "2026-04-30T19:31:52.174536Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.identifier.uri": [
+      {
+        "value": "https://infoscience.epfl.ch/handle/20.500.14299/30",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "dc.title": [
+      {
+        "value": "Ecole polytechnique fédérale de Lausanne",
+        "language": "en",
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      }
+    ],
+    "dc.type": [
+      {
+        "value": "ECOLE",
+        "language": null,
+        "authority": null,
+        "confidence": 0,
+        "place": 0
+      }
+    ],
+    "dspace.entity.type": [
+      {
+        "value": "OrgUnit",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.orgUnit.active": [
+      {
+        "value": "true",
+        "language": null,
+        "authority": null,
+        "confidence": 0,
+        "place": 0
+      }
+    ],
+    "epfl.orgUnit.cf": [
+      {
+        "value": "1028",
+        "language": null,
+        "authority": null,
+        "confidence": 0,
+        "place": 0,
+        "securityLevel": 0
+      }
+    ],
+    "epfl.orgUnit.level": [
+      {
+        "value": "1",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.synchronization.date": [
+      {
+        "value": "2026-04-30T19:31:52Z",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.unit.code": [
+      {
+        "value": "10000",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "epfl.unit.infoscienceCode": [
+      {
+        "value": "U10000",
+        "language": null,
+        "authority": null,
+        "confidence": -1,
+        "place": 0
+      }
+    ],
+    "oairecerif.acronym": [
+      {
+        "value": "EPFL",
+        "language": "en",
+        "authority": null,
+        "confidence": -1,
+        "place": 1
+      }
+    ],
+    "oairecerif.identifier.url": [
+      {
+        "value": "https://www.epfl.ch/",
+        "language": null,
+        "authority": null,
+        "confidence": 0,
+        "place": 0
+      }
+    ]
+  },
+  "inArchive": true,
+  "discoverable": true,
+  "withdrawn": false,
+  "lastModified": "2026-04-30T19:31:52.174+00:00",
+  "entityType": "OrgUnit",
+  "type": "item",
+  "uniqueType": "core.item",
+  "_links": {
+    "accessStatus": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/accessStatus"
+    },
+    "bundles": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/bundles"
+    },
+    "identifiers": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/identifiers"
+    },
+    "mappedCollections": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/mappedCollections"
+    },
+    "owningCollection": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/owningCollection"
+    },
+    "relationships": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/relationships"
+    },
+    "version": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/version"
+    },
+    "templateItemOf": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/templateItemOf"
+    },
+    "metrics": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/metrics"
+    },
+    "thumbnail": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/thumbnail"
+    },
+    "submitter": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01/submitter"
+    },
+    "self": {
+      "href": "https://infoscience.epfl.ch/server/api/core/items/41674f42-ba15-4612-9817-2a6f60985c01"
+    }
+  }
+}

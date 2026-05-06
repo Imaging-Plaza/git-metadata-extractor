@@ -38,25 +38,35 @@ extra_javascript:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - API and CLI: api-and-cli.md
+  - V2 Extraction Service:
+      - V2 API Reference: v2-api-reference.md
+      - API and CLI Quick Reference: api-and-cli.md
+      - Migration V1 to V2: migration-v1-to-v2.md
+  - RAG Indices:
+      - Overview: rag-indices.md
+      - Federated Search: federated-search.md
+      - HuggingFace Index: huggingface-index.md
+      - Zenodo Index: zenodo-index.md
+      - EPFL Graph Disciplines: epfl-graph-disciplines.md
+      - SWISSUbase Index: swissubase-index.md
+      - V2 Agent RAG Tools: v2-rag-tools.md
+      - Concept Tagging Stage: concept-tagging.md
+      - Roadmap: ROADMAP.md
   - Architecture:
       - Design Notes: architecture/design-notes.md
-      - Repository Analysis Strategy: AGENT_STRATEGY.md
-  - Integrations:
+  - Legacy / Historical:
+      - V1 Repository Analysis Strategy: AGENT_STRATEGY.md
       - Infoscience Integration: INFOSCIENCE_INTEGRATION.md
       - Infoscience API Findings: INFOSCIENCE_API_FINDINGS.md
-  - JSON-LD:
-      - Conversion Guide: JSONLD_CONVERSION.md
-      - Mapping Documentation: PYDANTIC_JSONLD_MAPPING.md
-      - Conversion Summary: JSONLD_CONVERSION_SUMMARY.md
-      - Mapping Update: JSONLD_MAPPING_UPDATE.md
-      - JSON and JSON-LD CLI: JSON_JSONLD_CONVERSION_CLI.md
-  - Academic Catalog:
-      - Option B Implementation: ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md
-      - Refactor Summary: ACADEMIC_CATALOG_REFACTOR_SUMMARY.md
-  - Updates:
+      - JSON-LD Conversion Guide: JSONLD_CONVERSION.md
+      - JSON-LD Mapping: PYDANTIC_JSONLD_MAPPING.md
+      - JSON-LD Conversion Summary: JSONLD_CONVERSION_SUMMARY.md
+      - JSON-LD Mapping Update: JSONLD_MAPPING_UPDATE.md
+      - JSON / JSON-LD CLI: JSON_JSONLD_CONVERSION_CLI.md
+      - Academic Catalog Option B: ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md
+      - Academic Catalog Refactor: ACADEMIC_CATALOG_REFACTOR_SUMMARY.md
       - Affiliation Changes: AFFILIATION_CHANGES.md
       - Estimated Tokens Fix: ESTIMATED_TOKENS_FIX.md
       - Updates Summary: UPDATES_SUMMARY.md
-  - Releases:
+      - GIMIE / GitHub CFF Edge Cases: issue-brief-gimie-github-cff-edge-cases.md
       - Legacy Releases: releases/legacy-releases.md

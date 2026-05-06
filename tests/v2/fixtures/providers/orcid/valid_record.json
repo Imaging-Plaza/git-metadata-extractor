@@ -1,0 +1,26 @@
+{
+  "orcid_id": "0000-0002-1825-0097",
+  "name": "Alice Example",
+  "employment": [
+    {
+      "organization": "Ecole Polytechnique Federale de Lausanne",
+      "department": "School of Engineering",
+      "role": "Research Engineer",
+      "start_date": "2021-01-01",
+      "end_date": null
+    }
+  ],
+  "education": [
+    {
+      "organization": "University of Lausanne",
+      "department": "Computer Science",
+      "role": "PhD",
+      "start_date": "2017-09-01",
+      "end_date": "2020-12-31"
+    }
+  ],
+  "affiliations": [
+    "Ecole Polytechnique Federale de Lausanne",
+    "University of Lausanne"
+  ]
+}
