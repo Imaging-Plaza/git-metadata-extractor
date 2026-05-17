@@ -92,3 +92,75 @@ class V2ExtractJobAccepted(BaseModel):
     status: V2ExtractJobStatus
     status_url: str
     submitted_at: datetime
+
+
+class IndexIngestJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ZenodoIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/zenodo/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more Zenodo record identifiers. Bare numeric ids, "
+            "DOIs (`10.5281/zenodo.…`), or full Zenodo URLs are accepted."
+        ),
+    )
+    refresh: bool = Field(
+        default=False,
+        description="If true, re-fetch records already present in the local store.",
+    )
+
+
+class HFIngestItem(BaseModel):
+    """One repository to ingest into the HuggingFace index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["model", "dataset", "space"]
+    repo_id: str = Field(
+        min_length=1,
+        description="HuggingFace repo handle. Format: `<author>/<name>`.",
+    )
+
+
+class HuggingFaceIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[HFIngestItem] = Field(
+        min_length=1,
+        description="One or more {type, repo_id} pairs to ingest.",
+    )
+
+
+class IndexIngestJob(BaseModel):
+    """Persistent record for an async index-ingest job."""
+
+    job_id: str
+    index_name: Literal["zenodo", "huggingface"]
+    status: IndexIngestJobStatus
+    request: dict[str, Any]
+    submitted_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    summary: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class IndexIngestJobAccepted(BaseModel):
+    """Response body for the POST that enqueues an ingest job."""
+
+    job_id: str
+    index_name: Literal["zenodo", "huggingface"]
+    status: IndexIngestJobStatus
+    status_url: str
+    submitted_at: datetime

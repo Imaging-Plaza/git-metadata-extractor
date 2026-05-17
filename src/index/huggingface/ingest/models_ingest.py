@@ -29,6 +29,39 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
+def ingest_single_model(
+    *,
+    repo_id: str,
+    config: HuggingFaceIndexConfig,
+    client: HFClient,
+    store: DuckDBStore,
+) -> bool:
+    """Fetch + upsert a single model. Returns True when persisted, False on miss."""
+    info = client.model_info(repo_id, expand=MODEL_EXPAND_FIELDS)
+    if info is None:
+        return False
+    row = _model_row(repo_id, info)
+    raw = info_to_dict(info)
+    store.upsert_model(row, raw)
+
+    readme = client.fetch_readme(repo_id, repo_type="model")
+    if readme:
+        write_readme(
+            config,
+            entity_type="models",
+            repo_id=repo_id,
+            readme=readme,
+        )
+    maybe_snapshot_full_card(
+        config=config,
+        client=client,
+        entity_type="models",
+        repo_id=repo_id,
+        repo_type="model",
+    )
+    return True
+
+
 def ingest_models(
     *,
     config: HuggingFaceIndexConfig,
@@ -53,29 +86,10 @@ def ingest_models(
                 # Already in DB at this revision — skip the heavy info+readme fetch.
                 skipped += 1
                 continue
-            info = client.model_info(repo_id, expand=MODEL_EXPAND_FIELDS)
-            if info is None:
-                continue
-            row = _model_row(repo_id, info)
-            raw = info_to_dict(info)
-            store.upsert_model(row, raw)
-
-            readme = client.fetch_readme(repo_id, repo_type="model")
-            if readme:
-                write_readme(
-                    config,
-                    entity_type="models",
-                    repo_id=repo_id,
-                    readme=readme,
-                )
-            maybe_snapshot_full_card(
-                config=config,
-                client=client,
-                entity_type="models",
-                repo_id=repo_id,
-                repo_type="model",
-            )
-            upserted += 1
+            if ingest_single_model(
+                repo_id=repo_id, config=config, client=client, store=store,
+            ):
+                upserted += 1
             if limit is not None and upserted >= limit * len(scope.seeds):
                 return upserted
     LOGGER.info("models: ingest summary upserted=%d skipped_unchanged=%d", upserted, skipped)

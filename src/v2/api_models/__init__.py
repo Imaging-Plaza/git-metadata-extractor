@@ -1,4 +1,9 @@
 from src.v2.api_models.contracts import (
+    HFIngestItem,
+    HuggingFaceIngestRequest,
+    IndexIngestJob,
+    IndexIngestJobAccepted,
+    IndexIngestJobStatus,
     V2ExtractJob,
     V2ExtractJobAccepted,
     V2ExtractJobStatus,
@@ -8,12 +13,18 @@ from src.v2.api_models.contracts import (
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
     V2Stats,
+    ZenodoIngestRequest,
 )
 from src.v2.api_models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
 from src.v2.api_models.errors import V2ErrorResponse, V2ErrorType, V2FieldError
 
 __all__ = [
     "DisciplineV2",
+    "HFIngestItem",
+    "HuggingFaceIngestRequest",
+    "IndexIngestJob",
+    "IndexIngestJobAccepted",
+    "IndexIngestJobStatus",
     "OrganizationTypeV2",
     "RepositoryTypeV2",
     "V2ErrorResponse",
@@ -28,4 +39,5 @@ __all__ = [
     "V2JSONLDOutput",
     "V2JSONOutputEnvelope",
     "V2Stats",
+    "ZenodoIngestRequest",
 ]
