@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS categories (
     wikipedia_page_id    VARCHAR,
     wikipedia_url        VARCHAR,
     wikipedia_extract    VARCHAR,
+    wikidata_qid         VARCHAR,
     graphsearch_url      VARCHAR,
     n_concepts           INTEGER DEFAULT 0,
     n_children           INTEGER DEFAULT 0,
@@ -17,8 +18,9 @@ CREATE TABLE IF NOT EXISTS categories (
     fetched_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Idempotent column add for upgrades from v1 schemas without `wikipedia_extract`.
+-- Idempotent column adds for upgrades from older schemas.
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS wikipedia_extract VARCHAR;
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS wikidata_qid VARCHAR;
 
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_categories_depth ON categories(depth);

@@ -1347,6 +1347,33 @@ async def extract_job(
     return record
 
 
+@v2_router.post(
+    "/cache/clear",
+    tags=["Cache Management"],
+)
+async def clear_v2_cache(
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> dict[str, Any]:
+    """Wipe every entry from the v2 pipeline cache.
+
+    Targets the `ProviderCache` SQLite at `V2_PROVIDER_CACHE_PATH` — the
+    same store that backs the `/extract` short-circuit and the per-provider
+    sub-caches (RAG, Selenium, link veracity, etc.). The v1 cache at
+    `/v1/cache/clear` is a separate store and is not touched here.
+    """
+
+    cache = getattr(request.app.state, "v2_provider_cache", None)
+    if not isinstance(cache, ProviderCache):
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "v2 provider cache is not configured"},
+        )
+    removed = cache.clear()
+    logger.info("v2 cache cleared: removed=%d entries", removed)
+    return {"message": f"Cleared {removed} v2 cache entries", "removed": removed}
+
+
 @v2_router.get(
     "/health",
     response_model=V2HealthResponse,
