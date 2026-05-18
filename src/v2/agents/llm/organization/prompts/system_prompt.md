@@ -123,6 +123,28 @@ Search ROR and Infoscience together in one call and return:
 Use this as the primary tool when available to keep `pulse:ror` and `pulse:infoscienceOrganizationIdentifier` coherent for the same organization.
 Do not rely on acronym-only matches from linked candidates.
 
+### Query construction (applies to every ROR / Infoscience search tool)
+
+Acronyms collide hard in the registry — "SDSC" matches both Swiss Data
+Science Center (CH) and San Diego Supercomputer Center (US); "NIH" hits
+Swiss + US variants; "CSCS" matches Swiss + Italian centers. Two rules
+to disambiguate **before** you call any ROR search tool:
+
+1. **Expand acronyms to the full organisation name in the query.** Read the
+   surrounding context (README sentence, author affiliation string, repo
+   owner handle) for the full expansion. If the only mention is the bare
+   acronym and no expansion is recoverable, pass BOTH in the query, e.g.
+   `"SDSC Swiss Data Science Center"`, not just `"SDSC"`.
+2. **Constrain by country when the repo context is geographically
+   anchored.** If the repo owner is Swiss (EPFL-/ETHZ-/UNI-prefixed
+   handle, `*.ch` URL, contributors with Swiss affiliations, README
+   mentions EPFL/ETHZ/UNIL/UZH/Université de …), pass
+   `filters={"country_code": "CH"}` to `search_ror_rag` / use
+   `scope_mode="switzerland"` (or `"epfl_ethz"` for narrowest). The same
+   pattern applies for other countries.
+
+Leave `pulse:ror` as `null` rather than picking the wrong country.
+
 ### `search_ror_organizations`
 
 Search ROR organizations by query text.
