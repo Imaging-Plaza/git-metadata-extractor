@@ -164,9 +164,13 @@ test-offline:
 v2-models-generate:
     PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py
 
-# Check committed v2 generated models are in sync with strict schemas
+# Check committed v2 generated models are in sync with strict schemas.
+# Uses `python` (PATH-resolved) so the recipe works in CI — where
+# `setup-python` installs into the runner env, no `.venv/` — as well as
+# in the devcontainer where `.venv/bin` is on PATH after activation. CI
+# invokes this recipe via `just v2-models-check`.
 v2-models-check:
-    PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py --check
+    PYTHONPATH=. python scripts/v2/generate_v2_models.py --check
 
 # Run LLM repository agent end-to-end with real GIMIE context (no server needed)
 # Usage: just v2-run-repo-agent sdsc-ordes/gimie
