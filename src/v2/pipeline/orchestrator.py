@@ -203,7 +203,7 @@ class PipelineOrchestrator:
         retry_max_retries: int = 3,
         retry_backoff_base: float = 0.0,
         retry_sleep_func: SleepCallable | None = None,
-        max_concurrent_agents: int = 3,
+        max_concurrent_agents: int = 8,
         include_upstream_stage_outputs_in_prompt: bool = True,
         user_prompt_appendix: str | None = None,
         cache: ProviderCache | None = None,

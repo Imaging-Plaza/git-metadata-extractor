@@ -203,20 +203,25 @@ def _extract_path_kind(source_url: str) -> str | None:
 
 
 def _resolve_max_concurrent_agents() -> int:
-    """Read `V2_MAX_CONCURRENT_AGENTS` env var (default 6).
+    """Read `V2_MAX_CONCURRENT_AGENTS` env var (default 8).
 
     Caps how many work items per stage (person agents, contribution agents,
     link-veracity calls, etc.) run in parallel within a single /extract
     request. Higher values speed up wide-fanout repos at the cost of more
     concurrent LLM calls — keep within the LLM provider's rate limit.
+
+    Default raised from 6 to 8 after profiling a 50-person repo
+    (deeplabcut/deeplabcut): person+membership stages were spending ~12
+    minutes waiting on the semaphore. The RCP/LLM stack absorbed 8
+    in-flight calls without thermal throttling in that test.
     """
     raw = os.getenv("V2_MAX_CONCURRENT_AGENTS")
     if raw is None:
-        return 6
+        return 8
     try:
         value = int(raw.strip())
     except ValueError:
-        return 6
+        return 8
     return max(1, value)
 
 
