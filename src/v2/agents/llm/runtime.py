@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from pydantic_ai import Agent
+from pydantic_ai.usage import UsageLimits
 
 from src.v1.llm.model_config import (
     create_pydantic_ai_model,
@@ -94,6 +95,45 @@ def _extract_usage_counts(usage: Any) -> tuple[int | None, int | None]:
     return normalized_requests, normalized_tool_calls
 
 
+_DEFAULT_REQUEST_LIMIT_ENV = "V2_LLM_REQUEST_LIMIT"
+_DEFAULT_TOOL_CALLS_LIMIT_ENV = "V2_LLM_TOOL_CALLS_LIMIT"
+_DEFAULT_REQUEST_LIMIT = 25
+_DEFAULT_TOOL_CALLS_LIMIT = 50
+
+
+def _coerce_positive_int_env(name: str, fallback: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return fallback
+    return max(1, value)
+
+
+def _default_usage_limits() -> UsageLimits:
+    """Per-agent caps on LLM roundtrips and tool calls.
+
+    Without an explicit cap, observed: the article agent looped >100 tool
+    calls (12 min wall) on a paper-heavy repo, exploring every tool every
+    time. The cap turns runaway loops into clean ``UsageLimitExceeded``
+    errors that the per-stage runner surfaces as a single warning instead
+    of consuming the whole job budget.
+
+    Tunable per deployment via ``V2_LLM_REQUEST_LIMIT`` /
+    ``V2_LLM_TOOL_CALLS_LIMIT``.
+    """
+    return UsageLimits(
+        request_limit=_coerce_positive_int_env(
+            _DEFAULT_REQUEST_LIMIT_ENV, _DEFAULT_REQUEST_LIMIT,
+        ),
+        tool_calls_limit=_coerce_positive_int_env(
+            _DEFAULT_TOOL_CALLS_LIMIT_ENV, _DEFAULT_TOOL_CALLS_LIMIT,
+        ),
+    )
+
+
 def _coerce_output_payload(output: Any) -> dict[str, Any]:
     """Convert model output into a JSON-object dictionary.
 
@@ -160,6 +200,7 @@ class V2LLMRuntime:
         user_prompt: str,
         output_type: Any = None,
         tools: list[Any] | None = None,
+        usage_limits: UsageLimits | None = None,
     ) -> LLMRuntimeResult:
         """Execute a prompt and return a structured JSON payload plus metadata.
 
@@ -170,6 +211,12 @@ class V2LLMRuntime:
                 schema. Defaults to ``dict[str, Any]`` when not provided.
                 Passing a Pydantic model class constrains the LLM to produce
                 output that conforms to its schema (first validation pass).
+            usage_limits: Optional pydantic-ai ``UsageLimits``. Defaults to
+                ``_default_usage_limits()``: 25 model requests + 50 tool
+                calls per agent invocation. Observed in profiling: the
+                article agent would loop 100+ tool calls without a cap and
+                spend 12 minutes on a single repo; the default keeps any
+                agent's wall time bounded.
         """
 
         resolved_output_type: Any = output_type if output_type is not None else dict[str, Any]
@@ -199,11 +246,18 @@ class V2LLMRuntime:
             if model_parameters and "model_settings" in run_parameters:
                 run_kwargs["model_settings"] = model_parameters
 
+            effective_limits = usage_limits or _default_usage_limits()
+            if "usage_limits" in run_parameters:
+                run_kwargs["usage_limits"] = effective_limits
+
             logger.info(
-                "LLM runtime start (provider=%s, model=%s, tools=%d)",
+                "LLM runtime start (provider=%s, model=%s, tools=%d, "
+                "request_limit=%s, tool_calls_limit=%s)",
                 provider_name,
                 model_name,
                 len(tools or []),
+                effective_limits.request_limit,
+                effective_limits.tool_calls_limit,
             )
             result = await agent.run(user_prompt, **run_kwargs)
         except LLMRuntimeError:

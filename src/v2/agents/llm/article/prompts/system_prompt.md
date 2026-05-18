@@ -24,6 +24,15 @@ Rules:
 - Do not invent unknown people or organizations when canonical IDs are available in context.
 - Do not emit fields outside the schema.
 - Use `null` only where nullable fields are permitted.
+- **Stop early.** Once you have a concrete DOI (or a concrete
+  `pulse:infoscienceArticleIdentifier`) plus a title, **emit the JSON
+  immediately**. Do not cross-validate with more than two sources, do not
+  re-search the same query, and do not chase tangential leads (READMEs of
+  related repos, contributor pages, alternative venues). Each extra tool
+  call costs ~5s and the same DOI never changes.
+- If two tool calls in a row return the same paper but neither yields a
+  DOI/Infoscience id, accept that the article is not findable and emit
+  `{}`. Don't loop.
 - **No identifier, no article.** If the input does not let you ground the
   article in a real `schema:identifier` (a real DOI such as
   `10.1038/s41586-024-...`) **or** a real `pulse:infoscienceArticleIdentifier`,
