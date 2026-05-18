@@ -32,9 +32,17 @@ def test_query_dependents_tool_returns_dict_with_expected_keys(
     # Monkey-patch fetch_dependents_html so the tool's call path doesn't hit
     # Selenium. The tool uses `list_dependents` internally, which calls
     # `iterate_dependents` → `fetch_dependents_html`.
+    #
+    # `service.py` imports `fetch_dependents_html` by name from `scraper`,
+    # so the local binding `src.module.dependents.service.fetch_dependents_html`
+    # must be patched — patching the scraper attribute only affects the
+    # scraper module's own binding and leaves the service's copy untouched.
+    fake_fetcher = lambda url, **_kwargs: fixture_html if url == expected_url else ""  # noqa: E731
     monkeypatch.setattr(
-        "src.module.dependents.scraper.fetch_dependents_html",
-        lambda url, **_kwargs: fixture_html if url == expected_url else "",
+        "src.module.dependents.scraper.fetch_dependents_html", fake_fetcher,
+    )
+    monkeypatch.setattr(
+        "src.module.dependents.service.fetch_dependents_html", fake_fetcher,
     )
     # Some env paths short-circuit if SELENIUM_REMOTE_URL is missing — keep
     # the service from refusing the lookup.

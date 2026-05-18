@@ -6,17 +6,44 @@
     "root_entity": {
       "id": "https://github.com/octocat",
       "type": "schema:Person",
-      "pulse:githubUsername": "octocat"
+      "shacl": "pulse:PersonShape",
+      "identifiers": {
+        "pulse:orcid": null,
+        "pulse:infosciencePersonIdentifier": null,
+        "pulse:githubUsername": "octocat"
+      },
+      "idSource": "pulse:githubUsername",
+      "schema:name": "The Octocat",
+      "schema:url": "https://github.com/octocat",
+      "pulse:githubUsername": "octocat",
+      "pulse:orcidIdentifier": null,
+      "pulse:infosciencePersonIdentifier": null,
+      "org:hasMembership": [],
+      "pulse:hasContribution": [],
+      "pulse:owns": null
     },
     "related_entities": [],
-    "excluded_entities": [],
     "entities_by_type": {
       "repositories": [],
       "persons": [
         {
           "id": "https://github.com/octocat",
           "type": "schema:Person",
-          "pulse:githubUsername": "octocat"
+          "shacl": "pulse:PersonShape",
+          "identifiers": {
+            "pulse:orcid": null,
+            "pulse:infosciencePersonIdentifier": null,
+            "pulse:githubUsername": "octocat"
+          },
+          "idSource": "pulse:githubUsername",
+          "schema:name": "The Octocat",
+          "schema:url": "https://github.com/octocat",
+          "pulse:githubUsername": "octocat",
+          "pulse:orcidIdentifier": null,
+          "pulse:infosciencePersonIdentifier": null,
+          "org:hasMembership": [],
+          "pulse:hasContribution": [],
+          "pulse:owns": null
         }
       ],
       "organizations": [],
@@ -25,6 +52,7 @@
       "contributions": []
     }
   },
+  "warnings": [],
   "stats": {
     "entities_count": 1,
     "triples_count": 0,
@@ -42,8 +70,7 @@
       "output_assembly",
       "link_veracity",
       "jsonld_build",
-      "shacl_gate",
-      "graph_write"
+      "shacl_gate"
     ]
   }
 }

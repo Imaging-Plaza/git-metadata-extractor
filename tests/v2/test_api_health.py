@@ -10,11 +10,28 @@ from httpx import ASGITransport, AsyncClient
 
 from src.v2.api import v2_router
 from src.v2.api_models.contracts import V2HealthResponse
+from src.v2.observation.github_rate_limit import GitHubRateLimitSummary
 
 HTTP_OK = 200
 PACKAGE_NAME = "git-metadata-extractor"
 GITHUB_COMPONENT = "github_token"
 HEALTH_ENDPOINT_MAX_MS = 100
+
+
+def _healthy_rate_limit_summary() -> GitHubRateLimitSummary:
+    """Minimal `GitHubRateLimitSummary` that reports `status="healthy"`.
+
+    The real `probe_github_rate_limit()` makes a live call to
+    `https://api.github.com/rate_limit`, which fails in CI (no live
+    GitHub credentials) and reports the github_token component as
+    `unhealthy`. Tests that need a healthy probe stub it.
+    """
+    return GitHubRateLimitSummary(
+        status="healthy",
+        total_remaining=5000,
+        earliest_reset=None,
+        tokens=[],
+    )
 
 
 def _build_test_app() -> FastAPI:
@@ -43,13 +60,16 @@ def test_health_returns_healthy_when_all_checks_pass(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.setattr(
+        "src.v2.api.probe_github_rate_limit",
+        lambda: _healthy_rate_limit_summary(),
+    )
 
     status_code, payload, _elapsed_ms = _get_json("/v2/health")
 
     assert status_code == HTTP_OK
     assert payload["status"] == "healthy"
     assert payload["components"]["config"] == "healthy"
-    assert payload["components"]["graph_store"] == "healthy"
     assert payload["components"][GITHUB_COMPONENT] == "healthy"
     assert V2HealthResponse.model_validate(payload)
 

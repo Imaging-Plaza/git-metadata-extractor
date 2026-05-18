@@ -47,13 +47,6 @@ def test_main_app_serves_v2_extract_route() -> None:
     assert payload["detected_type"] == "repository"
 
 
-def test_main_app_serves_v2_graph_route() -> None:
-    status_code, payload = _get_json("/v2/graph")
-
-    assert status_code == HTTP_OK
-    assert "@graph" in payload["graph_jsonld"]
-
-
 def test_main_app_v1_welcome_still_available() -> None:
     route_paths = {route.path for route in main_app.routes}
     payload = index()

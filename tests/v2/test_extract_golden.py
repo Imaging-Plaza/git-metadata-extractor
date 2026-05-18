@@ -41,7 +41,6 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "link_veracity",
         "jsonld_build",
         "shacl_gate",
-        "graph_write",
     ],
     "user": [
         "context_gather",
@@ -58,7 +57,6 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "link_veracity",
         "jsonld_build",
         "shacl_gate",
-        "graph_write",
     ],
     "organization": [
         "context_gather",
@@ -75,7 +73,6 @@ EXPECTED_STAGE_SEQUENCE_BY_DETECTED_TYPE = {
         "link_veracity",
         "jsonld_build",
         "shacl_gate",
-        "graph_write",
     ],
 }
 
