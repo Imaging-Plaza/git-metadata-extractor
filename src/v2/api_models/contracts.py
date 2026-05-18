@@ -219,6 +219,36 @@ class EthzResearchCollectionIngestRequest(BaseModel):
     )
 
 
+class OamonitorIngestItem(BaseModel):
+    """One Open Access Monitor (OAM-CH) document to ingest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity: Literal[
+        "journals", "publications", "publishers", "organisations",
+    ] = Field(
+        description="OAM-CH collection the id belongs to.",
+    )
+    id: str = Field(
+        min_length=1,
+        description=(
+            "Upstream `_id` of the document (string ids for journals/publishers, "
+            "OpenAlex URLs for publications, ROR URLs for organisations)."
+        ),
+    )
+
+
+class OamonitorIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/oamonitor/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OamonitorIngestItem] = Field(
+        min_length=1,
+        description="One or more {entity, id} pairs to ingest from OAM-CH.",
+    )
+
+
 class IndexSearchRequest(BaseModel):
     """Body for `POST /v2/indices/<name>/search`.
 
@@ -286,6 +316,7 @@ IndexName = Literal[
     "renkulab",
     "swissubase",
     "ethz_research_collection",
+    "oamonitor",
 ]
 
 

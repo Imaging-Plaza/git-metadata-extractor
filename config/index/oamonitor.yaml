@@ -1,0 +1,39 @@
+# Open Access Monitor CH (OAM-CH) RAG indexer config.
+# Resolved by `src/index/oamonitor/config.py` and merged with env vars
+# (`RCP_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`, `OAMONITOR_API_BASE_URL`)
+# at startup.
+
+rcp:
+  # Same RCP deployment as openalex / zenodo / huggingface indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant Open Access Monitor records"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  # OAM embedding texts are short (single line: title + ISSN + OA color etc.)
+  # with no chunking, so each embed call is fast — push more in parallel
+  # than the chunked-text indices (which keep 4 in-flight).
+  max_concurrency: 8
+  timeout_seconds: 120
+
+oamonitor:
+  # Public Mongo-proxy. No auth required. Documented at https://oamonitor.ch/wiki/api/
+  base_url: https://oam.oamonitor.ch/api/data/public
+  # Server silently caps each response at ~100 documents regardless of
+  # the requested `limit`. Match the cap so we don't waste effort asking
+  # for more on each call.
+  page_size: 100
+  # Be polite — the API doesn't document hard limits.
+  rate_per_minute: 60
+  max_concurrency: 4
+  timeout_seconds: 60
+
+qdrant:
+  url: http://localhost:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

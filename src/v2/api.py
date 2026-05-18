@@ -28,6 +28,7 @@ from src.v2.api_models import (
     IndexIngestJobStatus,
     IndexSearchRequest,
     IndexSearchResponse,
+    OamonitorIngestRequest,
     OpenAlexIngestRequest,
     OrcidIngestRequest,
     RenkulabIngestRequest,
@@ -58,6 +59,10 @@ from src.v2.indices.huggingface import (
     run_huggingface_search,
 )
 from src.v2.indices.jobs import IndexIngestJobStore
+from src.v2.indices.oamonitor import (
+    run_oamonitor_ingest_job,
+    run_oamonitor_search,
+)
 from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
 from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
 from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
@@ -1808,6 +1813,54 @@ async def ethz_research_collection_ingest_post(
     )
 
 
+@v2_router.post(
+    "/indices/oamonitor/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def oamonitor_ingest_post(
+    payload: OamonitorIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue an OAM-CH ingest for one or more `{entity, id}` items."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="oamonitor",
+        status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_oamonitor_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "oamonitor ingest job submitted: job_id=%s items=%d",
+        job_id, len(payload.items),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="oamonitor",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
 async def _search_response_or_unavailable(
     response: IndexSearchResponse | None, *, index_name: str,
 ) -> IndexSearchResponse | JSONResponse:
@@ -1976,6 +2029,28 @@ async def ethz_research_collection_search_post(
     return await _search_response_or_unavailable(
         await run_ethz_research_collection_search(payload, request.app.state),
         index_name="ethz_research_collection",
+    )
+
+
+@v2_router.post(
+    "/indices/oamonitor/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def oamonitor_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the OAM-CH index.
+
+    Use ``target`` to pick the entity collection: ``journals`` (default),
+    ``publications``, ``publishers``, ``organisations``.
+    """
+    return await _search_response_or_unavailable(
+        await run_oamonitor_search(payload, request.app.state),
+        index_name="oamonitor",
     )
 
 
