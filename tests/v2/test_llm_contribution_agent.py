@@ -61,6 +61,28 @@ def _valid_contribution_payload() -> dict[str, Any]:
     }
 
 
+def _person_and_repo_context() -> dict[str, Any]:
+    """Minimum context the orchestrator passes to the contribution agent.
+
+    `target_person` / `target_repository` are required by
+    `LLMContributionAgentV2.run()` (see the orphan-Contribution guard in
+    `src/v2/agents/llm/contribution/agent.py`): when missing, the agent
+    fail-closes and emits `{}` so no Contribution can leak into the graph
+    without both `schema:author` and `pulse:contributionTo`.
+    """
+    return {
+        "known_persons": [{"id": "alice", "type": "schema:Person"}],
+        "known_repositories": [
+            {"id": "owner/repo", "type": "schema:SoftwareSourceCode"},
+        ],
+        "target_person": {"id": "alice", "type": "schema:Person"},
+        "target_repository": {
+            "id": "owner/repo",
+            "type": "schema:SoftwareSourceCode",
+        },
+    }
+
+
 def test_llm_contribution_agent_validates_payload_and_exposes_model_metadata(
     load_schema,
 ) -> None:
@@ -71,10 +93,7 @@ def test_llm_contribution_agent_validates_payload_and_exposes_model_metadata(
         agent.run(
             {
                 "contribution_seed": "owner/repo",
-                "known_persons": [{"id": "alice", "type": "schema:Person"}],
-                "known_repositories": [
-                    {"id": "owner/repo", "type": "schema:SoftwareSourceCode"},
-                ],
+                **_person_and_repo_context(),
             },
             _providers(),
         ),
@@ -138,7 +157,12 @@ def test_llm_contribution_agent_records_strict_schema_warnings() -> None:
     payload["pulse:firstContributionDate"] = "not-a-date"
     agent = LLMContributionAgentV2(llm_runtime=_FakeLLMRuntime(payload))
 
-    result = asyncio.run(agent.run({"contribution_seed": "owner/repo"}, _providers()))
+    result = asyncio.run(
+        agent.run(
+            {"contribution_seed": "owner/repo", **_person_and_repo_context()},
+            _providers(),
+        ),
+    )
 
     assert result.warnings, "Expected strict-schema warnings but got none"
     assert any("pulse:firstContributionDate" in warning for warning in result.warnings)
