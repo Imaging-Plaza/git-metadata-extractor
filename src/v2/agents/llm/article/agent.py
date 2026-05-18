@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 from copy import deepcopy
 from typing import Any
 
 from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 
 from src.v2.agents.llm._loader import load_prompt
 from src.v2.agents.llm._payload_helpers import force_server_uuid
@@ -126,6 +130,129 @@ def _has_real_article_identifier(payload: dict[str, Any]) -> bool:
 _PROMPTS_PACKAGE = "src.v2.agents.llm.article.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
 _USER_PROMPT_TEMPLATE = load_prompt(_PROMPTS_PACKAGE, "user_prompt.md")
+
+# Match a DOI inside arbitrary text — used to surface a paper identifier
+# from README/CITATION/gimie-jsonld for the OAM prefetch query. Conservative:
+# requires `10.` + a 4-9 digit registrant prefix + `/` + at least one non-
+# whitespace char. DOI suffixes commonly contain `.` (e.g.
+# `10.1109/LRA.2021.3062298`), so we terminate only on whitespace/quote/
+# angle-bracket and trim trailing sentence punctuation afterwards.
+_DOI_IN_TEXT_RE = re.compile(
+    r"\b(10\.\d{4,9}/[^\s\"'<>]+)",
+)
+_DOI_TRAILING_PUNCT = ".,;:'\"()[]{}<>"
+
+_OAM_PREFETCH_TOP_K = 3
+_OAM_PREFETCH_ENTITY = "publications"
+_OAM_QUERY_MAX_CHARS = 300
+
+
+def _extract_dois_from_text(text: Any) -> list[str]:
+    """Return DOIs found in a chunk of text, deduped, in order.
+
+    Strips trailing sentence punctuation, which is allowed inside the DOI
+    pattern itself (DOIs commonly contain dots) but is rarely part of the
+    actual identifier when it appears at the end of a sentence.
+    """
+    if not isinstance(text, str) or not text:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for match in _DOI_IN_TEXT_RE.findall(text):
+        cleaned = match.strip().rstrip(_DOI_TRAILING_PUNCT)
+        if _is_real_doi(cleaned) and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            out.append(cleaned)
+    return out
+
+
+def _build_oam_prefetch_query(
+    *,
+    article_seed: str,
+    repository_context_summary: dict[str, Any] | None,
+    pipeline_outputs: Any,
+) -> str | None:
+    """Pick the most specific query to send to OAM.
+
+    Priority: DOI (from README, CITATION, gimie JSON-LD, or pipeline output)
+    > repo description + name > article seed. Returns ``None`` when nothing
+    usable is available so the prefetch is skipped entirely.
+    """
+    # 1. DOI — most specific. Mine the readme + gimie + pipeline outputs.
+    if isinstance(repository_context_summary, dict):
+        for key in ("readme_content", "gimie_jsonld"):
+            for doi in _extract_dois_from_text(repository_context_summary.get(key)):
+                return doi[:_OAM_QUERY_MAX_CHARS]
+    if isinstance(pipeline_outputs, dict):
+        # Some upstream agents stamp a candidate DOI on their output. Pick up
+        # the first plausible one so prefetch reuses prior signals.
+        for value in pipeline_outputs.values():
+            if isinstance(value, str):
+                for doi in _extract_dois_from_text(value):
+                    return doi[:_OAM_QUERY_MAX_CHARS]
+            elif isinstance(value, dict):
+                for inner in value.values():
+                    if isinstance(inner, str):
+                        for doi in _extract_dois_from_text(inner):
+                            return doi[:_OAM_QUERY_MAX_CHARS]
+
+    # 2. Repo description + full_name (gives the LLM enough title hint).
+    if isinstance(repository_context_summary, dict):
+        metadata = repository_context_summary.get("metadata")
+        if isinstance(metadata, dict):
+            parts: list[str] = []
+            for key in ("full_name", "name", "description"):
+                value = metadata.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+            if parts:
+                return " — ".join(parts)[:_OAM_QUERY_MAX_CHARS]
+
+    # 3. Fallback: the seed itself (typically the repo full_name).
+    if isinstance(article_seed, str) and article_seed.strip():
+        return article_seed.strip()[:_OAM_QUERY_MAX_CHARS]
+    return None
+
+
+async def _oam_prefetch(
+    *,
+    article_seed: str,
+    repository_context_summary: dict[str, Any] | None,
+    pipeline_outputs: Any,
+    provider: Any,
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Search OAM with the most specific query we can build.
+
+    Returns ``(query, hits)`` so the user prompt can quote the query that
+    was actually sent. Empty hit list when the provider is unavailable, the
+    query is unbuildable, or the search fails — never raises.
+    """
+    if provider is None:
+        return None, []
+    query = _build_oam_prefetch_query(
+        article_seed=article_seed,
+        repository_context_summary=repository_context_summary,
+        pipeline_outputs=pipeline_outputs,
+    )
+    if query is None:
+        return None, []
+    try:
+        hits = await provider.search(
+            query,
+            entity_type=_OAM_PREFETCH_ENTITY,
+            top_k=_OAM_PREFETCH_TOP_K,
+            rerank=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "article_agent: OAM prefetch failed query=%r — %s", query, exc,
+        )
+        return query, []
+    logger.info(
+        "article_agent: OAM prefetch query=%r entity=%s hits=%d",
+        query, _OAM_PREFETCH_ENTITY, len(hits),
+    )
+    return query, hits
 
 
 def _resolve_article_seed(context: dict[str, Any]) -> str:
@@ -282,6 +409,26 @@ class LLMArticleAgentV2:
         pipeline_outputs = context.get("pipeline_outputs")
         if isinstance(pipeline_outputs, dict) and pipeline_outputs:
             llm_input["pipeline_outputs"] = pipeline_outputs
+
+        # Deterministic OAM prefetch — search Open Access Monitor CH with the
+        # best signal we have (DOI from README/CITATION/gimie, or repo
+        # description) and surface the hits directly in the user prompt.
+        # Observed in profiling: the LLM has the `search_oamonitor_rag` tool
+        # registered but tends to skip it when Infoscience returns a match
+        # first. Prefetching guarantees OAM evidence reaches the model
+        # without depending on its tool-selection heuristics.
+        oam_query, oam_hits = await _oam_prefetch(
+            article_seed=article_seed,
+            repository_context_summary=repository_context,
+            pipeline_outputs=pipeline_outputs,
+            provider=providers.oamonitor_rag,
+        )
+        if oam_query is not None:
+            llm_input["oam_prefetch"] = {
+                "query": oam_query,
+                "entity_type": _OAM_PREFETCH_ENTITY,
+                "hits": oam_hits,
+            }
 
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
