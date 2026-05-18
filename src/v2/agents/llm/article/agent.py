@@ -38,6 +38,10 @@ from src.v2.agents.llm.agent_tools.renkulab_rag import (
 from src.v2.agents.llm.agent_tools.selenium_fetch import (
     make_fetch_link_content_tool,
 )
+from src.v2.agents.llm.agent_tools.oamonitor_rag import (
+    make_oamonitor_rag_fetch_records_tool,
+    make_oamonitor_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.swissubase_rag import (
     make_swissubase_rag_search_tool,
 )
@@ -317,6 +321,9 @@ class LLMArticleAgentV2:
         if providers.zenodo_rag is not None:
             tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
             tools.append(make_zenodo_rag_fetch_records_tool(providers.zenodo_rag))
+        if providers.oamonitor_rag is not None:
+            tools.append(make_oamonitor_rag_search_tool(providers.oamonitor_rag))
+            tools.append(make_oamonitor_rag_fetch_records_tool(providers.oamonitor_rag))
         if providers.renkulab_rag is not None:
             tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
         if providers.swissubase_rag is not None:

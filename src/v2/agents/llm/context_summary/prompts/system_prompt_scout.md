@@ -32,6 +32,10 @@ Spend it generously here so per-entity agents don't have to:
   papers that cite or describe the repo (CITATION.cff
   `preferred-citation`, .zenodo.json `related_identifiers`, README
   references).
+- `search_oamonitor_rag` — Open Access Monitor CH index. Use to
+  resolve a journal title to its ISSN + OA color, identify a
+  publisher's OA policy, or pin a Swiss institution (`entity_type`:
+  `journals` | `publications` | `publishers` | `organisations`).
 - `fetch_link_content_via_selenium` — sparingly, to verify a project
   homepage or a lab page when other signals are weak.
 - `search_on_the_internet` (DuckDuckGo) — last-resort confirmation only.

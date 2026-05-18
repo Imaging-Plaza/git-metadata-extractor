@@ -272,6 +272,9 @@ def _build_scout_tools(
     from src.v2.agents.llm.agent_tools.huggingface_rag import (  # noqa: PLC0415
         make_huggingface_rag_search_tool,
     )
+    from src.v2.agents.llm.agent_tools.oamonitor_rag import (  # noqa: PLC0415
+        make_oamonitor_rag_search_tool,
+    )
     from src.v2.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
         make_infoscience_rag_search_tool,
     )
@@ -313,6 +316,8 @@ def _build_scout_tools(
         tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
     if providers.zenodo_rag is not None:
         tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
+    if providers.oamonitor_rag is not None:
+        tools.append(make_oamonitor_rag_search_tool(providers.oamonitor_rag))
     if providers.ethz_research_collection_rag is not None:
         tools.append(
             make_ethz_research_collection_rag_search_tool(

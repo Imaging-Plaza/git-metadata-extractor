@@ -177,6 +177,7 @@ class ProviderSet:
     huggingface_rag: Any | None = None
     openalex_rag: Any | None = None
     zenodo_rag: Any | None = None
+    oamonitor_rag: Any | None = None
     orcid_rag: Any | None = None
     ror_rag: Any | None = None
     snsf_rag: Any | None = None

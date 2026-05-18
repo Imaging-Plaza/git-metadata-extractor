@@ -96,6 +96,12 @@ from src.v2.ingest.providers.swissubase_rag import (
 from src.v2.ingest.providers.swissubase_rag import (
     build_default_provider as build_default_swissubase_rag_provider,
 )
+from src.v2.ingest.providers.oamonitor_rag import (
+    OamonitorRagProvider,
+)
+from src.v2.ingest.providers.oamonitor_rag import (
+    build_default_provider as build_default_oamonitor_rag_provider,
+)
 from src.v2.ingest.providers.zenodo_rag import (
     ZenodoRagProvider,
 )
@@ -209,6 +215,16 @@ def _resolve_zenodo_rag_provider(app_state: Any) -> ZenodoRagProvider | None:
     )
 
 
+def _resolve_oamonitor_rag_provider(app_state: Any) -> OamonitorRagProvider | None:
+    return _resolve_rag_provider(
+        app_state,
+        state_attr="v2_oamonitor_rag_provider",
+        env_var="V2_OAMONITOR_RAG_ENABLED",
+        builder=build_default_oamonitor_rag_provider,
+        expected_type=OamonitorRagProvider,
+    )
+
+
 def _resolve_github_rag_provider(app_state: Any) -> GitHubRagProvider | None:
     return _resolve_rag_provider(
         app_state,
@@ -305,6 +321,7 @@ def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
     huggingface_rag: HuggingFaceRagProvider | None = None,
     openalex_rag: OpenAlexRagProvider | None = None,
     zenodo_rag: ZenodoRagProvider | None = None,
+    oamonitor_rag: OamonitorRagProvider | None = None,
     orcid_rag: OrcidRagProvider | None = None,
     ror_rag: RorRagProvider | None = None,
     snsf_rag: SnsfRagProvider | None = None,
@@ -320,6 +337,7 @@ def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
         "huggingface_rag": huggingface_rag,
         "openalex_rag": openalex_rag,
         "zenodo_rag": zenodo_rag,
+        "oamonitor_rag": oamonitor_rag,
         "orcid_rag": orcid_rag,
         "ror_rag": ror_rag,
         "snsf_rag": snsf_rag,
@@ -408,6 +426,7 @@ async def get_provider_set(request: Request) -> ProviderSet:
         huggingface_rag=_resolve_huggingface_rag_provider(app_state),
         openalex_rag=_resolve_openalex_rag_provider(app_state),
         zenodo_rag=_resolve_zenodo_rag_provider(app_state),
+        oamonitor_rag=_resolve_oamonitor_rag_provider(app_state),
         orcid_rag=_resolve_orcid_rag_provider(app_state),
         ror_rag=_resolve_ror_rag_provider(app_state),
         snsf_rag=_resolve_snsf_rag_provider(app_state),
@@ -437,6 +456,7 @@ async def get_provider_set(request: Request) -> ProviderSet:
         huggingface_rag=default_provider_set.huggingface_rag,
         openalex_rag=default_provider_set.openalex_rag,
         zenodo_rag=default_provider_set.zenodo_rag,
+        oamonitor_rag=default_provider_set.oamonitor_rag,
         orcid_rag=default_provider_set.orcid_rag,
         ror_rag=default_provider_set.ror_rag,
         snsf_rag=default_provider_set.snsf_rag,
