@@ -90,6 +90,13 @@ def mock_provider_set() -> ProviderSet:
     )
 
 
+# The v2 conftest `_isolate_v2_runtime_env` autouse fixture sets
+# `API_TOKEN=test-api-token` so `verify_token` (HTTPBearer) is active.
+# Send the matching Bearer header so the request reaches the handler
+# instead of bouncing off the auth dependency with 401.
+_AUTH_HEADERS = {"Authorization": "Bearer test-api-token"}
+
+
 def _get_json(path: str, params: dict[str, str]) -> tuple[int, Any]:
     async def _run() -> tuple[int, Any]:
         transport = ASGITransport(app=app)
@@ -97,7 +104,7 @@ def _get_json(path: str, params: dict[str, str]) -> tuple[int, Any]:
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            response = await client.get(path, params=params)
+            response = await client.get(path, params=params, headers=_AUTH_HEADERS)
         return response.status_code, response.json()
 
     return asyncio.run(_run())
