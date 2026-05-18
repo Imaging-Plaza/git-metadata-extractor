@@ -108,6 +108,13 @@ class ProviderCache:
             self.set(key, value, ttl_seconds=ttl_seconds)
         return value
 
+    def clear(self) -> int:
+        """Remove every cached entry. Returns the number of rows deleted."""
+
+        with self._connect() as conn, conn:
+            cursor = conn.execute("DELETE FROM responses;")
+            return int(cursor.rowcount or 0)
+
 
 __all__ = [
     "DEFAULT_CACHE_TTL_DAYS",

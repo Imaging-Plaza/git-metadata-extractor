@@ -21,6 +21,51 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
+def ingest_single_orcid(
+    *,
+    config: OrcidIndexConfig,
+    store: OrcidDuckDBStore,
+    orcid_id: str,
+    scope: str = "switzerland",
+    discovered_via: str = "api_post",
+    provider: object | None = None,
+) -> str:
+    """Fetch + persist one ORCID record. Returns the outcome string.
+
+    Outcome is one of: ``"in_scope"``, ``"out_of_scope"``, ``"not_found"``,
+    ``"error"``. ``provider`` can be passed by callers that want to reuse a
+    single :func:`build_orcid_provider` instance across many ids; otherwise
+    a fresh one is created.
+    """
+    if provider is None:
+        provider = build_orcid_provider(config)
+    try:
+        record = provider.get_person_by_orcid(orcid_id)  # type: ignore[attr-defined]
+    except ProviderNotFoundError:
+        LOGGER.info("orcid not found, skipping: %s", orcid_id)
+        return "not_found"
+    except ProviderError as exc:
+        LOGGER.warning("provider error for %s: %s", orcid_id, exc)
+        return "error"
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("unexpected error for %s: %s", orcid_id, exc)
+        return "error"
+    in_scope, reason = post_filter_record(
+        record,
+        scope=scope,  # type: ignore[arg-type]
+        config=config,
+        discovered_via=discovered_via,
+    )
+    _persist(
+        store=store,
+        record=record,
+        in_scope=in_scope,
+        scope_reason=reason,
+        discovered_via=discovered_via,
+    )
+    return "in_scope" if in_scope else "out_of_scope"
+
+
 def ingest_persons(
     *,
     config: OrcidIndexConfig,

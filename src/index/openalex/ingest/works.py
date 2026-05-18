@@ -72,6 +72,30 @@ def persist_work(store: DuckDBStore, item: dict[str, Any]) -> str | None:
     return work_id
 
 
+def ingest_single_work(
+    *,
+    config: OpenAlexIndexConfig,
+    store: DuckDBStore,
+    work_id: str,
+) -> str:
+    """Fetch + upsert one Work by OpenAlex id, URL, or DOI.
+
+    Outcome: ``"persisted" | "not_found" | "rejected"``. ``rejected`` covers
+    payloads that pyalex returned but :func:`persist_work` rejected (missing
+    canonical id). Network and unexpected errors are raised so the caller
+    can record them on the job.
+    """
+    from src.index.openalex.ingest.openalex_client import (  # noqa: PLC0415
+        fetch_work,
+    )
+
+    item = fetch_work(config=config, work_id=work_id)
+    if item is None:
+        return "not_found"
+    persisted_id = persist_work(store, item)
+    return "persisted" if persisted_id else "rejected"
+
+
 def ingest_works(
     *,
     config: OpenAlexIndexConfig,

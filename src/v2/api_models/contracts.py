@@ -92,3 +92,253 @@ class V2ExtractJobAccepted(BaseModel):
     status: V2ExtractJobStatus
     status_url: str
     submitted_at: datetime
+
+
+class IndexIngestJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ZenodoIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/zenodo/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more Zenodo record identifiers. Bare numeric ids, "
+            "DOIs (`10.5281/zenodo.…`), or full Zenodo URLs are accepted."
+        ),
+    )
+    refresh: bool = Field(
+        default=False,
+        description="If true, re-fetch records already present in the local store.",
+    )
+
+
+class HFIngestItem(BaseModel):
+    """One repository to ingest into the HuggingFace index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["model", "dataset", "space"]
+    repo_id: str = Field(
+        min_length=1,
+        description="HuggingFace repo handle. Format: `<author>/<name>`.",
+    )
+
+
+class HuggingFaceIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[HFIngestItem] = Field(
+        min_length=1,
+        description="One or more {type, repo_id} pairs to ingest.",
+    )
+
+
+class GitHubIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repos: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub repo handles in the form `owner/name`.",
+    )
+
+
+class OpenAlexIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/openalex/ingest`.
+
+    Accepts OpenAlex work identifiers in any of the canonical forms: a short
+    ``W…`` id, an ``https://openalex.org/W…`` URL, or a DOI (`10.…`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(
+        min_length=1,
+        description="One or more OpenAlex work IDs (`W…`), URLs, or DOIs.",
+    )
+
+
+class OrcidIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/orcid/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    orcid_ids: list[str] = Field(
+        min_length=1,
+        description="One or more ORCID identifiers (`XXXX-XXXX-XXXX-XXXX`).",
+    )
+
+
+class RenkulabIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/renkulab/ingest`.
+
+    Currently scoped to v2 project records; additional entity types can be
+    added later without breaking the contract.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_ids: list[str] = Field(
+        min_length=1,
+        description="One or more Renku v2 project ids (slug or UUID).",
+    )
+
+
+class SwissubaseIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/swissubase/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    study_ids: list[str] = Field(
+        min_length=1,
+        description="One or more SWISSUbase numeric study ids.",
+    )
+
+
+class EthzResearchCollectionIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/ethz_research_collection/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    uuids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more ETH Research Collection item UUIDs "
+            "(DSpace `/core/items/{uuid}`)."
+        ),
+    )
+
+
+class OamonitorIngestItem(BaseModel):
+    """One Open Access Monitor (OAM-CH) document to ingest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity: Literal[
+        "journals", "publications", "publishers", "organisations",
+    ] = Field(
+        description="OAM-CH collection the id belongs to.",
+    )
+    id: str = Field(
+        min_length=1,
+        description=(
+            "Upstream `_id` of the document (string ids for journals/publishers, "
+            "OpenAlex URLs for publications, ROR URLs for organisations)."
+        ),
+    )
+
+
+class OamonitorIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/oamonitor/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OamonitorIngestItem] = Field(
+        min_length=1,
+        description="One or more {entity, id} pairs to ingest from OAM-CH.",
+    )
+
+
+class IndexSearchRequest(BaseModel):
+    """Body for `POST /v2/indices/<name>/search`.
+
+    Uniform across indices. Indices with a single entity type ignore
+    ``target``; multi-entity indices use it to select the collection.
+    ETHZ Research Collection accepts the ChromaDB-style ``filter_payload``
+    as its ``where`` clause and falls back to ``mode="hybrid"``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(
+        min_length=1,
+        description="Free-text query to match against the index.",
+    )
+    top_k: int = Field(
+        default=10, ge=1, le=200,
+        description="Maximum number of results to return.",
+    )
+    candidate_k: int | None = Field(
+        default=None, ge=1, le=1000,
+        description="Vector-search candidate count before reranking. Indices that do not rerank ignore this.",
+    )
+    filter_payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata filter dict. Shape is index-specific (Qdrant for most, ChromaDB-style `where` for ETHZ Research Collection).",
+    )
+    target: str | None = Field(
+        default=None,
+        description="Optional entity type / collection target for multi-entity indices (e.g. huggingface: model|dataset|space|org; openalex: works|authors|institutions|sources|topics|concepts; ethz_research_collection: chunks|articles|persons|organizations).",
+    )
+
+
+class IndexSearchHit(BaseModel):
+    """One result row returned by an index search."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    vector_score: float | None = None
+    rerank_score: float | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    entity: dict[str, Any] | None = None
+
+
+class IndexSearchResponse(BaseModel):
+    """Wrapper envelope for index search results."""
+
+    index_name: "IndexName"
+    target: str | None = None
+    query: str
+    hits: list[IndexSearchHit] = Field(default_factory=list)
+    extra: dict[str, Any] | None = Field(
+        default=None,
+        description="Index-specific extras (e.g. ETHZ Research Collection related persons/orgs, HuggingFace facets). Optional.",
+    )
+
+
+IndexName = Literal[
+    "zenodo",
+    "huggingface",
+    "github",
+    "openalex",
+    "orcid",
+    "renkulab",
+    "swissubase",
+    "ethz_research_collection",
+    "oamonitor",
+]
+
+
+class IndexIngestJob(BaseModel):
+    """Persistent record for an async index-ingest job."""
+
+    job_id: str
+    index_name: IndexName
+    status: IndexIngestJobStatus
+    request: dict[str, Any]
+    submitted_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    summary: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class IndexIngestJobAccepted(BaseModel):
+    """Response body for the POST that enqueues an ingest job."""
+
+    job_id: str
+    index_name: IndexName
+    status: IndexIngestJobStatus
+    status_url: str
+    submitted_at: datetime

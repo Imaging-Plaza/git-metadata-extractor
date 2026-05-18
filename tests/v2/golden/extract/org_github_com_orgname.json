@@ -6,10 +6,29 @@
     "root_entity": {
       "id": "https://github.com/github",
       "type": "org:Organization",
-      "pulse:githubOrganizationHandle": "github"
+      "shacl": "pulse:OrganizationShape",
+      "identifiers": {
+        "pulse:ror": null,
+        "pulse:infoscienceOrganizationIdentifier": null,
+        "pulse:githubOrganizationHandle": "github"
+      },
+      "idSource": "pulse:githubOrganizationHandle",
+      "schema:name": "GitHub",
+      "schema:identifier": null,
+      "pulse:githubOrganizationHandle": "github",
+      "pulse:infoscienceOrganizationIdentifier": null,
+      "pulse:OrganizationType": "pulse:OtherOrganizationType",
+      "pulse:githubOrgFollowers": 200000,
+      "org:hasUnit": [],
+      "org:unitOf": [],
+      "pulse:owns": null,
+      "_aliases": [
+        "github"
+      ],
+      "_acronyms": [],
+      "_labels": []
     },
     "related_entities": [],
-    "excluded_entities": [],
     "entities_by_type": {
       "repositories": [],
       "persons": [],
@@ -17,7 +36,27 @@
         {
           "id": "https://github.com/github",
           "type": "org:Organization",
-          "pulse:githubOrganizationHandle": "github"
+          "shacl": "pulse:OrganizationShape",
+          "identifiers": {
+            "pulse:ror": null,
+            "pulse:infoscienceOrganizationIdentifier": null,
+            "pulse:githubOrganizationHandle": "github"
+          },
+          "idSource": "pulse:githubOrganizationHandle",
+          "schema:name": "GitHub",
+          "schema:identifier": null,
+          "pulse:githubOrganizationHandle": "github",
+          "pulse:infoscienceOrganizationIdentifier": null,
+          "pulse:OrganizationType": "pulse:OtherOrganizationType",
+          "pulse:githubOrgFollowers": 200000,
+          "org:hasUnit": [],
+          "org:unitOf": [],
+          "pulse:owns": null,
+          "_aliases": [
+            "github"
+          ],
+          "_acronyms": [],
+          "_labels": []
         }
       ],
       "articles": [],
@@ -25,6 +64,7 @@
       "contributions": []
     }
   },
+  "warnings": [],
   "stats": {
     "entities_count": 1,
     "triples_count": 0,
@@ -42,8 +82,7 @@
       "output_assembly",
       "link_veracity",
       "jsonld_build",
-      "shacl_gate",
-      "graph_write"
+      "shacl_gate"
     ]
   }
 }

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "0000-0001-2345-6789",
+    "type": "schema:Person",
+    "shacl": "pulse:PersonShape",
+    "identifiers": {
+      "pulse:orcid": "0000-0001-2345-6789",
+      "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+      "pulse:githubUsername": "caviri",
+      "uuid": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e"
+    },
+    "idSource": "pulse:orcid",
+    "schema:name": "Carlos Vivar Rios",
+    "schema:email": "carlos.vivar@epfl.ch",
+    "schema:url": "https://people.epfl.ch/carlos.vivar",
+    "pulse:githubUsername": "caviri",
+    "pulse:orcidIdentifier": "0000-0001-2345-6789",
+    "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "org:hasMembership": [
+      "0000-0001-2345-6789_https://ror.org/02s376052",
+      "0000-0001-2345-6789_numpy"
+    ],
+    "pulse:hasContribution": [
+      "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+      "0000-0001-2345-6789_EPFL-ENAC/structural-analysis"
+    ],
+    "pulse:owns": []
+  },
+  {
+    "id": "0000-0002-3456-7890",
+    "type": "schema:Person",
+    "shacl": "pulse:PersonShape",
+    "identifiers": {
+      "pulse:orcid": "0000-0002-3456-7890",
+      "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+      "pulse:githubUsername": "amorin",
+      "uuid": "a9b8c7d6-5e4f-4a3b-8c1d-9e8f7a6b5c4d"
+    },
+    "idSource": "pulse:orcid",
+    "schema:name": "Alice Morin",
+    "schema:email": "alice.morin@epfl.ch",
+    "schema:url": "https://people.epfl.ch/alice.morin",
+    "pulse:githubUsername": "amorin",
+    "pulse:orcidIdentifier": "0000-0002-3456-7890",
+    "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+    "org:hasMembership": ["0000-0002-3456-7890_https://ror.org/02s376052"],
+    "pulse:hasContribution": [
+      "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+      "0000-0002-3456-7890_EPFL-ENAC/structural-analysis"
+    ],
+    "pulse:owns": []
+  },
+  {
+    "id": "0000-0003-4567-8901",
+    "type": "schema:Person",
+    "shacl": "pulse:PersonShape",
+    "identifiers": {
+      "pulse:orcid": "0000-0003-4567-8901",
+      "pulse:infosciencePersonIdentifier": null,
+      "pulse:githubUsername": "jdupont",
+      "uuid": "b3f2a1c4-5d6e-4b7a-8c9d-1e2f3a4b5c6d"
+    },
+    "idSource": "pulse:orcid",
+    "schema:name": "Jean Dupont",
+    "schema:email": "jean.dupont@cern.ch",
+    "schema:url": null,
+    "pulse:githubUsername": "jdupont",
+    "pulse:orcidIdentifier": "0000-0003-4567-8901",
+    "pulse:infosciencePersonIdentifier": null,
+    "org:hasMembership": ["0000-0003-4567-8901_https://ror.org/01ggx4157"],
+    "pulse:hasContribution": [
+      "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+      "0000-0003-4567-8901_jdupont/geodata-toolkit"
+    ],
+    "pulse:owns": ["jdupont/geodata-toolkit"]
+  },
+  {
+    "id": "mweber",
+    "type": "schema:Person",
+    "shacl": "pulse:PersonShape",
+    "identifiers": {
+      "pulse:orcid": null,
+      "pulse:infosciencePersonIdentifier": null,
+      "pulse:githubUsername": "mweber",
+      "uuid": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+    },
+    "idSource": "pulse:githubUsername",
+    "schema:name": "Marie Weber",
+    "schema:email": "marie.weber@eth.ch",
+    "schema:url": null,
+    "pulse:githubUsername": "mweber",
+    "pulse:orcidIdentifier": null,
+    "pulse:infosciencePersonIdentifier": null,
+    "org:hasMembership": ["mweber_https://ror.org/05a28rw58"],
+    "pulse:hasContribution": [
+      "mweber_EPFL-ENAC/structural-analysis",
+      "mweber_mweber/data-pipeline"
+    ],
+    "pulse:owns": ["mweber/data-pipeline"]
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+    "type": "schema:Person",
+    "shacl": "pulse:PersonShape",
+    "identifiers": {
+      "pulse:orcid": null,
+      "pulse:infosciencePersonIdentifier": null,
+      "pulse:githubUsername": null,
+      "uuid": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+    },
+    "idSource": "uuid",
+    "schema:name": "Luca Rossi",
+    "schema:email": "luca.rossi@cern.ch",
+    "schema:url": null,
+    "pulse:githubUsername": null,
+    "pulse:orcidIdentifier": null,
+    "pulse:infosciencePersonIdentifier": null,
+    "org:hasMembership": ["e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157"],
+    "pulse:hasContribution": ["e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit"],
+    "pulse:owns": []
+  }
+]

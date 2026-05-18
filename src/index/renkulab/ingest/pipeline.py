@@ -56,6 +56,28 @@ def _save_state(
     )
 
 
+async def ingest_single_project(
+    *,
+    client: RenkulabClient,
+    store: RenkulabStore,
+    project_id: str,
+) -> str:
+    """Fetch + upsert one project by id (UUID or namespace/slug).
+
+    Outcome: ``"persisted" | "not_found" | "projection_skipped"``. No scope
+    matching is applied — the per-id route assumes the caller is asserting
+    they want this specific project regardless of seed config.
+    """
+    raw = await client.fetch_project(project_id)
+    if raw is None:
+        return "not_found"
+    row = project_project(raw)
+    if row is None:
+        return "projection_skipped"
+    store.upsert_project(row, raw=raw)
+    return "persisted"
+
+
 async def _ingest_projects(
     *,
     client: RenkulabClient,

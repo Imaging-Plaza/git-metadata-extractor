@@ -77,6 +77,36 @@ def _paginate(
                 return
 
 
+def fetch_work(
+    *,
+    config: OpenAlexIndexConfig,
+    work_id: str,
+) -> dict[str, Any] | None:
+    """Fetch a single Work by OpenAlex id (``W…``), URL, or DOI.
+
+    Returns the raw Work dict, or ``None`` when OpenAlex has no match.
+    Network/HTTP failures are bubbled up to the caller so the route can
+    surface them as a job error rather than silently swallow.
+    """
+    _ensure_configured(config)
+    candidate = (work_id or "").strip()
+    if not candidate:
+        return None
+    # pyalex's __getitem__ accepts an OpenAlex id, a full URL, or a DOI
+    # (with or without the `https://doi.org/` prefix) and resolves all of
+    # them to the same /works/{id} endpoint.
+    try:
+        result = Works()[candidate]
+    except Exception as exc:  # noqa: BLE001 — pyalex raises HTTP errors here
+        message = str(exc).lower()
+        if "404" in message or "not found" in message:
+            return None
+        raise
+    if isinstance(result, dict):
+        return result
+    return None
+
+
 def iter_works(
     *,
     config: OpenAlexIndexConfig,

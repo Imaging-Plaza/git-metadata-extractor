@@ -26,12 +26,22 @@ Spend it generously here so per-entity agents don't have to:
   when they look academic. Score < 0.65 with rerank → flag in caveats,
   don't claim.
 - `search_ror_rag` — canonicalise organisations (especially Swiss /
-  EPFL-adjacent). Use `--scope switzerland` for Swiss orgs, `worldwide`
-  otherwise.
+  EPFL-adjacent). Use `scope_mode="switzerland"` (or `"epfl_ethz"` for
+  the narrowest neighbourhood) when the repo is Swiss-anchored;
+  `"worldwide"` otherwise. **Acronyms collide** ("SDSC" = Swiss Data
+  Science Center vs San Diego Supercomputer Center; "NIH" hits CH+US):
+  always expand the acronym to the full name in the query before
+  calling, and pass `filters={"country_code": "CH"}` when the context
+  is Swiss. Leave the ROR field unset rather than commit to a wrong
+  country.
 - `search_openalex_rag` / `search_infoscience_rag` — find published
   papers that cite or describe the repo (CITATION.cff
   `preferred-citation`, .zenodo.json `related_identifiers`, README
   references).
+- `search_oamonitor_rag` — Open Access Monitor CH index. Use to
+  resolve a journal title to its ISSN + OA color, identify a
+  publisher's OA policy, or pin a Swiss institution (`entity_type`:
+  `journals` | `publications` | `publishers` | `organisations`).
 - `fetch_link_content_via_selenium` — sparingly, to verify a project
   homepage or a lab page when other signals are weak.
 - `search_on_the_internet` (DuckDuckGo) — last-resort confirmation only.

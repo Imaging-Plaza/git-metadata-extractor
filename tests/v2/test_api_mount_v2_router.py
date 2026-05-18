@@ -14,6 +14,11 @@ from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
 from src.v2.ingest.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
+# The v2 conftest `_isolate_v2_runtime_env` autouse fixture sets
+# `API_TOKEN=test-api-token` so `verify_token` (HTTPBearer) is active.
+# Send the matching Bearer header so v2 routes don't reject the request
+# with 401 before they reach the route handler.
+_AUTH_HEADERS = {"Authorization": "Bearer test-api-token"}
 
 
 def _get_json(path: str) -> tuple[int, Any]:
@@ -23,7 +28,7 @@ def _get_json(path: str) -> tuple[int, Any]:
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            response = await client.get(path)
+            response = await client.get(path, headers=_AUTH_HEADERS)
         return response.status_code, response.json()
 
     return asyncio.run(_run())
@@ -40,13 +45,6 @@ def test_main_app_serves_v2_extract_route() -> None:
 
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"
-
-
-def test_main_app_serves_v2_graph_route() -> None:
-    status_code, payload = _get_json("/v2/graph")
-
-    assert status_code == HTTP_OK
-    assert "@graph" in payload["graph_jsonld"]
 
 
 def test_main_app_v1_welcome_still_available() -> None:

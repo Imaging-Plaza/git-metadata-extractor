@@ -178,12 +178,35 @@ class EpflGraphStore:
                 "name": row[2],
             }
 
+    def iter_categories_missing_wikidata_qid(self) -> Iterator[dict[str, Any]]:
+        cursor = self.connect().execute(
+            "SELECT category_id, wikipedia_page_id, name "
+            "FROM categories "
+            "WHERE wikipedia_page_id IS NOT NULL "
+            "  AND (wikidata_qid IS NULL OR wikidata_qid = '') "
+            "ORDER BY category_id",
+        )
+        for row in cursor.fetchall():
+            yield {
+                "category_id": row[0],
+                "wikipedia_page_id": row[1],
+                "name": row[2],
+            }
+
     def update_wikipedia_extract(
         self, category_id: str, extract: str | None,
     ) -> None:
         self.connect().execute(
             "UPDATE categories SET wikipedia_extract = ? WHERE category_id = ?",
             [extract, category_id],
+        )
+
+    def update_wikidata_qid(
+        self, category_id: str, wikidata_qid: str | None,
+    ) -> None:
+        self.connect().execute(
+            "UPDATE categories SET wikidata_qid = ? WHERE category_id = ?",
+            [wikidata_qid, category_id],
         )
 
     def update_embedding_text(

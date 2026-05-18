@@ -21,7 +21,7 @@ Return **only** a JSON object. No markdown fences, no explanation. The object MA
 
 ## EPFL Graph hits (when present)
 
-The input may include `repo_context_summary.epfl_graph_hits` — a pre-fetched, deterministic top-K from EPFL's curated discipline ontology (~2226 categories), already filtered semantically against the repo's name + description + README. Each hit has `{category_id, name, depth, parent_id, wikipedia_url, score}`.
+The input may include `repo_context_summary.epfl_graph_hits` — a pre-fetched, score-filtered top-K from EPFL's curated discipline ontology (~2226 categories), already filtered semantically against the repo's name + description + README. Each hit has `{category_id, name, depth, parent_id, wikipedia_url, score}`.
 
 **When `epfl_graph_hits` is present, use it as your primary evidence**: scan the top 3-5 names, group them into distinct broad themes, and pick **1-3 Wikidata QIDs from the enum below** that best summarize them — emit one QID per distinct theme you can identify. The EPFL Graph names are far more specific than our enum (e.g. `topics-in-natural-language-processing`, `data-mining`); your job is to map them up to the broad QIDs in our schema.
 

@@ -84,6 +84,59 @@ def _persist_readme(*, owner: str, name: str, text: str, cards_dir: Path) -> str
     return str(target.relative_to(cards_dir))
 
 
+def ingest_single_repo(
+    *,
+    config: GitHubIndexConfig,
+    store: GitHubStore,
+    client: GitHubClient,
+    full_name: str,
+) -> str:
+    """Fetch + upsert one repository. Returns ``"ingested" | "skipped_404"``.
+
+    Increments the underlying DuckDB row and (when present) writes the README
+    snapshot to the cards directory. Pure side-effect; the bulk function and
+    the HTTP route share this path so behaviour stays consistent.
+    """
+    repo_payload = client.get_repository(full_name)
+    if not isinstance(repo_payload, dict):
+        LOGGER.warning("ingest skip: repo not found or unreachable: %s", full_name)
+        return "skipped_404"
+    languages = client.get_languages(full_name)
+    contributors = client.get_contributors(full_name)
+    readme_text, readme_path = client.get_readme(
+        full_name,
+        max_bytes=config.github.readme_max_bytes,
+    )
+    record = _record_from_payload(
+        full_name=full_name,
+        repo_payload=repo_payload,
+        languages=languages,
+        contributors=contributors,
+        readme_text=readme_text,
+        readme_path=readme_path,
+    )
+    if readme_text:
+        stored_path = _persist_readme(
+            owner=record.owner,
+            name=record.name,
+            text=readme_text,
+            cards_dir=config.paths.cards_dir,
+        )
+        # Replace the GitHub-side `readme_path` (e.g. `README.md` or
+        # `docs/README.rst`) with the on-disk relative path so downstream
+        # code can find the file unambiguously.
+        record.readme_path = stored_path
+    store.upsert_repo(record)
+    LOGGER.info(
+        "ingested %s (stars=%d lang=%s readme=%s)",
+        full_name,
+        record.stargazers_count,
+        record.primary_language or "-",
+        "yes" if readme_text else "no",
+    )
+    return "ingested" if readme_text else "ingested_no_readme"
+
+
 def ingest_repos(
     *,
     config: GitHubIndexConfig,
@@ -105,47 +158,15 @@ def ingest_repos(
     repos_to_process = scope.repos[:limit] if limit is not None else scope.repos
     for full_name in repos_to_process:
         seen += 1
-        repo_payload = client.get_repository(full_name)
-        if not isinstance(repo_payload, dict):
-            LOGGER.warning("ingest skip: repo not found or unreachable: %s", full_name)
+        outcome = ingest_single_repo(
+            config=config, store=store, client=client, full_name=full_name,
+        )
+        if outcome == "skipped_404":
             skipped_404 += 1
             continue
-        languages = client.get_languages(full_name)
-        contributors = client.get_contributors(full_name)
-        readme_text, readme_path = client.get_readme(
-            full_name,
-            max_bytes=config.github.readme_max_bytes,
-        )
-        if not readme_text:
-            no_readme += 1
-        record = _record_from_payload(
-            full_name=full_name,
-            repo_payload=repo_payload,
-            languages=languages,
-            contributors=contributors,
-            readme_text=readme_text,
-            readme_path=readme_path,
-        )
-        if readme_text:
-            stored_path = _persist_readme(
-                owner=record.owner,
-                name=record.name,
-                text=readme_text,
-                cards_dir=config.paths.cards_dir,
-            )
-            # Replace the GitHub-side `readme_path` (e.g. `README.md` or
-            # `docs/README.rst`) with the on-disk relative path so downstream
-            # code can find the file unambiguously.
-            record.readme_path = stored_path
-        store.upsert_repo(record)
         ingested += 1
-        LOGGER.info(
-            "ingested %s (stars=%d lang=%s readme=%s)",
-            full_name,
-            record.stargazers_count,
-            record.primary_language or "-",
-            "yes" if readme_text else "no",
-        )
+        if outcome == "ingested_no_readme":
+            no_readme += 1
     return {
         "seen": seen,
         "ingested": ingested,

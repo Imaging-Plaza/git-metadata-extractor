@@ -1,0 +1,83 @@
+[
+  {
+    "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 156,
+    "pulse:firstContributionDate": "2023-03-15T10:30:00+00:00",
+    "pulse:lastContributionDate": "2025-01-20T14:45:00+00:00",
+    "schema:author": "0000-0001-2345-6789"
+  },
+  {
+    "id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 42,
+    "pulse:firstContributionDate": "2022-05-10T09:00:00+00:00",
+    "pulse:lastContributionDate": "2024-11-30T16:20:00+00:00",
+    "schema:author": "0000-0001-2345-6789"
+  },
+  {
+    "id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 89,
+    "pulse:firstContributionDate": "2023-06-01T11:30:00+00:00",
+    "pulse:lastContributionDate": "2025-01-15T10:00:00+00:00",
+    "schema:author": "0000-0002-3456-7890"
+  },
+  {
+    "id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 234,
+    "pulse:firstContributionDate": "2022-01-10T08:00:00+00:00",
+    "pulse:lastContributionDate": "2024-12-01T17:30:00+00:00",
+    "schema:author": "0000-0002-3456-7890"
+  },
+  {
+    "id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 15,
+    "pulse:firstContributionDate": "2024-02-01T13:00:00+00:00",
+    "pulse:lastContributionDate": "2024-06-15T09:45:00+00:00",
+    "schema:author": "0000-0003-4567-8901"
+  },
+  {
+    "id": "mweber_EPFL-ENAC/structural-analysis",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/structural-analysis",
+    "pulse:contributionCount": 78,
+    "pulse:firstContributionDate": "2022-03-20T10:15:00+00:00",
+    "pulse:lastContributionDate": "2024-10-10T14:00:00+00:00",
+    "schema:author": "mweber"
+  },
+  {
+    "id": "mweber_mweber/data-pipeline",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "mweber/data-pipeline",
+    "pulse:contributionCount": 320,
+    "pulse:firstContributionDate": "2024-06-20T14:15:00+00:00",
+    "pulse:lastContributionDate": "2025-01-28T11:30:00+00:00",
+    "schema:author": "mweber"
+  },
+  {
+    "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "jdupont/geodata-toolkit",
+    "pulse:contributionCount": 23,
+    "pulse:firstContributionDate": "2024-02-05T10:00:00+00:00",
+    "pulse:lastContributionDate": "2024-08-15T16:30:00+00:00",
+    "schema:author": "0000-0003-4567-8901"
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_EPFL-ENAC/geodata-toolkit",
+    "type": "pulse:Contribution",
+    "pulse:contributionTo": "EPFL-ENAC/geodata-toolkit",
+    "pulse:contributionCount": 8,
+    "pulse:firstContributionDate": "2024-09-01T09:00:00+00:00",
+    "pulse:lastContributionDate": "2025-01-10T15:20:00+00:00",
+    "schema:author": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+  }
+]

@@ -22,6 +22,7 @@ from src.index.epfl_graph.embed.pipeline import (
     embed_disciplines,
 )
 from src.index.epfl_graph.ingest.download import ingest_tree
+from src.index.epfl_graph.ingest.wikidata_qids import fetch_wikidata_qids
 from src.index.epfl_graph.ingest.wikipedia_extracts import (
     fetch_wikipedia_extracts,
     rebuild_embedding_texts,
@@ -75,6 +76,23 @@ def _cmd_enrich_wikipedia(args: argparse.Namespace) -> int:
         {
             "wikipedia_extracts_fetched": fetched,
             "embedding_texts_rebuilt": rebuilt,
+            "duckdb_path": str(config.paths.duckdb_path),
+        },
+    )
+    return 0
+
+
+def _cmd_enrich_wikidata(args: argparse.Namespace) -> int:
+    """Fetch missing Wikidata QIDs for categories via Wikipedia pageprops."""
+    config = load_config()
+    store = EpflGraphStore.open(config.paths.duckdb_path)
+    try:
+        fetched = fetch_wikidata_qids(config, store, limit=args.limit)
+    finally:
+        store.close()
+    _emit_json(
+        {
+            "wikidata_qids_fetched": fetched,
             "duckdb_path": str(config.paths.duckdb_path),
         },
     )
@@ -135,6 +153,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_enrich.add_argument("--limit", type=int, default=None)
     p_enrich.set_defaults(func=_cmd_enrich_wikipedia)
+
+    p_qids = sub.add_parser(
+        "enrich-wikidata",
+        help="Fill missing wikidata_qid via Wikipedia pageprops (prop=pageprops)",
+    )
+    p_qids.add_argument("--limit", type=int, default=None)
+    p_qids.set_defaults(func=_cmd_enrich_wikidata)
 
     p_search = sub.add_parser("search", help="Semantic search over disciplines")
     p_search.add_argument("query")

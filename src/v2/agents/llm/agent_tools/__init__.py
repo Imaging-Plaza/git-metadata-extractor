@@ -79,6 +79,10 @@ from src.v2.agents.llm.agent_tools.uuid import (
     generate_uuid_v4_batch_tool,
     generate_uuid_v4_tool,
 )
+from src.v2.agents.llm.agent_tools.oamonitor_rag import (
+    make_oamonitor_rag_fetch_records_tool,
+    make_oamonitor_rag_search_tool,
+)
 from src.v2.agents.llm.agent_tools.zenodo_rag import (
     make_zenodo_rag_fetch_records_tool,
     make_zenodo_rag_search_tool,
@@ -110,6 +114,8 @@ __all__ = [
     "make_infoscience_rag_fetch_records_tool",
     "make_infoscience_rag_search_tool",
     "make_infoscience_search_tool",
+    "make_oamonitor_rag_fetch_records_tool",
+    "make_oamonitor_rag_search_tool",
     "make_openalex_rag_search_tool",
     "make_orcid_person_tool",
     "make_orcid_rag_search_tool",

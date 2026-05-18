@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import requests
 
@@ -30,22 +30,27 @@ USER_AGENT = (
     "git-metadata-extractor/2.0 (+https://github.com/Imaging-Plaza/"
     "git-metadata-extractor) (concept_tagging discipline ingest)"
 )
-MAX_PAGE_IDS_PER_REQUEST = 50
+# Wikipedia's TextExtracts module silently caps `exlimit=max` at 20 pages per
+# request when `explaintext` / `exintro` are set. Batching more than 20 means
+# the tail of each batch comes back with no `extract` field. Stay at 20 so
+# every queued page actually gets a lead-section extract.
+MAX_PAGE_IDS_PER_REQUEST = 20
 RATE_PER_SECOND = 5
 DEFAULT_TIMEOUT = 30
 MAX_EXTRACT_CHARS_FOR_EMBED = 1200  # cap each extract for embedding text
 
 
-def _fetch_extracts_batch_by_title(  # noqa: C901
-    titles: list[str], *, session: requests.Session, timeout: float,
+def _fetch_extracts_batch_by_page_id(
+    page_ids: list[str], *, session: requests.Session, timeout: float,
 ) -> dict[str, str]:
-    """Title-keyed extract fetch. Returns ``{original_title: extract}``.
+    """Page-id-keyed extract fetch. Returns ``{page_id_str: extract}``.
 
-    MediaWiki normalizes/redirects titles transparently with ``redirects=1``;
-    we map results back to the *input* title using the ``normalized`` and
-    ``redirects`` from→to arrays.
+    Querying by pageid is deterministic — no title normalization, no redirect
+    chasing — and each EPFL Graph category row already carries the canonical
+    Wikipedia page id. Wikipedia returns the ``pageid`` integer per page in
+    the response; we re-stringify it to match our input keys.
     """
-    if not titles:
+    if not page_ids:
         return {}
     response = session.get(
         WIKIPEDIA_API_URL,
@@ -56,48 +61,28 @@ def _fetch_extracts_batch_by_title(  # noqa: C901
             "exintro": "true",
             "explaintext": "true",
             "exlimit": "max",
-            "redirects": "1",
-            "titles": "|".join(titles),
+            "pageids": "|".join(page_ids),
         },
         timeout=timeout,
     )
     response.raise_for_status()
     payload = response.json()
     query = payload.get("query") if isinstance(payload, dict) else None
-    if not isinstance(query, dict):
+    pages = query.get("pages") if isinstance(query, dict) else None
+    if not isinstance(pages, dict):
         return {}
-    # Resolved title → input title (chain: input → normalized → redirected).
-    resolved_to_input: dict[str, str] = {t: t for t in titles}
-    for entry in query.get("normalized", []) or []:
-        if not isinstance(entry, dict):
-            continue
-        from_title = entry.get("from")
-        to_title = entry.get("to")
-        if isinstance(from_title, str) and isinstance(to_title, str):
-            input_title = resolved_to_input.get(from_title, from_title)
-            resolved_to_input[to_title] = input_title
-    for entry in query.get("redirects", []) or []:
-        if not isinstance(entry, dict):
-            continue
-        from_title = entry.get("from")
-        to_title = entry.get("to")
-        if isinstance(from_title, str) and isinstance(to_title, str):
-            input_title = resolved_to_input.get(from_title, from_title)
-            resolved_to_input[to_title] = input_title
 
-    pages = query.get("pages") if isinstance(query.get("pages"), dict) else {}
     out: dict[str, str] = {}
     for page in pages.values():
         if not isinstance(page, dict):
             continue
+        page_id = page.get("pageid")
         extract = page.get("extract")
-        title = page.get("title")
         if not isinstance(extract, str) or not extract.strip():
             continue
-        if not isinstance(title, str):
+        if not isinstance(page_id, int):
             continue
-        input_title = resolved_to_input.get(title, title)
-        out[input_title] = extract.strip()
+        out[str(page_id)] = extract.strip()
     return out
 
 
@@ -125,21 +110,25 @@ def fetch_wikipedia_extracts(  # noqa: C901
     last_call = 0.0
     updated = 0
 
-    # Use the canonical Wikipedia title (stored in `categories.name`) instead
-    # of pageids — `name` matches the target article exactly when no
-    # rename has happened, and `redirects=1` handles the rest. Keying on
-    # title also makes the redirect/normalization mapping straightforward.
-    title_to_category: dict[str, str] = {}
+    # Query by Wikipedia page id (stored in `categories.wikipedia_page_id`)
+    # rather than title. Each row already carries the canonical pageid; using
+    # it skips title-normalization and redirect-chasing entirely. Rows with a
+    # missing pageid fall back to title-based lookup so we still cover them.
+    page_id_to_category: dict[str, str] = {}
+    title_only_rows: list[dict[str, Any]] = []
     for row in pending:
-        name = row.get("name")
         category_id = row.get("category_id")
-        if not isinstance(name, str) or not name.strip() or not category_id:
+        if not category_id:
             continue
-        title_to_category.setdefault(name.strip(), str(category_id))
+        page_id = row.get("wikipedia_page_id")
+        if isinstance(page_id, (str, int)) and str(page_id).strip():
+            page_id_to_category.setdefault(str(page_id).strip(), str(category_id))
+        else:
+            title_only_rows.append(row)
 
-    titles = list(title_to_category.keys())
-    for index in range(0, len(titles), MAX_PAGE_IDS_PER_REQUEST):
-        batch = titles[index : index + MAX_PAGE_IDS_PER_REQUEST]
+    page_ids = list(page_id_to_category.keys())
+    for index in range(0, len(page_ids), MAX_PAGE_IDS_PER_REQUEST):
+        batch = page_ids[index : index + MAX_PAGE_IDS_PER_REQUEST]
         now = time.monotonic()
         wait = max(0.0, last_call + interval - now)
         if wait:
@@ -147,7 +136,7 @@ def fetch_wikipedia_extracts(  # noqa: C901
         last_call = time.monotonic()
 
         try:
-            extracts = _fetch_extracts_batch_by_title(
+            extracts = _fetch_extracts_batch_by_page_id(
                 batch, session=session, timeout=DEFAULT_TIMEOUT,
             )
         except Exception as exc:  # noqa: BLE001
@@ -156,8 +145,8 @@ def fetch_wikipedia_extracts(  # noqa: C901
             )
             continue
 
-        for input_title, extract in extracts.items():
-            category_id = title_to_category.get(input_title)
+        for page_id, extract in extracts.items():
+            category_id = page_id_to_category.get(page_id)
             if not category_id:
                 continue
             try:
@@ -171,8 +160,14 @@ def fetch_wikipedia_extracts(  # noqa: C901
         if updated and updated % log_every == 0:
             LOGGER.info(
                 "epfl_graph: updated %d / %d wikipedia extracts",
-                updated, len(titles),
+                updated, len(page_ids),
             )
+
+    if title_only_rows:
+        LOGGER.info(
+            "epfl_graph: %d categories without wikipedia_page_id — skipping",
+            len(title_only_rows),
+        )
 
     LOGGER.info(
         "epfl_graph: wikipedia extract fetch complete — %d updated", updated,

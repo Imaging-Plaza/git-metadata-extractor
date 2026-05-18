@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from copy import deepcopy
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
@@ -224,24 +227,58 @@ class LLMContributionAgentV2:
             if isinstance(target_repository, dict)
             else None
         )
-        if isinstance(target_person_id, str) and target_person_id:
-            payload["schema:author"] = target_person_id
-        if isinstance(target_repository_id, str) and target_repository_id:
-            payload["pulse:contributionTo"] = target_repository_id
-        if (
+
+        # Fail closed: a Contribution without BOTH `schema:author` and
+        # `pulse:contributionTo` violates pulse:ContributionShape (SHACL
+        # mandates exactly one author + one contributionTo per node). When
+        # either authoritative id is missing, do not emit the entity — a
+        # malformed Contribution would otherwise leak past prune_dangling_refs
+        # (its guard only catches *dangling* refs, not *missing* fields) and
+        # land in the graph as an orphan.
+        if not (
             isinstance(target_person_id, str)
             and target_person_id
             and isinstance(target_repository_id, str)
             and target_repository_id
         ):
-            composite_id = f"{target_person_id}_{target_repository_id}"
-            payload["id"] = composite_id
-            payload["idSource"] = "pulse:composite"
-            identifiers = payload.get("identifiers")
-            if not isinstance(identifiers, dict):
-                identifiers = {}
-                payload["identifiers"] = identifiers
-            identifiers["pulse:composite"] = composite_id
+            warning = (
+                "llm_contribution: skipping Contribution emission — "
+                f"target_person_id={target_person_id!r}, "
+                f"target_repository_id={target_repository_id!r} "
+                "(both required to satisfy pulse:ContributionShape)"
+            )
+            logger.warning(warning)
+            return AgentResult(
+                data={},
+                warnings=[warning],
+                raw_output={},
+                model=llm_result.model,
+                provider=llm_result.provider,
+                tokens_prompt=llm_result.tokens_prompt,
+                tokens_completion=llm_result.tokens_completion,
+                stats={
+                    "agent_runtime": "llm",
+                    "contributions": [],
+                    "contribution_count": 0,
+                    "derivation": {
+                        "contribution_seed": contribution_seed,
+                        "skipped_reason": "missing_target_ids",
+                        "target_person_id": target_person_id,
+                        "target_repository_id": target_repository_id,
+                    },
+                },
+            )
+
+        payload["schema:author"] = target_person_id
+        payload["pulse:contributionTo"] = target_repository_id
+        composite_id = f"{target_person_id}_{target_repository_id}"
+        payload["id"] = composite_id
+        payload["idSource"] = "pulse:composite"
+        identifiers = payload.get("identifiers")
+        if not isinstance(identifiers, dict):
+            identifiers = {}
+            payload["identifiers"] = identifiers
+        identifiers["pulse:composite"] = composite_id
 
         # Stamp count/first/last from the deterministic GitHub bookends
         # carried on `target_repository.contributors`. Without this, the

@@ -42,7 +42,7 @@ class RepositoryRefinerPatch(BaseModel):
     discipline: list[str] | None = Field(
         default=None,
         alias="pulse:discipline",
-        description="Wikidata QIDs (e.g., ['wd:Q428691']). At most 2.",
+        description="Wikidata QIDs (e.g., ['wd:Q428691']). At most 3.",
     )
     repository_type: RepositoryTypeLiteral | None = Field(
         default=None,

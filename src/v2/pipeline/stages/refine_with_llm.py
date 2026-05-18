@@ -54,6 +54,24 @@ EPFL_GRAPH_HITS_TOP_K = 8
 EPFL_GRAPH_HIT_FIELDS: frozenset[str] = frozenset(
     {"category_id", "name", "depth", "parent_id", "wikipedia_url", "score"},
 )
+EPFL_GRAPH_MIN_SCORE_DEFAULT = 0.85
+EPFL_GRAPH_MIN_SCORE_ENV = "V2_EPFL_GRAPH_MIN_SCORE"
+
+
+def _epfl_graph_min_score() -> float:
+    raw = os.getenv(EPFL_GRAPH_MIN_SCORE_ENV)
+    if raw is None or not raw.strip():
+        return EPFL_GRAPH_MIN_SCORE_DEFAULT
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning(
+            "refine_with_llm: %s=%r is not a float — falling back to %.2f",
+            EPFL_GRAPH_MIN_SCORE_ENV,
+            raw,
+            EPFL_GRAPH_MIN_SCORE_DEFAULT,
+        )
+        return EPFL_GRAPH_MIN_SCORE_DEFAULT
 
 
 @dataclass(slots=True)
@@ -142,6 +160,23 @@ async def _fetch_epfl_graph_hits(
         {key: hit.get(key) for key in EPFL_GRAPH_HIT_FIELDS if key in hit}
         for hit in hits
     ]
+
+
+def _filter_hits_by_score(
+    hits: list[dict[str, Any]],
+    *,
+    min_score: float,
+) -> list[dict[str, Any]]:
+    """Keep only hits with a numeric ``score >= min_score``. Stable order."""
+
+    if not hits:
+        return []
+    filtered: list[dict[str, Any]] = []
+    for hit in hits:
+        score = hit.get("score")
+        if isinstance(score, (int, float)) and float(score) >= min_score:
+            filtered.append(hit)
+    return filtered
 
 
 def _apply_patch(
@@ -348,15 +383,20 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
     membership_refiner = membership_refiner or MembershipRefinerAgent()
 
     repo_context_summary = _build_repo_context_summary(gathered_context=gathered_context)
-    epfl_graph_hits = await _fetch_epfl_graph_hits(
+    raw_epfl_graph_hits = await _fetch_epfl_graph_hits(
         provider=epfl_graph_provider,
         repo_context_summary=repo_context_summary,
     )
-    if epfl_graph_hits:
+    min_score = _epfl_graph_min_score()
+    epfl_graph_hits = _filter_hits_by_score(raw_epfl_graph_hits, min_score=min_score)
+    if raw_epfl_graph_hits:
         logger.info(
-            "refine_with_llm: EPFL Graph hits prefetched count=%d top_score=%.3f",
+            "refine_with_llm: EPFL Graph hits prefetched count=%d kept=%d "
+            "min_score=%.2f top_score=%.3f",
+            len(raw_epfl_graph_hits),
             len(epfl_graph_hits),
-            epfl_graph_hits[0].get("score") or 0.0,
+            min_score,
+            raw_epfl_graph_hits[0].get("score") or 0.0,
         )
     repo_context_summary_for_repo = (
         {**repo_context_summary, "epfl_graph_hits": epfl_graph_hits}

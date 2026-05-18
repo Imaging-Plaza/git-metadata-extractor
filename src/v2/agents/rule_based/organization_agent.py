@@ -30,6 +30,64 @@ def _pick_best_orgunit_match(results: Any) -> dict[str, Any] | None:
     return candidates[0]
 
 
+def _select_ror_match(
+    ror_matches: list[dict[str, Any]],
+    *,
+    country_bias: str | None,
+    warnings: list[str],
+    ror_query: str,
+) -> dict[str, Any] | None:
+    """Pick a ROR match from ``ror_matches`` with optional country bias.
+
+    ``country_bias`` is an ISO 3166-1 alpha-2 code. When set, the first
+    match whose ``country.country_code`` equals the bias is preferred.
+    Falls back to ``ror_matches[0]`` when no biased match is found — and
+    records a warning so the mismatch is visible downstream.
+
+    Background: ROR's HTTP search returns the most-cited org first for a
+    given query. For acronyms that collide across countries (``SDSC``:
+    Swiss Data Science Center vs San Diego Supercomputer Center;
+    ``NIH``: Swiss vs US), the top hit is almost always the US one. When
+    we're enriching an org that already has an Infoscience match, we
+    *know* the Swiss bias is correct.
+    """
+    if not ror_matches:
+        return None
+    if not country_bias:
+        return ror_matches[0]
+    biased = next(
+        (
+            candidate
+            for candidate in ror_matches
+            if isinstance(candidate, dict)
+            and isinstance(candidate.get("country"), dict)
+            and candidate["country"].get("country_code") == country_bias
+        ),
+        None,
+    )
+    if biased is not None:
+        if biased is not ror_matches[0]:
+            top = ror_matches[0]
+            top_id = top.get("id") if isinstance(top, dict) else None
+            warnings.append(
+                f"ROR country-bias applied for {ror_query!r}: "
+                f"skipping top hit {top_id} (country != {country_bias}) "
+                f"in favour of {biased.get('id')}.",
+            )
+        return biased
+    # No CH-anchored match — keep the original behaviour but flag it so the
+    # mismatch is visible in extraction warnings instead of failing silently.
+    top = ror_matches[0]
+    top_country = (top.get("country") or {}).get("country_code") if isinstance(top, dict) else None
+    warnings.append(
+        f"ROR country-bias requested ({country_bias}) for {ror_query!r} "
+        f"but no match in that country; falling back to top hit "
+        f"{top.get('id') if isinstance(top, dict) else None} "
+        f"(country={top_country}).",
+    )
+    return top
+
+
 def _classify_organization_type(ror_types: list[str]) -> str:
     normalized = [value.lower() for value in ror_types]
     if any("education" in value for value in normalized):
@@ -63,6 +121,20 @@ class OrganizationAgentV2:
         if github_lookup_enabled:
             github_org = providers.github.get_organization(org_name)
 
+        # Infoscience first: when it returns a hit, the org is by definition
+        # from the EPFL/Swiss universe and we bias the subsequent ROR lookup
+        # toward `country_code = "CH"` to avoid acronym collisions (the
+        # canonical example is "SDSC", which top-ranks San Diego Supercomputer
+        # Center in ROR's global index instead of the Swiss Data Science
+        # Center).
+        infoscience_match: dict[str, Any] | None = None
+        if providers.infoscience:
+            infoscience_query = context.get("infoscience_query") or github_org.get("name") or org_name
+            infoscience_results = providers.infoscience.search_orgunit(str(infoscience_query))
+            infoscience_match = _pick_best_orgunit_match(infoscience_results)
+        else:
+            warnings.append("Infoscience provider not configured for organization enrichment")
+
         ror_record: dict[str, Any] | None = None
         if providers.ror:
             ror_id_hint = context.get("ror_id")
@@ -78,19 +150,18 @@ class OrganizationAgentV2:
                     )
                     ror_matches = providers.ror.search_organizations(str(ror_query))
                     if ror_matches:
-                        ror_record = ror_matches[0]
+                        ror_record = _select_ror_match(
+                            ror_matches,
+                            country_bias=(
+                                "CH" if isinstance(infoscience_match, dict) else None
+                            ),
+                            warnings=warnings,
+                            ror_query=str(ror_query),
+                        )
             except ProviderNotFoundError as exc:
                 warnings.append(f"ROR lookup failed: {exc}")
         else:
             warnings.append("ROR provider not configured for organization enrichment")
-
-        infoscience_match: dict[str, Any] | None = None
-        if providers.infoscience:
-            infoscience_query = context.get("infoscience_query") or github_org.get("name") or org_name
-            infoscience_results = providers.infoscience.search_orgunit(str(infoscience_query))
-            infoscience_match = _pick_best_orgunit_match(infoscience_results)
-        else:
-            warnings.append("Infoscience provider not configured for organization enrichment")
 
         ror_id = ror_record.get("id") if isinstance(ror_record, dict) else None
         infoscience_id = (
