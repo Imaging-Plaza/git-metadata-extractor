@@ -59,6 +59,19 @@ class _DummyORCIDProvider(ORCIDProvider):
             affiliations=["EPFL"],
         )
 
+    def search_persons(
+        self,
+        query: str,
+        *,
+        rows: int = 50,
+        start: int = 0,
+    ) -> list:
+        # The context-gather tests never exercise expanded-search; return
+        # `[]` to satisfy the abstract-method contract without plumbing in
+        # `ORCIDSearchHit` fixtures we don't need here.
+        del query, rows, start
+        return []
+
 
 def test_repository_context_contains_expected_sections() -> None:
     providers = ProviderSet(github=_DummyGitHubProvider())

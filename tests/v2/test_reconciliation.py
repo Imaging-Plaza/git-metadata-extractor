@@ -429,7 +429,10 @@ def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> N
     )
 
     assert "https://github.com/sdsc-ordes" in canonical_org["org:hasUnit"]
-    assert github_org_account["org:unitOf"] == "https://ror.org/02hdt9m26"
+    # `org:unitOf` is a list per `pulse:OrganizationShape` (multi-valued
+    # to allow joint-affiliations); reconciliation no longer collapses
+    # the single-parent case to a scalar.
+    assert github_org_account["org:unitOf"] == ["https://ror.org/02hdt9m26"]
     assert github_org_account["pulse:githubOrganizationHandle"] == "sdsc-ordes"
     assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "https://github.com/sdsc-ordes"
 
@@ -597,7 +600,10 @@ def test_reconcile_prunes_unresolved_organization_hierarchy_links() -> None:
     reconciled_org = reconciled.entities["organizations"][0]
 
     assert reconciled_org["org:hasUnit"] == []
-    assert reconciled_org["org:unitOf"] is None
+    # Both `org:hasUnit` and `org:unitOf` are list-valued per the
+    # OrganizationShape; reconciliation now empties the list rather than
+    # collapsing it to `None`.
+    assert reconciled_org["org:unitOf"] == []
     assert any(
         "Dropped unresolved organization hierarchy references during reconciliation: "
         "org:hasUnit=1, org:unitOf=1"
@@ -627,7 +633,9 @@ def test_reconcile_preserves_resolvable_organization_hierarchy_links() -> None:
     organizations = {organization["id"]: organization for organization in reconciled.entities["organizations"]}
 
     assert organizations["https://ror.org/05gzmn429"]["org:hasUnit"] == ["https://ror.org/04f4a0c74"]
-    assert organizations["https://ror.org/04f4a0c74"]["org:unitOf"] == "https://ror.org/05gzmn429"
+    assert organizations["https://ror.org/04f4a0c74"]["org:unitOf"] == [
+        "https://ror.org/05gzmn429",
+    ]
     assert not any(
         "Dropped unresolved organization hierarchy references during reconciliation"
         in warning

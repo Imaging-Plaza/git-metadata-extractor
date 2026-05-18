@@ -76,7 +76,14 @@ def test_organization_agent_output_validates_against_agent_schema(
     )
 
     schema = load_schema("agent", "organization")
-    validate(instance=result.data, schema=schema)
+    # The rule-based organization agent carries underscore-prefixed
+    # lookup fields (`_aliases`, `_acronyms`, `_labels`) on `data` for the
+    # membership agent to resolve composite IDs against. These keys are
+    # stripped before strict validation / JSON-LD output, but the agent
+    # schema is strict (`additionalProperties: false`), so we strip them
+    # here too before asserting schema-validity.
+    public_payload = {k: v for k, v in result.data.items() if not k.startswith("_")}
+    validate(instance=public_payload, schema=schema)
 
     assert result.data["schema:name"] == "Ecole Polytechnique Federale de Lausanne"
     assert result.data["pulse:OrganizationType"] == "pulse:University"

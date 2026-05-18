@@ -66,7 +66,10 @@ def test_v2_agent_runtime_default_rejects_invalid_values(
 ) -> None:
     _clear_v2_config_env(monkeypatch)
     monkeypatch.setenv("GITHUB_TOKEN", "test-value")
-    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "hybrid")
+    # `hybrid` used to be invalid but became a first-class runtime; pick a
+    # token the AgentRuntime enum cannot resolve to exercise the
+    # validation error path.
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "nonexistent_runtime")
 
     with pytest.raises(ValueError, match="Invalid runtime value for V2_AGENT_RUNTIME_DEFAULT"):
         V2Config()

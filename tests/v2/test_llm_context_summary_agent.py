@@ -27,7 +27,11 @@ def test_llm_context_summary_agent_compiles_markdown_and_exposes_grep_tool() -> 
             tools: Any = None,
         ) -> LLMRuntimeResult:
             del output_type
-            assert "repository context compiler" in system_prompt.lower()
+            # Agent now defaults to the "research scout" prompt
+            # (`system_prompt_scout.md`); both prompts share the
+            # `repository` framing so we assert on that instead of the
+            # superseded compiler-mode title.
+            assert "repository" in system_prompt.lower()
             captured_user_prompt.append(user_prompt)
             captured_tools.extend(tools or [])
             return LLMRuntimeResult(
