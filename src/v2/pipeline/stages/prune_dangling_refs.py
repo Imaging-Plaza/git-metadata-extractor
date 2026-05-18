@@ -144,32 +144,55 @@ def prune_dangling_refs(
             continue
         types = _types_of(entity)
         if MEMBERSHIP_TYPE in types:
+            # pulse:MembershipShape requires org:organization. A missing ref
+            # is just as fatal as a dangling one — both produce a SHACL
+            # violation on upload, so treat them identically.
             org_ref = _resolve_id_ref(entity.get("org:organization"))
-            if org_ref is None or org_ref in live:
-                surviving.append(entity)
-            else:
+            membership_problems: list[str] = []
+            if org_ref is None:
+                membership_problems.append("org:organization (missing)")
+            elif org_ref not in live:
+                membership_problems.append(
+                    f"org:organization={org_ref!r} (dangling)",
+                )
+            if membership_problems:
                 dropped_memberships += 1
                 warnings.append(
                     f"prune_dangling_refs: dropped Membership "
                     f"{entity.get('id') or entity.get('@id')!r} — "
-                    f"org:organization {org_ref!r} not in graph",
+                    + ", ".join(membership_problems),
                 )
+            else:
+                surviving.append(entity)
             continue
         if CONTRIBUTION_TYPE in types:
+            # pulse:ContributionShape mandates exactly one schema:author and
+            # one pulse:contributionTo per node. Treat missing fields and
+            # dangling refs identically — both produce SHACL violations on
+            # upload (observed: 19 orphan Contributions in the
+            # `infoscience-hybrid` named graph leaked past the old guard
+            # because it only matched dangling, not missing, refs).
             repo_ref = _resolve_id_ref(entity.get("pulse:contributionTo"))
             author_ref = _resolve_id_ref(entity.get("schema:author"))
-            missing = []
-            if repo_ref is not None and repo_ref not in live:
-                missing.append(f"pulse:contributionTo={repo_ref!r}")
-            if author_ref is not None and author_ref not in live:
-                missing.append(f"schema:author={author_ref!r}")
-            if missing:
+            contribution_problems: list[str] = []
+            if repo_ref is None:
+                contribution_problems.append("pulse:contributionTo (missing)")
+            elif repo_ref not in live:
+                contribution_problems.append(
+                    f"pulse:contributionTo={repo_ref!r} (dangling)",
+                )
+            if author_ref is None:
+                contribution_problems.append("schema:author (missing)")
+            elif author_ref not in live:
+                contribution_problems.append(
+                    f"schema:author={author_ref!r} (dangling)",
+                )
+            if contribution_problems:
                 dropped_contribs += 1
                 warnings.append(
                     f"prune_dangling_refs: dropped Contribution "
                     f"{entity.get('id') or entity.get('@id')!r} — "
-                    + ", ".join(missing)
-                    + " not in graph",
+                    + ", ".join(contribution_problems),
                 )
             else:
                 surviving.append(entity)
