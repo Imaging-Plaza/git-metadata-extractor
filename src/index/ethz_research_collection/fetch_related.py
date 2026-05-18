@@ -29,6 +29,29 @@ from .paths import (
 logger = logging.getLogger(__name__)
 
 
+async def fetch_related_single(
+    cfg: EthzResearchCollectionIndexConfig,
+    *,
+    uuid: str,
+    kind: str,
+    refresh: bool = False,
+) -> str:
+    """Fetch one Person or OrgUnit by UUID. ``kind`` ∈ {``"person"``, ``"org"``}.
+
+    Returns the same outcome string as the bulk fetcher
+    (``written | skipped-existing | unauthorized | not-found | error``).
+    """
+    if kind not in {"person", "org"}:
+        return "error"
+    out_dir = raw_persons_dir() if kind == "person" else raw_organizations_dir()
+    async with DSpaceClient(cfg.research_collection) as client:
+        try:
+            return await _fetch_one(client, uuid, out_dir, refresh=refresh)
+        except Exception:
+            logger.exception("fetch-related failed for %s (%s)", uuid, kind)
+            return "error"
+
+
 async def _fetch_one(
     client: DSpaceClient,
     uuid: str,

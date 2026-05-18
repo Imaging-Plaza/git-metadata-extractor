@@ -357,6 +357,60 @@ def _save_state(
     )
 
 
+def ingest_single_study(
+    *,
+    config: SwissubaseIndexConfig,
+    client: SwissubaseClient,
+    store: SwissubaseStore,
+    scope: Scope,
+    study_id: str,
+) -> str:
+    """Fetch + persist one SWISSUbase study by numeric id.
+
+    Outcome: ``"persisted" | "projection_skipped" | "not_found" | "error"``.
+    Built on the same primitives the bulk path uses
+    (:meth:`SwissubaseClient.fetch_study_overview` / ``fetch_study_main`` /
+    ``fetch_study_dynamic_blocks`` and :func:`project_study` /
+    :func:`persist_study`) so the HTTP route and the CLI agree on behaviour.
+    """
+    sid = str(study_id).strip()
+    if not sid or not sid.isdigit():
+        return "error"
+    try:
+        overview = client.fetch_study_overview(sid)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("overview fetch failed for %s: %s", sid, exc)
+        return "not_found"
+    if overview is None:
+        return "not_found"
+    try:
+        main = client.fetch_study_main(sid)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("main fetch failed for %s: %s", sid, exc)
+        main = None
+    try:
+        dynamic_blocks = client.fetch_study_dynamic_blocks(sid)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.info("dynamic-blocks fetch failed for %s: %s", sid, exc)
+        dynamic_blocks = None
+    row = project_study(
+        config=config,
+        scope=scope,
+        item={"studyVersionId": int(sid)},
+        overview=overview if isinstance(overview, dict) else None,
+        main=main if isinstance(main, dict) else None,
+    )
+    if row is None:
+        return "projection_skipped"
+    persist_study(
+        store=store,
+        study_row=row,
+        overview=overview if isinstance(overview, dict) else None,
+        dynamic_blocks=dynamic_blocks,
+    )
+    return "persisted"
+
+
 def ingest_studies(
     *,
     config: SwissubaseIndexConfig,

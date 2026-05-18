@@ -36,6 +36,25 @@ def _pick_text_bitstream(bitstreams: list) -> Optional[dict]:
     return bitstreams[0] if bitstreams else None
 
 
+async def fetch_text_single(
+    cfg: EthzResearchCollectionIndexConfig,
+    *,
+    uuid: str,
+    refresh: bool = False,
+) -> str:
+    """Fetch the TEXT bundle for one UUID. Returns the same outcome string
+    as the bulk runner. Spins up a one-off ``DSpaceClient`` per call; if you
+    have many UUIDs to fetch use :func:`fetch_text` instead, which shares a
+    client and a semaphore across the batch.
+    """
+    async with DSpaceClient(cfg.research_collection) as client:
+        try:
+            return await _fetch_one(client, uuid, text_dir(), refresh=refresh)
+        except Exception:
+            logger.exception("text-fetch failed for %s", uuid)
+            return "error"
+
+
 async def _fetch_one(
     client: DSpaceClient,
     uuid: str,

@@ -20,10 +20,16 @@ from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.api_models import (
+    EthzResearchCollectionIngestRequest,
+    GitHubIngestRequest,
     HuggingFaceIngestRequest,
     IndexIngestJob,
     IndexIngestJobAccepted,
     IndexIngestJobStatus,
+    OpenAlexIngestRequest,
+    OrcidIngestRequest,
+    RenkulabIngestRequest,
+    SwissubaseIngestRequest,
     V2ErrorResponse,
     V2ErrorType,
     V2ExtractJob,
@@ -40,8 +46,16 @@ from src.v2.api_models import (
 from src.v2.auth import verify_token
 from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
+from src.v2.indices.ethz_research_collection import (
+    run_ethz_research_collection_ingest_job,
+)
+from src.v2.indices.github import run_github_ingest_job
 from src.v2.indices.huggingface import run_huggingface_ingest_job
 from src.v2.indices.jobs import IndexIngestJobStore
+from src.v2.indices.openalex import run_openalex_ingest_job
+from src.v2.indices.orcid import run_orcid_ingest_job
+from src.v2.indices.renkulab import run_renkulab_ingest_job
+from src.v2.indices.swissubase import run_swissubase_ingest_job
 from src.v2.indices.zenodo import run_zenodo_ingest_job
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
@@ -1513,6 +1527,275 @@ async def huggingface_ingest_post(
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id),
         submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/github/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def github_ingest_post(
+    payload: GitHubIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a GitHub ingest for one or more `owner/name` repo handles."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_github_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info("github ingest job submitted: job_id=%s repos=%d", job_id, len(payload.repos))
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/openalex/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def openalex_ingest_post(
+    payload: OpenAlexIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue an OpenAlex ingest for one or more work IDs / URLs / DOIs."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="openalex", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_openalex_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info("openalex ingest job submitted: job_id=%s ids=%d", job_id, len(payload.ids))
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="openalex", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/orcid/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def orcid_ingest_post(
+    payload: OrcidIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue an ORCID ingest for one or more ORCID identifiers."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="orcid", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_orcid_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info("orcid ingest job submitted: job_id=%s ids=%d", job_id, len(payload.orcid_ids))
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="orcid", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/renkulab/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def renkulab_ingest_post(
+    payload: RenkulabIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a Renkulab ingest for one or more project ids (UUID or namespace/slug)."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="renkulab", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_renkulab_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "renkulab ingest job submitted: job_id=%s project_ids=%d",
+        job_id, len(payload.project_ids),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="renkulab", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/swissubase/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def swissubase_ingest_post(
+    payload: SwissubaseIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a SWISSUbase ingest for one or more numeric study ids."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="swissubase", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_swissubase_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "swissubase ingest job submitted: job_id=%s study_ids=%d",
+        job_id, len(payload.study_ids),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="swissubase", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/ethz_research_collection/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def ethz_research_collection_ingest_post(
+    payload: EthzResearchCollectionIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue an ETH Research Collection ingest for one or more item UUIDs."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="ethz_research_collection",
+        status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_ethz_research_collection_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "ethz_research_collection ingest job submitted: job_id=%s uuids=%d",
+        job_id, len(payload.uuids),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="ethz_research_collection",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
     )
 
 

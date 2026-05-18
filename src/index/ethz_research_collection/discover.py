@@ -46,6 +46,41 @@ def _write_item(item: dict) -> bool:
     return True
 
 
+async def fetch_and_persist_item(
+    cfg: EthzResearchCollectionIndexConfig,
+    *,
+    uuid: str,
+    refresh: bool = False,
+) -> str:
+    """Fetch one DSpace item by UUID and persist it under ``raw/items/<uuid>.json``.
+
+    Outcome: ``"persisted" | "already_present" | "not_found" | "error"``.
+    The downstream stages (``fetch-text``, ``extract-matches``, ``embed``…)
+    are still batch-oriented over the raw/items directory and need to be
+    run separately after one or more per-item ingests.
+    """
+    sanitized = (uuid or "").strip()
+    if not sanitized:
+        return "error"
+    path = raw_items_dir() / f"{sanitized}.json"
+    if path.exists() and not refresh:
+        return "already_present"
+    async with DSpaceClient(cfg.research_collection) as client:
+        try:
+            item = await client.get_item(sanitized)
+        except Exception as exc:  # noqa: BLE001 — surfaced as a job error
+            logger.warning(
+                "ethz_research_collection: fetch failed for %s: %s",
+                sanitized, exc,
+            )
+            return "error"
+    if not isinstance(item, dict):
+        return "not_found"
+    # Force-write even if the existing file is on disk when `refresh=True`.
+    path.write_text(json.dumps(item, ensure_ascii=False, indent=2), encoding="utf-8")
+    return "persisted"
+
+
 async def discover(
     cfg: EthzResearchCollectionIndexConfig,
     *,

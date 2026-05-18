@@ -142,11 +142,100 @@ class HuggingFaceIngestRequest(BaseModel):
     )
 
 
+class GitHubIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repos: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub repo handles in the form `owner/name`.",
+    )
+
+
+class OpenAlexIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/openalex/ingest`.
+
+    Accepts OpenAlex work identifiers in any of the canonical forms: a short
+    ``W…`` id, an ``https://openalex.org/W…`` URL, or a DOI (`10.…`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(
+        min_length=1,
+        description="One or more OpenAlex work IDs (`W…`), URLs, or DOIs.",
+    )
+
+
+class OrcidIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/orcid/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    orcid_ids: list[str] = Field(
+        min_length=1,
+        description="One or more ORCID identifiers (`XXXX-XXXX-XXXX-XXXX`).",
+    )
+
+
+class RenkulabIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/renkulab/ingest`.
+
+    Currently scoped to v2 project records; additional entity types can be
+    added later without breaking the contract.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_ids: list[str] = Field(
+        min_length=1,
+        description="One or more Renku v2 project ids (slug or UUID).",
+    )
+
+
+class SwissubaseIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/swissubase/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    study_ids: list[str] = Field(
+        min_length=1,
+        description="One or more SWISSUbase numeric study ids.",
+    )
+
+
+class EthzResearchCollectionIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/ethz_research_collection/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    uuids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more ETH Research Collection item UUIDs "
+            "(DSpace `/core/items/{uuid}`)."
+        ),
+    )
+
+
+IndexName = Literal[
+    "zenodo",
+    "huggingface",
+    "github",
+    "openalex",
+    "orcid",
+    "renkulab",
+    "swissubase",
+    "ethz_research_collection",
+]
+
+
 class IndexIngestJob(BaseModel):
     """Persistent record for an async index-ingest job."""
 
     job_id: str
-    index_name: Literal["zenodo", "huggingface"]
+    index_name: IndexName
     status: IndexIngestJobStatus
     request: dict[str, Any]
     submitted_at: datetime
@@ -160,7 +249,7 @@ class IndexIngestJobAccepted(BaseModel):
     """Response body for the POST that enqueues an ingest job."""
 
     job_id: str
-    index_name: Literal["zenodo", "huggingface"]
+    index_name: IndexName
     status: IndexIngestJobStatus
     status_url: str
     submitted_at: datetime

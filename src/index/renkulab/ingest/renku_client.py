@@ -156,6 +156,22 @@ class RenkulabClient:
     ) -> AsyncIterator[dict[str, Any]]:
         return self._iter_paged("/projects", limit=limit)
 
+    async def fetch_project(self, project_id: str) -> dict[str, Any] | None:
+        """Fetch a single project by id (UUID or `namespace/slug`).
+
+        Returns the raw project dict, or ``None`` when Renku returns 404 /
+        401 / 403 (private project we can't see).
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await self._get(client, f"/projects/{project_id}", {})
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (401, 403, 404):
+                    return None
+                raise
+        body = response.json()
+        return body if isinstance(body, dict) else None
+
     def iter_groups(
         self,
         *,

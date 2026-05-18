@@ -72,6 +72,28 @@ def _relation_values(metadata: dict, fields: Iterable[str]) -> List[str]:
     return out
 
 
+def extract_relations_single(uuid: str) -> Optional[RelationRecord]:
+    """Pull Person/Org UUIDs from one article's ``raw/items/<uuid>.json``.
+
+    Returns ``None`` if the raw file isn't on disk or the article has no
+    relations. Does NOT touch ``relations.jsonl``, ``persons.txt`` or
+    ``organizations.txt`` — the caller decides what to do with the result.
+    """
+    item = _load_item(uuid)
+    if item is None:
+        return None
+    metadata = item.get("metadata", {}) or {}
+    person_uuids = _dedupe_preserve(_relation_values(metadata, _PERSON_RELATION_FIELDS))
+    org_uuids = _dedupe_preserve(_relation_values(metadata, _ORG_RELATION_FIELDS))
+    if not person_uuids and not org_uuids:
+        return None
+    return RelationRecord(
+        article_uuid=uuid,
+        person_uuids=person_uuids,
+        org_uuids=org_uuids,
+    )
+
+
 def _load_item(uuid: str) -> Optional[dict]:
     p = raw_items_dir() / f"{uuid}.json"
     if not p.exists():

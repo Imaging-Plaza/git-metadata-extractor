@@ -84,6 +84,26 @@ def _canonicalise(url: str) -> Optional[str]:
     return None
 
 
+def extract_matches_single(uuid: str) -> Optional[MatchRecord]:
+    """Run match extraction for one UUID. Reads ``text/<uuid>.txt`` and
+    returns a :class:`MatchRecord` if any GitHub/HF URL is found, else
+    ``None``. Does NOT touch the shared ``matches.jsonl`` aggregate; the
+    caller decides whether to persist.
+    """
+    text_file = text_dir() / f"{uuid}.txt"
+    if not text_file.exists():
+        return None
+    text = text_file.read_text(encoding="utf-8", errors="replace")
+    urls, counts = _extract_from_text(text)
+    if not urls:
+        return None
+    return MatchRecord(
+        uuid=uuid,
+        matched_urls=sorted(urls),
+        counts_by_host=dict(counts),
+    )
+
+
 def _extract_from_text(text: str) -> Tuple[Set[str], Counter]:
     found: Set[str] = set()
     counts: Counter = Counter()
