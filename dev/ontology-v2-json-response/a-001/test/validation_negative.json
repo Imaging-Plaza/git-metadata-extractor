@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-10T17:31:44.361620",
+  "schema_type": "negative",
+  "summary": {
+    "total_cases": 2,
+    "passed_cases": 2,
+    "failed_cases": 0
+  },
+  "results": [
+    {
+      "name": "person_invalid_null_identifiers_no_email",
+      "schema_type": "strict",
+      "fixture_file": "fixtures/person_invalid_null_identifiers_no_email.json",
+      "schema_file": "pulse_PersonShape.schema.json",
+      "expected_valid": false,
+      "actual_valid": false,
+      "passed": true,
+      "error_count": 1,
+      "errors": [
+        {
+          "path": [],
+          "message": "{'id': 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b', 'type': 'schema:Person', 'shacl': 'pulse:PersonShape', 'identifiers': {'pulse:orcid': None, 'pulse:infosciencePersonIdentifier': None, 'pulse:githubUsername': None, 'uuid': 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b'}, 'idSource': 'uuid', 'schema:name': 'Null Identifier Regression Case', 'schema:url': None, 'pulse:githubUsername': None, 'pulse:orcidIdentifier': None, 'pulse:infosciencePersonIdentifier': None, 'org:hasMembership': [], 'pulse:hasContribution': [], 'pulse:owns': []} is not valid under any of the given schemas",
+          "schema_path": [
+            "anyOf"
+          ],
+          "validator": "anyOf"
+        }
+      ]
+    },
+    {
+      "name": "person_invalid_null_identifiers_no_email",
+      "schema_type": "agent",
+      "fixture_file": "fixtures/person_invalid_null_identifiers_no_email.json",
+      "schema_file": "pulse_PersonShape.schema.json",
+      "expected_valid": false,
+      "actual_valid": false,
+      "passed": true,
+      "error_count": 1,
+      "errors": [
+        {
+          "path": [],
+          "message": "{'id': 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b', 'type': 'schema:Person', 'shacl': 'pulse:PersonShape', 'identifiers': {'pulse:orcid': None, 'pulse:infosciencePersonIdentifier': None, 'pulse:githubUsername': None, 'uuid': 'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b'}, 'idSource': 'uuid', 'schema:name': 'Null Identifier Regression Case', 'schema:url': None, 'pulse:githubUsername': None, 'pulse:orcidIdentifier': None, 'pulse:infosciencePersonIdentifier': None, 'org:hasMembership': [], 'pulse:hasContribution': [], 'pulse:owns': []} is not valid under any of the given schemas",
+          "schema_path": [
+            "anyOf"
+          ],
+          "validator": "anyOf"
+        }
+      ]
+    }
+  ]
+}
