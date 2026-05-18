@@ -34,7 +34,21 @@ async def validate_github_token() -> dict:
     Raises:
         HTTPException 401 if token is missing, invalid, or expired
     """
-    token = os.environ.get("GITHUB_TOKEN")
+    raw_token = os.environ.get("GITHUB_TOKEN")
+
+    # `GITHUB_TOKEN` may be a comma-separated list of tokens used by the
+    # rotation client (src/index/github/api.py). The validator only needs one
+    # working token to confirm the deployment is configured, so pick the first
+    # non-empty entry. Passing the raw comma-joined string to GitHub returns
+    # 401 and blocks every authenticated route.
+    token = next(
+        (
+            part.strip()
+            for part in (raw_token or "").split(",")
+            if part.strip()
+        ),
+        None,
+    )
 
     # Check if token is configured
     if not token:

@@ -43,6 +43,17 @@ Tools:
   or seed). Use it to recover `pulse:infoscienceArticleIdentifier`, fill in a
   missing DOI (`schema:identifier`), or confirm `schema:datePublished`. Try
   the article title first; fall back to author + keyword if that misses.
+- `search_oamonitor_rag(query, entity_type, top_k)` — semantic search over the
+  Open Access Monitor CH index (Swiss-context publications, journals,
+  publishers, organisations). Call it BEFORE `search_infoscience_publications`
+  to confirm a cited venue (journal title, ISSN, publisher) or to recover the
+  DOI of a Swiss publication. `entity_type` ∈ {publications, journals,
+  publishers, organisations} — pick `publications` for paper lookups,
+  `journals` to disambiguate a venue title.
+- `fetch_records_oamonitor_rag(ids, entity_type)` — after a `search_oamonitor_rag`
+  hit, pull the full OAM record (ISSNs, DOI, publisher object, OA color,
+  publication date). Use it to fill `schema:isPartOf`, `schema:publisher`,
+  `schema:identifier` (DOI), and `schema:datePublished`.
 - `fetch_link_content_via_selenium(url)` — fetch a candidate publication URL
   to verify its existence and extract metadata when needed.
 
