@@ -17,9 +17,11 @@ from typing import TYPE_CHECKING, Any
 from src.v2.api_models import (
     HFIngestItem,
     HuggingFaceIngestRequest,
-    IndexIngestJob,
     IndexIngestJobStatus,
+    IndexSearchRequest,
+    IndexSearchResponse,
 )
+from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
     from src.v2.indices.jobs import IndexIngestJobStore
@@ -160,8 +162,40 @@ async def run_huggingface_ingest_job(
         job_store.set(record)
 
 
+async def run_huggingface_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    """Run a semantic search against the HuggingFace index.
+
+    ``target`` picks the entity table (``models``, ``datasets``, ``spaces``,
+    ``orgs``); defaults to ``models`` for backwards compatibility with the
+    standalone serve app.
+    """
+    resources = get_or_create_huggingface_resources(app_state)
+    if resources is None:
+        return None
+    config, _, store = resources
+    entity_type = payload.target or "models"
+    from src.index.huggingface.retrieval.semantic import semantic_search  # noqa: PLC0415
+    raw_hits = await asyncio.to_thread(
+        semantic_search,
+        config=config, query=payload.query, entity_type=entity_type,
+        top_k=payload.top_k,
+        candidate_k=payload.candidate_k or max(payload.top_k * 5, 50),
+        filter_payload=payload.filter_payload,
+        store=store,
+    )
+    return IndexSearchResponse(
+        index_name="huggingface",
+        target=entity_type,
+        query=payload.query,
+        hits=[hit_from_raw(h) for h in raw_hits],
+    )
+
+
 __all__ = [
     "INDEX_NAME",
     "get_or_create_huggingface_resources",
     "run_huggingface_ingest_job",
+    "run_huggingface_search",
 ]

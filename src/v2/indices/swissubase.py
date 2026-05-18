@@ -7,7 +7,13 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from src.v2.api_models import IndexIngestJobStatus, SwissubaseIngestRequest
+from src.v2.api_models import (
+    IndexIngestJobStatus,
+    IndexSearchRequest,
+    IndexSearchResponse,
+    SwissubaseIngestRequest,
+)
+from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
     from src.v2.indices.jobs import IndexIngestJobStore
@@ -130,8 +136,34 @@ async def run_swissubase_ingest_job(
         job_store.set(record)
 
 
+async def run_swissubase_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    """Run a semantic search against the SWISSUbase index."""
+    resources = get_or_create_swissubase_resources(app_state)
+    if resources is None:
+        return None
+    config, _, store, _ = resources
+    from src.index.swissubase.retrieval.semantic import semantic_search  # noqa: PLC0415
+    raw_hits = await asyncio.to_thread(
+        semantic_search,
+        config=config, query=payload.query,
+        top_k=payload.top_k,
+        candidate_k=payload.candidate_k or max(payload.top_k * 5, 50),
+        filter_payload=payload.filter_payload,
+        store=store,
+    )
+    return IndexSearchResponse(
+        index_name="swissubase",
+        target=None,
+        query=payload.query,
+        hits=[hit_from_raw(h) for h in raw_hits],
+    )
+
+
 __all__ = [
     "INDEX_NAME",
     "get_or_create_swissubase_resources",
     "run_swissubase_ingest_job",
+    "run_swissubase_search",
 ]

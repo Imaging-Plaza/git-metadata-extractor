@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 from src.v2.api_models import (
     EthzResearchCollectionIngestRequest,
     IndexIngestJobStatus,
+    IndexSearchHit,
+    IndexSearchRequest,
+    IndexSearchResponse,
 )
 
 if TYPE_CHECKING:
@@ -224,8 +227,67 @@ async def run_ethz_research_collection_ingest_job(
         job_store.set(record)
 
 
+async def run_ethz_research_collection_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    """Run a hybrid query against the ETHZ Research Collection index.
+
+    Maps the uniform request fields onto the index's own ``pipeline.query``:
+    ``target`` → query target (default ``chunks``), ``filter_payload`` →
+    ChromaDB-style ``where`` clause, ``top_k`` is used for both the candidate
+    pool (`top_k * 5`) and the rerank cutoff (`top_n = top_k`). The mode is
+    fixed to ``hybrid`` since the v2 API uniform shape doesn't expose a mode
+    selector; clients needing other modes can call the standalone serve app.
+
+    Related persons / organizations dicts (when present) land on
+    ``response.extra``.
+    """
+    resources = get_or_create_ethz_research_collection_resources(app_state)
+    if resources is None:
+        return None
+    (config,) = resources
+    target = payload.target or "chunks"
+    from src.index.ethz_research_collection.pipeline import query  # noqa: PLC0415
+    candidate_k = payload.candidate_k or max(payload.top_k * 5, 50)
+    result = await query(
+        config,
+        payload.query,
+        target=target,
+        where=payload.filter_payload,
+        top_k=candidate_k,
+        top_n=payload.top_k,
+        mode="hybrid",
+        with_authors=False,
+        with_orgs=False,
+    )
+    hits = [
+        IndexSearchHit(
+            id=str(row.get("id") or row.get("uuid") or ""),
+            payload=row,
+            entity=None,
+        )
+        for row in (result.rows or [])
+    ]
+    extra: dict[str, Any] | None = None
+    related_persons = getattr(result, "related_persons", None)
+    related_orgs = getattr(result, "related_organizations", None)
+    if related_persons or related_orgs:
+        extra = {
+            "related_persons": related_persons or {},
+            "related_organizations": related_orgs or {},
+        }
+    return IndexSearchResponse(
+        index_name="ethz_research_collection",
+        target=result.target,
+        query=payload.query,
+        hits=hits,
+        extra=extra,
+    )
+
+
 __all__ = [
     "INDEX_NAME",
     "get_or_create_ethz_research_collection_resources",
     "run_ethz_research_collection_ingest_job",
+    "run_ethz_research_collection_search",
 ]

@@ -6,11 +6,18 @@ when their per-id fetch helpers exist on the Renku client.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from src.v2.api_models import IndexIngestJobStatus, RenkulabIngestRequest
+from src.v2.api_models import (
+    IndexIngestJobStatus,
+    IndexSearchRequest,
+    IndexSearchResponse,
+    RenkulabIngestRequest,
+)
+from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
     from src.v2.indices.jobs import IndexIngestJobStore
@@ -127,8 +134,40 @@ async def run_renkulab_ingest_job(
         job_store.set(record)
 
 
+async def run_renkulab_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    """Run a semantic search against the Renkulab index.
+
+    Accepts a singular ``target`` for parity with the other indices; the
+    underlying ``semantic_search`` is called with ``entity_types=[target]``
+    when provided, or ``None`` (search across all entity types) otherwise.
+    """
+    resources = get_or_create_renkulab_resources(app_state)
+    if resources is None:
+        return None
+    config, _, store = resources
+    entity_types = [payload.target] if payload.target else None
+    from src.index.renkulab.retrieval.semantic import semantic_search  # noqa: PLC0415
+    raw_hits = await asyncio.to_thread(
+        semantic_search,
+        config=config, query=payload.query, entity_types=entity_types,
+        top_k=payload.top_k,
+        candidate_k=payload.candidate_k or max(payload.top_k * 5, 50),
+        filter_payload=payload.filter_payload,
+        store=store,
+    )
+    return IndexSearchResponse(
+        index_name="renkulab",
+        target=payload.target,
+        query=payload.query,
+        hits=[hit_from_raw(h) for h in raw_hits],
+    )
+
+
 __all__ = [
     "INDEX_NAME",
     "get_or_create_renkulab_resources",
     "run_renkulab_ingest_job",
+    "run_renkulab_search",
 ]

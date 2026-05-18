@@ -219,6 +219,64 @@ class EthzResearchCollectionIngestRequest(BaseModel):
     )
 
 
+class IndexSearchRequest(BaseModel):
+    """Body for `POST /v2/indices/<name>/search`.
+
+    Uniform across indices. Indices with a single entity type ignore
+    ``target``; multi-entity indices use it to select the collection.
+    ETHZ Research Collection accepts the ChromaDB-style ``filter_payload``
+    as its ``where`` clause and falls back to ``mode="hybrid"``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(
+        min_length=1,
+        description="Free-text query to match against the index.",
+    )
+    top_k: int = Field(
+        default=10, ge=1, le=200,
+        description="Maximum number of results to return.",
+    )
+    candidate_k: int | None = Field(
+        default=None, ge=1, le=1000,
+        description="Vector-search candidate count before reranking. Indices that do not rerank ignore this.",
+    )
+    filter_payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata filter dict. Shape is index-specific (Qdrant for most, ChromaDB-style `where` for ETHZ Research Collection).",
+    )
+    target: str | None = Field(
+        default=None,
+        description="Optional entity type / collection target for multi-entity indices (e.g. huggingface: model|dataset|space|org; openalex: works|authors|institutions|sources|topics|concepts; ethz_research_collection: chunks|articles|persons|organizations).",
+    )
+
+
+class IndexSearchHit(BaseModel):
+    """One result row returned by an index search."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    vector_score: float | None = None
+    rerank_score: float | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    entity: dict[str, Any] | None = None
+
+
+class IndexSearchResponse(BaseModel):
+    """Wrapper envelope for index search results."""
+
+    index_name: "IndexName"
+    target: str | None = None
+    query: str
+    hits: list[IndexSearchHit] = Field(default_factory=list)
+    extra: dict[str, Any] | None = Field(
+        default=None,
+        description="Index-specific extras (e.g. ETHZ Research Collection related persons/orgs, HuggingFace facets). Optional.",
+    )
+
+
 IndexName = Literal[
     "zenodo",
     "huggingface",

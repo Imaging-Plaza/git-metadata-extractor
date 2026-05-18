@@ -26,6 +26,8 @@ from src.v2.api_models import (
     IndexIngestJob,
     IndexIngestJobAccepted,
     IndexIngestJobStatus,
+    IndexSearchRequest,
+    IndexSearchResponse,
     OpenAlexIngestRequest,
     OrcidIngestRequest,
     RenkulabIngestRequest,
@@ -48,15 +50,22 @@ from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
 from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_ingest_job,
+    run_ethz_research_collection_search,
 )
-from src.v2.indices.github import run_github_ingest_job
-from src.v2.indices.huggingface import run_huggingface_ingest_job
+from src.v2.indices.github import run_github_ingest_job, run_github_search
+from src.v2.indices.huggingface import (
+    run_huggingface_ingest_job,
+    run_huggingface_search,
+)
 from src.v2.indices.jobs import IndexIngestJobStore
-from src.v2.indices.openalex import run_openalex_ingest_job
-from src.v2.indices.orcid import run_orcid_ingest_job
-from src.v2.indices.renkulab import run_renkulab_ingest_job
-from src.v2.indices.swissubase import run_swissubase_ingest_job
-from src.v2.indices.zenodo import run_zenodo_ingest_job
+from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
+from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
+from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
+from src.v2.indices.swissubase import (
+    run_swissubase_ingest_job,
+    run_swissubase_search,
+)
+from src.v2.indices.zenodo import run_zenodo_ingest_job, run_zenodo_search
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.jobs import JobStore
@@ -1796,6 +1805,177 @@ async def ethz_research_collection_ingest_post(
         job_id=job_id, index_name="ethz_research_collection",
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+async def _search_response_or_unavailable(
+    response: IndexSearchResponse | None, *, index_name: str,
+) -> IndexSearchResponse | JSONResponse:
+    if response is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": f"{index_name} index module unavailable on this deployment",
+            },
+        )
+    return response
+
+
+@v2_router.post(
+    "/indices/zenodo/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def zenodo_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the Zenodo index."""
+    return await _search_response_or_unavailable(
+        await run_zenodo_search(payload, request.app.state), index_name="zenodo",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the HuggingFace index.
+
+    Use ``target`` to pick the entity table: ``models`` (default), ``datasets``,
+    ``spaces``, or ``orgs``.
+    """
+    return await _search_response_or_unavailable(
+        await run_huggingface_search(payload, request.app.state),
+        index_name="huggingface",
+    )
+
+
+@v2_router.post(
+    "/indices/github/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def github_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the GitHub repos index."""
+    return await _search_response_or_unavailable(
+        await run_github_search(payload, request.app.state), index_name="github",
+    )
+
+
+@v2_router.post(
+    "/indices/openalex/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def openalex_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the OpenAlex index.
+
+    Use ``target`` to pick the entity type: ``works`` (default), ``authors``,
+    ``institutions``, ``sources``, ``topics``, ``concepts``.
+    """
+    return await _search_response_or_unavailable(
+        await run_openalex_search(payload, request.app.state), index_name="openalex",
+    )
+
+
+@v2_router.post(
+    "/indices/orcid/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def orcid_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the ORCID persons index."""
+    return await _search_response_or_unavailable(
+        await run_orcid_search(payload, request.app.state), index_name="orcid",
+    )
+
+
+@v2_router.post(
+    "/indices/renkulab/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def renkulab_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the Renkulab index.
+
+    ``target`` (optional) restricts the search to one of
+    ``projects | datasets | users | groups | workflows``; omit to search
+    across all configured entity types.
+    """
+    return await _search_response_or_unavailable(
+        await run_renkulab_search(payload, request.app.state), index_name="renkulab",
+    )
+
+
+@v2_router.post(
+    "/indices/swissubase/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def swissubase_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the SWISSUbase index."""
+    return await _search_response_or_unavailable(
+        await run_swissubase_search(payload, request.app.state),
+        index_name="swissubase",
+    )
+
+
+@v2_router.post(
+    "/indices/ethz_research_collection/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def ethz_research_collection_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Hybrid query against the ETH Research Collection index.
+
+    ``target`` picks one of ``chunks`` (default), ``articles``, ``persons``,
+    ``organizations``. ``filter_payload`` is forwarded as the ChromaDB-style
+    ``where`` clause. Mode is fixed to ``hybrid``; for other modes use the
+    standalone serve app directly.
+    """
+    return await _search_response_or_unavailable(
+        await run_ethz_research_collection_search(payload, request.app.state),
+        index_name="ethz_research_collection",
     )
 
 

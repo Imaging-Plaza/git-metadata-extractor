@@ -7,7 +7,13 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from src.v2.api_models import IndexIngestJobStatus, OrcidIngestRequest
+from src.v2.api_models import (
+    IndexIngestJobStatus,
+    IndexSearchRequest,
+    IndexSearchResponse,
+    OrcidIngestRequest,
+)
+from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
     from src.v2.indices.jobs import IndexIngestJobStore
@@ -126,4 +132,36 @@ async def run_orcid_ingest_job(
         job_store.set(record)
 
 
-__all__ = ["INDEX_NAME", "get_or_create_orcid_resources", "run_orcid_ingest_job"]
+async def run_orcid_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    """Run a semantic search against the ORCID persons index."""
+    resources = get_or_create_orcid_resources(app_state)
+    if resources is None:
+        return None
+    config, store, _ = resources
+    entity_type = payload.target or "persons"
+    from src.index.orcid.retrieval.semantic import semantic_search  # noqa: PLC0415
+    raw_hits = await asyncio.to_thread(
+        semantic_search,
+        config=config, query=payload.query, entity_type=entity_type,
+        top_k=payload.top_k,
+        candidate_k=payload.candidate_k or max(payload.top_k * 5, 50),
+        filter_payload=payload.filter_payload,
+        store=store,
+    )
+    # ORCID hits carry the person under the `person` key rather than `entity`.
+    return IndexSearchResponse(
+        index_name="orcid",
+        target=entity_type,
+        query=payload.query,
+        hits=[hit_from_raw(h, entity_key="person") for h in raw_hits],
+    )
+
+
+__all__ = [
+    "INDEX_NAME",
+    "get_or_create_orcid_resources",
+    "run_orcid_ingest_job",
+    "run_orcid_search",
+]
