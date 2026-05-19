@@ -16,13 +16,28 @@ workers = int(os.getenv("WORKERS", "2"))
 worker_class = "uvicorn.workers.UvicornWorker"
 timeout = int(os.getenv("TIMEOUT", "600"))
 
-# Memory optimization settings
+# Memory optimization settings.
+#
+# Defaults are 0 (= no automatic worker recycling) because the v2
+# `/v2/extract` flow is long-poll: callers `GET /v2/jobs/{job_id}`
+# every ~2s for the duration of an extraction (~60-120s wall),
+# producing ~50 requests per repo. With the previous `MAX_REQUESTS=1000`
+# default, a worker recycles after ~20 repos and every in-flight long-
+# poll on that worker fails with "Server disconnected without sending
+# a response.", surfacing as a 15-40% step-up in the hub's failure
+# rate mid-batch.
+#
+# If you actually need memory recycling (e.g. you observe leaks during
+# very long-running production deployments) set `MAX_REQUESTS=N` in
+# the environment — but pick a value comfortably above
+# `MAX_POLLS_PER_REPO * MAX_REPOS_PER_HOUR / WORKERS` so a single
+# repo's polls never straddle a recycle.
 max_requests = int(
-    os.getenv("MAX_REQUESTS", "1000"),
-)  # Recycle workers after N requests
+    os.getenv("MAX_REQUESTS", "0"),
+)
 max_requests_jitter = int(
-    os.getenv("MAX_REQUESTS_JITTER", "100"),
-)  # Add randomness to prevent all workers recycling at once
+    os.getenv("MAX_REQUESTS_JITTER", "0"),
+)
 
 # Worker memory limit (restart worker if exceeds this)
 worker_tmp_dir = "/dev/shm"  # Use shared memory for better performance  # noqa: S108
