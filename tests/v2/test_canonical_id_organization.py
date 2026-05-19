@@ -96,7 +96,10 @@ def test_resolve_organization_id_uses_github_when_higher_priority_ids_are_missin
     assert id_source == "pulse:githubOrganizationHandle"
 
 
-def test_resolve_organization_id_generates_stable_uuid_v5_fallback() -> None:
+def test_resolve_organization_id_generates_uuid4_fallback() -> None:
+    # Fallback now emits uuid4 (was uuid5) — see canonicalization
+    # id_resolution `_deterministic_uuid` for the cross-repo collision
+    # rationale.
     organization = {
         "schema:name": "Imagining Center",
         "identifiers": {
@@ -109,11 +112,13 @@ def test_resolve_organization_id_generates_stable_uuid_v5_fallback() -> None:
     canonical_id, id_source = resolve_organization_id(organization)
 
     parsed = uuid.UUID(canonical_id)
-    assert parsed.version == UUID_V5_VERSION
+    assert parsed.version == 4
     assert id_source == "uuid"
 
 
-def test_resolve_organization_id_is_deterministic() -> None:
+def test_resolve_organization_id_fallback_yields_distinct_uuids_per_call() -> None:
+    # Two unrelated orgs with the same minimal seed must get DIFFERENT
+    # URNs so downstream graph-stores don't merge them.
     organization = {
         "schema:name": "Imagining Center",
         "identifiers": {
@@ -126,7 +131,7 @@ def test_resolve_organization_id_is_deterministic() -> None:
     first_id, first_source = resolve_organization_id(organization)
     second_id, second_source = resolve_organization_id(organization)
 
-    assert first_id == second_id
+    assert first_id != second_id
     assert first_source == second_source == "uuid"
 
 

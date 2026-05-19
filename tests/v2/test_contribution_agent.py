@@ -10,7 +10,7 @@ from jsonschema import validate
 from src.v2.agents import ContributionAgentV2, ProviderSet
 from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
-EXPECTED_CONTRIBUTION_COUNT = 2
+EXPECTED_CONTRIBUTION_COUNT = 1  # alice only — bob's count=0+null-dates edge dropped
 EXPECTED_ALICE_CONTRIBUTION_COUNT = 7
 UUID_VERSION_4 = 4
 
@@ -87,9 +87,13 @@ def test_contribution_agent_derives_deduplicated_contributions_with_uuid4_identi
         validate(instance=contribution, schema=contribution_schema)
 
     assert len(contributions) == EXPECTED_CONTRIBUTION_COUNT
+    # Bob's composite (`https://github.com/bob__sdsc-ordes/gimie`) is
+    # dropped because his fixture has count=0 + null dates — see Bug G
+    # in the production audit. Alice's composite survives; note the
+    # `__` (double-underscore) separator so the composite can be
+    # parsed back unambiguously (GitHub usernames may contain `_`).
     assert [contribution["id"] for contribution in contributions] == [
-        "https://github.com/bob_sdsc-ordes/gimie",
-        "https://orcid.org/0000-0002-1825-0097_sdsc-ordes/gimie",
+        "https://orcid.org/0000-0002-1825-0097__sdsc-ordes/gimie",
     ]
     for contribution in contributions:
         identifiers = contribution.get("identifiers")
@@ -117,10 +121,12 @@ def test_contribution_agent_populates_count_and_nullable_dates() -> None:
         for contribution in contributions
         if contribution["schema:author"] == "https://orcid.org/0000-0002-1825-0097"
     )
-    bob_contribution = next(
-        contribution
+    # Bob's fixture has count=0 + null dates → empty edge dropped at
+    # emit time (Bug G fix). His Contribution should NOT appear in
+    # output; instead the agent warns about the drop.
+    assert all(
+        contribution["schema:author"] != "https://github.com/bob"
         for contribution in contributions
-        if contribution["schema:author"] == "https://github.com/bob"
     )
 
     assert (
@@ -129,9 +135,9 @@ def test_contribution_agent_populates_count_and_nullable_dates() -> None:
     )
     assert alice_contribution["pulse:firstContributionDate"] == "2023-12-01T00:00:00Z"
     assert alice_contribution["pulse:lastContributionDate"] == "2024-06-01T00:00:00Z"
-    assert bob_contribution["pulse:contributionCount"] == 0
-    assert bob_contribution["pulse:firstContributionDate"] is None
-    assert bob_contribution["pulse:lastContributionDate"] is None
+    assert any(
+        "dropped — no count and no dates" in warning for warning in result.warnings
+    )
     assert any("Unresolved contribution person mapping" in warning for warning in result.warnings)
 
 
@@ -189,8 +195,15 @@ def test_contribution_agent_scopes_to_target_person_when_provided() -> None:
     result = asyncio.run(agent.run(context, providers))
 
     contributions = result.stats["contributions"]
-    assert len(contributions) == 1
-    assert contributions[0]["schema:author"] == "https://github.com/bob"
+    # Bob's mock fixture has count=0 + null dates — the empty-edge
+    # guard (Bug G fix) drops his contribution at emit time, so the
+    # target-person scoping yields ZERO contributions, not one.
+    # What we DO still check: the agent didn't crash, no warnings
+    # about other contributors leaked through.
+    assert contributions == []
+    assert any(
+        "dropped — no count and no dates" in warning for warning in result.warnings
+    )
     # Other contributors (alice, unknown-contributor) belong to other fanout
     # items and must not surface as "Unresolved" here.
     assert not any(

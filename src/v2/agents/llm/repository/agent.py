@@ -282,18 +282,43 @@ class LLMRepositoryAgentV2:
         if isinstance(forks_count, int) and forks_count >= 0:
             payload["pulse:githubRepoForks"] = forks_count
 
-        # Discipline guarantee: every repo entity must carry at least one
-        # `pulse:discipline` Wikidata IRI. The system prompt requires 1–2,
-        # but the LLM occasionally returns null/empty. Fall back to a
-        # broad-but-honest default (computer engineering) so downstream
-        # consumers never see a discipline-less repository.
+        # `pulse:isForkOf`: stamp the upstream repo URL when GitHub flags
+        # this as a fork. The LLM rarely emits this field reliably from
+        # README text alone (observed: `null` even for clear forks of
+        # `lovell/detect-libc`, `jgm/pandoc`, etc.), so derive it
+        # deterministically from `metadata.fork` + `metadata.parent.html_url`
+        # the same way the rule-based agent does. Direct parent over root
+        # ancestor matches the immediate fork edge downstream agents
+        # actually want to walk.
+        if metadata.get("fork"):
+            parent_repo = metadata.get("parent")
+            if isinstance(parent_repo, dict):
+                parent_url = parent_repo.get("html_url")
+                if isinstance(parent_url, str) and parent_url.strip():
+                    payload["pulse:isForkOf"] = parent_url.strip()
+
+        # Discipline normalisation. The SHACL `pulse:DisciplineShape`
+        # constrains values to the Wikidata-based enumeration but has
+        # NO `sh:minCount`, so an empty list is valid. Previous behaviour
+        # stamped `wd:Q428691` (computer engineering / "software") as a
+        # catch-all whenever the LLM returned nothing — production audit
+        # showed this hid honest "no specific domain" answers behind a
+        # broad default (77% of a 441-repo batch were tagged as Software
+        # *only*, with no domain QID).
+        #
+        # Now: normalise to a clean list of trimmed strings, but leave
+        # it empty when the LLM didn't surface a domain QID. The prompt
+        # is the place to teach the model when to emit the broad default
+        # explicitly vs. leave the field empty.
         existing_disciplines = payload.get("pulse:discipline")
-        if not isinstance(existing_disciplines, list) or not [
-            value
-            for value in existing_disciplines
-            if isinstance(value, str) and value.strip()
-        ]:
-            payload["pulse:discipline"] = ["wd:Q428691"]  # computer engineering
+        if isinstance(existing_disciplines, list):
+            payload["pulse:discipline"] = [
+                value.strip()
+                for value in existing_disciplines
+                if isinstance(value, str) and value.strip()
+            ]
+        else:
+            payload["pulse:discipline"] = []
 
         force_server_uuid(payload, uuid_value)
 

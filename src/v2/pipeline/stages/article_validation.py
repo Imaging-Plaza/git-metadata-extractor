@@ -177,6 +177,17 @@ def validate_articles(
             )
             continue
 
+        # Normalise `schema:identifier` to the canonical DOI URL so it
+        # matches the article's `@id`. Production audit observed 31/31
+        # articles emitting `@id = https://doi.org/10.1051/...` but
+        # `schema:identifier = 10.1051/...` (bare DOI). Keep the bare
+        # form in `identifiers.schema:identifier` for backward-compat
+        # consumers, but make the top-level field URL-shaped so both
+        # representations of the same DOI agree.
+        canonical_doi_url = _normalize_doi_url(schema_identifier)
+        if canonical_doi_url and schema_identifier != canonical_doi_url:
+            entity["schema:identifier"] = canonical_doi_url
+
         new_related.append(entity)
 
     updated = AssembledOutput(

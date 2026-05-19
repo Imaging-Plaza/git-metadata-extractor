@@ -477,6 +477,29 @@ class LLMPersonAgentV2:
 
         force_server_uuid(payload, uuid_value)
 
+        # Drop `schema:url` self-loops — the LLM frequently emits the
+        # github profile URL as `schema:url` even when the Person's
+        # `@id` IS already that same URL. Production audit (Bug P,
+        # 1505 cases) observed every github-only Person carrying this
+        # tautological edge. The LLM can emit `schema:url` as either a
+        # plain string OR a `{"@id": "..."}` dict — both forms must be
+        # matched and dropped when equal to the Person's resolved id.
+        person_id = payload.get("id") or payload.get("@id")
+        schema_url = payload.get("schema:url")
+        url_target: str | None = None
+        if isinstance(schema_url, str):
+            url_target = schema_url.strip()
+        elif isinstance(schema_url, dict):
+            inner = schema_url.get("@id") or schema_url.get("id")
+            if isinstance(inner, str):
+                url_target = inner.strip()
+        if (
+            isinstance(person_id, str)
+            and url_target is not None
+            and url_target == person_id.strip()
+        ):
+            payload.pop("schema:url", None)
+
         raw_output = deepcopy(payload)
 
         # Second validation pass: strict schema (warnings only, never raises).

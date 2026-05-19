@@ -270,15 +270,30 @@ def _deterministic_uuid(
     entity: dict[str, Any],
     keys_for_seed: tuple[str, ...],
 ) -> str:
-    seed_parts: list[str] = []
-    for key in keys_for_seed:
-        value = _lookup_identifier(entity, (key,))
-        if value is not None:
-            seed_parts.append(value.lower())
-    if not seed_parts:
-        seed_parts.append(json.dumps(entity, sort_keys=True, separators=(",", ":")))
-    seed = "|".join(seed_parts)
-    return str(uuid.uuid5(namespace, seed))
+    """Fallback UUID for entities that lack a canonical identifier.
+
+    Despite the function name (kept for ABI compatibility), this now
+    returns a **uuid4** rather than a deterministic uuid5. Reason:
+    production audit observed cross-repo collisions where two
+    different entities — typically two persons named ``"John Doe"``
+    in unrelated repositories, neither carrying an ORCID, Infoscience
+    id, or GitHub handle — resolved to the same `urn:pulse:<uuid>`
+    because both produced the same uuid5 seed (`name|empty|empty|...`).
+    When Oxigraph ingests the graph it merges all triples on the
+    shared URN into a single subject, corrupting the data.
+
+    Two persons named "John Doe" in two unrelated repos are different
+    entities. The fallback path is explicitly for entities with no
+    grounding identifier, so per-run determinism here was never
+    semantically meaningful — re-runs of the same extraction will
+    produce different URNs for these entities, which is correct:
+    nothing in the input pinned them to a stable identity.
+
+    The keys_for_seed argument is retained but unused, so call-sites
+    don't need to change.
+    """
+    del namespace, entity, keys_for_seed
+    return str(uuid.uuid4())
 
 
 def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:

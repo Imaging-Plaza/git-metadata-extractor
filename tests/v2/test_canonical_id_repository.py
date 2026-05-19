@@ -37,7 +37,9 @@ def test_resolve_repository_id_uses_doi_when_github_handle_is_missing() -> None:
     assert id_source == "schema:citation"
 
 
-def test_resolve_repository_id_falls_back_to_uuid_v5() -> None:
+def test_resolve_repository_id_falls_back_to_uuid4() -> None:
+    # Fallback emits uuid4 (was uuid5) to avoid cross-repo collisions —
+    # see canonicalization id_resolution `_deterministic_uuid`.
     repository = {
         "schema:name": "Some Repository",
         "identifiers": {
@@ -49,7 +51,7 @@ def test_resolve_repository_id_falls_back_to_uuid_v5() -> None:
     canonical_id, id_source = resolve_repository_id(repository)
 
     parsed = uuid.UUID(canonical_id)
-    assert parsed.version == UUID_V5_VERSION
+    assert parsed.version == 4
     assert id_source == "uuid"
 
 

@@ -114,16 +114,13 @@
         "@id": "https://github.com/octocat",
         "@type": "schema:Person",
         "schema:name": "The Octocat",
-        "schema:url": {
-          "@id": "https://github.com/octocat"
-        },
         "pulse:githubUsername": "octocat",
         "pulse:orcidIdentifier": null,
         "pulse:infosciencePersonIdentifier": null,
         "org:hasMembership": [],
         "pulse:hasContribution": [
           {
-            "@id": "https://github.com/octocat_https://github.com/octocat/Hello-World"
+            "@id": "https://github.com/octocat__https://github.com/octocat/Hello-World"
           }
         ],
         "pulse:owns": [
@@ -158,12 +155,10 @@
         },
         "pulse:isForkOf": null,
         "pulse:repositoryType": "pulse:Software",
-        "pulse:discipline": [
-          "wd:Q428691"
-        ]
+        "pulse:discipline": []
       },
       {
-        "@id": "https://github.com/octocat_https://github.com/octocat/Hello-World",
+        "@id": "https://github.com/octocat__https://github.com/octocat/Hello-World",
         "@type": "pulse:Contribution",
         "pulse:contributionTo": {
           "@id": "https://github.com/octocat/Hello-World"
@@ -180,7 +175,7 @@
   "warnings": [],
   "stats": {
     "entities_count": 3,
-    "triples_count": 22,
+    "triples_count": 20,
     "stages_completed": [
       "context_gather",
       "repo_agent",

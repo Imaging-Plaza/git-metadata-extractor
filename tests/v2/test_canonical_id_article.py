@@ -63,7 +63,9 @@ def test_resolve_article_id_normalizes_infoscience_core_items_url() -> None:
     assert id_source == "pulse:infoscienceArticleIdentifier"
 
 
-def test_resolve_article_id_falls_back_to_uuid_v5() -> None:
+def test_resolve_article_id_falls_back_to_uuid4() -> None:
+    # Fallback emits uuid4 (was uuid5) to avoid cross-repo collisions —
+    # see canonicalization id_resolution `_deterministic_uuid`.
     article = {
         "schema:name": "Graph Article",
         "schema:datePublished": "2025-06-15",
@@ -76,7 +78,7 @@ def test_resolve_article_id_falls_back_to_uuid_v5() -> None:
     canonical_id, id_source = resolve_article_id(article)
 
     parsed = uuid.UUID(canonical_id)
-    assert parsed.version == UUID_V5_VERSION
+    assert parsed.version == 4
     assert id_source == "uuid"
 
 

@@ -98,6 +98,34 @@ def _normalize_affiliation_entries(entries: Any) -> list[dict[str, str | None]]:
     return normalized_entries
 
 
+def _person_schema_url(
+    *,
+    infoscience_match: dict[str, Any] | None,
+    github_html_url: Any,
+    resolved_id: str | None,
+) -> str | None:
+    """Pick a `schema:url` for the person, avoiding the self-loop case.
+
+    Prefers the Infoscience profile URL when an Infoscience match is
+    available. Falls back to the GitHub profile URL — except when the
+    Person's `@id` IS that same GitHub profile URL (the most common
+    case: `id = https://github.com/<login>` and the GitHub user record
+    reports the same `html_url`). Emitting `schema:url` pointing at
+    your own `@id` is a tautological self-loop that bloats the graph
+    without carrying information (audit observed 1505 such loops).
+    """
+    if infoscience_match:
+        profile_url = infoscience_match.get("profileUrl")
+        if isinstance(profile_url, str) and profile_url.strip():
+            return profile_url
+    if isinstance(github_html_url, str) and github_html_url.strip():
+        candidate = github_html_url.strip()
+        if isinstance(resolved_id, str) and candidate == resolved_id.strip():
+            return None
+        return candidate
+    return None
+
+
 def _resolve_username(context: dict[str, Any]) -> str:
     for key in ("username", "github_username"):
         value = context.get(key)
@@ -221,10 +249,10 @@ class PersonAgentV2:
                 or github_user.get("name")
                 or username
             ),
-            "schema:url": (
-                (infoscience_match or {}).get("profileUrl")
-                if infoscience_match
-                else github_user.get("html_url")
+            "schema:url": _person_schema_url(
+                infoscience_match=infoscience_match,
+                github_html_url=github_user.get("html_url"),
+                resolved_id=resolved_id,
             ),
             "pulse:githubUsername": github_username,
             "pulse:orcidIdentifier": normalized_orcid,

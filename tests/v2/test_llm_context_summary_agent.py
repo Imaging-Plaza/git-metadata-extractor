@@ -25,9 +25,13 @@ def test_llm_context_summary_agent_compiles_markdown_and_exposes_grep_tool() -> 
             user_prompt: str,
             output_type: Any = None,
             tools: Any = None,
+            usage_limits: Any = None,
         ) -> LLMRuntimeResult:
-            del output_type
-            assert "repository context compiler" in system_prompt.lower()
+            del output_type, usage_limits
+            # Agent defaults to scout mode (`V2_CONTEXT_SUMMARY_SCOUT_MODE`)
+            # in many envs; both the legacy compiler prompt and the scout
+            # prompt share the "repository" framing.
+            assert "repository" in system_prompt.lower()
             captured_user_prompt.append(user_prompt)
             captured_tools.extend(tools or [])
             return LLMRuntimeResult(
@@ -82,8 +86,9 @@ def test_llm_context_summary_agent_is_fail_open_on_runtime_error() -> None:
             user_prompt: str,
             output_type: Any = None,
             tools: Any = None,
+            usage_limits: Any = None,
         ) -> LLMRuntimeResult:
-            del system_prompt, user_prompt, output_type, tools
+            del system_prompt, user_prompt, output_type, tools, usage_limits
             raise LLMRuntimeError("boom")
 
     agent = LLMContextSummaryAgentV2(llm_runtime=_FailingRuntime())

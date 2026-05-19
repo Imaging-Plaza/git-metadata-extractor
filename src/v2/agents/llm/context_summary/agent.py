@@ -15,12 +15,31 @@ from src.v2.agents.llm.agent_tools.duckduckgo_search import (
 from src.v2.agents.llm.agent_tools.repository_corpus_grep import (
     make_repository_corpus_grep_tool,
 )
+from pydantic_ai.usage import UsageLimits
+
 from src.v2.agents.models import AgentResult, ProviderSet
 from src.v2.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 from src.v2.ingest.cache import ProviderCache
 from src.v2.observation.query_log import stamp_current_agent
 
 logger = logging.getLogger(__name__)
+
+# Scout-mode usage budget. The scout prompt explicitly tells the LLM to
+# spend ~20 tool calls up-front so per-entity agents don't have to; the
+# global `V2_LLM_REQUEST_LIMIT` default of 25 (set in
+# `src/v2/agents/llm/runtime.py`) caps it before it finishes and the
+# brief comes back empty, leaving downstream agents to re-discover every
+# ORCID / ROR / DOI themselves. Override locally so scout gets the
+# budget it was designed for. Per-call request count tracked by
+# pydantic-ai; tool-call budget gates the actual external lookups.
+#
+# TODO: lift these into a general agent-tuning config file (alongside
+# `V2_LLM_REQUEST_LIMIT` / `V2_LLM_TOOL_CALLS_LIMIT`) so every agent can
+# declare its own budget without touching code. Today the two knobs are
+# global env vars + this single per-agent override; a YAML/TOML config
+# keyed by agent name would scale better as more agents need tuning.
+_SCOUT_REQUEST_LIMIT = 60
+_SCOUT_TOOL_CALLS_LIMIT = 120
 
 _PROMPTS_PACKAGE = "src.v2.agents.llm.context_summary.prompts"
 _SYSTEM_PROMPT = load_prompt(_PROMPTS_PACKAGE, "system_prompt.md")
@@ -416,6 +435,7 @@ class LLMContextSummaryAgentV2:
         # is unchanged (2 tools, original prompt). Scout mode adds the
         # RAG providers' search tools so people / orgs / articles get
         # recon'd up-front.
+        usage_limits: UsageLimits | None = None
         if scout_mode:
             system_prompt = load_prompt(_PROMPTS_PACKAGE, _SCOUT_PROMPT_FILENAME)
             tools = _build_scout_tools(
@@ -423,9 +443,16 @@ class LLMContextSummaryAgentV2:
                 cache=self._cache,
                 corpus_documents=corpus_documents,
             )
+            usage_limits = UsageLimits(
+                request_limit=_SCOUT_REQUEST_LIMIT,
+                tool_calls_limit=_SCOUT_TOOL_CALLS_LIMIT,
+            )
             logger.info(
-                "context_summary_agent: scout mode ON (%d tools)",
+                "context_summary_agent: scout mode ON (%d tools, "
+                "request_limit=%d, tool_calls_limit=%d)",
                 len(tools),
+                _SCOUT_REQUEST_LIMIT,
+                _SCOUT_TOOL_CALLS_LIMIT,
             )
         else:
             system_prompt = _SYSTEM_PROMPT
@@ -435,11 +462,15 @@ class LLMContextSummaryAgentV2:
             ]
 
         try:
+            run_kwargs: dict[str, Any] = {}
+            if usage_limits is not None:
+                run_kwargs["usage_limits"] = usage_limits
             llm_result = await self._llm_runtime.run_json_prompt(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 output_type=LLMContextSummaryOutput,
                 tools=tools,
+                **run_kwargs,
             )
         except LLMRuntimeError as exc:
             warning = f"context_summary_agent: LLM call failed; proceeding without compiled summary ({exc})"

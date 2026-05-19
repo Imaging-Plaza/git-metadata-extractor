@@ -43,7 +43,12 @@ def test_repository_agent_output_validates_against_agent_schema(
     assert result.data["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
     assert result.data["schema:author"]
     assert result.data["pulse:repositoryType"]
-    assert result.data["pulse:discipline"]
+    # `pulse:discipline` is now allowed to be empty when no domain
+    # signal applies — the previous `["wd:Q428691"]` catch-all hid
+    # honest empty answers behind a noisy default. Octocat's
+    # Hello-World fixture has no domain hints, so an empty list is
+    # the correct output.
+    assert isinstance(result.data["pulse:discipline"], list)
     assert "contributors" not in result.data
 
     derivation = result.stats.get("derivation")

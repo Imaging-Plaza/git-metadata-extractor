@@ -109,6 +109,37 @@ def _normalize_created_at(value: Any) -> str | None:
     return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _resolve_fork_parent_url(repository: dict[str, Any]) -> str | None:
+    """Return the upstream repo URL when ``repository`` is a fork, else ``None``.
+
+    GitHub's ``GET /repos/{owner}/{repo}`` payload carries two related
+    nested fields for forks: ``parent`` (immediate upstream) and
+    ``source`` (root ancestor of the network). For repos forked
+    directly from an original both fields point at the same record;
+    for chained forks they diverge. Prefer ``parent`` as it's the
+    direct lineage edge — that's what downstream agents (article
+    linkage, contribution attribution) want to walk first. Use the
+    ``html_url`` form so the value matches every other repository IRI
+    in the ontology (https://github.com/owner/repo).
+
+    Returns ``None`` for non-forks and for forks whose upstream has
+    been deleted (`parent` field absent or unusably sparse).
+    """
+    if not repository.get("fork"):
+        return None
+    parent = repository.get("parent")
+    if isinstance(parent, dict):
+        candidate = parent.get("html_url")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    source = repository.get("source")
+    if isinstance(source, dict):
+        candidate = source.get("html_url")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
 async def _maybe_await(value: Any) -> Any:
     if hasattr(value, "__await__"):
         return await value
@@ -298,9 +329,7 @@ class RepositoryAgentV2:
             "schema:citation": f"https://doi.org/{doi_value}" if doi_value else None,
             "schema:programmingLanguage": programming_languages,
             "pulse:ownedBy": repository.get("owner", {}).get("login"),
-            "pulse:isForkOf": repository.get("source", {}).get("full_name")
-            if repository.get("fork")
-            else None,
+            "pulse:isForkOf": _resolve_fork_parent_url(repository),
         }
 
     async def _default_repository_classifier(
@@ -336,10 +365,12 @@ class RepositoryAgentV2:
         )
 
         disciplines = _to_list_of_strings(context.get("disciplines"))
-        if not disciplines:
-            # Match the LLM agent's fallback so both runtimes emit the same
-            # "broad code repo" default (Wikidata: computer engineering).
-            disciplines = ["wd:Q428691"]
+        # Empty list is now the honest default — the SHACL
+        # `pulse:DisciplineShape` has no `sh:minCount`, so `[]` validates.
+        # The previous catch-all (`wd:Q428691`, computer engineering /
+        # "software") was hiding the absence of a real domain signal:
+        # in a 441-repo production batch 77% landed with the catch-all
+        # ONLY, drowning honest per-domain aggregation.
 
         return {
             "pulse:repositoryType": repository_type,

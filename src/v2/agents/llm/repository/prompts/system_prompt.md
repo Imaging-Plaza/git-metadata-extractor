@@ -49,7 +49,29 @@ Return **only** a JSON object. No markdown fences, no explanation.
 - Generate a fresh UUID v4 for `identifiers.uuid`.
 - If a value is unknown or absent from the context, use `null` for nullable fields or omit optional fields entirely.
 - `schema:author` must contain at least one entry derived from contributor logins.
-- `pulse:discipline` must contain **1–2 entries** chosen from the `list_disciplines` tool output. Never emit an empty array or null. If the topic is genuinely ambiguous, pick a broad-but-honest discipline (e.g. computer engineering for a generic code repo, or the closest match to its programming languages and README).
+- `pulse:discipline` is an array of **0–2 Wikidata IRIs** from the
+  `list_disciplines` tool output. Empty `[]` IS allowed and is
+  preferred over a noise default. Rules of thumb:
+  - **0 entries** when the README / topics give no domain signal
+    beyond "this is some software" (a generic CLI helper, a build
+    plugin, a personal sandbox repo, a starter template). Emitting
+    `[]` is more honest than stamping `wd:Q428691` as a catch-all;
+    downstream consumers aggregate per-domain over the whole graph
+    and a 77% Software-only default hides real concentration.
+  - **1 entry** when the topic clearly maps to one discipline (a
+    bioinformatics pipeline → `wd:Q420`, a structural-engineering
+    FEM solver → `wd:Q12483`, a metadata extractor →
+    `wd:Q428691`).
+  - **2 entries** for genuinely cross-disciplinary work (a
+    geospatial-imaging library used in agriculture, a NLP toolkit
+    targeted at legal documents).
+- **NEVER** stamp `wd:Q428691` (computer engineering) as a
+  "everything is software" fallback when no domain QID applies.
+  That QID is for repos whose primary discipline IS computer
+  engineering itself (compilers, OS internals, type systems,
+  language tooling). Most code repos are not that — they're tools
+  *applied to* a domain or have no specific domain at all. Pick the
+  applied domain when it exists; otherwise `[]`.
 
 ## Available tools
 
