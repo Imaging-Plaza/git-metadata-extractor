@@ -27,6 +27,46 @@ Rules:
 - Only set role/date fields when evidence clearly maps to the selected organization; otherwise keep them null.
 - Do not invent unsupported fields.
 
+**Hard rules — emit-or-skip:**
+
+A Membership must NOT be emitted unless **at least one** of these
+evidence anchors is true. If none hold, return `{}` and let the
+downstream pipeline drop the orphan rather than stamping an
+unsupported edge.
+
+1. **ORCID-employment match.** `get_orcid_record(target_person.orcid)`
+   returned an `employment` or `education` entry whose
+   `organization` matches the candidate org by ROR id, ROR-aliased
+   name, or exact name match (case-insensitive, accents stripped).
+   Substring or fuzzy matches alone do NOT count.
+2. **GitHub-profile company field.** The target person's GitHub
+   profile `company` field (in `known_persons[].pulse:githubCompany`
+   or the same field on `target_person`) names the candidate
+   organization or one of its acronyms.
+3. **Shared institutional email.** The person's email domain matches
+   the organization's known email domain.
+4. **Repository-owner inheritance.** The target organization IS the
+   repository's owning organization (i.e. `org:Membership` between
+   the repo author and the github-handle org that owns the repo).
+   This is the most common and lowest-risk path.
+
+Counter-rules (observed false-positive patterns to AVOID):
+
+- **Do not** stamp a Membership from a `query_orcid` name match
+  alone — that returns ANY ORCID record whose name string is
+  similar, including unrelated people at unrelated companies.
+- **Do not** stamp a Membership when the GitHub username happens to
+  *resemble* a company slug (e.g. `rickardraysearch` →
+  "RaySearch Laboratories", `coreprocess` → "10X Genomics",
+  `danba340` → "Volvo Cars"). The substring is not evidence.
+- **Do not** stamp a Membership to an organization in a different
+  country from the repo's owning organization unless ORCID
+  employment explicitly links the person to that country. If
+  `target_country_code` is provided in the context (typically `CH`
+  for SDSC / EPFL / ETHZ-hosted repos), default-reject candidate
+  orgs whose ROR country differs and no rule above gives explicit
+  cross-country evidence.
+
 Date-field discipline (strict):
 - `time:hasBeginning` and `time:hasEnd` MUST be `null` unless an ORCID
   employment or education affiliation explicitly returns a `start_date` or
