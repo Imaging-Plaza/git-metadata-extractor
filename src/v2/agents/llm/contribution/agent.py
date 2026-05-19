@@ -271,7 +271,15 @@ class LLMContributionAgentV2:
 
         payload["schema:author"] = target_person_id
         payload["pulse:contributionTo"] = target_repository_id
-        composite_id = f"{target_person_id}_{target_repository_id}"
+        # Double underscore separator — single `_` is ambiguous because
+        # GitHub usernames are allowed to contain `_` (and URLs in the
+        # repo id contain `/`), so `<person_url>_<repo_url>` cannot be
+        # parsed back unambiguously. `__` never appears in either a
+        # github.com URL or a ROR identifier, so the composite is
+        # round-trippable. Migration: any previously persisted edges
+        # with single-`_` separator are still readable by consumers —
+        # only newly emitted edges adopt the new shape.
+        composite_id = f"{target_person_id}__{target_repository_id}"
         payload["id"] = composite_id
         payload["idSource"] = "pulse:composite"
         identifiers = payload.get("identifiers")
@@ -301,6 +309,44 @@ class LLMContributionAgentV2:
                 payload["pulse:lastContributionDate"] = last_date
 
         force_server_uuid(payload, uuid_value)
+
+        # Drop empty edges. Production audit observed 28 contributions
+        # landing with `pulse:contributionCount=0` and both date fields
+        # `null` — vacuous edges that bloat the graph without carrying
+        # any signal. They arise when the LLM emits a Contribution from
+        # a weak signal (a comment, a watch, a review) but the GitHub
+        # contributor record never produced a commit count or date.
+        contribution_count = payload.get("pulse:contributionCount")
+        first_contribution_date = payload.get("pulse:firstContributionDate")
+        last_contribution_date = payload.get("pulse:lastContributionDate")
+        if (
+            (contribution_count is None or contribution_count == 0)
+            and not first_contribution_date
+            and not last_contribution_date
+        ):
+            warning = (
+                f"llm_contribution: dropping Contribution {payload.get('id')!r} — "
+                "no count, no firstContributionDate, no lastContributionDate"
+            )
+            logger.info(warning)
+            return AgentResult(
+                data={},
+                warnings=[warning],
+                raw_output={},
+                model=llm_result.model,
+                provider=llm_result.provider,
+                tokens_prompt=llm_result.tokens_prompt,
+                tokens_completion=llm_result.tokens_completion,
+                stats={
+                    "agent_runtime": "llm",
+                    "contributions": [],
+                    "contribution_count": 0,
+                    "derivation": {
+                        "contribution_seed": contribution_seed,
+                        "skipped_reason": "empty_edge",
+                    },
+                },
+            )
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)

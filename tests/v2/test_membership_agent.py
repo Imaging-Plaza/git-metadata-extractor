@@ -77,9 +77,13 @@ def test_membership_agent_derives_deduplicated_memberships_with_uuid4_identifier
         validate(instance=membership, schema=membership_schema)
 
     assert len(memberships) == EXPECTED_MEMBERSHIP_COUNT
+    # Composite IDs use `__` (double underscore) separator — single
+    # `_` is ambiguous because GitHub usernames may contain `_` and
+    # the composite can't be parsed back. See Bug F in the production
+    # audit.
     assert [membership["id"] for membership in memberships] == [
-        "https://orcid.org/0000-0002-1825-0097_https://ror.org/019wvm592",
-        "https://orcid.org/0000-0002-1825-0097_https://ror.org/02s376052",
+        "https://orcid.org/0000-0002-1825-0097__https://ror.org/019wvm592",
+        "https://orcid.org/0000-0002-1825-0097__https://ror.org/02s376052",
     ]
     for membership in memberships:
         identifiers = membership.get("identifiers")

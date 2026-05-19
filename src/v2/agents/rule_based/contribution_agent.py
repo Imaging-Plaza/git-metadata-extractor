@@ -318,7 +318,10 @@ class ContributionAgentV2:
                     )
                     continue
 
-                composite_id = f"{person_id}_{repository_id}"
+                # `__` separator (not `_`) so the composite can be
+                # parsed back unambiguously — GitHub usernames are
+                # allowed to contain `_`.
+                composite_id = f"{person_id}__{repository_id}"
                 existing = contribution_data_by_composite.setdefault(
                     composite_id,
                     {
@@ -352,13 +355,29 @@ class ContributionAgentV2:
         raw_contributions: list[dict[str, Any]] = []
         for composite_id in sorted(contribution_data_by_composite):
             contribution_data = contribution_data_by_composite[composite_id]
+            contribution_count = int(contribution_data["count"])
+            first_date = _as_string(contribution_data.get("first_date"))
+            last_date = _as_string(contribution_data.get("last_date"))
+            # Drop empty edges. Production audit found 28 Contributions
+            # with `pulse:contributionCount=0` and both date fields
+            # `null` — semantically vacuous edges that bloat the graph
+            # without carrying any signal. They arise when a person is
+            # linked to a repo via a non-commit signal (PR review,
+            # discussion, watch) but the contribution scraper finds no
+            # actual commit count.
+            if contribution_count == 0 and first_date is None and last_date is None:
+                _append_unique(
+                    warnings,
+                    f"contribution {composite_id}: dropped — no count and no dates",
+                )
+                continue
             payload = _build_contribution_payload(
                 composite_id=composite_id,
                 person_id=str(contribution_data["person_id"]),
                 repository_id=str(contribution_data["repository_id"]),
-                contribution_count=int(contribution_data["count"]),
-                first_contribution_date=_as_string(contribution_data.get("first_date")),
-                last_contribution_date=_as_string(contribution_data.get("last_date")),
+                contribution_count=contribution_count,
+                first_contribution_date=first_date,
+                last_contribution_date=last_date,
             )
             raw_payload = deepcopy(payload)
             validated_payload, validation_warnings = validate_permissive(
@@ -372,6 +391,18 @@ class ContributionAgentV2:
                 )
             validated_contributions.append(validated_payload)
             raw_contributions.append(raw_payload)
+
+        # All candidate contributions may have been filtered out by the
+        # empty-edge guard (Bug G). Return an empty AgentResult — same
+        # shape as the `not contribution_data_by_composite` early-exit
+        # above — so callers don't try to index an empty list.
+        if not validated_contributions:
+            return AgentResult(
+                data={},
+                warnings=warnings,
+                raw_output={},
+                stats={"contributions": []},
+            )
 
         primary_contribution = validated_contributions[0]
         primary_raw_output = raw_contributions[0]

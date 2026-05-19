@@ -5,7 +5,7 @@ Return exactly one JSON object for an `org:Membership` entity conforming to `pul
 Output only JSON. No markdown fences. No explanations.
 
 Required fields:
-- `id` (composite `personId_orgId` or UUID fallback)
+- `id` (composite `personId__orgId` — DOUBLE underscore, see Rules — or UUID fallback)
 - `type` = `"org:Membership"`
 - `shacl` = `"pulse:MembershipShape"`
 - `identifiers` with `pulse:composite` and `uuid`
@@ -22,7 +22,11 @@ Rules:
 - Use `target_person` and `target_organizations` as primary context when provided.
 - Prefer ROR-backed canonical organization IDs when multiple near-match organizations are present and context supports that choice.
 - Prefer `membership_seed` as the target person when present.
-- Build a deterministic composite ID when possible: `{personId}_{organizationId}`.
+- Build a deterministic composite ID with a **double-underscore**
+  separator: `{personId}__{organizationId}`. Single `_` is ambiguous
+  because GitHub usernames may contain `_` and you cannot parse the
+  composite back unambiguously. Example:
+  `https://github.com/alice-smith__https://ror.org/02s376052`.
 - If target person has an ORCID identifier, use ORCID evidence to infer `org:role`, `time:hasBeginning`, and `time:hasEnd` conservatively.
 - Only set role/date fields when evidence clearly maps to the selected organization; otherwise keep them null.
 - Do not invent unsupported fields.

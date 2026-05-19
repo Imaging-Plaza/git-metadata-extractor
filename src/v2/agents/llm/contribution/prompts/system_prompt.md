@@ -5,7 +5,7 @@ Return exactly one JSON object for a `pulse:Contribution` entity conforming to `
 Output only JSON. No markdown fences. No explanations.
 
 Required fields:
-- `id` (composite `personId_repoId` or UUID fallback)
+- `id` (composite `personId__repoId` — DOUBLE underscore — or UUID fallback)
 - `type` = `"pulse:Contribution"`
 - `shacl` = `"pulse:ContributionShape"`
 - `identifiers` with `pulse:composite` and `uuid`
@@ -24,9 +24,13 @@ Rules:
   `schema:author` to `target_person.id` and `pulse:contributionTo` to
   `target_repository.id`.
 - Use canonical person and repository IDs from known entities.
-- Build the composite id deterministically: `{target_person.id}_{target_repository.id}`,
-  set `idSource = "pulse:composite"`, and put the same composite into
-  `identifiers["pulse:composite"]`.
+- Build the composite id deterministically with a **double-underscore**
+  separator: `{target_person.id}__{target_repository.id}`. Single `_`
+  is ambiguous because GitHub usernames may contain `_` and the
+  composite cannot be parsed back to its components. Example:
+  `https://github.com/alice-smith__https://github.com/lis-epfl/vswarm`.
+  Set `idSource = "pulse:composite"` and put the same composite
+  string into `identifiers["pulse:composite"]`.
 - `contribution_seed` is the repository id (kept for backwards compatibility) —
   prefer `target_repository.id` over it when both are present.
 - Do not invent unsupported fields.

@@ -424,7 +424,11 @@ class MembershipAgentV2:
                     )
                     continue
 
-                composite_id = f"{person_id}_{organization_id}"
+                # `__` separator (not `_`) so the composite can be
+                # parsed back unambiguously — GitHub usernames may
+                # contain `_` and ROR IDs end in alphanumerics that
+                # collide on single-`_` boundaries.
+                composite_id = f"{person_id}__{organization_id}"
                 existing = membership_data_by_composite.setdefault(
                     composite_id,
                     {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -218,9 +219,87 @@ def assemble_output(  # noqa: C901, PLR0912
             ),
         )
 
+    # Final safety net: collapse duplicate `id`s into one entity body
+    # each. The earlier reconciliation step computes the canonical id
+    # but does not always merge the bodies — production audit observed
+    # the same URN appearing 4 times in one repo's `@graph` with
+    # different `pulse:OrganizationType` (CommunitySpace vs
+    # SoftwareProject) and different `schema:name` capitalisations
+    # (numtide / Numtide), violating the JSON-LD contract that a
+    # subject IRI carries one body per graph.
+    related_entities, dedup_warnings = _merge_duplicate_entities(related_entities)
+    warnings.extend(dedup_warnings)
+
     return AssembledOutput(
         root_entity=_clean_relationship_refs(root_entity, excluded_ids),
         related_entities=related_entities,
         excluded_entities=excluded_entities,
         warnings=warnings,
     )
+
+
+def _merge_duplicate_entities(
+    entities: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Collapse entries sharing the same ``id`` into one, preferring the
+    first occurrence's body and filling its missing fields from later
+    copies.
+
+    Merge policy:
+    - Scalar field present in both → keep first (left-bias). The
+      reconciliation step that already ran ordered entries by source
+      priority, so the first copy is the trusted one.
+    - Scalar field present in only one → keep the present value.
+    - List field present in both → concatenate + dedupe preserving order.
+    - Dict field present in both → recursive merge with the same rules.
+
+    Returns the deduped list and a warnings list summarising the
+    collapses (one line per duplicate cluster).
+    """
+    seen: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    duplicates: dict[str, int] = {}
+    no_id: list[dict[str, Any]] = []
+
+    for entity in entities:
+        entity_id = entity.get("id") if isinstance(entity, dict) else None
+        if not isinstance(entity_id, str) or not entity_id:
+            no_id.append(entity)
+            continue
+        if entity_id not in seen:
+            seen[entity_id] = deepcopy(entity)
+            order.append(entity_id)
+            continue
+        _merge_into(seen[entity_id], entity)
+        duplicates[entity_id] = duplicates.get(entity_id, 1) + 1
+
+    merged = [seen[eid] for eid in order] + no_id
+    warnings = [
+        f"output_assembly: merged {count} entities sharing id={eid!r} into one body"
+        for eid, count in sorted(duplicates.items())
+    ]
+    return merged, warnings
+
+
+def _merge_into(target: dict[str, Any], source: Any) -> None:
+    """Mutate ``target`` to fill in fields from ``source`` (left-bias)."""
+
+    if not isinstance(source, dict):
+        return
+    for key, value in source.items():
+        if key not in target or target[key] is None or target[key] == [] or target[key] == {}:
+            target[key] = deepcopy(value)
+            continue
+        existing = target[key]
+        if isinstance(existing, list) and isinstance(value, list):
+            seen_serialised: set[str] = set()
+            combined: list[Any] = []
+            for item in [*existing, *value]:
+                token = json.dumps(item, sort_keys=True, default=str)
+                if token in seen_serialised:
+                    continue
+                seen_serialised.add(token)
+                combined.append(item)
+            target[key] = combined
+        elif isinstance(existing, dict) and isinstance(value, dict):
+            _merge_into(existing, value)
