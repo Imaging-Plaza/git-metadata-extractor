@@ -1276,9 +1276,21 @@ def _detect_repository_fork_cycles(repositories: list[dict[str, Any]]) -> list[s
 
 
 def _extract_composite_pair(composite_id: Any) -> tuple[str | None, str | None]:
-    if not isinstance(composite_id, str) or "_" not in composite_id:
+    """Split a composite `{personId}__{otherId}` (or legacy `_`) into halves.
+
+    The canonical separator is `__` (double underscore) so GitHub
+    usernames containing `_` round-trip. We still accept a single
+    `_` for backward compatibility with any persisted edges from
+    before the format switch.
+    """
+    if not isinstance(composite_id, str):
         return None, None
-    left, right = composite_id.split("_", maxsplit=1)
+    if "__" in composite_id:
+        left, right = composite_id.split("__", maxsplit=1)
+    elif "_" in composite_id:
+        left, right = composite_id.split("_", maxsplit=1)
+    else:
+        return None, None
     if not left or not right:
         return None, None
     return left, right
@@ -1317,7 +1329,10 @@ def _normalize_membership_entities(
             )
             continue
 
-        canonical_membership_id = f"{canonical_person_id}_{canonical_org_id}"
+        # `__` (double underscore) matches the agents' new composite
+        # convention so the @id round-trips through `_extract_composite_pair`
+        # even when personId or orgId contain `_` (GitHub usernames may).
+        canonical_membership_id = f"{canonical_person_id}__{canonical_org_id}"
         if canonical_membership_id in seen_membership_ids:
             continue
         seen_membership_ids.add(canonical_membership_id)
@@ -1390,7 +1405,8 @@ def _normalize_contribution_entities(  # noqa: C901
             )
             continue
 
-        canonical_contribution_id = f"{canonical_person_id}_{canonical_repository_id}"
+        # `__` separator — same rationale as membership composites.
+        canonical_contribution_id = f"{canonical_person_id}__{canonical_repository_id}"
         if canonical_contribution_id in seen_contribution_ids:
             continue
         seen_contribution_ids.add(canonical_contribution_id)

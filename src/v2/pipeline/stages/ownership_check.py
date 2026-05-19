@@ -282,15 +282,42 @@ def _owner_handle_for_repo(entity: dict[str, Any]) -> str | None:
 
 
 def _index_owners(entities: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Build a `handle.lower() -> entity` map for Person and Organization entities."""
+    """Build a `handle.lower() -> entity` map for Person/Organization entities.
+
+    When multiple entities advertise the same github handle (the
+    typical case after reconciliation copies `pulse:githubOrganizationHandle`
+    onto both the github-side Org and its ROR counterpart), prefer the
+    one whose `id` is the canonical github URL. The github-side entity
+    IS the direct owner of the repository; the ROR-side entity is an
+    indirect/legal-entity parent linked via `org:hasUnit`. Production
+    audit (Bug J, 165 cases on ENAC-CNPA et al.) showed `infer_owners`
+    sometimes picking the ROR Org as the indexed owner, which then
+    re-stamped `pulse:owns: [repo]` on the ROR side after
+    `validate_ownership` had already cleaned it — leaving the inverse
+    broken in the final graph.
+    """
     index: dict[str, dict[str, Any]] = {}
     for entity in entities:
         if not isinstance(entity, dict):
             continue
         handle = _entity_owner_handle(entity)
-        if handle:
-            index.setdefault(handle, entity)
+        if not handle:
+            continue
+        current = index.get(handle)
+        if current is None:
+            index[handle] = entity
+            continue
+        # Tie-break: prefer the github-URL-IRI entity over a ROR-IRI
+        # entity for the same handle.
+        if _id_is_github_url(entity) and not _id_is_github_url(current):
+            index[handle] = entity
     return index
+
+
+def _id_is_github_url(entity: dict[str, Any]) -> bool:
+    """Return True when the entity's `id` is a `https://github.com/...` URL."""
+    iid = entity.get("id") or entity.get("@id")
+    return isinstance(iid, str) and iid.startswith(("https://github.com/", "http://github.com/"))
 
 
 def _add_to_owns(entity: dict[str, Any], repo_id: str) -> bool:

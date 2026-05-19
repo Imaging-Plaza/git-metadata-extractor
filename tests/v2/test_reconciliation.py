@@ -82,7 +82,9 @@ def _article(
 
 
 def _membership(person_ref: str, org_ref: str) -> dict:
-    membership_id = f"{person_ref}_{org_ref}"
+    # `__` separator matches the canonical composite ID convention
+    # (see `src/v2/pipeline/stages/reconciliation.py:_extract_composite_pair`).
+    membership_id = f"{person_ref}__{org_ref}"
     return {
         "id": membership_id,
         "type": "org:Membership",
@@ -98,7 +100,8 @@ def _membership(person_ref: str, org_ref: str) -> dict:
 
 
 def _contribution(person_ref: str, repository_ref: str) -> dict:
-    contribution_id = f"{person_ref}_{repository_ref}"
+    # `__` separator matches the canonical composite ID convention.
+    contribution_id = f"{person_ref}__{repository_ref}"
     return {
         "id": contribution_id,
         "type": "pulse:Contribution",
@@ -429,7 +432,7 @@ def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> N
     )
 
     assert "https://github.com/sdsc-ordes" in canonical_org["org:hasUnit"]
-    assert github_org_account["org:unitOf"] == "https://ror.org/02hdt9m26"
+    assert github_org_account["org:unitOf"] == ["https://ror.org/02hdt9m26"]
     assert github_org_account["pulse:githubOrganizationHandle"] == "sdsc-ordes"
     assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "https://github.com/sdsc-ordes"
 
@@ -597,7 +600,8 @@ def test_reconcile_prunes_unresolved_organization_hierarchy_links() -> None:
     reconciled_org = reconciled.entities["organizations"][0]
 
     assert reconciled_org["org:hasUnit"] == []
-    assert reconciled_org["org:unitOf"] is None
+    # org:unitOf is list-valued; reconciliation empties it on drop.
+    assert reconciled_org["org:unitOf"] == []
     assert any(
         "Dropped unresolved organization hierarchy references during reconciliation: "
         "org:hasUnit=1, org:unitOf=1"
@@ -627,7 +631,7 @@ def test_reconcile_preserves_resolvable_organization_hierarchy_links() -> None:
     organizations = {organization["id"]: organization for organization in reconciled.entities["organizations"]}
 
     assert organizations["https://ror.org/05gzmn429"]["org:hasUnit"] == ["https://ror.org/04f4a0c74"]
-    assert organizations["https://ror.org/04f4a0c74"]["org:unitOf"] == "https://ror.org/05gzmn429"
+    assert organizations["https://ror.org/04f4a0c74"]["org:unitOf"] == ["https://ror.org/05gzmn429"]
     assert not any(
         "Dropped unresolved organization hierarchy references during reconciliation"
         in warning

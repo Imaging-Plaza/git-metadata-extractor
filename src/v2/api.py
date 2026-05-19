@@ -1009,6 +1009,23 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for warning in owner_inference_warnings:
         _append_unique_warning(warnings, warning)
 
+    # Second-pass inverse consistency check — `infer_owners` indexes by
+    # github handle and may have just stamped `pulse:owns: [repo]` on
+    # the ROR-side Org instead of (or in addition to) the github-handle
+    # Org. Re-run `validate_ownership` so its dual-identity guard drops
+    # entries on whichever Org doesn't match the repo's actual
+    # `pulse:ownedBy`. Production audit (Bug J) showed this is the
+    # most common path to broken inverses (165 cases on ENAC-CNPA et al.).
+    stage_started_at = perf_counter()
+    assembled_output, inverse_warnings = validate_ownership(assembled_output)
+    logger.info(
+        "inverse_consistency: dropped=%d in %.2fs",
+        len(inverse_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in inverse_warnings:
+        _append_unique_warning(warnings, warning)
+
     stage_started_at = perf_counter()
     assembled_output, prune_warnings = prune_dangling_refs(assembled_output)
     logger.info(
