@@ -96,7 +96,13 @@ def test_resolve_person_id_uses_github_when_higher_priority_ids_are_missing() ->
     assert id_source == "pulse:githubUsername"
 
 
-def test_resolve_person_id_generates_stable_uuid_v5_fallback() -> None:
+def test_resolve_person_id_generates_uuid4_fallback() -> None:
+    # The fallback resolver used to emit a deterministic uuid5 derived
+    # from the entity body, which caused cross-repo collisions when two
+    # persons in unrelated contexts shared the same minimal seed
+    # ("John Doe", no ORCID, no GitHub handle). It now emits a uuid4 —
+    # entities without a grounding identifier are NOT comparable across
+    # repos, so a fresh URN per call is the correct semantics.
     person = {
         "schema:name": "Jane Doe",
         "schema:email": "jane@example.org",
@@ -110,11 +116,15 @@ def test_resolve_person_id_generates_stable_uuid_v5_fallback() -> None:
     canonical_id, id_source = resolve_person_id(person)
 
     parsed = uuid.UUID(canonical_id)
-    assert parsed.version == UUID_V5_VERSION
+    assert parsed.version == 4
     assert id_source == "uuid"
 
 
-def test_resolve_person_id_is_deterministic_for_same_input() -> None:
+def test_resolve_person_id_fallback_yields_distinct_uuids_per_call() -> None:
+    # Counterpart to the uuid5-determinism guarantee that the fallback
+    # used to provide. With uuid4 the inverse property is required:
+    # two calls with identical input MUST produce distinct UUIDs, so
+    # downstream graph-stores don't merge unrelated entities.
     person = {
         "schema:name": "Jane Doe",
         "schema:email": "jane@example.org",
@@ -128,7 +138,7 @@ def test_resolve_person_id_is_deterministic_for_same_input() -> None:
     first_id, first_source = resolve_person_id(person)
     second_id, second_source = resolve_person_id(person)
 
-    assert first_id == second_id
+    assert first_id != second_id
     assert first_source == second_source == "uuid"
 
 

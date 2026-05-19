@@ -23,6 +23,7 @@ Run all three between `apply_link_pruning_to_assembled_output` and
 from __future__ import annotations
 
 import re
+import uuid
 from copy import deepcopy
 from typing import Any
 from urllib.parse import urlparse
@@ -155,6 +156,16 @@ def validate_ownership(
         _apply_owns_check(cloned, warnings)
         new_related.append(cloned)
 
+    # Second pass: enforce inverse consistency on `pulse:owns`. When a
+    # repo's `pulse:ownedBy` points at one Org but a DIFFERENT Org
+    # (typically the same legal entity, dual-identity: github-handle
+    # Org + ROR Org) carries the repo in its `pulse:owns`, drop the
+    # spurious entry. Production audit (ENAC-CNPA, 171 cases) showed
+    # the ROR-side Org keeping `pulse:owns: [repo]` while the repo
+    # only pointed back to the github-side Org — a broken inverse
+    # relationship that confuses downstream consumers.
+    _enforce_owns_inverse_consistency(new_root, new_related, warnings)
+
     return (
         AssembledOutput(
             root_entity=new_root if new_root is not None else assembled.root_entity,
@@ -164,6 +175,66 @@ def validate_ownership(
         ),
         warnings,
     )
+
+
+def _enforce_owns_inverse_consistency(
+    root: dict[str, Any] | None,
+    related: list[dict[str, Any]],
+    warnings: list[str],
+) -> None:
+    """Drop `pulse:owns` entries whose repo's `pulse:ownedBy` points elsewhere."""
+
+    candidates: list[dict[str, Any]] = []
+    if isinstance(root, dict):
+        candidates.append(root)
+    candidates.extend(e for e in related if isinstance(e, dict))
+
+    # Build repo_id → ownedBy target lookup.
+    repo_owned_by: dict[str, str] = {}
+    for entity in candidates:
+        if entity.get("type") != REPOSITORY_TYPE:
+            continue
+        repo_id = entity.get("id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+        owned_by = entity.get(OWNED_BY_KEY)
+        if isinstance(owned_by, dict):
+            target = owned_by.get("@id")
+            if isinstance(target, str) and target:
+                repo_owned_by[repo_id] = target
+        elif isinstance(owned_by, str) and owned_by.startswith(("http://", "https://", "urn:")):
+            repo_owned_by[repo_id] = owned_by
+
+    # For each org/person carrying `pulse:owns`, drop entries whose
+    # repo points at a different `pulse:ownedBy`.
+    for entity in candidates:
+        owns = entity.get(OWNS_KEY)
+        if not isinstance(owns, list) or not owns:
+            continue
+        entity_id = entity.get("id")
+        if not isinstance(entity_id, str) or not entity_id:
+            continue
+        kept: list[Any] = []
+        for entry in owns:
+            target = entry.get("@id") if isinstance(entry, dict) else entry
+            if not isinstance(target, str) or not target:
+                kept.append(entry)
+                continue
+            actual_owner = repo_owned_by.get(target)
+            if actual_owner is None:
+                # Repo not present in the graph or has no ownedBy — keep,
+                # we have no signal to refute the claim.
+                kept.append(entry)
+                continue
+            if actual_owner == entity_id:
+                kept.append(entry)
+                continue
+            warnings.append(
+                f"Dropped pulse:owns entry on {entity_id} → {target}: repo's "
+                f"pulse:ownedBy points at {actual_owner!r}, not at this entity "
+                "(dual-identity org with broken inverse).",
+            )
+        entity[OWNS_KEY] = kept if kept else None
 
 
 REPOSITORY_TYPE = "schema:SoftwareSourceCode"
@@ -1016,6 +1087,48 @@ def guarantee_repo_author(
     synthesized_handles: set[str] = set()
     changed = False
 
+    salvaged_contributions: list[dict[str, Any]] = []
+    existing_contribution_ids = {
+        contribution.get("id")
+        for contribution in reconciled.contributions
+        if isinstance(contribution, dict) and isinstance(contribution.get("id"), str)
+    }
+
+    def _stamp_owner_contribution(person_id: str, repo_id: str) -> None:
+        """Emit a synthetic Contribution for the salvaged owner→repo pair.
+
+        Production audit found 146/441 repos where the owner appeared in
+        `schema:author` but had no matching `pulse:Contribution` edge —
+        these are exactly the repos that hit this salvage path. The
+        author edge is half a relationship; without the Contribution
+        the graph reports who-but-not-how-much, which downstream
+        aggregators see as inconsistent. Emit a minimal Contribution
+        with `pulse:contributionCount=1` (the at-least-one-commit
+        baseline a repo owner must logically have) and null dates so
+        downstream consumers can recognise it as a baseline edge.
+        """
+        composite_id = f"{person_id}__{repo_id}"
+        if composite_id in existing_contribution_ids:
+            return
+        salvaged_contributions.append(
+            {
+                "id": composite_id,
+                "type": "pulse:Contribution",
+                "shacl": "pulse:ContributionShape",
+                "identifiers": {
+                    "pulse:composite": composite_id,
+                    "uuid": str(uuid.uuid4()),
+                },
+                "idSource": "pulse:composite",
+                "pulse:contributionTo": repo_id,
+                "pulse:contributionCount": 1,
+                "pulse:firstContributionDate": None,
+                "pulse:lastContributionDate": None,
+                "schema:author": person_id,
+            },
+        )
+        existing_contribution_ids.add(composite_id)
+
     for entity in repositories:
         if not isinstance(entity, dict):
             new_repos.append(entity)
@@ -1046,6 +1159,7 @@ def guarantee_repo_author(
             if isinstance(owner_id, str) and owner_id:
                 cloned["schema:author"] = [owner_id]
                 changed = True
+                _stamp_owner_contribution(owner_id, repo_id)
                 warnings.append(
                     "KNOWN BUG (schema:author empty after reconciliation): "
                     f"stamped fallback owner '{owner_id}' as schema:author on "
@@ -1076,6 +1190,7 @@ def guarantee_repo_author(
                 synthesized_handles.add(synthesis_key)
             cloned["schema:author"] = [stub_id]
             changed = True
+            _stamp_owner_contribution(stub_id, repo_id)
             if owner_is_org:
                 warnings.append(
                     "KNOWN BUG (schema:author empty after reconciliation): "
@@ -1110,10 +1225,11 @@ def guarantee_repo_author(
     new_entities["repositories"] = new_repos
     if synthesized_persons:
         new_entities["persons"] = list(new_entities.get("persons") or []) + synthesized_persons
+    new_contributions = list(reconciled.contributions) + salvaged_contributions
     new_reconciled = ReconciledEntities(
         entities=new_entities,
         memberships=list(reconciled.memberships),
-        contributions=list(reconciled.contributions),
+        contributions=new_contributions,
         link_warnings=list(reconciled.link_warnings),
         reconciliation_debug=dict(reconciled.reconciliation_debug),
     )
