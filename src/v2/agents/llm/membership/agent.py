@@ -100,6 +100,40 @@ def _country_code_from_org(organization: Any) -> str | None:
     return None
 
 
+def _collect_allowed_org_ids(
+    *,
+    target_organizations: list[dict[str, Any]],
+    known_organizations: Any,
+    organization_derivations: Any,
+) -> set[str]:
+    """Return the set of org `@id`s the LLM is allowed to point Memberships at.
+
+    The membership agent's job is to express employment/affiliation for a
+    target person inside the graph that other agents have already built.
+    A Membership target outside this set is, in practice, an LLM-invented
+    cross-reference (typically from `query_orcid` returning a name-fuzzy
+    hit at an unrelated company). Returns an empty set when no
+    organizations have been surfaced at all — then the filter degrades
+    open (lets the LLM's choice through) so we don't strangle deployments
+    that genuinely run without an org-detection upstream.
+    """
+    allowed: set[str] = set()
+    for org in target_organizations:
+        if isinstance(org, dict):
+            oid = org.get("id") or org.get("@id")
+            if isinstance(oid, str) and oid.strip():
+                allowed.add(oid.strip())
+    for collection in (known_organizations, organization_derivations):
+        if not isinstance(collection, list):
+            continue
+        for org in collection:
+            if isinstance(org, dict):
+                oid = org.get("id") or org.get("@id")
+                if isinstance(oid, str) and oid.strip():
+                    allowed.add(oid.strip())
+    return allowed
+
+
 def _infer_target_country_code(
     *,
     target_organizations: list[dict[str, Any]],
@@ -274,6 +308,56 @@ class LLMMembershipAgentV2:
             payload["time:hasEnd"] = end
         if beg and end and beg > end:
             payload["time:hasBeginning"], payload["time:hasEnd"] = end, beg
+
+        # Spurious-membership filter — code-level enforcement of the
+        # emit-or-skip prompt rules. The LLM was observed ignoring the
+        # counter-rules in `system_prompt.md`: it still stamps
+        # Memberships to ROR orgs that only matched via a `query_orcid`
+        # name fuzzy hit (e.g. `jamalsenouci` (GitHub contributor of an
+        # EPFL repo) → Spotify (ror.org/00hbd6420) just because some
+        # *other* "Jamal Senouci" works at Spotify). Reject any
+        # Membership whose target org isn't reachable from the
+        # context — the cost of a false negative (legitimate ORCID
+        # employment dropped because the org wasn't surfaced upstream)
+        # is far smaller than the false-positive misattribution noise.
+        target_org_ref = payload.get("org:organization")
+        if isinstance(target_org_ref, dict):
+            target_org_id = target_org_ref.get("@id") or target_org_ref.get("id")
+        else:
+            target_org_id = target_org_ref
+        if isinstance(target_org_id, str) and target_org_id.strip():
+            allowed_org_ids = _collect_allowed_org_ids(
+                target_organizations=normalized_target_organizations,
+                known_organizations=llm_input.get("known_organizations", []),
+                organization_derivations=llm_input.get("organization_derivations", []),
+            )
+            if allowed_org_ids and target_org_id.strip() not in allowed_org_ids:
+                warning = (
+                    f"llm_membership: dropping Membership {payload.get('id')!r} — "
+                    f"target org {target_org_id!r} not present in known_organizations "
+                    "(likely a spurious `query_orcid` name match; the LLM ignored "
+                    "the emit-or-skip rules in the system prompt)."
+                )
+                logger.info(warning)
+                return AgentResult(
+                    data={},
+                    warnings=[warning],
+                    raw_output={},
+                    model=llm_result.model,
+                    provider=llm_result.provider,
+                    tokens_prompt=llm_result.tokens_prompt,
+                    tokens_completion=llm_result.tokens_completion,
+                    stats={
+                        "agent_runtime": "llm",
+                        "memberships": [],
+                        "membership_count": 0,
+                        "derivation": {
+                            "membership_seed": membership_seed,
+                            "skipped_reason": "org_not_in_context",
+                            "target_org_id": target_org_id,
+                        },
+                    },
+                )
 
         raw_output = deepcopy(payload)
         validation_warnings = _strict_validate(payload)
