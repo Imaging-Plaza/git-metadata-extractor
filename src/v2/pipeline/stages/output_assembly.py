@@ -230,6 +230,20 @@ def assemble_output(  # noqa: C901, PLR0912
     related_entities, dedup_warnings = _merge_duplicate_entities(related_entities)
     warnings.extend(dedup_warnings)
 
+    # Person `schema:url` self-loop drop — final canonical-form sweep.
+    # The LLM person agent's own guard runs BEFORE canonicalization
+    # has rewritten `id`, so when the LLM emits
+    # `"id": "<urn>", "schema:url": "https://github.com/X"` the
+    # equality check fails at agent time. Downstream stages then
+    # resolve `id` to the github URL and the self-loop materialises in
+    # the final graph. Re-check here, after every id has been
+    # canonicalised, and drop the redundant url. Production audit
+    # observed 14 self-loops in `gabyx/pandoc` alone after the
+    # agent-level fixes shipped.
+    _drop_person_url_self_loops(related_entities)
+    if isinstance(root_entity, dict):
+        _drop_person_url_self_loops([root_entity])
+
     # Article ↔ Repo linkback. Production audit (Bug V) found
     # `schema:citation` literally `null` in 441/441 repos, including
     # the 19 repos that successfully extracted ``schema:ScholarlyArticle``
@@ -254,6 +268,38 @@ def assemble_output(  # noqa: C901, PLR0912
         excluded_entities=excluded_entities,
         warnings=warnings,
     )
+
+
+def _drop_person_url_self_loops(entities: list[dict[str, Any]]) -> None:
+    """Mutate Persons in-place to drop `schema:url` self-loops.
+
+    A self-loop is `schema:url == id` (in either the bare-string or
+    `{"@id": ...}` form). Mutates the list in place since this stage
+    already deep-copies upstream payloads.
+    """
+    for entity in entities:
+        if not isinstance(entity, dict):
+            continue
+        type_value = entity.get("type") or entity.get("@type")
+        if isinstance(type_value, list):
+            is_person = any("schema:Person" in str(t) for t in type_value)
+        else:
+            is_person = isinstance(type_value, str) and "schema:Person" in type_value
+        if not is_person:
+            continue
+        pid = entity.get("id") or entity.get("@id")
+        if not isinstance(pid, str):
+            continue
+        url = entity.get("schema:url")
+        target: str | None = None
+        if isinstance(url, str):
+            target = url.strip()
+        elif isinstance(url, dict):
+            inner = url.get("@id") or url.get("id")
+            if isinstance(inner, str):
+                target = inner.strip()
+        if target is not None and target == pid.strip():
+            entity.pop("schema:url", None)
 
 
 def _link_articles_to_root_repo(
