@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import threading
 from copy import deepcopy
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError
@@ -1259,7 +1260,112 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     if written_log_path is not None:
         logger.info("query log written: %s", written_log_path)
 
+    # Auto-ingest hook (Bug-class extension): when the operator opts in
+    # via `V2_GITHUB_RAG_AUTO_INGEST=true`, every successful repository
+    # extract triggers a background ingest of the repo card into the
+    # GitHub RAG DuckDB + Qdrant collection. This grows the index
+    # organically as new repos are seen, so subsequent extractions find
+    # them via `search_github_rag`. Fire-and-forget — the caller's
+    # response is already built, the ingest is best-effort.
+    _maybe_schedule_github_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
+
     return response_model
+
+
+_GITHUB_AUTO_INGEST_LOCK = threading.Lock()
+
+
+def _maybe_schedule_github_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background GitHub RAG ingest when the operator opts in.
+
+    Gates:
+    - `V2_GITHUB_RAG_AUTO_INGEST=true` env var (off by default — every
+      existing deployment keeps its current behaviour).
+    - The extract target must be a repository (we have no index for
+      user/org/article cards yet).
+    - `classification.normalized_url` must be a public github.com repo.
+      Private/unreachable repos surface as `skipped_404` inside
+      `ingest_single_repo` and emit one warning; no crash.
+
+    Concurrency: a module-level `threading.Lock` serialises DuckDB
+    writes across uvicorn worker tasks. The single-repo ingest is
+    fast (~1-3s) so contention is negligible.
+    """
+    if os.getenv("V2_GITHUB_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "detected_type"):
+        return
+    if str(classification.detected_type.value).lower() != "repository":
+        return
+    normalized_url = getattr(classification, "normalized_url", None)
+    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
+        return
+    full_name = normalized_url.removeprefix("https://github.com/").removeprefix(
+        "http://github.com/",
+    ).strip("/")
+    if not full_name or full_name.count("/") != 1:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.github.config import load_config as load_github_config  # noqa: PLC0415
+            from src.index.github.embed.pipeline import embed_repos  # noqa: PLC0415
+            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github.ingest.repos import ingest_single_repo  # noqa: PLC0415
+            from src.index.github.storage.duckdb_store import GitHubStore  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github auto-ingest (run_id=%s, repo=%s): module import failed",
+                run_id, full_name,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_github_config()
+            with _GITHUB_AUTO_INGEST_LOCK:
+                store = GitHubStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_repo(full_name)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = GitHubClient(cfg)
+                    outcome = ingest_single_repo(
+                        config=cfg, store=store, client=client, full_name=full_name,
+                    )
+                    if outcome == "skipped_404":
+                        return ("skipped_404", 0)
+                    embed_summary = embed_repos(config=cfg, store=store, limit=None)
+                    return (outcome, int(embed_summary.get("repos", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github auto-ingest (run_id=%s, repo=%s): failed",
+                run_id, full_name,
+            )
+            return
+        logger.info(
+            "github auto-ingest (run_id=%s, repo=%s): %s (chunks_embedded=%d)",
+            run_id, full_name, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        # No running event loop (e.g. unit tests that call extract
+        # synchronously). Skip silently — the auto-ingest is a
+        # non-essential background enrichment.
+        return
 
 
 @v2_router.post(
