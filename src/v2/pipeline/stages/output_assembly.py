@@ -230,12 +230,107 @@ def assemble_output(  # noqa: C901, PLR0912
     related_entities, dedup_warnings = _merge_duplicate_entities(related_entities)
     warnings.extend(dedup_warnings)
 
+    # Article ↔ Repo linkback. Production audit (Bug V) found
+    # `schema:citation` literally `null` in 441/441 repos, including
+    # the 19 repos that successfully extracted ``schema:ScholarlyArticle``
+    # entities via the RAG path. The articles existed in the @graph
+    # with valid DOIs and authors but were never wired back to the
+    # repository they describe, so a SPARQL like
+    #
+    #     ?repo schema:citation ?article . ?article a schema:ScholarlyArticle .
+    #
+    # returned nothing despite the data being present. Stamp the
+    # article's DOI URL into the root repo's `schema:citation` list
+    # so the cross-store link is materialised.
+    cleaned_root = _clean_relationship_refs(root_entity, excluded_ids)
+    cleaned_root, citation_warnings = _link_articles_to_root_repo(
+        cleaned_root, related_entities,
+    )
+    warnings.extend(citation_warnings)
+
     return AssembledOutput(
-        root_entity=_clean_relationship_refs(root_entity, excluded_ids),
+        root_entity=cleaned_root,
         related_entities=related_entities,
         excluded_entities=excluded_entities,
         warnings=warnings,
     )
+
+
+def _link_articles_to_root_repo(
+    root_entity: Any,
+    related_entities: list[dict[str, Any]],
+) -> tuple[Any, list[str]]:
+    """Stamp ScholarlyArticle DOIs onto the root repo's `schema:citation`.
+
+    The article agent emits ``schema:ScholarlyArticle`` entities with
+    DOI-shaped `@id`s but never updates the repo's `schema:citation`
+    field — by the time articles are produced (mid-pipeline) the repo
+    payload has already been frozen. We do the wiring here, at output
+    assembly time, when both the repo (as the root) and the articles
+    (in `related_entities`) are in hand together.
+
+    Idempotent: existing `schema:citation` values are preserved; new
+    article ids are appended only when not already present. Returns
+    the (possibly-modified) root plus one warning per article wired.
+    """
+    if not isinstance(root_entity, dict):
+        return root_entity, []
+    if root_entity.get("type") != "schema:SoftwareSourceCode":
+        return root_entity, []
+
+    article_ids: list[str] = []
+    for entity in related_entities:
+        if not isinstance(entity, dict):
+            continue
+        if entity.get("type") != "schema:ScholarlyArticle":
+            continue
+        article_id = entity.get("id") or entity.get("@id")
+        if isinstance(article_id, str) and article_id.strip():
+            article_ids.append(article_id.strip())
+
+    if not article_ids:
+        return root_entity, []
+
+    existing = root_entity.get("schema:citation")
+    citations: list[str] = []
+    seen: set[str] = set()
+    if isinstance(existing, str) and existing.strip():
+        citations.append(existing.strip())
+        seen.add(existing.strip())
+    elif isinstance(existing, list):
+        for value in existing:
+            if isinstance(value, str) and value.strip() and value.strip() not in seen:
+                citations.append(value.strip())
+                seen.add(value.strip())
+            elif isinstance(value, dict):
+                inner = value.get("@id") or value.get("id")
+                if isinstance(inner, str) and inner.strip() and inner.strip() not in seen:
+                    citations.append(inner.strip())
+                    seen.add(inner.strip())
+
+    stamped: list[str] = []
+    for article_id in article_ids:
+        if article_id in seen:
+            continue
+        citations.append(article_id)
+        seen.add(article_id)
+        stamped.append(article_id)
+
+    if not stamped:
+        return root_entity, []
+
+    # Normalise to a list — `schema:citation` is unbounded per
+    # `schema.org`, and a list is the only shape that round-trips
+    # through every consumer cleanly (JSON-LD framing, SHACL, the
+    # downstream Oxigraph upload).
+    root_entity["schema:citation"] = citations
+    repo_id = root_entity.get("id") or root_entity.get("@id") or "<repo>"
+    warnings = [
+        f"output_assembly: stamped schema:citation on {repo_id} → {article_id} "
+        "(was {!r}). Linking the orphan ScholarlyArticle back to its repository.".format(existing)
+        for article_id in stamped
+    ]
+    return root_entity, warnings
 
 
 def _merge_duplicate_entities(
