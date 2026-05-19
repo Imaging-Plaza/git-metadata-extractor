@@ -1067,7 +1067,13 @@ def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
         },
         "idSource": "pulse:githubUsername",
         "schema:name": handle,
-        "schema:url": profile_url,
+        # `schema:url` intentionally left None — for github-only synthesized
+        # stubs the only candidate URL would be the github profile, which
+        # IS the Person's `id`. Emitting it produces a tautological
+        # self-loop (Bug P, 1505 cases in the production audit + 14 more
+        # observed in `gabyx/pandoc` even after the agent-side fixes,
+        # because the stubs are added downstream of those agents).
+        "schema:url": None,
         "pulse:githubUsername": handle,
         "pulse:orcidIdentifier": None,
         "pulse:infosciencePersonIdentifier": None,
