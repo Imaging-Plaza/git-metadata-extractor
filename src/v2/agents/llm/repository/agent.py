@@ -297,18 +297,28 @@ class LLMRepositoryAgentV2:
                 if isinstance(parent_url, str) and parent_url.strip():
                     payload["pulse:isForkOf"] = parent_url.strip()
 
-        # Discipline guarantee: every repo entity must carry at least one
-        # `pulse:discipline` Wikidata IRI. The system prompt requires 1–2,
-        # but the LLM occasionally returns null/empty. Fall back to a
-        # broad-but-honest default (computer engineering) so downstream
-        # consumers never see a discipline-less repository.
+        # Discipline normalisation. The SHACL `pulse:DisciplineShape`
+        # constrains values to the Wikidata-based enumeration but has
+        # NO `sh:minCount`, so an empty list is valid. Previous behaviour
+        # stamped `wd:Q428691` (computer engineering / "software") as a
+        # catch-all whenever the LLM returned nothing — production audit
+        # showed this hid honest "no specific domain" answers behind a
+        # broad default (77% of a 441-repo batch were tagged as Software
+        # *only*, with no domain QID).
+        #
+        # Now: normalise to a clean list of trimmed strings, but leave
+        # it empty when the LLM didn't surface a domain QID. The prompt
+        # is the place to teach the model when to emit the broad default
+        # explicitly vs. leave the field empty.
         existing_disciplines = payload.get("pulse:discipline")
-        if not isinstance(existing_disciplines, list) or not [
-            value
-            for value in existing_disciplines
-            if isinstance(value, str) and value.strip()
-        ]:
-            payload["pulse:discipline"] = ["wd:Q428691"]  # computer engineering
+        if isinstance(existing_disciplines, list):
+            payload["pulse:discipline"] = [
+                value.strip()
+                for value in existing_disciplines
+                if isinstance(value, str) and value.strip()
+            ]
+        else:
+            payload["pulse:discipline"] = []
 
         force_server_uuid(payload, uuid_value)
 

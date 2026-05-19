@@ -365,10 +365,12 @@ class RepositoryAgentV2:
         )
 
         disciplines = _to_list_of_strings(context.get("disciplines"))
-        if not disciplines:
-            # Match the LLM agent's fallback so both runtimes emit the same
-            # "broad code repo" default (Wikidata: computer engineering).
-            disciplines = ["wd:Q428691"]
+        # Empty list is now the honest default — the SHACL
+        # `pulse:DisciplineShape` has no `sh:minCount`, so `[]` validates.
+        # The previous catch-all (`wd:Q428691`, computer engineering /
+        # "software") was hiding the absence of a real domain signal:
+        # in a 441-repo production batch 77% landed with the catch-all
+        # ONLY, drowning honest per-domain aggregation.
 
         return {
             "pulse:repositoryType": repository_type,
