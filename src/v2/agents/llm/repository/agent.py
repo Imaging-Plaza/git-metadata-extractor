@@ -282,6 +282,21 @@ class LLMRepositoryAgentV2:
         if isinstance(forks_count, int) and forks_count >= 0:
             payload["pulse:githubRepoForks"] = forks_count
 
+        # `pulse:isForkOf`: stamp the upstream repo URL when GitHub flags
+        # this as a fork. The LLM rarely emits this field reliably from
+        # README text alone (observed: `null` even for clear forks of
+        # `lovell/detect-libc`, `jgm/pandoc`, etc.), so derive it
+        # deterministically from `metadata.fork` + `metadata.parent.html_url`
+        # the same way the rule-based agent does. Direct parent over root
+        # ancestor matches the immediate fork edge downstream agents
+        # actually want to walk.
+        if metadata.get("fork"):
+            parent_repo = metadata.get("parent")
+            if isinstance(parent_repo, dict):
+                parent_url = parent_repo.get("html_url")
+                if isinstance(parent_url, str) and parent_url.strip():
+                    payload["pulse:isForkOf"] = parent_url.strip()
+
         # Discipline guarantee: every repo entity must carry at least one
         # `pulse:discipline` Wikidata IRI. The system prompt requires 1–2,
         # but the LLM occasionally returns null/empty. Fall back to a
