@@ -2,9 +2,51 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import TYPE_CHECKING, Any
 
 from src.v2.pipeline.stages.models import ContextBundle
+
+
+# `_clean_readme_for_llm`: a *light* cleaner that removes only the
+# high-noise / low-signal portions of a GitHub README so downstream LLM
+# prompts + RAG queries don't waste tokens on badge/image/HTML soup.
+#
+# Unlike `concept_tagging._strip_markdown` (which removes headers,
+# lists, code fences, etc. for pure-text embedding), this cleaner KEEPS
+# markdown structure that a model can use to understand the document:
+# headers, bullet lists, code blocks, bold/italic. It only strips:
+#
+#   - HTML tags entirely (drops `<img>`, `<div>`, `<center>`, `<a>` etc.)
+#   - Markdown images `![alt](url)` (badges, logo banners)
+#   - Markdown badge-link constructs `[![alt](badge)](link)` collapsed
+#   - Bare URLs that are sitting on their own line (badge URLs)
+#
+# Observed savings on `deeplabcut/deeplabcut`: README first 1000 chars
+# go from "~95% `<img>` markup" → "actual prose". Helps every LLM
+# agent that injects `readme_content` into its prompt.
+_HTML_TAG_RE = re.compile(r"<[^>]+>", re.DOTALL)
+_MD_BADGE_LINK_RE = re.compile(r"\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)")
+_MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_LONE_URL_LINE_RE = re.compile(r"^\s*https?://\S+\s*$", re.MULTILINE)
+_BLANK_LINE_RUN_RE = re.compile(r"\n{3,}")
+
+
+def _clean_readme_for_llm(text: str | None) -> str:
+    """Strip noisy badge/image/HTML markup but keep markdown structure.
+
+    Idempotent — running on already-cleaned text is a near no-op (the
+    second pass finds nothing to remove).
+    """
+    if not isinstance(text, str) or not text:
+        return text or ""
+    cleaned = _MD_BADGE_LINK_RE.sub("", text)
+    cleaned = _MD_IMAGE_RE.sub("", cleaned)
+    cleaned = _HTML_TAG_RE.sub("", cleaned)
+    cleaned = _LONE_URL_LINE_RE.sub("", cleaned)
+    # Collapse the cascade of blank lines that the removals leave behind.
+    cleaned = _BLANK_LINE_RUN_RE.sub("\n\n", cleaned)
+    return cleaned.strip()
 
 if TYPE_CHECKING:
     from src.v2.agents.models import ProviderSet
@@ -230,6 +272,12 @@ def _optional_repository_context(
     if not readme_content:
         warnings.append(f"Repository README content is not available for {full_name}")
         readme_content = ""
+    else:
+        # Light clean once at the source so every downstream consumer
+        # (5 LLM agents + the RAG discipline tagger + concept_tagging)
+        # gets noise-free README without each call site having to
+        # re-strip. Keeps headers/lists/code intact.
+        readme_content = _clean_readme_for_llm(readme_content)
 
     gimie_jsonld: dict[str, Any] = {}
     try:
@@ -320,6 +368,8 @@ async def gather_context(  # noqa: C901, PLR0915
         if not readme_content:
             warnings.append("Repository README content is not available")
             readme_content = ""
+        else:
+            readme_content = _clean_readme_for_llm(readme_content)
 
         gimie_jsonld = providers.github.get_repository_jsonld(full_name)
 
