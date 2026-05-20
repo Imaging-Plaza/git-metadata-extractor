@@ -93,6 +93,7 @@ from src.v2.pipeline.stages import (
     infer_github_handle_parents,
     demote_github_props_to_units,
     emit_fork_parent_stubs,
+    infer_article_source_organization,
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
@@ -1109,6 +1110,20 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         perf_counter() - stage_started_at,
     )
     for warning in fork_stub_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Deterministic inference: stamp `schema:sourceOrganization` on
+    # Articles that don't have one when there is exactly one Org an
+    # author was a confirmed member of on the article's publication
+    # date. Refuses to guess when the answer is ambiguous.
+    stage_started_at = perf_counter()
+    assembled_output, source_org_warnings = infer_article_source_organization(assembled_output)
+    logger.info(
+        "article_source_org_inference: stamped=%d in %.2fs",
+        len(source_org_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in source_org_warnings:
         _append_unique_warning(warnings, warning)
 
     if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":

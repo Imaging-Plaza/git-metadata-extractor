@@ -1553,10 +1553,168 @@ def emit_fork_parent_stubs(
     )
 
 
+def _article_date(article: dict[str, Any]) -> str | None:
+    """Return the parseable ISO date string for an article, or None."""
+    candidate = article.get("schema:datePublished")
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    return candidate.strip()[:10]  # YYYY-MM-DD prefix is enough for comparison
+
+
+def _membership_active_on(
+    membership: dict[str, Any],
+    iso_date: str,
+) -> bool:
+    """True when `iso_date` falls inside the membership's [begin, end] interval.
+
+    Open-ended end (`time:hasEnd is None`) treated as still active. Missing
+    begin disqualifies — we won't accept "from forever" as evidence.
+    """
+    begin = membership.get("time:hasBeginning")
+    end = membership.get("time:hasEnd")
+    if not isinstance(begin, str) or not begin.strip():
+        return False
+    if iso_date < begin[:10]:
+        return False
+    if isinstance(end, str) and end.strip() and iso_date > end[:10]:
+        return False
+    return True
+
+
+def _membership_org_id(membership: dict[str, Any]) -> str | None:
+    target = membership.get("org:organization")
+    if isinstance(target, dict):
+        return target.get("@id") if isinstance(target.get("@id"), str) else None
+    return target if isinstance(target, str) else None
+
+
+def _membership_person_id(membership: dict[str, Any]) -> str | None:
+    # `_person_ref` is the internal field stamped by reconciliation;
+    # fall back to parsing the composite @id (`personId__orgId`).
+    person_ref = membership.get("_person_ref")
+    if isinstance(person_ref, str) and person_ref.strip():
+        return person_ref.strip()
+    membership_id = membership.get("id") or membership.get("@id")
+    if isinstance(membership_id, str) and "__" in membership_id:
+        left, _ = membership_id.split("__", maxsplit=1)
+        return left if left else None
+    return None
+
+
+def infer_article_source_organization(
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """Set `schema:sourceOrganization` on Articles that don't have one,
+    by looking up which Organization each author was a member of on the
+    article's publication date.
+
+    Triggers only when the inference is unambiguous: across all the
+    article's authors, exactly ONE Organization has at least one
+    Membership active on the publication date. If two or more orgs are
+    active (e.g. an author had a joint appointment plus a different
+    author belonged to a third lab), we abstain — the rule_based pipeline
+    refuses to guess.
+
+    Why this is safe:
+    - Memberships have already been filtered by the evidence floor
+      (role OR dates required) in `_normalize_membership_entities`, so
+      the input data is trustworthy.
+    - We require the article to have a parseable `schema:datePublished`,
+      a non-null `time:hasBeginning` on the membership, and a single
+      resulting org. Each of those is a hard guard, not a heuristic.
+    - The audit trail explains the inference per-article.
+
+    Real-world example from deeplabcut/deeplabcut: article
+    `10.1016/j.neuron.2022.08.022` (date 2022-11-16) has author Mackenzie
+    Mathis whose only active Membership at that date is EPFL
+    (`ror.org/02s376052`, 2020-08-01 → null). Source org gets stamped.
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(e) if isinstance(e, dict) else e
+        for e in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    memberships_by_person: dict[str, list[dict[str, Any]]] = {}
+    org_ids: set[str] = set()
+    for entity in candidates:
+        etype = entity.get("type") or entity.get("@type")
+        types = etype if isinstance(etype, list) else [etype] if isinstance(etype, str) else []
+        if any("Membership" in str(t) for t in types):
+            pid = _membership_person_id(entity)
+            if pid:
+                memberships_by_person.setdefault(pid, []).append(entity)
+            continue
+        if any("Organization" in str(t) for t in types):
+            oid = entity.get("id") or entity.get("@id")
+            if isinstance(oid, str):
+                org_ids.add(oid)
+
+    warnings: list[str] = []
+
+    for article in candidates:
+        etype = article.get("type") or article.get("@type")
+        types = etype if isinstance(etype, list) else [etype] if isinstance(etype, str) else []
+        if not any("ScholarlyArticle" in str(t) for t in types):
+            continue
+        existing = article.get("schema:sourceOrganization")
+        if existing is not None and existing != "":
+            continue
+        article_date = _article_date(article)
+        if article_date is None:
+            continue
+        authors = article.get("schema:author") or []
+        if isinstance(authors, str):
+            authors = [authors]
+        author_ids: list[str] = []
+        for a in authors:
+            aid = a.get("@id") if isinstance(a, dict) else a
+            if isinstance(aid, str) and aid:
+                author_ids.append(aid)
+        if not author_ids:
+            continue
+
+        active_org_ids: set[str] = set()
+        for author_id in author_ids:
+            for m in memberships_by_person.get(author_id, ()):
+                if not _membership_active_on(m, article_date):
+                    continue
+                oid = _membership_org_id(m)
+                if isinstance(oid, str) and oid in org_ids:
+                    active_org_ids.add(oid)
+        if len(active_org_ids) == 1:
+            inferred_org = next(iter(active_org_ids))
+            article["schema:sourceOrganization"] = inferred_org
+            warnings.append(
+                f"Inferred schema:sourceOrganization for article "
+                f"{article.get('id') or article.get('@id')} → {inferred_org} "
+                f"(unique author Membership active on {article_date}).",
+            )
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
 __all__ = [
     "demote_github_props_to_units",
     "emit_fork_parent_stubs",
     "guarantee_repo_author",
+    "infer_article_source_organization",
     "infer_github_handle_parents",
     "infer_org_units",
     "infer_owners",
