@@ -1284,7 +1284,7 @@ def _strip_github_props(entity: dict[str, Any]) -> list[str]:
     return cleared
 
 
-def demote_github_props_to_units(
+def demote_github_props_to_units(  # noqa: C901
     assembled: AssembledOutput,
 ) -> tuple[AssembledOutput, list[str]]:
     """Move `pulse:githubOrgFollowers` / `pulse:githubOrganizationHandle` off
@@ -1296,17 +1296,24 @@ def demote_github_props_to_units(
     identifies a legal/research entity; GitHub-derived metrics belong on
     the GitHub presence (the unit), not on the parent.
 
-    Trigger:
-    - Parent has a ROR id (`@id` or `pulse:ror` starts with `https://ror.org/`).
-    - Parent has at least one `org:hasUnit` child that is a github-only org
-      (`@id` starts with `https://github.com/`).
-    - The parent's `pulse:githubOrganizationHandle` matches the handle of one
-      of those children (so the parent's GitHub data really is the unit's).
+    Two cases handled:
 
-    Action:
-    - Strip the GitHub-derived properties from the parent (set to None).
-    - Copy the values onto the matching child only if the child is missing them
-      (never overwrite — the child is the canonical owner of these fields).
+    1. **Existing unit, matching handle.** Parent has `org:hasUnit →
+       github_url` whose child carries the same handle as the parent.
+       Move follower count to the child (only if missing) and strip the
+       GitHub-derived properties from the parent.
+
+    2. **No matching unit — synthesize one.** Parent has a
+       `pulse:githubOrganizationHandle` but no `org:hasUnit` child for
+       that handle (audit example: `ror.org/02s376052` EPFL carrying
+       `"GeoEnergyLab-EPFL"` with `hasUnit=[]`). Emit a minimal
+       github-only `org:Organization` stub for the handle, stamp
+       `org:unitOf` on the unit and `org:hasUnit` on the parent, and
+       strip the GitHub-derived properties from the parent. The stub
+       satisfies `pulse:OrganizationShape` (one of `schema:identifier`,
+       `pulse:githubOrganizationHandle`, or
+       `pulse:infoscienceOrganizationIdentifier` minCount 1 — we provide
+       the github handle) plus `schema:name`.
     """
     new_root: dict[str, Any] | None = (
         deepcopy(assembled.root_entity)
@@ -1331,6 +1338,7 @@ def demote_github_props_to_units(
             id_index[entity_id] = entity
 
     warnings: list[str] = []
+    synthesized_units: list[dict[str, Any]] = []
 
     for parent in candidates:
         if parent.get("type") != ORGANIZATION_TYPE:
@@ -1341,28 +1349,72 @@ def demote_github_props_to_units(
         parent_handle = _entity_github_org_handle(parent)
         if parent_handle is None:
             continue
-        units = parent.get(HAS_UNIT_KEY)
-        if not isinstance(units, list) or not units:
+
+        # Pull the handle as the agent emitted it (preserve original case
+        # for the synthesized unit's id and display name).
+        raw_handle = parent.get("pulse:githubOrganizationHandle")
+        if not isinstance(raw_handle, str) or not raw_handle.strip():
+            identifiers = parent.get("identifiers")
+            raw_handle = identifiers.get("pulse:githubOrganizationHandle") if isinstance(identifiers, dict) else None
+        if not isinstance(raw_handle, str) or not raw_handle.strip():
             continue
+        raw_handle = raw_handle.strip()
+
         matched_child: dict[str, Any] | None = None
-        for unit_ref in units:
-            unit_id = unit_ref.get("@id") if isinstance(unit_ref, dict) else unit_ref
-            if not isinstance(unit_id, str):
-                continue
-            child = id_index.get(unit_id)
-            if child is None or not unit_id.startswith("https://github.com/"):
-                continue
-            child_handle = _entity_github_org_handle(child)
-            if child_handle is not None and child_handle == parent_handle:
-                matched_child = child
-                break
+        units = parent.get(HAS_UNIT_KEY)
+        if isinstance(units, list):
+            for unit_ref in units:
+                unit_id = unit_ref.get("@id") if isinstance(unit_ref, dict) else unit_ref
+                if not isinstance(unit_id, str) or not unit_id.startswith("https://github.com/"):
+                    continue
+                child = id_index.get(unit_id)
+                if child is None:
+                    continue
+                child_handle = _entity_github_org_handle(child)
+                if child_handle == parent_handle:
+                    matched_child = child
+                    break
+
+        # Case 2: synthesize the unit if no matching child exists.
         if matched_child is None:
-            continue
+            synthesized_id = f"https://github.com/{raw_handle}"
+            if synthesized_id in id_index:
+                # Same URL exists as a non-unit org (e.g. it wasn't in
+                # parent's hasUnit list yet). Reuse instead of duplicating.
+                matched_child = id_index[synthesized_id]
+            else:
+                matched_child = {
+                    "id": synthesized_id,
+                    "type": ORGANIZATION_TYPE,
+                    "shacl": "pulse:OrganizationShape",
+                    "identifiers": {
+                        "pulse:githubOrganizationHandle": raw_handle,
+                        "uuid": str(uuid4()),
+                    },
+                    "idSource": "pulse:githubOrganizationHandle",
+                    "schema:name": raw_handle,
+                    "pulse:githubOrganizationHandle": raw_handle,
+                    "org:unitOf": [parent_id],
+                    "_stub": True,
+                }
+                synthesized_units.append(matched_child)
+                id_index[synthesized_id] = matched_child
+                warnings.append(
+                    f"Synthesized github-only org unit {synthesized_id} for "
+                    f"ROR parent {parent_id} (handle {raw_handle!r}). Issue #29/#33 "
+                    f"extension: ROR carried the unit handle with no existing "
+                    f"`org:hasUnit` link.",
+                )
+            _add_to_has_unit(parent, matched_child["id"])
+            _set_unit_of(matched_child, parent_id)
+
+        # Move follower count to the unit (never overwrite an existing value).
         parent_followers = parent.get("pulse:githubOrgFollowers")
         if isinstance(parent_followers, int) and not isinstance(
             matched_child.get("pulse:githubOrgFollowers"), int
         ):
             matched_child["pulse:githubOrgFollowers"] = parent_followers
+
         cleared = _strip_github_props(parent)
         if cleared:
             warnings.append(
@@ -1370,6 +1422,9 @@ def demote_github_props_to_units(
                 f"to unit {matched_child.get('id')} (handle '{parent_handle}'): "
                 f"{', '.join(cleared)}.",
             )
+
+    if synthesized_units:
+        new_related = list(new_related) + synthesized_units
 
     return (
         AssembledOutput(
