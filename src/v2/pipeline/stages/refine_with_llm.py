@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 
+import re
+
 from src.v2.agents.llm.agent_tools.graph_neighbors import make_get_entity_neighbors_tool
 from src.v2.agents.llm.refiners import (
     MembershipRefinerAgent,
@@ -34,7 +36,15 @@ from src.v2.agents.llm.refiners import (
     RepositoryRefinerAgent,
     RepositoryRefinerInput,
 )
+from src.v2.agents.llm.refiners.discovery import (
+    DiscoveredArticle,
+    DiscoveredOrg,
+    DiscoveredPerson,
+    DiscoveryRefinerAgent,
+    DiscoveryRefinerInput,
+)
 from src.v2.agents.llm.runtime import LLMRuntimeError
+from src.v2.api_models.enums import OrganizationTypeV2
 from src.v2.ingest.providers.epfl_graph_rag import EpflGraphRagProvider
 from src.v2.pipeline.stages.models import ReconciledEntities
 
@@ -49,6 +59,16 @@ MEMBERSHIP_PATCHABLE_FIELDS: frozenset[str] = frozenset({"org:role"})
 
 README_CONTEXT_MAX_CHARS = 1500
 DEFAULT_MAX_CONCURRENCY = 4
+
+# Discovery refiner thresholds. The LLM is told to only propose
+# entities with confidence >= 0.7 (see prompt); we re-check that floor
+# defensively because the validator can't trust the model alone.
+DISCOVERY_CONFIDENCE_FLOOR = 0.7
+DISCOVERY_README_CAP = 8000
+DISCOVERY_CITATION_CAP = 4000
+DISCOVERY_REPLY_MAX_PER_TYPE = 10   # safety cap on additions per extract
+_ORCID_RE = re.compile(r"\b(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\b")
+_VALID_ORG_TYPES: frozenset[str] = frozenset(t.value for t in OrganizationTypeV2)
 
 EPFL_GRAPH_HITS_TOP_K = 8
 EPFL_GRAPH_HIT_FIELDS: frozenset[str] = frozenset(
@@ -353,6 +373,317 @@ def _gate_repo_type_patch(
     return pruned, [warning]
 
 
+# ---------------------------------------------------------------------------
+# Discovery refiner: additive entities (Persons, Orgs, Articles)
+# ---------------------------------------------------------------------------
+
+
+def _normalize_orcid(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if candidate.startswith("https://orcid.org/"):
+        candidate = candidate[len("https://orcid.org/"):]
+    candidate = candidate.upper()
+    if _ORCID_RE.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def _normalize_github_handle(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    handle = value.strip().lstrip("@")
+    # Accept full URL form too.
+    if handle.startswith("https://github.com/"):
+        handle = handle[len("https://github.com/"):].strip("/")
+    handle = handle.split("/", maxsplit=1)[0]
+    if not handle or " " in handle:
+        return None
+    return handle
+
+
+def _normalize_ror(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate.startswith("https://ror.org/"):
+        return None
+    return candidate
+
+
+def _normalize_doi_url(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if candidate.startswith("https://doi.org/"):
+        return candidate
+    if candidate.startswith("10."):
+        return f"https://doi.org/{candidate}"
+    return None
+
+
+def _materialize_person(
+    proposal: DiscoveredPerson,
+    existing_ids: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Convert a DiscoveredPerson into a SHACL-compliant Person entity.
+
+    Returns (entity_dict, warning_or_none). When the proposal can't be
+    materialised (missing identifier, duplicate id, low confidence), the
+    entity is None and the warning explains why.
+    """
+    if proposal.confidence < DISCOVERY_CONFIDENCE_FLOOR:
+        return None, (
+            f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+            f"(confidence={proposal.confidence:.2f} < {DISCOVERY_CONFIDENCE_FLOOR})"
+        )
+    github_handle = _normalize_github_handle(proposal.pulse_githubUsername)
+    orcid = _normalize_orcid(proposal.pulse_orcidIdentifier)
+    if not github_handle and not orcid:
+        return None, (
+            f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+            "(no github handle nor ORCID identifier)"
+        )
+    if orcid:
+        person_id = f"https://orcid.org/{orcid}"
+        id_source = "pulse:orcid"
+    else:
+        person_id = f"https://github.com/{github_handle}"
+        id_source = "pulse:githubUsername"
+    if person_id in existing_ids:
+        return None, (
+            f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+            f"(@id {person_id} already in graph)"
+        )
+    return (
+        {
+            "id": person_id,
+            "type": "schema:Person",
+            "shacl": "pulse:PersonShape",
+            "identifiers": {
+                "pulse:orcid": f"https://orcid.org/{orcid}" if orcid else None,
+                "pulse:githubUsername": github_handle,
+            },
+            "idSource": id_source,
+            "schema:name": proposal.schema_name,
+            "pulse:githubUsername": github_handle,
+            "pulse:orcidIdentifier": f"https://orcid.org/{orcid}" if orcid else None,
+            "schema:email": proposal.schema_email or None,
+            "_source": "hybrid_refiner",
+            "_discovery_reason": proposal.reason[:240] if proposal.reason else "",
+            "_discovery_confidence": proposal.confidence,
+        },
+        None,
+    )
+
+
+def _materialize_org(
+    proposal: DiscoveredOrg,
+    existing_ids: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    if proposal.confidence < DISCOVERY_CONFIDENCE_FLOOR:
+        return None, (
+            f"discovery_refiner: dropped Org proposal {proposal.schema_name!r} "
+            f"(confidence={proposal.confidence:.2f} < {DISCOVERY_CONFIDENCE_FLOOR})"
+        )
+    ror = _normalize_ror(proposal.pulse_ror)
+    gh_handle = _normalize_github_handle(proposal.pulse_githubOrganizationHandle)
+    if not ror and not gh_handle:
+        return None, (
+            f"discovery_refiner: dropped Org proposal {proposal.schema_name!r} "
+            "(no ROR nor github handle)"
+        )
+    org_type = (
+        proposal.pulse_OrganizationType
+        if proposal.pulse_OrganizationType in _VALID_ORG_TYPES
+        else "pulse:OtherOrganizationType"
+    )
+    if ror:
+        org_id = ror
+        id_source = "pulse:ror"
+    else:
+        org_id = f"https://github.com/{gh_handle}"
+        id_source = "pulse:githubOrganizationHandle"
+    if org_id in existing_ids:
+        return None, (
+            f"discovery_refiner: dropped Org proposal {proposal.schema_name!r} "
+            f"(@id {org_id} already in graph)"
+        )
+    return (
+        {
+            "id": org_id,
+            "type": "org:Organization",
+            "shacl": "pulse:OrganizationShape",
+            "identifiers": {
+                "pulse:ror": ror,
+                "pulse:githubOrganizationHandle": gh_handle,
+            },
+            "idSource": id_source,
+            "schema:name": proposal.schema_name,
+            "schema:identifier": ror,
+            "pulse:githubOrganizationHandle": gh_handle,
+            "pulse:OrganizationType": org_type,
+            "_source": "hybrid_refiner",
+            "_discovery_reason": proposal.reason[:240] if proposal.reason else "",
+            "_discovery_confidence": proposal.confidence,
+        },
+        None,
+    )
+
+
+def _materialize_article(
+    proposal: DiscoveredArticle,
+    existing_ids: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    if proposal.confidence < DISCOVERY_CONFIDENCE_FLOOR:
+        return None, (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(confidence={proposal.confidence:.2f} < {DISCOVERY_CONFIDENCE_FLOOR})"
+        )
+    doi_url = _normalize_doi_url(proposal.schema_identifier)
+    if not doi_url:
+        return None, (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(missing/malformed DOI: {proposal.schema_identifier!r})"
+        )
+    if doi_url in existing_ids:
+        return None, (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(DOI {doi_url} already in graph)"
+        )
+    return (
+        {
+            "id": doi_url,
+            "type": "schema:ScholarlyArticle",
+            "shacl": "pulse:ArticleShape",
+            "identifiers": {"schema:identifier": doi_url},
+            "idSource": "schema:identifier",
+            "schema:name": proposal.schema_name,
+            "schema:identifier": doi_url,
+            "schema:datePublished": proposal.schema_datePublished,
+            "_source": "hybrid_refiner",
+            "_discovery_reason": proposal.reason[:240] if proposal.reason else "",
+            "_discovery_confidence": proposal.confidence,
+            "_proposed_author_names": list(proposal.author_names or []),
+        },
+        None,
+    )
+
+
+async def _run_discovery_pass(
+    *,
+    reconciled: ReconciledEntities,
+    repo_context_summary: dict[str, Any],
+    gathered_context: dict[str, Any] | None,
+) -> tuple[list[str], dict[str, int]]:
+    """Single LLM call that proposes new Persons/Orgs/Articles from
+    README + CITATION.cff. Mutates `reconciled` in place to append the
+    accepted entities. Returns (warnings, stats)."""
+    stats = {"proposed": 0, "added": 0, "rejected": 0}
+
+    persons = reconciled.entities.get("persons") or []
+    organizations = reconciled.entities.get("organizations") or []
+    articles = reconciled.entities.get("articles") or []
+    existing_person_ids = {p["id"] for p in persons if isinstance(p.get("id"), str)}
+    existing_org_ids = {o["id"] for o in organizations if isinstance(o.get("id"), str)}
+    existing_article_ids = {a["id"] for a in articles if isinstance(a.get("id"), str)}
+
+    repo_handle = ""
+    readme_text: str | None = None
+    citation_cff: str | None = None
+    repo_description: str | None = None
+    repo_topics: list[str] = []
+    if isinstance(gathered_context, dict):
+        repo_ctx = gathered_context.get("repository") or {}
+        if isinstance(repo_ctx, dict):
+            repo_handle = repo_ctx.get("full_name") or ""
+            readme_value = repo_ctx.get("readme_content")
+            if isinstance(readme_value, str) and readme_value.strip():
+                readme_text = readme_value[:DISCOVERY_README_CAP]
+            metadata = repo_ctx.get("metadata") or {}
+            if isinstance(metadata, dict):
+                if isinstance(metadata.get("description"), str):
+                    repo_description = metadata["description"]
+                if isinstance(metadata.get("topics"), list):
+                    repo_topics = [t for t in metadata["topics"] if isinstance(t, str)]
+                cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
+                if isinstance(cff, str) and cff.strip():
+                    citation_cff = cff[:DISCOVERY_CITATION_CAP]
+
+    if not readme_text and not citation_cff:
+        return ([], stats)  # nothing to inspect
+
+    refiner = DiscoveryRefinerAgent()
+    refiner_input = DiscoveryRefinerInput(
+        repo_handle=repo_handle,
+        readme_text=readme_text,
+        citation_cff=citation_cff,
+        repo_description=repo_description,
+        repo_topics=repo_topics,
+        existing_person_ids=sorted(existing_person_ids),
+        existing_org_ids=sorted(existing_org_ids),
+        existing_article_ids=sorted(existing_article_ids),
+    )
+    warnings: list[str] = []
+    try:
+        proposal = await refiner.run(refiner_input=refiner_input)
+    except LLMRuntimeError as exc:
+        warnings.append(f"discovery_refiner: skipped — {exc}")
+        return (warnings, stats)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("discovery_refiner crashed")
+        warnings.append(f"discovery_refiner: skipped (unexpected error) — {exc}")
+        return (warnings, stats)
+
+    stats["proposed"] = (
+        len(proposal.new_persons)
+        + len(proposal.new_orgs)
+        + len(proposal.new_articles)
+    )
+
+    def _accept(
+        entity: dict[str, Any] | None,
+        warning: str | None,
+        bucket: list[dict[str, Any]],
+        bucket_ids: set[str],
+    ) -> None:
+        if entity is None:
+            if warning:
+                warnings.append(warning)
+            stats["rejected"] += 1
+            return
+        bucket.append(entity)
+        bucket_ids.add(entity["id"])
+        stats["added"] += 1
+        warnings.append(
+            f"discovery_refiner: added {entity['type']} {entity['id']} "
+            f"(confidence={entity['_discovery_confidence']:.2f}, "
+            f"reason={entity['_discovery_reason']!r})",
+        )
+
+    person_bucket: list[dict[str, Any]] = list(persons)
+    org_bucket: list[dict[str, Any]] = list(organizations)
+    article_bucket: list[dict[str, Any]] = list(articles)
+    for p in proposal.new_persons[:DISCOVERY_REPLY_MAX_PER_TYPE]:
+        e, w = _materialize_person(p, existing_person_ids)
+        _accept(e, w, person_bucket, existing_person_ids)
+    for o in proposal.new_orgs[:DISCOVERY_REPLY_MAX_PER_TYPE]:
+        e, w = _materialize_org(o, existing_org_ids)
+        _accept(e, w, org_bucket, existing_org_ids)
+    for a in proposal.new_articles[:DISCOVERY_REPLY_MAX_PER_TYPE]:
+        e, w = _materialize_article(a, existing_article_ids)
+        _accept(e, w, article_bucket, existing_article_ids)
+
+    # Write back only when something was added.
+    if stats["added"]:
+        reconciled.entities["persons"] = person_bucket
+        reconciled.entities["organizations"] = org_bucket
+        reconciled.entities["articles"] = article_bucket
+
+    return (warnings, stats)
+
+
 async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
     *,
     reconciled: ReconciledEntities,
@@ -506,9 +837,22 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
         else:
             by_type[type_label]["skipped"] += 1
 
-    refined_count = sum(stats["refined"] for stats in by_type.values())
-    skipped_count = sum(stats["skipped"] for stats in by_type.values())
-    failed_count = sum(stats["failed"] for stats in by_type.values())
+    # Additive pass: ask the LLM what's MISSING from the graph relative
+    # to the README / CITATION.cff. Each proposal must clear the
+    # `DISCOVERY_CONFIDENCE_FLOOR`, carry a verifiable identifier, and
+    # avoid duplicating existing @ids. Materialised entities flow into
+    # the same `reconciled` container the per-entity refiners returned.
+    discovery_warnings, discovery_stats = await _run_discovery_pass(
+        reconciled=reconciled,
+        repo_context_summary=repo_context_summary,
+        gathered_context=gathered_context,
+    )
+    warnings.extend(discovery_warnings)
+    by_type["discovery"] = discovery_stats
+
+    refined_count = sum(stats.get("refined", 0) for stats in by_type.values())
+    skipped_count = sum(stats.get("skipped", 0) for stats in by_type.values())
+    failed_count = sum(stats.get("failed", 0) for stats in by_type.values())
 
     logger.info(
         "refine_with_llm: refined=%d skipped=%d failed=%d "
