@@ -232,11 +232,83 @@ def prune_dangling_refs(
                 entity[field] = new_value
                 cleared_scalars += 1
 
-    if dropped_memberships or dropped_contribs or cleared_scalars or filtered_list_entries:
+    # ------------------------------------------------------------------
+    # Pass 3: drop orphan Organizations
+    # ------------------------------------------------------------------
+    # An Organization with no incoming reference contributes nothing to
+    # the graph and signals a false-positive from a name lookup that
+    # didn't survive subsequent filters (Statistics Botswana case:
+    # Membership dropped because role/dates were all null, leaving the
+    # Org orphan in the graph). Drop the Org so the user doesn't see
+    # phantom affiliations.
+    org_ref_keys = (
+        "org:organization",        # on Memberships
+        "pulse:ownedBy",           # on Repositories / Articles
+        "org:hasUnit",             # on parent Orgs
+        "org:unitOf",              # on child Orgs
+        "pulse:owns",              # rarely points at orgs but covered
+        "schema:sourceOrganization",  # on Articles
+        "organizationId",          # inside affiliation dicts
+    )
+    referenced_ids: set[str] = set()
+    for entity in _candidates():
+        if not isinstance(entity, dict):
+            continue
+        for key, value in entity.items():
+            if key not in org_ref_keys:
+                continue
+            if isinstance(value, str) and value:
+                referenced_ids.add(value)
+            elif isinstance(value, dict):
+                target = value.get("@id") or value.get("id")
+                if isinstance(target, str) and target:
+                    referenced_ids.add(target)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str) and item:
+                        referenced_ids.add(item)
+                    elif isinstance(item, dict):
+                        target = item.get("@id") or item.get("id")
+                        if isinstance(target, str) and target:
+                            referenced_ids.add(target)
+        # `affiliations` lives one level deeper on Persons.
+        affiliations = entity.get("affiliations")
+        if isinstance(affiliations, list):
+            for aff in affiliations:
+                if isinstance(aff, dict):
+                    target = aff.get("organizationId") or aff.get("organization")
+                    if isinstance(target, str) and target:
+                        referenced_ids.add(target)
+                elif isinstance(aff, str) and aff:
+                    referenced_ids.add(aff)
+
+    surviving_after_orphans: list[Any] = []
+    dropped_orphan_orgs = 0
+    for entity in new_related:
+        if not isinstance(entity, dict):
+            surviving_after_orphans.append(entity)
+            continue
+        types = _types_of(entity)
+        if "org:Organization" not in types:
+            surviving_after_orphans.append(entity)
+            continue
+        org_id = entity.get("id") or entity.get("@id")
+        if isinstance(org_id, str) and org_id in referenced_ids:
+            surviving_after_orphans.append(entity)
+            continue
+        dropped_orphan_orgs += 1
+        warnings.append(
+            f"prune_dangling_refs: dropped orphan Organization "
+            f"{org_id!r} (no incoming reference after Membership filter).",
+        )
+    new_related = surviving_after_orphans
+
+    if dropped_memberships or dropped_contribs or cleared_scalars or filtered_list_entries or dropped_orphan_orgs:
         warnings.append(
             "prune_dangling_refs: summary "
             f"dropped_memberships={dropped_memberships} "
             f"dropped_contributions={dropped_contribs} "
+            f"dropped_orphan_orgs={dropped_orphan_orgs} "
             f"cleared_scalar_refs={cleared_scalars} "
             f"filtered_list_entries={filtered_list_entries}",
         )

@@ -1441,7 +1441,35 @@ def _normalize_membership_entities(
         )
         normalized_memberships.append(base)
 
-    return normalized_memberships, covered_pairs, warnings
+    # Drop Memberships with no evidence: role unset AND no dates. These
+    # come from Infoscience/Affiliation lookups that surface an
+    # organization name but no role and no employment dates — purely a
+    # "name appears in a field" hit with no confirmable connection
+    # (audit example: contributor `3C111` → Infoscience hit
+    # "Labourie, François" → org:hasMembership → Statistics Botswana
+    # with role/dates all null). Keeping them inflates the graph with
+    # spurious affiliations users can't trust. The deterministic rule:
+    # a Membership without role AND without either start or end date is
+    # noise.
+    evidence_filtered: list[dict[str, Any]] = []
+    for membership in normalized_memberships:
+        role = membership.get("org:role")
+        begin = membership.get("time:hasBeginning")
+        end = membership.get("time:hasEnd")
+        has_role = isinstance(role, str) and role.strip()
+        has_dates = (isinstance(begin, str) and begin.strip()) or (
+            isinstance(end, str) and end.strip()
+        )
+        if has_role or has_dates:
+            evidence_filtered.append(membership)
+            continue
+        warnings.append(
+            "Dropped evidence-free Membership "
+            f"{membership.get('id')!r} (org:role / hasBeginning / hasEnd all "
+            "null — no confirmable connection).",
+        )
+
+    return evidence_filtered, covered_pairs, warnings
 
 
 def _normalize_contribution_entities(  # noqa: C901
