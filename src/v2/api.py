@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -161,6 +162,16 @@ STAGE_RECONCILIATION = "reconciliation"
 STAGE_LLM_DEDUP = "llm_dedup"
 STAGE_LLM_CRITIC = "llm_critic"
 STAGE_SHACL_GATE = "shacl_gate"
+
+# Async-job heartbeat tuning. The worker writes `last_heartbeat_at` to
+# the JobStore every `_JOB_HEARTBEAT_INTERVAL_SECONDS`. When a GET
+# arrives for a "running" job whose latest heartbeat is older than
+# `_JOB_STALE_THRESHOLD_SECONDS`, we treat the job as orphaned (worker
+# died, OS killed it, deploy restarted, etc.) and flip it to FAILED so
+# the client doesn't poll forever. Threshold is generous (10 minutes
+# = 20 missed beats) so we don't false-positive on a slow LLM stage.
+_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
+_JOB_STALE_THRESHOLD_SECONDS = 600.0
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
@@ -321,13 +332,37 @@ async def _run_extract_job(
     Runs the existing GET handler as a plain async function, then unwraps the
     success/error result onto the persisted V2ExtractJob record.
     """
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         existing = job_store.get(job_id)
         if existing is None:
             return
+        now = datetime.now(timezone.utc)
         existing.status = V2ExtractJobStatus.RUNNING
-        existing.started_at = datetime.now(timezone.utc)
+        existing.started_at = now
+        existing.last_heartbeat_at = now
         job_store.set(existing)
+
+        # Periodic heartbeat so a job whose worker process dies mid-flight
+        # can be detected and marked failed by the GET endpoint instead
+        # of staying "running" forever. Cancelled in the finally block
+        # so we don't leave a zombie task behind on normal completion.
+        async def _heartbeat() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(_JOB_HEARTBEAT_INTERVAL_SECONDS)
+                except asyncio.CancelledError:
+                    raise
+                try:
+                    current = job_store.get(job_id)
+                    if current is None or current.status != V2ExtractJobStatus.RUNNING:
+                        return
+                    current.last_heartbeat_at = datetime.now(timezone.utc)
+                    job_store.set(current)
+                except Exception:  # noqa: BLE001
+                    logger.exception("heartbeat write failed for job %s", job_id)
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
 
         result = await extract(
             full_path=payload.source_url,
@@ -341,6 +376,7 @@ async def _run_extract_job(
 
         finished = job_store.get(job_id) or existing
         finished.completed_at = datetime.now(timezone.utc)
+        finished.last_heartbeat_at = finished.completed_at
         if isinstance(result, V2ExtractResponse):
             finished.status = V2ExtractJobStatus.COMPLETED
             finished.result = result
@@ -363,12 +399,18 @@ async def _run_extract_job(
             return
         record.status = V2ExtractJobStatus.FAILED
         record.completed_at = datetime.now(timezone.utc)
+        record.last_heartbeat_at = record.completed_at
         record.error = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
             detail=str(exc),
             source_url=payload.source_url,
         )
         job_store.set(record)
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            with contextlib.suppress(Exception):
+                await heartbeat_task
 
 
 def _append_unique_warning(warnings: list[str], warning: str) -> None:
@@ -1588,6 +1630,35 @@ async def extract_job(
             status_code=status.HTTP_404_NOT_FOUND,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
+    # Detect orphaned jobs: the worker that was executing this job died
+    # (OS kill, deploy, OOM, …) without flipping the status, so the
+    # stored record is stuck in RUNNING. We notice because no heartbeat
+    # has been written in over `_JOB_STALE_THRESHOLD_SECONDS`. Flip to
+    # FAILED, persist, and return the failed view so the client stops
+    # polling. New `POST /v2/extract` calls will start a fresh job.
+    if record.status == V2ExtractJobStatus.RUNNING:
+        now = datetime.now(timezone.utc)
+        beat = record.last_heartbeat_at or record.started_at or record.submitted_at
+        if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
+            stale_seconds = (now - beat).total_seconds()
+            logger.warning(
+                "marking job %s as FAILED: no heartbeat for %.0fs "
+                "(threshold=%.0fs) — worker likely died mid-flight",
+                job_id,
+                stale_seconds,
+                _JOB_STALE_THRESHOLD_SECONDS,
+            )
+            record.status = V2ExtractJobStatus.FAILED
+            record.completed_at = now
+            record.error = V2ErrorResponse(
+                error_type=V2ErrorType.PIPELINE_ERROR,
+                detail=(
+                    "extract job orphaned: worker process died mid-extraction "
+                    f"(no heartbeat for {int(stale_seconds)}s)"
+                ),
+                source_url=record.request.source_url,
+            )
+            job_store.set(record)
     return record
 
 

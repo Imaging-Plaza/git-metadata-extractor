@@ -83,6 +83,11 @@ class V2ExtractJob(BaseModel):
     submitted_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    # Heartbeat written periodically by the running worker. The GET
+    # endpoint flips status to FAILED when this is stale for too long,
+    # so jobs whose worker process died mid-flight are reported as
+    # failed rather than perpetually "running".
+    last_heartbeat_at: datetime | None = None
     result: V2ExtractResponse | None = None
     error: V2ErrorResponse | None = None
 
