@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -21,13 +22,65 @@ def _resolve_org_name(context: dict[str, Any]) -> str:
     raise ValueError(message)
 
 
-def _pick_best_orgunit_match(results: Any) -> dict[str, Any] | None:
+_ORG_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}")
+_ACRONYM_TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
+
+
+def _org_name_tokens(value: Any) -> set[str]:
+    """Lowercase alphabetic tokens (≥2 chars). Splits camelCase and
+    snake/kebab variants so `EPFL-Open-Science` and `EPFL Open Science`
+    both yield {epfl, open, science}."""
+    if not isinstance(value, str):
+        return set()
+    cleaned = re.sub(r"([a-z])([A-Z])", r"\1 \2", value)
+    return {match.group(0).lower() for match in _ORG_TOKEN_RE.finditer(cleaned)}
+
+
+def _org_record_tokens(record: dict[str, Any]) -> set[str]:
+    """Aggregate name + aliases + acronyms into a single token set so
+    ROR matches by alias (e.g. `EPFL` for "École Polytechnique Fédérale
+    de Lausanne") are recognised."""
+    tokens: set[str] = set()
+    tokens |= _org_name_tokens(record.get("name"))
+    for key in ("aliases", "acronyms", "labels"):
+        value = record.get(key)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str):
+                    tokens |= _org_name_tokens(item)
+                elif isinstance(item, dict):
+                    label = item.get("label") or item.get("value")
+                    if isinstance(label, str):
+                        tokens |= _org_name_tokens(label)
+    return tokens
+
+
+def _pick_best_orgunit_match(
+    results: Any,
+    *,
+    candidate_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Accept an Infoscience org-unit match only when the name shares at
+    least one ≥2-char alphabetic token with the candidate query.
+
+    Without this, a query like "Statistics Botswana" (forwarded from a
+    person's affiliation list with no actual connection to the project)
+    can match an arbitrary Infoscience org and put it in the graph. Same
+    defensive principle as the person-agent fix in commit 5bc7733.
+    """
     if not isinstance(results, list):
         return None
     candidates = [item for item in results if isinstance(item, dict)]
     if not candidates:
         return None
-    return candidates[0]
+    candidate_tokens = _org_name_tokens(candidate_name)
+    if not candidate_tokens:
+        # Without any signal to verify against, conservatively skip.
+        return None
+    for item in candidates:
+        if _org_record_tokens(item) & candidate_tokens:
+            return item
+    return None
 
 
 def _select_ror_match(
@@ -37,15 +90,22 @@ def _select_ror_match(
     warnings: list[str],
     ror_query: str,
 ) -> dict[str, Any] | None:
-    """Pick a ROR match from ``ror_matches`` with optional country bias.
+    """Pick a ROR match from ``ror_matches`` with optional country bias
+    AND name-token overlap.
 
     ``country_bias`` is an ISO 3166-1 alpha-2 code. When set, the first
     match whose ``country.country_code`` equals the bias is preferred.
-    Falls back to ``ror_matches[0]`` when no biased match is found — and
-    records a warning so the mismatch is visible downstream.
 
-    Background: ROR's HTTP search returns the most-cited org first for a
-    given query. For acronyms that collide across countries (``SDSC``:
+    Acceptance gate: the chosen match must also share at least one
+    ≥2-char alphabetic token with ``ror_query`` (via the record's name,
+    aliases, acronyms, or labels). ROR search returns relevance-ranked
+    best-effort matches even for queries that have no real ROR
+    counterpart — e.g. a free-text affiliation string the indexer
+    spuriously bound to a person. Without this check the top hit gets
+    promoted to the graph as a phantom organisation.
+
+    Background: ROR's HTTP search returns the most-cited org first for
+    a given query. For acronyms that collide across countries (``SDSC``:
     Swiss Data Science Center vs San Diego Supercomputer Center;
     ``NIH``: Swiss vs US), the top hit is almost always the US one. When
     we're enriching an org that already has an Infoscience match, we
@@ -53,8 +113,24 @@ def _select_ror_match(
     """
     if not ror_matches:
         return None
+
+    candidate_tokens = _org_name_tokens(ror_query)
+
+    def _accepts(record: dict[str, Any]) -> bool:
+        if not candidate_tokens:
+            return False
+        return bool(_org_record_tokens(record) & candidate_tokens)
+
     if not country_bias:
-        return ror_matches[0]
+        top = ror_matches[0]
+        if _accepts(top):
+            return top
+        warnings.append(
+            f"ROR top hit for {ror_query!r} ({top.get('id') if isinstance(top, dict) else top}) "
+            "shares no name token with the query; skipping enrichment "
+            "to avoid a phantom organisation.",
+        )
+        return None
     biased = next(
         (
             candidate
@@ -66,6 +142,13 @@ def _select_ror_match(
         None,
     )
     if biased is not None:
+        if not _accepts(biased):
+            warnings.append(
+                f"ROR country-bias hit for {ror_query!r} "
+                f"({biased.get('id')}) shares no name token with the query; "
+                "skipping enrichment to avoid a phantom organisation.",
+            )
+            return None
         if biased is not ror_matches[0]:
             top = ror_matches[0]
             top_id = top.get("id") if isinstance(top, dict) else None
@@ -75,10 +158,17 @@ def _select_ror_match(
                 f"in favour of {biased.get('id')}.",
             )
         return biased
-    # No CH-anchored match — keep the original behaviour but flag it so the
-    # mismatch is visible in extraction warnings instead of failing silently.
+    # No CH-anchored match — fall back to the top hit only if its name
+    # tokens overlap with the query; otherwise skip enrichment.
     top = ror_matches[0]
     top_country = (top.get("country") or {}).get("country_code") if isinstance(top, dict) else None
+    if not _accepts(top):
+        warnings.append(
+            f"ROR top hit for {ror_query!r} ({top.get('id') if isinstance(top, dict) else top}) "
+            "shares no name token with the query and no country-bias "
+            "match exists; skipping enrichment to avoid a phantom organisation.",
+        )
+        return None
     warnings.append(
         f"ROR country-bias requested ({country_bias}) for {ror_query!r} "
         f"but no match in that country; falling back to top hit "
@@ -131,7 +221,15 @@ class OrganizationAgentV2:
         if providers.infoscience:
             infoscience_query = context.get("infoscience_query") or github_org.get("name") or org_name
             infoscience_results = providers.infoscience.search_orgunit(str(infoscience_query))
-            infoscience_match = _pick_best_orgunit_match(infoscience_results)
+            infoscience_match = _pick_best_orgunit_match(
+                infoscience_results,
+                candidate_name=str(infoscience_query),
+            )
+            if infoscience_results and infoscience_match is None:
+                warnings.append(
+                    f"Infoscience orgunit search returned {len(infoscience_results)} hits for "
+                    f"{infoscience_query!r} but none share a name token; skipping enrichment.",
+                )
         else:
             warnings.append("Infoscience provider not configured for organization enrichment")
 
