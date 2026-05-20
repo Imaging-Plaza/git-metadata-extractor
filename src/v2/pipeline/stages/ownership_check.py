@@ -1382,8 +1382,125 @@ def demote_github_props_to_units(
     )
 
 
+def emit_fork_parent_stubs(
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """For every repo with `pulse:isForkOf = <github_url>` referencing an
+    upstream not in the graph, emit minimal `schema:SoftwareSourceCode` +
+    `schema:Person` stubs so the SHACL `sh:class schema:SoftwareSourceCode`
+    constraint on `pulse:isForkOf` is satisfied.
+
+    Without these stubs SHACL flags 3 violations per fork
+    (`schema:name`, `schema:author`, `pulse:githubRepositoryHandle` — all
+    minCount 1 on `pulse:RepositoryShape`). With them the graph conforms
+    and downstream consumers get a "this is a fork of X" pointer they
+    can dereference.
+
+    The stub carries only the SHACL-required fields:
+    SoftwareSourceCode → `schema:name`, `pulse:githubRepositoryHandle`,
+    `schema:author`. Person → `schema:name`, `pulse:githubUsername`.
+    `_stub = True` marks them as derived.
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(entity) if isinstance(entity, dict) else entity
+        for entity in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    existing_ids: set[str] = set()
+    for entity in candidates:
+        eid = entity.get("id") or entity.get("@id")
+        if isinstance(eid, str) and eid:
+            existing_ids.add(eid)
+
+    warnings: list[str] = []
+    new_stubs: list[dict[str, Any]] = []
+    seen_stubs: set[str] = set()
+
+    for entity in candidates:
+        if entity.get("type") != REPOSITORY_TYPE:
+            continue
+        fork_of = entity.get("pulse:isForkOf")
+        target = fork_of.get("@id") if isinstance(fork_of, dict) else fork_of
+        if not isinstance(target, str) or not target.startswith("https://github.com/"):
+            continue
+        if target in existing_ids or target in seen_stubs:
+            continue
+        handle = target.removeprefix("https://github.com/").strip("/")
+        if "/" not in handle:
+            continue
+        owner, repo_name = handle.split("/", maxsplit=1)
+        if not (owner and repo_name):
+            continue
+        owner_url = f"https://github.com/{owner}"
+
+        # Person stub (parent's owner). Skip if already present.
+        if owner_url not in existing_ids and owner_url not in seen_stubs:
+            new_stubs.append(
+                {
+                    "id": owner_url,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:githubUsername": owner,
+                        "uuid": str(uuid4()),
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": owner,
+                    "pulse:githubUsername": owner,
+                    "_stub": True,
+                },
+            )
+            seen_stubs.add(owner_url)
+
+        # SoftwareSourceCode stub for the fork parent.
+        new_stubs.append(
+            {
+                "id": target,
+                "type": REPOSITORY_TYPE,
+                "shacl": "pulse:RepositoryShape",
+                "identifiers": {
+                    "pulse:githubRepositoryHandle": handle,
+                    "uuid": str(uuid4()),
+                },
+                "idSource": "pulse:githubRepositoryHandle",
+                "schema:name": repo_name,
+                "pulse:githubRepositoryHandle": handle,
+                "schema:author": [owner_url],
+                "_stub": True,
+            },
+        )
+        seen_stubs.add(target)
+        warnings.append(
+            f"Inferred minimal SoftwareSourceCode stub for fork parent "
+            f"{target!r} referenced by {entity.get('id')}.",
+        )
+
+    if new_stubs:
+        new_related = list(new_related) + new_stubs
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
 __all__ = [
     "demote_github_props_to_units",
+    "emit_fork_parent_stubs",
     "guarantee_repo_author",
     "infer_github_handle_parents",
     "infer_org_units",

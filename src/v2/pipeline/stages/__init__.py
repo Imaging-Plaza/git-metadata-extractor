@@ -42,6 +42,7 @@ from src.v2.pipeline.stages.output_assembly import (
 )
 from src.v2.pipeline.stages.ownership_check import (
     demote_github_props_to_units,
+    emit_fork_parent_stubs,
     guarantee_repo_author,
     infer_github_handle_parents,
     infer_org_units,
@@ -82,6 +83,7 @@ __all__ = [
     "concept_tagging_is_enabled",
     "concept_tagging_resolve_backend",
     "demote_github_props_to_units",
+    "emit_fork_parent_stubs",
     "gather_context",
     "guarantee_repo_author",
     "hybrid_refiner_is_enabled",

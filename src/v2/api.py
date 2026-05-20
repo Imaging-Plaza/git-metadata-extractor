@@ -92,6 +92,7 @@ from src.v2.pipeline.stages import (
     guarantee_repo_author,
     infer_github_handle_parents,
     demote_github_props_to_units,
+    emit_fork_parent_stubs,
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
@@ -1095,6 +1096,19 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         perf_counter() - stage_started_at,
     )
     for warning in demote_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Emit minimal stubs for fork parents so `pulse:isForkOf` references
+    # satisfy SHACL `sh:class schema:SoftwareSourceCode` without forcing
+    # us to ingest the upstream repo.
+    stage_started_at = perf_counter()
+    assembled_output, fork_stub_warnings = emit_fork_parent_stubs(assembled_output)
+    logger.info(
+        "fork_parent_stubs: emitted=%d in %.2fs",
+        len(fork_stub_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in fork_stub_warnings:
         _append_unique_warning(warnings, warning)
 
     if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":

@@ -42,9 +42,17 @@ LIST_REF_FIELDS: tuple[str, ...] = (
     "pulse:hasContribution",
     "org:hasMembership",
 )
+# Scalar reference fields that the prune stage clears when the target isn't
+# in the assembled graph.
+#
+# `pulse:isForkOf` is deliberately NOT here: it points to the upstream fork
+# parent (e.g. lovell/detect-libc) which is an external repo we don't ingest.
+# Clearing it loses the meaningful provenance signal that this repo is a fork
+# of X, with no benefit — SHACL `sh:class schema:SoftwareSourceCode` on an
+# unknown IRI is treated as open-world / non-violating by the validator
+# (verified: conforms=True with the value preserved as a URI literal).
 SCALAR_REF_FIELDS: tuple[str, ...] = (
     "pulse:ownedBy",
-    "pulse:isForkOf",
 )
 
 

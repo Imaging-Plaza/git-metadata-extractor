@@ -707,6 +707,27 @@ class RealGitHubProvider(GitHubProvider):
             node.get("http://schema.org/dateCreated"),
         )
 
+        # REST API is authoritative for fork-status + parent (gimie's
+        # `pulse:isForkOf` is unreliable — empty on most forks observed in
+        # the audit). Fall back to gimie data only when REST returned nothing.
+        rest_fork = rest_metadata.get("fork")
+        rest_parent_url = rest_metadata.get("parent_html_url")
+        rest_parent_full = rest_metadata.get("parent_full_name")
+        rest_source_url = rest_metadata.get("source_html_url")
+        rest_source_full = rest_metadata.get("source_full_name")
+        gimie_fork_target = _first_non_empty_string(node.get("pulse:isForkOf"))
+        is_fork = bool(rest_fork) if rest_fork is not None else bool(gimie_fork_target)
+        parent_payload: dict[str, Any] | None = None
+        if rest_parent_url or rest_parent_full:
+            parent_payload = {
+                "html_url": rest_parent_url,
+                "full_name": rest_parent_full,
+            }
+        source_payload = {
+            "html_url": rest_source_url,
+            "full_name": rest_source_full or gimie_fork_target,
+        }
+
         return {
             "name": node_name or repository_name,
             "full_name": normalized_full_name,
@@ -725,19 +746,25 @@ class RealGitHubProvider(GitHubProvider):
             "license": {
                 "spdx_id": _extract_spdx_id(node),
             },
-            "fork": bool(node.get("pulse:isForkOf")),
-            "source": {
-                "full_name": _first_non_empty_string(node.get("pulse:isForkOf")),
-            },
+            "fork": is_fork,
+            "parent": parent_payload,
+            "source": source_payload,
             "topics": [],
         }
 
     def _get_repository_rest_metadata(self, full_name: str) -> dict[str, Any]:
-        """Fetch stars/forks/created_at from the GitHub REST API (cached).
+        """Fetch stars/forks/created_at + fork-status from the GitHub REST
+        API (cached).
 
         Returns an empty dict on any error so the caller falls back to
         gimie-derived values. Cached via the standard provider cache so
         repeated requests within TTL don't re-hit GitHub.
+
+        Also extracts `fork` (bool) and `parent.html_url` / `source.html_url`
+        which gimie's JSON-LD does not surface reliably. Without this the
+        downstream `pulse:isForkOf` predicate is always null (issue
+        observed across cmdoret/renku, gabyx/detect-libc,
+        SwissDataScienceCenter/python-future in the batch10 audit).
         """
 
         def _fetch() -> dict[str, Any]:
@@ -763,15 +790,25 @@ class RealGitHubProvider(GitHubProvider):
                 return {}
             if not isinstance(payload, dict):
                 return {}
+            parent = payload.get("parent") if isinstance(payload.get("parent"), dict) else None
+            source = payload.get("source") if isinstance(payload.get("source"), dict) else None
             return {
                 "stargazers_count": payload.get("stargazers_count"),
                 "forks_count": payload.get("forks_count"),
                 "created_at": payload.get("created_at"),
+                "fork": bool(payload.get("fork")),
+                "parent_html_url": parent.get("html_url") if parent else None,
+                "parent_full_name": parent.get("full_name") if parent else None,
+                "source_html_url": source.get("html_url") if source else None,
+                "source_full_name": source.get("full_name") if source else None,
             }
 
         if self._cache is None:
             return _fetch()
-        key = ProviderCache.make_key("github", "get_repository_rest", full_name=full_name)
+        # Cache key bumped to v2 when fork/parent fields were added so the
+        # old cached entries (which lacked them) don't shadow the new
+        # response shape.
+        key = ProviderCache.make_key("github", "get_repository_rest_v2", full_name=full_name)
         return self._cache.get_or_set(
             key,
             _fetch,
