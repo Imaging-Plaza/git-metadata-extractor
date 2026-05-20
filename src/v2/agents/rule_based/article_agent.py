@@ -567,6 +567,16 @@ def _map_source_organization(
     *,
     organization_lookup: dict[str, str],
 ) -> tuple[str | None, list[str]]:
+    """Map an article's `sourceOrganization` to a canonical in-graph
+    Organization id.
+
+    When the lookup misses, return `None` (drop the field) rather than
+    leaking the raw query string as a dangling reference. Emitting
+    `schema:sourceOrganization = "ETH Zurich"` when no `ETH Zurich`
+    Organization exists in the graph creates a SHACL-orphan pointer that
+    no consumer can dereference. The deterministic rule: emit the field
+    only when we can resolve it to an entity we know.
+    """
     source_organization = _as_string(publication.get("sourceOrganization"))
     if source_organization is None:
         return None, []
@@ -575,8 +585,9 @@ def _map_source_organization(
     if isinstance(resolved_source, str):
         return resolved_source, []
 
-    return source_organization, [
-        f"Unresolved article source organization mapping: '{source_organization}'",
+    return None, [
+        f"Dropped article source organization {source_organization!r}: "
+        "no matching Organization in the assembled graph.",
     ]
 
 
