@@ -330,6 +330,19 @@ class RepositoryAgentV2:
             "schema:programmingLanguage": programming_languages,
             "pulse:ownedBy": repository.get("owner", {}).get("login"),
             "pulse:isForkOf": _resolve_fork_parent_url(repository),
+            # Internal-only fields (`_` prefix is stripped before the
+            # SHACL gate and JSON-LD output). They preserve signal that
+            # the v2.1.2 ontology can't express (the `pulse:RepositoryShape`
+            # is `sh:closed true` and declares neither `schema:description`
+            # nor `schema:keywords`), so downstream consumers — the LLM
+            # hybrid refiner especially — get the full repo pitch + topic
+            # tags for context without violating the ontology contract.
+            # When the ontology adds these paths in v2.x we can promote
+            # them to canonical SHACL fields in one place.
+            "_description": repository.get("description") or None,
+            "_keywords": [
+                t for t in (repository.get("topics") or []) if isinstance(t, str) and t
+            ] or None,
         }
 
     async def _default_repository_classifier(
