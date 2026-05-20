@@ -508,8 +508,16 @@ def load_model_config(analysis_type: str) -> List[Dict[str, Any]]:
             logger.error(f"Invalid JSON in {env_var}: {e}")
             logger.info(f"Falling back to default configuration for {analysis_type}")
 
-    # Return default configuration
-    return MODEL_CONFIGS.get(analysis_type, [])
+    configs = list(MODEL_CONFIGS.get(analysis_type, []))
+
+    # Swap the `model` field across every profile when an override env var is
+    # set. Useful when the default model on a shared inference endpoint is
+    # degraded and a temporary fallback is needed without editing this file.
+    override = os.getenv("V2_LLM_MODEL_OVERRIDE")
+    if override and configs:
+        configs = [{**c, "model": override} for c in configs]
+
+    return configs
 
 
 def create_pydantic_ai_model(config: Dict[str, Any]):
