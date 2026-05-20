@@ -1342,11 +1342,46 @@ def _merge_membership_dates(
     return (begins[0] if begins else None, ends[0] if ends else None)
 
 
+def _person_has_orcid(person: dict[str, Any]) -> bool:
+    """True when the person entity carries a verifiable ORCID iD."""
+    if not isinstance(person, dict):
+        return False
+    direct = person.get("pulse:orcidIdentifier") or person.get("pulse:orcid")
+    if isinstance(direct, str) and direct.strip():
+        return True
+    identifiers = person.get("identifiers")
+    if isinstance(identifiers, dict):
+        for key in ("pulse:orcid", "pulse:orcidIdentifier"):
+            value = identifiers.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+    return False
+
+
+def _org_has_ror(organization: dict[str, Any]) -> bool:
+    """True when the organisation entity carries a verifiable ROR id."""
+    if not isinstance(organization, dict):
+        return False
+    direct = organization.get("pulse:ror") or organization.get("schema:identifier")
+    if isinstance(direct, str) and direct.strip().startswith("https://ror.org/"):
+        return True
+    if isinstance(organization.get("id"), str) and organization["id"].startswith("https://ror.org/"):
+        return True
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        ror = identifiers.get("pulse:ror")
+        if isinstance(ror, str) and ror.strip().startswith("https://ror.org/"):
+            return True
+    return False
+
+
 def _normalize_membership_entities(
     memberships: list[dict[str, Any]],
     *,
     person_lookup: dict[str, str],
     organization_lookup: dict[str, str],
+    persons_by_id: dict[str, dict[str, Any]] | None = None,
+    organizations_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], set[tuple[str, str]], list[str]]:
     # Buffer by canonical id so duplicates (issue #30/#34) merge their role
     # and date fields instead of one silently shadowing the other.
@@ -1441,16 +1476,25 @@ def _normalize_membership_entities(
         )
         normalized_memberships.append(base)
 
-    # Drop Memberships with no evidence: role unset AND no dates. These
-    # come from Infoscience/Affiliation lookups that surface an
-    # organization name but no role and no employment dates — purely a
-    # "name appears in a field" hit with no confirmable connection
-    # (audit example: contributor `3C111` → Infoscience hit
-    # "Labourie, François" → org:hasMembership → Statistics Botswana
-    # with role/dates all null). Keeping them inflates the graph with
-    # spurious affiliations users can't trust. The deterministic rule:
-    # a Membership without role AND without either start or end date is
-    # noise.
+    # Membership evidence floor (issue #A). Default drop: role unset AND
+    # no dates AND nothing better to anchor on. The trade-off observed
+    # in the deeplabcut audit (current vs develop branch, 2026-05-20):
+    # the strict floor correctly removes phantom affiliations like
+    # `Statistics Botswana` and `Apple` from contributors whose
+    # connection to the project is unverifiable, but it also drops
+    # genuine ORCID/ROR-confirmed links — e.g. Mackenzie Mathis's
+    # AdaptiveMotorControlLab membership — when Infoscience/ORCID
+    # surfaced the link without dates.
+    #
+    # Softened rule: keep the membership when it has role OR dates OR
+    # both endpoints carry authoritative identifiers (Person with ORCID
+    # iD AND Organisation with ROR id). The double-authority condition
+    # is the bar that re-admits AdaptiveMotorControlLab-class records
+    # while still rejecting the "GitHub-handle-only person → arbitrary
+    # ROR org" weak chain that produced Statistics Botswana.
+    persons_by_id = persons_by_id or {}
+    organizations_by_id = organizations_by_id or {}
+
     evidence_filtered: list[dict[str, Any]] = []
     for membership in normalized_memberships:
         role = membership.get("org:role")
@@ -1460,13 +1504,24 @@ def _normalize_membership_entities(
         has_dates = (isinstance(begin, str) and begin.strip()) or (
             isinstance(end, str) and end.strip()
         )
-        if has_role or has_dates:
+
+        # Authority anchor: both endpoints carry stable cross-database
+        # identifiers (ORCID for the person, ROR for the org). When both
+        # are present, the connection itself is verifiable via the
+        # upstream registries even without role/date metadata.
+        person_id = membership.get("_person_ref")
+        org_id = membership.get("org:organization")
+        person_entity = persons_by_id.get(person_id) if isinstance(person_id, str) else None
+        org_entity = organizations_by_id.get(org_id) if isinstance(org_id, str) else None
+        has_authority_anchor = _person_has_orcid(person_entity) and _org_has_ror(org_entity)
+
+        if has_role or has_dates or has_authority_anchor:
             evidence_filtered.append(membership)
             continue
         warnings.append(
             "Dropped evidence-free Membership "
             f"{membership.get('id')!r} (org:role / hasBeginning / hasEnd all "
-            "null — no confirmable connection).",
+            "null, no ORCID+ROR anchor — no confirmable connection).",
         )
 
     return evidence_filtered, covered_pairs, warnings
@@ -1818,10 +1873,18 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             owned_repository_ids_by_org.get(organization_id, []),
         )
 
+    persons_index = {
+        p["id"]: p for p in persons if isinstance(p.get("id"), str)
+    }
+    organizations_index = {
+        o["id"]: o for o in organizations if isinstance(o.get("id"), str)
+    }
     memberships, _covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
         class_memberships,
         person_lookup=person_lookup,
         organization_lookup=organization_lookup,
+        persons_by_id=persons_index,
+        organizations_by_id=organizations_index,
     )
     link_warnings.extend(class_membership_warnings)
 
