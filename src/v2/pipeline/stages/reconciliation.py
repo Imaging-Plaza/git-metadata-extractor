@@ -1528,6 +1528,13 @@ def _normalize_membership_entities(
     persons_by_id = persons_by_id or {}
     organizations_by_id = organizations_by_id or {}
 
+    # Track dropped affiliation names per person so the evidence trail
+    # survives even when the materialised Membership entity is filtered.
+    # User instruction (2026-05-20): "mientras aparezcan en la evidencia
+    # está bien" — they want to see e.g. "AdaptiveMotorControlLab" was
+    # dropped for Mackenzie Mathis even if it can't enter the graph.
+    dropped_affiliations_by_person: dict[str, list[dict[str, Any]]] = {}
+
     evidence_filtered: list[dict[str, Any]] = []
     for membership in normalized_memberships:
         role = membership.get("org:role")
@@ -1539,14 +1546,7 @@ def _normalize_membership_entities(
         )
 
         # Authority anchor: the Person side carries a verifiable ORCID
-        # iD AND the Organisation side carries some registered identifier
-        # (ROR, Infoscience orgunit record, github org URL, or a
-        # `urn:pulse:` stub with a real schema:name from
-        # demote_github_props_to_units). The ORCID half is the strong
-        # signal — it stops "github-handle-only contributor → Infoscience
-        # admin entity" chains from sneaking back in, while letting
-        # ORCID-confirmed researchers keep their lab/chair affiliations
-        # even when the source record lacked role or dates.
+        # iD AND the Organisation side carries some registered identifier.
         person_id = membership.get("_person_ref")
         org_id = membership.get("org:organization")
         person_entity = persons_by_id.get(person_id) if isinstance(person_id, str) else None
@@ -1556,11 +1556,40 @@ def _normalize_membership_entities(
         if has_role or has_dates or has_authority_anchor:
             evidence_filtered.append(membership)
             continue
+        # Drop, but preserve the evidence — name the Person + Org in the
+        # warning, and stash the affiliation snippet on the Person.
+        person_name = (
+            person_entity.get("schema:name") if isinstance(person_entity, dict) else None
+        )
+        org_name = (
+            org_entity.get("schema:name") if isinstance(org_entity, dict) else None
+        ) or "<unknown org>"
         warnings.append(
             "Dropped evidence-free Membership "
-            f"{membership.get('id')!r} (org:role / hasBeginning / hasEnd all "
-            "null, no ORCID+ROR anchor — no confirmable connection).",
+            f"{membership.get('id')!r} (person={person_name!r}, org={org_name!r}, "
+            "no role / no dates / no ORCID+ROR anchor — no confirmable connection).",
         )
+        if isinstance(person_id, str):
+            dropped_affiliations_by_person.setdefault(person_id, []).append(
+                {
+                    "org_id": org_id,
+                    "org_name": org_name if org_name != "<unknown org>" else None,
+                    "membership_id": membership.get("id"),
+                    "reason": "no role / no dates / no ORCID+ROR anchor",
+                },
+            )
+
+    # Stamp dropped-affiliations evidence on each affected Person. The
+    # `_dropped_affiliations` field is internal (underscore prefix is
+    # stripped before SHACL gate + JSON-LD output) — its purpose is
+    # auditability via the raw pipeline payload, not the canonical
+    # ontology output.
+    for pid, dropped in dropped_affiliations_by_person.items():
+        person_entity = persons_by_id.get(pid)
+        if isinstance(person_entity, dict):
+            existing = person_entity.get("_dropped_affiliations") or []
+            if isinstance(existing, list):
+                person_entity["_dropped_affiliations"] = existing + dropped
 
     return evidence_filtered, covered_pairs, warnings
 
