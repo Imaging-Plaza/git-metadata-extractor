@@ -22,11 +22,16 @@ def _compact_identifier(uri: str) -> str:
 
 
 def default_ttl_path() -> Path:
+    # Keep this aligned with `src.v2.validation.ontology.ONTOLOGY_RELATIVE_PATH`
+    # — the SHACL validator binds against v2.1.2 at runtime, and the enum
+    # alignment tests must compare the Python enums against the same source
+    # of truth. v2.0.1 still had the Wikipedia-URL placeholder for
+    # "Information engineering"; v2.1.2 fixed it to `wd:Q1254373`.
     return (
         Path(__file__).resolve().parents[2]
         / "dev"
         / "ontology-v2-json-response"
-        / "open-pulse-ontology-v2.0.1.ttl"
+        / "open-pulse-ontology-v2.1.2.ttl"
     )
 
 
@@ -62,7 +67,7 @@ def main() -> int:
         "--ttl-path",
         type=Path,
         default=default_ttl_path(),
-        help="Path to open-pulse-ontology-v2.0.1.ttl",
+        help="Path to open-pulse-ontology-v2.1.2.ttl (or any later revision)",
     )
     parser.add_argument("--indent", type=int, default=2, help="JSON output indentation")
     args = parser.parse_args()

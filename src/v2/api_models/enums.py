@@ -62,10 +62,13 @@ class DisciplineV2(str, Enum):
     HEALTH_SCIENCES = ("wd:Q843601", "http://www.wikidata.org/entity/Q843601")
     RELIGION = ("wd:Q9174", "http://www.wikidata.org/entity/Q9174")
     PSYCHOLOGY = ("wd:Q9418", "http://www.wikidata.org/entity/Q9418")
-    INFORMATION_ENGINEERING = (
-        "http://www.wikipedia.org/wiki/Information_engineering",
-        "http://www.wikipedia.org/wiki/Information_engineering",
-    )
+    # Open Pulse Ontology v2.1.2 source of truth:
+    # `wd:Q1254373 a pulse:DisciplineEnumeration; skos:prefLabel "Information engineering"@en`.
+    # Earlier this enum carried a Wikipedia URL in place of the QID, which
+    # broke `pulse:DisciplineShape` validation (the SHACL constraint expects
+    # the matching ontology IRI) and broke the discipline-tagger walk-up
+    # whenever an EPFL Graph category resolved to `information-engineering`.
+    INFORMATION_ENGINEERING = ("wd:Q1254373", "http://www.wikidata.org/entity/Q1254373")
 
 
 class RepositoryTypeV2(str, Enum):
