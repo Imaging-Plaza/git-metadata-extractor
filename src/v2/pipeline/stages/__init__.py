@@ -41,6 +41,7 @@ from src.v2.pipeline.stages.output_assembly import (
     build_json_output,
 )
 from src.v2.pipeline.stages.ownership_check import (
+    demote_github_props_to_units,
     guarantee_repo_author,
     infer_github_handle_parents,
     infer_org_units,
@@ -80,6 +81,7 @@ __all__ = [
     "compute_stats",
     "concept_tagging_is_enabled",
     "concept_tagging_resolve_backend",
+    "demote_github_props_to_units",
     "gather_context",
     "guarantee_repo_author",
     "hybrid_refiner_is_enabled",

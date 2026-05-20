@@ -1269,7 +1269,121 @@ def guarantee_repo_author(
     return new_reconciled, warnings
 
 
+def _strip_github_props(entity: dict[str, Any]) -> list[str]:
+    """Remove GitHub-derived properties from `entity`. Returns the keys cleared."""
+    cleared: list[str] = []
+    for key in ("pulse:githubOrgFollowers", "pulse:githubOrganizationHandle"):
+        if entity.get(key) not in (None, ""):
+            entity[key] = None
+            cleared.append(key)
+    identifiers = entity.get("identifiers")
+    if isinstance(identifiers, dict):
+        if isinstance(identifiers.get("pulse:githubOrganizationHandle"), str):
+            identifiers["pulse:githubOrganizationHandle"] = None
+            cleared.append("identifiers.pulse:githubOrganizationHandle")
+    return cleared
+
+
+def demote_github_props_to_units(
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """Move `pulse:githubOrgFollowers` / `pulse:githubOrganizationHandle` off
+    ROR-id'd parents and onto the github-only unit they describe.
+
+    Fixes the data-shape bug reported in Imaging-Plaza/git-metadata-extractor
+    issue #29/#33: a ROR organization with `org:hasUnit → github_org` was
+    carrying the unit's follower count and handle on the legal entity. ROR
+    identifies a legal/research entity; GitHub-derived metrics belong on
+    the GitHub presence (the unit), not on the parent.
+
+    Trigger:
+    - Parent has a ROR id (`@id` or `pulse:ror` starts with `https://ror.org/`).
+    - Parent has at least one `org:hasUnit` child that is a github-only org
+      (`@id` starts with `https://github.com/`).
+    - The parent's `pulse:githubOrganizationHandle` matches the handle of one
+      of those children (so the parent's GitHub data really is the unit's).
+
+    Action:
+    - Strip the GitHub-derived properties from the parent (set to None).
+    - Copy the values onto the matching child only if the child is missing them
+      (never overwrite — the child is the canonical owner of these fields).
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(entity) if isinstance(entity, dict) else entity
+        for entity in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    id_index: dict[str, dict[str, Any]] = {}
+    for entity in candidates:
+        if entity.get("type") != ORGANIZATION_TYPE:
+            continue
+        entity_id = entity.get("id")
+        if isinstance(entity_id, str) and entity_id:
+            id_index[entity_id] = entity
+
+    warnings: list[str] = []
+
+    for parent in candidates:
+        if parent.get("type") != ORGANIZATION_TYPE:
+            continue
+        parent_id = parent.get("id")
+        if not isinstance(parent_id, str) or not parent_id.startswith("https://ror.org/"):
+            continue
+        parent_handle = _entity_github_org_handle(parent)
+        if parent_handle is None:
+            continue
+        units = parent.get(HAS_UNIT_KEY)
+        if not isinstance(units, list) or not units:
+            continue
+        matched_child: dict[str, Any] | None = None
+        for unit_ref in units:
+            unit_id = unit_ref.get("@id") if isinstance(unit_ref, dict) else unit_ref
+            if not isinstance(unit_id, str):
+                continue
+            child = id_index.get(unit_id)
+            if child is None or not unit_id.startswith("https://github.com/"):
+                continue
+            child_handle = _entity_github_org_handle(child)
+            if child_handle is not None and child_handle == parent_handle:
+                matched_child = child
+                break
+        if matched_child is None:
+            continue
+        parent_followers = parent.get("pulse:githubOrgFollowers")
+        if isinstance(parent_followers, int) and not isinstance(
+            matched_child.get("pulse:githubOrgFollowers"), int
+        ):
+            matched_child["pulse:githubOrgFollowers"] = parent_followers
+        cleared = _strip_github_props(parent)
+        if cleared:
+            warnings.append(
+                f"Demoted GitHub-derived properties from ROR parent {parent_id} "
+                f"to unit {matched_child.get('id')} (handle '{parent_handle}'): "
+                f"{', '.join(cleared)}.",
+            )
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
 __all__ = [
+    "demote_github_props_to_units",
     "guarantee_repo_author",
     "infer_github_handle_parents",
     "infer_org_units",

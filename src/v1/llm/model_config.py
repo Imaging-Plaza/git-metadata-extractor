@@ -5,12 +5,45 @@ Centralized configuration for different providers and models used across the app
 Supports OpenAI, OpenRouter, OpenAI-compatible endpoints, and Ollama (local and remote).
 """
 
+import itertools
 import json
 import logging
 import os
+import threading
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+_API_KEY_LOCK = threading.Lock()
+_API_KEY_CYCLES: Dict[str, "itertools.cycle"] = {}
+_API_KEY_SOURCES: Dict[str, str] = {}
+
+
+def _next_api_key(env_var: str) -> str:
+    """Round-robin a single token out of a comma-separated env value.
+
+    Supports the same multi-token pattern as `GITHUB_TOKEN`
+    (`ghp_A,ghp_B,...`): set `RCP_TOKEN=sk-A,sk-B` and every LLM model
+    instantiation pulls the next key. Locked per-env-var so different
+    providers (`RCP_TOKEN`, `OPENAI_API_KEY`, ...) keep independent cycles.
+    Per-process cycle — with multiple uvicorn workers the rotation is
+    independent per worker, but the overall call volume splits roughly
+    evenly across tokens.
+    """
+    raw = os.getenv(env_var) or ""
+    if "," not in raw:
+        return raw.strip()
+    with _API_KEY_LOCK:
+        cached_source = _API_KEY_SOURCES.get(env_var)
+        if raw != cached_source or env_var not in _API_KEY_CYCLES:
+            tokens = [t.strip() for t in raw.split(",") if t.strip()]
+            if not tokens:
+                _API_KEY_CYCLES.pop(env_var, None)
+                _API_KEY_SOURCES[env_var] = raw
+                return ""
+            _API_KEY_CYCLES[env_var] = itertools.cycle(tokens)
+            _API_KEY_SOURCES[env_var] = raw
+        return next(_API_KEY_CYCLES[env_var])
 
 # Default model configurations
 MODEL_CONFIGS = {
@@ -555,7 +588,7 @@ def create_pydantic_ai_model(config: Dict[str, Any]):
             model_name,
             provider=OpenAIProvider(
                 base_url=base_url,
-                api_key=os.getenv(api_key_env),
+                api_key=_next_api_key(api_key_env),
             ),
         )
     elif provider == "ollama":

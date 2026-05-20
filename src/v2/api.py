@@ -91,6 +91,7 @@ from src.v2.pipeline.stages import (
     compute_stats,
     guarantee_repo_author,
     infer_github_handle_parents,
+    demote_github_props_to_units,
     infer_org_units,
     infer_owners,
     promote_failed_id_entities,
@@ -1084,6 +1085,16 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         perf_counter() - stage_started_at,
     )
     for warning in org_unit_warnings:
+        _append_unique_warning(warnings, warning)
+
+    stage_started_at = perf_counter()
+    assembled_output, demote_warnings = demote_github_props_to_units(assembled_output)
+    logger.info(
+        "demote_github_props_to_units: demoted=%d in %.2fs",
+        len(demote_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in demote_warnings:
         _append_unique_warning(warnings, warning)
 
     if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":
