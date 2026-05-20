@@ -1375,6 +1375,39 @@ def _org_has_ror(organization: dict[str, Any]) -> bool:
     return False
 
 
+def _org_has_authority(organization: dict[str, Any]) -> bool:
+    """True when the organisation has any verifiable cross-registry id.
+
+    Broader than `_org_has_ror`: accepts ROR, Infoscience orgunit
+    records, github org URLs, and the `urn:pulse:` synthesized stubs
+    that `demote_github_props_to_units` emits with a `schema:name`.
+    The purpose is to distinguish "real org with a registered identifier"
+    from "free-text name we can't dereference" — the former gets a pass
+    in the evidence-floor when the person side is already ORCID-anchored.
+    """
+    if not isinstance(organization, dict):
+        return False
+    if _org_has_ror(organization):
+        return True
+    org_id = organization.get("id") or organization.get("@id")
+    if isinstance(org_id, str):
+        if org_id.startswith("https://github.com/"):
+            return True
+        if org_id.startswith("https://infoscience.epfl.ch/"):
+            return True
+        if org_id.startswith("urn:pulse:") and isinstance(
+            organization.get("schema:name"), str,
+        ):
+            return bool(organization["schema:name"].strip())
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        if identifiers.get("pulse:infoscienceOrganizationIdentifier"):
+            return True
+        if identifiers.get("pulse:githubOrganizationHandle"):
+            return True
+    return False
+
+
 def _normalize_membership_entities(
     memberships: list[dict[str, Any]],
     *,
@@ -1505,15 +1538,20 @@ def _normalize_membership_entities(
             isinstance(end, str) and end.strip()
         )
 
-        # Authority anchor: both endpoints carry stable cross-database
-        # identifiers (ORCID for the person, ROR for the org). When both
-        # are present, the connection itself is verifiable via the
-        # upstream registries even without role/date metadata.
+        # Authority anchor: the Person side carries a verifiable ORCID
+        # iD AND the Organisation side carries some registered identifier
+        # (ROR, Infoscience orgunit record, github org URL, or a
+        # `urn:pulse:` stub with a real schema:name from
+        # demote_github_props_to_units). The ORCID half is the strong
+        # signal — it stops "github-handle-only contributor → Infoscience
+        # admin entity" chains from sneaking back in, while letting
+        # ORCID-confirmed researchers keep their lab/chair affiliations
+        # even when the source record lacked role or dates.
         person_id = membership.get("_person_ref")
         org_id = membership.get("org:organization")
         person_entity = persons_by_id.get(person_id) if isinstance(person_id, str) else None
         org_entity = organizations_by_id.get(org_id) if isinstance(org_id, str) else None
-        has_authority_anchor = _person_has_orcid(person_entity) and _org_has_ror(org_entity)
+        has_authority_anchor = _person_has_orcid(person_entity) and _org_has_authority(org_entity)
 
         if has_role or has_dates or has_authority_anchor:
             evidence_filtered.append(membership)
