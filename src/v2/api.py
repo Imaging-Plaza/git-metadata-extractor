@@ -95,6 +95,7 @@ from src.v2.pipeline.stages import (
     emit_fork_parent_stubs,
     infer_article_source_organization,
     infer_org_units,
+    tag_rule_based_disciplines,
     infer_owners,
     promote_failed_id_entities,
     prune_dangling_refs,
@@ -1125,6 +1126,35 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     )
     for warning in source_org_warnings:
         _append_unique_warning(warnings, warning)
+
+    # Deterministic discipline tagging via the EPFL Graph disciplines
+    # Qdrant RAG. Runs only when the root is a repository and the field
+    # is still empty (does not overwrite upstream agent output). Result
+    # is gated on the SHACL DisciplineEnumeration so output is always
+    # schema-valid.
+    if classification.detected_type.value == "repository":
+        stage_started_at = perf_counter()
+        readme_text_for_disciplines: str | None = None
+        repository_context = (
+            gathered_context.get("repository")
+            if isinstance(gathered_context, dict)
+            else None
+        )
+        if isinstance(repository_context, dict):
+            candidate = repository_context.get("readme_content")
+            if isinstance(candidate, str):
+                readme_text_for_disciplines = candidate
+        assembled_output, discipline_warnings = await tag_rule_based_disciplines(
+            assembled_output,
+            readme_text=readme_text_for_disciplines,
+        )
+        logger.info(
+            "rule_based_disciplines: emitted=%d in %.2fs",
+            sum(1 for w in discipline_warnings if "Inferred pulse:discipline" in w),
+            perf_counter() - stage_started_at,
+        )
+        for warning in discipline_warnings:
+            _append_unique_warning(warnings, warning)
 
     if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":
         repository_context = (

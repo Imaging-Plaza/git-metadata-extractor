@@ -51,6 +51,9 @@ from src.v2.pipeline.stages.ownership_check import (
     validate_ownership,
 )
 from src.v2.pipeline.stages.prune_dangling_refs import prune_dangling_refs
+from src.v2.pipeline.stages.rule_based_disciplines import (
+    tag_disciplines as tag_rule_based_disciplines,
+)
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.pipeline.stages.refine_with_llm import (
     RefineWithLLMResult,
@@ -101,6 +104,7 @@ __all__ = [
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
     "run_refine_with_llm_stage",
+    "tag_rule_based_disciplines",
     "validate_articles",
     "validate_author_classes",
     "validate_ownership",
