@@ -1135,6 +1135,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     if classification.detected_type.value == "repository":
         stage_started_at = perf_counter()
         readme_text_for_disciplines: str | None = None
+        github_description_for_disciplines: str | None = None
         repository_context = (
             gathered_context.get("repository")
             if isinstance(gathered_context, dict)
@@ -1144,9 +1145,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             candidate = repository_context.get("readme_content")
             if isinstance(candidate, str):
                 readme_text_for_disciplines = candidate
+            # The GitHub REST `description` field carries the repo's one-line
+            # pitch, which is far more discriminative for discipline matching
+            # than the first 4k of the README (often HTML/badge soup).
+            metadata = repository_context.get("metadata")
+            if isinstance(metadata, dict):
+                gh_desc = metadata.get("description")
+                if isinstance(gh_desc, str) and gh_desc.strip():
+                    github_description_for_disciplines = gh_desc.strip()
         assembled_output, discipline_warnings = await tag_rule_based_disciplines(
             assembled_output,
             readme_text=readme_text_for_disciplines,
+            github_description=github_description_for_disciplines,
         )
         logger.info(
             "rule_based_disciplines: emitted=%d in %.2fs",

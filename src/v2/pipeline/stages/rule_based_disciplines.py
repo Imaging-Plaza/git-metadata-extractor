@@ -79,16 +79,51 @@ def _resolve_float_env(name: str, default: float) -> float:
         return default
 
 
-def _build_query(repo: dict[str, Any], readme: str | None) -> str:
+def _strip_markdown_for_query(text: str) -> str:
+    """Reuse the concept_tagging stripper so HTML/image/badge markup
+    doesn't pollute the embedding."""
+    try:
+        from src.v2.pipeline.stages.concept_tagging import (  # noqa: PLC0415
+            _strip_markdown,
+        )
+    except Exception:  # noqa: BLE001
+        return text
+    return _strip_markdown(text)
+
+
+def _build_query(
+    repo: dict[str, Any],
+    readme: str | None,
+    *,
+    description_override: str | None = None,
+) -> str:
+    """Compose the embedding query from real signal only.
+
+    deeplabcut README starts with ~1000 chars of `<img>` badges before
+    the actual content; without stripping, the embedder gets a soup of
+    markup that semantically matches "density-estimation" instead of
+    the repo's real topic. We strip markdown/HTML, then concat
+    name + description + cleaned README excerpt.
+    """
     parts: list[str] = []
     name = repo.get("schema:name")
     if isinstance(name, str) and name.strip():
         parts.append(name.strip())
-    desc = repo.get("schema:description")
-    if isinstance(desc, str) and desc.strip():
-        parts.append(desc.strip())
+    desc_candidates = (
+        repo.get("schema:description"),
+        description_override,
+    )
+    for desc in desc_candidates:
+        if isinstance(desc, str) and desc.strip():
+            parts.append(desc.strip())
+            break
     if isinstance(readme, str) and readme.strip():
-        parts.append(readme.strip()[:README_CHARS_CAP])
+        cleaned_readme = _strip_markdown_for_query(readme).strip()
+        # Collapse whitespace so the cap counts text, not boilerplate
+        # spaces and blank lines.
+        cleaned_readme = " ".join(cleaned_readme.split())
+        if cleaned_readme:
+            parts.append(cleaned_readme[:README_CHARS_CAP])
     return "\n\n".join(parts)
 
 
@@ -166,6 +201,7 @@ async def tag_disciplines(
     assembled: AssembledOutput,
     *,
     readme_text: str | None,
+    github_description: str | None = None,
 ) -> tuple[AssembledOutput, list[str]]:
     """Stamp `pulse:discipline` on the root repository entity from
     semantic search hits over the EPFL Graph disciplines RAG."""
@@ -196,7 +232,11 @@ async def tag_disciplines(
         # V2_EPFL_GRAPH_RAG_ENABLED is false or config missing; nothing to do.
         return assembled, warnings
 
-    query = _build_query(assembled.root_entity, readme_text)
+    query = _build_query(
+        assembled.root_entity,
+        readme_text,
+        description_override=github_description,
+    )
     if not query.strip():
         return assembled, warnings
 
