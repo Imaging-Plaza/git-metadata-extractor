@@ -38,7 +38,44 @@ def _anonymize_email(email: Any) -> str | None:
     return f"{hashed_local}@{domain}"
 
 
-def _pick_best_infoscience_match(results: Any) -> dict[str, Any] | None:
+_NAME_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}")
+
+
+def _name_tokens(value: Any) -> set[str]:
+    """Lowercase alphabetic tokens (≥2 chars). Used for similarity checks."""
+    if not isinstance(value, str):
+        return set()
+    return {match.group(0).lower() for match in _NAME_TOKEN_RE.finditer(value)}
+
+
+def _pick_best_infoscience_match(
+    results: Any,
+    *,
+    candidate_name: str | None = None,
+    candidate_orcid: str | None = None,
+) -> dict[str, Any] | None:
+    """Choose the Infoscience hit that is genuinely the same person.
+
+    Accept only when there is **confirmable connective tissue** between
+    the GitHub user we're enriching and the Infoscience record. Without
+    a check, `infoscience.search_person` happily returns a relevance-
+    ranked best guess for any query — including opaque github
+    usernames like `3C111` for which Infoscience cheerfully proposes
+    "Labourie, François" (real audit case from cmdoret/renku that
+    leaked Statistics Botswana into the graph as a phantom affiliation).
+
+    Acceptance hierarchy (return the first matching candidate):
+
+    1. **ORCID match.** Same ORCID iD on both sides is deterministic;
+       any other field can disagree.
+    2. **Name overlap.** When the GitHub profile carries a multi-token
+       human-readable name and the Infoscience hit's name shares at
+       least one ≥2-char alphabetic token (case-insensitive). Single-
+       token github display names (`3C111`, `gabyx`, `coreprocess`) are
+       not enough — they collide on common substrings too easily.
+    3. **No accept.** Returning None is the safe default; downstream
+       stages fall back to github metadata only.
+    """
     if not isinstance(results, list):
         return None
     candidates = [item for item in results if isinstance(item, dict)]
@@ -49,7 +86,25 @@ def _pick_best_infoscience_match(results: Any) -> dict[str, Any] | None:
         score = item.get("score")
         return float(score) if isinstance(score, (int, float)) else -1.0
 
-    return sorted(candidates, key=_score, reverse=True)[0]
+    candidates.sort(key=_score, reverse=True)
+
+    normalized_orcid = candidate_orcid.strip() if isinstance(candidate_orcid, str) and candidate_orcid.strip() else None
+    candidate_tokens = _name_tokens(candidate_name)
+    has_real_name = len(candidate_tokens) >= 2
+
+    if normalized_orcid:
+        for item in candidates:
+            item_orcid = item.get("orcid")
+            if isinstance(item_orcid, str) and item_orcid.strip() == normalized_orcid:
+                return item
+
+    if has_real_name:
+        for item in candidates:
+            item_tokens = _name_tokens(item.get("name"))
+            if item_tokens & candidate_tokens:
+                return item
+
+    return None
 
 
 def _deduplicate_preserve_order(values: list[str]) -> list[str]:
@@ -168,7 +223,24 @@ class PersonAgentV2:
                 or username
             )
             infoscience_results = providers.infoscience.search_person(str(search_query))
-            infoscience_match = _pick_best_infoscience_match(infoscience_results)
+            # Acceptance is gated on ORCID equality or name-token overlap
+            # against the GitHub profile name; without that, an opaque
+            # github handle ("3C111", "gabyx") would resolve to whichever
+            # person Infoscience scores highest for that string, dragging
+            # phantom affiliations along. See `_pick_best_infoscience_match`
+            # for the rule.
+            candidate_name = github_user.get("name") or context.get("person_query")
+            infoscience_match = _pick_best_infoscience_match(
+                infoscience_results,
+                candidate_name=candidate_name if isinstance(candidate_name, str) else None,
+                candidate_orcid=orcid_identifier_hint,
+            )
+            if infoscience_results and infoscience_match is None:
+                warnings.append(
+                    f"Infoscience search returned {len(infoscience_results)} hits for "
+                    f"{search_query!r} but none confirmed by ORCID or name overlap; "
+                    "skipping enrichment to avoid phantom affiliations.",
+                )
         else:
             warnings.append("Infoscience provider not configured for person enrichment")
 
