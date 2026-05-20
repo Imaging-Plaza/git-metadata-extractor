@@ -1296,16 +1296,64 @@ def _extract_composite_pair(composite_id: Any) -> tuple[str | None, str | None]:
     return left, right
 
 
+def _normalize_role_value(role: Any) -> str:
+    """Lowercase + strip dots + collapse whitespace, for role equality.
+
+    Treats `Ph.D Student`, `PhD Student`, and `phd  student` as equivalent
+    so they merge into one canonical role rather than three rows in the
+    output (issue #30 / #34).
+    """
+    if not isinstance(role, str):
+        return ""
+    cleaned = role.replace(".", "").lower()
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _pick_membership_role(roles: list[tuple[str | None, str | None, str | None]]) -> str | None:
+    """Pick the canonical role from a list of `(role, hasBeginning, hasEnd)` tuples.
+
+    Policy (rmfranken issue #34 task list):
+    1. Drop null / empty roles.
+    2. If all remaining roles normalize to the same value (`_normalize_role_value`),
+       pick the longest (preserves richer punctuation/case — "Ph.D Student"
+       beats "PhD Student" on length).
+    3. Otherwise, pick the role from the entry with the most recent
+       `time:hasEnd` (fallback `time:hasBeginning`). Null dates rank lowest.
+    """
+    valid = [(r, b, e) for (r, b, e) in roles if isinstance(r, str) and r.strip()]
+    if not valid:
+        return None
+    if len({_normalize_role_value(r) for r, _, _ in valid}) == 1:
+        return max((r for r, _, _ in valid), key=len)
+    # most-recent-dated wins; sort key prefers entries with hasEnd, then hasBeginning.
+    def _date_key(entry: tuple[str | None, str | None, str | None]) -> tuple[str, str]:
+        _, begin, end = entry
+        return (end or "", begin or "")
+    valid.sort(key=_date_key, reverse=True)
+    return valid[0][0]
+
+
+def _merge_membership_dates(
+    dates: list[tuple[str | None, str | None]],
+) -> tuple[str | None, str | None]:
+    """Earliest non-null hasBeginning, latest non-null hasEnd."""
+    begins = sorted(b for b, _ in dates if isinstance(b, str) and b)
+    ends = sorted((e for _, e in dates if isinstance(e, str) and e), reverse=True)
+    return (begins[0] if begins else None, ends[0] if ends else None)
+
+
 def _normalize_membership_entities(
     memberships: list[dict[str, Any]],
     *,
     person_lookup: dict[str, str],
     organization_lookup: dict[str, str],
 ) -> tuple[list[dict[str, Any]], set[tuple[str, str]], list[str]]:
-    normalized_memberships: list[dict[str, Any]] = []
+    # Buffer by canonical id so duplicates (issue #30/#34) merge their role
+    # and date fields instead of one silently shadowing the other.
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    bucket_order: list[str] = []
     covered_pairs: set[tuple[str, str]] = set()
     warnings: list[str] = []
-    seen_membership_ids: set[str] = set()
 
     for membership in memberships:
         composite_id_ref: Any = membership.get("id")
@@ -1333,9 +1381,6 @@ def _normalize_membership_entities(
         # convention so the @id round-trips through `_extract_composite_pair`
         # even when personId or orgId contain `_` (GitHub usernames may).
         canonical_membership_id = f"{canonical_person_id}__{canonical_org_id}"
-        if canonical_membership_id in seen_membership_ids:
-            continue
-        seen_membership_ids.add(canonical_membership_id)
         covered_pairs.add((canonical_person_id, canonical_org_id))
 
         normalized_membership = deepcopy(membership)
@@ -1363,7 +1408,38 @@ def _normalize_membership_entities(
         if not isinstance(normalized_membership.get("time:hasEnd"), str):
             normalized_membership["time:hasEnd"] = None
 
-        normalized_memberships.append(normalized_membership)
+        if canonical_membership_id not in buckets:
+            buckets[canonical_membership_id] = []
+            bucket_order.append(canonical_membership_id)
+        buckets[canonical_membership_id].append(normalized_membership)
+
+    normalized_memberships: list[dict[str, Any]] = []
+    for canonical_id in bucket_order:
+        group = buckets[canonical_id]
+        if len(group) == 1:
+            normalized_memberships.append(group[0])
+            continue
+
+        # Merge >1 duplicates per issue #30 / #34. First entry wins for
+        # opaque fields (uuid, identifiers); role + dates use the
+        # resolution policies above.
+        base = group[0]
+        roles = [
+            (m.get("org:role"), m.get("time:hasBeginning"), m.get("time:hasEnd"))
+            for m in group
+        ]
+        dates = [(m.get("time:hasBeginning"), m.get("time:hasEnd")) for m in group]
+        merged_role = _pick_membership_role(roles)
+        merged_begin, merged_end = _merge_membership_dates(dates)
+        base["org:role"] = merged_role
+        base["time:hasBeginning"] = merged_begin
+        base["time:hasEnd"] = merged_end
+        warnings.append(
+            f"Merged {len(group)} duplicate memberships at {canonical_id} "
+            f"(roles seen: {sorted({r for r, _, _ in roles if r})!r} → "
+            f"{merged_role!r}).",
+        )
+        normalized_memberships.append(base)
 
     return normalized_memberships, covered_pairs, warnings
 
