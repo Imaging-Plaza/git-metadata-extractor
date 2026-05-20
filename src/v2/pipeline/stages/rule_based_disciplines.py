@@ -51,7 +51,11 @@ from src.v2.pipeline.stages.models import AssembledOutput
 logger = logging.getLogger(__name__)
 
 REPOSITORY_TYPE = "schema:SoftwareSourceCode"
-DEFAULT_MAX = 3
+# Bumped from 3 to 5: the walk now collects the FULL allowed-ancestor
+# chain per hit (granular → broad). One semantic hit can contribute
+# both `information-engineering` AND `applied-sciences`, so the cap
+# must be generous enough to leave room for ~2 hits worth of chains.
+DEFAULT_MAX = 5
 DEFAULT_MIN_SCORE = 0.4
 DEFAULT_TOP_K = 10
 README_CHARS_CAP = 4000
@@ -135,27 +139,47 @@ def _is_repository(entity: Any) -> bool:
     return any("SoftwareSourceCode" in str(item) for item in types)
 
 
-def _walk_to_allowed_ancestor(
+def _walk_collect_allowed_ancestors(
     category_id: str,
     qid_by_category: dict[str, tuple[str | None, str | None]],
     *,
     max_steps: int = 8,
-) -> tuple[str | None, list[str]]:
-    """Walk parent_id chain until we find a category whose wikidata_qid
-    is in DisciplineV2. Returns (qid_or_None, trail_for_audit)."""
+) -> tuple[list[str], list[str]]:
+    """Walk the parent_id chain and collect EVERY category whose
+    wikidata_qid is in DisciplineV2.
+
+    Returns `(allowed_qids_granular_first, trail_for_audit)`.
+
+    Why we collect the whole chain instead of stopping at the first
+    match: the enum is a finite set of broad disciplines (Mathematics,
+    Statistics, Information Engineering, Applied Sciences, ...). A
+    granular EPFL Graph hit like `graphical-models` walks through
+    `data-science → information-engineering → applied-sciences`. Both
+    `information-engineering` (Q1254373) and `applied-sciences`
+    (Q7112556) are valid enum members. Keeping only the first one
+    found loses the broader-discipline context that ontology consumers
+    expect to be present (a paper that is Information Engineering IS
+    also Applied Sciences by subclass relation).
+
+    The caller dedupes across hits so the final `pulse:discipline`
+    list reflects granular → broad with no repeats.
+    """
     trail: list[str] = []
+    matches: list[str] = []
     current = category_id
     for _ in range(max_steps):
         if current not in qid_by_category:
             break
         qid, parent = qid_by_category[current]
         trail.append(current)
-        if isinstance(qid, str) and f"wd:{qid}" in _ALLOWED_QIDS:
-            return f"wd:{qid}", trail
+        if isinstance(qid, str):
+            normalized = f"wd:{qid}"
+            if normalized in _ALLOWED_QIDS:
+                matches.append(normalized)
         if not isinstance(parent, str) or not parent or parent == current:
             break
         current = parent
-    return None, trail
+    return matches, trail
 
 
 def _fetch_category_chain_qids(
@@ -273,7 +297,7 @@ async def tag_disciplines(
         return assembled, warnings
 
     new_root = deepcopy(assembled.root_entity)
-    selected: list[str] = []
+    selected: list[str] = []  # order = granular-first across hits
     seen_qids: set[str] = set()
     for hit in hits:
         score = hit.get("score")
@@ -282,15 +306,25 @@ async def tag_disciplines(
         category_id = hit.get("category_id")
         if not isinstance(category_id, str):
             continue
-        qid, trail = _walk_to_allowed_ancestor(category_id, qid_by_category)
-        if qid is None or qid in seen_qids:
-            continue
-        seen_qids.add(qid)
-        selected.append(qid)
-        warnings.append(
-            f"Inferred pulse:discipline={qid} from EPFL Graph hit "
-            f"{category_id!r} (score={float(score):.3f}, walk={trail}).",
+        chain_qids, trail = _walk_collect_allowed_ancestors(
+            category_id, qid_by_category,
         )
+        if not chain_qids:
+            continue
+        # `chain_qids` is granular-first; preserve that order on insertion
+        # so the final pulse:discipline list reads from most specific to
+        # broadest by ontology depth.
+        for qid in chain_qids:
+            if qid in seen_qids:
+                continue
+            if len(selected) >= max_disciplines:
+                break
+            seen_qids.add(qid)
+            selected.append(qid)
+            warnings.append(
+                f"Inferred pulse:discipline={qid} from EPFL Graph hit "
+                f"{category_id!r} (score={float(score):.3f}, walk={trail}).",
+            )
         if len(selected) >= max_disciplines:
             break
 
