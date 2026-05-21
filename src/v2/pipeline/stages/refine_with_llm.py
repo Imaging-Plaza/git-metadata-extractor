@@ -660,6 +660,14 @@ async def _run_rescue_pass(
     if not readme_text and not citation_cff and not aux_files:
         return ([], stats)
 
+    logger.info(
+        "rescue_refiner: payload — repo=%s readme=%s cff=%s aux_files=%s candidates=%d",
+        repo_handle,
+        f"{len(readme_text)}B" if readme_text else "none",
+        f"{len(citation_cff)}B" if citation_cff else "none",
+        {k: f"{len(v)}B" for k, v in aux_files.items()},
+        len(candidates),
+    )
     refiner = RescueRefinerAgent()
     refiner_input = RescueRefinerInput(
         repo_handle=repo_handle,

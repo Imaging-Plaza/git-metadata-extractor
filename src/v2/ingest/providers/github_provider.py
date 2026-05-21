@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import itertools
 import json
 import logging
@@ -813,6 +814,70 @@ class RealGitHubProvider(GitHubProvider):
             key,
             _fetch,
             label=f"github.get_repository_rest({full_name})",
+        )
+
+    def get_repository_readme(self, full_name: str) -> str:
+        """Fetch the README content for a repository via the GitHub REST
+        API (`/repos/{owner}/{repo}/readme`).
+
+        The endpoint returns the README in whatever location/casing the
+        repo uses (`README.md`, `README.rst`, `readme.txt`, …) and the
+        content as base64 by default. We decode, cap at 100KB, and
+        cache. Empty string when the repo has no README or the call
+        fails — callers (context_gather) fall back to repo description.
+
+        Why this isn't part of `get_repository`: the upstream gimie
+        JSON-LD that `get_repository` consumes does NOT carry the README
+        body, only `schema:description` (the repo's short tagline). For
+        a while the refiners were running on that 138-byte tagline
+        thinking it was the README. Surface it as its own field so
+        callers can pull it explicitly.
+        """
+
+        max_bytes = 100_000
+
+        def _fetch() -> str:
+            url = f"https://api.github.com/repos/{full_name}/readme"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github README fetch failed: %s", full_name)
+                return ""
+            if response.status_code == 404:
+                return ""
+            if response.status_code != 200:
+                logger.info(
+                    "github README fetch returned %d for %s",
+                    response.status_code, full_name,
+                )
+                return ""
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github README response not JSON: %s", full_name)
+                return ""
+            if not isinstance(payload, dict):
+                return ""
+            content_b64 = payload.get("content")
+            encoding = payload.get("encoding")
+            if not isinstance(content_b64, str) or encoding != "base64":
+                return ""
+            try:
+                decoded = base64.b64decode(content_b64).decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                logger.exception("github README base64-decode failed: %s", full_name)
+                return ""
+            return decoded[:max_bytes]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_repository_readme", full_name=full_name)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_repository_readme({full_name})",
         )
 
     def get_repository_sbom(self, full_name: str) -> list[dict[str, Any]] | None:

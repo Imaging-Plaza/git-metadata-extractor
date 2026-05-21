@@ -263,7 +263,21 @@ def _optional_repository_context(
         )
         languages = {}
 
+    # Prefer the dedicated REST README fetch; the gimie JSON-LD that
+    # populates `repository_metadata` does NOT include the README body,
+    # only `schema:description` (the repo's short tagline). Without this
+    # call the LLM refiners were running on a ~138-byte tagline thinking
+    # it was the README. Fall back to legacy metadata keys / description
+    # only when the dedicated fetch comes back empty.
+    readme_from_provider = ""
+    try:
+        readme_from_provider = providers.github.get_repository_readme(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository README fetch failed for {full_name}: {exc}",
+        )
     readme_content = _first_non_empty_string(
+        readme_from_provider,
         repository_metadata.get("readme"),
         repository_metadata.get("readme_content"),
         repository_metadata.get("README"),
@@ -373,7 +387,15 @@ async def gather_context(  # noqa: C901, PLR0915
                 cause=exc,
             ) from exc
 
+        readme_from_provider = ""
+        try:
+            readme_from_provider = providers.github.get_repository_readme(full_name)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository README fetch failed for {full_name}: {exc}",
+            )
         readme_content = _first_non_empty_string(
+            readme_from_provider,
             repository_metadata.get("readme"),
             repository_metadata.get("readme_content"),
             repository_metadata.get("README"),
