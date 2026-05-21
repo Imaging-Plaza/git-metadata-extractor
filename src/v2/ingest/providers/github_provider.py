@@ -900,6 +900,17 @@ class RealGitHubProvider(GitHubProvider):
         ".podspec",
     )
 
+    # Files inside `.github/` that carry maintainer / funding signal.
+    # CODEOWNERS lives there by convention (also valid at root or in
+    # `docs/`, but `.github/` is the canonical and most-common spot).
+    # FUNDING.yml is GitHub Sponsors / Open Collective / Patreon /
+    # custom funding URLs.
+    _AUX_DOTGITHUB_FILE_PATTERNS: frozenset[str] = frozenset({
+        "codeowners",
+        "funding.yml",
+        "funding.yaml",
+    })
+
     def get_repository_aux_files(self, full_name: str) -> dict[str, str]:
         """Fetch repo-root evidence files (AUTHORS, CITATION.cff,
         NOTICE, pyproject.toml, etc.) that complement the README with
@@ -922,28 +933,33 @@ class RealGitHubProvider(GitHubProvider):
 
         max_bytes = 50_000
 
-        def _list_root_files() -> set[str]:
-            url = f"https://api.github.com/repos/{full_name}/contents/"
+        def _list_dir_files(path: str) -> set[str]:
+            url = f"https://api.github.com/repos/{full_name}/contents/{path}"
             try:
                 response = self._run_with_rate_limit(
                     lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
                 )
             except Exception:  # noqa: BLE001
                 logger.exception(
-                    "github contents-root listing failed: %s", full_name,
+                    "github contents listing failed: %s /%s",
+                    full_name, path,
                 )
+                return set()
+            if response.status_code == 404:
+                # Directory absent — common for `.github/`; not an error.
                 return set()
             if response.status_code != 200:
                 logger.info(
-                    "github contents-root listing returned %d for %s",
-                    response.status_code,
-                    full_name,
+                    "github contents listing returned %d for %s /%s",
+                    response.status_code, full_name, path,
                 )
                 return set()
             try:
                 payload = response.json()
             except ValueError:
-                logger.exception("github contents-root not JSON: %s", full_name)
+                logger.exception(
+                    "github contents listing not JSON: %s /%s", full_name, path,
+                )
                 return set()
             if not isinstance(payload, list):
                 return set()
@@ -969,19 +985,32 @@ class RealGitHubProvider(GitHubProvider):
             return content[:max_bytes] if content else None
 
         def _fetch() -> dict[str, str]:
-            root_names = _list_root_files()
-            if not root_names:
-                return {}
+            out: dict[str, str] = {}
+
+            root_names = _list_dir_files("")
             interesting = [
                 name for name in root_names
                 if name.lower() in self._AUX_FILE_PATTERNS
                 or name.lower().endswith(self._AUX_FILE_SUFFIXES)
             ]
-            out: dict[str, str] = {}
             for name in interesting:
                 content = _fetch_raw(name)
                 if content:
                     out[name] = content
+
+            # `.github/` carries the canonical CODEOWNERS / FUNDING.yml.
+            # One extra listing call per extract — skipped silently when
+            # the directory doesn't exist.
+            dotgithub_names = _list_dir_files(".github")
+            dotgithub_interesting = [
+                name for name in dotgithub_names
+                if name.lower() in self._AUX_DOTGITHUB_FILE_PATTERNS
+            ]
+            for name in dotgithub_interesting:
+                content = _fetch_raw(f".github/{name}")
+                if content:
+                    out[f".github/{name}"] = content
+
             return out
 
         if self._cache is None:
