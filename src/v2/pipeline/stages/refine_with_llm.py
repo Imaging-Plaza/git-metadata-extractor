@@ -22,6 +22,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 import re
 
@@ -428,15 +429,143 @@ def _normalize_doi_url(value: str | None) -> str | None:
     return None
 
 
+# GitHub handle suffixes that flag the account as a lab / group / department
+# rather than an individual researcher. AUTHORS lines like
+# "M Mathis, mackenzie@post.harvard.edu | https://github.com/MMathisLab"
+# pair a person's name with a lab-branded handle — modelling this as a
+# Person creates a phantom duplicate of the ORCID-anchored Person while
+# losing the lab→institution relation. Reclassifying to org:Organization
+# lets us emit `org:unitOf` toward the real institution.
+_LAB_HANDLE_SUFFIXES: tuple[str, ...] = (
+    "lab", "labs",
+    "group",
+    "team",
+    "center", "centre",
+    "institute",
+    "consortium",
+    "network",
+)
+
+
+def _looks_lab_flavored(handle: str | None) -> bool:
+    """Heuristic: GitHub handle whose suffix screams "this is a lab/group"."""
+    if not isinstance(handle, str):
+        return False
+    normalized = handle.strip().lower()
+    if not normalized:
+        return False
+    return any(normalized.endswith(suffix) for suffix in _LAB_HANDLE_SUFFIXES)
+
+
+def _build_person_dedup_index(
+    persons: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Build (handle | ORCID | email) → canonical @id map for existing
+    persons.
+
+    The discovery refiner's existing @id-equality check is not enough:
+    rule-based persons are commonly keyed on ORCID
+    (`https://orcid.org/X-X-X-X`) while discovery proposes them by their
+    GitHub URL (`https://github.com/<handle>`) — different @ids for the
+    same human. This index lets us catch those duplicates before
+    materialisation, so we drop them rather than re-emit a phantom.
+    """
+
+    index: dict[str, str] = {}
+    for person in persons:
+        if not isinstance(person, dict):
+            continue
+        canonical = person.get("id") or person.get("@id")
+        if not isinstance(canonical, str) or not canonical:
+            continue
+        handle = person.get("pulse:githubUsername")
+        if isinstance(handle, str) and handle.strip():
+            index.setdefault(f"gh:{handle.strip().lower()}", canonical)
+        orcid_url = person.get("pulse:orcidIdentifier")
+        if isinstance(orcid_url, str):
+            match = re.search(
+                r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])",
+                orcid_url,
+                re.IGNORECASE,
+            )
+            if match:
+                index.setdefault(f"orcid:{match.group(1).upper()}", canonical)
+        email = person.get("schema:email")
+        if isinstance(email, str) and "@" in email:
+            index.setdefault(f"email:{email.strip().lower()}", canonical)
+    return index
+
+
+def _infer_lab_parent_org(
+    person_name: str | None,
+    persons: list[dict[str, Any]],
+    memberships: list[dict[str, Any]],
+) -> str | None:
+    """When discovery promotes a lab-flavoured handle to an Org, link it
+    via `org:unitOf` to the institution its named owner already belongs
+    to.
+
+    Strategy: loose-match `person_name` (tokens length ≥ 3, ≥ 2 shared
+    with an existing person), then return the @id of that person's
+    first kept Membership organisation. Returns None if no confident
+    match — caller will emit the Org without `org:unitOf` rather than
+    guess.
+    """
+
+    if not isinstance(person_name, str):
+        return None
+    target = person_name.strip().lower()
+    if not target:
+        return None
+    target_tokens = set(re.findall(r"\w{3,}", target))
+    if not target_tokens:
+        return None
+
+    matched_person_ids: list[str] = []
+    for person in persons:
+        if not isinstance(person, dict):
+            continue
+        candidate_name = (person.get("schema:name") or "").strip().lower()
+        if not candidate_name:
+            continue
+        candidate_tokens = set(re.findall(r"\w{3,}", candidate_name))
+        if len(target_tokens & candidate_tokens) >= 2:
+            canonical = person.get("id") or person.get("@id")
+            if isinstance(canonical, str) and canonical:
+                matched_person_ids.append(canonical)
+
+    if not matched_person_ids:
+        return None
+
+    matched_set = set(matched_person_ids)
+    for membership in memberships:
+        if not isinstance(membership, dict):
+            continue
+        person_ref = membership.get("_person_ref")
+        if person_ref not in matched_set:
+            continue
+        org_ref = membership.get("org:organization")
+        if isinstance(org_ref, dict):
+            org_ref = org_ref.get("@id") or org_ref.get("id")
+        if isinstance(org_ref, str) and org_ref.strip():
+            return org_ref
+    return None
+
+
 def _materialize_person(
     proposal: DiscoveredPerson,
     existing_ids: set[str],
+    dedup_index: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Convert a DiscoveredPerson into a SHACL-compliant Person entity.
 
     Returns (entity_dict, warning_or_none). When the proposal can't be
     materialised (missing identifier, duplicate id, low confidence), the
-    entity is None and the warning explains why.
+    entity is None and the warning explains why. `dedup_index` lets us
+    catch cross-identifier duplicates (handle ↔ ORCID ↔ email pointing
+    at the same human under different @ids) — those get dropped rather
+    than linked, per the project's "stay within the ontology, no
+    `owl:sameAs` until reviewed" policy.
     """
     if proposal.confidence < DISCOVERY_CONFIDENCE_FLOOR:
         return None, (
@@ -461,12 +590,41 @@ def _materialize_person(
             f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
             f"(@id {person_id} already in graph)"
         )
+    if dedup_index:
+        if github_handle:
+            existing_canonical = dedup_index.get(f"gh:{github_handle.lower()}")
+            if existing_canonical:
+                return None, (
+                    f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+                    f"(handle @{github_handle} already in graph as {existing_canonical})"
+                )
+        if orcid:
+            existing_canonical = dedup_index.get(f"orcid:{orcid.upper()}")
+            if existing_canonical:
+                return None, (
+                    f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+                    f"(ORCID {orcid} already in graph as {existing_canonical})"
+                )
+        email = (proposal.schema_email or "").strip().lower()
+        if email and "@" in email:
+            existing_canonical = dedup_index.get(f"email:{email}")
+            if existing_canonical:
+                return None, (
+                    f"discovery_refiner: dropped Person proposal {proposal.schema_name!r} "
+                    f"(email {email} already in graph as {existing_canonical})"
+                )
     return (
         {
             "id": person_id,
             "type": "schema:Person",
             "shacl": "pulse:PersonShape",
             "identifiers": {
+                # `uuid` is a SHACL-required identifier for every Person — the
+                # strict validator rejects entities missing it. Rule-based
+                # persons get one stamped during reconciliation (see
+                # reconciliation.py around line 137); discovery-materialised
+                # persons never went through that stage so we mint one here.
+                "uuid": str(uuid4()),
                 "pulse:orcid": f"https://orcid.org/{orcid}" if orcid else None,
                 "pulse:githubUsername": github_handle,
             },
@@ -521,6 +679,9 @@ def _materialize_org(
             "type": "org:Organization",
             "shacl": "pulse:OrganizationShape",
             "identifiers": {
+                # SHACL-required: mirrors the rule-based Org reconciliation
+                # path which always stamps a uuid (reconciliation.py:206).
+                "uuid": str(uuid4()),
                 "pulse:ror": ror,
                 "pulse:githubOrganizationHandle": gh_handle,
             },
@@ -562,7 +723,12 @@ def _materialize_article(
             "id": doi_url,
             "type": "schema:ScholarlyArticle",
             "shacl": "pulse:ArticleShape",
-            "identifiers": {"schema:identifier": doi_url},
+            "identifiers": {
+                # SHACL-required: every Article carries a uuid identifier
+                # alongside its primary DOI/identifier value.
+                "uuid": str(uuid4()),
+                "schema:identifier": doi_url,
+            },
             "idSource": "schema:identifier",
             "schema:name": proposal.schema_name,
             "schema:identifier": doi_url,
@@ -574,6 +740,70 @@ def _materialize_article(
         },
         None,
     )
+
+
+def _materialize_lab_org(
+    proposal: DiscoveredPerson,
+    existing_org_ids: set[str],
+    parent_org_id: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Convert a discovery-proposed Person carrying a lab-flavoured
+    GitHub handle into an `org:Organization` entity.
+
+    AUTHORS lines like ``M Mathis, ... | https://github.com/MMathisLab``
+    name a real human but the handle functions as a lab identity — it
+    is the lab's GitHub account, not the person's personal one. The
+    correct ontological move is to emit it as an Organization (with
+    `pulse:githubOrganizationHandle`) and, when we can identify the
+    parent institution from the named person's existing Memberships,
+    link it via `org:unitOf`. We deliberately do NOT add `owl:sameAs`
+    between the lab Org and the underlying Person — that pattern is
+    under review with the ontology owner.
+    """
+
+    handle = _normalize_github_handle(proposal.pulse_githubUsername)
+    if not handle:
+        return None, (
+            f"discovery_refiner: dropped lab-Org proposal {proposal.schema_name!r} "
+            "(no github handle)"
+        )
+    org_id = f"https://github.com/{handle}"
+    if org_id in existing_org_ids:
+        return None, (
+            f"discovery_refiner: dropped lab-Org proposal {proposal.schema_name!r} "
+            f"(@id {org_id} already in graph)"
+        )
+
+    # Display name: keep the AUTHORS-line name but tag the type. The
+    # person's name is the most accurate label we have for a lab-flavoured
+    # account at this stage; a richer rename pass can follow.
+    entity: dict[str, Any] = {
+        "id": org_id,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            # SHACL-required uuid, mirrored from the standard Org path.
+            "uuid": str(uuid4()),
+            "pulse:githubOrganizationHandle": handle,
+        },
+        "idSource": "pulse:githubOrganizationHandle",
+        "schema:name": proposal.schema_name,
+        "pulse:githubOrganizationHandle": handle,
+        # Lab/group accounts on GitHub almost always belong to a research
+        # institution; falling back to the generic "Other" type is
+        # uninformative. Caller can refine later if needed.
+        "pulse:OrganizationType": "pulse:ResearchInstitution",
+        "_source": "hybrid_refiner",
+        "_discovery_reason": (proposal.reason or "")[:240],
+        "_discovery_confidence": proposal.confidence,
+        "_reclassified_from_person": True,
+    }
+    if parent_org_id:
+        # Schema expects an array of string @ids (mirrors how
+        # rule-based reconciliation populates `org:hasUnit` and
+        # `org:unitOf`), not an array of `{"@id": …}` dicts.
+        entity["org:unitOf"] = [parent_org_id]
+    return entity, None
 
 
 async def _run_rescue_pass(
@@ -732,11 +962,27 @@ async def _run_rescue_pass(
                 )
                 else "uuid"
             )
+            # `schema:identifier` is the catch-all required by the
+            # OrganizationShape's `sh:or` branch when no ROR / handle /
+            # infoscience id is available. When the rescue candidate's
+            # org_id is just a UUID (no recognisable scheme), fall back
+            # to the org name as the identifier so the stub clears
+            # strict validation. Otherwise the rescued Membership ends
+            # up pointing at an Org that gets SHACL-dropped, which then
+            # drops the Person too.
+            schema_identifier = (
+                org_id if org_id.startswith("https://ror.org/")
+                else org_name if id_source == "uuid"
+                else None
+            )
             org_stub = {
                 "id": org_id,
                 "type": "org:Organization",
                 "shacl": "pulse:OrganizationShape",
                 "identifiers": {
+                    # SHACL-required: every Org carries a uuid alongside its
+                    # primary external identifier (mirrors reconciliation).
+                    "uuid": str(uuid4()),
                     "pulse:ror": org_id if org_id.startswith("https://ror.org/") else None,
                     "pulse:infoscienceOrganizationIdentifier": (
                         org_id if org_id.startswith("https://infoscience.epfl.ch/") else None
@@ -749,9 +995,7 @@ async def _run_rescue_pass(
                 },
                 "idSource": id_source,
                 "schema:name": org_name,
-                "schema:identifier": (
-                    org_id if org_id.startswith("https://ror.org/") else None
-                ),
+                "schema:identifier": schema_identifier,
                 "pulse:OrganizationType": "pulse:OtherOrganizationType",
                 "_source": "hybrid_rescue_refiner",
                 "_rescue_reason": decision.reason[:240] if decision.reason else "",
@@ -768,6 +1012,8 @@ async def _run_rescue_pass(
                 "type": "org:Membership",
                 "shacl": "pulse:MembershipShape",
                 "identifiers": {
+                    # SHACL-required: every Membership carries a uuid.
+                    "uuid": str(uuid4()),
                     "pulse:composite": candidate.membership_id,
                 },
                 "idSource": "pulse:composite",
@@ -805,11 +1051,16 @@ async def _run_rescue_pass(
         if not isinstance(existing_refs, list):
             existing_refs = []
             person["org:hasMembership"] = existing_refs
-        ref = {"@id": membership["id"]}
-        if ref not in existing_refs and membership["id"] not in [
+        # Schema requires plain string membership IDs in `org:hasMembership`
+        # (rule-based reconciliation emits them that way). Earlier this
+        # pushed `{"@id": ...}` dicts which tripped strict validation and
+        # dropped the parent Person from the output entirely.
+        membership_id = membership["id"]
+        existing_id_set = {
             r.get("@id") if isinstance(r, dict) else r for r in existing_refs
-        ]:
-            existing_refs.append(ref)
+        }
+        if membership_id not in existing_id_set:
+            existing_refs.append(membership_id)
 
     return (warnings, stats)
 
@@ -920,9 +1171,52 @@ async def _run_discovery_pass(
     person_bucket: list[dict[str, Any]] = list(persons)
     org_bucket: list[dict[str, Any]] = list(organizations)
     article_bucket: list[dict[str, Any]] = list(articles)
+
+    # Indexes built once for cross-identifier dedup + lab-Org parent
+    # inference. `person_dedup_index` catches the case where the same
+    # human already exists under a different @id (ORCID vs github);
+    # `memberships` lets us discover which institution a lab-flavoured
+    # handle should be `org:unitOf`.
+    person_dedup_index = _build_person_dedup_index(persons)
+    existing_memberships = reconciled.memberships or []
+
     for p in proposal.new_persons[:DISCOVERY_REPLY_MAX_PER_TYPE]:
-        e, w = _materialize_person(p, existing_person_ids)
-        _accept(e, w, person_bucket, existing_person_ids)
+        handle_candidate = _normalize_github_handle(p.pulse_githubUsername)
+        if handle_candidate and _looks_lab_flavored(handle_candidate):
+            # The AUTHORS line names a person but the handle is a lab
+            # identity — materialise as Org with `org:unitOf` toward the
+            # institution where the named person already holds a
+            # Membership (when we can identify it confidently).
+            parent_org_id = _infer_lab_parent_org(
+                p.schema_name, persons, existing_memberships,
+            )
+            entity, warning = _materialize_lab_org(
+                p, existing_org_ids, parent_org_id,
+            )
+            _accept(entity, warning, org_bucket, existing_org_ids)
+            # Stamp the reciprocal `org:hasUnit` on the parent so the
+            # downstream `prune_dangling_refs` pass doesn't drop the
+            # new lab Org as an orphan (it only counts INCOMING refs,
+            # and `org:unitOf` is outgoing). Without this the lab
+            # disappears from the final graph.
+            if entity is not None and parent_org_id:
+                for parent_entity in org_bucket:
+                    if not isinstance(parent_entity, dict):
+                        continue
+                    if parent_entity.get("id") != parent_org_id:
+                        continue
+                    has_units = parent_entity.get("org:hasUnit")
+                    if not isinstance(has_units, list):
+                        has_units = []
+                        parent_entity["org:hasUnit"] = has_units
+                    if entity["id"] not in has_units:
+                        has_units.append(entity["id"])
+                    break
+        else:
+            entity, warning = _materialize_person(
+                p, existing_person_ids, person_dedup_index,
+            )
+            _accept(entity, warning, person_bucket, existing_person_ids)
     for o in proposal.new_orgs[:DISCOVERY_REPLY_MAX_PER_TYPE]:
         e, w = _materialize_org(o, existing_org_ids)
         _accept(e, w, org_bucket, existing_org_ids)
