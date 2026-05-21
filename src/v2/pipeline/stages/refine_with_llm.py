@@ -43,6 +43,11 @@ from src.v2.agents.llm.refiners.discovery import (
     DiscoveryRefinerAgent,
     DiscoveryRefinerInput,
 )
+from src.v2.agents.llm.refiners.rescue import (
+    RescueCandidate,
+    RescueRefinerAgent,
+    RescueRefinerInput,
+)
 from src.v2.agents.llm.runtime import LLMRuntimeError
 from src.v2.api_models.enums import OrganizationTypeV2
 from src.v2.ingest.providers.epfl_graph_rag import EpflGraphRagProvider
@@ -571,6 +576,221 @@ def _materialize_article(
     )
 
 
+async def _run_rescue_pass(
+    *,
+    reconciled: ReconciledEntities,
+    gathered_context: dict[str, Any] | None,
+) -> tuple[list[str], dict[str, int]]:
+    """LLM-judged rescue of evidence-thin Memberships that the
+    deterministic reconciliation pass dropped.
+
+    Pulls `_dropped_affiliations` (stamped by `_normalize_membership_entities`)
+    off each Person, presents the list to the LLM together with the
+    repo context, and re-instantiates the Memberships the model
+    explicitly approves with a verbatim-quote justification. Synthesises
+    a minimal Org stub when the rescued link's target is not yet in
+    the graph.
+    """
+    stats = {"candidates": 0, "rescued": 0, "rejected": 0}
+
+    persons = reconciled.entities.get("persons") or []
+    organizations = reconciled.entities.get("organizations") or []
+
+    persons_by_id = {p["id"]: p for p in persons if isinstance(p.get("id"), str)}
+    org_ids = {o["id"] for o in organizations if isinstance(o.get("id"), str)}
+
+    candidates: list[RescueCandidate] = []
+    for person in persons:
+        dropped = person.get("_dropped_affiliations")
+        if not isinstance(dropped, list):
+            continue
+        person_id = person.get("id")
+        person_name = person.get("schema:name")
+        for entry in dropped:
+            if not isinstance(entry, dict):
+                continue
+            membership_id = entry.get("membership_id")
+            if not isinstance(membership_id, str):
+                continue
+            candidates.append(
+                RescueCandidate(
+                    membership_id=membership_id,
+                    person_id=person_id or "",
+                    person_name=person_name,
+                    org_id=entry.get("org_id"),
+                    org_name=entry.get("org_name"),
+                    reason=entry.get("reason"),
+                ),
+            )
+    stats["candidates"] = len(candidates)
+
+    if not candidates:
+        return ([], stats)
+
+    repo_handle = ""
+    readme_text: str | None = None
+    citation_cff: str | None = None
+    if isinstance(gathered_context, dict):
+        repo_ctx = gathered_context.get("repository") or {}
+        if isinstance(repo_ctx, dict):
+            repo_handle = repo_ctx.get("full_name") or ""
+            readme_value = repo_ctx.get("readme_content")
+            if isinstance(readme_value, str) and readme_value.strip():
+                readme_text = readme_value
+            metadata = repo_ctx.get("metadata") or {}
+            if isinstance(metadata, dict):
+                cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
+                if isinstance(cff, str) and cff.strip():
+                    citation_cff = cff
+
+    if not readme_text and not citation_cff:
+        return ([], stats)
+
+    refiner = RescueRefinerAgent()
+    refiner_input = RescueRefinerInput(
+        repo_handle=repo_handle,
+        readme_text=readme_text,
+        citation_cff=citation_cff,
+        candidates=candidates,
+        existing_org_ids=sorted(org_ids),
+    )
+    warnings: list[str] = []
+    try:
+        output = await refiner.run(refiner_input=refiner_input)
+    except LLMRuntimeError as exc:
+        warnings.append(f"rescue_refiner: skipped — {exc}")
+        return (warnings, stats)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("rescue_refiner crashed")
+        warnings.append(f"rescue_refiner: skipped (unexpected error) — {exc}")
+        return (warnings, stats)
+
+    DISCOVERY_FLOOR = 0.7  # noqa: N806 — local constant
+    # Index candidates by membership_id for quick lookup on decisions.
+    candidate_index = {c.membership_id: c for c in candidates}
+    new_orgs: list[dict[str, Any]] = []
+    new_memberships: list[dict[str, Any]] = []
+    accepted_membership_ids: set[str] = set()
+
+    for decision in output.decisions:
+        candidate = candidate_index.get(decision.membership_id)
+        if candidate is None:
+            warnings.append(
+                f"rescue_refiner: dropped decision for unknown membership "
+                f"{decision.membership_id!r}",
+            )
+            continue
+        if decision.confidence < DISCOVERY_FLOOR:
+            warnings.append(
+                f"rescue_refiner: dropped rescue of {candidate.membership_id!r} "
+                f"(confidence={decision.confidence:.2f} < {DISCOVERY_FLOOR})",
+            )
+            stats["rejected"] += 1
+            continue
+
+        # Materialise the Org if it isn't in the graph yet.
+        org_id = candidate.org_id or ""
+        if not org_id:
+            warnings.append(
+                f"rescue_refiner: rescue of {candidate.membership_id!r} "
+                "skipped (candidate had no org_id)",
+            )
+            stats["rejected"] += 1
+            continue
+        if org_id not in org_ids:
+            org_name = candidate.org_name or org_id
+            id_source = (
+                "pulse:ror" if org_id.startswith("https://ror.org/")
+                else "pulse:infoscienceOrganizationIdentifier" if org_id.startswith(
+                    "https://infoscience.epfl.ch/",
+                )
+                else "pulse:githubOrganizationHandle" if org_id.startswith(
+                    "https://github.com/",
+                )
+                else "uuid"
+            )
+            org_stub = {
+                "id": org_id,
+                "type": "org:Organization",
+                "shacl": "pulse:OrganizationShape",
+                "identifiers": {
+                    "pulse:ror": org_id if org_id.startswith("https://ror.org/") else None,
+                    "pulse:infoscienceOrganizationIdentifier": (
+                        org_id if org_id.startswith("https://infoscience.epfl.ch/") else None
+                    ),
+                    "pulse:githubOrganizationHandle": (
+                        org_id.removeprefix("https://github.com/")
+                        if org_id.startswith("https://github.com/")
+                        else None
+                    ),
+                },
+                "idSource": id_source,
+                "schema:name": org_name,
+                "schema:identifier": (
+                    org_id if org_id.startswith("https://ror.org/") else None
+                ),
+                "pulse:OrganizationType": "pulse:OtherOrganizationType",
+                "_source": "hybrid_rescue_refiner",
+                "_rescue_reason": decision.reason[:240] if decision.reason else "",
+                "_rescue_confidence": decision.confidence,
+            }
+            new_orgs.append(org_stub)
+            org_ids.add(org_id)
+
+        # Materialise the Membership. Role/dates left None — the
+        # rescue evidence lives in `_rescue_reason` and the warning.
+        new_memberships.append(
+            {
+                "id": candidate.membership_id,
+                "type": "org:Membership",
+                "shacl": "pulse:MembershipShape",
+                "identifiers": {
+                    "pulse:composite": candidate.membership_id,
+                },
+                "idSource": "pulse:composite",
+                "org:organization": org_id,
+                "org:role": None,
+                "time:hasBeginning": None,
+                "time:hasEnd": None,
+                "_person_ref": candidate.person_id,
+                "_source": "hybrid_rescue_refiner",
+                "_rescue_reason": decision.reason[:240] if decision.reason else "",
+                "_rescue_confidence": decision.confidence,
+            },
+        )
+        accepted_membership_ids.add(candidate.membership_id)
+        stats["rescued"] += 1
+        warnings.append(
+            f"rescue_refiner: rescued Membership {candidate.membership_id!r} "
+            f"(person={candidate.person_name!r}, org={candidate.org_name!r}, "
+            f"confidence={decision.confidence:.2f}, reason={decision.reason[:120]!r})",
+        )
+
+    if new_orgs:
+        reconciled.entities["organizations"] = organizations + new_orgs
+    if new_memberships:
+        reconciled.memberships = list(reconciled.memberships) + new_memberships
+
+    # Reattach to the Person's org:hasMembership list so the graph
+    # walks remain consistent with the rescue.
+    for membership in new_memberships:
+        pid = membership.get("_person_ref")
+        person = persons_by_id.get(pid) if isinstance(pid, str) else None
+        if not isinstance(person, dict):
+            continue
+        existing_refs = person.get("org:hasMembership")
+        if not isinstance(existing_refs, list):
+            existing_refs = []
+            person["org:hasMembership"] = existing_refs
+        ref = {"@id": membership["id"]}
+        if ref not in existing_refs and membership["id"] not in [
+            r.get("@id") if isinstance(r, dict) else r for r in existing_refs
+        ]:
+            existing_refs.append(ref)
+
+    return (warnings, stats)
+
+
 async def _run_discovery_pass(
     *,
     reconciled: ReconciledEntities,
@@ -836,6 +1056,17 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
             by_type[type_label]["refined"] += 1
         else:
             by_type[type_label]["skipped"] += 1
+
+    # Rescue pass: ask the LLM to re-instate Memberships the
+    # deterministic filter dropped, when the README / CITATION.cff
+    # explicitly supports the person→org link. This is the "additive
+    # but targeted" counterpart to the open-ended discovery pass.
+    rescue_warnings, rescue_stats = await _run_rescue_pass(
+        reconciled=reconciled,
+        gathered_context=gathered_context,
+    )
+    warnings.extend(rescue_warnings)
+    by_type["rescue"] = rescue_stats
 
     # Additive pass: ask the LLM what's MISSING from the graph relative
     # to the README / CITATION.cff. Each proposal must clear the
