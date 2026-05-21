@@ -865,6 +865,134 @@ class RealGitHubProvider(GitHubProvider):
             label=f"github.get_repository_sbom({full_name})",
         )
 
+    # Curated set of repo-root files that often carry attribution /
+    # team / funding info the rest of the pipeline can't recover from
+    # ORCID or Infoscience. Lowercased keys are matched case-
+    # insensitively against the directory listing.
+    _AUX_FILE_PATTERNS: frozenset[str] = frozenset({
+        # Author / maintainer / contributor lists
+        "authors", "authors.md", "authors.rst", "authors.txt",
+        "contributors", "contributors.md", "contributors.txt",
+        "maintainers", "maintainers.md", "maintainers.yml", "maintainers.yaml",
+        "owners", "owners.yaml", "owners.yml",
+        # Citation / bibliographic self-description
+        "citation", "citation.cff", "citation.md", "citation.bib",
+        "publications.md", "papers.md",
+        # Apache-style attribution / acknowledgments
+        "notice", "notice.md", "notice.txt", "notice.yml", "notice.yaml",
+        "acknowledgments.md", "acknowledgements.md",
+        # Governance / contribution / security / funding
+        "contributing.md", "code_of_conduct.md", "governance.md",
+        "security.md", "funding.md",
+        # Language / ecosystem manifests with author / contributor fields
+        "pyproject.toml", "setup.cfg", "setup.py",
+        "package.json", "cargo.toml", "composer.json",
+        "go.mod", "package.swift", "project.toml", "pom.xml",
+        "description",  # R package manifest (Author / Maintainer fields)
+        # Research-software & public-sector metadata standards
+        ".zenodo.json", "codemeta.json", "publiccode.yml",
+    })
+
+    # Suffix-based matches for ecosystems that name files <project>.ext
+    # (e.g. CocoaPods `MyLib.podspec`, RubyGems `my_gem.gemspec`).
+    _AUX_FILE_SUFFIXES: tuple[str, ...] = (
+        ".gemspec",
+        ".podspec",
+    )
+
+    def get_repository_aux_files(self, full_name: str) -> dict[str, str]:
+        """Fetch repo-root evidence files (AUTHORS, CITATION.cff,
+        NOTICE, pyproject.toml, etc.) that complement the README with
+        attribution / funding / governance information.
+
+        Two-phase fetch to keep the API budget honest:
+
+        1. ONE call to `GET /repos/{owner}/{repo}/contents/` to list
+           repo-root entries and pick which of our curated filenames
+           actually exist (same idea gimie's `parsers/__init__.py`
+           uses to gate its CITATION/LICENSE parsers).
+        2. One raw-content fetch per surviving filename, capped at
+           50 KB each.
+
+        Returns `{filename: content}` for files found at the repo
+        root. Empty dict when none match. Cached at the per-repo level
+        with the same TTL as the rest of the github provider so a
+        re-extract within the window is free.
+        """
+
+        max_bytes = 50_000
+
+        def _list_root_files() -> set[str]:
+            url = f"https://api.github.com/repos/{full_name}/contents/"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "github contents-root listing failed: %s", full_name,
+                )
+                return set()
+            if response.status_code != 200:
+                logger.info(
+                    "github contents-root listing returned %d for %s",
+                    response.status_code,
+                    full_name,
+                )
+                return set()
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github contents-root not JSON: %s", full_name)
+                return set()
+            if not isinstance(payload, list):
+                return set()
+            return {
+                item["name"]
+                for item in payload
+                if isinstance(item, dict)
+                and item.get("type") == "file"
+                and isinstance(item.get("name"), str)
+            }
+
+        def _fetch_raw(path: str) -> str | None:
+            url = f"https://raw.githubusercontent.com/{full_name}/HEAD/{path}"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                return None
+            if response.status_code != 200:
+                return None
+            content = response.text or ""
+            return content[:max_bytes] if content else None
+
+        def _fetch() -> dict[str, str]:
+            root_names = _list_root_files()
+            if not root_names:
+                return {}
+            interesting = [
+                name for name in root_names
+                if name.lower() in self._AUX_FILE_PATTERNS
+                or name.lower().endswith(self._AUX_FILE_SUFFIXES)
+            ]
+            out: dict[str, str] = {}
+            for name in interesting:
+                content = _fetch_raw(name)
+                if content:
+                    out[name] = content
+            return out
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_repository_aux_files", full_name=full_name)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_repository_aux_files({full_name})",
+        )
+
     def get_commit_bookends(
         self,
         full_name: str,

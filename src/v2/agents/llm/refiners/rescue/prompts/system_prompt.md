@@ -6,6 +6,7 @@ You receive:
 - `repo_handle` — the GitHub `owner/repo` being extracted.
 - `readme_text` — the cleaned README (markdown stripped of badges/images).
 - `citation_cff` — CITATION.cff content if present.
+- `aux_files` — `{filename: content}` for repo-root attribution files we found (AUTHORS, NOTICE.yml, pyproject.toml, CONTRIBUTING.md, CODE_OF_CONDUCT.md, package.json, codemeta.json, .zenodo.json, …). These are the **richest** signal for affiliations — `AUTHORS` typically lists "X at Y institution", `NOTICE.yml` carries copyright attributions ("© A. & M.W. Mathis Labs"), `pyproject.toml`/`package.json` declare authors with affiliations or emails, `codemeta.json` and `.zenodo.json` carry structured author records. Treat any of these as primary evidence on par with the README.
 - `candidates` — list of dropped `(person, org)` pairs with the original reason. Each candidate carries `person_id`, `person_name`, `org_id`, `org_name`, `membership_id`.
 
 ## Output contract
@@ -30,7 +31,7 @@ Return ONLY decisions you want to flip to accepted. Skip candidates you reject �
 ## Hard rules
 
 - **Confidence must be ≥ 0.7** for any accept. Anything below: do not list.
-- **`reason` must be a verbatim quote** from the README or CITATION.cff that explicitly supports the Person→Org link. Naming an org in passing is not enough — the snippet must connect THIS person to THIS org.
+- **`reason` must be a verbatim quote** from the README, CITATION.cff, or one of the `aux_files` (AUTHORS, NOTICE.yml, pyproject.toml, etc.) that explicitly supports the Person→Org link. Naming an org in passing is not enough — the snippet must connect THIS person to THIS org. Prefix the quote with the source filename when it comes from an aux file (e.g. `"AUTHORS: Mackenzie Mathis is at the Adaptive Motor Control Lab, EPFL"`).
 - **`accept: true` only.** Do not emit `false` entries; absence is rejection.
 - **Conservative default.** When in doubt, do not rescue. The user already accepted that the pipeline drops these by default; you're only undoing that for genuinely well-supported cases.
 

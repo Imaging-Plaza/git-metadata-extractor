@@ -88,6 +88,8 @@ class DiscoveryRefinerInput(BaseModel):
     citation_cff: str | None = None
     repo_description: str | None = None
     repo_topics: list[str] = Field(default_factory=list)
+    # Repo-root attribution files (AUTHORS, NOTICE, pyproject.toml, …).
+    aux_files: dict[str, str] = Field(default_factory=dict)
     existing_person_ids: list[str] = Field(default_factory=list)
     existing_org_ids: list[str] = Field(default_factory=list)
     existing_article_ids: list[str] = Field(default_factory=list)
@@ -125,6 +127,12 @@ class DiscoveryRefinerAgent:
             payload["readme_text"] = payload["readme_text"][:_README_CAP]
         if isinstance(payload.get("citation_cff"), str):
             payload["citation_cff"] = payload["citation_cff"][:_CITATION_CAP]
+        aux = payload.get("aux_files") or {}
+        if isinstance(aux, dict):
+            payload["aux_files"] = {
+                name: (content[:6_000] if isinstance(content, str) else content)
+                for name, content in aux.items()
+            }
 
         user_prompt = (
             "Inspect the repository context below and propose entities the "

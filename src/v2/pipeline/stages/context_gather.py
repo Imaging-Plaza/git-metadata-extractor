@@ -290,6 +290,19 @@ def _optional_repository_context(
         if isinstance(fetched_jsonld, dict):
             gimie_jsonld = fetched_jsonld
 
+    # Auxiliary attribution / governance files at the repo root.
+    # `get_repository_aux_files` lists the root directory once, then
+    # raw-fetches only the curated filenames that exist. Gives the LLM
+    # refiners (rescue + discovery) signal the README alone doesn't
+    # carry — AUTHORS, NOTICE.yml, CITATION.cff, pyproject.toml etc.
+    aux_files: dict[str, str] = {}
+    try:
+        aux_files = providers.github.get_repository_aux_files(full_name)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository aux-files lookup failed for {full_name}: {exc}",
+        )
+
     return {
         "full_name": full_name,
         "metadata": repository_metadata,
@@ -297,6 +310,7 @@ def _optional_repository_context(
         "contributors": contributors,
         "languages": languages,
         "gimie_jsonld": gimie_jsonld,
+        "aux_files": aux_files,
         "repository_files": _coerce_repository_files(
             repository_metadata.get("repository_files") or repository_metadata.get("files"),
         ),
@@ -373,6 +387,14 @@ async def gather_context(  # noqa: C901, PLR0915
 
         gimie_jsonld = providers.github.get_repository_jsonld(full_name)
 
+        try:
+            aux_files = providers.github.get_repository_aux_files(full_name)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository aux-files lookup failed for {full_name}: {exc}",
+            )
+            aux_files = {}
+
         context["repository"] = {
             "full_name": full_name,
             "metadata": repository_metadata,
@@ -380,6 +402,7 @@ async def gather_context(  # noqa: C901, PLR0915
             "contributors": contributors,
             "languages": languages,
             "gimie_jsonld": gimie_jsonld,
+            "aux_files": aux_files,
             "repository_files": _coerce_repository_files(
                 repository_metadata.get("repository_files") or repository_metadata.get("files"),
             ),

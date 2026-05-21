@@ -630,6 +630,7 @@ async def _run_rescue_pass(
     repo_handle = ""
     readme_text: str | None = None
     citation_cff: str | None = None
+    aux_files: dict[str, str] = {}
     if isinstance(gathered_context, dict):
         repo_ctx = gathered_context.get("repository") or {}
         if isinstance(repo_ctx, dict):
@@ -637,13 +638,26 @@ async def _run_rescue_pass(
             readme_value = repo_ctx.get("readme_content")
             if isinstance(readme_value, str) and readme_value.strip():
                 readme_text = readme_value
-            metadata = repo_ctx.get("metadata") or {}
-            if isinstance(metadata, dict):
-                cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
-                if isinstance(cff, str) and cff.strip():
-                    citation_cff = cff
+            # Pull every aux file we collected (AUTHORS, NOTICE.yml,
+            # pyproject.toml, …). If CITATION.cff lives in aux_files,
+            # mirror it into the dedicated slot too for prompt clarity.
+            aux_value = repo_ctx.get("aux_files")
+            if isinstance(aux_value, dict):
+                aux_files = {
+                    k: v for k, v in aux_value.items()
+                    if isinstance(v, str) and v.strip()
+                }
+            cff_from_aux = aux_files.get("CITATION.cff") or aux_files.get("citation.cff")
+            if isinstance(cff_from_aux, str) and cff_from_aux.strip():
+                citation_cff = cff_from_aux
+            else:
+                metadata = repo_ctx.get("metadata") or {}
+                if isinstance(metadata, dict):
+                    cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
+                    if isinstance(cff, str) and cff.strip():
+                        citation_cff = cff
 
-    if not readme_text and not citation_cff:
+    if not readme_text and not citation_cff and not aux_files:
         return ([], stats)
 
     refiner = RescueRefinerAgent()
@@ -651,6 +665,7 @@ async def _run_rescue_pass(
         repo_handle=repo_handle,
         readme_text=readme_text,
         citation_cff=citation_cff,
+        aux_files=aux_files,
         candidates=candidates,
         existing_org_ids=sorted(org_ids),
     )
@@ -814,6 +829,7 @@ async def _run_discovery_pass(
     citation_cff: str | None = None
     repo_description: str | None = None
     repo_topics: list[str] = []
+    aux_files: dict[str, str] = {}
     if isinstance(gathered_context, dict):
         repo_ctx = gathered_context.get("repository") or {}
         if isinstance(repo_ctx, dict):
@@ -821,17 +837,27 @@ async def _run_discovery_pass(
             readme_value = repo_ctx.get("readme_content")
             if isinstance(readme_value, str) and readme_value.strip():
                 readme_text = readme_value[:DISCOVERY_README_CAP]
+            aux_value = repo_ctx.get("aux_files")
+            if isinstance(aux_value, dict):
+                aux_files = {
+                    k: v for k, v in aux_value.items()
+                    if isinstance(v, str) and v.strip()
+                }
+            cff_from_aux = aux_files.get("CITATION.cff") or aux_files.get("citation.cff")
+            if isinstance(cff_from_aux, str) and cff_from_aux.strip():
+                citation_cff = cff_from_aux[:DISCOVERY_CITATION_CAP]
             metadata = repo_ctx.get("metadata") or {}
             if isinstance(metadata, dict):
                 if isinstance(metadata.get("description"), str):
                     repo_description = metadata["description"]
                 if isinstance(metadata.get("topics"), list):
                     repo_topics = [t for t in metadata["topics"] if isinstance(t, str)]
-                cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
-                if isinstance(cff, str) and cff.strip():
-                    citation_cff = cff[:DISCOVERY_CITATION_CAP]
+                if not citation_cff:
+                    cff = metadata.get("citation_cff") or metadata.get("CITATION_cff")
+                    if isinstance(cff, str) and cff.strip():
+                        citation_cff = cff[:DISCOVERY_CITATION_CAP]
 
-    if not readme_text and not citation_cff:
+    if not readme_text and not citation_cff and not aux_files:
         return ([], stats)  # nothing to inspect
 
     refiner = DiscoveryRefinerAgent()
@@ -841,6 +867,7 @@ async def _run_discovery_pass(
         citation_cff=citation_cff,
         repo_description=repo_description,
         repo_topics=repo_topics,
+        aux_files=aux_files,
         existing_person_ids=sorted(existing_person_ids),
         existing_org_ids=sorted(existing_org_ids),
         existing_article_ids=sorted(existing_article_ids),

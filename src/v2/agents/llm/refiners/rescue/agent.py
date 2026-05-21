@@ -64,6 +64,9 @@ class RescueRefinerInput(BaseModel):
     repo_handle: str = ""
     readme_text: str | None = None
     citation_cff: str | None = None
+    # Auxiliary attribution files (AUTHORS, NOTICE.yml, pyproject.toml,
+    # CONTRIBUTING.md, …). Keyed by filename, capped per-file upstream.
+    aux_files: dict[str, str] = Field(default_factory=dict)
     candidates: list[RescueCandidate] = Field(default_factory=list)
     existing_org_ids: list[str] = Field(default_factory=list)
 
@@ -104,6 +107,15 @@ class RescueRefinerAgent:
             payload["readme_text"] = payload["readme_text"][:_README_CAP]
         if isinstance(payload.get("citation_cff"), str):
             payload["citation_cff"] = payload["citation_cff"][:_CITATION_CAP]
+        # Per-file cap on aux files to keep the prompt budget honest.
+        # AUTHORS / NOTICE / pyproject.toml are typically the richest
+        # signal for affiliations; we keep their first 6KB each.
+        aux = payload.get("aux_files") or {}
+        if isinstance(aux, dict):
+            payload["aux_files"] = {
+                name: (content[:6_000] if isinstance(content, str) else content)
+                for name, content in aux.items()
+            }
 
         user_prompt = (
             "Decide which of the dropped (person, org) memberships below "
