@@ -342,6 +342,56 @@ class PersonAgentV2:
         if email is not None:
             payload["schema:email"] = email
 
+        # Internal profile metadata: not in the v2 ontology yet, so
+        # written under the `_` convention (stripped before SHACL /
+        # JSON-LD output). Lets the LLM refiners + downstream consumers
+        # see the rich GitHub / ORCID profile without losing the data
+        # to validation. ORCID profile fields are also surfaced here.
+        github_profile_fields = {
+            "_avatar_url":         github_user.get("avatar_url"),
+            "_html_url":           github_user.get("html_url"),
+            "_blog":               github_user.get("blog"),
+            "_bio":                github_user.get("bio"),
+            "_company":            github_user.get("company"),
+            "_location":           github_user.get("location"),
+            "_twitter_username":   github_user.get("twitter_username"),
+            "_public_repos":       github_user.get("public_repos"),
+            "_followers_count":    github_user.get("followers"),
+            "_following_count":    github_user.get("following"),
+            "_github_created_at":  github_user.get("created_at"),
+            "_github_updated_at":  github_user.get("updated_at"),
+            "_github_account_type": github_user.get("type"),
+            "_hireable":           github_user.get("hireable"),
+        }
+        for key, value in github_profile_fields.items():
+            if value not in (None, "", []):
+                payload[key] = value
+
+        # ORCID record extras (when the person was matched to an ORCID).
+        if isinstance(orcid_record, dict):
+            for orcid_key, payload_key in (
+                ("biography",        "_orcid_biography"),
+                ("country",          "_orcid_country"),
+                ("keywords",         "_orcid_keywords"),
+                ("researcher_urls",  "_orcid_researcher_urls"),
+                ("other_names",      "_orcid_other_names"),
+                ("external_identifiers", "_orcid_external_identifiers"),
+            ):
+                value = orcid_record.get(orcid_key)
+                if value not in (None, "", []):
+                    payload[payload_key] = value
+
+        # Infoscience profile extras (when matched).
+        if isinstance(infoscience_match, dict):
+            for info_key, payload_key in (
+                ("infoscience_url",  "_infoscience_url"),
+                ("position",         "_infoscience_position"),
+                ("employment_status", "_infoscience_employment_status"),
+            ):
+                value = infoscience_match.get(info_key)
+                if value not in (None, "", []):
+                    payload[payload_key] = value
+
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
             payload.update(overrides)

@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import requests
 from copy import deepcopy
 from dataclasses import dataclass, field
 from time import perf_counter
@@ -48,6 +49,12 @@ from src.v2.agents.llm.refiners.rescue import (
     RescueCandidate,
     RescueRefinerAgent,
     RescueRefinerInput,
+)
+from src.v2.agents.llm.refiners.org_resolver import (
+    OrgResolverAgent,
+    OrgResolverInput,
+    OrgResolverPatch,
+    UnresolvedOrg,
 )
 from src.v2.agents.llm.runtime import LLMRuntimeError
 from src.v2.api_models.enums import OrganizationTypeV2
@@ -429,6 +436,85 @@ def _normalize_doi_url(value: str | None) -> str | None:
     return None
 
 
+# Strict ArticleShape requires `schema:identifier` to match this pattern
+# (bare DOI, not the URL form). LLM-emitted proposals tend to give the
+# URL form; we keep it for the entity's @id but strip it for the
+# identifier slot.
+_BARE_DOI_PATTERN = re.compile(r"^10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+$")
+
+
+def _extract_bare_doi(value: str | None) -> str | None:
+    """`https://doi.org/10.x/y` → `10.x/y`; passes through valid bare DOIs."""
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if candidate.startswith("https://doi.org/"):
+        candidate = candidate[len("https://doi.org/"):]
+    elif candidate.startswith("doi:"):
+        candidate = candidate[4:]
+    if _BARE_DOI_PATTERN.match(candidate):
+        return candidate
+    return None
+
+
+_OPENALEX_BASE_URL = "https://api.openalex.org"
+
+
+def _openalex_lookup_doi(bare_doi: str) -> dict[str, Any] | None:
+    """Resolve a DOI to OpenAlex `publication_date` + author list.
+
+    Discovery articles arrive with only a DOI and a quoted README/aux
+    snippet — they don't carry the structured authorship needed for
+    ArticleShape's `schema:author` (minCount=1) or the required
+    `schema:datePublished`. OpenAlex's `/works/doi:<bare>` returns
+    both, with each authorship carrying an ORCID we can match against
+    existing Persons in the graph (avoiding duplicates) or use to
+    materialise a Person stub for unmatched authors.
+
+    Returns:
+      {
+        "publication_date": "YYYY-MM-DD" | None,
+        "authorships": [{"name": "...", "orcid": "https://orcid.org/..." | None}],
+      }
+    Or None on any failure (network, 404, malformed). The article
+    materialiser drops the proposal when this is None.
+    """
+    mailto = os.environ.get("OPENALEX_MAILTO", "").strip()
+    url = f"{_OPENALEX_BASE_URL}/works/doi:{bare_doi}"
+    params = {"mailto": mailto} if mailto else None
+    try:
+        response = requests.get(url, params=params, timeout=15)
+    except Exception:  # noqa: BLE001
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    authorships: list[dict[str, str | None]] = []
+    for raw in data.get("authorships") or []:
+        if not isinstance(raw, dict):
+            continue
+        author = raw.get("author") or {}
+        if not isinstance(author, dict):
+            continue
+        name = author.get("display_name")
+        orcid = author.get("orcid")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        authorships.append({
+            "name": name.strip(),
+            "orcid": orcid.strip() if isinstance(orcid, str) and orcid.strip() else None,
+        })
+    return {
+        "publication_date": data.get("publication_date"),
+        "authorships": authorships,
+    }
+
+
 # GitHub handle suffixes that flag the account as a lab / group / department
 # rather than an individual researcher. AUTHORS lines like
 # "M Mathis, mackenzie@post.harvard.edu | https://github.com/MMathisLab"
@@ -700,46 +786,128 @@ def _materialize_org(
 
 def _materialize_article(
     proposal: DiscoveredArticle,
-    existing_ids: set[str],
-) -> tuple[dict[str, Any] | None, str | None]:
+    existing_article_ids: set[str],
+    existing_person_ids: set[str],
+    person_dedup_index: dict[str, str],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str | None]:
+    """Materialise a DiscoveredArticle with OpenAlex enrichment.
+
+    Strict `ArticleShape` requires three things the LLM doesn't reliably
+    produce:
+    - `schema:identifier` matching `^10\\.\\d{4,9}/...$` (BARE DOI, not
+      the `https://doi.org/...` URL form).
+    - `schema:datePublished` (`xsd:date`).
+    - `schema:author` with `minCount=1` (Person references).
+
+    Strategy: parse the DOI, look it up on OpenAlex for the publication
+    date and authorship list, then match each authorship's ORCID
+    against the existing graph (via `person_dedup_index`) so we don't
+    duplicate Persons. Authors without an ORCID can't be uniquely
+    referenced — they're skipped. If we end up with zero resolvable
+    author refs after dedup we drop the article (better than emitting
+    a SHACL-invalid one).
+
+    Returns `(article, new_person_stubs, warning)`. The caller is
+    responsible for appending `new_person_stubs` to the person bucket
+    and updating `existing_person_ids` / `person_dedup_index`.
+    """
+
     if proposal.confidence < DISCOVERY_CONFIDENCE_FLOOR:
-        return None, (
+        return None, [], (
             f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
             f"(confidence={proposal.confidence:.2f} < {DISCOVERY_CONFIDENCE_FLOOR})"
         )
-    doi_url = _normalize_doi_url(proposal.schema_identifier)
-    if not doi_url:
-        return None, (
+    bare_doi = _extract_bare_doi(proposal.schema_identifier)
+    if not bare_doi:
+        return None, [], (
             f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
             f"(missing/malformed DOI: {proposal.schema_identifier!r})"
         )
-    if doi_url in existing_ids:
-        return None, (
+    doi_url = f"https://doi.org/{bare_doi}"
+    if doi_url in existing_article_ids or bare_doi in existing_article_ids:
+        return None, [], (
             f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
-            f"(DOI {doi_url} already in graph)"
+            f"(DOI {bare_doi} already in graph)"
         )
-    return (
-        {
-            "id": doi_url,
-            "type": "schema:ScholarlyArticle",
-            "shacl": "pulse:ArticleShape",
-            "identifiers": {
-                # SHACL-required: every Article carries a uuid identifier
-                # alongside its primary DOI/identifier value.
-                "uuid": str(uuid4()),
-                "schema:identifier": doi_url,
-            },
-            "idSource": "schema:identifier",
-            "schema:name": proposal.schema_name,
-            "schema:identifier": doi_url,
-            "schema:datePublished": proposal.schema_datePublished,
-            "_source": "hybrid_refiner",
-            "_discovery_reason": proposal.reason[:240] if proposal.reason else "",
-            "_discovery_confidence": proposal.confidence,
-            "_proposed_author_names": list(proposal.author_names or []),
+
+    enrichment = _openalex_lookup_doi(bare_doi)
+    if enrichment is None:
+        return None, [], (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(OpenAlex lookup failed for DOI {bare_doi})"
+        )
+
+    pub_date = enrichment.get("publication_date") or proposal.schema_datePublished
+    if not isinstance(pub_date, str) or not pub_date.strip():
+        return None, [], (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(no publication date for DOI {bare_doi})"
+        )
+
+    author_refs: list[dict[str, str]] = []
+    new_persons: list[dict[str, Any]] = []
+    seen_author_ids: set[str] = set()
+    for authorship in enrichment.get("authorships", []) or []:
+        orcid_url = authorship.get("orcid")
+        name = authorship.get("name")
+        if not isinstance(orcid_url, str):
+            # Without an ORCID we have no stable identifier to dedup
+            # against the existing graph; skip the author rather than
+            # emit a name-only Person ref that strict validation rejects.
+            continue
+        match = re.search(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", orcid_url, re.IGNORECASE)
+        if not match:
+            continue
+        bare_orcid = match.group(1).upper()
+        canonical_id = person_dedup_index.get(f"orcid:{bare_orcid}")
+        if canonical_id is None:
+            canonical_id = f"https://orcid.org/{bare_orcid}"
+            if canonical_id not in existing_person_ids:
+                new_persons.append({
+                    "id": canonical_id,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "uuid": str(uuid4()),
+                        "pulse:orcid": canonical_id,
+                    },
+                    "idSource": "pulse:orcid",
+                    "schema:name": name,
+                    "pulse:orcidIdentifier": canonical_id,
+                    "_source": "hybrid_refiner",
+                    "_discovery_reason": f"OpenAlex authorship of {bare_doi}",
+                    "_discovery_confidence": proposal.confidence,
+                })
+        if canonical_id in seen_author_ids:
+            continue
+        seen_author_ids.add(canonical_id)
+        author_refs.append({"@id": canonical_id})
+
+    if not author_refs:
+        return None, [], (
+            f"discovery_refiner: dropped Article proposal {proposal.schema_name!r} "
+            f"(OpenAlex returned no ORCID-anchored authors for DOI {bare_doi})"
+        )
+
+    article = {
+        "id": doi_url,
+        "type": "schema:ScholarlyArticle",
+        "shacl": "pulse:ArticleShape",
+        "identifiers": {
+            "uuid": str(uuid4()),
+            "schema:identifier": bare_doi,
         },
-        None,
-    )
+        "idSource": "schema:identifier",
+        "schema:name": proposal.schema_name,
+        "schema:identifier": bare_doi,
+        "schema:datePublished": pub_date,
+        "schema:author": author_refs,
+        "_source": "hybrid_refiner",
+        "_discovery_reason": proposal.reason[:240] if proposal.reason else "",
+        "_discovery_confidence": proposal.confidence,
+        "_proposed_author_names": list(proposal.author_names or []),
+    }
+    return article, new_persons, None
 
 
 def _materialize_lab_org(
@@ -804,6 +972,669 @@ def _materialize_lab_org(
         # `org:unitOf`), not an array of `{"@id": …}` dicts.
         entity["org:unitOf"] = [parent_org_id]
     return entity, None
+
+
+# A short uppercase code with no whitespace — Infoscience-style orgunit
+# acronym (e.g. UPMWMATHIS, UPAMATHIS, IC-IINFCOM, ENAC-LMS). These map
+# 1:1 in the Infoscience orgunit acronym index but vector embeddings
+# can't pick them up.
+_CODE_LIKE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_-]{2,15}$")
+
+
+def _looks_like_infoscience_code(query: str) -> bool:
+    if not isinstance(query, str):
+        return False
+    return bool(_CODE_LIKE_PATTERN.fullmatch(query.strip()))
+
+
+def _split_composite_org_name(query: str) -> tuple[str, str] | None:
+    """`"CNRS, IGF"` → `("CNRS", "IGF")`. Returns None when it doesn't look composite."""
+
+    if not isinstance(query, str):
+        return None
+    parts = [part.strip() for part in query.split(",")]
+    if len(parts) != 2:
+        return None
+    if not all(parts):
+        return None
+    return parts[0], parts[1]
+
+
+def _flatten_handle_concat(query: str) -> list[str]:
+    """`"@a @b @c"` → `["a", "b", "c"]`. Empty list when not handle-shaped."""
+
+    if not isinstance(query, str):
+        return []
+    candidates: list[str] = []
+    for token in query.split():
+        candidate = _normalize_github_handle(token)
+        if candidate:
+            candidates.append(candidate)
+    return candidates
+
+
+def _query_communities_index(query: str) -> list[dict[str, Any]]:
+    """SQL lookup against the local `communities` DuckDB.
+
+    Matches an org name against `source_slug`, `title`, and
+    `description` (case-insensitive), preferring exact-slug hits.
+    Also strips a leading `@` so GitHub-handle-shaped queries work.
+    """
+
+    if not isinstance(query, str) or not query.strip():
+        return []
+    try:
+        import duckdb  # noqa: PLC0415
+        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return []
+    db_path = duckdb_path()
+    if not db_path.exists():
+        return []
+    q = query.strip().lstrip("@").strip()
+    try:
+        con = duckdb.connect(str(db_path), read_only=True)
+    except Exception:  # noqa: BLE001
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        result = con.execute(
+            """
+            SELECT community_id, source_slug, parent_org, title, description, url
+            FROM communities
+            WHERE source_slug = ?
+               OR LOWER(source_slug) = LOWER(?)
+               OR title ILIKE ?
+               OR description ILIKE ?
+            ORDER BY
+                CASE WHEN source_slug = ? THEN 0 ELSE 1 END,
+                LENGTH(COALESCE(title, '')) ASC
+            LIMIT 5
+            """,
+            [q, q, f"%{q}%", f"%{q}%", q],
+        ).fetchall()
+        columns = [d[0] for d in con.description]
+        for row in result:
+            rows.append(dict(zip(columns, row, strict=False)))
+    except Exception:  # noqa: BLE001
+        return []
+    finally:
+        try:
+            con.close()
+        except Exception:  # noqa: BLE001
+            pass
+    return rows
+
+
+def _query_infoscience_acronym(db_path: str, query: str) -> list[dict[str, Any]]:
+    """Look up an Infoscience orgunit by acronym (exact match, then prefix).
+
+    Returns a list of `{org_uuid, name, acronym, parent_org_uuid, url}`
+    dicts. The lookup is intentionally narrow — only hits when the
+    query has the code-shape (uppercase / alphanumeric / no whitespace);
+    free-text names go through the live-API and federated branches.
+    """
+
+    import duckdb  # noqa: PLC0415
+
+    if not _looks_like_infoscience_code(query):
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        con = duckdb.connect(db_path, read_only=True)
+    except Exception:  # noqa: BLE001
+        return []
+    try:
+        result = con.execute(
+            """
+            SELECT org_uuid, name, acronym, parent_org_uuid
+            FROM organizations
+            WHERE acronym = ?
+            LIMIT 5
+            """,
+            [query],
+        ).fetchall()
+        columns = [d[0] for d in con.description] if result else []
+        for row in result:
+            record = dict(zip(columns, row, strict=False))
+            record["url"] = (
+                f"https://infoscience.epfl.ch/entities/orgunit/{record['org_uuid']}"
+            )
+            rows.append(record)
+    except Exception:  # noqa: BLE001
+        return []
+    finally:
+        try:
+            con.close()
+        except Exception:  # noqa: BLE001
+            pass
+    return rows
+
+
+async def _gather_federated_evidence(
+    query: str,
+    *,
+    providers: Any,
+    max_per_source: int = 5,
+    total_timeout_seconds: float = 25.0,
+) -> dict[str, Any]:
+    """One-shot "silver bullet" evidence pack for the org resolver LLM.
+
+    Fans the query out concurrently to:
+      1. Direct Infoscience `search_orgunit` — best for UP* / EPFL-*
+         codes that fail semantic search.
+      2. Direct GitHub `get_organization` — best for `@handle`-shaped
+         queries; resolves display_name + description.
+      3. ROR search for the parent half of `"<X>, <Y>"` composites.
+      4. Federated RAG semantic search (12 indices in parallel).
+
+    Each branch is wrapped in a per-call timeout AND the whole fan-out
+    is bounded by `total_timeout_seconds` so a slow provider can't hang
+    the resolver stage. Branches that fail or return empty contribute
+    `[]` to their slot — the LLM downstream knows to ignore empty slots.
+
+    The result is appended to the resolver's user prompt as
+    `pre_fetched_evidence`, so the LLM gets a concrete starting point
+    instead of having to discover the right tool routing on its own.
+    """
+
+    out: dict[str, Any] = {
+        "query": query,
+        "infoscience_duckdb_hits": [],
+        "communities_hits": [],
+        "infoscience_orgunit_hits": [],
+        "github_org": None,
+        "ror_hits_for_parent": [],
+        "ror_hits_for_unit": [],
+        "federated_indices": [],
+    }
+
+    if not isinstance(query, str) or not query.strip():
+        return out
+    normalized_query = query.strip()
+
+    # --- DuckDB direct (FAST + AUTHORITATIVE for codes) ----------------
+    async def _safe_duckdb_infoscience() -> None:
+        """SQL `WHERE acronym = ?` against the local Infoscience DuckDB.
+
+        After the ingest fix (parsers.py extracts `oairecerif.acronym`
+        into the `acronym` column) and the one-shot backfill, this
+        returns the exact orgunit for codes like `UPMWMATHIS` /
+        `UPAMATHIS` / `U13781` in ~1ms with zero noise — bypassing the
+        semantic-vector search's confusion on opaque acronyms.
+        Best signal in the whole aggregator for code-shaped queries.
+        """
+        try:
+            import duckdb  # noqa: PLC0415 — local import keeps the cold-path cost out of the hot path
+            from src.index.infoscience.paths import duckdb_path  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            return
+        db_path = duckdb_path()
+        if not db_path.exists():
+            return
+        try:
+            rows = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _query_infoscience_acronym, str(db_path), normalized_query,
+                ),
+                timeout=4.0,
+            )
+        except Exception:  # noqa: BLE001
+            return
+        out["infoscience_duckdb_hits"] = rows[:max_per_source]
+
+    # --- Communities DuckDB (lab / group registry) ---------------------
+    async def _safe_communities() -> None:
+        """Search the local `communities` DuckDB.
+
+        Best signal when the dropped org is a GitHub-shaped lab handle
+        (`@AdaptiveMotorControlLab`) or a free-text lab name — the
+        index merges curated EPFL/ETHZ/CERN/CERN-openlab slugs plus
+        ~700 auto-discovered communities, all keyed by parent org.
+        """
+        try:
+            rows = await asyncio.wait_for(
+                asyncio.to_thread(_query_communities_index, normalized_query),
+                timeout=4.0,
+            )
+        except Exception:  # noqa: BLE001
+            return
+        out["communities_hits"] = rows[:max_per_source]
+
+    # --- Direct calls (sync providers, run in threadpool) -------------
+    async def _safe_infoscience() -> None:
+        if getattr(providers, "infoscience", None) is None:
+            return
+        try:
+            hits = await asyncio.wait_for(
+                asyncio.to_thread(
+                    providers.infoscience.search_orgunit, normalized_query,
+                ),
+                timeout=8.0,
+            )
+        except Exception:  # noqa: BLE001
+            return
+        flat: list[dict[str, Any]] = []
+        for hit in (hits or [])[:max_per_source]:
+            payload = hit.model_dump(mode="json") if hasattr(hit, "model_dump") else dict(hit)
+            flat.append({
+                "name": payload.get("name"),
+                "acronym": payload.get("acronym"),
+                "parentOrganization": payload.get("parentOrganization"),
+                "url": payload.get("url"),
+                "infoscienceOrgUnitIdentifier": payload.get(
+                    "infoscienceOrgUnitIdentifier",
+                ),
+            })
+        out["infoscience_orgunit_hits"] = flat
+
+    async def _safe_github() -> None:
+        github_provider = getattr(providers, "github", None)
+        if github_provider is None:
+            return
+        handles = _flatten_handle_concat(normalized_query)
+        if not handles:
+            # Plain string with no `@` but might still be a handle if short
+            stripped = normalized_query.lstrip("@").strip()
+            if " " not in stripped and 1 < len(stripped) <= 40:
+                handles = [stripped]
+        for handle in handles[:3]:
+            try:
+                meta = await asyncio.wait_for(
+                    asyncio.to_thread(github_provider.get_organization, handle),
+                    timeout=8.0,
+                )
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(meta, dict) and meta.get("schema:name"):
+                out["github_org"] = {
+                    "handle": handle,
+                    "name": meta.get("schema:name") or meta.get("name"),
+                    "description": meta.get("schema:description") or meta.get("description"),
+                    "url": meta.get("schema:url") or meta.get("html_url"),
+                }
+                return  # First valid handle wins
+
+    async def _safe_ror_composite() -> None:
+        ror_rag = getattr(providers, "ror_rag", None)
+        if ror_rag is None:
+            return
+        composite = _split_composite_org_name(normalized_query)
+        if composite is None:
+            return
+        parent_q, unit_q = composite
+        try:
+            parent_res = await asyncio.wait_for(
+                ror_rag.search(parent_q, top_k=3), timeout=8.0,
+            )
+        except Exception:  # noqa: BLE001
+            parent_res = []
+        try:
+            unit_res = await asyncio.wait_for(
+                ror_rag.search(unit_q, top_k=3), timeout=8.0,
+            )
+        except Exception:  # noqa: BLE001
+            unit_res = []
+        def _flat(records: Any) -> list[dict[str, Any]]:
+            if not isinstance(records, list):
+                return []
+            return [
+                {
+                    "name": r.get("schema:name") or r.get("name"),
+                    "id": r.get("@id") or r.get("id"),
+                    "country": r.get("country"),
+                }
+                for r in records if isinstance(r, dict)
+            ][:max_per_source]
+        out["ror_hits_for_parent"] = _flat(parent_res)
+        out["ror_hits_for_unit"] = _flat(unit_res)
+
+    async def _safe_federated() -> None:
+        federated = getattr(providers, "federated_rag", None)
+        if federated is None:
+            return
+        try:
+            res = await asyncio.wait_for(
+                federated.search(normalized_query, top_k=max_per_source),
+                timeout=10.0,
+            )
+        except Exception:  # noqa: BLE001
+            return
+        hits = res.get("hits") if isinstance(res, dict) else []
+        flat: list[dict[str, Any]] = []
+        for h in (hits or [])[:max_per_source]:
+            if not isinstance(h, dict):
+                continue
+            flat.append({
+                "index": h.get("_source_index") or h.get("index") or h.get("source"),
+                "id": h.get("@id") or h.get("id"),
+                "name": h.get("schema:name") or h.get("name") or h.get("display_name") or h.get("title"),
+                "score": h.get("score") or h.get("_score"),
+            })
+        out["federated_indices"] = flat
+
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(
+                _safe_duckdb_infoscience(),
+                _safe_communities(),
+                _safe_infoscience(),
+                _safe_github(),
+                _safe_ror_composite(),
+                _safe_federated(),
+                return_exceptions=False,
+            ),
+            timeout=total_timeout_seconds,
+        )
+    except TimeoutError:
+        logger.warning(
+            "federated_evidence: total timeout (%.1fs) for query %r",
+            total_timeout_seconds, normalized_query,
+        )
+    return out
+
+
+def _org_needs_resolution(org: dict[str, Any]) -> bool:
+    """An org is un-anchored when none of the SHACL `sh:or` slots is filled.
+
+    `pulse:OrganizationShape` requires AT LEAST one of:
+      * `schema:identifier`
+      * `pulse:githubOrganizationHandle`
+      * `pulse:infoscienceOrganizationIdentifier`
+    Anything that fails this disjunction gets SHACL-rejected and dropped
+    from the final graph. The resolver targets exactly those orgs.
+    """
+
+    if not isinstance(org, dict):
+        return False
+    for key in (
+        "schema:identifier",
+        "pulse:githubOrganizationHandle",
+        "pulse:infoscienceOrganizationIdentifier",
+        "pulse:ror",
+    ):
+        value = org.get(key)
+        if isinstance(value, str) and value.strip():
+            return False
+    return True
+
+
+def _affiliated_person_names(
+    org_id: str,
+    persons: list[dict[str, Any]],
+    memberships: list[dict[str, Any]],
+) -> list[str]:
+    """Persons linked to `org_id` via Membership — helps the LLM disambiguate."""
+
+    person_ids: set[str] = set()
+    for membership in memberships:
+        if not isinstance(membership, dict):
+            continue
+        org_ref = membership.get("org:organization")
+        if isinstance(org_ref, dict):
+            org_ref = org_ref.get("@id") or org_ref.get("id")
+        if org_ref != org_id:
+            continue
+        person_ref = membership.get("_person_ref")
+        if isinstance(person_ref, str) and person_ref:
+            person_ids.add(person_ref)
+
+    names: list[str] = []
+    for person in persons:
+        if not isinstance(person, dict):
+            continue
+        pid = person.get("id") or person.get("@id")
+        if pid not in person_ids:
+            continue
+        name = person.get("schema:name")
+        if isinstance(name, str) and name.strip():
+            names.append(name.strip())
+    return names
+
+
+def _apply_org_resolver_patch(
+    org: dict[str, Any],
+    patch: OrgResolverPatch,
+) -> bool:
+    """Stamp resolver-supplied identifiers onto the org entity in place.
+
+    Returns True when at least one identifier slot was filled (and the
+    entity will now clear the OrganizationShape `sh:or` branch). The @id
+    is intentionally NOT changed — that would break every inbound
+    Membership/hasUnit reference. The new identifiers piggyback as
+    properties.
+    """
+
+    if patch.confidence < 0.7:
+        return False
+
+    identifiers = org.setdefault("identifiers", {})
+    if not isinstance(identifiers, dict):
+        identifiers = {}
+        org["identifiers"] = identifiers
+
+    # The strict schema's `identifiers` block has
+    # `additionalProperties: false` — every key we write must already
+    # exist in the allowed set: {uuid, pulse:ror, pulse:githubOrganizationHandle,
+    # pulse:infoscienceOrganizationIdentifier}. Top-level `pulse:ror` is
+    # NOT a property on Organization — only `identifiers.pulse:ror` is.
+    # Pattern constraints:
+    #   - schema:identifier  ⇒ must match `^https://ror\.org/[0-9a-z]{9}$`
+    #     (NOT a github URL, NOT an infoscience URL).
+    #   - identifiers.pulse:infoscienceOrganizationIdentifier ⇒ bare UUID4.
+    changed = False
+    ror_pattern = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
+    infoscience_uuid_pattern = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    )
+
+    if patch.pulse_ror and ror_pattern.match(patch.pulse_ror):
+        identifiers["pulse:ror"] = patch.pulse_ror
+        # `schema:identifier` is constrained to the ROR URL form by
+        # the strict schema; only set it when we actually have one.
+        org["schema:identifier"] = patch.pulse_ror
+        changed = True
+
+    if patch.pulse_infoscienceOrganizationIdentifier:
+        raw = patch.pulse_infoscienceOrganizationIdentifier.strip()
+        # The LLM tends to return the full URL form even when prompted
+        # for the bare UUID; strip the common URL prefixes.
+        for prefix in (
+            "https://infoscience.epfl.ch/entities/orgunit/",
+            "https://infoscience.epfl.ch/server/api/core/items/",
+            "https://infoscience.epfl.ch/",
+        ):
+            if raw.startswith(prefix):
+                raw = raw[len(prefix):]
+                break
+        # Drop any trailing path segments / query strings.
+        raw = raw.split("/", maxsplit=1)[0].split("?", maxsplit=1)[0]
+        if infoscience_uuid_pattern.match(raw):
+            identifiers["pulse:infoscienceOrganizationIdentifier"] = raw
+            # Top-level mirror only if the schema has the property — it
+            # doesn't, so leave it off. `sh:or` is satisfied by the
+            # identifiers-block entry.
+            changed = True
+
+    if patch.pulse_githubOrganizationHandle:
+        handle = patch.pulse_githubOrganizationHandle.strip().lstrip("@")
+        if handle and " " not in handle:
+            identifiers["pulse:githubOrganizationHandle"] = handle
+            org["pulse:githubOrganizationHandle"] = handle
+            changed = True
+
+    if patch.pulse_OrganizationType:
+        org["pulse:OrganizationType"] = patch.pulse_OrganizationType
+        changed = True
+
+    if patch.org_unitOf and patch.org_unitOf.startswith(("http://", "https://")):
+        existing = org.get("org:unitOf")
+        if isinstance(existing, list):
+            if patch.org_unitOf not in existing:
+                existing.append(patch.org_unitOf)
+        else:
+            org["org:unitOf"] = [patch.org_unitOf]
+        changed = True
+
+    if patch.schema_name_canonical and patch.schema_name_canonical.strip():
+        # Keep original name as alias for traceability, swap the display.
+        org["schema:name"] = patch.schema_name_canonical.strip()
+        changed = True
+
+    if changed:
+        org["_source"] = org.get("_source") or "org_resolver"
+        org["_org_resolver_reason"] = (patch.reason or "")[:240]
+        org["_org_resolver_confidence"] = patch.confidence
+
+    return changed
+
+
+async def _run_org_resolver_pass(
+    *,
+    reconciled: ReconciledEntities,
+    gathered_context: dict[str, Any] | None,
+    providers: Any | None = None,
+) -> tuple[list[str], dict[str, int]]:
+    """LLM-driven resolution of orgs lacking any SHACL-required identifier.
+
+    Runs BEFORE rescue so any newly anchored orgs (e.g. UPMWMATHIS →
+    Infoscience id) become eligible Membership targets when rescue
+    re-evaluates the evidence floor.
+    """
+
+    stats: dict[str, int] = {"candidates": 0, "resolved": 0, "declined": 0, "failed": 0}
+
+    organizations = reconciled.entities.get("organizations") or []
+    persons = reconciled.entities.get("persons") or []
+    memberships = reconciled.memberships or []
+
+    candidates = [
+        org for org in organizations
+        if isinstance(org, dict) and _org_needs_resolution(org)
+    ]
+    stats["candidates"] = len(candidates)
+    if not candidates:
+        return ([], stats)
+
+    if providers is None:
+        return (
+            [
+                f"org_resolver: skipped — providers not passed in; "
+                f"{len(candidates)} un-anchored org(s) will fail strict validation",
+            ],
+            stats,
+        )
+
+    # Build the resolver toolset. Each guard mirrors the per-entity
+    # refiner pattern: a missing index degrades silently.
+    from src.v2.agents.llm.agent_tools.ror_rag import (  # noqa: PLC0415
+        make_ror_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
+        make_infoscience_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.epfl_graph_rag import (  # noqa: PLC0415
+        make_epfl_graph_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.github_organization import (  # noqa: PLC0415
+        make_github_organization_metadata_tool,
+    )
+
+    tools: list[Any] = []
+    if getattr(providers, "ror_rag", None) is not None:
+        tools.append(make_ror_rag_search_tool(providers.ror_rag))
+    if getattr(providers, "infoscience_rag", None) is not None:
+        tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
+    if getattr(providers, "epfl_graph_rag", None) is not None:
+        tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+    if getattr(providers, "github", None) is not None:
+        tools.append(make_github_organization_metadata_tool(providers.github))
+
+    if not tools:
+        return (
+            [
+                f"org_resolver: skipped — no resolver tools available; "
+                f"{len(candidates)} un-anchored org(s) will fail strict validation",
+            ],
+            stats,
+        )
+
+    # Repo context for disambiguation
+    repo_handle = ""
+    repo_description: str | None = None
+    readme_excerpt: str | None = None
+    if isinstance(gathered_context, dict):
+        repo_ctx = gathered_context.get("repository") or {}
+        if isinstance(repo_ctx, dict):
+            repo_handle = repo_ctx.get("full_name") or ""
+            readme = repo_ctx.get("readme_content")
+            if isinstance(readme, str):
+                readme_excerpt = readme[:4_000]
+            metadata = repo_ctx.get("metadata") or {}
+            if isinstance(metadata, dict) and isinstance(metadata.get("description"), str):
+                repo_description = metadata["description"]
+
+    agent = OrgResolverAgent()
+    warnings: list[str] = []
+
+    for org in candidates:
+        org_id = org.get("id") or org.get("@id") or "?"
+        name = org.get("schema:name") or "?"
+        unresolved = UnresolvedOrg(
+            org_id=str(org_id),
+            **{"schema:name": str(name)},
+            **{"pulse:OrganizationType": org.get("pulse:OrganizationType")},
+            affiliated_person_names=_affiliated_person_names(
+                org_id, persons, memberships,
+            ),
+        )
+        # Silver-bullet pre-fetch: fan the org name out to Infoscience
+        # (exact code lookup), GitHub (handle resolution), ROR (composite
+        # parent/unit), and the federated RAG. Saves the LLM from
+        # discovering the right tool route on its own and prevents the
+        # 25-call request budget from being burned on noisy semantic
+        # searches when an exact lookup would have answered in one hop.
+        pre_fetched = await _gather_federated_evidence(
+            str(name), providers=providers,
+        )
+        try:
+            patch = await agent.run(
+                refiner_input=OrgResolverInput(
+                    repo_handle=repo_handle,
+                    repo_description=repo_description,
+                    readme_excerpt=readme_excerpt,
+                    org=unresolved,
+                    pre_fetched_evidence=pre_fetched,
+                ),
+                tools=tools,
+            )
+        except LLMRuntimeError as exc:
+            warnings.append(
+                f"org_resolver: failed for {name!r} — {exc}",
+            )
+            stats["failed"] += 1
+            continue
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("org_resolver crashed for %s", name)
+            warnings.append(
+                f"org_resolver: crashed for {name!r} — {exc}",
+            )
+            stats["failed"] += 1
+            continue
+
+        if _apply_org_resolver_patch(org, patch):
+            stats["resolved"] += 1
+            warnings.append(
+                f"org_resolver: resolved {name!r} (confidence={patch.confidence:.2f}, "
+                f"reason={(patch.reason or '')[:120]!r})",
+            )
+        else:
+            stats["declined"] += 1
+            warnings.append(
+                f"org_resolver: declined {name!r} (no tool result cleared the bar)",
+            )
+
+    return (warnings, stats)
 
 
 async def _run_rescue_pass(
@@ -1221,8 +2052,41 @@ async def _run_discovery_pass(
         e, w = _materialize_org(o, existing_org_ids)
         _accept(e, w, org_bucket, existing_org_ids)
     for a in proposal.new_articles[:DISCOVERY_REPLY_MAX_PER_TYPE]:
-        e, w = _materialize_article(a, existing_article_ids)
-        _accept(e, w, article_bucket, existing_article_ids)
+        article, new_persons, warning = _materialize_article(
+            a, existing_article_ids, existing_person_ids, person_dedup_index,
+        )
+        _accept(article, warning, article_bucket, existing_article_ids)
+        # OpenAlex-discovered authors that aren't in the graph yet need
+        # to be added as Person stubs alongside the article, otherwise
+        # `schema:author` refs dangle and `prune_dangling_refs` removes
+        # the article entirely.
+        for person_stub in new_persons:
+            if person_stub["id"] in existing_person_ids:
+                continue
+            person_bucket.append(person_stub)
+            existing_person_ids.add(person_stub["id"])
+            stats["added"] += 1
+            warnings.append(
+                f"discovery_refiner: added schema:Person {person_stub['id']} "
+                f"(OpenAlex authorship of {a.schema_identifier!r})",
+            )
+            # Keep the dedup index in sync so later proposals don't
+            # re-propose this same author.
+            handle = person_stub.get("pulse:githubUsername")
+            if isinstance(handle, str) and handle:
+                person_dedup_index.setdefault(
+                    f"gh:{handle.lower()}", person_stub["id"],
+                )
+            orcid_url = person_stub.get("pulse:orcidIdentifier")
+            if isinstance(orcid_url, str):
+                orcid_match = re.search(
+                    r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", orcid_url, re.IGNORECASE,
+                )
+                if orcid_match:
+                    person_dedup_index.setdefault(
+                        f"orcid:{orcid_match.group(1).upper()}",
+                        person_stub["id"],
+                    )
 
     # Write back only when something was added.
     if stats["added"]:
@@ -1242,6 +2106,7 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
     person_refiner: PersonRefinerAgent | None = None,
     membership_refiner: MembershipRefinerAgent | None = None,
     epfl_graph_provider: EpflGraphRagProvider | None = None,
+    providers: Any | None = None,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
 ) -> RefineWithLLMResult:
     """Run the hybrid LLM refinement stage over reconciled entities.
@@ -1385,6 +2250,19 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
             by_type[type_label]["refined"] += 1
         else:
             by_type[type_label]["skipped"] += 1
+
+    # Org resolver pass: anchor un-identified orgs by routing the LLM
+    # through ROR / Infoscience / EPFL Graph / GitHub. Runs BEFORE
+    # rescue so any newly anchored orgs (e.g. UPMWMATHIS → Infoscience
+    # id, @AdaptiveMotorControlLab → GitHub org metadata) can serve as
+    # valid Membership targets when rescue re-evaluates dropped pairs.
+    resolver_warnings, resolver_stats = await _run_org_resolver_pass(
+        reconciled=reconciled,
+        gathered_context=gathered_context,
+        providers=providers,
+    )
+    warnings.extend(resolver_warnings)
+    by_type["org_resolver"] = resolver_stats
 
     # Rescue pass: ask the LLM to re-instate Memberships the
     # deterministic filter dropped, when the README / CITATION.cff

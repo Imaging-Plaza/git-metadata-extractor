@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -78,6 +79,62 @@ STAGE_AGENTS = "agents"
 GITHUB_LOGIN_PATTERN = re.compile(r"^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$")
 VALIDATION_WARNING_PREFIX = "Validation warning at"
 COMPILED_CONTEXT_PROMPT_BLOCK_HEADER = "## Compiled Source Summary"
+
+# Fan-out caps for the user/organization flows. Each owned repo triggers
+# a gimie clone-and-parse round-trip (~10-30s per repo), so an org with
+# 100 repos can easily blow past any reasonable HTTP timeout. When the
+# real count exceeds the cap we keep the first N (GitHub's default
+# ordering is by `pushed_at`, so this approximates "most active") and
+# emit a warning naming the dropped count so the consumer knows the
+# graph is partial. Both caps are env-tunable; set 0 to disable
+# capping entirely.
+#
+# Note that the fan-out cap is now a *secondary* guard — by default the
+# user/org flows emit owned repos as `@id` references in `pulse:owns`
+# WITHOUT materialising each as a full `schema:SoftwareSourceCode`
+# entity (see `_should_expand_owned_repos`). The cap only kicks in when
+# expansion is explicitly turned on via `V2_EXPAND_OWNED_REPOS=true`.
+_DEFAULT_MAX_REPO_FANOUT_ORG = 25
+_DEFAULT_MAX_REPO_FANOUT_USER = 50
+
+
+def _resolve_repo_fanout_cap(detected_type: str) -> int:
+    if detected_type == "organization":
+        raw = os.getenv("V2_MAX_REPO_FANOUT_ORG")
+        default = _DEFAULT_MAX_REPO_FANOUT_ORG
+    elif detected_type == "user":
+        raw = os.getenv("V2_MAX_REPO_FANOUT_USER")
+        default = _DEFAULT_MAX_REPO_FANOUT_USER
+    else:
+        return 0
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(0, value)
+
+
+def _should_expand_owned_repos() -> bool:
+    """When False (default), the user/organization flows emit each
+    owned repo as a bare `@id` reference in the root entity's
+    `pulse:owns` array, but DO NOT materialise it as a full
+    `schema:SoftwareSourceCode` entity in the graph.
+
+    Rationale: an org or prolific user can easily own 50-200 repos.
+    Running gimie + the contributor pipeline on each one costs minutes
+    of wall time and most of the resulting nodes are weakly connected
+    to the root entity that motivated the extraction. The W3C-style
+    "just an IRI" reference preserves the structural link without the
+    materialisation cost. Consumers that want the rich per-repo
+    metadata can extract each repo directly via the repository flow,
+    or set `V2_EXPAND_OWNED_REPOS=true` to restore the previous
+    behaviour for the user/org flow itself.
+    """
+    raw = (os.getenv("V2_EXPAND_OWNED_REPOS") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
 
 PLAN_BY_TYPE: dict[str, list[str]] = {
     "repository": [
@@ -393,6 +450,13 @@ class PipelineOrchestrator:
                 continue
 
             work_items = self._build_work_items(stage.name, plan.detected_type, runtime_context)
+            # Drain any fanout-cap warnings that `_build_work_items`
+            # stashed on the runtime_context (e.g. when we trimmed an
+            # 88-repo org down to the configured cap).
+            fanout_warnings = runtime_context.pop("_fanout_warnings", None)
+            if isinstance(fanout_warnings, list):
+                for warning in fanout_warnings:
+                    _append_unique(warnings, str(warning))
             if stage.name == STAGE_PERSON_AGENTS and work_items:
                 work_items, pre_stage_warnings = self._filter_person_work_items(
                     work_items,
@@ -1005,10 +1069,26 @@ class PipelineOrchestrator:
     def _person_root_context(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
         bundle = runtime_context.get("context_bundle")
         user_context = bundle.context.get("user", {}) if isinstance(bundle, ContextBundle) else {}
+        # Carry the user's owned-repo list explicitly so the
+        # rule-based person_agent populates `pulse:owns` with
+        # `<owner>/<repo>` references regardless of whether the
+        # downstream fan-out stage expands each repo into a full
+        # `schema:SoftwareSourceCode` entity. Mirrors the same
+        # plumbing in `_organization_root_context`.
+        url_info = self._require_url_info(runtime_context)
+        username = user_context.get("username") or url_info.owner
+        owned_repos = user_context.get("owned_repos")
+        repositories: list[str] = []
+        if isinstance(owned_repos, list):
+            for repo in owned_repos:
+                if not isinstance(repo, str) or not repo:
+                    continue
+                repositories.append(repo if "/" in repo else f"{username}/{repo}")
         return {
-            "username": user_context.get("username") or self._require_url_info(runtime_context).owner,
+            "username": username,
             "source_url": runtime_context.get("source_url"),
             "user_context": user_context,
+            "source_repositories": repositories,
         }
 
     def _organization_root_context(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
@@ -1018,10 +1098,26 @@ class PipelineOrchestrator:
             if isinstance(bundle, ContextBundle)
             else {}
         )
+        # Carry the owned-repo list explicitly so the org_agent
+        # populates `pulse:owns` with the `<owner>/<repo>` references
+        # regardless of whether the fan-out stage expands each repo
+        # into a full `schema:SoftwareSourceCode` entity. Owners can
+        # subsequently re-extract any reference via the repository
+        # flow if they want the rich metadata.
+        owned_repos = organization_context.get("owned_repos")
+        url_info = self._require_url_info(runtime_context)
+        org_name = organization_context.get("org_name") or url_info.owner
+        repositories: list[str] = []
+        if isinstance(owned_repos, list):
+            for repo in owned_repos:
+                if not isinstance(repo, str) or not repo:
+                    continue
+                repositories.append(repo if "/" in repo else f"{org_name}/{repo}")
         return {
-            "org_name": organization_context.get("org_name") or self._require_url_info(runtime_context).owner,
+            "org_name": org_name,
             "source_url": runtime_context.get("source_url"),
             "organization_context": organization_context,
+            "repositories": repositories,
         }
 
     def _repository_source_full_name(self, runtime_context: dict[str, Any]) -> str | None:
@@ -1219,8 +1315,56 @@ class PipelineOrchestrator:
                         continue
                     full_names.append(repo if "/" in repo else f"{owner}/{repo}")
 
+        deduped_full_names = _deduplicate(full_names)
+
+        # Default for user/organization flows: emit the owned repos as
+        # `@id` references in `pulse:owns` (the rule-based person/org
+        # agents already populate that field) without materialising
+        # each repo as a full `schema:SoftwareSourceCode` entity. The
+        # references survive in the graph; the heavyweight gimie work
+        # is reserved for the repository flow where the user
+        # explicitly asks about one repo. Set `V2_EXPAND_OWNED_REPOS=true`
+        # to restore eager expansion.
+        if (
+            detected_type in {"user", "organization"}
+            and not _should_expand_owned_repos()
+            and deduped_full_names
+        ):
+            warning_sink = runtime_context.setdefault("_fanout_warnings", [])
+            if isinstance(warning_sink, list):
+                _append_unique(
+                    warning_sink,
+                    (
+                        f"repo_fanout: kept {len(deduped_full_names)} owned repos as "
+                        f"`pulse:owns` references for {detected_type}={owner!r} without "
+                        f"materialising full Repository entities (saves ~"
+                        f"{len(deduped_full_names) * 10}s of gimie wall time). "
+                        f"Set V2_EXPAND_OWNED_REPOS=true to restore eager expansion."
+                    ),
+                )
+            return []
+
+        cap = _resolve_repo_fanout_cap(detected_type)
+        dropped_for_cap: list[str] = []
+        if cap > 0 and len(deduped_full_names) > cap:
+            dropped_for_cap = deduped_full_names[cap:]
+            deduped_full_names = deduped_full_names[:cap]
+            warning_sink = runtime_context.setdefault("_fanout_warnings", [])
+            if isinstance(warning_sink, list):
+                _append_unique(
+                    warning_sink,
+                    (
+                        f"repo_fanout: capped at {cap} repos for {detected_type}={owner!r} "
+                        f"(had {cap + len(dropped_for_cap)}); {len(dropped_for_cap)} additional "
+                        f"repos skipped to keep the request within budget — "
+                        f"set V2_MAX_REPO_FANOUT_{detected_type.upper()} higher (or to 0 to lift). "
+                        f"Skipped: {', '.join(dropped_for_cap[:5])}"
+                        f"{'…' if len(dropped_for_cap) > 5 else ''}"
+                    ),
+                )
+
         contexts: list[dict[str, Any]] = []
-        for full_name in _deduplicate(full_names):
+        for full_name in deduped_full_names:
             context: dict[str, Any] = {
                 "full_name": full_name,
                 "source_url": runtime_context.get("source_url"),

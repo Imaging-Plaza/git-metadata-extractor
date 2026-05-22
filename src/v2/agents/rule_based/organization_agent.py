@@ -397,13 +397,56 @@ class OrganizationAgentV2:
             "org:unitOf": [parent_org] if isinstance(parent_org, str) and parent_org else [],
             "pulse:owns": owns,
             # Internal lookup keys (`_`-prefix is stripped before strict
-            # validation and JSON-LD output). Used by `membership_agent` to
-            # resolve `org:hasMembership` composite IDs whose org token is
-            # the original ORCID-supplied name (e.g. "Aalto-yliopisto")
-            # rather than the canonical ROR display name.
+            # validation and JSON-LD output by default; surfaced when
+            # the caller passes `?include_internal_fields=true`). Used
+            # by `membership_agent` to resolve `org:hasMembership`
+            # composite IDs and by downstream consumers / LLM refiners
+            # to access the rich GitHub-org + ROR + Infoscience
+            # metadata that the v2 ontology doesn't yet model.
             "_aliases": merged_aliases,
             "_acronyms": ror_acronyms,
             "_labels": ror_labels,
+            # GitHub organization profile (when the org has a GitHub presence).
+            "_avatar_url":         github_org.get("avatar_url"),
+            "_html_url":           github_org.get("html_url"),
+            "_blog":               github_org.get("blog"),
+            "_description":        github_org.get("description"),
+            "_company":            github_org.get("company"),
+            "_location":           github_org.get("location"),
+            "_email":              github_org.get("email"),
+            "_twitter_username":   github_org.get("twitter_username"),
+            "_public_repos":       github_org.get("public_repos"),
+            "_followers_count":    github_org.get("followers"),
+            "_github_created_at":  github_org.get("created_at"),
+            "_github_updated_at":  github_org.get("updated_at"),
+            "_github_account_type": github_org.get("type"),
+            # ROR profile extras.
+            "_ror_country":        ror_record.get("country") if isinstance(ror_record, dict) else None,
+            "_ror_types":          ror_record.get("types") if isinstance(ror_record, dict) else None,
+            "_ror_status":         ror_record.get("status") if isinstance(ror_record, dict) else None,
+            "_ror_established":    ror_record.get("established") if isinstance(ror_record, dict) else None,
+            "_ror_links":          ror_record.get("links") if isinstance(ror_record, dict) else None,
+            # Infoscience profile extras (uses the new structured columns
+            # we backfilled: acronym, infoscience_code, unit_code,
+            # parent_acronym, director_name, org_type_dspace).
+            "_infoscience_code":         (
+                infoscience_match.get("infoscience_code") if isinstance(infoscience_match, dict) else None
+            ),
+            "_unit_code":                (
+                infoscience_match.get("unit_code") if isinstance(infoscience_match, dict) else None
+            ),
+            "_parent_acronym":           (
+                infoscience_match.get("parent_acronym") if isinstance(infoscience_match, dict) else None
+            ),
+            "_director_name":            (
+                infoscience_match.get("director_name") if isinstance(infoscience_match, dict) else None
+            ),
+            "_org_type_dspace":          (
+                infoscience_match.get("org_type_dspace") if isinstance(infoscience_match, dict) else None
+            ),
+            "_infoscience_url":          (
+                infoscience_match.get("infoscience_url") if isinstance(infoscience_match, dict) else None
+            ),
         }
 
         overrides = context.get("agent_overrides")

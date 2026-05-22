@@ -729,13 +729,20 @@ class RealGitHubProvider(GitHubProvider):
             "full_name": rest_source_full or gimie_fork_target,
         }
 
+        # Merge GitHub REST extras into the response. The repo_agent
+        # surfaces these via `_`-prefixed internal-only fields (homepage,
+        # default_branch, language, size, archived, pushed_at, etc.).
+        rest_license = rest_metadata.get("license") or {}
+        rest_owner = rest_metadata.get("owner") or {}
         return {
             "name": node_name or repository_name,
             "full_name": normalized_full_name,
             "html_url": repository_url,
             "owner": {
                 "login": owner_name,
-                "type": "Organization",
+                "type": rest_owner.get("type") or "Organization",
+                "avatar_url": rest_owner.get("avatar_url"),
+                "html_url": rest_owner.get("html_url"),
             },
             "description": _first_non_empty_string(
                 node.get("schema:description"),
@@ -745,12 +752,34 @@ class RealGitHubProvider(GitHubProvider):
             "forks_count": forks_count,
             "created_at": created_at,
             "license": {
-                "spdx_id": _extract_spdx_id(node),
+                "spdx_id": rest_license.get("spdx_id") or _extract_spdx_id(node),
+                "name": rest_license.get("name"),
+                "url": rest_license.get("url"),
             },
             "fork": is_fork,
             "parent": parent_payload,
             "source": source_payload,
-            "topics": [],
+            "topics": rest_metadata.get("topics") or [],
+            # Extra REST fields preserved for the repo_agent's `_`-prefixed
+            # internal-only output (gated by `?include_internal_fields=true`).
+            "homepage": rest_metadata.get("homepage"),
+            "default_branch": rest_metadata.get("default_branch"),
+            "language": rest_metadata.get("language"),
+            "size": rest_metadata.get("size"),
+            "archived": rest_metadata.get("archived"),
+            "disabled": rest_metadata.get("disabled"),
+            "pushed_at": rest_metadata.get("pushed_at"),
+            "updated_at": rest_metadata.get("updated_at"),
+            "open_issues_count": rest_metadata.get("open_issues_count"),
+            "watchers_count": rest_metadata.get("watchers_count"),
+            "subscribers_count": rest_metadata.get("subscribers_count"),
+            "network_count": rest_metadata.get("network_count"),
+            "has_wiki": rest_metadata.get("has_wiki"),
+            "has_pages": rest_metadata.get("has_pages"),
+            "has_discussions": rest_metadata.get("has_discussions"),
+            "has_issues": rest_metadata.get("has_issues"),
+            "has_projects": rest_metadata.get("has_projects"),
+            "visibility": rest_metadata.get("visibility"),
         }
 
     def _get_repository_rest_metadata(self, full_name: str) -> dict[str, Any]:
@@ -793,6 +822,12 @@ class RealGitHubProvider(GitHubProvider):
                 return {}
             parent = payload.get("parent") if isinstance(payload.get("parent"), dict) else None
             source = payload.get("source") if isinstance(payload.get("source"), dict) else None
+            license_block = (
+                payload.get("license") if isinstance(payload.get("license"), dict) else {}
+            )
+            owner_block = (
+                payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
+            )
             return {
                 "stargazers_count": payload.get("stargazers_count"),
                 "forks_count": payload.get("forks_count"),
@@ -802,14 +837,50 @@ class RealGitHubProvider(GitHubProvider):
                 "parent_full_name": parent.get("full_name") if parent else None,
                 "source_html_url": source.get("html_url") if source else None,
                 "source_full_name": source.get("full_name") if source else None,
+                # Rich GitHub REST fields preserved for `_`-prefixed
+                # internal-only output (surfaced when the caller passes
+                # `?include_internal_fields=true`). The ontology doesn't
+                # model these yet so they ride along under the
+                # underscore convention without breaking SHACL.
+                "homepage": payload.get("homepage"),
+                "default_branch": payload.get("default_branch"),
+                "language": payload.get("language"),
+                "size": payload.get("size"),
+                "archived": payload.get("archived"),
+                "disabled": payload.get("disabled"),
+                "pushed_at": payload.get("pushed_at"),
+                "updated_at": payload.get("updated_at"),
+                "open_issues_count": payload.get("open_issues_count"),
+                "watchers_count": payload.get("watchers_count"),
+                "subscribers_count": payload.get("subscribers_count"),
+                "network_count": payload.get("network_count"),
+                "has_wiki": payload.get("has_wiki"),
+                "has_pages": payload.get("has_pages"),
+                "has_discussions": payload.get("has_discussions"),
+                "has_issues": payload.get("has_issues"),
+                "has_projects": payload.get("has_projects"),
+                "visibility": payload.get("visibility"),
+                "license": {
+                    "spdx_id": license_block.get("spdx_id"),
+                    "name": license_block.get("name"),
+                    "url": license_block.get("url"),
+                },
+                "topics": payload.get("topics"),
+                "owner": {
+                    "login": owner_block.get("login"),
+                    "type": owner_block.get("type"),
+                    "avatar_url": owner_block.get("avatar_url"),
+                    "html_url": owner_block.get("html_url"),
+                },
             }
 
         if self._cache is None:
             return _fetch()
-        # Cache key bumped to v2 when fork/parent fields were added so the
-        # old cached entries (which lacked them) don't shadow the new
-        # response shape.
-        key = ProviderCache.make_key("github", "get_repository_rest_v2", full_name=full_name)
+        # Cache key bumped to v3 when the richer GitHub REST fields
+        # (homepage / default_branch / size / archived / *_count / etc.)
+        # were added so the old `_v2` entries (which lacked them) don't
+        # shadow the new response shape.
+        key = ProviderCache.make_key("github", "get_repository_rest_v3", full_name=full_name)
         return self._cache.get_or_set(
             key,
             _fetch,

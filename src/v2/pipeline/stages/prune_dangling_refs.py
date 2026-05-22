@@ -101,6 +101,36 @@ def _filter_list_refs(value: Any, live: set[str]) -> tuple[Any, int]:
     return kept, dropped
 
 
+def _filter_owns_refs(value: Any, live: set[str]) -> tuple[Any, int]:
+    """Same shape as ``_filter_list_refs`` but preserves stable
+    external IRIs for `pulse:owns`.
+
+    When the user/organization flow skips per-repo materialisation
+    (``V2_EXPAND_OWNED_REPOS=false``) the `pulse:owns` array still
+    carries references to the owned repos. They won't appear in the
+    `live` set because we never created a Repository entity for
+    them, but the IRI is a stable external identifier
+    (``https://github.com/<owner>/<repo>``) consumers can resolve
+    independently. Drop only non-IRI references; keep the URLs.
+    """
+
+    if not isinstance(value, list):
+        return value, 0
+    kept: list[Any] = []
+    dropped = 0
+    for ref in value:
+        target = _resolve_id_ref(ref)
+        if target is None or target in live:
+            kept.append(ref)
+            continue
+        # External well-formed IRI — keep it. Drop only mangled refs.
+        if isinstance(target, str) and target.startswith(("http://", "https://")):
+            kept.append(ref)
+        else:
+            dropped += 1
+    return kept, dropped
+
+
 def _clear_scalar_if_dangling(value: Any, live: set[str]) -> tuple[Any, bool]:
     """Return ``(maybe-cleared, was_cleared)`` for a single @id ref."""
 
@@ -220,7 +250,11 @@ def prune_dangling_refs(
         for field in LIST_REF_FIELDS:
             if field not in entity:
                 continue
-            new_value, dropped = _filter_list_refs(entity[field], live)
+            # `pulse:owns` uses the IRI-preserving filter so external
+            # `<owner>/<repo>` references survive when we deliberately
+            # skipped the repo materialisation step.
+            filter_fn = _filter_owns_refs if field == "pulse:owns" else _filter_list_refs
+            new_value, dropped = filter_fn(entity[field], live)
             if dropped:
                 entity[field] = new_value
                 filtered_list_entries += dropped

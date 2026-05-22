@@ -523,6 +523,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm", "hybrid"] | None, Query()] = None,
     include_context_summary: Annotated[bool, Query()] = False,
+    include_internal_fields: Annotated[
+        bool,
+        Query(
+            description=(
+                "When true, the response keeps `_`-prefixed internal fields "
+                "(e.g. `_bio`, `_avatar_url`, `_orcid_keywords`, `_company`) "
+                "that aren't part of the open-pulse ontology yet. Strict SHACL "
+                "validation still runs identically — this flag only affects "
+                "what the consumer sees. Default false for ontology compliance."
+            ),
+        ),
+    ] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
     _token: Annotated[str, Depends(verify_token)],
 ) -> V2ExtractResponse | JSONResponse:
@@ -600,6 +612,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             output_format=output_format,
             agent_runtime=resolved_runtime.value,
             include_context_summary=bool(include_context_summary),
+            include_internal_fields=bool(include_internal_fields),
         )
         cached_response = pipeline_cache.get(pipeline_cache_key)
         if isinstance(cached_response, dict):
@@ -766,6 +779,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 reconciled=reconciled,
                 gathered_context=gathered_context,
                 epfl_graph_provider=providers.epfl_graph_rag,
+                providers=providers,
                 max_concurrency=orchestrator.max_concurrent_agents,
             )
         except Exception as exc:
@@ -1249,6 +1263,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     shacl_graph_payload = build_jsonld_output(
         assembled=assembled_output,
         jsonld_context=jsonld_context,
+        include_internal_fields=include_internal_fields,
     )
     graph_nodes = shacl_graph_payload.get("@graph")
     logger.info(

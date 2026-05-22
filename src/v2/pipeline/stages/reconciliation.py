@@ -1891,16 +1891,28 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             canonical_owns: list[str] = []
             for owned_repo in owns_refs:
                 canonical_repo_id = _resolve_lookup_token(repository_lookup, owned_repo)
-                if canonical_repo_id is None:
-                    if isinstance(owned_repo, str):
+                if canonical_repo_id is not None:
+                    canonical_owns.append(canonical_repo_id)
+                    continue
+                # When the user/organization flow skips per-repo
+                # materialisation (`V2_EXPAND_OWNED_REPOS=false`) the
+                # owned-repo refs won't resolve in `repository_lookup`
+                # because the entities don't exist in this graph. Keep
+                # them as stable external IRIs (github URLs) so
+                # consumers can still see what the user/org owns,
+                # rather than silently dropping the relation.
+                if isinstance(owned_repo, str) and owned_repo:
+                    if owned_repo.startswith(("http://", "https://")):
+                        canonical_owns.append(owned_repo)
+                    elif "/" in owned_repo:
+                        canonical_owns.append(f"https://github.com/{owned_repo}")
+                    else:
                         link_warnings.append(
                             (
                                 "Orphan repository ownership reference from person: "
                                 f"person={person_id}, repository={owned_repo}"
                             ),
                         )
-                    continue
-                canonical_owns.append(canonical_repo_id)
             person["pulse:owns"] = _dedupe_preserve_order(canonical_owns)
 
     organization_ids = {
@@ -1933,11 +1945,32 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     for organization in organizations:
         organization_id = organization["id"]
         github_handle = _organization_github_handle(organization)
+        # Refs from materialised repositories (the historical source).
+        materialised_owns = list(owned_repository_ids_by_org.get(organization_id, []))
+        # Refs the org_agent stamped from `github_org["repositories"]`
+        # or the context's `repositories` list. When the user/org flow
+        # skipped per-repo expansion (`V2_EXPAND_OWNED_REPOS=false`) the
+        # materialised list will be empty but the agent-supplied list
+        # holds the `<owner>/<repo>` strings — keep them as canonical
+        # github IRIs so consumers can still traverse what's owned.
+        existing_owns = organization.get("pulse:owns")
+        external_owns: list[str] = []
+        if isinstance(existing_owns, list):
+            for value in existing_owns:
+                if not isinstance(value, str) or not value:
+                    continue
+                if value.startswith(("http://", "https://")):
+                    external_owns.append(value)
+                elif "/" in value:
+                    external_owns.append(f"https://github.com/{value}")
         if not isinstance(github_handle, str) or not github_handle:
-            organization["pulse:owns"] = []
+            # Without a GitHub handle on the org we can't be sure the
+            # external refs really belong here, so we drop them. The
+            # materialised-only path remains.
+            organization["pulse:owns"] = _dedupe_preserve_order(materialised_owns)
             continue
         organization["pulse:owns"] = _dedupe_preserve_order(
-            owned_repository_ids_by_org.get(organization_id, []),
+            materialised_owns + external_owns,
         )
 
     persons_index = {
