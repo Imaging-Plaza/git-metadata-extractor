@@ -74,7 +74,12 @@ class OrganizationRefinerAgent:
     ) -> dict[str, Any]:
         """Run the refiner and return a patch dict (possibly empty).
 
-        Returns whitelisted-only keys: `pulse:OrganizationType` and/or `pulse:discipline`.
+        Returns whitelisted-only keys: `pulse:OrganizationType`.
+
+        Note: there is no `pulse:discipline` on `org:Organization` in Open
+        Pulse Ontology v2.1.2 — discipline tagging is a `schema:SoftwareSourceCode`
+        field only (see the repository refiner). Do not add it here without an
+        ontology change to `OrganizationShape`.
         """
 
         identifier = refiner_input.entity.get("schema:name") or refiner_input.entity.get(
@@ -88,8 +93,8 @@ class OrganizationRefinerAgent:
         }
         user_prompt = (
             "Inspect the organization entity below and propose a JSON patch with "
-            "only the fields you want to change (whitelist: `pulse:OrganizationType`, "
-            "`pulse:discipline`). Return `{}` if no change is warranted.\n\n"
+            "only the fields you want to change (whitelist: `pulse:OrganizationType`). "
+            "Return `{}` if no change is warranted.\n\n"
             "```json\n"
             + json.dumps(user_payload, ensure_ascii=True, sort_keys=True)
             + "\n```"

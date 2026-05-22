@@ -138,6 +138,17 @@ class GitHubProvider(BaseProvider, ABC):
         del full_name
         return ""
 
+    def get_profile_readme(self, owner: str, *, is_organization: bool) -> str:
+        """Return the GitHub *profile* README — the markdown shown on a user's
+        or organization's profile page — or an empty string when none exists.
+
+        Profile READMEs live in a special location: ``<user>/<user>``'s
+        README for a user, ``<org>/.github``'s ``profile/README.md`` for an
+        organization.
+        """
+        del owner, is_organization
+        return ""
+
     def get_repository_aux_files(self, full_name: str) -> dict[str, str]:
         """Return repo-root attribution files (AUTHORS, NOTICE, …) keyed by filename."""
         del full_name

@@ -107,6 +107,84 @@ def _pick_best_infoscience_match(
     return None
 
 
+def _orcid_search_hit_name_tokens(hit: dict[str, Any]) -> set[str]:
+    """All lowercase name tokens advertised by an ORCID expanded-search hit."""
+    parts: list[str] = []
+    for key in ("given_names", "family_names", "credit_name"):
+        value = hit.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+    for value in hit.get("other_names") or []:
+        if isinstance(value, str):
+            parts.append(value)
+    return _name_tokens(" ".join(parts))
+
+
+def _pick_best_orcid_search_hit(
+    hits: Any,
+    *,
+    candidate_name: str | None,
+    affiliation_hints: list[str],
+) -> dict[str, Any] | None:
+    """Choose an ORCID expanded-search hit that is confidently the same person.
+
+    ORCID name search is high-recall / low-precision — many researchers
+    share a name — and, unlike `get_person_by_orcid`, there is no ORCID iD
+    to confirm against (that is exactly what we are discovering). So accept
+    only an UNAMBIGUOUS result:
+
+    1. **Full-name match** — every token of the candidate's (multi-token)
+       name must appear in the hit's name fields. A single-token candidate
+       name is never enough.
+    2. Among full-name matches, accept only when exactly ONE distinct ORCID
+       iD qualifies. When two or more do, try to break the tie with
+       affiliation corroboration (a hit institution sharing a token with a
+       known affiliation of the person); if that still leaves more than
+       one, abstain.
+
+    Returning None is the safe default — the same precision-first stance as
+    `_pick_best_infoscience_match`.
+    """
+    if not isinstance(hits, list):
+        return None
+    candidate_tokens = _name_tokens(candidate_name)
+    if len(candidate_tokens) < 2:
+        return None
+
+    full_name_matches: dict[str, dict[str, Any]] = {}
+    for hit in hits:
+        if not isinstance(hit, dict):
+            continue
+        orcid_id = hit.get("orcid_id")
+        if not isinstance(orcid_id, str) or not orcid_id:
+            continue
+        if candidate_tokens <= _orcid_search_hit_name_tokens(hit):
+            full_name_matches.setdefault(orcid_id, hit)
+
+    if len(full_name_matches) == 1:
+        return next(iter(full_name_matches.values()))
+    if len(full_name_matches) < 2:
+        return None
+
+    # Two or more same-name researchers — break the tie on affiliation.
+    affiliation_tokens: set[str] = set()
+    for hint in affiliation_hints:
+        affiliation_tokens |= _name_tokens(hint)
+    if not affiliation_tokens:
+        return None
+    corroborated: dict[str, dict[str, Any]] = {}
+    for orcid_id, hit in full_name_matches.items():
+        institution_tokens: set[str] = set()
+        for institution in hit.get("institution_names") or []:
+            if isinstance(institution, str):
+                institution_tokens |= _name_tokens(institution)
+        if institution_tokens & affiliation_tokens:
+            corroborated[orcid_id] = hit
+    if len(corroborated) == 1:
+        return next(iter(corroborated.values()))
+    return None
+
+
 def _deduplicate_preserve_order(values: list[str]) -> list[str]:
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -202,6 +280,21 @@ class PersonAgentV2:
         username = _resolve_username(context)
         github_user = providers.github.get_user(username)
 
+        # Profile README (`<user>/<user>`'s README) — the richest free-text
+        # self-description GitHub exposes for a user. Fetched directly
+        # alongside the user profile; stamped as internal `_profile_readme`.
+        person_profile_readme: str | None = None
+        try:
+            _profile_readme = providers.github.get_profile_readme(
+                username,
+                is_organization=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"Profile README fetch failed: {exc}")
+            _profile_readme = ""
+        if isinstance(_profile_readme, str) and _profile_readme.strip():
+            person_profile_readme = _profile_readme.strip()
+
         orcid_record: Any | None = None
         orcid_identifier_hint = _normalize_orcid(context.get("orcid")) or _normalize_orcid(
             github_user.get("orcid"),
@@ -244,9 +337,66 @@ class PersonAgentV2:
         else:
             warnings.append("Infoscience provider not configured for person enrichment")
 
-        normalized_orcid = _normalize_orcid(
-            (orcid_record or {}).get("orcid_id") if orcid_record else None,
-        ) or _normalize_orcid((infoscience_match or {}).get("orcid"))
+        # Proactive ORCID discovery. The hint-based lookup above only fires
+        # when an ORCID was already in the context or the GitHub profile —
+        # almost never true — so persons came back with no ORCID at all.
+        # When no hint was available but the person was confidently anchored
+        # to an Infoscience identity, search ORCID by the (now confirmed)
+        # name. ORCID name search is high-recall / low-precision, so
+        # `_pick_best_orcid_search_hit` accepts only a UNIQUE full-name
+        # match; without an Infoscience match we do not guess, to avoid
+        # attaching a stranger's ORCID iD.
+        discovered_orcid: str | None = None
+        if providers.orcid and not orcid_identifier_hint and infoscience_match:
+            discovery_name = (
+                infoscience_match.get("name")
+                or github_user.get("name")
+                or context.get("person_query")
+                or username
+            )
+            affiliation_hints = [
+                value
+                for value in (infoscience_match.get("affiliations") or [])
+                if isinstance(value, str) and value
+            ]
+            if isinstance(github_user.get("company"), str) and github_user["company"]:
+                affiliation_hints.append(github_user["company"])
+            orcid_search_hits: Any = []
+            try:
+                orcid_search_hits = providers.orcid.search_persons(str(discovery_name))
+            except (ProviderNotFoundError, ValueError) as exc:
+                warnings.append(f"ORCID discovery search failed: {exc}")
+            discovered_hit = _pick_best_orcid_search_hit(
+                orcid_search_hits,
+                candidate_name=discovery_name if isinstance(discovery_name, str) else None,
+                affiliation_hints=affiliation_hints,
+            )
+            discovered_orcid = _normalize_orcid(
+                discovered_hit.get("orcid_id") if discovered_hit else None,
+            )
+            if discovered_orcid:
+                warnings.append(
+                    f"Discovered ORCID {discovered_orcid} for {discovery_name!r} "
+                    "via name + affiliation search (no ORCID was provided in "
+                    "context or the GitHub profile).",
+                )
+                if orcid_record is None:
+                    try:
+                        orcid_record = providers.orcid.get_person_by_orcid(
+                            discovered_orcid,
+                        )
+                    except (ProviderNotFoundError, ValueError) as exc:
+                        warnings.append(
+                            f"ORCID record fetch failed after discovery: {exc}",
+                        )
+
+        normalized_orcid = (
+            _normalize_orcid(
+                (orcid_record or {}).get("orcid_id") if orcid_record else None,
+            )
+            or _normalize_orcid((infoscience_match or {}).get("orcid"))
+            or discovered_orcid
+        )
         if not normalized_orcid and not providers.orcid:
             normalized_orcid = orcid_identifier_hint
         infoscience_id = (
@@ -362,6 +512,7 @@ class PersonAgentV2:
             "_github_updated_at":  github_user.get("updated_at"),
             "_github_account_type": github_user.get("type"),
             "_hireable":           github_user.get("hireable"),
+            "_profile_readme":     person_profile_readme,
         }
         for key, value in github_profile_fields.items():
             if value not in (None, "", []):
