@@ -136,15 +136,44 @@ def parse_organization(item: Dict[str, Any]) -> OrganizationRecord:
     return OrganizationRecord(
         org_uuid=uuid,
         name=first_value(md, "dc.title") or first_value(md, "organization.legalName"),
-        acronym=first_value(md, "organization.identifier.acronym"),
+        # The real Infoscience/DSpace key for the unit acronym is
+        # `oairecerif.acronym` (e.g. `UPMWMATHIS`, `UPAMATHIS`,
+        # `ENAC-LMS`). The legacy `organization.identifier.acronym`
+        # never gets populated in practice, leaving the `acronym`
+        # column NULL for every row and breaking SQL-keyed lookups.
+        # Fall back to `epfl.unit.infoscienceCode` (e.g. `U13781`) when
+        # the OAI acronym is missing.
+        acronym=(
+            first_value(md, "oairecerif.acronym")
+            or first_value(md, "organization.identifier.acronym")
+            or first_value(md, "epfl.unit.infoscienceCode")
+        ),
+        # Alternative codes (kept distinct from `acronym` so callers
+        # can target them explicitly when they need the U-prefixed or
+        # bare-numeric form).
+        infoscience_code=first_value(md, "epfl.unit.infoscienceCode"),
+        unit_code=first_value(md, "epfl.unit.code"),
         aliases=all_values(md, "organization.alternateName"),
         parent_org_uuid=parent_chain_authorities[0] if parent_chain_authorities else None,
         parent_org_chain=parent_chain_authorities,
         parent_org_chain_names=parent_chain_names,
+        # `organization.parentOrganization` carries the parent's acronym
+        # directly (`BMI`, `SV`) — handy for "all units under X" queries
+        # without a UUID join through `parent_org_uuid`.
+        parent_acronym=first_value(md, "organization.parentOrganization"),
+        director_name=first_value(md, "crisou.director"),
+        org_type_dspace=first_value(md, "dc.type"),
         description=first_value(md, "dc.description")
         or first_value(md, "dc.description.abstract"),
-        sciper_unit_id=first_value(md, "cris.virtual.unitId")
-        or first_value(md, "epfl.unitId"),
+        # Same bug pattern as `acronym` — the real DSpace fields are
+        # `epfl.unit.code` (bare numeric) / `epfl.orgUnit.cf`. The
+        # legacy `cris.virtual.unitId` / `epfl.unitId` are missing for
+        # every orgunit row.
+        sciper_unit_id=(
+            first_value(md, "cris.virtual.unitId")
+            or first_value(md, "epfl.unitId")
+            or first_value(md, "epfl.unit.code")
+        ),
         unit_manager_uuid=first_authority(md, "cris.virtual.unitManager"),
         unit_manager_name=first_value(md, "cris.virtual.unitManager"),
         infoscience_url=_infoscience_url(uuid, "orgunit"),

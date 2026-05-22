@@ -33,7 +33,24 @@ CREATE TABLE IF NOT EXISTS organizations (
     org_uuid           TEXT PRIMARY KEY,
     name               TEXT,
     acronym            TEXT,
+    -- Alternative EPFL-internal codes that complement `acronym`.
+    -- `infoscience_code` is the U-prefixed form (`U13780`); some EPFL
+    -- systems reference units by this. `unit_code` is the bare numeric
+    -- (`13780`) for joins with HR / EPFL Graph data.
+    infoscience_code   TEXT,
+    unit_code          TEXT,
+    -- Canonical Infoscience entity URL —
+    -- `https://infoscience.epfl.ch/entities/orgunit/<uuid>`.
+    infoscience_url    TEXT,
     parent_org_uuid    TEXT,
+    -- Parent acronym mirrored from `organization.parentOrganization`
+    -- (`BMI`, `SV`, ...). Useful when querying "all units under X"
+    -- without a UUID join.
+    parent_acronym     TEXT,
+    -- Director / unit-manager name (`crisou.director`).
+    director_name      TEXT,
+    -- DSpace entity sub-type (`LABO`, `FACULTY`, `SECTION`, ...).
+    org_type_dspace    TEXT,
     sciper_unit_id     TEXT,
     ror_id             TEXT,
     raw                JSON,
