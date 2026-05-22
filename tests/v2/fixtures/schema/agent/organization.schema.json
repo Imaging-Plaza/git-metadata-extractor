@@ -5,6 +5,9 @@
   "description": "Schema for Organization entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name AND at least ONE of (schema:identifier, pulse:githubOrganizationHandle, pulse:infoscienceOrganizationIdentifier).",
   "type": "object",
   "additionalProperties": false,
+  "patternProperties": {
+    "^_": {}
+  },
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
   "properties": {
     "id": {

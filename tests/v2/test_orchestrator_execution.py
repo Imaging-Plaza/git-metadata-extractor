@@ -1035,7 +1035,10 @@ def test_class_stage_work_items_include_upstream_references_and_typed_buckets() 
     ]
 
 
-def test_class_stage_fanout_is_deterministic_for_user_and_organization_roots() -> None:
+def test_class_stage_fanout_is_deterministic_for_user_and_organization_roots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
     captured_article_seeds: list[str] = []
     captured_membership_seeds: list[str] = []
     captured_contribution_seeds: list[str] = []
@@ -1599,7 +1602,10 @@ def test_execute_llm_compiles_context_summary_and_strips_raw_repository_blobs() 
     assert "# Compiled Context" in prompt_appendix
 
 
-def test_execute_uses_llm_repository_runner_for_user_and_org_in_llm_mode() -> None:
+def test_execute_uses_llm_repository_runner_for_user_and_org_in_llm_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
     llm_repo_calls = 0
     llm_org_calls = 0
     llm_class_calls = 0
@@ -2165,7 +2171,10 @@ def test_execute_hard_fails_when_llm_repository_runner_errors() -> None:
     assert rule_repo_calls == 0
 
 
-def test_execute_uses_llm_repository_runner_for_user_repo_fanout() -> None:
+def test_execute_uses_llm_repository_runner_for_user_repo_fanout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
     llm_repo_calls = 0
     rule_repo_calls = 0
 

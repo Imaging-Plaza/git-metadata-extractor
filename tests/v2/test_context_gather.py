@@ -10,7 +10,12 @@ from src.v2.agents import ProviderSet
 from src.v2.ingest.detection.models import GitHubURLClassification, GitHubURLType
 from src.v2.pipeline.stages import gather_context
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from src.v2.ingest.providers.base import GitHubProvider, ORCIDProvider, ORCIDRecord
+from src.v2.ingest.providers.base import (
+    GitHubProvider,
+    ORCIDProvider,
+    ORCIDRecord,
+    ORCIDSearchHit,
+)
 
 EXPECTED_CONTRIBUTOR_COUNT = 2
 
@@ -58,6 +63,16 @@ class _DummyORCIDProvider(ORCIDProvider):
             education=[],
             affiliations=["EPFL"],
         )
+
+    def search_persons(
+        self,
+        query: str,
+        *,
+        rows: int = 50,
+        start: int = 0,
+    ) -> list[ORCIDSearchHit]:
+        del query, rows, start
+        return []
 
 
 def test_repository_context_contains_expected_sections() -> None:
