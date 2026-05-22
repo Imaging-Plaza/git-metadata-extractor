@@ -1,0 +1,80 @@
+# Communities index — curated parent-org slug lists.
+#
+# `hardcoded_slugs`  — known-good Zenodo community slugs, fetched
+#                       directly via `/api/communities/<slug>`.
+# `discovery_queries` — `?q=<keyword>` searches added on top of the
+#                       hardcoded list. Lets us pick up newly-created
+#                       lab communities without editing this file.
+#
+# The build step deduplicates by `community_id` (`zenodo:<slug>`) so
+# overlap between hardcoded and discovered is harmless.
+
+parents:
+  epfl:
+    label: "École Polytechnique Fédérale de Lausanne"
+    discovery_queries:
+      - "EPFL"
+    hardcoded_slugs:
+      - epfl
+      - eesd_at_epfl
+      - ivrl-epfl-switzerland
+      - epfl-chili
+      - epfl-lcpt
+      - asl-epfl
+      - sxl-epfl
+      - lmis1_epfl
+      - eml-epfl
+      - tne_lab_epfl
+      - lcsb-epfl-data
+      - epfl-ice
+      - embeddedsystemslab-epfl
+      - gr-mo
+      - spt
+      - epfllibrary_oer
+
+  ethz:
+    label: "ETH Zürich"
+    discovery_queries:
+      - "ETH Zurich"
+    hardcoded_slugs:
+      - sae-eth
+      - reiher-research-group
+      - ghe-ethz
+      - mds
+      - epse-ethz
+      - bernauer_archive
+      - iac_tp_data_code
+      - eth_zurich_iac_atmospheric_physics
+
+  cern:
+    label: "CERN"
+    # Narrow phrases + strict post-filter — Zenodo's `?q=` does word-stem
+    # fuzzy match ("CERN" matches CERMN/CERTH/CERIC, ATLAS matches any
+    # atlas of birds, etc.). `affiliation_check_regex` is applied to
+    # title+description after discovery; hardcoded_slugs bypass the
+    # filter (they're curator-vetted).
+    discovery_queries:
+      - "CERN"
+      - "ATLAS Collaboration"
+      - "CMS Collaboration"
+      - "LHCb Collaboration"
+      - "ALICE Collaboration"
+    affiliation_check_regex: "\\b(CERN|LHCb|Large Hadron Collider|ATLAS detector|CMS experiment|cern\\.ch)\\b"
+    hardcoded_slugs:
+      - cerneducation
+      - ideasquare
+      - cernsciencegateway
+      - cern_cloud_experiment
+      - cern-it-gov-inn
+      - cern-iml-wg
+      - alice-experiment
+      - cms-experiment
+      - atlas_experiment
+
+  cern_openlab:
+    label: "CERN openlab"
+    discovery_queries:
+      - "CERN openlab"
+    affiliation_check_regex: "\\b(CERN openlab|openlab\\b.*CERN|CERN\\b.*openlab)\\b"
+    hardcoded_slugs:
+      - cernopenlab

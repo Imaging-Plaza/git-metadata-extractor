@@ -87,7 +87,7 @@ def load_adapters(only: list[str] | None = None) -> list[IndexAdapter]:
     candidates = [
         "huggingface", "openalex", "infoscience", "orcid", "ror", "zenodo",
         "ethz_research_collection", "github", "snsf", "renkulab", "epfl_graph",
-        "swissubase",
+        "swissubase", "communities",
     ]
     targets = [c for c in candidates if (only is None or c in only)]
     for name in targets:
