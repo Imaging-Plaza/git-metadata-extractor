@@ -44,7 +44,10 @@ def test_v1_root_response_shape_is_unchanged() -> None:
     payload = api_module.index()
     assert isinstance(payload, dict)
     assert list(payload) == ["title"]
-    assert "Git Metadata Extractor v2.0.1" in payload["title"]
+    # Version-agnostic: this is a response-*shape* check, so assert the
+    # stable title prefix rather than a hardcoded version that goes stale
+    # on every release bump.
+    assert "Git Metadata Extractor v" in payload["title"]
 
 
 def test_v1_cache_management_endpoints_respond(tmp_path, monkeypatch) -> None:
