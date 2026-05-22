@@ -199,6 +199,24 @@ class ZenodoStore:
             ],
         )
 
+    def ensure_community(self, community_id: str) -> None:
+        """Insert a stub `communities` row if the id is not already
+        present — never overwrites an existing row.
+
+        Records reference communities the crawl never bootstrapped
+        metadata for. Without this, those ids appear in
+        `record_communities` but are absent from the `communities`
+        master table (orphan references). `ON CONFLICT DO NOTHING`
+        guarantees a stub never clobbers real metadata written by
+        `upsert_community`, regardless of ingest order.
+        """
+        self.connect().execute(
+            "INSERT INTO communities (community_id, title, raw, ingested_at) "
+            "VALUES (?, NULL, NULL, ?) "
+            "ON CONFLICT (community_id) DO NOTHING",
+            [community_id, self._now()],
+        )
+
     def upsert_record_communities(
         self,
         record_id: str,
