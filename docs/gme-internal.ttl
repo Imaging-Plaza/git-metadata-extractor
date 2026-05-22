@@ -1,0 +1,280 @@
+@prefix gme-internal: <https://openpulse.science/git-metadata-extractor#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+#
+# GME internal vocabulary
+# -----------------------
+# Auxiliary terms for provider metadata collected by the
+# git-metadata-extractor that the Open Pulse ontology does not (yet)
+# model. These terms appear in a /v2/extract response only when it is
+# requested with `?include_internal_fields=true`.
+#
+# This vocabulary is SEPARATE from the Open Pulse ontology and does not
+# modify it. A document carrying gme-internal:* predicates is valid RDF
+# and loads into a triplestore, but is intentionally NOT conformant to
+# the closed (sh:closed) Open Pulse SHACL shapes.
+#
+
+<https://openpulse.science/git-metadata-extractor#> a owl:Ontology ;
+    rdfs:label "GME internal vocabulary" ;
+    rdfs:comment "Auxiliary provider-metadata terms emitted by the git-metadata-extractor under include_internal_fields=true. Not part of Open Pulse." .
+
+
+# --- GitHub account/profile metadata (Person and Organization) ---
+
+gme-internal:avatar_url a rdf:Property ;
+    rdfs:label "avatar_url" ;
+    rdfs:comment "Profile avatar image URL from GitHub." .
+
+gme-internal:bio a rdf:Property ;
+    rdfs:label "bio" ;
+    rdfs:comment "Free-text bio from the GitHub profile." .
+
+gme-internal:blog a rdf:Property ;
+    rdfs:label "blog" ;
+    rdfs:comment "Personal/organisation website declared on GitHub." .
+
+gme-internal:company a rdf:Property ;
+    rdfs:label "company" ;
+    rdfs:comment "Company/affiliation string from the GitHub profile." .
+
+gme-internal:email a rdf:Property ;
+    rdfs:label "email" ;
+    rdfs:comment "Public email address from the GitHub profile." .
+
+gme-internal:location a rdf:Property ;
+    rdfs:label "location" ;
+    rdfs:comment "Free-text location from the GitHub profile." .
+
+gme-internal:twitter_username a rdf:Property ;
+    rdfs:label "twitter_username" ;
+    rdfs:comment "Twitter/X handle declared on GitHub." .
+
+gme-internal:hireable a rdf:Property ;
+    rdfs:label "hireable" ;
+    rdfs:comment "GitHub 'hireable' flag (Person only)." .
+
+gme-internal:html_url a rdf:Property ;
+    rdfs:label "html_url" ;
+    rdfs:comment "Canonical GitHub HTML profile URL." .
+
+gme-internal:followers_count a rdf:Property ;
+    rdfs:label "followers_count" ;
+    rdfs:comment "Number of GitHub followers." .
+
+gme-internal:following_count a rdf:Property ;
+    rdfs:label "following_count" ;
+    rdfs:comment "Number of accounts the user follows (Person only)." .
+
+gme-internal:public_repos a rdf:Property ;
+    rdfs:label "public_repos" ;
+    rdfs:comment "Count of public repositories on GitHub." .
+
+gme-internal:github_account_type a rdf:Property ;
+    rdfs:label "github_account_type" ;
+    rdfs:comment "GitHub account type — 'User' or 'Organization'." .
+
+gme-internal:github_created_at a rdf:Property ;
+    rdfs:label "github_created_at" ;
+    rdfs:comment "GitHub account creation timestamp (ISO 8601)." .
+
+gme-internal:github_updated_at a rdf:Property ;
+    rdfs:label "github_updated_at" ;
+    rdfs:comment "GitHub account last-update timestamp (ISO 8601)." .
+
+
+# --- GitHub repository metadata (SoftwareSourceCode) ---
+
+gme-internal:description a rdf:Property ;
+    rdfs:label "description" ;
+    rdfs:comment "Repository short description from GitHub." .
+
+gme-internal:keywords a rdf:Property ;
+    rdfs:label "keywords" ;
+    rdfs:comment "Repository topics/keywords from GitHub." .
+
+gme-internal:homepage a rdf:Property ;
+    rdfs:label "homepage" ;
+    rdfs:comment "Repository homepage URL declared on GitHub." .
+
+gme-internal:primary_language a rdf:Property ;
+    rdfs:label "primary_language" ;
+    rdfs:comment "Dominant programming language reported by GitHub." .
+
+gme-internal:default_branch a rdf:Property ;
+    rdfs:label "default_branch" ;
+    rdfs:comment "Default branch name." .
+
+gme-internal:license_name a rdf:Property ;
+    rdfs:label "license_name" ;
+    rdfs:comment "SPDX/GitHub license name." .
+
+gme-internal:license_url a rdf:Property ;
+    rdfs:label "license_url" ;
+    rdfs:comment "GitHub API URL for the repository license." .
+
+gme-internal:visibility a rdf:Property ;
+    rdfs:label "visibility" ;
+    rdfs:comment "Repository visibility — 'public' or 'private'." .
+
+gme-internal:archived a rdf:Property ;
+    rdfs:label "archived" ;
+    rdfs:comment "Whether the repository is archived." .
+
+gme-internal:disabled a rdf:Property ;
+    rdfs:label "disabled" ;
+    rdfs:comment "Whether the repository is disabled." .
+
+gme-internal:size_kb a rdf:Property ;
+    rdfs:label "size_kb" ;
+    rdfs:comment "Repository size in kilobytes." .
+
+gme-internal:watchers_count a rdf:Property ;
+    rdfs:label "watchers_count" ;
+    rdfs:comment "Number of watchers." .
+
+gme-internal:subscribers_count a rdf:Property ;
+    rdfs:label "subscribers_count" ;
+    rdfs:comment "Number of subscribers." .
+
+gme-internal:network_count a rdf:Property ;
+    rdfs:label "network_count" ;
+    rdfs:comment "Size of the repository fork network." .
+
+gme-internal:open_issues_count a rdf:Property ;
+    rdfs:label "open_issues_count" ;
+    rdfs:comment "Count of open issues." .
+
+gme-internal:has_wiki a rdf:Property ;
+    rdfs:label "has_wiki" ;
+    rdfs:comment "Whether the repository has a wiki." .
+
+gme-internal:has_pages a rdf:Property ;
+    rdfs:label "has_pages" ;
+    rdfs:comment "Whether GitHub Pages is enabled." .
+
+gme-internal:has_issues a rdf:Property ;
+    rdfs:label "has_issues" ;
+    rdfs:comment "Whether the issue tracker is enabled." .
+
+gme-internal:has_projects a rdf:Property ;
+    rdfs:label "has_projects" ;
+    rdfs:comment "Whether GitHub Projects is enabled." .
+
+gme-internal:has_discussions a rdf:Property ;
+    rdfs:label "has_discussions" ;
+    rdfs:comment "Whether GitHub Discussions is enabled." .
+
+gme-internal:pushed_at a rdf:Property ;
+    rdfs:label "pushed_at" ;
+    rdfs:comment "Timestamp of the last push (ISO 8601)." .
+
+gme-internal:updated_at a rdf:Property ;
+    rdfs:label "updated_at" ;
+    rdfs:comment "Repository last-update timestamp (ISO 8601)." .
+
+
+# --- ROR (Research Organization Registry) metadata (Organization) ---
+
+gme-internal:ror_country a rdf:Property ;
+    rdfs:label "ror_country" ;
+    rdfs:comment "Country of the ROR-registered organisation." .
+
+gme-internal:ror_types a rdf:Property ;
+    rdfs:label "ror_types" ;
+    rdfs:comment "ROR organisation type labels." .
+
+gme-internal:ror_status a rdf:Property ;
+    rdfs:label "ror_status" ;
+    rdfs:comment "ROR record status (e.g. 'active')." .
+
+gme-internal:ror_established a rdf:Property ;
+    rdfs:label "ror_established" ;
+    rdfs:comment "Year the organisation was established, per ROR." .
+
+gme-internal:ror_links a rdf:Property ;
+    rdfs:label "ror_links" ;
+    rdfs:comment "Official links listed in the ROR record." .
+
+
+# --- ORCID metadata (Person) ---
+
+gme-internal:orcid_biography a rdf:Property ;
+    rdfs:label "orcid_biography" ;
+    rdfs:comment "Biography text from the ORCID record." .
+
+gme-internal:orcid_country a rdf:Property ;
+    rdfs:label "orcid_country" ;
+    rdfs:comment "Country from the ORCID record." .
+
+gme-internal:orcid_keywords a rdf:Property ;
+    rdfs:label "orcid_keywords" ;
+    rdfs:comment "Self-declared keywords from the ORCID record." .
+
+gme-internal:orcid_other_names a rdf:Property ;
+    rdfs:label "orcid_other_names" ;
+    rdfs:comment "Alternative names listed on the ORCID record." .
+
+gme-internal:orcid_researcher_urls a rdf:Property ;
+    rdfs:label "orcid_researcher_urls" ;
+    rdfs:comment "Researcher URLs listed on the ORCID record." .
+
+gme-internal:orcid_external_identifiers a rdf:Property ;
+    rdfs:label "orcid_external_identifiers" ;
+    rdfs:comment "External identifiers on the ORCID record." .
+
+
+# --- Infoscience / DSpace metadata (Person and Organization) ---
+
+gme-internal:infoscience_url a rdf:Property ;
+    rdfs:label "infoscience_url" ;
+    rdfs:comment "Infoscience profile/record URL." .
+
+gme-internal:infoscience_code a rdf:Property ;
+    rdfs:label "infoscience_code" ;
+    rdfs:comment "Infoscience organisational unit code." .
+
+gme-internal:infoscience_position a rdf:Property ;
+    rdfs:label "infoscience_position" ;
+    rdfs:comment "Position/role from Infoscience (Person)." .
+
+gme-internal:infoscience_employment_status a rdf:Property ;
+    rdfs:label "infoscience_employment_status" ;
+    rdfs:comment "Employment status from Infoscience (Person)." .
+
+gme-internal:unit_code a rdf:Property ;
+    rdfs:label "unit_code" ;
+    rdfs:comment "Organisational unit code (DSpace)." .
+
+gme-internal:parent_acronym a rdf:Property ;
+    rdfs:label "parent_acronym" ;
+    rdfs:comment "Acronym of the parent organisational unit." .
+
+gme-internal:director_name a rdf:Property ;
+    rdfs:label "director_name" ;
+    rdfs:comment "Name of the unit director (DSpace)." .
+
+gme-internal:org_type_dspace a rdf:Property ;
+    rdfs:label "org_type_dspace" ;
+    rdfs:comment "Organisation type as recorded in DSpace." .
+
+gme-internal:acronyms a rdf:Property ;
+    rdfs:label "acronyms" ;
+    rdfs:comment "Acronyms associated with the organisation." .
+
+gme-internal:aliases a rdf:Property ;
+    rdfs:label "aliases" ;
+    rdfs:comment "Alternative names for the organisation." .
+
+gme-internal:labels a rdf:Property ;
+    rdfs:label "labels" ;
+    rdfs:comment "Multilingual labels for the organisation." .
+
+
+# --- Pipeline-derived metadata ---
+
+gme-internal:dropped_affiliations a rdf:Property ;
+    rdfs:label "dropped_affiliations" ;
+    rdfs:comment "Affiliations collected but dropped during reconciliation for lack of a confirmable identifier anchor." .

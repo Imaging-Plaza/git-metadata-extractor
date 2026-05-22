@@ -141,3 +141,71 @@ def test_build_jsonld_output_emits_license_citation_and_org_hierarchy_as_iris() 
     assert list(graph.objects(org_child, URIRef("http://www.w3.org/ns/org#unitOf"))) == [
         org_parent,
     ]
+
+
+def _assembled_with_internal_fields() -> AssembledOutput:
+    return AssembledOutput(
+        root_entity={
+            "id": "owner/repo",
+            "type": "schema:SoftwareSourceCode",
+            "schema:name": "owner/repo",
+            "_homepage": "https://example.org",
+            "_watchers_count": 42,
+        },
+        related_entities=[],
+        excluded_entities=[
+            {
+                "entity_type": "person",
+                "entity": {
+                    "id": "alice",
+                    "type": "schema:Person",
+                    "schema:name": "Alice",
+                    "_bio": "researcher",
+                },
+                "reason": [{"message": "strict_validation"}],
+            },
+        ],
+    )
+
+
+def test_internal_fields_dropped_when_flag_off() -> None:
+    payload = build_jsonld_output(
+        assembled=_assembled_with_internal_fields(),
+        jsonld_context=_context(),
+        include_internal_fields=False,
+    )
+    node = payload["@graph"][0]
+    excluded = payload["excluded_entities"][0]["entity"]
+    assert "gme-internal" not in payload["@context"]
+    assert not [k for k in node if str(k).startswith(("_", "gme-internal:"))]
+    assert not [k for k in excluded if str(k).startswith(("_", "gme-internal:"))]
+
+
+def test_internal_fields_renamed_to_gme_internal_terms_when_flag_on() -> None:
+    payload = build_jsonld_output(
+        assembled=_assembled_with_internal_fields(),
+        jsonld_context=_context(),
+        include_internal_fields=True,
+    )
+    # Prefix registered so the terms expand to real IRIs.
+    assert (
+        payload["@context"]["gme-internal"]
+        == "https://openpulse.science/git-metadata-extractor#"
+    )
+    node = payload["@graph"][0]
+    assert node["gme-internal:homepage"] == "https://example.org"
+    assert node["gme-internal:watchers_count"] == 42
+    assert "_homepage" not in node
+    # Applies to excluded_entities too.
+    excluded = payload["excluded_entities"][0]["entity"]
+    assert excluded["gme-internal:bio"] == "researcher"
+    assert "_bio" not in excluded
+
+    # The renamed terms expand to IRIs under the gme-internal namespace.
+    graph = Graph()
+    graph.parse(data=json.dumps(payload), format="json-ld")
+    assert (
+        None,
+        URIRef("https://openpulse.science/git-metadata-extractor#homepage"),
+        Literal("https://example.org"),
+    ) in graph
