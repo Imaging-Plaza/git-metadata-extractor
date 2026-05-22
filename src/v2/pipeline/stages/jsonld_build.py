@@ -9,6 +9,17 @@ if TYPE_CHECKING:
 ENTITY_URI_PREFIX = "urn:pulse:"
 HELPER_ONLY_FIELDS = {"shacl", "identifiers", "idSource", "_person_ref"}
 
+# Auxiliary namespace for the rich provider metadata the extractor
+# collects but the Open Pulse ontology does not (yet) model. Surfaced
+# only when `include_internal_fields=True`: a `_avatar_url` field is
+# emitted as the JSON-LD term `gme-internal:avatar_url`, which expands
+# to a real IRI so the payload loads into an RDF triplestore. This is a
+# separate vocabulary — it does NOT touch the Open Pulse ontology, and
+# such output is intentionally not conformant to its closed SHACL
+# shapes (a triplestore load needs no SHACL conformance).
+GME_INTERNAL_PREFIX = "gme-internal"
+GME_INTERNAL_NAMESPACE = "https://openpulse.science/git-metadata-extractor#"
+
 
 def _normalize_node_id(value: Any, *, index: int) -> str:
     if isinstance(value, str) and value:
@@ -95,6 +106,25 @@ def _drop_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _internal_term(key: str) -> str:
+    """Map a `_`-prefixed internal field to its `gme-internal:` JSON-LD
+    term (`_avatar_url` -> `gme-internal:avatar_url`)."""
+    return f"{GME_INTERNAL_PREFIX}:{key.lstrip('_')}"
+
+
+def _rewrite_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``entity`` with top-level `_`-prefixed keys
+    renamed to their `gme-internal:` terms, so they expand to real IRI
+    predicates instead of being dropped as undefined JSON-LD terms."""
+    out: dict[str, Any] = {}
+    for key, value in entity.items():
+        if isinstance(key, str) and key.startswith("_"):
+            out[_internal_term(key)] = value
+        else:
+            out[key] = value
+    return out
+
+
 def build_jsonld_output(
     *,
     assembled: AssembledOutput,
@@ -109,14 +139,19 @@ def build_jsonld_output(
     contains zero `_` fields anywhere — only terms the open-pulse
     ontology declares.
 
-    Set ``include_internal_fields=True`` to keep `_`-prefixed keys in
-    the output (`@graph` and `excluded_entities` alike) — useful when
-    the caller asked for the broader profile metadata (`_avatar_url`,
-    `_bio`, `_company`, `_orcid_keywords`, `_dropped_affiliations`,
-    etc.) that we collect but don't yet have ontology terms for.
-    Strict SHACL validation has already run by this point (it always
-    strips `_` fields), so flipping this flag is purely about what the
-    consumer sees, not about validation.
+    Set ``include_internal_fields=True`` to surface the broader profile
+    metadata (`_avatar_url`, `_bio`, `_company`, `_orcid_keywords`,
+    `_dropped_affiliations`, etc.) that we collect but don't yet have
+    ontology terms for. Each `_`-prefixed key is renamed to a
+    `gme-internal:` JSON-LD term (`_avatar_url` -> `gme-internal:avatar_url`)
+    and the `gme-internal` prefix is registered in `@context`, so the
+    payload expands to real IRI triples and loads into an RDF
+    triplestore. This applies to `@graph` nodes and `excluded_entities`
+    alike. Strict SHACL validation has already run by this point (it
+    always strips `_` fields), so flipping this flag is purely about
+    what the consumer sees, not about validation — and the resulting
+    document is intentionally not conformant to the closed Open Pulse
+    SHACL shapes.
     """
 
     entities: list[dict[str, Any]] = []
@@ -143,17 +178,18 @@ def build_jsonld_output(
         for key, value in entity.items():
             if key in HELPER_ONLY_FIELDS or key in {"id", "type"}:
                 continue
-            if (
-                not include_internal_fields
-                and isinstance(key, str)
-                and key.startswith("_")
-            ):
-                continue
-            node[key] = _normalize_jsonld_value(
+            out_key = key
+            if isinstance(key, str) and key.startswith("_"):
+                if not include_internal_fields:
+                    continue
+                # Emit as a `gme-internal:` term so it expands to a real
+                # IRI predicate rather than a dropped undefined term.
+                out_key = _internal_term(key)
+            node[out_key] = _normalize_jsonld_value(
                 value,
                 id_map=id_map,
                 iri_typed_terms=iri_typed_terms,
-                current_property=key,
+                current_property=out_key,
             )
 
         # Strip `pulse:ror` when redundant with the node's own `@id`. The
@@ -171,20 +207,28 @@ def build_jsonld_output(
         graph.append(node)
 
     graph.sort(key=lambda item: str(item.get("@id", "")))
+    context = deepcopy(jsonld_context)
+    if include_internal_fields:
+        # Register the prefix so `gme-internal:*` terms expand to IRIs.
+        context[GME_INTERNAL_PREFIX] = GME_INTERNAL_NAMESPACE
     payload: dict[str, Any] = {
-        "@context": deepcopy(jsonld_context),
+        "@context": context,
         "@graph": graph,
     }
     if assembled.excluded_entities:
         excluded = deepcopy(assembled.excluded_entities)
         # `excluded_entities` carry the same `_`-prefixed internal fields
         # as `@graph` nodes (nested under each record's `entity`). Honour
-        # the flag here too, so `include_internal_fields=False` yields a
-        # response with zero `_` fields anywhere — not just in `@graph`.
-        if not include_internal_fields:
-            for record in excluded:
-                inner = record.get("entity") if isinstance(record, dict) else None
-                if isinstance(inner, dict):
-                    record["entity"] = _drop_internal_keys(inner)
+        # the flag here too: drop them when off, rename them to
+        # `gme-internal:` terms when on — so the whole response is
+        # consistent (zero `_` fields, or all of them as real IRIs).
+        for record in excluded:
+            inner = record.get("entity") if isinstance(record, dict) else None
+            if isinstance(inner, dict):
+                record["entity"] = (
+                    _rewrite_internal_keys(inner)
+                    if include_internal_fields
+                    else _drop_internal_keys(inner)
+                )
         payload["excluded_entities"] = excluded
     return payload
