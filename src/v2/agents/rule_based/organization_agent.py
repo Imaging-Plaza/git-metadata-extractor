@@ -235,6 +235,23 @@ class OrganizationAgentV2:
         if github_lookup_enabled:
             github_org = providers.github.get_organization(org_name)
 
+        # Profile README (`<org>/.github/profile/README.md`) — the richest
+        # free-text "what is this org" text GitHub exposes. Fetched directly
+        # alongside the org profile (like `get_organization` above); read by
+        # downstream agents, notably the ROR parent selector.
+        org_profile_readme: str | None = None
+        if github_lookup_enabled:
+            try:
+                readme = providers.github.get_profile_readme(
+                    org_name,
+                    is_organization=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Profile README fetch failed: {exc}")
+                readme = ""
+            if isinstance(readme, str) and readme.strip():
+                org_profile_readme = readme.strip()
+
         # Infoscience first: when it returns a hit, the org is by definition
         # from the EPFL/Swiss universe and we bias the subsequent ROR lookup
         # toward `country_code = "CH"` to avoid acronym collisions (the
@@ -437,6 +454,7 @@ class OrganizationAgentV2:
             "_description":        github_org.get("description"),
             "_company":            github_org.get("company"),
             "_location":           github_org.get("location"),
+            "_profile_readme":     org_profile_readme,
             "_email":              github_org.get("email"),
             "_twitter_username":   github_org.get("twitter_username"),
             "_public_repos":       github_org.get("public_repos"),

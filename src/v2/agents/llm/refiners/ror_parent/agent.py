@@ -127,7 +127,7 @@ class RorParentSelectorAgent:
         payload = refiner_input.model_dump(by_alias=True, exclude_none=False)
         org_context = payload.get("org_context")
         if isinstance(org_context, dict):
-            for key in ("description", "homepage", "location", "company"):
+            for key in ("description", "homepage", "location", "company", "profile_readme"):
                 value = org_context.get(key)
                 if isinstance(value, str) and len(value) > _README_EXCERPT_LIMIT:
                     org_context[key] = value[:_README_EXCERPT_LIMIT]

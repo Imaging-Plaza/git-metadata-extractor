@@ -212,18 +212,20 @@ def test_no_ror_provider_is_a_noop() -> None:
     assert warnings == []
 
 
-def test_org_context_carries_the_github_description() -> None:
-    """The org's GitHub description (internal `_description`) — the strongest
-    parent signal — is surfaced for the selector."""
+def test_org_context_carries_the_github_description_and_profile_readme() -> None:
+    """The org's GitHub description and profile README (internal `_*` fields)
+    — the strongest parent signals — are surfaced for the selector."""
     org = {
         "_description": "Link between EPFL/IC labs and industry",
         "_location": "Lausanne, Switzerland",
         "_blog": "https://c4dt.epfl.ch",
+        "_profile_readme": "# C4DT\n\nThe Center for Digital Trust at EPFL.",
     }
     context = _org_context_for_selector(org)
     assert context is not None
     assert context["description"] == "Link between EPFL/IC labs and industry"
     assert context["homepage"] == "https://c4dt.epfl.ch"
+    assert context["profile_readme"] == "# C4DT\n\nThe Center for Digital Trust at EPFL."
     assert _org_context_for_selector({}) is None
 
 

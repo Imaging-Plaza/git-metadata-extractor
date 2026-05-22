@@ -280,6 +280,21 @@ class PersonAgentV2:
         username = _resolve_username(context)
         github_user = providers.github.get_user(username)
 
+        # Profile README (`<user>/<user>`'s README) — the richest free-text
+        # self-description GitHub exposes for a user. Fetched directly
+        # alongside the user profile; stamped as internal `_profile_readme`.
+        person_profile_readme: str | None = None
+        try:
+            _profile_readme = providers.github.get_profile_readme(
+                username,
+                is_organization=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"Profile README fetch failed: {exc}")
+            _profile_readme = ""
+        if isinstance(_profile_readme, str) and _profile_readme.strip():
+            person_profile_readme = _profile_readme.strip()
+
         orcid_record: Any | None = None
         orcid_identifier_hint = _normalize_orcid(context.get("orcid")) or _normalize_orcid(
             github_user.get("orcid"),
@@ -497,6 +512,7 @@ class PersonAgentV2:
             "_github_updated_at":  github_user.get("updated_at"),
             "_github_account_type": github_user.get("type"),
             "_hireable":           github_user.get("hireable"),
+            "_profile_readme":     person_profile_readme,
         }
         for key, value in github_profile_fields.items():
             if value not in (None, "", []):

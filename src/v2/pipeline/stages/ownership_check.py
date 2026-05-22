@@ -876,6 +876,7 @@ def _org_context_for_selector(org: dict[str, Any]) -> dict[str, Any] | None:
         ("_location", "location"),
         ("_blog", "homepage"),
         ("_company", "company"),
+        ("_profile_readme", "profile_readme"),
     ):
         value = org.get(src_key)
         if isinstance(value, str) and value.strip():

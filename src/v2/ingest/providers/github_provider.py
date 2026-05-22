@@ -951,6 +951,75 @@ class RealGitHubProvider(GitHubProvider):
             label=f"github.get_repository_readme({full_name})",
         )
 
+    def get_profile_readme(self, owner: str, *, is_organization: bool) -> str:
+        """Fetch the GitHub *profile* README — the markdown shown on the
+        account's profile page.
+
+        - **User** ``<owner>``: the README of the special ``<owner>/<owner>``
+          repository (`GET /repos/{owner}/{owner}/readme`).
+        - **Organization** ``<owner>``: ``profile/README.md`` inside the
+          ``<owner>/.github`` repository
+          (`GET /repos/{owner}/.github/readme/profile`).
+
+        Returns an empty string when no profile README exists (the common
+        case — most accounts don't have one) or the call fails. The body is
+        a rich "what is this account" description ideal as agent context.
+        """
+
+        owner = (owner or "").strip().strip("/")
+        if not owner:
+            return ""
+        if is_organization:
+            url = f"https://api.github.com/repos/{owner}/.github/readme/profile"
+            subject = f"{owner}/.github:profile"
+        else:
+            url = f"https://api.github.com/repos/{owner}/{owner}/readme"
+            subject = f"{owner}/{owner}"
+
+        max_bytes = 100_000
+
+        def _fetch() -> str:
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github profile README fetch failed: %s", subject)
+                return ""
+            if response.status_code == 404:
+                return ""
+            if response.status_code != 200:
+                logger.info(
+                    "github profile README fetch returned %d for %s",
+                    response.status_code, subject,
+                )
+                return ""
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github profile README response not JSON: %s", subject)
+                return ""
+            if not isinstance(payload, dict):
+                return ""
+            content_b64 = payload.get("content")
+            if not isinstance(content_b64, str) or payload.get("encoding") != "base64":
+                return ""
+            try:
+                decoded = base64.b64decode(content_b64).decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                logger.exception("github profile README base64-decode failed: %s", subject)
+                return ""
+            return decoded[:max_bytes]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_profile_readme", subject=subject)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_profile_readme({subject})",
+        )
+
     def get_repository_sbom(self, full_name: str) -> list[dict[str, Any]] | None:
         """Fetch the SPDX SBOM from GitHub and return a flat dependency list.
 
