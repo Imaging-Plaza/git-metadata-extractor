@@ -267,6 +267,13 @@ scope:
       - squirro              # Squirro — Zurich enterprise AI / insight engine
       - eraneos              # Eraneos — Zurich IT consulting (formerly AWK)
       - ubs-ai               # UBS AI Community — Swiss bank, Zurich HQ
+      # Promoted 2026-05-22 from the wide discover-orgs sweep — only the
+      # genuinely Swiss/EPFL namespaces; the rest of the verified set was
+      # fuzzy-match noise (Luxembourg/Spain/USC, "Empathy" cos, personal
+      # accounts named Bern/Basel/Cern) and was rejected.
+      - CERN                 # CERN — European Organization for Nuclear Research
+      - languagenet          # EPFL CS-552 Modern NLP — LanguageNet team
+      - usisoftware-org      # Software Institute — USI, Lugano
 
 discovery:
   # Substrings fed to list_models(search=...) / list_datasets(search=...).
