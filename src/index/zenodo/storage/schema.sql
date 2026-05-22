@@ -12,6 +12,15 @@ CREATE TABLE IF NOT EXISTS records (
     access_right       TEXT,                         -- open | embargoed | restricted | closed
     license_id         TEXT,
     keywords_json      JSON,
+    -- Denormalised list of community slugs the record belongs to.
+    -- Mirrors `record_communities` so consumers can filter
+    -- `WHERE list_contains(community_ids, 'cernopenlab')` without
+    -- joining. Refreshed at upsert time.
+    community_ids      JSON,
+    -- The first community we crawled when ingesting this record;
+    -- handy as a `primary` label when a record lives in multiple
+    -- communities and we just need a single colour-code field.
+    primary_community_id TEXT,
     raw                JSON,
     ingested_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -73,6 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_records_pubdate     ON records (publication_date)
 CREATE INDEX IF NOT EXISTS idx_records_type        ON records (resource_type);
 CREATE INDEX IF NOT EXISTS idx_records_access      ON records (access_right);
 CREATE INDEX IF NOT EXISTS idx_records_concept     ON records (concept_recid);
+CREATE INDEX IF NOT EXISTS idx_records_primary_comm ON records (primary_community_id);
 CREATE INDEX IF NOT EXISTS idx_creators_orcid      ON creators (orcid);
 CREATE INDEX IF NOT EXISTS idx_chunks_entity       ON chunks (entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_record_creators_ck  ON record_creators (creator_key);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -91,7 +92,11 @@ from src.v2.pipeline.stages import (
     compute_stats,
     guarantee_repo_author,
     infer_github_handle_parents,
+    demote_github_props_to_units,
+    emit_fork_parent_stubs,
+    infer_article_source_organization,
     infer_org_units,
+    tag_rule_based_disciplines,
     infer_owners,
     promote_failed_id_entities,
     prune_dangling_refs,
@@ -157,6 +162,16 @@ STAGE_RECONCILIATION = "reconciliation"
 STAGE_LLM_DEDUP = "llm_dedup"
 STAGE_LLM_CRITIC = "llm_critic"
 STAGE_SHACL_GATE = "shacl_gate"
+
+# Async-job heartbeat tuning. The worker writes `last_heartbeat_at` to
+# the JobStore every `_JOB_HEARTBEAT_INTERVAL_SECONDS`. When a GET
+# arrives for a "running" job whose latest heartbeat is older than
+# `_JOB_STALE_THRESHOLD_SECONDS`, we treat the job as orphaned (worker
+# died, OS killed it, deploy restarted, etc.) and flip it to FAILED so
+# the client doesn't poll forever. Threshold is generous (10 minutes
+# = 20 missed beats) so we don't false-positive on a slow LLM stage.
+_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
+_JOB_STALE_THRESHOLD_SECONDS = 600.0
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
@@ -317,13 +332,37 @@ async def _run_extract_job(
     Runs the existing GET handler as a plain async function, then unwraps the
     success/error result onto the persisted V2ExtractJob record.
     """
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         existing = job_store.get(job_id)
         if existing is None:
             return
+        now = datetime.now(timezone.utc)
         existing.status = V2ExtractJobStatus.RUNNING
-        existing.started_at = datetime.now(timezone.utc)
+        existing.started_at = now
+        existing.last_heartbeat_at = now
         job_store.set(existing)
+
+        # Periodic heartbeat so a job whose worker process dies mid-flight
+        # can be detected and marked failed by the GET endpoint instead
+        # of staying "running" forever. Cancelled in the finally block
+        # so we don't leave a zombie task behind on normal completion.
+        async def _heartbeat() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(_JOB_HEARTBEAT_INTERVAL_SECONDS)
+                except asyncio.CancelledError:
+                    raise
+                try:
+                    current = job_store.get(job_id)
+                    if current is None or current.status != V2ExtractJobStatus.RUNNING:
+                        return
+                    current.last_heartbeat_at = datetime.now(timezone.utc)
+                    job_store.set(current)
+                except Exception:  # noqa: BLE001
+                    logger.exception("heartbeat write failed for job %s", job_id)
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
 
         result = await extract(
             full_path=payload.source_url,
@@ -337,6 +376,7 @@ async def _run_extract_job(
 
         finished = job_store.get(job_id) or existing
         finished.completed_at = datetime.now(timezone.utc)
+        finished.last_heartbeat_at = finished.completed_at
         if isinstance(result, V2ExtractResponse):
             finished.status = V2ExtractJobStatus.COMPLETED
             finished.result = result
@@ -359,12 +399,18 @@ async def _run_extract_job(
             return
         record.status = V2ExtractJobStatus.FAILED
         record.completed_at = datetime.now(timezone.utc)
+        record.last_heartbeat_at = record.completed_at
         record.error = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
             detail=str(exc),
             source_url=payload.source_url,
         )
         job_store.set(record)
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            with contextlib.suppress(Exception):
+                await heartbeat_task
 
 
 def _append_unique_warning(warnings: list[str], warning: str) -> None:
@@ -477,6 +523,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     output_format: Annotated[Literal["jsonld", "json"], Query()] = "jsonld",
     agent_runtime: Annotated[Literal["rule_based", "llm", "hybrid"] | None, Query()] = None,
     include_context_summary: Annotated[bool, Query()] = False,
+    include_internal_fields: Annotated[
+        bool,
+        Query(
+            description=(
+                "When true, the response keeps `_`-prefixed internal fields "
+                "(e.g. `_bio`, `_avatar_url`, `_orcid_keywords`, `_company`) "
+                "that aren't part of the open-pulse ontology yet. Strict SHACL "
+                "validation still runs identically — this flag only affects "
+                "what the consumer sees. Default false for ontology compliance."
+            ),
+        ),
+    ] = False,
     providers: Annotated[ProviderSet, Depends(get_provider_set)],
     _token: Annotated[str, Depends(verify_token)],
 ) -> V2ExtractResponse | JSONResponse:
@@ -554,6 +612,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             output_format=output_format,
             agent_runtime=resolved_runtime.value,
             include_context_summary=bool(include_context_summary),
+            include_internal_fields=bool(include_internal_fields),
         )
         cached_response = pipeline_cache.get(pipeline_cache_key)
         if isinstance(cached_response, dict):
@@ -720,6 +779,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 reconciled=reconciled,
                 gathered_context=gathered_context,
                 epfl_graph_provider=providers.epfl_graph_rag,
+                providers=providers,
                 max_concurrency=orchestrator.max_concurrent_agents,
             )
         except Exception as exc:
@@ -1086,6 +1146,82 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     for warning in org_unit_warnings:
         _append_unique_warning(warnings, warning)
 
+    stage_started_at = perf_counter()
+    assembled_output, demote_warnings = demote_github_props_to_units(assembled_output)
+    logger.info(
+        "demote_github_props_to_units: demoted=%d in %.2fs",
+        len(demote_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in demote_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Emit minimal stubs for fork parents so `pulse:isForkOf` references
+    # satisfy SHACL `sh:class schema:SoftwareSourceCode` without forcing
+    # us to ingest the upstream repo.
+    stage_started_at = perf_counter()
+    assembled_output, fork_stub_warnings = emit_fork_parent_stubs(assembled_output)
+    logger.info(
+        "fork_parent_stubs: emitted=%d in %.2fs",
+        len(fork_stub_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in fork_stub_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Deterministic inference: stamp `schema:sourceOrganization` on
+    # Articles that don't have one when there is exactly one Org an
+    # author was a confirmed member of on the article's publication
+    # date. Refuses to guess when the answer is ambiguous.
+    stage_started_at = perf_counter()
+    assembled_output, source_org_warnings = infer_article_source_organization(assembled_output)
+    logger.info(
+        "article_source_org_inference: stamped=%d in %.2fs",
+        len(source_org_warnings),
+        perf_counter() - stage_started_at,
+    )
+    for warning in source_org_warnings:
+        _append_unique_warning(warnings, warning)
+
+    # Deterministic discipline tagging via the EPFL Graph disciplines
+    # Qdrant RAG. Runs only when the root is a repository and the field
+    # is still empty (does not overwrite upstream agent output). Result
+    # is gated on the SHACL DisciplineEnumeration so output is always
+    # schema-valid.
+    if classification.detected_type.value == "repository":
+        stage_started_at = perf_counter()
+        readme_text_for_disciplines: str | None = None
+        github_description_for_disciplines: str | None = None
+        repository_context = (
+            gathered_context.get("repository")
+            if isinstance(gathered_context, dict)
+            else None
+        )
+        if isinstance(repository_context, dict):
+            candidate = repository_context.get("readme_content")
+            if isinstance(candidate, str):
+                readme_text_for_disciplines = candidate
+            # The GitHub REST `description` field carries the repo's one-line
+            # pitch, which is far more discriminative for discipline matching
+            # than the first 4k of the README (often HTML/badge soup).
+            metadata = repository_context.get("metadata")
+            if isinstance(metadata, dict):
+                gh_desc = metadata.get("description")
+                if isinstance(gh_desc, str) and gh_desc.strip():
+                    github_description_for_disciplines = gh_desc.strip()
+        assembled_output, discipline_warnings = await tag_rule_based_disciplines(
+            assembled_output,
+            readme_text=readme_text_for_disciplines,
+            github_description=github_description_for_disciplines,
+        )
+        logger.info(
+            "rule_based_disciplines: emitted=%d in %.2fs",
+            sum(1 for w in discipline_warnings if "Inferred pulse:discipline" in w),
+            perf_counter() - stage_started_at,
+        )
+        for warning in discipline_warnings:
+            _append_unique_warning(warnings, warning)
+
     if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":
         repository_context = (
             gathered_context.get("repository")
@@ -1127,6 +1263,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     shacl_graph_payload = build_jsonld_output(
         assembled=assembled_output,
         jsonld_context=jsonld_context,
+        include_internal_fields=include_internal_fields,
     )
     graph_nodes = shacl_graph_payload.get("@graph")
     logger.info(
@@ -1508,6 +1645,35 @@ async def extract_job(
             status_code=status.HTTP_404_NOT_FOUND,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
+    # Detect orphaned jobs: the worker that was executing this job died
+    # (OS kill, deploy, OOM, …) without flipping the status, so the
+    # stored record is stuck in RUNNING. We notice because no heartbeat
+    # has been written in over `_JOB_STALE_THRESHOLD_SECONDS`. Flip to
+    # FAILED, persist, and return the failed view so the client stops
+    # polling. New `POST /v2/extract` calls will start a fresh job.
+    if record.status == V2ExtractJobStatus.RUNNING:
+        now = datetime.now(timezone.utc)
+        beat = record.last_heartbeat_at or record.started_at or record.submitted_at
+        if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
+            stale_seconds = (now - beat).total_seconds()
+            logger.warning(
+                "marking job %s as FAILED: no heartbeat for %.0fs "
+                "(threshold=%.0fs) — worker likely died mid-flight",
+                job_id,
+                stale_seconds,
+                _JOB_STALE_THRESHOLD_SECONDS,
+            )
+            record.status = V2ExtractJobStatus.FAILED
+            record.completed_at = now
+            record.error = V2ErrorResponse(
+                error_type=V2ErrorType.PIPELINE_ERROR,
+                detail=(
+                    "extract job orphaned: worker process died mid-extraction "
+                    f"(no heartbeat for {int(stale_seconds)}s)"
+                ),
+                source_url=record.request.source_url,
+            )
+            job_store.set(record)
     return record
 
 

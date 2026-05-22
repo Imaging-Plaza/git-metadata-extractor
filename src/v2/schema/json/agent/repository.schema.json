@@ -5,6 +5,9 @@
   "description": "Schema for Repository entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: githubRepositoryHandle → doi → uuid. SHACL requires: schema:name, pulse:githubRepositoryHandle, schema:author (min 1).",
   "type": "object",
   "additionalProperties": false,
+  "patternProperties": {
+    "^_": {}
+  },
   "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "pulse:githubRepositoryHandle", "schema:author"],
   "properties": {
     "id": {

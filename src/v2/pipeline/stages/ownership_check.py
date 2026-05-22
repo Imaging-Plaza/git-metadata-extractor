@@ -1269,8 +1269,452 @@ def guarantee_repo_author(
     return new_reconciled, warnings
 
 
+def _strip_github_props(entity: dict[str, Any]) -> list[str]:
+    """Remove GitHub-derived properties from `entity`. Returns the keys cleared."""
+    cleared: list[str] = []
+    for key in ("pulse:githubOrgFollowers", "pulse:githubOrganizationHandle"):
+        if entity.get(key) not in (None, ""):
+            entity[key] = None
+            cleared.append(key)
+    identifiers = entity.get("identifiers")
+    if isinstance(identifiers, dict):
+        if isinstance(identifiers.get("pulse:githubOrganizationHandle"), str):
+            identifiers["pulse:githubOrganizationHandle"] = None
+            cleared.append("identifiers.pulse:githubOrganizationHandle")
+    return cleared
+
+
+def demote_github_props_to_units(  # noqa: C901
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """Move `pulse:githubOrgFollowers` / `pulse:githubOrganizationHandle` off
+    ROR-id'd parents and onto the github-only unit they describe.
+
+    Fixes the data-shape bug reported in Imaging-Plaza/git-metadata-extractor
+    issue #29/#33: a ROR organization with `org:hasUnit → github_org` was
+    carrying the unit's follower count and handle on the legal entity. ROR
+    identifies a legal/research entity; GitHub-derived metrics belong on
+    the GitHub presence (the unit), not on the parent.
+
+    Two cases handled:
+
+    1. **Existing unit, matching handle.** Parent has `org:hasUnit →
+       github_url` whose child carries the same handle as the parent.
+       Move follower count to the child (only if missing) and strip the
+       GitHub-derived properties from the parent.
+
+    2. **No matching unit — synthesize one.** Parent has a
+       `pulse:githubOrganizationHandle` but no `org:hasUnit` child for
+       that handle (audit example: `ror.org/02s376052` EPFL carrying
+       `"GeoEnergyLab-EPFL"` with `hasUnit=[]`). Emit a minimal
+       github-only `org:Organization` stub for the handle, stamp
+       `org:unitOf` on the unit and `org:hasUnit` on the parent, and
+       strip the GitHub-derived properties from the parent. The stub
+       satisfies `pulse:OrganizationShape` (one of `schema:identifier`,
+       `pulse:githubOrganizationHandle`, or
+       `pulse:infoscienceOrganizationIdentifier` minCount 1 — we provide
+       the github handle) plus `schema:name`.
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(entity) if isinstance(entity, dict) else entity
+        for entity in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    id_index: dict[str, dict[str, Any]] = {}
+    for entity in candidates:
+        if entity.get("type") != ORGANIZATION_TYPE:
+            continue
+        entity_id = entity.get("id")
+        if isinstance(entity_id, str) and entity_id:
+            id_index[entity_id] = entity
+
+    warnings: list[str] = []
+    synthesized_units: list[dict[str, Any]] = []
+
+    for parent in candidates:
+        if parent.get("type") != ORGANIZATION_TYPE:
+            continue
+        parent_id = parent.get("id")
+        if not isinstance(parent_id, str) or not parent_id.startswith("https://ror.org/"):
+            continue
+        parent_handle = _entity_github_org_handle(parent)
+        if parent_handle is None:
+            continue
+
+        # Pull the handle as the agent emitted it (preserve original case
+        # for the synthesized unit's id and display name).
+        raw_handle = parent.get("pulse:githubOrganizationHandle")
+        if not isinstance(raw_handle, str) or not raw_handle.strip():
+            identifiers = parent.get("identifiers")
+            raw_handle = identifiers.get("pulse:githubOrganizationHandle") if isinstance(identifiers, dict) else None
+        if not isinstance(raw_handle, str) or not raw_handle.strip():
+            continue
+        raw_handle = raw_handle.strip()
+
+        matched_child: dict[str, Any] | None = None
+        units = parent.get(HAS_UNIT_KEY)
+        if isinstance(units, list):
+            for unit_ref in units:
+                unit_id = unit_ref.get("@id") if isinstance(unit_ref, dict) else unit_ref
+                if not isinstance(unit_id, str) or not unit_id.startswith("https://github.com/"):
+                    continue
+                child = id_index.get(unit_id)
+                if child is None:
+                    continue
+                child_handle = _entity_github_org_handle(child)
+                if child_handle == parent_handle:
+                    matched_child = child
+                    break
+
+        # Case 2: synthesize the unit if no matching child exists.
+        if matched_child is None:
+            synthesized_id = f"https://github.com/{raw_handle}"
+            if synthesized_id in id_index:
+                # Same URL exists as a non-unit org (e.g. it wasn't in
+                # parent's hasUnit list yet). Reuse instead of duplicating.
+                matched_child = id_index[synthesized_id]
+            else:
+                matched_child = {
+                    "id": synthesized_id,
+                    "type": ORGANIZATION_TYPE,
+                    "shacl": "pulse:OrganizationShape",
+                    "identifiers": {
+                        "pulse:githubOrganizationHandle": raw_handle,
+                        "uuid": str(uuid4()),
+                    },
+                    "idSource": "pulse:githubOrganizationHandle",
+                    "schema:name": raw_handle,
+                    "pulse:githubOrganizationHandle": raw_handle,
+                    "org:unitOf": [parent_id],
+                    "_stub": True,
+                }
+                synthesized_units.append(matched_child)
+                id_index[synthesized_id] = matched_child
+                warnings.append(
+                    f"Synthesized github-only org unit {synthesized_id} for "
+                    f"ROR parent {parent_id} (handle {raw_handle!r}). Issue #29/#33 "
+                    f"extension: ROR carried the unit handle with no existing "
+                    f"`org:hasUnit` link.",
+                )
+            _add_to_has_unit(parent, matched_child["id"])
+            _set_unit_of(matched_child, parent_id)
+
+        # Move follower count to the unit (never overwrite an existing value).
+        parent_followers = parent.get("pulse:githubOrgFollowers")
+        if isinstance(parent_followers, int) and not isinstance(
+            matched_child.get("pulse:githubOrgFollowers"), int
+        ):
+            matched_child["pulse:githubOrgFollowers"] = parent_followers
+
+        cleared = _strip_github_props(parent)
+        if cleared:
+            warnings.append(
+                f"Demoted GitHub-derived properties from ROR parent {parent_id} "
+                f"to unit {matched_child.get('id')} (handle '{parent_handle}'): "
+                f"{', '.join(cleared)}.",
+            )
+
+    if synthesized_units:
+        new_related = list(new_related) + synthesized_units
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
+def emit_fork_parent_stubs(
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """For every repo with `pulse:isForkOf = <github_url>` referencing an
+    upstream not in the graph, emit minimal `schema:SoftwareSourceCode` +
+    `schema:Person` stubs so the SHACL `sh:class schema:SoftwareSourceCode`
+    constraint on `pulse:isForkOf` is satisfied.
+
+    Without these stubs SHACL flags 3 violations per fork
+    (`schema:name`, `schema:author`, `pulse:githubRepositoryHandle` — all
+    minCount 1 on `pulse:RepositoryShape`). With them the graph conforms
+    and downstream consumers get a "this is a fork of X" pointer they
+    can dereference.
+
+    The stub carries only the SHACL-required fields:
+    SoftwareSourceCode → `schema:name`, `pulse:githubRepositoryHandle`,
+    `schema:author`. Person → `schema:name`, `pulse:githubUsername`.
+    `_stub = True` marks them as derived.
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(entity) if isinstance(entity, dict) else entity
+        for entity in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    existing_ids: set[str] = set()
+    for entity in candidates:
+        eid = entity.get("id") or entity.get("@id")
+        if isinstance(eid, str) and eid:
+            existing_ids.add(eid)
+
+    warnings: list[str] = []
+    new_stubs: list[dict[str, Any]] = []
+    seen_stubs: set[str] = set()
+
+    for entity in candidates:
+        if entity.get("type") != REPOSITORY_TYPE:
+            continue
+        fork_of = entity.get("pulse:isForkOf")
+        target = fork_of.get("@id") if isinstance(fork_of, dict) else fork_of
+        if not isinstance(target, str) or not target.startswith("https://github.com/"):
+            continue
+        if target in existing_ids or target in seen_stubs:
+            continue
+        handle = target.removeprefix("https://github.com/").strip("/")
+        if "/" not in handle:
+            continue
+        owner, repo_name = handle.split("/", maxsplit=1)
+        if not (owner and repo_name):
+            continue
+        owner_url = f"https://github.com/{owner}"
+
+        # Person stub (parent's owner). Skip if already present.
+        if owner_url not in existing_ids and owner_url not in seen_stubs:
+            new_stubs.append(
+                {
+                    "id": owner_url,
+                    "type": "schema:Person",
+                    "shacl": "pulse:PersonShape",
+                    "identifiers": {
+                        "pulse:githubUsername": owner,
+                        "uuid": str(uuid4()),
+                    },
+                    "idSource": "pulse:githubUsername",
+                    "schema:name": owner,
+                    "pulse:githubUsername": owner,
+                    "_stub": True,
+                },
+            )
+            seen_stubs.add(owner_url)
+
+        # SoftwareSourceCode stub for the fork parent.
+        new_stubs.append(
+            {
+                "id": target,
+                "type": REPOSITORY_TYPE,
+                "shacl": "pulse:RepositoryShape",
+                "identifiers": {
+                    "pulse:githubRepositoryHandle": handle,
+                    "uuid": str(uuid4()),
+                },
+                "idSource": "pulse:githubRepositoryHandle",
+                "schema:name": repo_name,
+                "pulse:githubRepositoryHandle": handle,
+                "schema:author": [owner_url],
+                "_stub": True,
+            },
+        )
+        seen_stubs.add(target)
+        warnings.append(
+            f"Inferred minimal SoftwareSourceCode stub for fork parent "
+            f"{target!r} referenced by {entity.get('id')}.",
+        )
+
+    if new_stubs:
+        new_related = list(new_related) + new_stubs
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
+def _article_date(article: dict[str, Any]) -> str | None:
+    """Return the parseable ISO date string for an article, or None."""
+    candidate = article.get("schema:datePublished")
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    return candidate.strip()[:10]  # YYYY-MM-DD prefix is enough for comparison
+
+
+def _membership_active_on(
+    membership: dict[str, Any],
+    iso_date: str,
+) -> bool:
+    """True when `iso_date` falls inside the membership's [begin, end] interval.
+
+    Open-ended end (`time:hasEnd is None`) treated as still active. Missing
+    begin disqualifies — we won't accept "from forever" as evidence.
+    """
+    begin = membership.get("time:hasBeginning")
+    end = membership.get("time:hasEnd")
+    if not isinstance(begin, str) or not begin.strip():
+        return False
+    if iso_date < begin[:10]:
+        return False
+    if isinstance(end, str) and end.strip() and iso_date > end[:10]:
+        return False
+    return True
+
+
+def _membership_org_id(membership: dict[str, Any]) -> str | None:
+    target = membership.get("org:organization")
+    if isinstance(target, dict):
+        return target.get("@id") if isinstance(target.get("@id"), str) else None
+    return target if isinstance(target, str) else None
+
+
+def _membership_person_id(membership: dict[str, Any]) -> str | None:
+    # `_person_ref` is the internal field stamped by reconciliation;
+    # fall back to parsing the composite @id (`personId__orgId`).
+    person_ref = membership.get("_person_ref")
+    if isinstance(person_ref, str) and person_ref.strip():
+        return person_ref.strip()
+    membership_id = membership.get("id") or membership.get("@id")
+    if isinstance(membership_id, str) and "__" in membership_id:
+        left, _ = membership_id.split("__", maxsplit=1)
+        return left if left else None
+    return None
+
+
+def infer_article_source_organization(
+    assembled: AssembledOutput,
+) -> tuple[AssembledOutput, list[str]]:
+    """Set `schema:sourceOrganization` on Articles that don't have one,
+    by looking up which Organization each author was a member of on the
+    article's publication date.
+
+    Triggers only when the inference is unambiguous: across all the
+    article's authors, exactly ONE Organization has at least one
+    Membership active on the publication date. If two or more orgs are
+    active (e.g. an author had a joint appointment plus a different
+    author belonged to a third lab), we abstain — the rule_based pipeline
+    refuses to guess.
+
+    Why this is safe:
+    - Memberships have already been filtered by the evidence floor
+      (role OR dates required) in `_normalize_membership_entities`, so
+      the input data is trustworthy.
+    - We require the article to have a parseable `schema:datePublished`,
+      a non-null `time:hasBeginning` on the membership, and a single
+      resulting org. Each of those is a hard guard, not a heuristic.
+    - The audit trail explains the inference per-article.
+
+    Real-world example from deeplabcut/deeplabcut: article
+    `10.1016/j.neuron.2022.08.022` (date 2022-11-16) has author Mackenzie
+    Mathis whose only active Membership at that date is EPFL
+    (`ror.org/02s376052`, 2020-08-01 → null). Source org gets stamped.
+    """
+    new_root: dict[str, Any] | None = (
+        deepcopy(assembled.root_entity)
+        if isinstance(assembled.root_entity, dict)
+        else None
+    )
+    new_related: list[Any] = [
+        deepcopy(e) if isinstance(e, dict) else e
+        for e in assembled.related_entities
+    ]
+    candidates: list[dict[str, Any]] = []
+    if new_root is not None:
+        candidates.append(new_root)
+    candidates.extend(e for e in new_related if isinstance(e, dict))
+
+    memberships_by_person: dict[str, list[dict[str, Any]]] = {}
+    org_ids: set[str] = set()
+    for entity in candidates:
+        etype = entity.get("type") or entity.get("@type")
+        types = etype if isinstance(etype, list) else [etype] if isinstance(etype, str) else []
+        if any("Membership" in str(t) for t in types):
+            pid = _membership_person_id(entity)
+            if pid:
+                memberships_by_person.setdefault(pid, []).append(entity)
+            continue
+        if any("Organization" in str(t) for t in types):
+            oid = entity.get("id") or entity.get("@id")
+            if isinstance(oid, str):
+                org_ids.add(oid)
+
+    warnings: list[str] = []
+
+    for article in candidates:
+        etype = article.get("type") or article.get("@type")
+        types = etype if isinstance(etype, list) else [etype] if isinstance(etype, str) else []
+        if not any("ScholarlyArticle" in str(t) for t in types):
+            continue
+        existing = article.get("schema:sourceOrganization")
+        if existing is not None and existing != "":
+            continue
+        article_date = _article_date(article)
+        if article_date is None:
+            continue
+        authors = article.get("schema:author") or []
+        if isinstance(authors, str):
+            authors = [authors]
+        author_ids: list[str] = []
+        for a in authors:
+            aid = a.get("@id") if isinstance(a, dict) else a
+            if isinstance(aid, str) and aid:
+                author_ids.append(aid)
+        if not author_ids:
+            continue
+
+        active_org_ids: set[str] = set()
+        for author_id in author_ids:
+            for m in memberships_by_person.get(author_id, ()):
+                if not _membership_active_on(m, article_date):
+                    continue
+                oid = _membership_org_id(m)
+                if isinstance(oid, str) and oid in org_ids:
+                    active_org_ids.add(oid)
+        if len(active_org_ids) == 1:
+            inferred_org = next(iter(active_org_ids))
+            article["schema:sourceOrganization"] = inferred_org
+            warnings.append(
+                f"Inferred schema:sourceOrganization for article "
+                f"{article.get('id') or article.get('@id')} → {inferred_org} "
+                f"(unique author Membership active on {article_date}).",
+            )
+
+    return (
+        AssembledOutput(
+            root_entity=new_root if new_root is not None else assembled.root_entity,
+            related_entities=new_related,
+            excluded_entities=list(assembled.excluded_entities),
+            warnings=list(assembled.warnings),
+        ),
+        warnings,
+    )
+
+
 __all__ = [
+    "demote_github_props_to_units",
+    "emit_fork_parent_stubs",
     "guarantee_repo_author",
+    "infer_article_source_organization",
     "infer_github_handle_parents",
     "infer_org_units",
     "infer_owners",

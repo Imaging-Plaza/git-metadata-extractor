@@ -41,13 +41,19 @@ from src.v2.pipeline.stages.output_assembly import (
     build_json_output,
 )
 from src.v2.pipeline.stages.ownership_check import (
+    demote_github_props_to_units,
+    emit_fork_parent_stubs,
     guarantee_repo_author,
+    infer_article_source_organization,
     infer_github_handle_parents,
     infer_org_units,
     infer_owners,
     validate_ownership,
 )
 from src.v2.pipeline.stages.prune_dangling_refs import prune_dangling_refs
+from src.v2.pipeline.stages.rule_based_disciplines import (
+    tag_disciplines as tag_rule_based_disciplines,
+)
 from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.pipeline.stages.refine_with_llm import (
     RefineWithLLMResult,
@@ -80,8 +86,11 @@ __all__ = [
     "compute_stats",
     "concept_tagging_is_enabled",
     "concept_tagging_resolve_backend",
+    "demote_github_props_to_units",
+    "emit_fork_parent_stubs",
     "gather_context",
     "guarantee_repo_author",
+    "infer_article_source_organization",
     "hybrid_refiner_is_enabled",
     "infer_github_handle_parents",
     "infer_org_units",
@@ -95,6 +104,7 @@ __all__ = [
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
     "run_refine_with_llm_stage",
+    "tag_rule_based_disciplines",
     "validate_articles",
     "validate_author_classes",
     "validate_ownership",

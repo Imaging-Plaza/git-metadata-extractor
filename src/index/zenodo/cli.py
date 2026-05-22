@@ -295,7 +295,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_discover.set_defaults(func=_cmd_discover)
 
     p_ingest = sub.add_parser("ingest", help="Pull Zenodo records into DuckDB")
-    p_ingest.add_argument("--scope", default="epfl", help="Scope name (epfl, switzerland)")
+    p_ingest.add_argument("--scope", default="epfl", help="Scope name (epfl, switzerland, ethz, cern, cern_openlab, all)")
     p_ingest.add_argument("--limit", type=int, default=None, help="Per-community record cap")
     p_ingest.add_argument("--refresh", action="store_true", help="Re-ingest completed communities")
     p_ingest.add_argument(
@@ -338,10 +338,30 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # `force=True` overrides any handler that an upstream `import` may
+    # have attached to the root logger — otherwise our heartbeats can
+    # land in /dev/null when something else (logfire, pydantic-ai)
+    # captures stderr first.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+        force=True,
     )
     parser = _build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args) or 0)
+    try:
+        return int(args.func(args) or 0)
+    except Exception as exc:  # noqa: BLE001 — top-level surface for operator clarity
+        # DuckDB raises `IOException` when another process holds the
+        # file lock. Print the actionable message so an operator
+        # doesn't get a silent exit 0 / 1 and wonder what happened.
+        message = str(exc)
+        if "Could not set lock" in message:
+            sys.stderr.write(
+                "\nERROR: another Zenodo ingest is already running and "
+                "holding the DuckDB lock.\n"
+                f"Detail: {message}\n"
+                "Wait for it to finish, or `kill` it before retrying.\n",
+            )
+            return 1
+        raise

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import logging
+import os
+from functools import lru_cache
 from urllib.parse import unquote, urlparse
+
+import requests
 
 from src.v2.ingest.detection.models import (
     GitHubURLClassification,
     GitHubURLType,
     UnsupportedGitHubURL,
 )
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_GITHUB_BASE_URL = "https://github.com"
 MIN_ORG_URL_SEGMENTS = 2
@@ -102,6 +109,48 @@ def _strip_repo_suffix(repo_name: str) -> str:
     return repo_name
 
 
+@lru_cache(maxsize=512)
+def _probe_account_type(account_name: str) -> str | None:
+    """Hit GitHub's `/users/<name>` REST API to disambiguate User vs
+    Organization for the bare `github.com/<name>` form.
+
+    The endpoint returns the same payload for both Users and
+    Organizations, with a top-level `"type"` field of `"User"` or
+    `"Organization"`. We cache per-process via `lru_cache` so repeated
+    classifications for the same handle are free.
+
+    Fails open: any network error / non-200 / missing token returns
+    `None`, and the caller falls back to the historical default of
+    `USER`. No new external dependency, no behavioural regression
+    when GitHub is unreachable.
+    """
+
+    if not account_name or "/" in account_name:
+        return None
+    headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GITHUB_TOKEN", "").split(",", 1)[0].strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        response = requests.get(
+            f"https://api.github.com/users/{account_name}",
+            headers=headers,
+            timeout=5.0,
+        )
+    except Exception:  # noqa: BLE001 — must never break classification
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    account_type = payload.get("type") if isinstance(payload, dict) else None
+    if account_type in ("User", "Organization"):
+        return account_type
+    return None
+
+
 def classify_github_url(url: str) -> GitHubURLClassification:
     _, hostname, path_segments = _parse_url(url)
     configured_host, configured_path_segments = _parse_github_base_url()
@@ -138,9 +187,21 @@ def classify_github_url(url: str) -> GitHubURLClassification:
 
     owner = first_segment
     if len(relative_segments) == 1:
+        # `github.com/<name>` is ambiguous between User and Organization
+        # — historically defaulted to USER, which mis-modelled real
+        # orgs (e.g. `github.com/DeepLabCut`) as a single Person who
+        # owns N repos. Probe the GitHub API to find the actual type;
+        # fall back to USER on any failure so behaviour is identical
+        # to the legacy path when GitHub is unreachable.
+        probed = _probe_account_type(owner)
+        detected_type = (
+            GitHubURLType.ORGANIZATION
+            if probed == "Organization"
+            else GitHubURLType.USER
+        )
         return GitHubURLClassification(
             normalized_url=f"{base_url}/{owner}",
-            detected_type=GitHubURLType.USER,
+            detected_type=detected_type,
             owner=owner,
             repo=None,
         )

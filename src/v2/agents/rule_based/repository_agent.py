@@ -330,6 +330,41 @@ class RepositoryAgentV2:
             "schema:programmingLanguage": programming_languages,
             "pulse:ownedBy": repository.get("owner", {}).get("login"),
             "pulse:isForkOf": _resolve_fork_parent_url(repository),
+            # Internal-only fields (`_` prefix is stripped before the
+            # SHACL gate and JSON-LD output by default; surfaced when
+            # the caller passes `?include_internal_fields=true`). They
+            # preserve signal the v2.1.2 ontology can't express
+            # (`pulse:RepositoryShape` is `sh:closed true`), so
+            # downstream consumers — the LLM hybrid refiner especially
+            # — get the full GitHub + gimie metadata for context
+            # without violating the ontology contract. When the
+            # ontology adds these paths we can promote them to
+            # canonical SHACL fields in one place.
+            "_description": repository.get("description") or None,
+            "_keywords": [
+                t for t in (repository.get("topics") or []) if isinstance(t, str) and t
+            ] or None,
+            "_homepage": repository.get("homepage") or None,
+            "_default_branch": repository.get("default_branch") or None,
+            "_primary_language": repository.get("language") or None,
+            "_size_kb": repository.get("size"),
+            "_archived": repository.get("archived"),
+            "_disabled": repository.get("disabled"),
+            "_pushed_at": repository.get("pushed_at"),
+            "_updated_at": repository.get("updated_at"),
+            "_open_issues_count": repository.get("open_issues_count"),
+            "_watchers_count": repository.get("watchers_count"),
+            "_subscribers_count": repository.get("subscribers_count"),
+            "_network_count": repository.get("network_count"),
+            "_has_wiki": repository.get("has_wiki"),
+            "_has_pages": repository.get("has_pages"),
+            "_has_discussions": repository.get("has_discussions"),
+            "_has_issues": repository.get("has_issues"),
+            "_has_projects": repository.get("has_projects"),
+            "_license_name": (repository.get("license") or {}).get("name"),
+            "_license_url": (repository.get("license") or {}).get("url"),
+            "_avatar_url": (repository.get("owner") or {}).get("avatar_url"),
+            "_visibility": repository.get("visibility"),
         }
 
     async def _default_repository_classifier(

@@ -114,10 +114,19 @@ class OrganizationRecord(BaseModel):
     org_uuid: str
     name: Optional[str] = None
     acronym: Optional[str] = None
+    # Alternative EPFL-internal codes; both extracted directly from
+    # the DSpace metadata block and persisted alongside `acronym` so
+    # SQL-keyed lookups work regardless of which code the consumer
+    # happens to know.
+    infoscience_code: Optional[str] = None
+    unit_code: Optional[str] = None
     aliases: List[str] = Field(default_factory=list)
     parent_org_uuid: Optional[str] = None
     parent_org_chain: List[str] = Field(default_factory=list)
     parent_org_chain_names: List[str] = Field(default_factory=list)
+    parent_acronym: Optional[str] = None
+    director_name: Optional[str] = None
+    org_type_dspace: Optional[str] = None
     description: Optional[str] = None
     sciper_unit_id: Optional[str] = None
     ror_id: Optional[str] = None

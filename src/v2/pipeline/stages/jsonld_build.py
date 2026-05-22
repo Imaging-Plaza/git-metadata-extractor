@@ -90,7 +90,23 @@ def build_jsonld_output(
     *,
     assembled: AssembledOutput,
     jsonld_context: dict[str, Any],
+    include_internal_fields: bool = False,
 ) -> dict[str, Any]:
+    """Build the JSON-LD `@graph` from a validated `AssembledOutput`.
+
+    ``include_internal_fields=False`` (default) preserves the
+    ontology-compliant behaviour: `_`-prefixed keys are stripped, so
+    the response only contains fields the open-pulse ontology declares.
+
+    Set ``include_internal_fields=True`` to keep `_`-prefixed keys in
+    the output — useful when the caller asked for the broader profile
+    metadata (`_avatar_url`, `_bio`, `_company`, `_orcid_keywords`,
+    `_dropped_affiliations`, etc.) that we collect but don't yet have
+    ontology terms for. Strict SHACL validation has already run by
+    this point (it always strips `_` fields), so flipping this flag
+    is purely about what the consumer sees, not about validation.
+    """
+
     entities: list[dict[str, Any]] = []
     if isinstance(assembled.root_entity, dict):
         entities.append(assembled.root_entity)
@@ -115,7 +131,11 @@ def build_jsonld_output(
         for key, value in entity.items():
             if key in HELPER_ONLY_FIELDS or key in {"id", "type"}:
                 continue
-            if isinstance(key, str) and key.startswith("_"):
+            if (
+                not include_internal_fields
+                and isinstance(key, str)
+                and key.startswith("_")
+            ):
                 continue
             node[key] = _normalize_jsonld_value(
                 value,

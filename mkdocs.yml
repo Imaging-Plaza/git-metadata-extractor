@@ -47,6 +47,7 @@ nav:
       - Federated Search: federated-search.md
       - HuggingFace Index: huggingface-index.md
       - Zenodo Index: zenodo-index.md
+      - Communities Index: communities-index.md
       - EPFL Graph Disciplines: epfl-graph-disciplines.md
       - SWISSUbase Index: swissubase-index.md
       - V2 Agent RAG Tools: v2-rag-tools.md

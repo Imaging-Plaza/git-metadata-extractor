@@ -133,6 +133,16 @@ class GitHubProvider(BaseProvider, ABC):
         """Return the raw GIMIE JSON-LD payload for ``owner/repo``, or an empty dict."""
         return {}
 
+    def get_repository_readme(self, full_name: str) -> str:
+        """Return the repository README content for ``owner/repo``, or empty string."""
+        del full_name
+        return ""
+
+    def get_repository_aux_files(self, full_name: str) -> dict[str, str]:
+        """Return repo-root attribution files (AUTHORS, NOTICE, …) keyed by filename."""
+        del full_name
+        return {}
+
 
 class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""

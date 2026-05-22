@@ -1296,16 +1296,132 @@ def _extract_composite_pair(composite_id: Any) -> tuple[str | None, str | None]:
     return left, right
 
 
+def _normalize_role_value(role: Any) -> str:
+    """Lowercase + strip dots + collapse whitespace, for role equality.
+
+    Treats `Ph.D Student`, `PhD Student`, and `phd  student` as equivalent
+    so they merge into one canonical role rather than three rows in the
+    output (issue #30 / #34).
+    """
+    if not isinstance(role, str):
+        return ""
+    cleaned = role.replace(".", "").lower()
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _pick_membership_role(roles: list[tuple[str | None, str | None, str | None]]) -> str | None:
+    """Pick the canonical role from a list of `(role, hasBeginning, hasEnd)` tuples.
+
+    Policy (rmfranken issue #34 task list):
+    1. Drop null / empty roles.
+    2. If all remaining roles normalize to the same value (`_normalize_role_value`),
+       pick the longest (preserves richer punctuation/case — "Ph.D Student"
+       beats "PhD Student" on length).
+    3. Otherwise, pick the role from the entry with the most recent
+       `time:hasEnd` (fallback `time:hasBeginning`). Null dates rank lowest.
+    """
+    valid = [(r, b, e) for (r, b, e) in roles if isinstance(r, str) and r.strip()]
+    if not valid:
+        return None
+    if len({_normalize_role_value(r) for r, _, _ in valid}) == 1:
+        return max((r for r, _, _ in valid), key=len)
+    # most-recent-dated wins; sort key prefers entries with hasEnd, then hasBeginning.
+    def _date_key(entry: tuple[str | None, str | None, str | None]) -> tuple[str, str]:
+        _, begin, end = entry
+        return (end or "", begin or "")
+    valid.sort(key=_date_key, reverse=True)
+    return valid[0][0]
+
+
+def _merge_membership_dates(
+    dates: list[tuple[str | None, str | None]],
+) -> tuple[str | None, str | None]:
+    """Earliest non-null hasBeginning, latest non-null hasEnd."""
+    begins = sorted(b for b, _ in dates if isinstance(b, str) and b)
+    ends = sorted((e for _, e in dates if isinstance(e, str) and e), reverse=True)
+    return (begins[0] if begins else None, ends[0] if ends else None)
+
+
+def _person_has_orcid(person: dict[str, Any]) -> bool:
+    """True when the person entity carries a verifiable ORCID iD."""
+    if not isinstance(person, dict):
+        return False
+    direct = person.get("pulse:orcidIdentifier") or person.get("pulse:orcid")
+    if isinstance(direct, str) and direct.strip():
+        return True
+    identifiers = person.get("identifiers")
+    if isinstance(identifiers, dict):
+        for key in ("pulse:orcid", "pulse:orcidIdentifier"):
+            value = identifiers.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+    return False
+
+
+def _org_has_ror(organization: dict[str, Any]) -> bool:
+    """True when the organisation entity carries a verifiable ROR id."""
+    if not isinstance(organization, dict):
+        return False
+    direct = organization.get("pulse:ror") or organization.get("schema:identifier")
+    if isinstance(direct, str) and direct.strip().startswith("https://ror.org/"):
+        return True
+    if isinstance(organization.get("id"), str) and organization["id"].startswith("https://ror.org/"):
+        return True
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        ror = identifiers.get("pulse:ror")
+        if isinstance(ror, str) and ror.strip().startswith("https://ror.org/"):
+            return True
+    return False
+
+
+def _org_has_authority(organization: dict[str, Any]) -> bool:
+    """True when the organisation has any verifiable cross-registry id.
+
+    Broader than `_org_has_ror`: accepts ROR, Infoscience orgunit
+    records, github org URLs, and the `urn:pulse:` synthesized stubs
+    that `demote_github_props_to_units` emits with a `schema:name`.
+    The purpose is to distinguish "real org with a registered identifier"
+    from "free-text name we can't dereference" — the former gets a pass
+    in the evidence-floor when the person side is already ORCID-anchored.
+    """
+    if not isinstance(organization, dict):
+        return False
+    if _org_has_ror(organization):
+        return True
+    org_id = organization.get("id") or organization.get("@id")
+    if isinstance(org_id, str):
+        if org_id.startswith("https://github.com/"):
+            return True
+        if org_id.startswith("https://infoscience.epfl.ch/"):
+            return True
+        if org_id.startswith("urn:pulse:") and isinstance(
+            organization.get("schema:name"), str,
+        ):
+            return bool(organization["schema:name"].strip())
+    identifiers = organization.get("identifiers")
+    if isinstance(identifiers, dict):
+        if identifiers.get("pulse:infoscienceOrganizationIdentifier"):
+            return True
+        if identifiers.get("pulse:githubOrganizationHandle"):
+            return True
+    return False
+
+
 def _normalize_membership_entities(
     memberships: list[dict[str, Any]],
     *,
     person_lookup: dict[str, str],
     organization_lookup: dict[str, str],
+    persons_by_id: dict[str, dict[str, Any]] | None = None,
+    organizations_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], set[tuple[str, str]], list[str]]:
-    normalized_memberships: list[dict[str, Any]] = []
+    # Buffer by canonical id so duplicates (issue #30/#34) merge their role
+    # and date fields instead of one silently shadowing the other.
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    bucket_order: list[str] = []
     covered_pairs: set[tuple[str, str]] = set()
     warnings: list[str] = []
-    seen_membership_ids: set[str] = set()
 
     for membership in memberships:
         composite_id_ref: Any = membership.get("id")
@@ -1333,9 +1449,6 @@ def _normalize_membership_entities(
         # convention so the @id round-trips through `_extract_composite_pair`
         # even when personId or orgId contain `_` (GitHub usernames may).
         canonical_membership_id = f"{canonical_person_id}__{canonical_org_id}"
-        if canonical_membership_id in seen_membership_ids:
-            continue
-        seen_membership_ids.add(canonical_membership_id)
         covered_pairs.add((canonical_person_id, canonical_org_id))
 
         normalized_membership = deepcopy(membership)
@@ -1363,9 +1476,122 @@ def _normalize_membership_entities(
         if not isinstance(normalized_membership.get("time:hasEnd"), str):
             normalized_membership["time:hasEnd"] = None
 
-        normalized_memberships.append(normalized_membership)
+        if canonical_membership_id not in buckets:
+            buckets[canonical_membership_id] = []
+            bucket_order.append(canonical_membership_id)
+        buckets[canonical_membership_id].append(normalized_membership)
 
-    return normalized_memberships, covered_pairs, warnings
+    normalized_memberships: list[dict[str, Any]] = []
+    for canonical_id in bucket_order:
+        group = buckets[canonical_id]
+        if len(group) == 1:
+            normalized_memberships.append(group[0])
+            continue
+
+        # Merge >1 duplicates per issue #30 / #34. First entry wins for
+        # opaque fields (uuid, identifiers); role + dates use the
+        # resolution policies above.
+        base = group[0]
+        roles = [
+            (m.get("org:role"), m.get("time:hasBeginning"), m.get("time:hasEnd"))
+            for m in group
+        ]
+        dates = [(m.get("time:hasBeginning"), m.get("time:hasEnd")) for m in group]
+        merged_role = _pick_membership_role(roles)
+        merged_begin, merged_end = _merge_membership_dates(dates)
+        base["org:role"] = merged_role
+        base["time:hasBeginning"] = merged_begin
+        base["time:hasEnd"] = merged_end
+        warnings.append(
+            f"Merged {len(group)} duplicate memberships at {canonical_id} "
+            f"(roles seen: {sorted({r for r, _, _ in roles if r})!r} → "
+            f"{merged_role!r}).",
+        )
+        normalized_memberships.append(base)
+
+    # Membership evidence floor (issue #A). Default drop: role unset AND
+    # no dates AND nothing better to anchor on. The trade-off observed
+    # in the deeplabcut audit (current vs develop branch, 2026-05-20):
+    # the strict floor correctly removes phantom affiliations like
+    # `Statistics Botswana` and `Apple` from contributors whose
+    # connection to the project is unverifiable, but it also drops
+    # genuine ORCID/ROR-confirmed links — e.g. Mackenzie Mathis's
+    # AdaptiveMotorControlLab membership — when Infoscience/ORCID
+    # surfaced the link without dates.
+    #
+    # Softened rule: keep the membership when it has role OR dates OR
+    # both endpoints carry authoritative identifiers (Person with ORCID
+    # iD AND Organisation with ROR id). The double-authority condition
+    # is the bar that re-admits AdaptiveMotorControlLab-class records
+    # while still rejecting the "GitHub-handle-only person → arbitrary
+    # ROR org" weak chain that produced Statistics Botswana.
+    persons_by_id = persons_by_id or {}
+    organizations_by_id = organizations_by_id or {}
+
+    # Track dropped affiliation names per person so the evidence trail
+    # survives even when the materialised Membership entity is filtered.
+    # User instruction (2026-05-20): "mientras aparezcan en la evidencia
+    # está bien" — they want to see e.g. "AdaptiveMotorControlLab" was
+    # dropped for Mackenzie Mathis even if it can't enter the graph.
+    dropped_affiliations_by_person: dict[str, list[dict[str, Any]]] = {}
+
+    evidence_filtered: list[dict[str, Any]] = []
+    for membership in normalized_memberships:
+        role = membership.get("org:role")
+        begin = membership.get("time:hasBeginning")
+        end = membership.get("time:hasEnd")
+        has_role = isinstance(role, str) and role.strip()
+        has_dates = (isinstance(begin, str) and begin.strip()) or (
+            isinstance(end, str) and end.strip()
+        )
+
+        # Authority anchor: the Person side carries a verifiable ORCID
+        # iD AND the Organisation side carries some registered identifier.
+        person_id = membership.get("_person_ref")
+        org_id = membership.get("org:organization")
+        person_entity = persons_by_id.get(person_id) if isinstance(person_id, str) else None
+        org_entity = organizations_by_id.get(org_id) if isinstance(org_id, str) else None
+        has_authority_anchor = _person_has_orcid(person_entity) and _org_has_authority(org_entity)
+
+        if has_role or has_dates or has_authority_anchor:
+            evidence_filtered.append(membership)
+            continue
+        # Drop, but preserve the evidence — name the Person + Org in the
+        # warning, and stash the affiliation snippet on the Person.
+        person_name = (
+            person_entity.get("schema:name") if isinstance(person_entity, dict) else None
+        )
+        org_name = (
+            org_entity.get("schema:name") if isinstance(org_entity, dict) else None
+        ) or "<unknown org>"
+        warnings.append(
+            "Dropped evidence-free Membership "
+            f"{membership.get('id')!r} (person={person_name!r}, org={org_name!r}, "
+            "no role / no dates / no ORCID+ROR anchor — no confirmable connection).",
+        )
+        if isinstance(person_id, str):
+            dropped_affiliations_by_person.setdefault(person_id, []).append(
+                {
+                    "org_id": org_id,
+                    "org_name": org_name if org_name != "<unknown org>" else None,
+                    "membership_id": membership.get("id"),
+                    "reason": "no role / no dates / no ORCID+ROR anchor",
+                },
+            )
+
+    # Stamp dropped-affiliations evidence on each affected Person. The
+    # `_dropped_affiliations` field is internal (underscore prefix is
+    # stripped before SHACL gate + JSON-LD output) — its purpose is
+    # auditability via the raw pipeline payload, not the canonical
+    # ontology output.
+    for pid, dropped in dropped_affiliations_by_person.items():
+        person_entity = persons_by_id.get(pid)
+        if isinstance(person_entity, dict):
+            existing = person_entity.get("_dropped_affiliations") or []
+            if isinstance(existing, list):
+                person_entity["_dropped_affiliations"] = existing + dropped
+
+    return evidence_filtered, covered_pairs, warnings
 
 
 def _normalize_contribution_entities(  # noqa: C901
@@ -1665,16 +1891,28 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             canonical_owns: list[str] = []
             for owned_repo in owns_refs:
                 canonical_repo_id = _resolve_lookup_token(repository_lookup, owned_repo)
-                if canonical_repo_id is None:
-                    if isinstance(owned_repo, str):
+                if canonical_repo_id is not None:
+                    canonical_owns.append(canonical_repo_id)
+                    continue
+                # When the user/organization flow skips per-repo
+                # materialisation (`V2_EXPAND_OWNED_REPOS=false`) the
+                # owned-repo refs won't resolve in `repository_lookup`
+                # because the entities don't exist in this graph. Keep
+                # them as stable external IRIs (github URLs) so
+                # consumers can still see what the user/org owns,
+                # rather than silently dropping the relation.
+                if isinstance(owned_repo, str) and owned_repo:
+                    if owned_repo.startswith(("http://", "https://")):
+                        canonical_owns.append(owned_repo)
+                    elif "/" in owned_repo:
+                        canonical_owns.append(f"https://github.com/{owned_repo}")
+                    else:
                         link_warnings.append(
                             (
                                 "Orphan repository ownership reference from person: "
                                 f"person={person_id}, repository={owned_repo}"
                             ),
                         )
-                    continue
-                canonical_owns.append(canonical_repo_id)
             person["pulse:owns"] = _dedupe_preserve_order(canonical_owns)
 
     organization_ids = {
@@ -1707,17 +1945,46 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
     for organization in organizations:
         organization_id = organization["id"]
         github_handle = _organization_github_handle(organization)
+        # Refs from materialised repositories (the historical source).
+        materialised_owns = list(owned_repository_ids_by_org.get(organization_id, []))
+        # Refs the org_agent stamped from `github_org["repositories"]`
+        # or the context's `repositories` list. When the user/org flow
+        # skipped per-repo expansion (`V2_EXPAND_OWNED_REPOS=false`) the
+        # materialised list will be empty but the agent-supplied list
+        # holds the `<owner>/<repo>` strings — keep them as canonical
+        # github IRIs so consumers can still traverse what's owned.
+        existing_owns = organization.get("pulse:owns")
+        external_owns: list[str] = []
+        if isinstance(existing_owns, list):
+            for value in existing_owns:
+                if not isinstance(value, str) or not value:
+                    continue
+                if value.startswith(("http://", "https://")):
+                    external_owns.append(value)
+                elif "/" in value:
+                    external_owns.append(f"https://github.com/{value}")
         if not isinstance(github_handle, str) or not github_handle:
-            organization["pulse:owns"] = []
+            # Without a GitHub handle on the org we can't be sure the
+            # external refs really belong here, so we drop them. The
+            # materialised-only path remains.
+            organization["pulse:owns"] = _dedupe_preserve_order(materialised_owns)
             continue
         organization["pulse:owns"] = _dedupe_preserve_order(
-            owned_repository_ids_by_org.get(organization_id, []),
+            materialised_owns + external_owns,
         )
 
+    persons_index = {
+        p["id"]: p for p in persons if isinstance(p.get("id"), str)
+    }
+    organizations_index = {
+        o["id"]: o for o in organizations if isinstance(o.get("id"), str)
+    }
     memberships, _covered_membership_pairs, class_membership_warnings = _normalize_membership_entities(
         class_memberships,
         person_lookup=person_lookup,
         organization_lookup=organization_lookup,
+        persons_by_id=persons_index,
+        organizations_by_id=organizations_index,
     )
     link_warnings.extend(class_membership_warnings)
 

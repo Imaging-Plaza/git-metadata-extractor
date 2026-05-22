@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import itertools
 import json
 import logging
@@ -707,13 +708,41 @@ class RealGitHubProvider(GitHubProvider):
             node.get("http://schema.org/dateCreated"),
         )
 
+        # REST API is authoritative for fork-status + parent (gimie's
+        # `pulse:isForkOf` is unreliable — empty on most forks observed in
+        # the audit). Fall back to gimie data only when REST returned nothing.
+        rest_fork = rest_metadata.get("fork")
+        rest_parent_url = rest_metadata.get("parent_html_url")
+        rest_parent_full = rest_metadata.get("parent_full_name")
+        rest_source_url = rest_metadata.get("source_html_url")
+        rest_source_full = rest_metadata.get("source_full_name")
+        gimie_fork_target = _first_non_empty_string(node.get("pulse:isForkOf"))
+        is_fork = bool(rest_fork) if rest_fork is not None else bool(gimie_fork_target)
+        parent_payload: dict[str, Any] | None = None
+        if rest_parent_url or rest_parent_full:
+            parent_payload = {
+                "html_url": rest_parent_url,
+                "full_name": rest_parent_full,
+            }
+        source_payload = {
+            "html_url": rest_source_url,
+            "full_name": rest_source_full or gimie_fork_target,
+        }
+
+        # Merge GitHub REST extras into the response. The repo_agent
+        # surfaces these via `_`-prefixed internal-only fields (homepage,
+        # default_branch, language, size, archived, pushed_at, etc.).
+        rest_license = rest_metadata.get("license") or {}
+        rest_owner = rest_metadata.get("owner") or {}
         return {
             "name": node_name or repository_name,
             "full_name": normalized_full_name,
             "html_url": repository_url,
             "owner": {
                 "login": owner_name,
-                "type": "Organization",
+                "type": rest_owner.get("type") or "Organization",
+                "avatar_url": rest_owner.get("avatar_url"),
+                "html_url": rest_owner.get("html_url"),
             },
             "description": _first_non_empty_string(
                 node.get("schema:description"),
@@ -723,21 +752,49 @@ class RealGitHubProvider(GitHubProvider):
             "forks_count": forks_count,
             "created_at": created_at,
             "license": {
-                "spdx_id": _extract_spdx_id(node),
+                "spdx_id": rest_license.get("spdx_id") or _extract_spdx_id(node),
+                "name": rest_license.get("name"),
+                "url": rest_license.get("url"),
             },
-            "fork": bool(node.get("pulse:isForkOf")),
-            "source": {
-                "full_name": _first_non_empty_string(node.get("pulse:isForkOf")),
-            },
-            "topics": [],
+            "fork": is_fork,
+            "parent": parent_payload,
+            "source": source_payload,
+            "topics": rest_metadata.get("topics") or [],
+            # Extra REST fields preserved for the repo_agent's `_`-prefixed
+            # internal-only output (gated by `?include_internal_fields=true`).
+            "homepage": rest_metadata.get("homepage"),
+            "default_branch": rest_metadata.get("default_branch"),
+            "language": rest_metadata.get("language"),
+            "size": rest_metadata.get("size"),
+            "archived": rest_metadata.get("archived"),
+            "disabled": rest_metadata.get("disabled"),
+            "pushed_at": rest_metadata.get("pushed_at"),
+            "updated_at": rest_metadata.get("updated_at"),
+            "open_issues_count": rest_metadata.get("open_issues_count"),
+            "watchers_count": rest_metadata.get("watchers_count"),
+            "subscribers_count": rest_metadata.get("subscribers_count"),
+            "network_count": rest_metadata.get("network_count"),
+            "has_wiki": rest_metadata.get("has_wiki"),
+            "has_pages": rest_metadata.get("has_pages"),
+            "has_discussions": rest_metadata.get("has_discussions"),
+            "has_issues": rest_metadata.get("has_issues"),
+            "has_projects": rest_metadata.get("has_projects"),
+            "visibility": rest_metadata.get("visibility"),
         }
 
     def _get_repository_rest_metadata(self, full_name: str) -> dict[str, Any]:
-        """Fetch stars/forks/created_at from the GitHub REST API (cached).
+        """Fetch stars/forks/created_at + fork-status from the GitHub REST
+        API (cached).
 
         Returns an empty dict on any error so the caller falls back to
         gimie-derived values. Cached via the standard provider cache so
         repeated requests within TTL don't re-hit GitHub.
+
+        Also extracts `fork` (bool) and `parent.html_url` / `source.html_url`
+        which gimie's JSON-LD does not surface reliably. Without this the
+        downstream `pulse:isForkOf` predicate is always null (issue
+        observed across cmdoret/renku, gabyx/detect-libc,
+        SwissDataScienceCenter/python-future in the batch10 audit).
         """
 
         def _fetch() -> dict[str, Any]:
@@ -763,19 +820,135 @@ class RealGitHubProvider(GitHubProvider):
                 return {}
             if not isinstance(payload, dict):
                 return {}
+            parent = payload.get("parent") if isinstance(payload.get("parent"), dict) else None
+            source = payload.get("source") if isinstance(payload.get("source"), dict) else None
+            license_block = (
+                payload.get("license") if isinstance(payload.get("license"), dict) else {}
+            )
+            owner_block = (
+                payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
+            )
             return {
                 "stargazers_count": payload.get("stargazers_count"),
                 "forks_count": payload.get("forks_count"),
                 "created_at": payload.get("created_at"),
+                "fork": bool(payload.get("fork")),
+                "parent_html_url": parent.get("html_url") if parent else None,
+                "parent_full_name": parent.get("full_name") if parent else None,
+                "source_html_url": source.get("html_url") if source else None,
+                "source_full_name": source.get("full_name") if source else None,
+                # Rich GitHub REST fields preserved for `_`-prefixed
+                # internal-only output (surfaced when the caller passes
+                # `?include_internal_fields=true`). The ontology doesn't
+                # model these yet so they ride along under the
+                # underscore convention without breaking SHACL.
+                "homepage": payload.get("homepage"),
+                "default_branch": payload.get("default_branch"),
+                "language": payload.get("language"),
+                "size": payload.get("size"),
+                "archived": payload.get("archived"),
+                "disabled": payload.get("disabled"),
+                "pushed_at": payload.get("pushed_at"),
+                "updated_at": payload.get("updated_at"),
+                "open_issues_count": payload.get("open_issues_count"),
+                "watchers_count": payload.get("watchers_count"),
+                "subscribers_count": payload.get("subscribers_count"),
+                "network_count": payload.get("network_count"),
+                "has_wiki": payload.get("has_wiki"),
+                "has_pages": payload.get("has_pages"),
+                "has_discussions": payload.get("has_discussions"),
+                "has_issues": payload.get("has_issues"),
+                "has_projects": payload.get("has_projects"),
+                "visibility": payload.get("visibility"),
+                "license": {
+                    "spdx_id": license_block.get("spdx_id"),
+                    "name": license_block.get("name"),
+                    "url": license_block.get("url"),
+                },
+                "topics": payload.get("topics"),
+                "owner": {
+                    "login": owner_block.get("login"),
+                    "type": owner_block.get("type"),
+                    "avatar_url": owner_block.get("avatar_url"),
+                    "html_url": owner_block.get("html_url"),
+                },
             }
 
         if self._cache is None:
             return _fetch()
-        key = ProviderCache.make_key("github", "get_repository_rest", full_name=full_name)
+        # Cache key bumped to v3 when the richer GitHub REST fields
+        # (homepage / default_branch / size / archived / *_count / etc.)
+        # were added so the old `_v2` entries (which lacked them) don't
+        # shadow the new response shape.
+        key = ProviderCache.make_key("github", "get_repository_rest_v3", full_name=full_name)
         return self._cache.get_or_set(
             key,
             _fetch,
             label=f"github.get_repository_rest({full_name})",
+        )
+
+    def get_repository_readme(self, full_name: str) -> str:
+        """Fetch the README content for a repository via the GitHub REST
+        API (`/repos/{owner}/{repo}/readme`).
+
+        The endpoint returns the README in whatever location/casing the
+        repo uses (`README.md`, `README.rst`, `readme.txt`, …) and the
+        content as base64 by default. We decode, cap at 100KB, and
+        cache. Empty string when the repo has no README or the call
+        fails — callers (context_gather) fall back to repo description.
+
+        Why this isn't part of `get_repository`: the upstream gimie
+        JSON-LD that `get_repository` consumes does NOT carry the README
+        body, only `schema:description` (the repo's short tagline). For
+        a while the refiners were running on that 138-byte tagline
+        thinking it was the README. Surface it as its own field so
+        callers can pull it explicitly.
+        """
+
+        max_bytes = 100_000
+
+        def _fetch() -> str:
+            url = f"https://api.github.com/repos/{full_name}/readme"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github README fetch failed: %s", full_name)
+                return ""
+            if response.status_code == 404:
+                return ""
+            if response.status_code != 200:
+                logger.info(
+                    "github README fetch returned %d for %s",
+                    response.status_code, full_name,
+                )
+                return ""
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github README response not JSON: %s", full_name)
+                return ""
+            if not isinstance(payload, dict):
+                return ""
+            content_b64 = payload.get("content")
+            encoding = payload.get("encoding")
+            if not isinstance(content_b64, str) or encoding != "base64":
+                return ""
+            try:
+                decoded = base64.b64decode(content_b64).decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                logger.exception("github README base64-decode failed: %s", full_name)
+                return ""
+            return decoded[:max_bytes]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_repository_readme", full_name=full_name)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_repository_readme({full_name})",
         )
 
     def get_repository_sbom(self, full_name: str) -> list[dict[str, Any]] | None:
@@ -826,6 +999,163 @@ class RealGitHubProvider(GitHubProvider):
             key,
             _fetch,
             label=f"github.get_repository_sbom({full_name})",
+        )
+
+    # Curated set of repo-root files that often carry attribution /
+    # team / funding info the rest of the pipeline can't recover from
+    # ORCID or Infoscience. Lowercased keys are matched case-
+    # insensitively against the directory listing.
+    _AUX_FILE_PATTERNS: frozenset[str] = frozenset({
+        # Author / maintainer / contributor lists
+        "authors", "authors.md", "authors.rst", "authors.txt",
+        "contributors", "contributors.md", "contributors.txt",
+        "maintainers", "maintainers.md", "maintainers.yml", "maintainers.yaml",
+        "owners", "owners.yaml", "owners.yml",
+        # Citation / bibliographic self-description
+        "citation", "citation.cff", "citation.md", "citation.bib",
+        "publications.md", "papers.md",
+        # Apache-style attribution / acknowledgments
+        "notice", "notice.md", "notice.txt", "notice.yml", "notice.yaml",
+        "acknowledgments.md", "acknowledgements.md",
+        # Governance / contribution / security / funding
+        "contributing.md", "code_of_conduct.md", "governance.md",
+        "security.md", "funding.md",
+        # Language / ecosystem manifests with author / contributor fields
+        "pyproject.toml", "setup.cfg", "setup.py",
+        "package.json", "cargo.toml", "composer.json",
+        "go.mod", "package.swift", "project.toml", "pom.xml",
+        "description",  # R package manifest (Author / Maintainer fields)
+        # Research-software & public-sector metadata standards
+        ".zenodo.json", "codemeta.json", "publiccode.yml",
+    })
+
+    # Suffix-based matches for ecosystems that name files <project>.ext
+    # (e.g. CocoaPods `MyLib.podspec`, RubyGems `my_gem.gemspec`).
+    _AUX_FILE_SUFFIXES: tuple[str, ...] = (
+        ".gemspec",
+        ".podspec",
+    )
+
+    # Files inside `.github/` that carry maintainer / funding signal.
+    # CODEOWNERS lives there by convention (also valid at root or in
+    # `docs/`, but `.github/` is the canonical and most-common spot).
+    # FUNDING.yml is GitHub Sponsors / Open Collective / Patreon /
+    # custom funding URLs.
+    _AUX_DOTGITHUB_FILE_PATTERNS: frozenset[str] = frozenset({
+        "codeowners",
+        "funding.yml",
+        "funding.yaml",
+    })
+
+    def get_repository_aux_files(self, full_name: str) -> dict[str, str]:
+        """Fetch repo-root evidence files (AUTHORS, CITATION.cff,
+        NOTICE, pyproject.toml, etc.) that complement the README with
+        attribution / funding / governance information.
+
+        Two-phase fetch to keep the API budget honest:
+
+        1. ONE call to `GET /repos/{owner}/{repo}/contents/` to list
+           repo-root entries and pick which of our curated filenames
+           actually exist (same idea gimie's `parsers/__init__.py`
+           uses to gate its CITATION/LICENSE parsers).
+        2. One raw-content fetch per surviving filename, capped at
+           50 KB each.
+
+        Returns `{filename: content}` for files found at the repo
+        root. Empty dict when none match. Cached at the per-repo level
+        with the same TTL as the rest of the github provider so a
+        re-extract within the window is free.
+        """
+
+        max_bytes = 50_000
+
+        def _list_dir_files(path: str) -> set[str]:
+            url = f"https://api.github.com/repos/{full_name}/contents/{path}"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "github contents listing failed: %s /%s",
+                    full_name, path,
+                )
+                return set()
+            if response.status_code == 404:
+                # Directory absent — common for `.github/`; not an error.
+                return set()
+            if response.status_code != 200:
+                logger.info(
+                    "github contents listing returned %d for %s /%s",
+                    response.status_code, full_name, path,
+                )
+                return set()
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception(
+                    "github contents listing not JSON: %s /%s", full_name, path,
+                )
+                return set()
+            if not isinstance(payload, list):
+                return set()
+            return {
+                item["name"]
+                for item in payload
+                if isinstance(item, dict)
+                and item.get("type") == "file"
+                and isinstance(item.get("name"), str)
+            }
+
+        def _fetch_raw(path: str) -> str | None:
+            url = f"https://raw.githubusercontent.com/{full_name}/HEAD/{path}"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                return None
+            if response.status_code != 200:
+                return None
+            content = response.text or ""
+            return content[:max_bytes] if content else None
+
+        def _fetch() -> dict[str, str]:
+            out: dict[str, str] = {}
+
+            root_names = _list_dir_files("")
+            interesting = [
+                name for name in root_names
+                if name.lower() in self._AUX_FILE_PATTERNS
+                or name.lower().endswith(self._AUX_FILE_SUFFIXES)
+            ]
+            for name in interesting:
+                content = _fetch_raw(name)
+                if content:
+                    out[name] = content
+
+            # `.github/` carries the canonical CODEOWNERS / FUNDING.yml.
+            # One extra listing call per extract — skipped silently when
+            # the directory doesn't exist.
+            dotgithub_names = _list_dir_files(".github")
+            dotgithub_interesting = [
+                name for name in dotgithub_names
+                if name.lower() in self._AUX_DOTGITHUB_FILE_PATTERNS
+            ]
+            for name in dotgithub_interesting:
+                content = _fetch_raw(f".github/{name}")
+                if content:
+                    out[f".github/{name}"] = content
+
+            return out
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_repository_aux_files", full_name=full_name)
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_repository_aux_files({full_name})",
         )
 
     def get_commit_bookends(
