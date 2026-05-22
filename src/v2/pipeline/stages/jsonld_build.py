@@ -86,6 +86,15 @@ def _normalize_jsonld_value(
     return deepcopy(value)
 
 
+def _drop_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``entity`` without top-level `_`-prefixed keys."""
+    return {
+        key: value
+        for key, value in entity.items()
+        if not (isinstance(key, str) and key.startswith("_"))
+    }
+
+
 def build_jsonld_output(
     *,
     assembled: AssembledOutput,
@@ -95,16 +104,19 @@ def build_jsonld_output(
     """Build the JSON-LD `@graph` from a validated `AssembledOutput`.
 
     ``include_internal_fields=False`` (default) preserves the
-    ontology-compliant behaviour: `_`-prefixed keys are stripped, so
-    the response only contains fields the open-pulse ontology declares.
+    ontology-compliant behaviour: `_`-prefixed keys are stripped from
+    **both** `@graph` nodes and `excluded_entities`, so the response
+    contains zero `_` fields anywhere — only terms the open-pulse
+    ontology declares.
 
     Set ``include_internal_fields=True`` to keep `_`-prefixed keys in
-    the output — useful when the caller asked for the broader profile
-    metadata (`_avatar_url`, `_bio`, `_company`, `_orcid_keywords`,
-    `_dropped_affiliations`, etc.) that we collect but don't yet have
-    ontology terms for. Strict SHACL validation has already run by
-    this point (it always strips `_` fields), so flipping this flag
-    is purely about what the consumer sees, not about validation.
+    the output (`@graph` and `excluded_entities` alike) — useful when
+    the caller asked for the broader profile metadata (`_avatar_url`,
+    `_bio`, `_company`, `_orcid_keywords`, `_dropped_affiliations`,
+    etc.) that we collect but don't yet have ontology terms for.
+    Strict SHACL validation has already run by this point (it always
+    strips `_` fields), so flipping this flag is purely about what the
+    consumer sees, not about validation.
     """
 
     entities: list[dict[str, Any]] = []
@@ -164,5 +176,15 @@ def build_jsonld_output(
         "@graph": graph,
     }
     if assembled.excluded_entities:
-        payload["excluded_entities"] = deepcopy(assembled.excluded_entities)
+        excluded = deepcopy(assembled.excluded_entities)
+        # `excluded_entities` carry the same `_`-prefixed internal fields
+        # as `@graph` nodes (nested under each record's `entity`). Honour
+        # the flag here too, so `include_internal_fields=False` yields a
+        # response with zero `_` fields anywhere — not just in `@graph`.
+        if not include_internal_fields:
+            for record in excluded:
+                inner = record.get("entity") if isinstance(record, dict) else None
+                if isinstance(inner, dict):
+                    record["entity"] = _drop_internal_keys(inner)
+        payload["excluded_entities"] = excluded
     return payload

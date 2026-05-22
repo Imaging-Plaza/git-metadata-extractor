@@ -36,10 +36,36 @@ class V2JSONOutputEnvelope(BaseModel):
 
 
 class V2ExtractRequest(BaseModel):
-    source_url: str
-    output_format: Literal["jsonld", "json"] = "jsonld"
-    agent_runtime: Literal["rule_based", "llm", "hybrid"] | None = None
-    include_context_summary: bool = False
+    source_url: str = Field(
+        description="GitHub repository, user, or organization URL or handle.",
+        examples=["https://github.com/sdsc-ordes/gimie"],
+    )
+    output_format: Literal["jsonld", "json"] = Field(
+        default="jsonld",
+        description="Response shape: `jsonld` (JSON-LD graph) or `json` (flat envelope).",
+    )
+    agent_runtime: Literal["rule_based", "llm", "hybrid"] | None = Field(
+        default=None,
+        description=(
+            "Pipeline runtime. `rule_based` is deterministic; `llm` adds the "
+            "agent refiners; `hybrid` runs rule-based then LLM refinement. "
+            "Falls back to the server's V2_AGENT_RUNTIME_DEFAULT when omitted."
+        ),
+    )
+    include_context_summary: bool = Field(
+        default=False,
+        description="When true, attaches the scout context summary to the response.",
+    )
+    include_internal_fields: bool = Field(
+        default=False,
+        description=(
+            "When true, the response keeps `_`-prefixed internal fields "
+            "(e.g. `_bio`, `_avatar_url`, `_orcid_keywords`, `_company`) that "
+            "aren't part of the Open Pulse ontology yet. Strict SHACL "
+            "validation still runs identically — this flag only affects what "
+            "the consumer sees. Default false for ontology compliance."
+        ),
+    )
 
 
 class V2ExtractResponse(BaseModel):

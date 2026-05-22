@@ -370,6 +370,7 @@ async def _run_extract_job(
             output_format=payload.output_format,
             agent_runtime=payload.agent_runtime,
             include_context_summary=payload.include_context_summary,
+            include_internal_fields=payload.include_internal_fields,
             providers=providers,
             _token="",
         )
