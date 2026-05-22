@@ -20,6 +20,10 @@ RUN useradd -ms /bin/bash -u 1000 non-root-user \
 
 WORKDIR /app
 COPY src ./src
+# Ship the RAG index configs (config/index/*.yaml) — without them every
+# index provider fails `load_config()` and silently disables itself.
+# Deploy-specific values (Qdrant URL, tokens, scope) stay env-overridable.
+COPY config ./config
 COPY pyproject.toml .
 COPY tools/config/gunicorn_conf.py ./gunicorn_conf.py
 
