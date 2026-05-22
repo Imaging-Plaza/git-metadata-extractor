@@ -4,9 +4,9 @@
 # - article.schema.json: 9493d56d6cbc441aa5061c38e4392b70f76b9c41eb4424f5f0f74bc3c5f12028
 # - contribution.schema.json: ac7d1bdb429a359e9e10045faf4874d6575b02e14277e959a5c979af15e456f8
 # - membership.schema.json: 7ec7bd52823ad40aca2e1bafb1747ac54ec6a8a99ac42ccd563c5bbaab004ceb
-# - organization.schema.json: 57853768a4ac339989430e661be6df8525b493d6ba149def3e15bf478e440d6c
-# - person.schema.json: 2d1201235eac1ecdda4bbb535ceb1e6d552f1fcc5bc72fd3ebc5af9bf6f64c92
-# - repository.schema.json: 446d18e936517fae215c978b6709d9b84e65dd9968b002daf0fe9354cce538d1
+# - organization.schema.json: ff152525b13e7caa4df6d5328945ce32a5fb7cd458211bad4840fc94df1613d4
+# - person.schema.json: 1b397c3c524574bae63a333249816f85334c1e7420075a37a4e444004d3ae11a
+# - repository.schema.json: 0c4d0081ec6ea0953735e1d4a25a08c69d306e9c3acb7964748dff47afdaa9e7
 #
 
 from __future__ import annotations
