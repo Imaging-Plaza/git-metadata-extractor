@@ -32,6 +32,12 @@ The federated layer never shares state — it just orchestrates.
 | **SWISSUbase** | swissubase.ch | [`src/index/swissubase/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/swissubase) | `swissubase-*` | ✅ | ✅ (`search_swissubase_rag`) | Swiss social-science research-data platform: studies, datasets, persons, institutions. Ingest is Selenium-driven (no public REST API; per-`studyVersionId` enumeration to dodge the search-window cap). Default scope embeds only EPFL / ETHZ / SDSC-affiliated studies. |
 | **Federated** | wraps all above | [`src/index/_federated/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/_federated) | `gme-*` | — | ✅ (`search_federated_rag`, `lookup_entity_federated`) | one query → all indices in parallel |
 
+> **Support index (no RAG layer).** The [Communities index](communities-index.md)
+> (`src/index/communities/`) is a plain DuckDB metadata table — no Qdrant,
+> no embeddings. It maps Zenodo community slugs to a `parent_org` so the
+> Zenodo index can attribute records to EPFL / ETHZ / CERN. It joins the
+> federated layer for lookups but is not a semantic-search index.
+
 ## Shared infrastructure
 
 Every index built on the post-2026-05-01 pattern uses:

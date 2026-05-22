@@ -53,29 +53,30 @@ come from `Qwen/Qwen3-Embedding-8B` on EPFL RCP; reranking from
 
 ### A. Community-driven (the default)
 
-Pulls every record published under one of the configured Zenodo
-community slugs in `config/index/zenodo.yaml`:
+Pulls every record published under a Zenodo community. The community
+slugs are **not** hardcoded here — `ingest --scope <name>` resolves them
+from the [communities index](communities-index.md) by `parent_org`:
 
-```yaml
-scope:
-  default: epfl
-  epfl_communities:
-    - epfl
-    - eesd_at_epfl
-    - ivrl-epfl-switzerland
-  switzerland_communities:
-    - supsi
-    - sweco25
-    - plato-ch
-```
+| Scope | Communities resolved |
+|---|---|
+| `epfl` | every community with `parent_org = epfl` |
+| `ethz` | `parent_org = ethz` |
+| `cern` | `parent_org = cern` |
+| `cern_openlab` | `parent_org = cern_openlab` |
+| `switzerland` | `epfl` + `ethz` combined |
+| `all` | every community in the index |
 
 ```bash
+python -m src.index.communities.cli build   # populate the communities index first
 python -m src.index.zenodo ingest --scope epfl
-python -m src.index.zenodo ingest --scope switzerland
+python -m src.index.zenodo ingest --scope cern
 ```
 
-Resumable via `data/index/zenodo/state/ingest_<scope>.json` — completed
-community slugs are skipped on re-run unless `--refresh` is set.
+Each persisted record is stamped with the community it was crawled
+under (`primary_community_id`) and the full set it belongs to
+(`community_ids`). Resumable via
+`data/index/zenodo/state/ingest_<scope>.json` — completed community
+slugs are skipped on re-run unless `--refresh` is set.
 
 ### B. Citation-driven (the broader signal)
 
@@ -136,6 +137,8 @@ records (
     access_right       TEXT,                -- open | embargoed | restricted | closed
     license_id         TEXT,
     keywords_json      JSON,
+    community_ids        JSON,              -- every community slug this record belongs to
+    primary_community_id TEXT,              -- the community it was crawled under (see communities index)
     raw                JSON,                -- full Zenodo API payload
     ingested_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
