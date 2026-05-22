@@ -93,7 +93,11 @@ def test_repository_context_contains_expected_sections() -> None:
     assert "Python" in repository_context["languages"]
 
 
-def test_user_context_contains_profile_repos_and_orcid() -> None:
+def test_user_context_contains_profile_repos_and_orcid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Per-repo gimie context is opt-in; enable it to exercise the path.
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
     providers = ProviderSet(
         github=_DummyGitHubProvider(),
         orcid=_DummyORCIDProvider(),
@@ -114,7 +118,41 @@ def test_user_context_contains_profile_repos_and_orcid() -> None:
     assert user_context["orcid_data"]["name"] == "Alice Example"
 
 
-def test_org_context_contains_profile_members_and_repositories() -> None:
+def test_user_context_skips_per_repo_gimie_when_expansion_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Default (V2_EXPAND_OWNED_REPOS unset/false): owned repos are kept
+    # as names for `pulse:owns` references, but NO per-repo gimie runs.
+    monkeypatch.delenv("V2_EXPAND_OWNED_REPOS", raising=False)
+
+    class _ExplodingOnRepoGitHubProvider(_DummyGitHubProvider):
+        def get_repository(self, full_name: str) -> dict[str, Any]:
+            raise AssertionError(
+                f"get_repository must not run with expansion disabled: {full_name}",
+            )
+
+    providers = ProviderSet(
+        github=_ExplodingOnRepoGitHubProvider(),
+        orcid=_DummyORCIDProvider(),
+    )
+    url_info = GitHubURLClassification(
+        normalized_url="https://github.com/alice",
+        detected_type=GitHubURLType.USER,
+        owner="alice",
+        repo=None,
+    )
+
+    bundle = asyncio.run(gather_context("user", url_info, providers))
+
+    user_context = bundle.context["user"]
+    assert user_context["owned_repos"] == ["alice/repo-a", "repo-b"]
+    assert user_context["repository_contexts"] == {}
+
+
+def test_org_context_contains_profile_members_and_repositories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
     providers = ProviderSet(github=_DummyGitHubProvider())
     url_info = GitHubURLClassification(
         normalized_url="https://github.com/orgs/example",
@@ -135,7 +173,11 @@ def test_org_context_contains_profile_members_and_repositories() -> None:
     }
 
 
-def test_optional_repository_context_failures_are_warnings_for_user_mode() -> None:
+def test_optional_repository_context_failures_are_warnings_for_user_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("V2_EXPAND_OWNED_REPOS", "true")
+
     class _PartiallyFailingGitHubProvider(_DummyGitHubProvider):
         def get_repository(self, full_name: str) -> dict[str, Any]:
             if full_name.endswith("repo-b"):
