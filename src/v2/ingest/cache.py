@@ -112,8 +112,14 @@ class ProviderCache:
         """Remove every cached entry. Returns the number of rows deleted."""
 
         with self._connect() as conn, conn:
-            cursor = conn.execute("DELETE FROM responses;")
-            return int(cursor.rowcount or 0)
+            # `DELETE FROM <table>` with no WHERE triggers SQLite's
+            # truncate optimization, which makes `cursor.rowcount` return
+            # 0 regardless of how many rows were actually removed. Count
+            # first so the caller (and the /v2/cache/clear endpoint) gets
+            # a truthful number.
+            count = conn.execute("SELECT COUNT(*) FROM responses;").fetchone()[0]
+            conn.execute("DELETE FROM responses;")
+            return int(count or 0)
 
 
 __all__ = [

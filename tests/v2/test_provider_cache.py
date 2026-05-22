@@ -70,3 +70,16 @@ def test_make_key_is_deterministic_and_arg_sensitive() -> None:
     c = ProviderCache.make_key("github", "get_user", username="b")
     assert a == b
     assert a != c
+
+
+def test_clear_returns_real_deleted_count(tmp_path: Path) -> None:
+    # `DELETE FROM <table>` with no WHERE triggers SQLite's truncate
+    # optimization, under which `cursor.rowcount` is 0 even when rows are
+    # removed. `clear()` must still report the true count.
+    cache = ProviderCache(tmp_path / "p.db")
+    for i in range(7):
+        cache.set(f"k{i}", {"v": i})
+
+    assert cache.clear() == 7
+    assert cache.clear() == 0
+    assert cache.get("k0") is None
