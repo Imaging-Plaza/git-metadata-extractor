@@ -93,11 +93,22 @@ class ZenodoStore:
     # ---- Upserts ---------------------------------------------------------
 
     def upsert_record(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        # `community_ids` and `primary_community_id` are denormalised
+        # community membership baked onto the record itself so
+        # downstream queries can filter without joining
+        # `record_communities`. The caller passes the community we're
+        # currently crawling under as `primary_community_id`, plus the
+        # full set of communities the record's raw payload mentions
+        # as `community_ids` (deduped).
+        community_ids = row.get("community_ids")
+        if not isinstance(community_ids, list):
+            community_ids = []
         sql = (
             "INSERT INTO records "
             "(zenodo_id, concept_recid, doi, title, description, publication_date, "
-            " resource_type, access_right, license_id, keywords_json, raw, ingested_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            " resource_type, access_right, license_id, keywords_json, "
+            " community_ids, primary_community_id, raw, ingested_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (zenodo_id) DO UPDATE SET "
             "  concept_recid = excluded.concept_recid, "
             "  doi = excluded.doi, title = excluded.title, "
@@ -107,6 +118,9 @@ class ZenodoStore:
             "  access_right = excluded.access_right, "
             "  license_id = excluded.license_id, "
             "  keywords_json = excluded.keywords_json, "
+            "  community_ids = excluded.community_ids, "
+            "  primary_community_id = COALESCE("
+            "      records.primary_community_id, excluded.primary_community_id), "
             "  raw = excluded.raw, ingested_at = excluded.ingested_at"
         )
         self.connect().execute(
@@ -122,6 +136,8 @@ class ZenodoStore:
                 row.get("access_right"),
                 row.get("license_id"),
                 json.dumps(row.get("keywords") or [], ensure_ascii=False),
+                json.dumps(community_ids, ensure_ascii=False),
+                row.get("primary_community_id"),
                 json.dumps(raw, ensure_ascii=False),
                 self._now(),
             ],

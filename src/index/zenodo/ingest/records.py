@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+import time as _time
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -158,11 +159,29 @@ def _project_files(record_id: str, item: dict[str, Any]) -> list[dict[str, Any]]
     return out
 
 
-def persist_record(store: ZenodoStore, item: dict[str, Any]) -> str | None:
+def persist_record(
+    store: ZenodoStore,
+    item: dict[str, Any],
+    *,
+    crawling_community: str | None = None,
+) -> str | None:
     row = _project_record(item)
     if not row["zenodo_id"]:
         return None
     record_id = row["zenodo_id"]
+
+    # Mirror community membership onto the record itself so consumers
+    # can filter `WHERE primary_community_id = 'cernopenlab'` or
+    # `list_contains(community_ids, 'cernopenlab')` without joining
+    # `record_communities`. `crawling_community` is the slug we were
+    # iterating through when we found this record — useful as a
+    # "primary" colour even when the record belongs to several.
+    communities = _project_communities(item)
+    row["community_ids"] = list(communities)
+    if crawling_community and not row.get("primary_community_id"):
+        row["primary_community_id"] = crawling_community
+    elif communities and not row.get("primary_community_id"):
+        row["primary_community_id"] = communities[0]
     store.upsert_record(row, raw=item)
 
     creators = _project_creators(item)
@@ -173,7 +192,6 @@ def persist_record(store: ZenodoStore, item: dict[str, Any]) -> str | None:
     if creator_positions:
         store.upsert_record_creators(record_id, creator_positions)
 
-    communities = _project_communities(item)
     if communities:
         store.upsert_record_communities(record_id, communities)
 
@@ -217,9 +235,19 @@ async def _ingest_async(
     client = ZenodoClient(config)
     summary: dict[str, int] = {}
     seen_ids: set[str] = set()
+    total_communities = len(scope.communities)
+
+    LOGGER.info(
+        "ingest start: scope=%s communities=%d already_completed=%d refresh=%s limit=%s",
+        scope.name, total_communities, len(completed), refresh, limit,
+    )
 
     # Eagerly upsert each community as a row so retrievers can join titles.
-    for slug in scope.communities:
+    # Emit a heartbeat every 25 communities so the operator can see we're
+    # alive during the slow ~2.4s/slug Zenodo rate-limited fetch loop.
+    LOGGER.info("[%s] community-metadata bootstrap starting…", scope.name)
+    bootstrap_started_at = _time.time()
+    for index, slug in enumerate(scope.communities, start=1):
         community = await client.fetch_community(slug)
         if community is None:
             LOGGER.warning("community %s not found on Zenodo; skipping", slug)
@@ -228,33 +256,57 @@ async def _ingest_async(
             {"community_id": slug, "title": (community.get("metadata") or {}).get("title")},
             raw=community,
         )
+        if index % 25 == 0 or index == total_communities:
+            elapsed = _time.time() - bootstrap_started_at
+            LOGGER.info(
+                "[%s] community-metadata bootstrap: %d/%d (%.0fs elapsed, ~%.1fs/comm)",
+                scope.name, index, total_communities, elapsed, elapsed / index,
+            )
 
-    for slug in scope.communities:
+    LOGGER.info("[%s] record ingestion starting…", scope.name)
+    ingest_started_at = _time.time()
+    last_heartbeat = ingest_started_at
+    total_persisted = 0
+    for community_index, slug in enumerate(scope.communities, start=1):
         if slug in completed and not refresh:
             LOGGER.info("scope=%s community=%s already completed; skipping", scope.name, slug)
             continue
         community_count = 0
         async for record in client.iter_records(slug, limit=limit):
-            record_id = persist_record(store, record)
+            record_id = persist_record(store, record, crawling_community=slug)
             if record_id and record_id not in seen_ids:
                 seen_ids.add(record_id)
                 community_count += 1
+                total_persisted += 1
             if community_count and community_count % 200 == 0:
                 LOGGER.info(
                     "ingested %d records from community=%s (scope=%s)",
-                    community_count,
-                    slug,
-                    scope.name,
+                    community_count, slug, scope.name,
                 )
+            # Time-based heartbeat (every ~60s) so an operator tailing
+            # the log can confirm forward progress even when many
+            # communities have 0 records.
+            now = _time.time()
+            if now - last_heartbeat >= 60.0:
+                LOGGER.info(
+                    "[%s] heartbeat: community=%d/%d total_records=%d elapsed=%.0fs",
+                    scope.name, community_index, total_communities,
+                    total_persisted, now - ingest_started_at,
+                )
+                last_heartbeat = now
         summary[slug] = community_count
         completed.add(slug)
         state["completed_communities"] = sorted(completed)
         _save_state(config, scope.name, state)
         LOGGER.info(
-            "community=%s done: %d records persisted",
-            slug,
-            community_count,
+            "community=%s done: %d records (scope progress %d/%d, total_records=%d)",
+            slug, community_count, community_index, total_communities, total_persisted,
         )
+    LOGGER.info(
+        "[%s] ingest done: %d records persisted across %d communities in %.0fs",
+        scope.name, total_persisted, total_communities,
+        _time.time() - ingest_started_at,
+    )
     return summary
 
 
