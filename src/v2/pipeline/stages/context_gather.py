@@ -8,6 +8,23 @@ from typing import TYPE_CHECKING, Any
 from src.v2.pipeline.stages.models import ContextBundle
 
 
+def should_expand_owned_repos() -> bool:
+    """Whether user/organization flows run the full per-repo pipeline
+    (gimie context gather + materialisation) on each owned repo.
+
+    When False (default), owned repos are kept only as `pulse:owns`
+    `@id` references: context gather skips the per-repo gimie pass and
+    the orchestrator skips materialisation. An org or prolific user can
+    own 50-200 repos and gimie on each costs minutes of wall time. Set
+    `V2_EXPAND_OWNED_REPOS=true` to restore eager expansion.
+
+    Single source of truth for the flag — the orchestrator imports this
+    so context gather and materialisation never disagree.
+    """
+    raw = (os.getenv("V2_EXPAND_OWNED_REPOS") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 # `_clean_readme_for_llm`: a *light* cleaner that removes only the
 # high-noise / low-signal portions of a GitHub README so downstream LLM
 # prompts + RAG queries don't waste tokens on badge/image/HTML soup.
@@ -453,16 +470,21 @@ async def gather_context(  # noqa: C901, PLR0915
             or user_profile.get("repos")
             or user_profile.get("owned_repos"),
         )
+        # Per-repo gimie context is gated by V2_EXPAND_OWNED_REPOS. When
+        # off (default) the owned repos survive only as `pulse:owns`
+        # references — skipping the gimie pass here is what actually
+        # avoids the 30+ sequential sub-extractions on a prolific user.
         repository_contexts: dict[str, dict[str, Any]] = {}
-        for repo in owned_repos:
-            full_name = _normalize_owned_repo_full_name(username, repo)
-            repository_context = _optional_repository_context(
-                full_name=full_name,
-                providers=providers,
-                warnings=warnings,
-            )
-            if isinstance(repository_context, dict):
-                repository_contexts[full_name] = repository_context
+        if should_expand_owned_repos():
+            for repo in owned_repos:
+                full_name = _normalize_owned_repo_full_name(username, repo)
+                repository_context = _optional_repository_context(
+                    full_name=full_name,
+                    providers=providers,
+                    warnings=warnings,
+                )
+                if isinstance(repository_context, dict):
+                    repository_contexts[full_name] = repository_context
         orcid_id = _first_non_empty_string(
             user_profile.get("orcid"),
             user_profile.get("orcid_id"),
@@ -509,16 +531,18 @@ async def gather_context(  # noqa: C901, PLR0915
             organization_profile.get("repositories")
             or organization_profile.get("repos"),
         )
+        # Gated by V2_EXPAND_OWNED_REPOS — see the user branch above.
         repository_contexts: dict[str, dict[str, Any]] = {}
-        for repo in owned_repos:
-            full_name = _normalize_owned_repo_full_name(organization_name, repo)
-            repository_context = _optional_repository_context(
-                full_name=full_name,
-                providers=providers,
-                warnings=warnings,
-            )
-            if isinstance(repository_context, dict):
-                repository_contexts[full_name] = repository_context
+        if should_expand_owned_repos():
+            for repo in owned_repos:
+                full_name = _normalize_owned_repo_full_name(organization_name, repo)
+                repository_context = _optional_repository_context(
+                    full_name=full_name,
+                    providers=providers,
+                    warnings=warnings,
+                )
+                if isinstance(repository_context, dict):
+                    repository_contexts[full_name] = repository_context
 
         context["organization"] = {
             "org_name": organization_name,

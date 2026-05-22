@@ -47,6 +47,7 @@ from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection.models import GitHubURLClassification
 from src.v2.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage
 from src.v2.pipeline.stages import ContextBundle, gather_context
+from src.v2.pipeline.stages.context_gather import should_expand_owned_repos
 
 if TYPE_CHECKING:
     from src.v2.agents.contracts import RuntimeAgent
@@ -92,7 +93,7 @@ COMPILED_CONTEXT_PROMPT_BLOCK_HEADER = "## Compiled Source Summary"
 # Note that the fan-out cap is now a *secondary* guard — by default the
 # user/org flows emit owned repos as `@id` references in `pulse:owns`
 # WITHOUT materialising each as a full `schema:SoftwareSourceCode`
-# entity (see `_should_expand_owned_repos`). The cap only kicks in when
+# entity (see `should_expand_owned_repos`). The cap only kicks in when
 # expansion is explicitly turned on via `V2_EXPAND_OWNED_REPOS=true`.
 _DEFAULT_MAX_REPO_FANOUT_ORG = 25
 _DEFAULT_MAX_REPO_FANOUT_USER = 50
@@ -114,26 +115,6 @@ def _resolve_repo_fanout_cap(detected_type: str) -> int:
     except ValueError:
         return default
     return max(0, value)
-
-
-def _should_expand_owned_repos() -> bool:
-    """When False (default), the user/organization flows emit each
-    owned repo as a bare `@id` reference in the root entity's
-    `pulse:owns` array, but DO NOT materialise it as a full
-    `schema:SoftwareSourceCode` entity in the graph.
-
-    Rationale: an org or prolific user can easily own 50-200 repos.
-    Running gimie + the contributor pipeline on each one costs minutes
-    of wall time and most of the resulting nodes are weakly connected
-    to the root entity that motivated the extraction. The W3C-style
-    "just an IRI" reference preserves the structural link without the
-    materialisation cost. Consumers that want the rich per-repo
-    metadata can extract each repo directly via the repository flow,
-    or set `V2_EXPAND_OWNED_REPOS=true` to restore the previous
-    behaviour for the user/org flow itself.
-    """
-    raw = (os.getenv("V2_EXPAND_OWNED_REPOS") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
 
 
 PLAN_BY_TYPE: dict[str, list[str]] = {
@@ -1327,7 +1308,7 @@ class PipelineOrchestrator:
         # to restore eager expansion.
         if (
             detected_type in {"user", "organization"}
-            and not _should_expand_owned_repos()
+            and not should_expand_owned_repos()
             and deduped_full_names
         ):
             warning_sink = runtime_context.setdefault("_fanout_warnings", [])
