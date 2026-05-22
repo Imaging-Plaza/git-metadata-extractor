@@ -853,39 +853,268 @@ def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def infer_github_handle_parents(
+# Deterministic fallback bar (rule_based runtime, no LLM selector): accept a
+# ROR parent only when the single best candidate shares at least this many
+# tokens with the github org. A single shared token is almost always a
+# coincidental collision (`imaging-plaza` ↔ "Plaza Community Services").
+_RULE_BASED_ROR_MIN_SCORE = 2
+
+
+def _org_context_for_selector(org: dict[str, Any]) -> dict[str, Any] | None:
+    """Disambiguation context for the ROR selector, drawn from the github org
+    entity's own metadata.
+
+    The GitHub `description` is the strongest signal — "Center for Digital
+    Trust — Link between EPFL/IC labs and industry" names the parent
+    outright. These internal `_*` fields are stamped by the org agent from
+    the GitHub profile and stripped before JSON-LD output, but they are
+    present in the graph at this stage.
+    """
+    context: dict[str, Any] = {}
+    for src_key, ctx_key in (
+        ("_description", "description"),
+        ("_location", "location"),
+        ("_blog", "homepage"),
+        ("_company", "company"),
+    ):
+        value = org.get(src_key)
+        if isinstance(value, str) and value.strip():
+            context[ctx_key] = value.strip()
+    return context or None
+
+
+# Acronym-shaped tokens (EPFL, CERN, ETHZ) — 3-6 uppercase letters.
+_ACRONYM_RE = re.compile(r"\b[A-Z]{3,6}\b")
+# Domain labels that carry no institutional signal.
+_GENERIC_DOMAIN_LABELS: frozenset[str] = frozenset(
+    {"www", "com", "org", "net", "edu", "io", "github", "gitlab", "dev",
+     "app", "page", "pages", "site", "web"},
+)
+
+
+def _extra_ror_queries_from_metadata(org: dict[str, Any]) -> list[str]:
+    """Mine the org's description + homepage for institution hints that widen
+    the ROR search.
+
+    The parent is frequently named in the bio even when the handle gives
+    nothing — c4dt's description "Link between EPFL/IC labs and industry"
+    and homepage `c4dt.epfl.ch` both point straight at EPFL, which a handle-
+    only search ("c4dt", "Center for Digital Trust") never surfaces.
+    """
+    queries: list[str] = []
+
+    def _add(term: str) -> None:
+        if term and term not in queries:
+            queries.append(term)
+
+    description = org.get("_description")
+    if isinstance(description, str):
+        for match in _ACRONYM_RE.finditer(description):
+            _add(match.group(0))
+    for url_key in ("_blog", "_html_url"):
+        url = org.get(url_key)
+        if not isinstance(url, str) or not url.strip():
+            continue
+        netloc = urlparse(url if "//" in url else f"//{url}").netloc.lower()
+        for label in netloc.split("."):
+            if 3 <= len(label) <= 12 and label not in _GENERIC_DOMAIN_LABELS:
+                _add(label)
+    return queries
+
+
+def _ror_candidate_shortlist(
+    *,
+    handle: str,
+    org_name: str | None,
+    ror_provider: Any,
+    queries: list[str],
+    max_candidates: int,
+    warnings: list[str],
+) -> list[tuple[int, dict[str, Any]]]:
+    """Search ROR for `queries` and return a deduped, recall-friendly shortlist
+    of `(token_overlap_score, ror_record)` tuples for the selector to choose
+    from.
+
+    The real parent (an umbrella institution like EPFL) often shares only a
+    single token with a lab handle, so the shortlist keeps both the
+    token-overlap-strongest hits AND the ROR-relevance-#1 hit of each query
+    (ROR's own ranking surfaces `EPFL` as the top hit for the query `epfl`).
+    The selector — not a token threshold — does the precision filtering.
+    """
+    # ror_id -> (token_score, best_ror_rank, hit)
+    found: dict[str, tuple[int, int, dict[str, Any]]] = {}
+    for query in queries:
+        try:
+            hits = ror_provider.search_organizations(query)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"github_handle_parents: ROR search failed for query "
+                f"'{query}' (handle '{handle}'): {exc}",
+            )
+            continue
+        if not isinstance(hits, list):
+            continue
+        for rank, hit in enumerate(hits):
+            if not isinstance(hit, dict):
+                continue
+            ror_id = hit.get("id")
+            if not isinstance(ror_id, str) or not ror_id:
+                continue
+            score = _ror_record_score(handle=handle, name=org_name, ror_record=hit)
+            existing = found.get(ror_id)
+            if (
+                existing is None
+                or score > existing[0]
+                or (score == existing[0] and rank < existing[1])
+            ):
+                found[ror_id] = (score, rank, hit)
+
+    if not found:
+        return []
+
+    # Each query's ROR-#1 hit (rank 0) first — that is where an umbrella
+    # institution surfaces even on a single shared token — then the rest by
+    # descending token score, ROR rank as the tie-break.
+    relevance_top = [ror_id for ror_id, (_, rank, _) in found.items() if rank == 0]
+    by_score = sorted(found.items(), key=lambda item: (-item[1][0], item[1][1]))
+
+    ordered_ids: list[str] = []
+    for ror_id in relevance_top:
+        if ror_id not in ordered_ids:
+            ordered_ids.append(ror_id)
+    for ror_id, _ in by_score:
+        if ror_id not in ordered_ids:
+            ordered_ids.append(ror_id)
+
+    return [
+        (found[ror_id][0], found[ror_id][2]) for ror_id in ordered_ids[:max_candidates]
+    ]
+
+
+async def _select_ror_parent(
+    *,
+    handle: str,
+    org_name: str | None,
+    shortlist: list[tuple[int, dict[str, Any]]],
+    parent_selector: Any,
+    org_context: dict[str, Any] | None,
+    warnings: list[str],
+) -> dict[str, Any] | None:
+    """Choose the one ROR record that is the github org's parent, or None.
+
+    With an LLM `parent_selector`, the model picks (or declines) using the
+    geography / coincidental-collision rules in its system prompt. Without
+    one (rule_based runtime), fall back to a strict deterministic rule:
+    accept the single best token-overlap match only when it is an unambiguous
+    winner scoring at least `_RULE_BASED_ROR_MIN_SCORE`.
+    """
+    if not shortlist:
+        return None
+
+    if parent_selector is None:
+        ranked = sorted(shortlist, key=lambda item: -item[0])
+        best_score, best_hit = ranked[0]
+        second_score = ranked[1][0] if len(ranked) > 1 else -1
+        if best_score >= _RULE_BASED_ROR_MIN_SCORE and best_score > second_score:
+            return best_hit
+        return None
+
+    # LLM-backed selection. Lazy import keeps this deterministic-by-default
+    # module free of the LLM runtime dependency unless a selector is wired in.
+    from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
+        RorCandidate,
+        RorParentSelectorInput,
+    )
+
+    by_ror_id: dict[str, dict[str, Any]] = {}
+    candidates: list[RorCandidate] = []
+    for score, hit in shortlist:
+        ror_id = hit.get("id")
+        if not isinstance(ror_id, str) or not ror_id:
+            continue
+        by_ror_id[ror_id] = hit
+        country = hit.get("country")
+        candidates.append(
+            RorCandidate(
+                ror_id=ror_id,
+                name=hit.get("name") if isinstance(hit.get("name"), str) else ror_id,
+                aliases=[a for a in (hit.get("aliases") or []) if isinstance(a, str)],
+                acronyms=[a for a in (hit.get("acronyms") or []) if isinstance(a, str)],
+                types=[t for t in (hit.get("types") or []) if isinstance(t, str)],
+                country=(
+                    country.get("country_name") if isinstance(country, dict) else None
+                ),
+                token_overlap_score=score,
+            ),
+        )
+    if not candidates:
+        return None
+
+    try:
+        patch = await parent_selector.run(
+            refiner_input=RorParentSelectorInput(
+                github_handle=handle,
+                github_org_name=org_name,
+                org_context=org_context,
+                candidates=candidates,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"github_handle_parents: ROR parent selector failed for handle "
+            f"'{handle}': {exc}. Leaving the org standalone.",
+        )
+        return None
+
+    chosen_ror_id = patch.accepted_ror_id()
+    if chosen_ror_id is None:
+        warnings.append(
+            f"github_handle_parents: ROR parent selector declined for handle "
+            f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
+        )
+        return None
+    warnings.append(
+        f"github_handle_parents: ROR parent selector picked '{chosen_ror_id}' "
+        f"for handle '{handle}' (confidence={patch.confidence:.2f}): {patch.reason}",
+    )
+    return by_ror_id.get(chosen_ror_id)
+
+
+async def infer_github_handle_parents(
     assembled: AssembledOutput,
     *,
     providers: Any = None,
-    max_candidates_per_handle: int = 5,
-    min_match_score: int = 1,
+    parent_selector: Any = None,
+    max_candidates_per_handle: int = 10,
 ) -> tuple[AssembledOutput, list[str]]:
-    """For every github-only org in the graph, fuzzy-search ROR for matching
-    parent organizations and add them to the graph.
+    """For every github-only org in the graph, find its ROR parent
+    organization — when there genuinely is one — and add it to the graph.
 
-    The github org always remains as a standalone entity (its `id` and other
-    fields are untouched). The fuzzy matching:
+    The github org always remains a standalone entity (its `id` and other
+    fields are untouched). Resolution:
 
-    1. Builds 1-3 query strings from the github org's handle + display name
-       (full name, full handle, top distinctive tokens).
-    2. Calls `providers.ror.search_organizations(query)` for each (cached).
-    3. Scores each ROR hit by token overlap against the github org's
-       handle + name + aliases + acronyms.
-    4. Adds candidate ROR records with score ≥ `min_match_score` to the
-       graph as minimal entities (only id, ROR id, and canonical name —
-       leaves the rest null and lets downstream stages / agents enrich).
-    5. Picks the highest-scoring candidate as the github org's `unitOf`
-       parent and stamps the reciprocal `hasUnit`.
+    1. Builds query strings from the github org's handle and display name,
+       plus institution hints mined from its description / homepage (the
+       parent is often named there — c4dt's bio "Link between EPFL/IC labs"
+       points at EPFL, which a handle-only search never surfaces).
+    2. Calls `providers.ror.search_organizations(query)` for each (cached)
+       and assembles a recall-friendly shortlist of candidate ROR records —
+       both the token-overlap-strongest hits and the ROR-relevance-top hit
+       of each query (the umbrella institution often shares only one token
+       with a lab handle, e.g. `epfl-lasa` ↔ EPFL).
+    3. Hands the shortlist to `parent_selector` — an LLM agent that picks the
+       single ROR organization that is genuinely the parent (applying
+       geography and coincidental-collision rules) or declines. Without a
+       selector (rule_based runtime) a strict deterministic fallback accepts
+       only an unambiguous, multi-token winner.
+    4. Inserts ONLY the chosen ROR org — never unrelated "sibling" matches,
+       which a fuzzy top-K used to scatter into the graph — and stamps
+       `org:unitOf` / `org:hasUnit`. When the selector declines, the github
+       org is left standalone: a wrong parent is worse than no parent.
 
-    No-ops gracefully when `providers.ror` is None — the github orgs stay
-    in the graph untouched.
-
-    `max_candidates_per_handle` caps how many ROR matches per github org
-    we add to the graph (top-K by score). `min_match_score` is the
-    minimum token-overlap to count a hit as plausible.
-
-    Never overwrites an existing `org:unitOf` value, and reuses an already-
-    in-graph ROR entity rather than duplicating.
+    No-ops gracefully when `providers.ror` is None. Never overwrites an
+    existing `org:unitOf`, and reuses an already-in-graph ROR entity rather
+    than duplicating.
     """
 
     ror_provider = getattr(providers, "ror", None) if providers is not None else None
@@ -936,83 +1165,70 @@ def infer_github_handle_parents(
         if not org_id:
             continue
         org_name = org.get("schema:name") if isinstance(org.get("schema:name"), str) else None
+        org_context = _org_context_for_selector(org)
 
         # Build query terms then search ROR. Cache hits make repeated runs cheap.
+        # Mine the org's own description / homepage for institution hints —
+        # the parent is often named there even when the handle gives nothing.
         queries = _github_handle_query_terms(handle, org_name)
+        for extra_query in _extra_ror_queries_from_metadata(org):
+            if extra_query not in queries:
+                queries.append(extra_query)
         if not queries:
             continue
-        scored: dict[str, tuple[int, dict[str, Any]]] = {}
-        for query in queries:
-            try:
-                hits = ror_provider.search_organizations(query)
-            except Exception as exc:  # noqa: BLE001
-                warnings.append(
-                    f"github_handle_parents: ROR search failed for query "
-                    f"'{query}' (handle '{handle}'): {exc}",
-                )
+        shortlist = _ror_candidate_shortlist(
+            handle=handle,
+            org_name=org_name,
+            ror_provider=ror_provider,
+            queries=queries,
+            max_candidates=max_candidates_per_handle,
+            warnings=warnings,
+        )
+        if not shortlist:
+            continue
+
+        chosen_hit = await _select_ror_parent(
+            handle=handle,
+            org_name=org_name,
+            shortlist=shortlist,
+            parent_selector=parent_selector,
+            org_context=org_context,
+            warnings=warnings,
+        )
+        if chosen_hit is None:
+            continue
+        chosen_ror_id = chosen_hit.get("id")
+        if not isinstance(chosen_ror_id, str) or not chosen_ror_id:
+            continue
+
+        parent_entity = (
+            by_ror.get(chosen_ror_id)
+            or by_id.get(chosen_ror_id)
+            or inserted.get(chosen_ror_id)
+        )
+        if parent_entity is None:
+            parent_entity = _build_minimal_ror_org(chosen_hit)
+            if parent_entity is None:
                 continue
-            for hit in hits:
-                if not isinstance(hit, dict):
-                    continue
-                ror_id = hit.get("id")
-                if not isinstance(ror_id, str) or not ror_id:
-                    continue
-                score = _ror_record_score(
-                    handle=handle,
-                    name=org_name,
-                    ror_record=hit,
-                )
-                if score < min_match_score:
-                    continue
-                # Keep the best score we've seen for this ROR id.
-                existing = scored.get(ror_id)
-                if existing is None or existing[0] < score:
-                    scored[ror_id] = (score, hit)
+            inserted[chosen_ror_id] = parent_entity
+            by_id[chosen_ror_id] = parent_entity
+            by_ror[chosen_ror_id] = parent_entity
+            warnings.append(
+                f"Inserted ROR organization '{chosen_ror_id}' "
+                f"({chosen_hit.get('name')}) as parent of github handle "
+                f"'{handle}'.",
+            )
 
-        if not scored:
-            continue
-
-        # Top-K by score (highest first). The first one becomes the unitOf
-        # parent; the rest are added as siblings.
-        top_candidates = sorted(scored.items(), key=lambda item: -item[1][0])[
-            :max_candidates_per_handle
-        ]
-
-        ranked_entities: list[dict[str, Any]] = []
-        for ror_id, (score, hit) in top_candidates:
-            existing_entity = by_ror.get(ror_id) or by_id.get(ror_id) or inserted.get(ror_id)
-            if existing_entity is None:
-                new_entity = _build_minimal_ror_org(hit)
-                if new_entity is None:
-                    continue
-                inserted[ror_id] = new_entity
-                by_id[ror_id] = new_entity
-                by_ror[ror_id] = new_entity
-                ranked_entities.append(new_entity)
-                warnings.append(
-                    f"Inserted ROR organization '{ror_id}' "
-                    f"({hit.get('name')}) from github handle '{handle}' "
-                    f"(score={score}).",
-                )
-            else:
-                ranked_entities.append(existing_entity)
-
-        # Best match becomes the parent.
-        if not ranked_entities:
-            continue
-        parent_entity = ranked_entities[0]
         parent_id = parent_entity.get("id")
         if not isinstance(parent_id, str) or not parent_id:
             continue
-        unit_of_set = _set_unit_of(org, parent_id)
-        has_unit_set = _add_to_has_unit(parent_entity, org_id)
-        if unit_of_set:
+        if _set_unit_of(org, parent_id):
             warnings.append(
                 f"Inferred org:unitOf on {org_id} → {parent_id} "
-                f"(github handle '{handle}' fuzzy-matched ROR record "
+                f"(github handle '{handle}' resolved to ROR record "
                 f"'{parent_entity.get('schema:name')}').",
             )
-        if has_unit_set:
+        if _add_to_has_unit(parent_entity, org_id):
             warnings.append(f"Inferred org:hasUnit on {parent_id} → {org_id}.")
 
     # Append the newly-inserted ROR org entities to the related list.

@@ -83,6 +83,22 @@ def _pick_best_orgunit_match(
     return None
 
 
+# Generic org-structure / weak-content words. A ROR match whose entire
+# token overlap with the query is drawn from this set is a coincidental
+# collision, not a real identity — production examples: "Center for Digital
+# Trust" ↔ "RISM Digital Center", "Imaging-Plaza" ↔ "Kanazawa Education
+# Plaza". Such matches are declined so the org flows to the LLM-backed
+# `infer_github_handle_parents` selector instead of being finalised here.
+_GENERIC_ORG_TOKENS: frozenset[str] = frozenset(
+    {
+        "center", "centre", "digital", "plaza", "lab", "labs", "laboratory",
+        "group", "team", "institute", "institut", "department", "dept",
+        "division", "school", "college", "faculty", "unit", "office",
+        "foundation", "the", "of", "for", "and", "in", "at", "an", "on",
+    },
+)
+
+
 def _select_ror_match(
     ror_matches: list[dict[str, Any]],
     *,
@@ -96,13 +112,16 @@ def _select_ror_match(
     ``country_bias`` is an ISO 3166-1 alpha-2 code. When set, the first
     match whose ``country.country_code`` equals the bias is preferred.
 
-    Acceptance gate: the chosen match must also share at least one
-    ≥2-char alphabetic token with ``ror_query`` (via the record's name,
-    aliases, acronyms, or labels). ROR search returns relevance-ranked
-    best-effort matches even for queries that have no real ROR
-    counterpart — e.g. a free-text affiliation string the indexer
-    spuriously bound to a person. Without this check the top hit gets
-    promoted to the graph as a phantom organisation.
+    Acceptance gate: the chosen match must share at least one
+    *distinctive* (non-generic) ≥2-char alphabetic token with
+    ``ror_query`` (via the record's name, aliases, acronyms, or labels).
+    ROR search returns relevance-ranked best-effort matches even for
+    queries that have no real ROR counterpart — e.g. a free-text
+    affiliation string the indexer spuriously bound to a person — and a
+    match resting only on generic org-structure words ("center", "lab",
+    "digital", "plaza", …) is a coincidental collision. Without this
+    check the top hit gets promoted to the graph as a phantom
+    organisation.
 
     Background: ROR's HTTP search returns the most-cited org first for
     a given query. For acronyms that collide across countries (``SDSC``:
@@ -119,7 +138,12 @@ def _select_ror_match(
     def _accepts(record: dict[str, Any]) -> bool:
         if not candidate_tokens:
             return False
-        return bool(_org_record_tokens(record) & candidate_tokens)
+        overlap = _org_record_tokens(record) & candidate_tokens
+        # Require at least one *distinctive* shared token. A match resting
+        # only on generic org-structure words ("center", "lab", "digital",
+        # "plaza", …) is a coincidental collision; declining it leaves
+        # `pulse:ror` null so the agent-backed parent selector decides.
+        return any(token not in _GENERIC_ORG_TOKENS for token in overlap)
 
     if not country_bias:
         top = ror_matches[0]

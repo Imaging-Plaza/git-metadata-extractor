@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
+from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
 from src.v2.api_models import (
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
@@ -1105,9 +1106,19 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # and can refine the unitOf decision; runs before `infer_org_units` so
     # the token-overlap fallback also gets the broader graph.
     stage_started_at = perf_counter()
-    assembled_output, github_parent_warnings = infer_github_handle_parents(
+    # In LLM / hybrid runtimes an LLM agent picks the single correct ROR
+    # parent (or declines) from the fuzzy-search candidates. In rule_based
+    # runtime there is no selector — `infer_github_handle_parents` falls back
+    # to a strict deterministic rule, keeping that mode LLM-free.
+    ror_parent_selector = (
+        RorParentSelectorAgent()
+        if resolved_runtime != AgentRuntime.RULE_BASED
+        else None
+    )
+    assembled_output, github_parent_warnings = await infer_github_handle_parents(
         assembled_output,
         providers=providers,
+        parent_selector=ror_parent_selector,
     )
     logger.info(
         "github_handle_parents: actions=%d in %.2fs",
