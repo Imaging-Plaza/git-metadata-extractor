@@ -88,6 +88,10 @@ scope:
       - chrisfinlay          # Chris Finlay (epfl-radio-astro) — 1 dataset
       - mxxsc                # Oscar Ma (epfl-dlab) — 1 dataset
       - sraimund             # Raimund Schnürer (epfl-dhlab) — 1 dataset
+      # Promoted 2026-05-22 from wider discover-orgs sweep (per-term-limit
+      # 500). API-verified institutional orgs only.
+      - epfl-vita            # EPFL VITA Lab (Alahi) — 1 model, 1 dataset
+      - EPFLiGHT             # EPFL LiGHT Lab (intelligent global health) — 13 models, 1 dataset, 1 space
     switzerland:
       # EPFL block (mirrors `epfl` seed above).
       - epfl-llm
@@ -131,6 +135,9 @@ scope:
       - chrisfinlay
       - mxxsc
       - sraimund
+      # Promoted 2026-05-22 from wider discover-orgs sweep (mirrors `epfl`).
+      - epfl-vita
+      - EPFLiGHT
       # Original ETH + Swiss block.
       - swiss-ai
       - swiss-ai-center
@@ -151,6 +158,9 @@ scope:
       - eth-nlped
       - eth-easl
       - adhd-ethz
+      # Promoted 2026-05-22 from wider discover-orgs sweep (ETH labs).
+      - eth-sri              # ETH SRILab — Secure, Reliable, Intelligent Systems (Vechev) — 16 datasets
+      - disco-eth            # ETH DISCO — Distributed Computing Group (Wattenhofer) — 4 models, 13 datasets
       # Promoted personal user accounts (ETH-affiliated researchers).
       - arahmoun-ethz
       - jayzhang-ethz
@@ -169,6 +179,9 @@ scope:
       - HSLU-AAI             # Hochschule Luzern, Applied AI
       - fhnw                 # FHNW institutional
       - fhnwrover            # FHNW robotics project
+      # Promoted 2026-05-22 from wider discover-orgs sweep (API-verified).
+      - liri-uzh             # UZH Linguistic Research Infrastructure — 1 dataset
+      - irc-hslu             # Hochschule Luzern, Immersive Realities Center — 1 model
       # Promoted 2026-05-01 from extended Swiss probe (ZHAW + SWE-Swiss).
       - ZHAW                 # Zürcher Hochschule für Angewandte Wissenschaften
       - SWE-Swiss            # Swiss SWE benchmark (SWE-Swiss-32B-SFT, SWESwiss-Repair-RL)
@@ -346,6 +359,18 @@ discovery:
       - lcav
       - mlbio
       - sage
+      # CERN-related tokens — CERN straddles the FR/CH border in Meyrin (GE).
+      # HF presence is small but the LHC sub-experiments (ATLAS/CMS/LHCb/
+      # ALICE) all have HF orgs / personal accounts worth surfacing.
+      - cern
+      - meyrin       # CERN's host commune in Geneva canton
+      - atlas        # ATLAS experiment (very noisy — false positives expected)
+      - cms-experiment
+      - lhcb
+      - alice-experiment
+      - openlab      # CERN openlab — public/private partnership
+      - hep          # high-energy physics (noisy, but catches CERN-adjacent)
+      - particle-physics
 
 qdrant:
   # Compose service `gme-qdrant` on the `dev` network. Use the service name
