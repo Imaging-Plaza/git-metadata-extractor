@@ -193,6 +193,12 @@ def persist_record(
         store.upsert_record_creators(record_id, creator_positions)
 
     if communities:
+        # Keep the `communities` master table free of orphan references:
+        # ensure a row exists for every community the record links to.
+        # `ensure_community` is insert-if-absent, so it never overwrites
+        # richer metadata written by the scope bootstrap pass.
+        for cid in communities:
+            store.ensure_community(cid)
         store.upsert_record_communities(record_id, communities)
 
     for file_row in _project_files(record_id, item):
