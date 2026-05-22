@@ -192,6 +192,29 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_backfill_communities(args: argparse.Namespace) -> int:
+    del args
+    store = ZenodoStore.open()
+    try:
+        orphans = [
+            row[0]
+            for row in store.connect()
+            .execute(
+                "SELECT DISTINCT rc.community_id FROM record_communities rc "
+                "LEFT JOIN communities c ON c.community_id = rc.community_id "
+                "WHERE c.community_id IS NULL "
+                "ORDER BY rc.community_id",
+            )
+            .fetchall()
+        ]
+        for community_id in orphans:
+            store.ensure_community(community_id)
+    finally:
+        store.close()
+    _emit_json({"backfilled": len(orphans), "community_ids": orphans})
+    return 0
+
+
 def _cmd_discover(args: argparse.Namespace) -> int:
     if args.source != "infoscience":
         message = f"unknown discovery source: {args.source!r} (only 'infoscience' is supported)"
@@ -327,6 +350,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="Show DuckDB + Qdrant counts and paths")
     p_status.set_defaults(func=_cmd_status)
+
+    p_backfill = sub.add_parser(
+        "backfill-communities",
+        help=(
+            "Insert stub `communities` rows for ids referenced by "
+            "record_communities but missing from the master table"
+        ),
+    )
+    p_backfill.set_defaults(func=_cmd_backfill_communities)
 
     p_serve = sub.add_parser("serve", help="Run the Zenodo FastAPI app")
     p_serve.add_argument("--host", default="0.0.0.0")
