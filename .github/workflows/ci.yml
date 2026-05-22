@@ -55,7 +55,7 @@ jobs:
       - name: Run v1 parity regression tests
         run: |
           mkdir -p .tmp
-          CACHE_DB_PATH=.tmp/cache.db python -m pytest tests/test_cache.py tests/test_orcid_validation_pipeline.py tests/test_v1_parity.py
+          CACHE_DB_PATH=.tmp/cache.db python -m pytest tests/v1/test_cache.py tests/v1/test_orcid_validation_pipeline.py tests/v1/test_v1_parity.py
 
   llm-integration:
     runs-on: ubuntu-latest
