@@ -20,6 +20,8 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from src.utils.github_token_pool import github_auth_headers
+
 from ..data_models import (
     GitHubUserMetadata,
     ORCIDActivities,
@@ -29,7 +31,6 @@ from ..data_models import (
 
 load_dotenv()
 
-GME_GITHUB_TOKEN = os.environ["GME_GITHUB_TOKEN"]
 SELENIUM_REMOTE_URL = os.environ.get("SELENIUM_REMOTE_URL", "http://localhost:4444")
 
 
@@ -37,21 +38,24 @@ class GitHubUsersParser:
     """Parser for GitHub user metadata using REST and GraphQL APIs"""
 
     def __init__(self):
-        """
-        Initialize the parser with optional GitHub token for higher rate limits
-
-        """
-        self.github_token = GME_GITHUB_TOKEN
         self.rest_base_url = "https://api.github.com"
         self.graphql_url = "https://api.github.com/graphql"
-
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "GitHubUsersParser/1.0",
         }
 
-        if self.github_token:
-            self.headers["Authorization"] = f"token {self.github_token}"
+    def _auth_headers(self, extra: dict | None = None) -> dict:
+        """Per-request headers carrying a freshly rotated PAT.
+
+        Rotating per call (not per init) is what lets a multi-PAT
+        deployment actually spread GraphQL load across every token —
+        see issue #56.
+        """
+        merged = dict(self.headers)
+        if extra:
+            merged.update(extra)
+        return github_auth_headers(extra=merged)
 
     def get_user_metadata(
         self,
@@ -140,7 +144,7 @@ class GitHubUsersParser:
         params = {"per_page": limit, "sort": "updated"}
         
         try:
-            response = requests.get(url, headers=self.headers, params=params)
+            response = requests.get(url, headers=self._auth_headers(), params=params)
             
             if response.status_code != 200:
                 print(f"Warning: Failed to fetch repositories for {username}: {response.status_code}")
@@ -881,7 +885,7 @@ class GitHubUsersParser:
     def _get_rest_user_data(self, username: str) -> Dict[str, Any]:
         """Get basic user data from REST API"""
         url = f"{self.rest_base_url}/users/{username}"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code == 404:
             raise ValueError(f"User '{username}' not found")
@@ -912,12 +916,9 @@ class GitHubUsersParser:
 
         payload = {"query": query, "variables": variables}
 
-        headers = self.headers.copy()
-        headers["Content-Type"] = "application/json"
-
         response = requests.post(
             self.graphql_url,
-            headers=headers,
+            headers=self._auth_headers({"Content-Type": "application/json"}),
             data=json.dumps(payload),
         )
 
@@ -951,7 +952,7 @@ class GitHubUsersParser:
     def _get_user_organizations(self, username: str) -> List[str]:
         """Get user's public organizations"""
         url = f"{self.rest_base_url}/users/{username}/orgs"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code != 200:
             return []
@@ -963,7 +964,7 @@ class GitHubUsersParser:
         """Get user's README URL and content if it exists"""
         # Try to get README from API first
         url = f"{self.rest_base_url}/repos/{username}/{username}/readme"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code == 200:
             readme_data = response.json()
@@ -975,7 +976,7 @@ class GitHubUsersParser:
 
         # Try master branch as fallback
         url = f"{self.rest_base_url}/repos/{username}/{username}/contents/README.md"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code == 200:
             readme_data = response.json()

@@ -2,13 +2,14 @@ import ast
 import inspect
 import json
 import logging
-import os
 import re
 from typing import List, Optional, Union, get_args, get_origin
 
 import requests
 from pydantic import BaseModel, HttpUrl, create_model
 from pyld import jsonld
+
+from src.utils.github_token_pool import github_auth_headers
 
 from ..data_models import Affiliation, Person, SoftwareSourceCode
 from ..parsers.users_parser import GitHubUsersParser
@@ -39,14 +40,8 @@ def is_github_repo_public(repo_url: str) -> bool:
     owner, repo = match.groups()
     api_url = f"https://api.github.com/repos/{owner}/{repo}"
 
-    # Use GitHub token if available for higher rate limits
-    headers = {}
-    github_token = os.environ.get("GME_GITHUB_TOKEN")
-    if github_token:
-        headers["Authorization"] = f"token {github_token}"
-
     try:
-        response = requests.get(api_url, headers=headers, timeout=10)
+        response = requests.get(api_url, headers=github_auth_headers(), timeout=10)
 
         if response.status_code == 200:
             repo_data = response.json()

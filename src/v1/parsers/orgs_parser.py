@@ -10,29 +10,35 @@ from typing import Any, Dict, List, Optional
 import requests
 from dotenv import load_dotenv
 
+from src.utils.github_token_pool import github_auth_headers
+
 from ..data_models.organization import GitHubOrganizationMetadata
 
 load_dotenv()
-
-GME_GITHUB_TOKEN = os.environ["GME_GITHUB_TOKEN"]
 
 
 class GitHubOrganizationsParser:
     """Parser for GitHub organization metadata using REST and GraphQL APIs"""
 
     def __init__(self):
-        """Initialize the parser with GitHub token for higher rate limits"""
-        self.github_token = GME_GITHUB_TOKEN
         self.rest_base_url = "https://api.github.com"
         self.graphql_url = "https://api.github.com/graphql"
-
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "GitHubOrganizationsParser/1.0",
         }
 
-        if self.github_token:
-            self.headers["Authorization"] = f"token {self.github_token}"
+    def _auth_headers(self, extra: dict | None = None) -> dict:
+        """Per-request headers carrying a freshly rotated PAT.
+
+        Rotating per call (not per init) is what lets a multi-PAT
+        deployment actually spread GraphQL load across every token —
+        see issue #56.
+        """
+        merged = dict(self.headers)
+        if extra:
+            merged.update(extra)
+        return github_auth_headers(extra=merged)
 
     def get_organization_metadata(
         self,
@@ -116,7 +122,7 @@ class GitHubOrganizationsParser:
     def _get_rest_organization_data(self, org_name: str) -> Dict[str, Any]:
         """Get basic organization data from REST API"""
         url = f"{self.rest_base_url}/orgs/{org_name}"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code == 404:
             raise ValueError(f"Organization '{org_name}' not found")
@@ -161,12 +167,9 @@ class GitHubOrganizationsParser:
 
         payload = {"query": query, "variables": variables}
 
-        headers = self.headers.copy()
-        headers["Content-Type"] = "application/json"
-
         response = requests.post(
             self.graphql_url,
-            headers=headers,
+            headers=self._auth_headers({"Content-Type": "application/json"}),
             data=json.dumps(payload),
         )
 
@@ -224,7 +227,7 @@ class GitHubOrganizationsParser:
     def _get_organization_public_members(self, org_name: str) -> List[str]:
         """Get organization's public members"""
         url = f"{self.rest_base_url}/orgs/{org_name}/public_members"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code != 200:
             return []
@@ -240,7 +243,7 @@ class GitHubOrganizationsParser:
         """Get organization's repositories (limited for performance)"""
         url = f"{self.rest_base_url}/orgs/{org_name}/repos"
         params = {"per_page": limit, "sort": "updated"}
-        response = requests.get(url, headers=self.headers, params=params)
+        response = requests.get(url, headers=self._auth_headers(), params=params)
 
         if response.status_code != 200:
             return []
@@ -251,7 +254,7 @@ class GitHubOrganizationsParser:
     def _get_organization_teams(self, org_name: str) -> List[str]:
         """Get organization's teams (requires organization membership)"""
         url = f"{self.rest_base_url}/orgs/{org_name}/teams"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self._auth_headers())
 
         if response.status_code != 200:
             # This is expected for external users who can't see teams
@@ -270,7 +273,7 @@ class GitHubOrganizationsParser:
             url = (
                 f"{self.rest_base_url}/repos/{org_name}/.github/contents/{readme_path}"
             )
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self._auth_headers())
 
             if response.status_code == 200:
                 readme_data = response.json()
@@ -286,7 +289,7 @@ class GitHubOrganizationsParser:
                 f"{self.rest_base_url}/repos/{org_name}/.github/contents/{readme_path}"
             )
             params = {"ref": "master"}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = requests.get(url, headers=self._auth_headers(), params=params)
 
             if response.status_code == 200:
                 readme_data = response.json()

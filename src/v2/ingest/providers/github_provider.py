@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import base64
-import itertools
 import json
 import logging
 import os
 import re
-import threading
 import time
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import urlparse
 
 import requests
 
+from src.utils.github_token_pool import (
+    github_auth_headers as _github_auth_headers,
+)
+from src.utils.github_token_pool import (
+    next_github_token as _next_github_token,
+)
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.providers.base import (
     GitHubProvider,
@@ -81,49 +85,6 @@ def _is_unicode_decode_error(exc: BaseException) -> bool:
             return True
         current = current.__cause__ or current.__context__
     return False
-
-
-# Per-process round-robin over comma-separated tokens in GME_GITHUB_TOKEN. With
-# multiple gunicorn workers the rotation is independent per worker, which is
-# fine — overall calls split roughly evenly across tokens and the effective
-# rate-limit ceiling is N * 5000/h for N tokens.
-_GME_GITHUB_TOKEN_LOCK = threading.Lock()
-_GME_GITHUB_TOKEN_CYCLE: itertools.cycle | None = None
-_GME_GITHUB_TOKEN_SOURCE: str | None = None
-
-
-def _parse_github_tokens(raw: str) -> list[str]:
-    return [t.strip() for t in raw.split(",") if t.strip()]
-
-
-def _next_github_token() -> str:
-    """Return the next GitHub token (round-robin), or '' if none configured.
-
-    Prefers `GME_GITHUB_TOKEN_POOL` (comma-separated, set by the api startup
-    normalization) over `GME_GITHUB_TOKEN`. Falls back to `GME_GITHUB_TOKEN` when no
-    pool is configured.
-    """
-    global _GME_GITHUB_TOKEN_CYCLE, _GME_GITHUB_TOKEN_SOURCE
-    raw = os.environ.get("GME_GITHUB_TOKEN_POOL", "") or os.environ.get("GME_GITHUB_TOKEN", "")
-    with _GME_GITHUB_TOKEN_LOCK:
-        if raw != _GME_GITHUB_TOKEN_SOURCE or _GME_GITHUB_TOKEN_CYCLE is None:
-            tokens = _parse_github_tokens(raw)
-            _GME_GITHUB_TOKEN_CYCLE = itertools.cycle(tokens) if tokens else None
-            _GME_GITHUB_TOKEN_SOURCE = raw
-        if _GME_GITHUB_TOKEN_CYCLE is None:
-            return ""
-        return next(_GME_GITHUB_TOKEN_CYCLE)
-
-
-def _github_auth_headers(extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Build GitHub request headers with a rotated bearer token."""
-    headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
-    if extra:
-        headers.update(extra)
-    token = _next_github_token()
-    if token:
-        headers["Authorization"] = f"token {token}"
-    return headers
 
 
 _LINK_LAST_PAGE_RE = re.compile(r"[?&]page=(\d+)")
