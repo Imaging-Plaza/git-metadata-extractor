@@ -23,8 +23,10 @@ see the fixes.
 from __future__ import annotations
 
 import calendar
+import contextlib
 import json
 import logging
+import os
 import re
 from http import HTTPStatus
 from typing import Any
@@ -176,6 +178,41 @@ GithubExtractor.list_files = _patched_list_files
 from gimie.project import Project  # noqa: E402  # import after monkeypatches
 
 
+def _first_non_empty_token(raw: str) -> str | None:
+    return next((t.strip() for t in raw.split(",") if t.strip()), None)
+
+
+@contextlib.contextmanager
+def _gimie_legacy_github_token_env():
+    """Force `GITHUB_TOKEN` to a single PAT for the duration of a gimie call.
+
+    `gimie.extractors.github.GithubExtractor` reads `os.environ["GITHUB_TOKEN"]`
+    verbatim and 401s when the value contains commas. The post-rename
+    deployments expose the PAT pool under `GME_GITHUB_TOKEN_POOL` /
+    `GME_GITHUB_TOKEN`, and many local shells still export the legacy
+    `GITHUB_TOKEN` with the same comma-separated string — either way
+    gimie needs to see one entry. Promote whichever source has a value
+    (in order: POOL > GME single > legacy) to a single first token for
+    the call, then restore.
+    """
+    prior = os.environ.get("GITHUB_TOKEN")
+    raw = (
+        os.environ.get("GME_GITHUB_TOKEN_POOL", "")
+        or os.environ.get("GME_GITHUB_TOKEN", "")
+        or os.environ.get("GITHUB_TOKEN", "")
+    )
+    first = _first_non_empty_token(raw)
+    if first:
+        os.environ["GITHUB_TOKEN"] = first
+    try:
+        yield
+    finally:
+        if prior is None:
+            os.environ.pop("GITHUB_TOKEN", None)
+        else:
+            os.environ["GITHUB_TOKEN"] = prior
+
+
 def extract_gimie(full_path: str, serialization_format: str = "json-ld"):
     """
     Extracts the GIMIE project from the given URL.
@@ -189,13 +226,11 @@ def extract_gimie(full_path: str, serialization_format: str = "json-ld"):
     """
     logger.info(f"Extracting GIMIE metadata for: {full_path}")
 
-    proj = Project(full_path)
-
-    # To retrieve the rdflib.Graph object
-    g = proj.extract()
+    with _gimie_legacy_github_token_env():
+        proj = Project(full_path)
+        g = proj.extract()
 
     if serialization_format == "json-ld":
-        # To retrieve the graph in JSON-LD format
         output = json.loads(g.serialize(format="json-ld"))
     else:
         output = g.serialize(format=serialization_format)
