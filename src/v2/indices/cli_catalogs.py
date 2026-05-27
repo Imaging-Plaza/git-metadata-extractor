@@ -213,7 +213,86 @@ async def run_epfl_graph_search(
     )
 
 
+# ---------------------------------------------------------------------------
+# Communities — DuckDB ILIKE across title/description/keywords
+# ---------------------------------------------------------------------------
+# No semantic search infra; this is a tiny 469-row registry where a plain
+# substring scan finishes in milliseconds and is more honest than a vector
+# round-trip would be. Search is title-weighted: title hit > description hit
+# > keywords hit, sum-scored.
+
+
+async def run_communities_search(
+    payload: IndexSearchRequest, app_state: Any,
+) -> IndexSearchResponse | None:
+    del app_state  # we open a fresh read-only handle per request
+    try:
+        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.communities.storage.duckdb_store import (  # noqa: PLC0415
+            CommunitiesStore,
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("communities search: module unavailable — %s", exc)
+        return None
+    db_path = duckdb_path()
+    if not db_path.exists():
+        return IndexSearchResponse(
+            index_name="communities",
+            target=payload.target,
+            query=payload.query,
+            hits=[],
+            extra={"error": "communities.duckdb does not exist"},
+        )
+    pattern = f"%{payload.query}%"
+    sql = (
+        "SELECT "
+        "  community_id, source, source_slug, parent_org, title, description, "
+        "  url, visibility, created_at, updated_at, member_count, record_count, "
+        "  curator_names, keywords, "
+        "  (CASE WHEN title ILIKE ? THEN 3 ELSE 0 END) "
+        " + (CASE WHEN description ILIKE ? THEN 2 ELSE 0 END) "
+        " + (CASE WHEN CAST(keywords AS VARCHAR) ILIKE ? THEN 1 ELSE 0 END) "
+        " AS score "
+        "FROM communities "
+        "WHERE title ILIKE ? OR description ILIKE ? "
+        "   OR CAST(keywords AS VARCHAR) ILIKE ? "
+        "ORDER BY score DESC, title ASC "
+        "LIMIT ?"
+    )
+    store = CommunitiesStore.open(db_path)
+    try:
+        with store.read_only() as conn:
+            rows = conn.execute(
+                sql,
+                [pattern, pattern, pattern, pattern, pattern, pattern, payload.top_k],
+            ).fetchall()
+            cols = [d[0] for d in conn.description]
+    finally:
+        pass  # `read_only()` ctx closes the handle
+    # Pack the row under `payload` so clients read fields from the same
+    # location across every `/v2/indices/<name>/search` route, and promote
+    # `community_id` → `id` + `score` → `vector_score` for `IndexSearchHit`.
+    hits: list[Any] = []
+    for row in rows:
+        record = dict(zip(cols, row, strict=False))
+        score = record.pop("score", None)
+        hit_input: dict[str, Any] = {
+            "id": record.get("community_id", ""),
+            "payload": record,
+        }
+        if score is not None:
+            hit_input["vector_score"] = float(score)
+        hits.append(hit_from_raw(hit_input))
+    return IndexSearchResponse(
+        index_name="communities",
+        target=payload.target,
+        query=payload.query,
+        hits=hits,
+    )
+
+
 __all__ = [
+    "run_communities_search",
     "run_epfl_graph_search",
     "run_infoscience_search",
     "run_ror_search",
