@@ -82,16 +82,42 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
     from src.index.zenodo.iri import record_iri  # noqa: PLC0415
 
     bare_id = str(item.get("id") or item.get("conceptrecid") or "")
+    stats = item.get("stats") if isinstance(item.get("stats"), dict) else {}
+
+    def _int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     return {
         "zenodo_id": record_iri(bare_id) if bare_id else "",
         "concept_recid": str(concept_recid) if concept_recid is not None else None,
         "doi": item.get("doi") or metadata.get("doi"),
+        "concept_doi": item.get("conceptdoi"),
         "title": metadata.get("title"),
         "description": _strip_html(metadata.get("description")),
         "publication_date": _parse_publication_date(metadata.get("publication_date")),
         "resource_type": resource_type,
         "access_right": metadata.get("access_right"),
         "license_id": license_id,
+        "version": metadata.get("version"),
+        "revision": _int(item.get("revision")),
+        # Top-level lifecycle timestamps; the API returns ISO-8601 strings
+        # which DuckDB parses on insert via the column's TIMESTAMP type.
+        "created_at": item.get("created"),
+        "updated_at": item.get("updated"),
+        # Reach metrics. Concept-level totals + this-version-only breakdown.
+        "views": _int(stats.get("views")),
+        "unique_views": _int(stats.get("unique_views")),
+        "downloads": _int(stats.get("downloads")),
+        "unique_downloads": _int(stats.get("unique_downloads")),
+        "version_views": _int(stats.get("version_views")),
+        "version_unique_views": _int(stats.get("version_unique_views")),
+        "version_downloads": _int(stats.get("version_downloads")),
+        "version_unique_downloads": _int(stats.get("version_unique_downloads")),
         "keywords": metadata.get("keywords") or [],
     }
 

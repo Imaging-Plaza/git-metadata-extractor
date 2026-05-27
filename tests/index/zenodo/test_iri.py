@@ -210,6 +210,120 @@ def test_bootstrap_is_idempotent_after_migration(tmp_path: Path):
     conn.close()
 
 
+def test_bootstrap_backfills_stats_and_version_columns(tmp_path: Path):
+    """Pre-PR DB without the new columns + an existing row with `raw` →
+    bootstrap must ALTER the table, run the migration, and backfill every
+    new column from the raw API payload.
+    """
+    db_path = tmp_path / "zenodo.duckdb"
+    # Hand-craft a pre-migration table shape — only the original columns.
+    conn = duckdb.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE records ("
+        "  zenodo_id TEXT PRIMARY KEY, concept_recid TEXT, doi TEXT, "
+        "  title TEXT, description TEXT, publication_date DATE, "
+        "  resource_type TEXT, access_right TEXT, license_id TEXT, "
+        "  keywords_json JSON, community_ids JSON, primary_community_id TEXT, "
+        "  raw JSON, ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        ")",
+    )
+    raw_payload = {
+        "id": "18314844",
+        "conceptrecid": "18314843",
+        "conceptdoi": "10.5281/zenodo.18314843",
+        "doi": "10.5281/zenodo.18314844",
+        "revision": 5,
+        "created": "2024-01-15T10:30:00+00:00",
+        "updated": "2026-02-20T09:00:00+00:00",
+        "metadata": {"title": "Test", "version": "v2.1"},
+        "stats": {
+            "views": 4242,
+            "unique_views": 3000,
+            "downloads": 128,
+            "unique_downloads": 100,
+            "version_views": 1000,
+            "version_unique_views": 750,
+            "version_downloads": 30,
+            "version_unique_downloads": 28,
+        },
+    }
+    conn.execute(
+        "INSERT INTO records (zenodo_id, concept_recid, doi, title, raw) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ["18314844", "18314843", "10.5281/zenodo.18314844", "Test",
+         json.dumps(raw_payload)],
+    )
+    # The other tables required for the link-table migration to no-op.
+    conn.execute(
+        "CREATE TABLE communities (community_id TEXT PRIMARY KEY, title TEXT, "
+        "raw JSON, ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    )
+    conn.execute(
+        "CREATE TABLE record_creators (record_id TEXT, creator_key TEXT, "
+        "position INTEGER, PRIMARY KEY (record_id, creator_key))",
+    )
+    conn.execute(
+        "CREATE TABLE record_communities (record_id TEXT, community_id TEXT, "
+        "PRIMARY KEY (record_id, community_id))",
+    )
+    conn.execute(
+        "CREATE TABLE files (record_id TEXT, file_key TEXT, file_id TEXT, "
+        "size_bytes BIGINT, checksum TEXT, download_url TEXT, "
+        "PRIMARY KEY (record_id, file_key))",
+    )
+    conn.execute(
+        "CREATE TABLE creators (creator_key TEXT PRIMARY KEY, "
+        "display_name TEXT, orcid TEXT, affiliation TEXT, raw JSON, "
+        "ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    )
+    conn.execute(
+        "CREATE TABLE chunks (chunk_id TEXT PRIMARY KEY, entity_type TEXT, "
+        "entity_id TEXT, chunk_index INTEGER, text TEXT, token_count INTEGER, "
+        "vector_id TEXT, embedded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    )
+    conn.close()
+
+    store = ZenodoStore(db_path)
+    store.bootstrap()
+    conn = store.connect()
+
+    new_cols = [r[1] for r in conn.execute("PRAGMA table_info('records')").fetchall()]
+    for expected in (
+        "concept_doi", "version", "revision", "created_at", "updated_at",
+        "views", "unique_views", "downloads", "unique_downloads",
+        "version_views", "version_unique_views",
+        "version_downloads", "version_unique_downloads",
+    ):
+        assert expected in new_cols, f"new column {expected!r} missing"
+
+    row = conn.execute(
+        "SELECT concept_doi, version, revision, "
+        "       views, unique_views, downloads, unique_downloads, "
+        "       version_views, version_unique_views, "
+        "       version_downloads, version_unique_downloads, "
+        "       created_at, updated_at "
+        "FROM records WHERE zenodo_id = 'https://zenodo.org/records/18314844'",
+    ).fetchone()
+    (concept_doi, version, revision,
+     views, unique_views, downloads, unique_downloads,
+     ver_views, ver_unique_views, ver_downloads, ver_unique_downloads,
+     created_at, updated_at) = row
+    assert concept_doi == "10.5281/zenodo.18314843"
+    assert version == "v2.1"
+    assert revision == 5
+    assert views == 4242
+    assert unique_views == 3000
+    assert downloads == 128
+    assert unique_downloads == 100
+    assert ver_views == 1000
+    assert ver_unique_views == 750
+    assert ver_downloads == 30
+    assert ver_unique_downloads == 28
+    assert created_at.isoformat().startswith("2024-01-15T10:30")
+    assert updated_at.isoformat().startswith("2026-02-20T09:00")
+    store.close()
+
+
 def test_existing_record_ids_handles_iri_form(tmp_path: Path):
     """`existing_record_ids([bare])` should still return bare for downstream diffing."""
     db_path = tmp_path / "zenodo.duckdb"
