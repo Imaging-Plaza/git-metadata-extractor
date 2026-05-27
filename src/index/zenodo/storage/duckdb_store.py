@@ -75,6 +75,70 @@ class ZenodoStore:
                     "WHERE raw IS NOT NULL "
                     "  AND json_extract_string(raw, '$.conceptrecid') IS NOT NULL",
                 )
+            # Stats + version + timestamp columns. Added in the
+            # `feat/zenodo-stats-and-version-columns` PR; existing DBs
+            # need to ALTER TABLE before the CREATE TABLE IF NOT EXISTS
+            # in schema.sql (a no-op since the table already exists)
+            # can pick them up. Backfill from `raw` for any pre-existing
+            # rows whose new column is still NULL.
+            _ADDED_RECORD_COLUMNS: tuple[tuple[str, str, str], ...] = (
+                # (column, DDL type, JSONPath into `raw` for backfill)
+                ("concept_doi", "TEXT", "$.conceptdoi"),
+                ("version", "TEXT", "$.metadata.version"),
+                ("revision", "INTEGER", "$.revision"),
+                ("created_at", "TIMESTAMP", "$.created"),
+                ("updated_at", "TIMESTAMP", "$.updated"),
+                ("views", "BIGINT", "$.stats.views"),
+                ("unique_views", "BIGINT", "$.stats.unique_views"),
+                ("downloads", "BIGINT", "$.stats.downloads"),
+                ("unique_downloads", "BIGINT", "$.stats.unique_downloads"),
+                ("version_views", "BIGINT", "$.stats.version_views"),
+                (
+                    "version_unique_views",
+                    "BIGINT",
+                    "$.stats.version_unique_views",
+                ),
+                (
+                    "version_downloads",
+                    "BIGINT",
+                    "$.stats.version_downloads",
+                ),
+                (
+                    "version_unique_downloads",
+                    "BIGINT",
+                    "$.stats.version_unique_downloads",
+                ),
+            )
+            for col, ddl_type, json_path in _ADDED_RECORD_COLUMNS:
+                if col in cols:
+                    continue
+                conn.execute(f"ALTER TABLE records ADD COLUMN {col} {ddl_type}")
+                # Backfill from `raw`. Cast appropriately by type — DuckDB
+                # accepts TEXT for json_extract_string + autocoerces from
+                # string for the BIGINT / TIMESTAMP cases.
+                if ddl_type == "TEXT":
+                    cast_expr = (
+                        f"CAST(json_extract_string(raw, '{json_path}') AS TEXT)"
+                    )
+                elif ddl_type == "INTEGER":
+                    cast_expr = (
+                        f"TRY_CAST(json_extract_string(raw, '{json_path}') AS INTEGER)"
+                    )
+                elif ddl_type == "BIGINT":
+                    cast_expr = (
+                        f"TRY_CAST(json_extract_string(raw, '{json_path}') AS BIGINT)"
+                    )
+                elif ddl_type == "TIMESTAMP":
+                    cast_expr = (
+                        f"TRY_CAST(json_extract_string(raw, '{json_path}') AS TIMESTAMP)"
+                    )
+                else:
+                    cast_expr = f"json_extract_string(raw, '{json_path}')"
+                conn.execute(
+                    f"UPDATE records SET {col} = {cast_expr} "
+                    "WHERE raw IS NOT NULL AND "
+                    f"     json_extract_string(raw, '{json_path}') IS NOT NULL",
+                )
         conn.execute(_load_schema_sql())
         # IRI migration for the link tables — see the note at the
         # bottom of schema.sql. UPDATE on indexed bulk columns has
@@ -239,18 +303,33 @@ class ZenodoStore:
             community_ids = []
         sql = (
             "INSERT INTO records "
-            "(zenodo_id, concept_recid, doi, title, description, publication_date, "
-            " resource_type, access_right, license_id, keywords_json, "
+            "(zenodo_id, concept_recid, doi, concept_doi, title, description, "
+            " publication_date, resource_type, access_right, license_id, "
+            " version, revision, created_at, updated_at, "
+            " views, unique_views, downloads, unique_downloads, "
+            " version_views, version_unique_views, version_downloads, "
+            " version_unique_downloads, keywords_json, "
             " community_ids, primary_community_id, raw, ingested_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+            "        ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (zenodo_id) DO UPDATE SET "
             "  concept_recid = excluded.concept_recid, "
-            "  doi = excluded.doi, title = excluded.title, "
-            "  description = excluded.description, "
+            "  doi = excluded.doi, concept_doi = excluded.concept_doi, "
+            "  title = excluded.title, description = excluded.description, "
             "  publication_date = excluded.publication_date, "
             "  resource_type = excluded.resource_type, "
             "  access_right = excluded.access_right, "
             "  license_id = excluded.license_id, "
+            "  version = excluded.version, revision = excluded.revision, "
+            "  created_at = excluded.created_at, "
+            "  updated_at = excluded.updated_at, "
+            "  views = excluded.views, unique_views = excluded.unique_views, "
+            "  downloads = excluded.downloads, "
+            "  unique_downloads = excluded.unique_downloads, "
+            "  version_views = excluded.version_views, "
+            "  version_unique_views = excluded.version_unique_views, "
+            "  version_downloads = excluded.version_downloads, "
+            "  version_unique_downloads = excluded.version_unique_downloads, "
             "  keywords_json = excluded.keywords_json, "
             "  community_ids = excluded.community_ids, "
             "  primary_community_id = COALESCE("
@@ -263,12 +342,25 @@ class ZenodoStore:
                 row["zenodo_id"],
                 row.get("concept_recid"),
                 row.get("doi"),
+                row.get("concept_doi"),
                 row.get("title"),
                 row.get("description"),
                 row.get("publication_date"),
                 row.get("resource_type"),
                 row.get("access_right"),
                 row.get("license_id"),
+                row.get("version"),
+                row.get("revision"),
+                row.get("created_at"),
+                row.get("updated_at"),
+                row.get("views"),
+                row.get("unique_views"),
+                row.get("downloads"),
+                row.get("unique_downloads"),
+                row.get("version_views"),
+                row.get("version_unique_views"),
+                row.get("version_downloads"),
+                row.get("version_unique_downloads"),
                 json.dumps(row.get("keywords") or [], ensure_ascii=False),
                 json.dumps(community_ids, ensure_ascii=False),
                 row.get("primary_community_id"),
