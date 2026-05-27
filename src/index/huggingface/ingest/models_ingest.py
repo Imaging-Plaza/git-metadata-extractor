@@ -97,11 +97,16 @@ def ingest_models(
 
 
 def _model_row(repo_id: str, info: object) -> dict[str, object | None]:
+    from src.index.huggingface.iri import model_iri, namespace_iri  # noqa: PLC0415
+
     card_data = card_data_to_dict(getattr(info, "card_data", None) or getattr(info, "cardData", None))
     tags = list(getattr(info, "tags", None) or [])
+    bare_author = (
+        getattr(info, "author", None) or author_from_repo_id(repo_id)
+    )
     return {
-        "repo_id": repo_id,
-        "author": getattr(info, "author", None) or author_from_repo_id(repo_id),
+        "repo_id": model_iri(repo_id),
+        "author": namespace_iri(bare_author) if bare_author else None,
         "sha": getattr(info, "sha", None),
         "pipeline_tag": getattr(info, "pipeline_tag", None),
         "library_name": getattr(info, "library_name", None),
