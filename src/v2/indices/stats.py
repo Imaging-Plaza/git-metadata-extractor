@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     import duckdb
 
 INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
+    # Providers that already have a v2 ingest/search surface and a
+    # long-lived `get_or_create_<provider>_resources()` cache on `app_state`.
     "zenodo",
     "github",
     "huggingface",
@@ -35,6 +37,14 @@ INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     "swissubase",
     "ethz_research_collection",
     "oamonitor",
+    # CLI-managed catalogs (no v2 ingest/search route). We open their
+    # DuckDB on demand and cache on `app_state.v2_<provider>_store` so
+    # subsequent stats polls reuse the open connection.
+    "ror",
+    "infoscience",
+    "snsf",
+    "epfl_graph",
+    "communities",
 )
 
 # Common "this row was last touched" column names, in priority order.
@@ -211,7 +221,95 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
             return DuckDBStore.open()
         except Exception:  # noqa: BLE001 — config / disk issues
             return None
+
+    # CLI-managed catalogs: no v2 ingest/search route → no
+    # `get_or_create_*_resources` helper. Open once, cache on `app_state`.
+    if provider == "ror":
+        return _cli_store(
+            app_state, "v2_ror_store",
+            "src.index.ror.storage.duckdb_store", "DuckDBStore",
+        )
+    if provider == "infoscience":
+        return _cli_store(
+            app_state, "v2_infoscience_store",
+            "src.index.infoscience.storage.duckdb_store", "DuckDBStore",
+        )
+    if provider == "snsf":
+        return _cli_store(
+            app_state, "v2_snsf_store",
+            "src.index.snsf.storage.duckdb_store", "DuckDBStore",
+        )
+    if provider == "epfl_graph":
+        return _cli_store(
+            app_state, "v2_epfl_graph_store",
+            "src.index.epfl_graph.storage.duckdb_store", "EpflGraphStore",
+        )
+    if provider == "communities":
+        return _open_communities_store(app_state)
     return None
+
+
+def _cli_store(
+    app_state: Any, attr: str, module: str, class_name: str,
+) -> Any | None:
+    """Lazy-open a CLI-managed Store and cache it on `app_state.<attr>`."""
+    cached = getattr(app_state, attr, None)
+    if cached is not None:
+        return cached
+    try:
+        mod = __import__(module, fromlist=[class_name])
+        store_cls = getattr(mod, class_name)
+    except Exception:  # noqa: BLE001 — optional dependency missing
+        return None
+    try:
+        store = store_cls.open()
+    except Exception:  # noqa: BLE001 — config / disk error
+        return None
+    try:
+        setattr(app_state, attr, store)
+    except Exception:  # noqa: BLE001 — app_state may be frozen in tests
+        return store
+    return store
+
+
+def _open_communities_store(app_state: Any) -> Any | None:
+    """`CommunitiesStore` lacks `.connect()` (uses `_connect()` + `read_only()`),
+    so the stats endpoint can't call it directly. Wrap it in a tiny shim that
+    exposes a cached read-only handle as `.connect()`.
+    """
+    cached = getattr(app_state, "v2_communities_store", None)
+    if cached is not None:
+        return cached
+    try:
+        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        import duckdb as _duckdb  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return None
+
+    class _CommunitiesStoreShim:
+        def __init__(self, path: Any) -> None:
+            self.db_path = path  # surfaced for compact_duckdb()
+            self._conn: Any = None
+
+        def connect(self) -> Any:
+            if self._conn is None:
+                self._conn = _duckdb.connect(str(self.db_path), read_only=True)
+            return self._conn
+
+        def close(self) -> None:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+
+    try:
+        shim = _CommunitiesStoreShim(duckdb_path())
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        setattr(app_state, "v2_communities_store", shim)
+    except Exception:  # noqa: BLE001
+        return shim
+    return shim
 
 
 __all__ = [
