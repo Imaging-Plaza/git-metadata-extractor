@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
@@ -69,6 +70,7 @@ from src.v2.indices.oamonitor import (
 from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
 from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
 from src.v2.indices.cli_catalogs import (
+    run_communities_search,
     run_epfl_graph_search,
     run_infoscience_search,
     run_ror_search,
@@ -81,6 +83,7 @@ from src.v2.indices.compact import (
 )
 from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
 from src.v2.indices.stats import (
+    INDEX_STATS_SUPPORTED_PROVIDERS,
     IndexStatsResponse,
     UnknownIndexProviderError,
     collect_index_stats,
@@ -2511,6 +2514,110 @@ async def epfl_graph_search_post(
     return await _search_response_or_unavailable(
         await run_epfl_graph_search(payload, request.app.state),
         index_name="epfl_graph",
+    )
+
+
+@v2_router.post(
+    "/indices/communities/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def communities_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Lexical (ILIKE) search against the institutional communities registry.
+
+    No semantic infrastructure — communities is a tiny 469-row DuckDB-only
+    registry where substring scans across `title` / `description` /
+    `keywords` finish in milliseconds. Title hits outrank description
+    hits outrank keyword hits.
+    """
+    return await _search_response_or_unavailable(
+        await run_communities_search(payload, request.app.state),
+        index_name="communities",
+    )
+
+
+# --- /v2/indices/freshness ------------------------------------------------
+# Single roll-up over every supported catalog's `last_updated` for the Hub
+# Overview / monitoring. One round-trip instead of 14 separate stats calls.
+
+
+class _CatalogFreshness(BaseModel):
+    provider: str
+    count: int
+    last_updated: datetime | None = None
+    age_seconds: float | None = Field(
+        default=None,
+        description=(
+            "Seconds since `last_updated`. `null` when the catalog is empty "
+            "or has no timestamp-like column to read from."
+        ),
+    )
+
+
+class _FreshnessResponse(BaseModel):
+    as_of: datetime
+    catalogs: list[_CatalogFreshness]
+    oldest_provider: str | None = None
+    oldest_age_seconds: float | None = None
+
+
+@v2_router.get(
+    "/indices/freshness",
+    response_model=_FreshnessResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def index_freshness_get(
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> _FreshnessResponse:
+    """Aggregate `last_updated` across every supported catalog.
+
+    Returns one row per provider plus the `oldest_provider` / `oldest_age_seconds`
+    convenience fields that Open Pulse Hub can alert on directly. Providers
+    whose resources are unavailable on this deployment surface with
+    `count=0, last_updated=null` so the response shape is uniform.
+    """
+    now = datetime.now(timezone.utc)
+
+    def _one(provider: str) -> _CatalogFreshness:
+        try:
+            store = fetch_store_for_stats(provider, request.app.state)
+        except UnknownIndexProviderError:
+            return _CatalogFreshness(provider=provider, count=0)
+        if store is None:
+            return _CatalogFreshness(provider=provider, count=0)
+        try:
+            stats = collect_index_stats(provider, store.connect())
+        except Exception:  # noqa: BLE001 — keep the roll-up resilient
+            logger.exception("index freshness: %s collect failed", provider)
+            return _CatalogFreshness(provider=provider, count=0)
+        if stats.last_updated is None:
+            return _CatalogFreshness(provider=provider, count=stats.count)
+        # Both sides timezone-aware (collect_index_stats normalises to UTC).
+        age = (now - stats.last_updated).total_seconds()
+        return _CatalogFreshness(
+            provider=provider,
+            count=stats.count,
+            last_updated=stats.last_updated,
+            age_seconds=age,
+        )
+
+    catalogs = await asyncio.to_thread(
+        lambda: [_one(p) for p in INDEX_STATS_SUPPORTED_PROVIDERS],
+    )
+    aged = [c for c in catalogs if c.age_seconds is not None]
+    oldest = max(aged, key=lambda c: c.age_seconds) if aged else None
+    return _FreshnessResponse(
+        as_of=now,
+        catalogs=catalogs,
+        oldest_provider=oldest.provider if oldest else None,
+        oldest_age_seconds=oldest.age_seconds if oldest else None,
     )
 
 
