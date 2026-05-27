@@ -89,7 +89,12 @@ def ingest_datasets(
 
 
 def _dataset_row(repo_id: str, info: object) -> dict[str, object | None]:
-    from src.index.huggingface.iri import dataset_iri, namespace_iri  # noqa: PLC0415
+    from src.index.huggingface.iri import (  # noqa: PLC0415
+        dataset_iri,
+        dois_from_bibtex,
+        namespace_iri,
+        paperswithcode_url,
+    )
 
     card_data = card_data_to_dict(getattr(info, "card_data", None) or getattr(info, "cardData", None))
     tags = list(getattr(info, "tags", None) or [])
@@ -97,9 +102,18 @@ def _dataset_row(repo_id: str, info: object) -> dict[str, object | None]:
     bare_author = (
         getattr(info, "author", None) or author_from_repo_id(repo_id)
     )
+    citation_text = getattr(info, "citation", None)
+    if not isinstance(citation_text, str):
+        citation_text = None
+    pwc_id = getattr(info, "paperswithcode_id", None) or getattr(
+        info, "paperswithcodeId", None,
+    )
     return {
         "repo_id": dataset_iri(repo_id),
         "author": namespace_iri(bare_author) if bare_author else None,
+        "citation_text": citation_text,
+        "paperswithcode_url": paperswithcode_url(pwc_id),
+        "citation_dois": dois_from_bibtex(citation_text),
         "sha": getattr(info, "sha", None),
         "license": _license_from(card_data, getattr(info, "license", None)),
         "downloads": _coerce_int(getattr(info, "downloads", None)),
