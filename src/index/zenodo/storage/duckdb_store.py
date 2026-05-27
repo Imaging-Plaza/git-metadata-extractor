@@ -260,16 +260,28 @@ class ZenodoStore:
             *, table: str, columns: list[tuple[str, str]],
             select: str, primary_key: tuple[str, ...] | None = None,
         ) -> None:
-            """Rewrite `table` via CREATE TABLE _new + INSERT + DROP + RENAME."""
+            """Rewrite `table` via CREATE TABLE _new + INSERT + DROP + RENAME.
+
+            All four statements run inside a single transaction so a
+            crash between DROP and RENAME doesn't leave the original
+            table deleted with the replacement still under its temp
+            name. Rollback restores the pre-migration state in full.
+            """
             new_table = f"{table}__iri_migrate"
             conn.execute(f"DROP TABLE IF EXISTS {new_table}")
             col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns)
             if primary_key:
                 col_defs += f", PRIMARY KEY ({', '.join(primary_key)})"
-            conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
-            conn.execute(f"INSERT INTO {new_table} {select}")
-            conn.execute(f"DROP TABLE {table}")
-            conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+            conn.execute("BEGIN TRANSACTION")
+            try:
+                conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
+                conn.execute(f"INSERT INTO {new_table} {select}")
+                conn.execute(f"DROP TABLE {table}")
+                conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
 
         if _has_bare("record_creators", "record_id"):
             _ctas_swap(

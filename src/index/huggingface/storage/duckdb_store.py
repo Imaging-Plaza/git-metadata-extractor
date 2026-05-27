@@ -185,15 +185,31 @@ class DuckDBStore:
             *, table: str, columns: list[tuple[str, str]], select: str,
             primary_key: tuple[str, ...] | None = None,
         ) -> None:
+            # The DROP-old / RENAME-new sequence is only atomic when
+            # wrapped in a transaction. Without BEGIN/COMMIT, a crash
+            # between the two statements leaves the database in a state
+            # where the original table has been deleted but the
+            # replacement is still under its temp name — the migration
+            # has to be hand-recovered from the WAL. The transient
+            # working table (CREATE + INSERT) doesn't need the
+            # transaction, but a single span keeps the rollback
+            # surface simple: any failure restores the pre-migration
+            # state in full.
             new_table = f"{table}__iri_migrate"
             conn.execute(f"DROP TABLE IF EXISTS {new_table}")
             col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns)
             if primary_key:
                 col_defs += f", PRIMARY KEY ({', '.join(primary_key)})"
-            conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
-            conn.execute(f"INSERT INTO {new_table} {select}")
-            conn.execute(f"DROP TABLE {table}")
-            conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+            conn.execute("BEGIN TRANSACTION")
+            try:
+                conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
+                conn.execute(f"INSERT INTO {new_table} {select}")
+                conn.execute(f"DROP TABLE {table}")
+                conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
 
         # --- orgs.slug (PK) → IRI -------------------------------------
         if _table_has_bare("orgs", "slug"):

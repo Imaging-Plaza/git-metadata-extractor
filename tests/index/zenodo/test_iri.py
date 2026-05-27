@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import pytest
@@ -166,6 +167,87 @@ def test_bootstrap_migrates_dois_to_url_form(tmp_path: Path):
     assert rows["https://zenodo.org/records/A"][1] == "https://doi.org/10.5281/zenodo.X"
     assert rows["https://zenodo.org/records/B"][1] is None
     store.close()
+
+
+def test_ctas_swap_failure_after_drop_rolls_back_original_table(tmp_path: Path):
+    """Regression for the atomicity hole in `_ctas_swap`.
+
+    The original failure mode was: DROP TABLE <orig> succeeded, then
+    the process crashed before ALTER TABLE <new> RENAME TO <orig>
+    could run. That left the database with the original table gone
+    and the replacement still under its `__iri_migrate` shadow name —
+    unrecoverable without hand-editing the WAL.
+
+    The transaction wrap closes this by holding both statements (plus
+    the preceding CREATE / INSERT) under one BEGIN/COMMIT. To exhibit
+    the failure mode that *needs* the wrap (a failure AFTER the DROP),
+    we have to inject the crash there — DuckDB on its own won't naturally
+    fail at the RENAME stage. The test monkey-patches the connection's
+    `execute` so the ALTER RENAME raises, then asserts that the original
+    table is fully restored after bootstrap unwinds.
+    """
+    db_path = tmp_path / "zenodo.duckdb"
+    conn = duckdb.connect(str(db_path))
+    schema = (
+        Path(__file__).resolve().parents[3]
+        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+    ).read_text(encoding="utf-8")
+    conn.execute(schema)
+    # Plant a bare-id row so `_table_has_bare` returns True and the
+    # migration actually runs against this table.
+    conn.execute(
+        "INSERT INTO record_creators (record_id, creator_key, position) VALUES "
+        "  ('foo', 'alice', 0),"
+        "  ('bar', 'bob',   1)",
+    )
+    pre_rows = sorted(
+        conn.execute(
+            "SELECT record_id, creator_key, position FROM record_creators ORDER BY position",
+        ).fetchall(),
+    )
+    assert len(pre_rows) == 2
+    conn.close()
+
+    store = ZenodoStore(db_path)
+    real_connect = store.connect
+
+    class _CrashingConn:
+        """Pass through every call except the RENAME, which raises.
+        Mimics a process death between DROP and RENAME."""
+
+        def __init__(self, inner: Any) -> None:  # noqa: ANN401
+            self._inner = inner
+
+        def execute(self, sql: str, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+            if "ALTER TABLE" in sql and "RENAME TO record_creators" in sql:
+                msg = "simulated crash between DROP and RENAME"
+                raise RuntimeError(msg)
+            return self._inner.execute(sql, *args, **kwargs)
+
+        def __getattr__(self, name: str) -> Any:  # noqa: ANN401
+            return getattr(self._inner, name)
+
+    inner = real_connect()
+    store.connect = lambda: _CrashingConn(inner)  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        store.bootstrap()
+
+    # The bootstrap aborted mid-migration, but the transaction wrap
+    # should have rolled back: original `record_creators` survives,
+    # rows intact, no orphan shadow table.
+    surviving = sorted(
+        inner.execute(
+            "SELECT record_id, creator_key, position FROM record_creators ORDER BY position",
+        ).fetchall(),
+    )
+    assert surviving == pre_rows
+    orphan = inner.execute(
+        "SELECT table_name FROM duckdb_tables() "
+        "WHERE table_name = 'record_creators__iri_migrate'",
+    ).fetchone()
+    assert orphan is None, "rollback should have removed the shadow table too"
+    inner.close()
 
 
 def test_doi_migration_is_idempotent(tmp_path: Path):
