@@ -69,6 +69,12 @@ from src.v2.indices.oamonitor import (
 from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
 from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
 from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
+from src.v2.indices.stats import (
+    IndexStatsResponse,
+    UnknownIndexProviderError,
+    collect_index_stats,
+    fetch_store_for_stats,
+)
 from src.v2.indices.swissubase import (
     run_swissubase_ingest_job,
     run_swissubase_search,
@@ -2363,6 +2369,55 @@ async def oamonitor_search_post(
         await run_oamonitor_search(payload, request.app.state),
         index_name="oamonitor",
     )
+
+
+@v2_router.get(
+    "/indices/{provider}/stats",
+    response_model=IndexStatsResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def index_stats_get(
+    provider: Annotated[str, Path(description="One of the supported index providers.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexStatsResponse | JSONResponse:
+    """Read-only catalog stats: total rows + per-table breakdown + last_updated.
+
+    External consumers (Open Pulse Hub Overview, dashboards) used to poll
+    each `.duckdb` file with `duckdb.connect(path, read_only=True)`. That
+    fails as soon as the GME holds a write connection (auto-ingest et al)
+    because DuckDB's advisory lock is per-process. This endpoint runs the
+    same `SELECT COUNT(*)` queries on the GME's already-open connection,
+    so the file lock is never contested.
+    """
+
+    try:
+        store = fetch_store_for_stats(provider, request.app.state)
+    except UnknownIndexProviderError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+    if store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": f"{provider} index resources unavailable on this deployment",
+            },
+        )
+
+    try:
+        stats = await asyncio.to_thread(
+            collect_index_stats, provider, store.connect(),
+        )
+    except Exception as exc:  # noqa: BLE001 — surface as 503 + log
+        logger.exception("index stats query failed: provider=%s", provider)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": f"stats query failed: {exc}"},
+        )
+    return stats
 
 
 @v2_router.get(
