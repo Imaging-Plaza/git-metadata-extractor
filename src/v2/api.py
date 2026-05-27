@@ -128,6 +128,7 @@ from src.v2.pipeline.stages import (
     run_llm_dedup_stage,
     run_org_relationships_stage,
     run_refine_with_llm_stage,
+    run_resolve_bio_to_ror_llm_stage,
     run_resolve_bio_to_ror_stage,
     run_resolve_company_to_ror_stage,
     validate_articles,
@@ -201,6 +202,7 @@ STAGE_LINK_VERACITY = "link_veracity"
 STAGE_REFINE_WITH_LLM = "refine_with_llm"
 STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
 STAGE_RESOLVE_BIO_TO_ROR = "resolve_bio_to_ror"
+STAGE_RESOLVE_BIO_TO_ROR_LLM = "resolve_bio_to_ror_llm"
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -275,6 +277,23 @@ def _resolve_bio_to_ror_enabled() -> bool:
     backfill wants the structured-field-only behaviour.
     """
     raw = os.getenv("V2_RESOLVE_BIO_TO_ROR")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
+
+
+def _resolve_bio_to_ror_llm_enabled() -> bool:
+    """Read `V2_RESOLVE_BIO_TO_ROR_LLM` env var (default true).
+
+    When true (the default) AND the request runs under the LLM / hybrid
+    runtime, the LLM bio resolver runs after `resolve_bio_to_ror` and
+    spends one LLM call per still-unaffiliated person to resolve
+    affiliations that only surface in prose (long profile READMEs,
+    bios without a clean `at X` shape). Gated by runtime as well as
+    this flag — under the rule-based runtime it never runs even when
+    true.
+    """
+    raw = os.getenv("V2_RESOLVE_BIO_TO_ROR_LLM")
     if raw is None:
         return True
     return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
@@ -855,6 +874,42 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             _append_unique_warning(
                 warnings,
                 f"resolve_bio_to_ror stage failed: {exc}",
+            )
+
+    # === resolve_bio_to_ror_llm stage (LLM / hybrid only) =========
+    # One LLM call per person STILL missing `schema:affiliation` after
+    # Stage A. Costly enough that it's gated behind the LLM runtime —
+    # under rule-based it never runs even when the flag is on. The
+    # caller-side acceptance gate (confidence >= 0.7, verbatim quote
+    # in `reason`) matches the system prompt; the agent additionally
+    # blanks out the ROR field below that floor before the patch
+    # reaches this stage.
+    if (
+        resolved_runtime in (AgentRuntime.LLM, AgentRuntime.HYBRID)
+        and _resolve_bio_to_ror_llm_enabled()
+    ):
+        stage_started_at = perf_counter()
+        try:
+            bio_llm_result = await run_resolve_bio_to_ror_llm_stage(
+                reconciled=reconciled,
+                provider=getattr(providers, "ror_rag", None),
+            )
+            logger.info(
+                "%s: persons_examined=%d called=%d resolved=%d failed=%d in %.2fs",
+                STAGE_RESOLVE_BIO_TO_ROR_LLM,
+                bio_llm_result.persons_examined,
+                bio_llm_result.persons_called,
+                bio_llm_result.persons_resolved,
+                bio_llm_result.persons_failed,
+                perf_counter() - stage_started_at,
+            )
+            for warning in bio_llm_result.warnings:
+                _append_unique_warning(warnings, warning)
+        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+            logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR_LLM)
+            _append_unique_warning(
+                warnings,
+                f"resolve_bio_to_ror_llm stage failed: {exc}",
             )
 
     apply_critic_pruning = _should_apply_critic_pruning()

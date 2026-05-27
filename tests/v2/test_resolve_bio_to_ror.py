@@ -28,9 +28,11 @@ from src.v2.pipeline.stages.resolve_bio_to_ror import (
     BIO_KEYS,
     BLOG_KEYS,
     DOMAIN_HINTS,
+    EMAIL_KEYS,
     ORCID_BIO_KEYS,
     BioAffiliationResult,
     _blog_to_query,
+    _email_to_query,
     _extract_bio_candidates,
     run_resolve_bio_to_ror_stage,
 )
@@ -106,6 +108,25 @@ def test_blog_to_query_returns_none_on_blank_or_garbage():
     assert _blog_to_query("not a url") is None
 
 
+def test_email_to_query_resolves_hashed_local_part():
+    """`_anonymize_email` writes `<sha256_prefix>@<domain>` to `_email`
+    — the local part is hashed for PII, but the domain stays intact.
+    We resolve purely off the domain."""
+    assert _email_to_query("deadbeefcafe@epfl.ch") == "EPFL"
+    assert _email_to_query("abc123@mit.edu") == "Massachusetts Institute of Technology"
+
+
+def test_email_to_query_walks_subdomains():
+    assert _email_to_query("x@research.google.com") == "Google"
+
+
+def test_email_to_query_returns_none_on_unknown_or_garbage():
+    assert _email_to_query(None) is None
+    assert _email_to_query("") is None
+    assert _email_to_query("not-an-email") is None
+    assert _email_to_query("x@personal.example") is None
+
+
 def test_domain_hints_keys_are_lowercase():
     """Hostnames from urlparse are lowercased, so the lookup table
     must match — otherwise a perfectly good entry silently misses."""
@@ -174,6 +195,49 @@ def test_stage_resolves_from_orcid_bio():
         entities={
             "persons": [
                 {"id": "p1", "_orcid_biography": "Postdoc at EPFL since 2022."},
+            ],
+        },
+    )
+    provider = _StubProvider(
+        hits={
+            "EPFL": [
+                {"score": 0.95, "types": ["education"], "name": "EPFL", "ror_id": "https://ror.org/02s376052"},
+                {"score": 0.40, "types": ["education"], "name": "Other"},
+            ],
+        },
+    )
+    _run(reconciled, provider)
+    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+
+
+def test_stage_resolves_from_anonymized_email_domain():
+    """`_email` lands here as `<hash>@epfl.ch`; only the domain
+    matters and the hash on the local part is irrelevant."""
+    reconciled = ReconciledEntities(
+        entities={
+            "persons": [
+                {"id": "p1", "_email": "deadbeefcafe@epfl.ch"},
+            ],
+        },
+    )
+    provider = _StubProvider(
+        hits={
+            "EPFL": [
+                {"score": 0.95, "types": ["education"], "name": "EPFL", "ror_id": "https://ror.org/02s376052"},
+                {"score": 0.40, "types": ["education"], "name": "Other"},
+            ],
+        },
+    )
+    _run(reconciled, provider)
+    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+
+
+@pytest.mark.parametrize("email_key", EMAIL_KEYS)
+def test_stage_reads_email_under_every_key_shape(email_key):
+    reconciled = ReconciledEntities(
+        entities={
+            "persons": [
+                {"id": "p1", email_key: "x@epfl.ch"},
             ],
         },
     )
