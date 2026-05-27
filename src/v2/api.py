@@ -114,6 +114,7 @@ from src.v2.pipeline.stages import (
     run_llm_dedup_stage,
     run_org_relationships_stage,
     run_refine_with_llm_stage,
+    run_resolve_bio_to_ror_stage,
     run_resolve_company_to_ror_stage,
     validate_articles,
     validate_author_classes,
@@ -185,6 +186,7 @@ STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
 STAGE_REFINE_WITH_LLM = "refine_with_llm"
 STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
+STAGE_RESOLVE_BIO_TO_ROR = "resolve_bio_to_ror"
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -243,6 +245,22 @@ def _resolve_company_to_ror_enabled() -> bool:
     unchanged.
     """
     raw = os.getenv("V2_RESOLVE_COMPANY_TO_ROR")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
+
+
+def _resolve_bio_to_ror_enabled() -> bool:
+    """Read `V2_RESOLVE_BIO_TO_ROR` env var (default true).
+
+    When true (the default), the bio → ROR resolver runs right after
+    `resolve_company_to_ror` and stamps `schema:affiliation` on persons
+    whose `_company` was empty but whose `_bio` / `_orcid_biography` /
+    `_blog` carry an institution signal that the strict ROR gate accepts.
+    Set to `false` (or `0`/`no`/`off`) to skip; useful when a catalog
+    backfill wants the structured-field-only behaviour.
+    """
+    raw = os.getenv("V2_RESOLVE_BIO_TO_ROR")
     if raw is None:
         return True
     return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
@@ -790,6 +808,39 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             _append_unique_warning(
                 warnings,
                 f"resolve_company_to_ror stage failed: {exc}",
+            )
+
+    # === resolve_bio_to_ror stage ================================
+    # Backstop for persons the company-string stage missed: pulls
+    # affiliation hints from `_bio` / `_orcid_biography` / `_blog`.
+    # Runs in the same slot as company-resolution (after reconciliation,
+    # before critic) and reuses the same strict acceptance gate, so its
+    # output looks identical to the critic / refiner — they see the same
+    # `schema:affiliation` triples regardless of which extractor stamped
+    # them.
+    if _resolve_bio_to_ror_enabled():
+        stage_started_at = perf_counter()
+        try:
+            bio_result = await run_resolve_bio_to_ror_stage(
+                reconciled=reconciled,
+                provider=getattr(providers, "ror_rag", None),
+            )
+            logger.info(
+                "%s: persons_examined=%d persons_resolved=%d "
+                "candidates=%d queries=%d accepted=%d in %.2fs",
+                STAGE_RESOLVE_BIO_TO_ROR,
+                bio_result.persons_examined,
+                bio_result.persons_resolved,
+                bio_result.candidates_extracted,
+                bio_result.queries_attempted,
+                bio_result.queries_accepted,
+                perf_counter() - stage_started_at,
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+            logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR)
+            _append_unique_warning(
+                warnings,
+                f"resolve_bio_to_ror stage failed: {exc}",
             )
 
     apply_critic_pruning = _should_apply_critic_pruning()
