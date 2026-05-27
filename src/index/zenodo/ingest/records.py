@@ -27,10 +27,34 @@ _DATE_RE = re.compile(r"^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?")
 _NON_WORD_RE = re.compile(r"[^a-z0-9]+")
 
 
+_STRIP_MAX_PASSES = 5
+
+
 def _strip_html(raw: str | None) -> str | None:
-    if not raw:
+    """Strip HTML to plain text, robust against multi-level escaping.
+
+    Zenodo wraps record `metadata.description` in a `<p>` element and
+    then HTML-escapes the inner content (`&lt;div&gt;…`). One pass of
+    `BeautifulSoup.get_text()` unescapes entities while extracting
+    text — which removes the `<p>` shell but turns the formerly-escaped
+    inner string back into a fresh HTML document that still needs
+    stripping. Loop until the output stabilises (or we hit
+    `_STRIP_MAX_PASSES`, which bounds runaway on pathological input).
+
+    Early-exits when the working text has no remaining `<` or `>` so
+    the common path (already-clean text) makes a single pass.
+    """
+    if not raw or not raw.strip():
         return None
-    text = BeautifulSoup(raw, "html.parser").get_text(" ", strip=True)
+    text = raw
+    for _ in range(_STRIP_MAX_PASSES):
+        if "<" not in text and ">" not in text:
+            break
+        stripped = BeautifulSoup(text, "html.parser").get_text(" ", strip=True)
+        if stripped == text:
+            break
+        text = stripped
+    text = text.strip()
     return text or None
 
 

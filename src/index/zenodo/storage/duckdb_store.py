@@ -147,6 +147,57 @@ class ZenodoStore:
         self._migrate_link_tables_to_iri()
         # DOIs → canonical doi.org URL form. Idempotent.
         self._migrate_dois_to_url()
+        # Descriptions whose stored value still carries HTML get
+        # re-cleaned through the iterative stripper, sourcing from
+        # `raw.metadata.description`. Idempotent (skips rows that
+        # are already clean).
+        self._migrate_descriptions_strip_html()
+
+    def _migrate_descriptions_strip_html(self) -> None:
+        """Re-clean any `records.description` that still contains HTML.
+
+        Pre-PR rows were stripped with a single BeautifulSoup pass that
+        unescaped inner content without re-stripping it (so the stored
+        text retained the now-decoded tags). For each row whose
+        description still has `<…>`, re-derive from
+        `raw.metadata.description` via `_strip_html` and write back.
+        Bounded by the row count of records actually containing HTML —
+        fast in practice (~hundreds of rows for our deployment, not all
+        6.7k).
+        """
+        from src.index.zenodo.ingest.records import _strip_html  # noqa: PLC0415
+
+        conn = self.connect()
+        candidates = conn.execute(
+            "SELECT zenodo_id, raw FROM records "
+            "WHERE description LIKE '%<%>%' OR description LIKE '%&lt;%'",
+        ).fetchall()
+        if not candidates:
+            return
+        cleaned = 0
+        for zenodo_id, raw_payload in candidates:
+            if isinstance(raw_payload, str):
+                try:
+                    raw = json.loads(raw_payload)
+                except json.JSONDecodeError:
+                    continue
+            else:
+                raw = raw_payload
+            if not isinstance(raw, dict):
+                continue
+            metadata = raw.get("metadata")
+            source = (
+                metadata.get("description")
+                if isinstance(metadata, dict)
+                else None
+            )
+            new_desc = _strip_html(source)
+            conn.execute(
+                "UPDATE records SET description = ? WHERE zenodo_id = ?",
+                [new_desc, zenodo_id],
+            )
+            cleaned += 1
+        LOGGER.info("zenodo: re-cleaned %d record descriptions", cleaned)
 
     def _migrate_dois_to_url(self) -> None:
         """Promote `records.doi` / `records.concept_doi` to the
