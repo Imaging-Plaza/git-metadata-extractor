@@ -8,10 +8,14 @@ import duckdb
 import pytest
 
 from src.index.huggingface.iri import (
+    arxiv_doi_iri,
+    arxiv_dois_from_tags,
     dataset_iri,
+    dois_from_bibtex,
     iri_for_entity_type,
     model_iri,
     namespace_iri,
+    paperswithcode_url,
     parse_namespace_slug,
     parse_repo_id,
     space_iri,
@@ -206,6 +210,184 @@ def test_bootstrap_is_idempotent_after_migration(tmp_path: Path):
     assert conn.execute("SELECT COUNT(*) FROM models").fetchone()[0] == 2
     assert conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 4
     conn.close()
+
+
+def test_arxiv_doi_iri_handles_every_input_form():
+    """Bare id, `arxiv:` tag, version suffix, full URL — all → canonical DOI URL."""
+    expected = "https://doi.org/10.48550/arXiv.2311.16079"
+    assert arxiv_doi_iri("2311.16079") == expected
+    assert arxiv_doi_iri("arxiv:2311.16079") == expected
+    assert arxiv_doi_iri("ARXIV:2311.16079") == expected
+    # Version suffix stripped (DOI is per-paper, not per-version).
+    assert arxiv_doi_iri("arxiv:2311.16079v3") == expected
+    # Already URL: idempotent.
+    assert arxiv_doi_iri(expected) == expected
+    assert arxiv_doi_iri(expected + "/") == expected
+    # Empty / whitespace → None.
+    assert arxiv_doi_iri("") is None
+    assert arxiv_doi_iri("   ") is None
+
+
+def test_arxiv_dois_from_tags_dedupes_and_orders():
+    tags = [
+        "transformers",
+        "arxiv:2311.16079",
+        "medical",
+        "arxiv:2311.16079",  # duplicate
+        "arxiv:2406.09406v2",
+        "license:llama2",
+    ]
+    out = arxiv_dois_from_tags(tags)
+    assert out == [
+        "https://doi.org/10.48550/arXiv.2311.16079",
+        "https://doi.org/10.48550/arXiv.2406.09406",
+    ]
+    # Empty / None inputs.
+    assert arxiv_dois_from_tags(None) == []
+    assert arxiv_dois_from_tags([]) == []
+    # No arxiv tags → empty.
+    assert arxiv_dois_from_tags(["medical", "license:mit"]) == []
+
+
+def test_paperswithcode_url_builds_and_is_idempotent():
+    assert paperswithcode_url("mnist") == "https://paperswithcode.com/dataset/mnist"
+    iri = "https://paperswithcode.com/dataset/imagenet"
+    assert paperswithcode_url(iri) == iri
+    assert paperswithcode_url(iri + "/") == iri
+    assert paperswithcode_url(None) is None
+    assert paperswithcode_url("") is None
+
+
+def test_dois_from_bibtex_extracts_dedupes_strips_punctuation():
+    bibtex = """
+    @article{foo,
+        title = {Foo},
+        doi = {10.48550/arXiv.2311.16079},
+        url = {https://doi.org/10.5281/zenodo.1234567},
+    }
+    @article{bar,
+        doi = {10.48550/arXiv.2311.16079},  # duplicate
+        note = {See also 10.1234/xyz.42},   # trailing punct + comment
+    }
+    """
+    out = dois_from_bibtex(bibtex)
+    # Order preserved, deduped, all wrapped as URLs.
+    assert out == [
+        "https://doi.org/10.48550/arXiv.2311.16079",
+        "https://doi.org/10.5281/zenodo.1234567",
+        "https://doi.org/10.1234/xyz.42",
+    ]
+    # Empty / None / non-string → [].
+    assert dois_from_bibtex(None) == []
+    assert dois_from_bibtex("") == []
+    assert dois_from_bibtex("no dois in here") == []
+
+
+def test_bootstrap_backfills_citation_surface(tmp_path: Path):
+    """Pre-PR DB shape without the citation columns + a model with arxiv
+    tags + a dataset with raw.citation → bootstrap ALTERs the tables and
+    backfills the derived fields.
+    """
+    db_path = tmp_path / "hf.duckdb"
+    # Pre-PR shape: only the original columns on models/datasets.
+    conn = duckdb.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE models ("
+        "  repo_id TEXT PRIMARY KEY, author TEXT, sha TEXT, "
+        "  pipeline_tag TEXT, library_name TEXT, license TEXT, "
+        "  downloads BIGINT, downloads_all_time BIGINT, likes BIGINT, "
+        "  gated BOOLEAN, private BOOLEAN, created_at TIMESTAMP, "
+        "  last_modified TIMESTAMP, tags JSON, card_data JSON, "
+        "  base_models JSON, raw JSON, ingested_at TIMESTAMP)",
+    )
+    conn.execute(
+        "CREATE TABLE datasets ("
+        "  repo_id TEXT PRIMARY KEY, author TEXT, sha TEXT, license TEXT, "
+        "  downloads BIGINT, downloads_all_time BIGINT, likes BIGINT, "
+        "  gated BOOLEAN, private BOOLEAN, created_at TIMESTAMP, "
+        "  last_modified TIMESTAMP, tags JSON, card_data JSON, "
+        "  dataset_info JSON, raw JSON, ingested_at TIMESTAMP)",
+    )
+    # The other tables (referenced by the IRI migration); empty is fine.
+    conn.execute(
+        "CREATE TABLE orgs (slug TEXT PRIMARY KEY, namespace_kind TEXT NOT NULL, "
+        "source TEXT NOT NULL, scope TEXT NOT NULL)",
+    )
+    conn.execute(
+        "CREATE TABLE spaces (repo_id TEXT PRIMARY KEY, author TEXT, sha TEXT, "
+        "sdk TEXT, runtime_stage TEXT, hardware TEXT, license TEXT, "
+        "likes BIGINT, created_at TIMESTAMP, last_modified TIMESTAMP, "
+        "tags JSON, card_data JSON, raw JSON, ingested_at TIMESTAMP)",
+    )
+    conn.execute(
+        "CREATE TABLE chunks (chunk_id TEXT PRIMARY KEY, entity_type TEXT, "
+        "repo_id TEXT, chunk_index INTEGER, text TEXT, token_count INTEGER, "
+        "vector_id TEXT, embedded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    )
+
+    import json as _json
+    conn.execute(
+        "INSERT INTO models (repo_id, tags, raw) VALUES (?, ?, ?)",
+        [
+            "https://huggingface.co/epfl-llm/meditron-7b",
+            _json.dumps(["arxiv:2311.16079", "medical", "arxiv:2401.00001v2"]),
+            _json.dumps({"id": "epfl-llm/meditron-7b"}),
+        ],
+    )
+    conn.execute(
+        "INSERT INTO datasets (repo_id, raw) VALUES (?, ?)",
+        [
+            "https://huggingface.co/datasets/example/dset",
+            _json.dumps({
+                "id": "example/dset",
+                "citation": "@article{foo, doi={10.5281/zenodo.999}}",
+                "paperswithcode_id": "mnist",
+            }),
+        ],
+    )
+    conn.close()
+
+    store = DuckDBStore(db_path)
+    store.bootstrap()
+    conn = store.connect()
+
+    # New columns exist.
+    m_cols = {r[1] for r in conn.execute("PRAGMA table_info('models')").fetchall()}
+    d_cols = {r[1] for r in conn.execute("PRAGMA table_info('datasets')").fetchall()}
+    assert "arxiv_dois" in m_cols
+    assert {"citation_text", "paperswithcode_url", "citation_dois"} <= d_cols
+
+    # Model backfill: arxiv DOIs derived from tags.
+    arxiv_dois_raw = conn.execute(
+        "SELECT arxiv_dois FROM models WHERE repo_id = "
+        "  'https://huggingface.co/epfl-llm/meditron-7b'",
+    ).fetchone()[0]
+    arxiv_dois = (
+        _json.loads(arxiv_dois_raw)
+        if isinstance(arxiv_dois_raw, str)
+        else arxiv_dois_raw
+    )
+    assert arxiv_dois == [
+        "https://doi.org/10.48550/arXiv.2311.16079",
+        "https://doi.org/10.48550/arXiv.2401.00001",
+    ]
+
+    # Dataset backfill: BibTeX → DOI URL; paperswithcode_id → URL.
+    row = conn.execute(
+        "SELECT citation_text, paperswithcode_url, citation_dois "
+        "FROM datasets WHERE repo_id = "
+        "  'https://huggingface.co/datasets/example/dset'",
+    ).fetchone()
+    citation_text, pwc_url, citation_dois_raw = row
+    assert citation_text.startswith("@article{foo")
+    assert pwc_url == "https://paperswithcode.com/dataset/mnist"
+    citation_dois = (
+        _json.loads(citation_dois_raw)
+        if isinstance(citation_dois_raw, str)
+        else citation_dois_raw
+    )
+    assert citation_dois == ["https://doi.org/10.5281/zenodo.999"]
+    store.close()
 
 
 def test_lookup_methods_accept_bare_or_iri_input(tmp_path: Path):

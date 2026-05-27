@@ -16,6 +16,8 @@ host and trailing slashes on input.
 
 from __future__ import annotations
 
+import re as _re
+
 _BASE = "https://huggingface.co/"
 _WWW = "https://www.huggingface.co/"
 _DATASETS_PREFIX = _BASE + "datasets/"
@@ -133,11 +135,104 @@ def parse_repo_id(iri_or_bare: str) -> str | None:
     return s or None
 
 
+# ---------------------------------------------------------------------------
+# Citation-surface helpers (arXiv DOIs from tags, BibTeX DOI extraction,
+# paperswithcode URLs). HF doesn't expose a `card_data.doi` for any of our
+# 1,515 repos, so these derived fields are the closest we get to a real
+# citation column.
+# ---------------------------------------------------------------------------
+
+_DOI_URL_PREFIX = "https://doi.org/"
+_ARXIV_DOI_PREFIX = "10.48550/arXiv."
+_PAPERSWITHCODE_BASE = "https://paperswithcode.com/dataset/"
+_ARXIV_TAG_RE = _re.compile(r"^arxiv:(.+?)(?:v\d+)?$", _re.IGNORECASE)
+# Conservative DOI shape — `10.<reg>/<suffix>` where suffix is non-greedy
+# up to whitespace, quote, bracket, or `}` (BibTeX delimiter).
+_BIBTEX_DOI_RE = _re.compile(
+    r"\b(10\.\d{4,9}/[^\s\"'<>{}]+)",
+    _re.IGNORECASE,
+)
+
+
+def arxiv_doi_iri(arxiv_id: str) -> str | None:
+    """`2311.16079` → `https://doi.org/10.48550/arXiv.2311.16079`.
+
+    Accepts bare arxiv ids, the `arxiv:<id>` tag form, or already-built
+    DOI URLs. Returns None for empty / unparseable input. Strips an
+    optional version suffix (`v1`, `v2`, …) since DOIs target the
+    abstract record, not a specific version.
+    """
+    s = _normalise(arxiv_id)
+    if not s:
+        return None
+    if s.startswith(_DOI_URL_PREFIX):
+        return s.rstrip("/")
+    match = _ARXIV_TAG_RE.match(s)
+    if match:
+        s = match.group(1)
+    # Strip version suffix when caller passed just `<id>v2`.
+    if not s.startswith(_ARXIV_DOI_PREFIX):
+        s_no_ver = _re.sub(r"v\d+$", "", s, flags=_re.IGNORECASE)
+        s = _ARXIV_DOI_PREFIX + s_no_ver
+    return _DOI_URL_PREFIX + s
+
+
+def arxiv_dois_from_tags(tags: list[str] | None) -> list[str]:
+    """Extract DOI URLs from a model's `tags` list. Order preserved, deduped."""
+    if not tags:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for tag in tags:
+        if not isinstance(tag, str) or not tag.lower().startswith("arxiv:"):
+            continue
+        iri = arxiv_doi_iri(tag)
+        if iri and iri not in seen:
+            seen.add(iri)
+            out.append(iri)
+    return out
+
+
+def paperswithcode_url(paperswithcode_id: str | None) -> str | None:
+    """`mnist` → `https://paperswithcode.com/dataset/mnist`. Idempotent on URLs."""
+    s = _normalise(paperswithcode_id)
+    if not s:
+        return None
+    if s.startswith(_PAPERSWITHCODE_BASE):
+        return s.rstrip("/")
+    if s.startswith("http://") or s.startswith("https://"):
+        return s.rstrip("/")
+    return _PAPERSWITHCODE_BASE + s
+
+
+def dois_from_bibtex(citation_text: str | None) -> list[str]:
+    """Pull every `10.<reg>/<suffix>` substring out of a BibTeX string.
+
+    Returns canonical `https://doi.org/...` URLs, order preserved, deduped.
+    Empty / non-string input returns `[]` (datasets without a citation).
+    """
+    if not isinstance(citation_text, str) or not citation_text.strip():
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for match in _BIBTEX_DOI_RE.finditer(citation_text):
+        bare = match.group(1).rstrip(".,;:")  # strip trailing punctuation
+        iri = _DOI_URL_PREFIX + bare
+        if iri not in seen:
+            seen.add(iri)
+            out.append(iri)
+    return out
+
+
 __all__ = [
+    "arxiv_doi_iri",
+    "arxiv_dois_from_tags",
     "dataset_iri",
+    "dois_from_bibtex",
     "iri_for_entity_type",
     "model_iri",
     "namespace_iri",
+    "paperswithcode_url",
     "parse_namespace_slug",
     "parse_repo_id",
     "space_iri",

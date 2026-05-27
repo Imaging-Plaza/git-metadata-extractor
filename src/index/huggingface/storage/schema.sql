@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS models (
     tags                 JSON,
     card_data            JSON,
     base_models          JSON,
+    -- arXiv DOIs derived from `arxiv:<id>` tags. arXiv mints a DOI for
+    -- every preprint as `10.48550/arXiv.<id>`; we store the canonical
+    -- `https://doi.org/...` form so consumers can dereference directly.
+    arxiv_dois           JSON,
     raw                  JSON,
     ingested_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -65,9 +69,23 @@ CREATE TABLE IF NOT EXISTS datasets (
     tags                 JSON,
     card_data            JSON,
     dataset_info         JSON,
+    -- HF dataset payloads carry a BibTeX `citation` field and an
+    -- optional `paperswithcode_id` linking to paperswithcode.com.
+    -- We keep the raw BibTeX text and pull any DOIs out into a
+    -- separate JSON list of `https://doi.org/...` URLs.
+    citation_text        TEXT,
+    paperswithcode_url   TEXT,
+    citation_dois        JSON,
     raw                  JSON,
     ingested_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Additive migrations for DBs created before the citation-surface
+-- columns landed. Idempotent (`IF NOT EXISTS`).
+ALTER TABLE models   ADD COLUMN IF NOT EXISTS arxiv_dois         JSON;
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS citation_text      TEXT;
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS paperswithcode_url TEXT;
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS citation_dois      JSON;
 
 CREATE TABLE IF NOT EXISTS spaces (
     repo_id              TEXT PRIMARY KEY,

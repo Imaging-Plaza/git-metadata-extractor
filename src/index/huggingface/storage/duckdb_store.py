@@ -77,6 +77,90 @@ class DuckDBStore:
         # `https://huggingface.co/...` IRI form. Idempotent — rows
         # already in URL shape match no WHERE clause.
         self._migrate_to_iri_ids()
+        # Backfill the citation-surface columns (`arxiv_dois` on
+        # models, `citation_text` / `paperswithcode_url` /
+        # `citation_dois` on datasets) from existing `raw` payloads.
+        # Skipped when the columns already carry a non-null value.
+        self._migrate_citation_surface()
+
+    def _migrate_citation_surface(self) -> None:
+        """Backfill arxiv DOIs (from model tags) and dataset citation
+        metadata (from `raw.citation` / `raw.paperswithcode_id`).
+        """
+        from src.index.huggingface.iri import (  # noqa: PLC0415
+            arxiv_dois_from_tags,
+            dois_from_bibtex,
+            paperswithcode_url,
+        )
+
+        conn = self.connect()
+
+        # --- models.arxiv_dois -----------------------------------------
+        # The arxiv tags live in `tags` JSON; backfill via Python because
+        # the parsing (strip `arxiv:`, drop `v<n>` suffix, dedupe) is
+        # cleaner here than a SQL CASE.
+        rows = conn.execute(
+            "SELECT repo_id, tags FROM models "
+            "WHERE arxiv_dois IS NULL OR arxiv_dois = '[]' OR arxiv_dois = 'null'",
+        ).fetchall()
+        for repo_id, tags_payload in rows:
+            try:
+                tags = (
+                    json.loads(tags_payload)
+                    if isinstance(tags_payload, str)
+                    else tags_payload
+                )
+            except json.JSONDecodeError:
+                continue
+            dois = arxiv_dois_from_tags(tags or [])
+            if dois:
+                conn.execute(
+                    "UPDATE models SET arxiv_dois = ? WHERE repo_id = ?",
+                    [json.dumps(dois, ensure_ascii=False), repo_id],
+                )
+
+        # --- datasets.citation_text / paperswithcode_url / citation_dois -
+        rows = conn.execute(
+            "SELECT repo_id, raw FROM datasets "
+            "WHERE citation_text IS NULL "
+            "   OR paperswithcode_url IS NULL "
+            "   OR citation_dois IS NULL OR citation_dois = '[]' OR citation_dois = 'null'",
+        ).fetchall()
+        for repo_id, raw_payload in rows:
+            try:
+                raw = (
+                    json.loads(raw_payload)
+                    if isinstance(raw_payload, str)
+                    else raw_payload
+                )
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            citation = raw.get("citation") if isinstance(raw.get("citation"), str) else None
+            pwc_id = raw.get("paperswithcode_id") or raw.get("paperswithcodeId")
+            citation_dois = dois_from_bibtex(citation)
+            pwc_url = paperswithcode_url(pwc_id) if pwc_id else None
+            if citation or pwc_url or citation_dois:
+                conn.execute(
+                    "UPDATE datasets SET "
+                    "  citation_text = COALESCE(citation_text, ?), "
+                    "  paperswithcode_url = COALESCE(paperswithcode_url, ?), "
+                    "  citation_dois = COALESCE("
+                    "      CASE WHEN citation_dois IS NULL "
+                    "                OR citation_dois = '[]' "
+                    "                OR citation_dois = 'null' "
+                    "           THEN NULL ELSE citation_dois END, "
+                    "      ?) "
+                    "WHERE repo_id = ?",
+                    [
+                        citation,
+                        pwc_url,
+                        json.dumps(citation_dois, ensure_ascii=False)
+                        if citation_dois else None,
+                        repo_id,
+                    ],
+                )
 
     def _migrate_to_iri_ids(self) -> None:
         """CTAS-swap each table whose PK or FK still carries bare ids.
@@ -345,7 +429,7 @@ class DuckDBStore:
                 "created_at",
                 "last_modified",
             ),
-            json_cols=("tags", "card_data", "base_models"),
+            json_cols=("tags", "card_data", "base_models", "arxiv_dois"),
             row=row,
             raw=raw,
         )
@@ -365,8 +449,10 @@ class DuckDBStore:
                 "private",
                 "created_at",
                 "last_modified",
+                "citation_text",
+                "paperswithcode_url",
             ),
-            json_cols=("tags", "card_data", "dataset_info"),
+            json_cols=("tags", "card_data", "dataset_info", "citation_dois"),
             row=row,
             raw=raw,
         )

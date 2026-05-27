@@ -97,7 +97,11 @@ def ingest_models(
 
 
 def _model_row(repo_id: str, info: object) -> dict[str, object | None]:
-    from src.index.huggingface.iri import model_iri, namespace_iri  # noqa: PLC0415
+    from src.index.huggingface.iri import (  # noqa: PLC0415
+        arxiv_dois_from_tags,
+        model_iri,
+        namespace_iri,
+    )
 
     card_data = card_data_to_dict(getattr(info, "card_data", None) or getattr(info, "cardData", None))
     tags = list(getattr(info, "tags", None) or [])
@@ -107,6 +111,10 @@ def _model_row(repo_id: str, info: object) -> dict[str, object | None]:
     return {
         "repo_id": model_iri(repo_id),
         "author": namespace_iri(bare_author) if bare_author else None,
+        # Derived citation surface — arXiv mints a DOI for every preprint
+        # as `10.48550/arXiv.<id>`. Models that cite arxiv via tags get
+        # `https://doi.org/...` URLs here, deduped.
+        "arxiv_dois": arxiv_dois_from_tags(tags),
         "sha": getattr(info, "sha", None),
         "pipeline_tag": getattr(info, "pipeline_tag", None),
         "library_name": getattr(info, "library_name", None),
