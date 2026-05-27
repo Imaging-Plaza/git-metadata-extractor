@@ -141,11 +141,22 @@ def _run(reconciled: ReconciledEntities, provider: Any) -> CompanyAffiliationRes
     )
 
 
-def test_stage_stamps_confident_affiliation():
+@pytest.mark.parametrize(
+    "key",
+    [
+        "_company",  # rule-based agent shape — what the pipeline really carries
+        "gme-internal:company",  # jsonld-build mid-form
+        GME_INTERNAL_COMPANY,  # full IRI — post-hoc SPARQL shape
+    ],
+)
+def test_stage_reads_company_under_every_key_shape(key):
+    """The stage must work whether the Person dict carries the company
+    under `_company` (in-pipeline), `gme-internal:company` (post jsonld-build
+    rewrite), or the full IRI (post-hoc SPARQL graph)."""
     reconciled = ReconciledEntities(
         entities={
             "persons": [
-                {"id": "p1", GME_INTERNAL_COMPANY: "Google"},
+                {"id": "p1", key: "Google"},
             ],
         },
     )
