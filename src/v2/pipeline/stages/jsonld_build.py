@@ -20,6 +20,36 @@ HELPER_ONLY_FIELDS = {"shacl", "identifiers", "idSource", "_person_ref"}
 GME_INTERNAL_PREFIX = "gme-internal"
 GME_INTERNAL_NAMESPACE = "https://openpulse.science/git-metadata-extractor#"
 
+# Auxiliary namespace for parsed publiccode.yml metadata. Same strategy
+# as `gme-internal:` (separate vocabulary, surfaced only when
+# `include_internal_fields=True`, does NOT touch the Open Pulse
+# ontology) — but with its own prefix so downstream RDF consumers can
+# recognise publiccode triples as such. The base IRI points at the
+# publiccode standard's docs URL (no formal ontology IRI exists for
+# the spec, but the docs URL is stable and identifies the field defs).
+#
+# Repository entities whose `_publiccode` field is populated have its
+# top-level scalar/list fields hoisted to `publiccode:<field>`
+# predicates so SPARQL queries like `?repo publiccode:license ?l` work
+# without re-parsing JSON. Nested sub-trees (legal / maintenance /
+# localisation / description / dependsOn / intendedAudience) remain
+# accessible via the `gme-internal:publiccode` JSON blob so structured
+# consumers don't lose data.
+PUBLICCODE_PREFIX = "publiccode"
+PUBLICCODE_NAMESPACE = "https://yml.publiccode.tools/"
+
+# Top-level publiccode v0.4 fields that are scalars or lists of
+# scalars — safe to hoist to `publiccode:<field>` triples. Anything not
+# in this set stays as nested JSON under `gme-internal:publiccode`.
+_PUBLICCODE_FLAT_FIELDS: frozenset[str] = frozenset({
+    # Scalars
+    "publiccodeYmlVersion", "name", "url", "applicationSuite",
+    "landingURL", "softwareVersion", "releaseDate", "logo",
+    "monochromeLogo", "roadmap", "developmentStatus", "softwareType",
+    # List-of-strings
+    "isBasedOn", "platforms", "categories", "usedBy",
+})
+
 
 def _normalize_node_id(value: Any, *, index: int) -> str:
     if isinstance(value, str) and value:
@@ -112,6 +142,39 @@ def _internal_term(key: str) -> str:
     return f"{GME_INTERNAL_PREFIX}:{key.lstrip('_')}"
 
 
+def _publiccode_term(field: str) -> str:
+    """`license` -> `publiccode:license`."""
+    return f"{PUBLICCODE_PREFIX}:{field}"
+
+
+def _hoist_publiccode_scalars(
+    publiccode: Any,
+) -> dict[str, Any]:
+    """Pull the scalar/list top-level fields from a parsed publiccode
+    payload into a flat ``{publiccode:<field>: value}`` dict for direct
+    emission as RDF predicates. Returns ``{}`` when the payload is
+    None / wrong-shape / missing every flat field.
+
+    Nested sub-trees (legal, maintenance, …) are intentionally NOT
+    hoisted here — they need their own predicate mapping per leaf,
+    which gets ambiguous fast (description has per-language sub-trees,
+    contractors/contacts are lists of dicts). They remain reachable
+    via `gme-internal:publiccode`."""
+    if not isinstance(publiccode, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for field in _PUBLICCODE_FLAT_FIELDS:
+        value = publiccode.get(field)
+        if value is None:
+            continue
+        if isinstance(value, str) and not value:
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        out[_publiccode_term(field)] = value
+    return out
+
+
 def _rewrite_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``entity`` with top-level `_`-prefixed keys
     renamed to their `gme-internal:` terms, so they expand to real IRI
@@ -192,6 +255,21 @@ def build_jsonld_output(
                 current_property=out_key,
             )
 
+        # Hoist scalar/list top-level publiccode fields to `publiccode:`
+        # predicates so SPARQL queries can hit them directly. The
+        # `gme-internal:publiccode` JSON blob above still carries the
+        # full nested payload for consumers that need the sub-trees.
+        if include_internal_fields:
+            for pc_term, pc_value in _hoist_publiccode_scalars(
+                entity.get("_publiccode"),
+            ).items():
+                node[pc_term] = _normalize_jsonld_value(
+                    pc_value,
+                    id_map=id_map,
+                    iri_typed_terms=iri_typed_terms,
+                    current_property=pc_term,
+                )
+
         # Strip `pulse:ror` when redundant with the node's own `@id`. The
         # `org:Organization` SHACL shape is `sh:closed` and does not
         # declare `pulse:ror`; emitting the field on a ROR-id'd node
@@ -209,8 +287,10 @@ def build_jsonld_output(
     graph.sort(key=lambda item: str(item.get("@id", "")))
     context = deepcopy(jsonld_context)
     if include_internal_fields:
-        # Register the prefix so `gme-internal:*` terms expand to IRIs.
+        # Register the prefixes so `gme-internal:*` and `publiccode:*`
+        # terms expand to IRIs (and the payload loads into RDF stores).
         context[GME_INTERNAL_PREFIX] = GME_INTERNAL_NAMESPACE
+        context[PUBLICCODE_PREFIX] = PUBLICCODE_NAMESPACE
     payload: dict[str, Any] = {
         "@context": context,
         "@graph": graph,
