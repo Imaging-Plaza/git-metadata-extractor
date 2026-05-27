@@ -76,6 +76,140 @@ class ZenodoStore:
                     "  AND json_extract_string(raw, '$.conceptrecid') IS NOT NULL",
                 )
         conn.execute(_load_schema_sql())
+        # IRI migration for the link tables — see the note at the
+        # bottom of schema.sql. UPDATE on indexed bulk columns has
+        # tripped DuckDB internal index errors on tables this size,
+        # so we drop-and-rebuild via CTAS.
+        self._migrate_link_tables_to_iri()
+
+    def _migrate_link_tables_to_iri(self) -> None:
+        """CTAS-swap link/chunk tables with `record_id`/`entity_id` →
+        IRI. Idempotent: each step checks for bare-id rows first and
+        is a no-op when everything is already migrated.
+        """
+        conn = self.connect()
+        record_prefix = "https://zenodo.org/records/"
+        community_prefix = "https://zenodo.org/communities/"
+
+        def _has_bare(table: str, col: str, extra: str = "") -> bool:
+            row = conn.execute(
+                f"SELECT 1 FROM {table} WHERE {col} NOT LIKE 'https://%' "
+                f"{extra} LIMIT 1",
+            ).fetchone()
+            return row is not None
+
+        def _ctas_swap(
+            *, table: str, columns: list[tuple[str, str]],
+            select: str, primary_key: tuple[str, ...] | None = None,
+        ) -> None:
+            """Rewrite `table` via CREATE TABLE _new + INSERT + DROP + RENAME."""
+            new_table = f"{table}__iri_migrate"
+            conn.execute(f"DROP TABLE IF EXISTS {new_table}")
+            col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns)
+            if primary_key:
+                col_defs += f", PRIMARY KEY ({', '.join(primary_key)})"
+            conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
+            conn.execute(f"INSERT INTO {new_table} {select}")
+            conn.execute(f"DROP TABLE {table}")
+            conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+
+        if _has_bare("record_creators", "record_id"):
+            _ctas_swap(
+                table="record_creators",
+                columns=[
+                    ("record_id", "TEXT NOT NULL"),
+                    ("creator_key", "TEXT NOT NULL"),
+                    ("position", "INTEGER"),
+                ],
+                select=(
+                    "SELECT CASE WHEN record_id LIKE 'https://%' THEN record_id "
+                    f"            ELSE '{record_prefix}' || record_id END, "
+                    "       creator_key, position "
+                    "FROM record_creators"
+                ),
+                primary_key=("record_id", "creator_key"),
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_record_creators_ck "
+                "ON record_creators (creator_key)",
+            )
+
+        if _has_bare("record_communities", "record_id") or _has_bare(
+            "record_communities", "community_id",
+        ):
+            _ctas_swap(
+                table="record_communities",
+                columns=[
+                    ("record_id", "TEXT NOT NULL"),
+                    ("community_id", "TEXT NOT NULL"),
+                ],
+                select=(
+                    "SELECT "
+                    "  CASE WHEN record_id LIKE 'https://%' THEN record_id "
+                    f"       ELSE '{record_prefix}' || record_id END, "
+                    "  CASE WHEN community_id LIKE 'https://%' THEN community_id "
+                    f"       ELSE '{community_prefix}' || community_id END "
+                    "FROM record_communities"
+                ),
+                primary_key=("record_id", "community_id"),
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_record_comm_cid "
+                "ON record_communities (community_id)",
+            )
+
+        if _has_bare("files", "record_id"):
+            _ctas_swap(
+                table="files",
+                columns=[
+                    ("record_id", "TEXT NOT NULL"),
+                    ("file_key", "TEXT NOT NULL"),
+                    ("file_id", "TEXT"),
+                    ("size_bytes", "BIGINT"),
+                    ("checksum", "TEXT"),
+                    ("download_url", "TEXT"),
+                ],
+                select=(
+                    "SELECT "
+                    "  CASE WHEN record_id LIKE 'https://%' THEN record_id "
+                    f"       ELSE '{record_prefix}' || record_id END, "
+                    "  file_key, file_id, size_bytes, checksum, download_url "
+                    "FROM files"
+                ),
+                primary_key=("record_id", "file_key"),
+            )
+
+        if _has_bare("chunks", "entity_id", extra="AND entity_type = 'records'"):
+            _ctas_swap(
+                table="chunks",
+                columns=[
+                    ("chunk_id", "TEXT PRIMARY KEY"),
+                    ("entity_type", "TEXT NOT NULL"),
+                    ("entity_id", "TEXT NOT NULL"),
+                    ("chunk_index", "INTEGER NOT NULL"),
+                    ("text", "TEXT NOT NULL"),
+                    ("token_count", "INTEGER NOT NULL"),
+                    ("vector_id", "TEXT NOT NULL"),
+                    (
+                        "embedded_at",
+                        "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    ),
+                ],
+                select=(
+                    "SELECT chunk_id, entity_type, "
+                    "  CASE WHEN entity_type = 'records' "
+                    "       AND entity_id NOT LIKE 'https://%' "
+                    f"       THEN '{record_prefix}' || entity_id "
+                    "       ELSE entity_id END, "
+                    "  chunk_index, text, token_count, vector_id, embedded_at "
+                    "FROM chunks"
+                ),
+                primary_key=None,  # chunk_id PK is inline above
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chunks_entity "
+                "ON chunks (entity_type, entity_id)",
+            )
 
     def close(self) -> None:
         if self._conn is not None:
@@ -283,29 +417,46 @@ class ZenodoStore:
     def existing_record_ids(self, zenodo_ids: list[str]) -> set[str]:
         """Return the subset of `zenodo_ids` already known to the store.
 
-        Matches against either the canonical `zenodo_id` (post-redirect
-        version-record) OR the `concept_recid` (Zenodo's "all versions"
-        identifier). A discovery source typically extracts whichever ID
-        appears in the citation, so checking both prevents redundant
-        re-fetches when a paper cites the concept ID but we persisted
-        the latest version.
+        Input is a list of bare numeric ids (`18314844`) — discovery
+        sources extract those from search-result text. Internally we
+        compare against:
+
+        - `records.zenodo_id`, which post-IRI-migration is the URL form
+          `https://zenodo.org/records/18314844` — so we promote the
+          input before SELECT.
+        - `records.concept_recid`, which stays a bare numeric id.
+
+        Returned set is in the original bare-id shape so callers can
+        diff against their own bare-id discovery set.
         """
         if not zenodo_ids:
             return set()
+        from src.index.zenodo.iri import parse_record_id, record_iri  # noqa: PLC0415
+
+        iri_form = [record_iri(z) for z in zenodo_ids]
         placeholders = ",".join(["?"] * len(zenodo_ids))
         cur = self.connect().execute(
             f"SELECT zenodo_id FROM records WHERE zenodo_id IN ({placeholders}) "
             f"UNION "
             f"SELECT concept_recid FROM records "
             f"WHERE concept_recid IN ({placeholders})",
-            [*zenodo_ids, *zenodo_ids],
+            [*iri_form, *zenodo_ids],
         )
-        return {str(r[0]) for r in cur.fetchall() if r[0] is not None}
+        found: set[str] = set()
+        for (value,) in cur.fetchall():
+            if value is None:
+                continue
+            bare = parse_record_id(str(value))
+            if bare:
+                found.add(bare)
+        return found
 
     def fetch_record(self, zenodo_id: str) -> dict[str, Any] | None:
+        from src.index.zenodo.iri import record_iri  # noqa: PLC0415
+
         cur = self.connect().execute(
             "SELECT * FROM records WHERE zenodo_id = ?",
-            [zenodo_id],
+            [record_iri(zenodo_id)],
         )
         row = cur.fetchone()
         if row is None:

@@ -79,8 +79,11 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
     else:
         resource_type = str(resource_type_block) if resource_type_block else None
     concept_recid = item.get("conceptrecid")
+    from src.index.zenodo.iri import record_iri  # noqa: PLC0415
+
+    bare_id = str(item.get("id") or item.get("conceptrecid") or "")
     return {
-        "zenodo_id": str(item.get("id") or item.get("conceptrecid") or ""),
+        "zenodo_id": record_iri(bare_id) if bare_id else "",
         "concept_recid": str(concept_recid) if concept_recid is not None else None,
         "doi": item.get("doi") or metadata.get("doi"),
         "title": metadata.get("title"),
@@ -124,14 +127,16 @@ def _project_creators(item: dict[str, Any]) -> list[tuple[dict[str, Any], int]]:
 
 
 def _project_communities(item: dict[str, Any]) -> list[str]:
+    """Return canonical community IRIs, one per linked community."""
+    from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+
     metadata = item.get("metadata") or {}
     blocks = metadata.get("communities") or []
     out: list[str] = []
     for b in blocks:
-        if isinstance(b, dict) and b.get("id"):
-            out.append(str(b["id"]))
-        elif isinstance(b, str):
-            out.append(b)
+        slug = b.get("id") if isinstance(b, dict) else b
+        if isinstance(slug, str) and slug.strip():
+            out.append(community_iri(slug))
     return out
 
 
@@ -178,9 +183,14 @@ def persist_record(
     # "primary" colour even when the record belongs to several.
     communities = _project_communities(item)
     row["community_ids"] = list(communities)
+    from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+
     if crawling_community and not row.get("primary_community_id"):
-        row["primary_community_id"] = crawling_community
+        # Callers pass bare slugs ("epfl") for the community they were
+        # iterating; promote to the canonical IRI to match the new PK form.
+        row["primary_community_id"] = community_iri(crawling_community)
     elif communities and not row.get("primary_community_id"):
+        # `communities` already carries IRIs (see `_project_communities`).
         row["primary_community_id"] = communities[0]
     store.upsert_record(row, raw=item)
 
@@ -258,8 +268,13 @@ async def _ingest_async(
         if community is None:
             LOGGER.warning("community %s not found on Zenodo; skipping", slug)
             continue
+        from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+
         store.upsert_community(
-            {"community_id": slug, "title": (community.get("metadata") or {}).get("title")},
+            {
+                "community_id": community_iri(slug),
+                "title": (community.get("metadata") or {}).get("title"),
+            },
             raw=community,
         )
         if index % 25 == 0 or index == total_communities:
