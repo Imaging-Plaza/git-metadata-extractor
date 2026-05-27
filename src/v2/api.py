@@ -125,6 +125,7 @@ from src.v2.pipeline.stages import (
     run_llm_dedup_stage,
     run_org_relationships_stage,
     run_refine_with_llm_stage,
+    run_resolve_company_to_ror_stage,
     validate_articles,
     validate_author_classes,
     validate_ownership,
@@ -194,6 +195,7 @@ STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
 STAGE_REFINE_WITH_LLM = "refine_with_llm"
+STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -239,6 +241,22 @@ def _should_apply_critic_pruning() -> bool:
     if raw is None:
         return False
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def _resolve_company_to_ror_enabled() -> bool:
+    """Read `V2_RESOLVE_COMPANY_TO_ROR` env var (default true).
+
+    When true (the default), the company → ROR resolver runs right after
+    `reconcile_entities` and stamps `schema:affiliation` on persons whose
+    `gme-internal:company` string resolves confidently against ROR.
+    Set to `false` (or `0`/`no`/`off`) to skip the stage; useful for
+    catalog backfills that should preserve the raw company strings
+    unchanged.
+    """
+    raw = os.getenv("V2_RESOLVE_COMPANY_TO_ROR")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
 
 
 def _format_duration(seconds: float) -> str:
@@ -753,6 +771,37 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     )
     for warning in reconciled.link_warnings:
         _append_unique_warning(warnings, warning)
+
+    # === resolve_company_to_ror stage ============================
+    # Stamp `schema:affiliation` on persons whose `gme-internal:company`
+    # string resolves confidently against the ROR RAG. Runs after
+    # reconciliation so we don't touch entities the critic would later
+    # drop, but before the LLM critic / refiner — that way the critic
+    # sees the resolved affiliations and refine_with_llm doesn't waste
+    # cycles re-resolving the same companies via its rescue path.
+    if _resolve_company_to_ror_enabled():
+        stage_started_at = perf_counter()
+        try:
+            company_result = await run_resolve_company_to_ror_stage(
+                reconciled=reconciled,
+                provider=getattr(providers, "ror_rag", None),
+            )
+            logger.info(
+                "%s: persons_examined=%d persons_resolved=%d "
+                "queries=%d accepted=%d in %.2fs",
+                STAGE_RESOLVE_COMPANY_TO_ROR,
+                company_result.persons_examined,
+                company_result.persons_resolved,
+                company_result.queries_attempted,
+                company_result.queries_accepted,
+                perf_counter() - stage_started_at,
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+            logger.exception("%s stage failed", STAGE_RESOLVE_COMPANY_TO_ROR)
+            _append_unique_warning(
+                warnings,
+                f"resolve_company_to_ror stage failed: {exc}",
+            )
 
     apply_critic_pruning = _should_apply_critic_pruning()
     if resolved_runtime == AgentRuntime.LLM and not apply_critic_pruning:

@@ -59,6 +59,10 @@ from src.v2.pipeline.stages.refine_with_llm import (
     RefineWithLLMResult,
     run_refine_with_llm_stage,
 )
+from src.v2.pipeline.stages.resolve_company_to_ror import (
+    CompanyAffiliationResult,
+    run_resolve_company_to_ror_stage,
+)
 from src.v2.pipeline.stages.refine_with_llm import (
     is_enabled as hybrid_refiner_is_enabled,
 )
@@ -70,6 +74,7 @@ __all__ = [
     "BACKEND_WIKIPEDIA",
     "SUPPORTED_BACKENDS",
     "AssembledOutput",
+    "CompanyAffiliationResult",
     "ConceptTaggingResult",
     "ContextBundle",
     "LLMCriticStageResult",
@@ -104,6 +109,7 @@ __all__ = [
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
     "run_refine_with_llm_stage",
+    "run_resolve_company_to_ror_stage",
     "tag_rule_based_disciplines",
     "validate_articles",
     "validate_author_classes",
