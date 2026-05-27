@@ -10,7 +10,9 @@ import pytest
 
 from src.index.zenodo.iri import (
     community_iri,
+    doi_iri,
     parse_community_slug,
+    parse_doi,
     parse_record_id,
     record_iri,
 )
@@ -49,6 +51,155 @@ def test_parse_round_trip():
     assert parse_record_id("") is None
     assert parse_community_slug("https://zenodo.org/communities/epfl") == "epfl"
     assert parse_community_slug("epfl") == "epfl"
+
+
+def test_doi_iri_promotes_bare_doi():
+    assert doi_iri("10.5281/zenodo.18314844") == (
+        "https://doi.org/10.5281/zenodo.18314844"
+    )
+
+
+def test_doi_iri_is_idempotent_and_strips_trailing_slash():
+    iri = "https://doi.org/10.5281/zenodo.18314844"
+    assert doi_iri(iri) == iri
+    assert doi_iri(iri + "/") == iri
+
+
+def test_doi_iri_normalises_dx_doi_org_legacy_host():
+    """Older ingest paths sometimes emit `https://dx.doi.org/…` — promote
+    to the canonical `https://doi.org/…` host.
+    """
+    legacy = "https://dx.doi.org/10.1234/abcd"
+    assert doi_iri(legacy) == "https://doi.org/10.1234/abcd"
+
+
+def test_doi_iri_strips_doi_scheme_prefix():
+    assert doi_iri("doi:10.1234/abcd") == "https://doi.org/10.1234/abcd"
+    assert doi_iri("DOI:10.1234/abcd") == "https://doi.org/10.1234/abcd"
+
+
+def test_parse_doi_round_trip():
+    assert parse_doi("https://doi.org/10.5281/zenodo.123") == "10.5281/zenodo.123"
+    assert parse_doi("https://dx.doi.org/10.5281/zenodo.123") == "10.5281/zenodo.123"
+    assert parse_doi("doi:10.1234/abcd") == "10.1234/abcd"
+    assert parse_doi("10.1234/abcd") == "10.1234/abcd"
+    assert parse_doi("") is None
+
+
+def test_bootstrap_migrates_dois_to_url_form(tmp_path: Path):
+    """Pre-PR rows carry bare DOI / legacy dx.doi.org host → bootstrap
+    rewrites both to the canonical `https://doi.org/…` form.
+    """
+    db_path = tmp_path / "zenodo.duckdb"
+    # Pre-PR table shape: original columns only (no concept_doi yet —
+    # exercise the case where the new ALTER + DOI migration both fire
+    # in the same bootstrap pass).
+    conn = duckdb.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE records ("
+        "  zenodo_id TEXT PRIMARY KEY, concept_recid TEXT, doi TEXT, "
+        "  title TEXT, description TEXT, publication_date DATE, "
+        "  resource_type TEXT, access_right TEXT, license_id TEXT, "
+        "  keywords_json JSON, community_ids JSON, primary_community_id TEXT, "
+        "  raw JSON, ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        ")",
+    )
+    conn.executemany(
+        "INSERT INTO records (zenodo_id, doi, title, raw) VALUES (?, ?, ?, ?)",
+        [
+            (
+                "https://zenodo.org/records/A",
+                "10.5281/zenodo.A",
+                "bare",
+                json.dumps({"id": "A", "conceptdoi": "10.5281/zenodo.X"}),
+            ),
+            (
+                "https://zenodo.org/records/B",
+                "https://dx.doi.org/10.5281/zenodo.B",
+                "legacy dx host",
+                json.dumps({"id": "B"}),
+            ),
+            (
+                "https://zenodo.org/records/C",
+                "https://doi.org/10.5281/zenodo.C",
+                "already url",
+                json.dumps({"id": "C"}),
+            ),
+            (
+                "https://zenodo.org/records/D",
+                None,
+                "no doi at all",
+                json.dumps({"id": "D"}),
+            ),
+        ],
+    )
+    # Tables the link-table migration touches must exist; empty is fine.
+    for ddl in (
+        "CREATE TABLE communities (community_id TEXT PRIMARY KEY)",
+        "CREATE TABLE record_creators (record_id TEXT, creator_key TEXT, position INTEGER, PRIMARY KEY (record_id, creator_key))",
+        "CREATE TABLE record_communities (record_id TEXT, community_id TEXT, PRIMARY KEY (record_id, community_id))",
+        "CREATE TABLE files (record_id TEXT, file_key TEXT, file_id TEXT, size_bytes BIGINT, checksum TEXT, download_url TEXT, PRIMARY KEY (record_id, file_key))",
+        "CREATE TABLE creators (creator_key TEXT PRIMARY KEY, display_name TEXT, orcid TEXT, affiliation TEXT, raw JSON, ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "CREATE TABLE chunks (chunk_id TEXT PRIMARY KEY, entity_type TEXT, entity_id TEXT, chunk_index INTEGER, text TEXT, token_count INTEGER, vector_id TEXT, embedded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    ):
+        conn.execute(ddl)
+    conn.close()
+
+    store = ZenodoStore(db_path)
+    store.bootstrap()
+    conn = store.connect()
+
+    rows = {
+        zid: (doi, cdoi)
+        for zid, doi, cdoi in conn.execute(
+            "SELECT zenodo_id, doi, concept_doi FROM records",
+        ).fetchall()
+    }
+    # Every populated DOI is now the canonical URL form.
+    assert rows["https://zenodo.org/records/A"][0] == "https://doi.org/10.5281/zenodo.A"
+    assert rows["https://zenodo.org/records/B"][0] == "https://doi.org/10.5281/zenodo.B"
+    assert rows["https://zenodo.org/records/C"][0] == "https://doi.org/10.5281/zenodo.C"
+    # NULL DOIs stay NULL (no surprise rewrite).
+    assert rows["https://zenodo.org/records/D"][0] is None
+    # concept_doi backfilled from `raw` (record A had `conceptdoi`) and
+    # is also in URL form.
+    assert rows["https://zenodo.org/records/A"][1] == "https://doi.org/10.5281/zenodo.X"
+    assert rows["https://zenodo.org/records/B"][1] is None
+    store.close()
+
+
+def test_doi_migration_is_idempotent(tmp_path: Path):
+    """Bootstrap N times; URLs stay URLs and no double-prefixing happens."""
+    db_path = tmp_path / "zenodo.duckdb"
+    conn = duckdb.connect(str(db_path))
+    schema = (
+        Path(__file__).resolve().parents[3]
+        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+    ).read_text(encoding="utf-8")
+    conn.execute(schema)
+    conn.execute(
+        "INSERT INTO records (zenodo_id, doi, concept_doi, title, raw) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            "https://zenodo.org/records/A",
+            "10.5281/zenodo.A",  # bare on entry
+            "10.5281/zenodo.X",
+            "test",
+            json.dumps({"id": "A"}),
+        ],
+    )
+    conn.close()
+
+    for _ in range(3):
+        store = ZenodoStore(db_path)
+        store.bootstrap()
+        store.close()
+
+    conn = duckdb.connect(str(db_path), read_only=True)
+    doi, cdoi = conn.execute("SELECT doi, concept_doi FROM records").fetchone()
+    conn.close()
+    assert doi == "https://doi.org/10.5281/zenodo.A"
+    assert cdoi == "https://doi.org/10.5281/zenodo.X"
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +459,9 @@ def test_bootstrap_backfills_stats_and_version_columns(tmp_path: Path):
      views, unique_views, downloads, unique_downloads,
      ver_views, ver_unique_views, ver_downloads, ver_unique_downloads,
      created_at, updated_at) = row
-    assert concept_doi == "10.5281/zenodo.18314843"
+    # `concept_doi` is promoted to the canonical URL form by the
+    # DOI migration that runs as part of bootstrap.
+    assert concept_doi == "https://doi.org/10.5281/zenodo.18314843"
     assert version == "v2.1"
     assert revision == 5
     assert views == 4242

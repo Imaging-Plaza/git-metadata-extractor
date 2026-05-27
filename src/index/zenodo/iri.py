@@ -16,6 +16,7 @@ from __future__ import annotations
 
 _RECORD_PREFIX = "https://zenodo.org/records/"
 _COMMUNITY_PREFIX = "https://zenodo.org/communities/"
+_DOI_PREFIX = "https://doi.org/"
 
 
 def record_iri(zenodo_id: str) -> str:
@@ -62,9 +63,43 @@ def parse_community_slug(iri_or_bare: str) -> str | None:
     return s
 
 
+def doi_iri(doi: str) -> str:
+    """`10.5281/zenodo.18314844` → `https://doi.org/10.5281/zenodo.18314844`.
+
+    Idempotent. Tolerates the legacy `doi:` scheme prefix and an existing
+    `https://dx.doi.org/...` form.
+    """
+    s = str(doi or "").strip()
+    if not s:
+        return s
+    if s.startswith("https://dx.doi.org/"):
+        s = _DOI_PREFIX + s[len("https://dx.doi.org/") :]
+    if s.startswith(_DOI_PREFIX):
+        return s.rstrip("/")
+    if s.lower().startswith("doi:"):
+        s = s[len("doi:") :]
+    return f"{_DOI_PREFIX}{s}"
+
+
+def parse_doi(iri_or_bare: str) -> str | None:
+    """Inverse of `doi_iri`. Returns the bare DOI ("10.…"), or None."""
+    s = str(iri_or_bare or "").strip()
+    if not s:
+        return None
+    if s.startswith(_DOI_PREFIX):
+        return s[len(_DOI_PREFIX) :].rstrip("/") or None
+    if s.startswith("https://dx.doi.org/"):
+        return s[len("https://dx.doi.org/") :].rstrip("/") or None
+    if s.lower().startswith("doi:"):
+        return s[len("doi:") :].rstrip("/") or None
+    return s
+
+
 __all__ = [
     "community_iri",
+    "doi_iri",
     "parse_community_slug",
+    "parse_doi",
     "parse_record_id",
     "record_iri",
 ]
