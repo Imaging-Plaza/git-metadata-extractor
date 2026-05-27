@@ -59,7 +59,7 @@ def _get_json(path: str) -> tuple[int, Any, float]:
 def test_health_returns_healthy_when_all_checks_pass(
     monkeypatch,
 ) -> None:
-    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
     monkeypatch.setattr(
         "src.v2.api.probe_github_rate_limit",
         lambda: _healthy_rate_limit_summary(),
@@ -77,7 +77,7 @@ def test_health_returns_healthy_when_all_checks_pass(
 def test_health_degrades_when_github_token_is_missing(
     monkeypatch,
 ) -> None:
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GME_GITHUB_TOKEN", raising=False)
 
     status_code, payload, _elapsed_ms = _get_json("/v2/health")
 
@@ -87,7 +87,7 @@ def test_health_degrades_when_github_token_is_missing(
 
 
 def test_health_includes_package_version(monkeypatch) -> None:
-    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
 
     status_code, payload, _elapsed_ms = _get_json("/v2/health")
 
@@ -98,7 +98,7 @@ def test_health_includes_package_version(monkeypatch) -> None:
 def test_health_endpoint_responds_under_100ms(
     monkeypatch,
 ) -> None:
-    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
 
     status_code, _payload, elapsed_ms = _get_json("/v2/health")
 

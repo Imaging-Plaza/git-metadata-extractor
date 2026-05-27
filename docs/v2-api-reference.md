@@ -326,6 +326,6 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 | `INDEX_QDRANT_URL` | YAML-driven | Qdrant endpoint for every RAG index. Use `http://gme-qdrant:6333` inside the devcontainer. |
 | `V2_QUERY_LOG_DIR` | `logs/v2_queries` | Per-request external-query log destination |
 | `LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
-| `GITHUB_TOKEN` | unset | Required for healthy provider preflight |
+| `GME_GITHUB_TOKEN` | unset | Required for healthy provider preflight |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | unset | At least one required in LLM mode |
 | `SELENIUM_REMOTE_URL` | unset | Enables link-veracity + the `fetch_link_content_via_selenium` tool |

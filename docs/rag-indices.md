@@ -47,7 +47,7 @@ Every index built on the post-2026-05-01 pattern uses:
 - **Embeddings**: `Qwen/Qwen3-Embedding-8B` on EPFL RCP, instruction-aware.
 - **Reranker**: `Qwen/Qwen3-Reranker-8B` on EPFL RCP.
 - **Chunking**: token-aware sliding window via `tiktoken` (`cl100k_base`); window/overlap configured per index in YAML.
-- **Auth**: `RCP_TOKEN` (required for embed + rerank); per-index source tokens (`HF_TOKEN`, `GITHUB_TOKEN`, `INFOSCIENCE_TOKEN`, etc.) where the upstream API requires them.
+- **Auth**: `RCP_TOKEN` (required for embed + rerank); per-index source tokens (`HF_TOKEN`, `GME_GITHUB_TOKEN`, `INFOSCIENCE_TOKEN`, etc.) where the upstream API requires them.
 
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of orgs in Qdrant + a JSONL dump for lexical lookup). The `infoscience` legacy chunks live alongside the new schema.
 

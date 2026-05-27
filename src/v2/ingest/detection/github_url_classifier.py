@@ -128,7 +128,7 @@ def _probe_account_type(account_name: str) -> str | None:
     if not account_name or "/" in account_name:
         return None
     headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
-    token = os.environ.get("GITHUB_TOKEN", "").split(",", 1)[0].strip()
+    token = os.environ.get("GME_GITHUB_TOKEN", "").split(",", 1)[0].strip()
     if token:
         headers["Authorization"] = f"Bearer {token}"
     try:

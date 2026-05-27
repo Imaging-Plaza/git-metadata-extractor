@@ -1,7 +1,7 @@
 """Config loader for the GitHub indexer.
 
 Reads `config/index/github.yaml` and merges in env-sourced credentials
-(`RCP_TOKEN`, `GITHUB_TOKEN`, `INDEX_QDRANT_API_KEY`) plus the resolved
+(`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_API_KEY`) plus the resolved
 data dir.
 
 The `rcp` and `qdrant` sub-blocks mirror `OpenAlexIndexConfig`
@@ -27,7 +27,7 @@ TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}
 
 MISSING_RCP_TOKEN_ERROR = "Missing required environment variable: RCP_TOKEN"
-MISSING_GITHUB_TOKEN_ERROR = "Missing required environment variable: GITHUB_TOKEN"
+MISSING_GME_GITHUB_TOKEN_ERROR = "Missing required environment variable: GME_GITHUB_TOKEN"
 
 
 class RcpConfig(BaseModel):
@@ -84,7 +84,7 @@ class GitHubIndexConfig(BaseModel):
 
     def require_github(self) -> None:
         if not self.github.token:
-            raise ValueError(MISSING_GITHUB_TOKEN_ERROR)
+            raise ValueError(MISSING_GME_GITHUB_TOKEN_ERROR)
 
 
 def _env_bool(name: str) -> Optional[bool]:
@@ -113,7 +113,7 @@ def load_config(path: Optional[Path] = None) -> GitHubIndexConfig:
     raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
 
     raw.setdefault("rcp", {})["token"] = _env_str("RCP_TOKEN")
-    raw.setdefault("github", {})["token"] = _env_str("GITHUB_TOKEN")
+    raw.setdefault("github", {})["token"] = _env_str("GME_GITHUB_TOKEN")
     raw.setdefault("qdrant", {})["api_key"] = _env_str("INDEX_QDRANT_API_KEY")
 
     if (override := _env_str("INDEX_QDRANT_URL")) is not None:

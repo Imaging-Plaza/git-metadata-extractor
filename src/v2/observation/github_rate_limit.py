@@ -1,6 +1,6 @@
 """GitHub token-pool rate-limit probe.
 
-Probes each token in `GITHUB_TOKEN_POOL` (or `GITHUB_TOKEN`) against
+Probes each token in `GME_GITHUB_TOKEN_POOL` (or `GME_GITHUB_TOKEN`) against
 `GET /rate_limit`. The endpoint does not count against the rate limit
 itself, so this is safe to call from `/v2/health`. Results are cached
 in-process for 30s to avoid flooding GitHub when a load balancer hits
@@ -54,11 +54,11 @@ _cache: tuple[float, GitHubRateLimitSummary] | None = None
 
 
 def _resolve_token_pool() -> list[str]:
-    pool = os.environ.get("GITHUB_TOKEN_POOL", "")
+    pool = os.environ.get("GME_GITHUB_TOKEN_POOL", "")
     tokens = [token.strip() for token in pool.split(",") if token.strip()]
     if tokens:
         return tokens
-    single = os.environ.get("GITHUB_TOKEN", "").strip()
+    single = os.environ.get("GME_GITHUB_TOKEN", "").strip()
     return [single] if single else []
 
 

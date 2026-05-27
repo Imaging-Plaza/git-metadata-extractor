@@ -6,7 +6,7 @@ from src.v2.agents.runtime import AgentRuntime
 from src.v2.config import V2Config
 
 V2_CONFIG_ENV_KEYS = {
-    "GITHUB_TOKEN",
+    "GME_GITHUB_TOKEN",
     "V2_AGENT_RUNTIME_DEFAULT",
 }
 
@@ -20,12 +20,12 @@ def test_v2_config_with_required_env_is_valid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
 
     config = V2Config()
     config.validate_preflight()
 
-    assert config.GITHUB_TOKEN
+    assert config.GME_GITHUB_TOKEN
 
 
 def test_v2_config_missing_github_token_raises_descriptive_error(
@@ -34,7 +34,7 @@ def test_v2_config_missing_github_token_raises_descriptive_error(
     _clear_v2_config_env(monkeypatch)
 
     config = V2Config()
-    with pytest.raises(ValueError, match="Missing required environment variable: GITHUB_TOKEN"):
+    with pytest.raises(ValueError, match="Missing required environment variable: GME_GITHUB_TOKEN"):
         config.validate_preflight()
 
 
@@ -42,7 +42,7 @@ def test_v2_agent_runtime_default_is_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
 
     config = V2Config()
 
@@ -53,7 +53,7 @@ def test_v2_agent_runtime_default_can_be_set_to_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
     monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "llm")
 
     config = V2Config()
@@ -65,7 +65,7 @@ def test_v2_agent_runtime_default_rejects_invalid_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-value")
+    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
     monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "not_a_runtime")
 
     with pytest.raises(ValueError, match="Invalid runtime value for V2_AGENT_RUNTIME_DEFAULT"):

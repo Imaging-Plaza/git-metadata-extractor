@@ -97,7 +97,7 @@ for the full list. Notable additions vs. v1:
 - `V2_PROVIDER_CACHE_*` — shared provider + verdict + pipeline + job-store cache.
 - `V2_<INDEX>_RAG_ENABLED` — toggle each RAG tool family.
 - `INDEX_QDRANT_URL` — Qdrant endpoint for the RAG indices.
-- `GITHUB_TOKEN` — required for healthy provider preflight (same as v1).
+- `GME_GITHUB_TOKEN` — required for healthy provider preflight (same as v1).
 
 ## Breaking/Behavior Changes
 

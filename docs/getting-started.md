@@ -18,7 +18,7 @@ cp .env.example .env
 
 Required to serve `/v2/extract`:
 
-- `GITHUB_TOKEN` — `/v2/health` flips to `degraded` without it.
+- `GME_GITHUB_TOKEN` — `/v2/health` flips to `degraded` without it.
 - `API_TOKEN` — bearer token guarding every `/v1/*` route plus
   `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
   every protected request returns `503` (no dev bypass). Generate with

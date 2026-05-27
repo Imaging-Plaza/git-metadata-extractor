@@ -22,7 +22,7 @@ _API_KEY_SOURCES: Dict[str, str] = {}
 def _next_api_key(env_var: str) -> str:
     """Round-robin a single token out of a comma-separated env value.
 
-    Supports the same multi-token pattern as `GITHUB_TOKEN`
+    Supports the same multi-token pattern as `GME_GITHUB_TOKEN`
     (`ghp_A,ghp_B,...`): set `RCP_TOKEN=sk-A,sk-B` and every LLM model
     instantiation pulls the next key. Locked per-env-var so different
     providers (`RCP_TOKEN`, `OPENAI_API_KEY`, ...) keep independent cycles.

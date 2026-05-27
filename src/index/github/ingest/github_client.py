@@ -13,7 +13,7 @@ the four endpoints we actually need:
   GET /repos/{owner}/{name}/contributors?per_page=100 — top-100 contributors
   GET /repos/{owner}/{name}/readme      — base64-encoded README + path
 
-Multi-token support: `GITHUB_TOKEN` may be a comma-separated list of PATs
+Multi-token support: `GME_GITHUB_TOKEN` may be a comma-separated list of PATs
 (`ghp_A,ghp_B,...`). The client splits at construction, round-robins across
 tokens per request, and on 403 rate-limit responses parks the exhausted
 token until its `X-RateLimit-Reset` timestamp. With N tokens, effective

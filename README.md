@@ -94,7 +94,7 @@ cp .env.example .env
 
 Edit `.env` and fill in at minimum:
 
-- `GITHUB_TOKEN` — required for `/v2/health` to report `ok` and for any
+- `GME_GITHUB_TOKEN` — required for `/v2/health` to report `ok` and for any
   real GitHub call (extraction service + `gh-*` indexer).
 - One LLM credential — `RCP_TOKEN` (EPFL RCP), `OPENAI_API_KEY`, or
   `OPENROUTER_API_KEY`, depending on the model profile in

@@ -357,14 +357,14 @@ class TerminalRunner:
         # plain `gimie.project.Project` here would re-introduce those.
         from src.v1.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
 
-        # The repo's GITHUB_TOKEN is comma-separated for v1's rotation
+        # The repo's GME_GITHUB_TOKEN is comma-separated for v1's rotation
         # logic. gimie expects a single token and 401s on the literal
         # comma string; pick the first non-empty token for the gimie
         # call only, then restore the original env.
-        gh_token_orig = os.environ.get("GITHUB_TOKEN", "")
+        gh_token_orig = os.environ.get("GME_GITHUB_TOKEN", "")
         if "," in gh_token_orig:
             primary = next((t.strip() for t in gh_token_orig.split(",") if t.strip()), gh_token_orig)
-            os.environ["GITHUB_TOKEN"] = primary
+            os.environ["GME_GITHUB_TOKEN"] = primary
         try:
             try:
                 gimie_payload = extract_gimie(source_url, serialization_format="json-ld")
@@ -373,7 +373,7 @@ class TerminalRunner:
                 gimie_payload = {"@graph": [], "_gimie_error": str(err)}
         finally:
             if gh_token_orig:
-                os.environ["GITHUB_TOKEN"] = gh_token_orig
+                os.environ["GME_GITHUB_TOKEN"] = gh_token_orig
         (workdir / "gimie.jsonld").write_text(
             json.dumps(gimie_payload, indent=2, ensure_ascii=False, default=str),
             encoding="utf-8",
