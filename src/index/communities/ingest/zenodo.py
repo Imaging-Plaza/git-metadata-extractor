@@ -50,8 +50,10 @@ def _normalize_record(payload: dict[str, Any], parent_org: str | None) -> dict[s
         val = metadata.get(key) if isinstance(metadata, dict) else None
         if isinstance(val, list):
             keywords.extend(str(v) for v in val if isinstance(v, (str, dict)))
+    from src.index.communities.iri import canonical_community_id  # noqa: PLC0415
+
     return {
-        "community_id": f"zenodo:{slug}",
+        "community_id": canonical_community_id("zenodo", slug),
         "source": "zenodo",
         "source_slug": slug,
         "parent_org": parent_org,

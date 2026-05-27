@@ -10,9 +10,11 @@ from pydantic import BaseModel, Field
 class CommunityRecord(BaseModel):
     """One row of the `communities` table.
 
-    `community_id` is namespaced by source (`zenodo:epfl-chili`) so we
-    can ingest the same logical community from multiple sources in the
-    future without primary-key clashes.
+    `community_id` is the canonical IRI for the community at its source
+    (e.g. `https://zenodo.org/communities/epfl-chili`). The
+    `src.index.communities.iri.canonical_community_id(source, slug)`
+    helper centralises the mapping; legacy `zenodo:<slug>` rows are
+    migrated in-place by `bootstrap()`.
     """
 
     community_id: str

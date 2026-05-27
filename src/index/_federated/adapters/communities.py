@@ -104,14 +104,16 @@ class CommunitiesAdapter:
         try:
             s = identifier.strip()
             # Three flavours of identifier we recognise:
-            #   1. `zenodo:<slug>`   (our canonical PK)
+            #   1. Full Zenodo URL   (`https://zenodo.org/communities/<slug>`,
+            #      the canonical PK post-migration)
             #   2. bare `<slug>`     (matches source_slug)
-            #   3. Full Zenodo URL   (`https://zenodo.org/communities/<slug>`)
+            #   3. Legacy `zenodo:<slug>` (pre-migration PK; kept for
+            #      backwards compatibility while consumers update)
             slug = s
-            if s.startswith("zenodo:"):
+            if s.startswith("https://zenodo.org/communities/"):
+                slug = s.rsplit("/", 1)[-1].rstrip("/")
+            elif s.startswith("zenodo:"):
                 slug = s.split(":", 1)[1]
-            elif s.startswith("https://zenodo.org/communities/"):
-                slug = s.rsplit("/", 1)[-1]
             rows = con.execute(
                 """
                 SELECT community_id, source, source_slug, parent_org, title,
