@@ -181,7 +181,7 @@ Shared infrastructure (post-2026-05-01 pattern):
 - **Reranker**: `Qwen/Qwen3-Reranker-8B` on EPFL RCP.
 - **Chunking**: token-aware sliding window via `tiktoken` (`cl100k_base`).
 - **Auth**: `RCP_TOKEN` (required); per-index source tokens (`HF_TOKEN`,
-  `GITHUB_TOKEN`, `INFOSCIENCE_TOKEN`, …) where the upstream API requires
+  `GME_GITHUB_TOKEN`, `INFOSCIENCE_TOKEN`, …) where the upstream API requires
   them.
 
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of

@@ -29,7 +29,7 @@ install-dev:
 setup:
     @echo "Setting up Git Metadata Extractor development environment..."
     pip install -e .
-    @if [ ! -f .env ]; then echo "Creating .env file from template..."; echo "OPENAI_API_KEY=\nOPENROUTER_API_KEY=\nGITHUB_TOKEN=\nGITLAB_TOKEN=\nMODEL=gpt-4\nPROVIDER=openai\nCACHE_ENABLED=true" > .env; echo ".env file created. Please edit with your API keys."; else echo ".env file already exists."; fi
+    @if [ ! -f .env ]; then echo "Creating .env file from template..."; echo "OPENAI_API_KEY=\nOPENROUTER_API_KEY=\nGME_GITHUB_TOKEN=\nGITLAB_TOKEN=\nMODEL=gpt-4\nPROVIDER=openai\nCACHE_ENABLED=true" > .env; echo ".env file created. Please edit with your API keys."; else echo ".env file already exists."; fi
     @echo "Setup complete!"
 
 # ============================================================================

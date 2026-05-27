@@ -41,7 +41,7 @@ def is_github_repo_public(repo_url: str) -> bool:
 
     # Use GitHub token if available for higher rate limits
     headers = {}
-    github_token = os.environ.get("GITHUB_TOKEN")
+    github_token = os.environ.get("GME_GITHUB_TOKEN")
     if github_token:
         headers["Authorization"] = f"token {github_token}"
 

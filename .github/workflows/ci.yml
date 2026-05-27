@@ -54,7 +54,7 @@ jobs:
 
       - name: Run v1 parity regression tests
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GME_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p .tmp
           CACHE_DB_PATH=.tmp/cache.db python -m pytest tests/v1/test_cache.py tests/v1/test_orcid_validation_pipeline.py tests/v1/test_v1_parity.py

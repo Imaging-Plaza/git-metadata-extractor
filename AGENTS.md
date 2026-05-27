@@ -206,7 +206,7 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
 
 | Var | Default | Purpose |
 |---|---|---|
-| `GITHUB_TOKEN` | — | required for live GitHub provider |
+| `GME_GITHUB_TOKEN` | — | required for live GitHub provider |
 | `API_TOKEN` | — | bearer token guarding every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | — | one is required for LLM mode |
 | `INFOSCIENCE_TOKEN` | unset | only for protected Infoscience routes |
@@ -237,7 +237,7 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
 | `V2_QUERY_LOG_DIR` | `logs/v2_queries` | per-request external-query log destination |
 | `LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
 
-Required environment **for serving requests**: `GITHUB_TOKEN` and at least
+Required environment **for serving requests**: `GME_GITHUB_TOKEN` and at least
 one LLM credential (when LLM mode is the default).
 
 Rules:

@@ -14,7 +14,7 @@ from ..data_models.organization import GitHubOrganizationMetadata
 
 load_dotenv()
 
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+GME_GITHUB_TOKEN = os.environ["GME_GITHUB_TOKEN"]
 
 
 class GitHubOrganizationsParser:
@@ -22,7 +22,7 @@ class GitHubOrganizationsParser:
 
     def __init__(self):
         """Initialize the parser with GitHub token for higher rate limits"""
-        self.github_token = GITHUB_TOKEN
+        self.github_token = GME_GITHUB_TOKEN
         self.rest_base_url = "https://api.github.com"
         self.graphql_url = "https://api.github.com/graphql"
 

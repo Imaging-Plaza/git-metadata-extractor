@@ -24,7 +24,7 @@ Root causes fall into four areas:
 | Consumer | git-metadata-extractor GIMIE JSON-LD route |
 | Library | `gimie==0.7.2` (PyPI) |
 | YAML | PyYAML `safe_load` in `gimie.parsers.cff` |
-| GitHub | Authenticated API (`GITHUB_TOKEN`) |
+| GitHub | Authenticated API (`GME_GITHUB_TOKEN`) |
 
 ---
 
@@ -101,7 +101,7 @@ PyYAML (YAML 1.1) treats **unquoted** scalars matching `YYYY-M-D` as **timestamp
 
 ### Reproduction
 
-- Many **`force_refresh=true`** calls or high crawl concurrency against **`GET /v1/repository/gimie/json-ld/...`** with the same **`GITHUB_TOKEN`**.
+- Many **`force_refresh=true`** calls or high crawl concurrency against **`GET /v1/repository/gimie/json-ld/...`** with the same **`GME_GITHUB_TOKEN`**.
 - GIMIE runs GraphQL **`query_contributors`**; GitHub responds with an error body such as *“You have exceeded a secondary rate limit…”*.
 
 ### Root cause

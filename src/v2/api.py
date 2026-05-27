@@ -2412,7 +2412,7 @@ async def health() -> V2HealthResponse:
         component_statuses["config"] = "unhealthy"
 
     rate_limit_summary: GitHubRateLimitSummary | None = None
-    if config and config.GITHUB_TOKEN:
+    if config and config.GME_GITHUB_TOKEN:
         try:
             rate_limit_summary = probe_github_rate_limit()
         except Exception:  # noqa: BLE001 — probe must never crash health

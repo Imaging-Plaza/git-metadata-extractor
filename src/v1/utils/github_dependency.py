@@ -19,7 +19,7 @@ async def validate_github_token() -> dict:
     Validate GitHub token and retrieve rate limit information.
 
     This dependency:
-    - Checks if GITHUB_TOKEN is configured
+    - Checks if GME_GITHUB_TOKEN is configured
     - Validates the token by calling GitHub API
     - Retrieves current rate limit information
     - Returns rate limit data for logging and response inclusion
@@ -34,9 +34,9 @@ async def validate_github_token() -> dict:
     Raises:
         HTTPException 401 if token is missing, invalid, or expired
     """
-    raw_token = os.environ.get("GITHUB_TOKEN")
+    raw_token = os.environ.get("GME_GITHUB_TOKEN")
 
-    # `GITHUB_TOKEN` may be a comma-separated list of tokens used by the
+    # `GME_GITHUB_TOKEN` may be a comma-separated list of tokens used by the
     # rotation client (src/index/github/api.py). The validator only needs one
     # working token to confirm the deployment is configured, so pick the first
     # non-empty entry. Passing the raw comma-joined string to GitHub returns
@@ -55,7 +55,7 @@ async def validate_github_token() -> dict:
         logger.error("GitHub token not configured")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub token not configured. Set GITHUB_TOKEN environment variable.",
+            detail="GitHub token not configured. Set GME_GITHUB_TOKEN environment variable.",
         )
 
     # Validate token by calling GitHub API rate limit endpoint
@@ -77,7 +77,7 @@ async def validate_github_token() -> dict:
             logger.error("GitHub token is invalid or expired")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="GitHub token is invalid or expired. Please update GITHUB_TOKEN environment variable.",
+                detail="GitHub token is invalid or expired. Please update GME_GITHUB_TOKEN environment variable.",
             )
 
         # If other error status

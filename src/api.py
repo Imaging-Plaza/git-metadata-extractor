@@ -11,13 +11,13 @@ from typing import Optional
 
 
 def _normalize_github_token_pool() -> None:
-    """Split a comma-separated GITHUB_TOKEN into a per-process token pool.
+    """Split a comma-separated GME_GITHUB_TOKEN into a per-process token pool.
 
-    Runs before any v1/gimie import so module-level `os.environ["GITHUB_TOKEN"]`
+    Runs before any v1/gimie import so module-level `os.environ["GME_GITHUB_TOKEN"]`
     reads see a single valid token. The full list (deduped, order preserved) is
-    exported as GITHUB_TOKEN_POOL for v2 REST hot paths to round-robin over.
+    exported as GME_GITHUB_TOKEN_POOL for v2 REST hot paths to round-robin over.
     """
-    raw = os.environ.get("GITHUB_TOKEN", "")
+    raw = os.environ.get("GME_GITHUB_TOKEN", "")
     if "," not in raw:
         return
     seen: set[str] = set()
@@ -29,8 +29,8 @@ def _normalize_github_token_pool() -> None:
             tokens.append(token)
     if not tokens:
         return
-    os.environ["GITHUB_TOKEN_POOL"] = ",".join(tokens)
-    os.environ["GITHUB_TOKEN"] = tokens[0]
+    os.environ["GME_GITHUB_TOKEN_POOL"] = ",".join(tokens)
+    os.environ["GME_GITHUB_TOKEN"] = tokens[0]
 
 
 _normalize_github_token_pool()

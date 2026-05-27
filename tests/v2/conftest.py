@@ -9,12 +9,12 @@ from typing import Any, Callable, Iterator
 # Module-level env defaults — must land BEFORE pytest discovers tests, since
 # the `_isolate_main_app_state` autouse fixture imports `src.api`, which
 # pulls in `src/v1/parsers/orgs_parser.py` whose top-level reads
-# `os.environ["GITHUB_TOKEN"]` unconditionally and raises KeyError when the
+# `os.environ["GME_GITHUB_TOKEN"]` unconditionally and raises KeyError when the
 # var is missing (observed in CI where `setup-python` does not provide one).
 # Tests that need to exercise the "token missing" path delete the var via
 # `monkeypatch.delenv(..., raising=False)` so this default is purely a
 # bootstrap; it does not mask real misconfiguration in product code.
-os.environ.setdefault("GITHUB_TOKEN", "ci-test-github-token")
+os.environ.setdefault("GME_GITHUB_TOKEN", "ci-test-github-token")
 os.environ.setdefault("API_TOKEN", "ci-test-api-token")
 
 import pytest

@@ -1,6 +1,6 @@
 # GitHub repository RAG indexer config.
 # Resolved by `src/index/github/config.py` and merged with env vars
-# (`RCP_TOKEN`, `GITHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
 # `INDEX_DATA_DIR`, `INDEX_GITHUB_SCOPE`) at startup.
 
 rcp:

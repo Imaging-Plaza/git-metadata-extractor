@@ -23,14 +23,14 @@ from src.v2.ingest.providers.ror_provider import RealRORProvider  # noqa: E402
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_PROVIDERS = ("github", "ror", "orcid", "infoscience", "selenium")
 ENV_REQUIREMENTS_BY_PROVIDER = {
-    "github": ("GITHUB_TOKEN",),
+    "github": ("GME_GITHUB_TOKEN",),
     "infoscience": ("INFOSCIENCE_TOKEN",),
     "selenium": ("SELENIUM_REMOTE_URL",),
 }
-MISSING_GITHUB_TOKEN_ERROR = "Missing required environment variable: GITHUB_TOKEN"  # noqa: S105
+MISSING_GME_GITHUB_TOKEN_ERROR = "Missing required environment variable: GME_GITHUB_TOKEN"  # noqa: S105
 MISSING_SELENIUM_URL_ERROR = "Missing required environment variable: SELENIUM_REMOTE_URL"
 GITHUB_UNAUTHORIZED_ERROR = (
-    "GitHub token unauthorized (401). Check GITHUB_TOKEN value and scopes."
+    "GitHub token unauthorized (401). Check GME_GITHUB_TOKEN value and scopes."
 )
 ROR_INVALID_PAYLOAD_ERROR = "ROR organization check returned an invalid payload"
 ROR_EMPTY_SEARCH_ERROR = "ROR search check returned no results"
@@ -67,9 +67,9 @@ def get_missing_required_env_vars(providers: Sequence[str] | None = None) -> lis
 
 
 def _check_github(timeout_seconds: int) -> None:
-    github_token = os.getenv("GITHUB_TOKEN", "").strip()
+    github_token = os.getenv("GME_GITHUB_TOKEN", "").strip()
     if not github_token:
-        raise RuntimeError(MISSING_GITHUB_TOKEN_ERROR)
+        raise RuntimeError(MISSING_GME_GITHUB_TOKEN_ERROR)
 
     session = requests.Session()
     headers = {

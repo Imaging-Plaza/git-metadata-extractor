@@ -29,7 +29,7 @@ from ..data_models import (
 
 load_dotenv()
 
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+GME_GITHUB_TOKEN = os.environ["GME_GITHUB_TOKEN"]
 SELENIUM_REMOTE_URL = os.environ.get("SELENIUM_REMOTE_URL", "http://localhost:4444")
 
 
@@ -41,7 +41,7 @@ class GitHubUsersParser:
         Initialize the parser with optional GitHub token for higher rate limits
 
         """
-        self.github_token = GITHUB_TOKEN
+        self.github_token = GME_GITHUB_TOKEN
         self.rest_base_url = "https://api.github.com"
         self.graphql_url = "https://api.github.com/graphql"
 
