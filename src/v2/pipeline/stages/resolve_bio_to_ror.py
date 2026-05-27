@@ -85,6 +85,7 @@ def _multi_key(field: str) -> tuple[str, ...]:
 BIO_KEYS = _multi_key("bio")
 ORCID_BIO_KEYS = _multi_key("orcid_biography")
 BLOG_KEYS = _multi_key("blog")
+EMAIL_KEYS = _multi_key("email")
 
 
 # Host → ROR search query. Values are the institution NAME (not a ROR
@@ -235,6 +236,31 @@ def _extract_bio_candidates(text: str) -> list[str]:
     return out
 
 
+def _email_to_query(email: str | None) -> str | None:
+    """Pull the institution name out of a (privacy-anonymized) email.
+
+    ``person_agent._anonymize_email`` already replaces the local part
+    with a short SHA-256 prefix but keeps the domain intact — exactly
+    the part we need for affiliation resolution. So
+    ``deadbeef@epfl.ch`` resolves through ``DOMAIN_HINTS`` the same
+    way ``people.epfl.ch`` does as a blog host.
+    """
+    if not isinstance(email, str):
+        return None
+    s = email.strip()
+    if "@" not in s:
+        return None
+    domain = s.rsplit("@", 1)[1].strip().lower()
+    if not domain:
+        return None
+    parts = domain.split(".")
+    for i in range(len(parts) - 1):
+        candidate = ".".join(parts[i:])
+        if candidate in DOMAIN_HINTS:
+            return DOMAIN_HINTS[candidate]
+    return None
+
+
 def _blog_to_query(blog_url: str | None) -> str | None:
     """Parse a blog URL and return the ROR search query when the host
     matches a known institution suffix. Returns None on unknown hosts."""
@@ -297,6 +323,7 @@ async def run_resolve_bio_to_ror_stage(
         bio = _read_first(person, BIO_KEYS) or ""
         orcid_bio = _read_first(person, ORCID_BIO_KEYS) or ""
         blog = _read_first(person, BLOG_KEYS) or ""
+        email = _read_first(person, EMAIL_KEYS) or ""
 
         candidates: list[str] = []
         seen_candidates: set[str] = set()
@@ -306,10 +333,13 @@ async def run_resolve_bio_to_ror_stage(
                     continue
                 seen_candidates.add(candidate.lower())
                 candidates.append(candidate)
-        domain_query = _blog_to_query(blog)
-        if domain_query and domain_query.lower() not in seen_candidates:
-            candidates.append(domain_query)
-            seen_candidates.add(domain_query.lower())
+        # Email and blog feed the same DOMAIN_HINTS table; email comes
+        # first because an institutional address (`@epfl.ch`) is a
+        # stronger employer signal than a personal blog host.
+        for query in (_email_to_query(email), _blog_to_query(blog)):
+            if query and query.lower() not in seen_candidates:
+                candidates.append(query)
+                seen_candidates.add(query.lower())
         if not candidates:
             continue
         candidates_extracted += len(candidates)
@@ -361,6 +391,7 @@ __all__ = [
     "BLOG_KEYS",
     "BioAffiliationResult",
     "DOMAIN_HINTS",
+    "EMAIL_KEYS",
     "ORCID_BIO_KEYS",
     "run_resolve_bio_to_ror_stage",
 ]
