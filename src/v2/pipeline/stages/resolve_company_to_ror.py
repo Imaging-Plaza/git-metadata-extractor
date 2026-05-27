@@ -84,7 +84,30 @@ NON_ORG_KEYS: frozenset[str] = frozenset({
 
 # Schema IRIs (kept inline to avoid a pipeline-wide constants module).
 SCHEMA_AFFILIATION = "http://schema.org/affiliation"
-GME_INTERNAL_COMPANY = "https://openpulse.science/git-metadata-extractor#company"
+# The Person dict carries the company under different keys depending on
+# where in the pipeline we run. In-pipeline (between reconciliation and
+# the LLM critic) it's the rule-based agent's `_company`. The
+# `gme-internal:` prefixed form lands later in `jsonld_build`. The
+# full IRI is only present in post-hoc SPARQL queries against the
+# already-expanded JSON-LD graph. We read whichever is set.
+COMPANY_KEYS: tuple[str, ...] = (
+    "_company",
+    "gme-internal:company",
+    "https://openpulse.science/git-metadata-extractor#company",
+)
+# Back-compat alias for callers that imported this name from the
+# pre-fix version of the module.
+GME_INTERNAL_COMPANY = COMPANY_KEYS[2]
+
+
+def _read_company(person: dict[str, Any]) -> Any:
+    """Return the first non-empty company value across every key shape
+    the Person dict might carry it under (see ``COMPANY_KEYS``)."""
+    for key in COMPANY_KEYS:
+        value = person.get(key)
+        if value:
+            return value
+    return None
 
 
 _COUNTRY_SUFFIX_RE = re.compile(r"\s*\([^)]+\)\s*$")
@@ -209,7 +232,7 @@ async def run_resolve_company_to_ror_stage(
     for person in persons:
         if not isinstance(person, dict):
             continue
-        raw_companies = person.get(GME_INTERNAL_COMPANY)
+        raw_companies = _read_company(person)
         if not raw_companies:
             continue
         if isinstance(raw_companies, str):
