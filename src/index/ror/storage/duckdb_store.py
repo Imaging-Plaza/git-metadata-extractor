@@ -296,6 +296,14 @@ class DuckDBStore:
         """Apply the canonical schema. Safe to call repeatedly."""
         conn = self.connect()
         conn.execute(_load_schema_sql())
+        # Promote the per-release Zenodo DOI to canonical URL form.
+        from src.index._shared.doi import (  # noqa: PLC0415
+            migrate_doi_column_to_url,
+        )
+
+        migrate_doi_column_to_url(
+            conn, table="manifests", column="ror_release_doi",
+        )
 
     def close(self) -> None:
         if self._conn is not None:

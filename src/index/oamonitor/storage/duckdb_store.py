@@ -59,7 +59,14 @@ class OamonitorStore:
         return self._conn
 
     def bootstrap(self) -> None:
-        self.connect().execute(_load_schema_sql())
+        conn = self.connect()
+        conn.execute(_load_schema_sql())
+        # Promote `publications.doi` to canonical `https://doi.org/<bare>`.
+        from src.index._shared.doi import (  # noqa: PLC0415
+            migrate_doi_column_to_url,
+        )
+
+        migrate_doi_column_to_url(conn, table="publications", column="doi")
 
     def close(self) -> None:
         if self._conn is not None:
@@ -101,6 +108,10 @@ class OamonitorStore:
         )
 
     def upsert_publication(self, row: dict[str, Any]) -> None:
+        from src.index._shared.doi import doi_iri  # noqa: PLC0415
+
+        if row.get("doi"):
+            row = {**row, "doi": doi_iri(row["doi"])}
         sql = (
             "INSERT INTO publications "
             "(_id, doi, url, oa_color, license, published_year, "
