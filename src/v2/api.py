@@ -1495,13 +1495,18 @@ def _maybe_schedule_github_auto_ingest(
 
         def _do_ingest() -> tuple[str, int]:
             cfg = load_github_config()
+            cfg.require_github()
             with _GITHUB_AUTO_INGEST_LOCK:
                 store = GitHubStore.open(cfg.paths.duckdb_path)
                 try:
                     existing = store.fetch_repo(full_name)
                     if existing is not None:
                         return ("skipped_already_indexed", 0)
-                    client = GitHubClient(cfg)
+                    client = GitHubClient(
+                        api_base=cfg.github.api_base,
+                        token=cfg.github.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
                     outcome = ingest_single_repo(
                         config=cfg, store=store, client=client, full_name=full_name,
                     )
