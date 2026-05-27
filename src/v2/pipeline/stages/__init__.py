@@ -63,6 +63,10 @@ from src.v2.pipeline.stages.resolve_bio_to_ror import (
     BioAffiliationResult,
     run_resolve_bio_to_ror_stage,
 )
+from src.v2.pipeline.stages.resolve_bio_to_ror_llm import (
+    BioLLMAffiliationResult,
+    run_resolve_bio_to_ror_llm_stage,
+)
 from src.v2.pipeline.stages.resolve_company_to_ror import (
     CompanyAffiliationResult,
     run_resolve_company_to_ror_stage,
@@ -79,6 +83,7 @@ __all__ = [
     "SUPPORTED_BACKENDS",
     "AssembledOutput",
     "BioAffiliationResult",
+    "BioLLMAffiliationResult",
     "CompanyAffiliationResult",
     "ConceptTaggingResult",
     "ContextBundle",
@@ -114,6 +119,7 @@ __all__ = [
     "run_llm_dedup_stage",
     "run_org_relationships_stage",
     "run_refine_with_llm_stage",
+    "run_resolve_bio_to_ror_llm_stage",
     "run_resolve_bio_to_ror_stage",
     "run_resolve_company_to_ror_stage",
     "tag_rule_based_disciplines",
