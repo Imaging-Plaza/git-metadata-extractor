@@ -13,8 +13,21 @@ from src.index.openalex.config import (
 
 @pytest.mark.openalex()
 def test_defaults_from_yaml(monkeypatch):
-    monkeypatch.delenv("OPENALEX_MAILTO", raising=False)
-    monkeypatch.delenv("RCP_TOKEN", raising=False)
+    # `load_config()` reads several env vars and overrides the YAML defaults
+    # if any are set. Local dev shells (devcontainer `.env`, etc.) often
+    # export `INDEX_QDRANT_URL=http://gme-qdrant:6333`, which then leaks
+    # into this test as `cfg.qdrant.url`. Clear every env the loader
+    # consults so the test really exercises the YAML defaults.
+    for env_var in (
+        "OPENALEX_MAILTO",
+        "RCP_TOKEN",
+        "INDEX_QDRANT_API_KEY",
+        "INDEX_QDRANT_URL",
+        "INDEX_QDRANT_PREFER_GRPC",
+        "INDEX_OPENALEX_SCOPE_ROR",
+        "INDEX_OPENALEX_SCOPE_COUNTRY",
+    ):
+        monkeypatch.delenv(env_var, raising=False)
     cfg = load_config()
     assert cfg.rcp.base_url == "https://inference-rcp.epfl.ch/v1"
     assert cfg.rcp.embedding_model == "Qwen/Qwen3-Embedding-8B"
@@ -24,7 +37,9 @@ def test_defaults_from_yaml(monkeypatch):
     assert cfg.scope.country == "ch"
     assert cfg.openalex.base_url == "https://api.openalex.org"
     assert cfg.openalex.per_page == 200
-    assert cfg.qdrant.url == "http://localhost:6333"
+    # YAML default mirrors the devcontainer compose service name. Host
+    # shells override via `INDEX_QDRANT_URL=http://localhost:6333`.
+    assert cfg.qdrant.url == "http://gme-qdrant:6333"
     assert cfg.chunking.size_tokens == 256
     assert cfg.chunking.overlap_tokens == 64
     # No env tokens were set.
