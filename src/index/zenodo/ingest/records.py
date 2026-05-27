@@ -79,10 +79,15 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
     else:
         resource_type = str(resource_type_block) if resource_type_block else None
     concept_recid = item.get("conceptrecid")
-    from src.index.zenodo.iri import record_iri  # noqa: PLC0415
+    from src.index.zenodo.iri import doi_iri, record_iri  # noqa: PLC0415
 
     bare_id = str(item.get("id") or item.get("conceptrecid") or "")
     stats = item.get("stats") if isinstance(item.get("stats"), dict) else {}
+
+    def _doi_url(value: Any) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        return doi_iri(value)
 
     def _int(value: Any) -> int | None:
         if value is None:
@@ -95,8 +100,8 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "zenodo_id": record_iri(bare_id) if bare_id else "",
         "concept_recid": str(concept_recid) if concept_recid is not None else None,
-        "doi": item.get("doi") or metadata.get("doi"),
-        "concept_doi": item.get("conceptdoi"),
+        "doi": _doi_url(item.get("doi") or metadata.get("doi")),
+        "concept_doi": _doi_url(item.get("conceptdoi")),
         "title": metadata.get("title"),
         "description": _strip_html(metadata.get("description")),
         "publication_date": _parse_publication_date(metadata.get("publication_date")),

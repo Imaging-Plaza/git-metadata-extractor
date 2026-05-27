@@ -145,6 +145,49 @@ class ZenodoStore:
         # tripped DuckDB internal index errors on tables this size,
         # so we drop-and-rebuild via CTAS.
         self._migrate_link_tables_to_iri()
+        # DOIs → canonical doi.org URL form. Idempotent.
+        self._migrate_dois_to_url()
+
+    def _migrate_dois_to_url(self) -> None:
+        """Promote `records.doi` / `records.concept_doi` to the
+        `https://doi.org/<bare>` URL form. Idempotent — rows already in
+        URL form match no WHERE clause.
+        """
+        conn = self.connect()
+        # Detect schema readiness — `concept_doi` was added by the
+        # stats-and-version PR; older DBs without it skip silently.
+        cols = {
+            r[1] for r in conn.execute("PRAGMA table_info('records')").fetchall()
+        }
+        if "doi" in cols:
+            conn.execute(
+                "UPDATE records "
+                "   SET doi = 'https://doi.org/' || doi "
+                " WHERE doi IS NOT NULL "
+                "   AND doi NOT LIKE 'https://doi.org/%' "
+                "   AND doi NOT LIKE 'https://dx.doi.org/%'",
+            )
+            # Normalise the legacy `dx.doi.org` host while we're here.
+            conn.execute(
+                "UPDATE records "
+                "   SET doi = 'https://doi.org/' || "
+                "             SUBSTRING(doi, LENGTH('https://dx.doi.org/') + 1) "
+                " WHERE doi LIKE 'https://dx.doi.org/%'",
+            )
+        if "concept_doi" in cols:
+            conn.execute(
+                "UPDATE records "
+                "   SET concept_doi = 'https://doi.org/' || concept_doi "
+                " WHERE concept_doi IS NOT NULL "
+                "   AND concept_doi NOT LIKE 'https://doi.org/%' "
+                "   AND concept_doi NOT LIKE 'https://dx.doi.org/%'",
+            )
+            conn.execute(
+                "UPDATE records "
+                "   SET concept_doi = 'https://doi.org/' || "
+                "             SUBSTRING(concept_doi, LENGTH('https://dx.doi.org/') + 1) "
+                " WHERE concept_doi LIKE 'https://dx.doi.org/%'",
+            )
 
     def _migrate_link_tables_to_iri(self) -> None:
         """CTAS-swap link/chunk tables with `record_id`/`entity_id` →
