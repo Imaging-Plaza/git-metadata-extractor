@@ -68,6 +68,17 @@ from src.v2.indices.oamonitor import (
 )
 from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
 from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
+from src.v2.indices.cli_catalogs import (
+    run_epfl_graph_search,
+    run_infoscience_search,
+    run_ror_search,
+    run_snsf_search,
+)
+from src.v2.indices.compact import (
+    CompactResult,
+    close_cached_resources_for,
+    compact_duckdb,
+)
 from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
 from src.v2.indices.stats import (
     IndexStatsResponse,
@@ -2369,6 +2380,157 @@ async def oamonitor_search_post(
         await run_oamonitor_search(payload, request.app.state),
         index_name="oamonitor",
     )
+
+
+# --- /v2/indices/<name>/search for the CLI-managed catalogs ---------------
+# These catalogs are populated by `python -m src.index.<name>` from cron
+# (no v2 ingest route) but have populated Qdrant collections. The thin
+# shims in `src.v2.indices.cli_catalogs` translate `IndexSearchRequest`
+# to each catalog's existing query function.
+
+
+@v2_router.post(
+    "/indices/ror/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def ror_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the ROR organisation index (125k+ orgs)."""
+    return await _search_response_or_unavailable(
+        await run_ror_search(payload, request.app.state),
+        index_name="ror",
+    )
+
+
+@v2_router.post(
+    "/indices/infoscience/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def infoscience_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the Infoscience publications index.
+
+    Use ``target`` to pick the collection: ``chunks`` (default),
+    ``articles``, ``persons``, ``organizations``.
+    """
+    return await _search_response_or_unavailable(
+        await run_infoscience_search(payload, request.app.state),
+        index_name="infoscience",
+    )
+
+
+@v2_router.post(
+    "/indices/snsf/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def snsf_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the SNSF grants index."""
+    return await _search_response_or_unavailable(
+        await run_snsf_search(payload, request.app.state),
+        index_name="snsf",
+    )
+
+
+@v2_router.post(
+    "/indices/epfl_graph/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def epfl_graph_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the EPFL Graph disciplines ontology."""
+    return await _search_response_or_unavailable(
+        await run_epfl_graph_search(payload, request.app.state),
+        index_name="epfl_graph",
+    )
+
+
+# --- /v2/indices/<name>/compact -------------------------------------------
+# Operator endpoint: EXPORT/IMPORT round-trip the per-provider DuckDB
+# file to reclaim space tombstoned by upsert churn. Mirrors what
+# `just compact-indexes` does offline, but online and per-provider.
+
+
+@v2_router.post(
+    "/indices/{provider}/compact",
+    response_model=CompactResult,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def index_compact_post(
+    provider: Annotated[str, Path(description="One of the supported index providers.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> CompactResult | JSONResponse:
+    """Run an EXPORT/IMPORT round-trip on `provider`'s DuckDB.
+
+    Closes the in-process Store cached on `app.state` so the file lock
+    is released, then opens a fresh connection, exports every table to
+    a sibling tempdir, swaps the DuckDB atomically with a `.bak`
+    fallback, and reports `bytes_before` / `bytes_after`. The next
+    stats / search call lazily re-opens.
+
+    This is a maintenance operation — call when the server is quiet.
+    `openalex` (3.7 GB) can take a couple of minutes.
+    """
+    try:
+        store = fetch_store_for_stats(provider, request.app.state)
+    except UnknownIndexProviderError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+    if store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": f"{provider} index resources unavailable on this deployment",
+            },
+        )
+    db_path = getattr(store, "db_path", None)
+    if db_path is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": f"{provider} Store does not expose `db_path`; compact unsupported",
+            },
+        )
+    # Close any in-process write handle so EXPORT can re-open the file.
+    close_cached_resources_for(provider, request.app.state)
+    try:
+        result = await asyncio.to_thread(compact_duckdb, provider, db_path)
+    except FileNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+    except Exception as exc:  # noqa: BLE001 — surface as 500 with the message
+        logger.exception("index compact failed: provider=%s", provider)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": f"compact failed: {exc}"},
+        )
+    return result
 
 
 @v2_router.get(

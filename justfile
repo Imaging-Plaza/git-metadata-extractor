@@ -218,6 +218,25 @@ cache-disable:
     curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/disable | python -m json.tool
 
 # ============================================================================
+# Index Maintenance
+# ============================================================================
+
+# Compact every `data/index/*/duckdb/*.duckdb` via EXPORT/IMPORT round-trip.
+# Run with the server stopped — DuckDB's file lock is per-process and the
+# helper opens each file directly. Reclaims tombstoned space accumulated
+# by upsert churn (openalex.duckdb sits at ~3.7 GB in current deployments).
+# For an online single-provider variant, use POST /v2/indices/<provider>/compact.
+compact-indexes:
+    python -m src.v2.indices.compact
+
+# Compact a single provider's DuckDB online (server must be running).
+# Example: `just compact-index openalex`. See `compact-indexes` for the
+# offline counterpart that hits every catalog at once.
+compact-index PROVIDER:
+    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" \
+        http://localhost:{{PORT}}/v2/indices/{{PROVIDER}}/compact | python -m json.tool
+
+# ============================================================================
 # Development Utilities
 # ============================================================================
 

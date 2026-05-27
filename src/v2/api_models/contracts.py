@@ -348,6 +348,14 @@ IndexName = Literal[
     "swissubase",
     "ethz_research_collection",
     "oamonitor",
+    # CLI-managed catalogs — search routes added in the stats/search
+    # coverage extension PR. No v2 ingest route (ingest happens via
+    # `python -m src.index.<name> ingest`).
+    "ror",
+    "infoscience",
+    "snsf",
+    "epfl_graph",
+    "communities",
 ]
 
 
