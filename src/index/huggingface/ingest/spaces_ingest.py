@@ -89,12 +89,17 @@ def ingest_spaces(
 
 
 def _space_row(repo_id: str, info: object) -> dict[str, object | None]:
+    from src.index.huggingface.iri import namespace_iri, space_iri  # noqa: PLC0415
+
     card_data = card_data_to_dict(getattr(info, "card_data", None) or getattr(info, "cardData", None))
     tags = list(getattr(info, "tags", None) or [])
     runtime = getattr(info, "runtime", None)
+    bare_author = (
+        getattr(info, "author", None) or author_from_repo_id(repo_id)
+    )
     return {
-        "repo_id": repo_id,
-        "author": getattr(info, "author", None) or author_from_repo_id(repo_id),
+        "repo_id": space_iri(repo_id),
+        "author": namespace_iri(bare_author) if bare_author else None,
         "sha": getattr(info, "sha", None),
         "sdk": getattr(info, "sdk", None) or _from_card("sdk", card_data),
         "runtime_stage": _runtime_stage(runtime),

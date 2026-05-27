@@ -89,12 +89,17 @@ def ingest_datasets(
 
 
 def _dataset_row(repo_id: str, info: object) -> dict[str, object | None]:
+    from src.index.huggingface.iri import dataset_iri, namespace_iri  # noqa: PLC0415
+
     card_data = card_data_to_dict(getattr(info, "card_data", None) or getattr(info, "cardData", None))
     tags = list(getattr(info, "tags", None) or [])
     dataset_info_payload = getattr(info, "dataset_info", None) or getattr(info, "datasetInfo", None)
+    bare_author = (
+        getattr(info, "author", None) or author_from_repo_id(repo_id)
+    )
     return {
-        "repo_id": repo_id,
-        "author": getattr(info, "author", None) or author_from_repo_id(repo_id),
+        "repo_id": dataset_iri(repo_id),
+        "author": namespace_iri(bare_author) if bare_author else None,
         "sha": getattr(info, "sha", None),
         "license": _license_from(card_data, getattr(info, "license", None)),
         "downloads": _coerce_int(getattr(info, "downloads", None)),

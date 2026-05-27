@@ -23,6 +23,24 @@ SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 ENTITY_TABLES: tuple[str, ...] = ("models", "datasets", "spaces")
 
 
+def _repo_iri_for_table(entity_table: str, repo_id: str) -> str:
+    """Promote a bare `<author>/<name>` to its canonical IRI for the table."""
+    from src.index.huggingface.iri import (  # noqa: PLC0415
+        dataset_iri,
+        model_iri,
+        space_iri,
+    )
+
+    match entity_table:
+        case "models":
+            return model_iri(repo_id)
+        case "datasets":
+            return dataset_iri(repo_id)
+        case "spaces":
+            return space_iri(repo_id)
+    return repo_id  # unknown table — pass through
+
+
 def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
@@ -55,6 +73,152 @@ class DuckDBStore:
     def bootstrap(self) -> None:
         conn = self.connect()
         conn.execute(_load_schema_sql())
+        # Promote bare slugs / repo_ids to their canonical
+        # `https://huggingface.co/...` IRI form. Idempotent — rows
+        # already in URL shape match no WHERE clause.
+        self._migrate_to_iri_ids()
+
+    def _migrate_to_iri_ids(self) -> None:
+        """CTAS-swap each table whose PK or FK still carries bare ids.
+
+        DuckDB's `UPDATE … SET <indexed-col> = …` chokes on large indexed
+        tables (we hit it on Zenodo's 24k record_creators), so the link
+        and entity tables get a fresh table + INSERT + DROP + RENAME.
+        Each step checks for at least one bare-id row before doing
+        any work, so the migration is a no-op on already-migrated DBs.
+        """
+        conn = self.connect()
+        ns = "https://huggingface.co/"
+
+        def _table_has_bare(table: str, column: str) -> bool:
+            row = conn.execute(
+                f"SELECT 1 FROM {table} WHERE {column} IS NOT NULL "
+                f"AND {column} NOT LIKE 'https://%' LIMIT 1",
+            ).fetchone()
+            return row is not None
+
+        def _ctas_swap(
+            *, table: str, columns: list[tuple[str, str]], select: str,
+            primary_key: tuple[str, ...] | None = None,
+        ) -> None:
+            new_table = f"{table}__iri_migrate"
+            conn.execute(f"DROP TABLE IF EXISTS {new_table}")
+            col_defs = ", ".join(f"{name} {dtype}" for name, dtype in columns)
+            if primary_key:
+                col_defs += f", PRIMARY KEY ({', '.join(primary_key)})"
+            conn.execute(f"CREATE TABLE {new_table} ({col_defs})")
+            conn.execute(f"INSERT INTO {new_table} {select}")
+            conn.execute(f"DROP TABLE {table}")
+            conn.execute(f"ALTER TABLE {new_table} RENAME TO {table}")
+
+        # --- orgs.slug (PK) → IRI -------------------------------------
+        if _table_has_bare("orgs", "slug"):
+            _ctas_swap(
+                table="orgs",
+                columns=[
+                    ("slug", "TEXT NOT NULL"),
+                    ("namespace_kind", "TEXT NOT NULL DEFAULT 'org'"),
+                    ("source", "TEXT NOT NULL DEFAULT 'seed'"),
+                    ("scope", "TEXT NOT NULL"),
+                    ("fullname", "TEXT"),
+                    ("details", "TEXT"),
+                    ("avatar_url", "TEXT"),
+                    ("num_models", "BIGINT"),
+                    ("num_datasets", "BIGINT"),
+                    ("num_spaces", "BIGINT"),
+                    ("num_followers", "BIGINT"),
+                    ("raw", "JSON"),
+                    (
+                        "ingested_at",
+                        "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                    ),
+                ],
+                select=(
+                    "SELECT "
+                    f"  CASE WHEN slug LIKE 'https://%' THEN slug ELSE '{ns}' || slug END, "
+                    "  namespace_kind, source, scope, fullname, details, avatar_url, "
+                    "  num_models, num_datasets, num_spaces, num_followers, raw, ingested_at "
+                    "FROM orgs"
+                ),
+                primary_key=("slug",),
+            )
+
+        # --- {models, datasets, spaces}.{repo_id, author} → IRI -------
+        # Each entity gets its own URL shape: models live at the namespace
+        # root, datasets under /datasets/, spaces under /spaces/. `author`
+        # is always the namespace IRI regardless of entity type.
+        entity_url_prefix = {
+            "models": ns,
+            "datasets": ns + "datasets/",
+            "spaces": ns + "spaces/",
+        }
+        for table, prefix in entity_url_prefix.items():
+            if not _table_has_bare(table, "repo_id"):
+                continue
+            cols = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
+            col_specs = [(r[1], r[2]) for r in cols]  # (name, type)
+            quoted_cols = [name for name, _ in col_specs]
+            select_clause = (
+                "SELECT "
+                + ", ".join(
+                    (
+                        f"CASE WHEN {c} LIKE 'https://%' THEN {c} "
+                        f"     ELSE '{prefix}' || {c} END"
+                        if c == "repo_id"
+                        else (
+                            f"CASE WHEN {c} LIKE 'https://%' OR {c} IS NULL "
+                            f"     THEN {c} ELSE '{ns}' || {c} END"
+                            if c == "author"
+                            else c
+                        )
+                    )
+                    for c in quoted_cols
+                )
+                + f" FROM {table}"
+            )
+            # `repo_id` PK is encoded inline; other indexes get recreated
+            # by the schema run on the next bootstrap pass (the schema
+            # CREATE INDEX IF NOT EXISTS lines are no-ops on tables that
+            # don't have them yet).
+            col_defs = [
+                (name, dtype + (" PRIMARY KEY" if name == "repo_id" else ""))
+                for name, dtype in col_specs
+            ]
+            _ctas_swap(
+                table=table,
+                columns=col_defs,
+                select=select_clause,
+            )
+
+        # --- chunks.repo_id (FK) → IRI ----------------------------------
+        if _table_has_bare("chunks", "repo_id"):
+            cols = conn.execute("PRAGMA table_info('chunks')").fetchall()
+            col_specs = [(r[1], r[2]) for r in cols]
+            quoted_cols = [name for name, _ in col_specs]
+            # entity_type discriminates the URL shape per chunk row.
+            select_clause = (
+                "SELECT "
+                + ", ".join(
+                    (
+                        "CASE "
+                        f"  WHEN {c} LIKE 'https://%' THEN {c} "
+                        f"  WHEN entity_type = 'model'   THEN '{ns}' || {c} "
+                        f"  WHEN entity_type = 'dataset' THEN '{ns}datasets/' || {c} "
+                        f"  WHEN entity_type = 'space'   THEN '{ns}spaces/' || {c} "
+                        f"  WHEN entity_type = 'org'     THEN '{ns}' || {c} "
+                        f"  ELSE {c} END"
+                        if c == "repo_id"
+                        else c
+                    )
+                    for c in quoted_cols
+                )
+                + " FROM chunks"
+            )
+            col_defs = [
+                (name, dtype + (" PRIMARY KEY" if name == "chunk_id" else ""))
+                for name, dtype in col_specs
+            ]
+            _ctas_swap(table="chunks", columns=col_defs, select=select_clause)
 
     def close(self) -> None:
         if self._conn is not None:
@@ -87,6 +251,8 @@ class DuckDBStore:
         num_followers: int | None = None,
         raw: dict[str, Any] | None = None,
     ) -> None:
+        from src.index.huggingface.iri import namespace_iri  # noqa: PLC0415
+
         raw_json = json.dumps(raw, ensure_ascii=False, default=str) if raw is not None else None
         self.connect().execute(
             "INSERT INTO orgs (slug, namespace_kind, source, scope, fullname, "
@@ -106,14 +272,18 @@ class DuckDBStore:
             "raw = COALESCE(excluded.raw, orgs.raw), "
             "ingested_at = excluded.ingested_at",
             [
-                slug, namespace_kind, source, scope, fullname,
+                namespace_iri(slug), namespace_kind, source, scope, fullname,
                 details, avatar_url, num_models, num_datasets, num_spaces,
                 num_followers, raw_json, self._now(),
             ],
         )
 
     def fetch_org(self, slug: str) -> dict[str, Any] | None:
-        cur = self.connect().execute("SELECT * FROM orgs WHERE slug = ?", [slug])
+        from src.index.huggingface.iri import namespace_iri  # noqa: PLC0415
+
+        cur = self.connect().execute(
+            "SELECT * FROM orgs WHERE slug = ?", [namespace_iri(slug)],
+        )
         row = cur.fetchone()
         if row is None:
             return None
@@ -144,11 +314,14 @@ class DuckDBStore:
 
     def list_repo_titles_for_org(self, slug: str) -> dict[str, list[dict[str, Any]]]:
         """Return per-table compact repo info used to compose the org embed text."""
+        from src.index.huggingface.iri import namespace_iri  # noqa: PLC0415
+
+        author_iri = namespace_iri(slug)
         out: dict[str, list[dict[str, Any]]] = {}
         for table in ENTITY_TABLES:
             cur = self.connect().execute(
                 f"SELECT repo_id, tags, card_data FROM {table} WHERE author = ?",  # noqa: S608
-                [slug],
+                [author_iri],
             )
             cols = [d[0] for d in cur.description]
             out[table] = [dict(zip(cols, r, strict=False)) for r in cur.fetchall()]
@@ -227,6 +400,16 @@ class DuckDBStore:
         row: dict[str, Any],
         raw: dict[str, Any],
     ) -> None:
+        from src.index.huggingface.iri import namespace_iri  # noqa: PLC0415
+
+        # Normalise repo_id + author to canonical IRI form so direct
+        # callers (and unit tests) can keep passing bare ids and still
+        # land on the same storage shape as the ingest pipeline.
+        row = dict(row)
+        if row.get("repo_id"):
+            row["repo_id"] = _repo_iri_for_table(table, str(row["repo_id"]))
+        if row.get("author"):
+            row["author"] = namespace_iri(str(row["author"]))
         all_cols = (*cols, *json_cols, "raw", "ingested_at")
         placeholders = ", ".join(["?"] * len(all_cols))
         col_list = ", ".join(all_cols)
@@ -256,6 +439,8 @@ class DuckDBStore:
         token_count: int,
         vector_id: str,
     ) -> None:
+        from src.index.huggingface.iri import iri_for_entity_type  # noqa: PLC0415
+
         self.connect().execute(
             "INSERT INTO chunks "
             "(chunk_id, entity_type, repo_id, chunk_index, text, "
@@ -266,7 +451,7 @@ class DuckDBStore:
             [
                 chunk_id,
                 entity_type,
-                repo_id,
+                iri_for_entity_type(entity_type, repo_id),
                 chunk_index,
                 text,
                 token_count,
@@ -320,7 +505,7 @@ class DuckDBStore:
             return None
         cur = self.connect().execute(
             f"SELECT sha FROM {entity_table} WHERE repo_id = ?",  # noqa: S608
-            [repo_id],
+            [_repo_iri_for_table(entity_table, repo_id)],
         )
         row = cur.fetchone()
         return row[0] if row else None
@@ -330,7 +515,7 @@ class DuckDBStore:
             return None
         cur = self.connect().execute(
             f"SELECT * FROM {entity_table} WHERE repo_id = ?",  # noqa: S608
-            [repo_id],
+            [_repo_iri_for_table(entity_table, repo_id)],
         )
         row = cur.fetchone()
         if row is None:
