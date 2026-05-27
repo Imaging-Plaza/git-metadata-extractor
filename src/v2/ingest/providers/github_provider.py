@@ -1056,7 +1056,9 @@ class RealGitHubProvider(GitHubProvider):
         "go.mod", "package.swift", "project.toml", "pom.xml",
         "description",  # R package manifest (Author / Maintainer fields)
         # Research-software & public-sector metadata standards
-        ".zenodo.json", "codemeta.json", "publiccode.yml",
+        ".zenodo.json", "codemeta.json", "publiccode.yml", "publiccode.yaml",
+        # Some projects spell it "CONTRIBUTION.md" instead of CONTRIBUTING.md.
+        "contribution.md",
     })
 
     # Suffix-based matches for ecosystems that name files <project>.ext

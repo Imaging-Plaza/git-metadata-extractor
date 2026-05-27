@@ -158,3 +158,120 @@ def test_repository_agent_filters_organization_contributors_from_authors() -> No
     derivation = result.stats.get("derivation")
     assert isinstance(derivation, dict)
     assert derivation["contributor_logins"] == ["alice"]
+
+
+def test_repository_agent_emits_aux_file_urls_for_present_files() -> None:
+    """When the context-gather slice carries a CITATION.cff / AUTHORS /
+    CONTRIBUTING.md / publiccode.yml, the agent should stamp a URL
+    pointer for each. The matcher is case-insensitive (real GitHub
+    responses preserve the on-disk casing)."""
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "name": "Hello-World",
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [{"login": "octocat"}],
+                    "languages": {"Python": 1},
+                    "aux_files": {
+                        # GitHub preserves the on-disk casing.
+                        "CITATION.cff": "cff-version: 1.2.0\nauthors:\n - given-names: Octo\n   family-names: Cat",
+                        "AUTHORS.md": "- Octo Cat",
+                        "CONTRIBUTING.md": "Open a PR.",
+                        "publiccode.yaml": "publiccodeYmlVersion: '0.4'",
+                    },
+                },
+            },
+            providers,
+        ),
+    )
+
+    raw = result.raw_output
+    assert raw["_citation_cff_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/CITATION.cff"
+    assert raw["_authors_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/AUTHORS.md"
+    assert raw["_contributing_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/CONTRIBUTING.md"
+    assert raw["_publiccode_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/publiccode.yaml"
+
+
+def test_repository_agent_emits_none_for_absent_aux_files() -> None:
+    """A repo with no CITATION.cff / AUTHORS / CONTRIBUTING / publiccode
+    must explicitly carry `None` for those internal fields so downstream
+    consumers can distinguish "absent" from "not checked"."""
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "name": "Hello-World",
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [{"login": "octocat"}],
+                    "languages": {"Python": 1},
+                    "aux_files": {"README.md": "Hello"},  # nothing relevant
+                },
+            },
+            providers,
+        ),
+    )
+
+    raw = result.raw_output
+    assert raw["_citation_cff_url"] is None
+    assert raw["_authors_url"] is None
+    assert raw["_contributing_url"] is None
+    assert raw["_publiccode_url"] is None
+
+
+def test_repository_agent_accepts_alternate_contribution_spelling() -> None:
+    """Some projects ship `CONTRIBUTION.md` (singular) — match that too."""
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "name": "Hello-World",
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [{"login": "octocat"}],
+                    "languages": {"Python": 1},
+                    "aux_files": {"CONTRIBUTION.md": "see docs"},
+                },
+            },
+            providers,
+        ),
+    )
+
+    assert result.raw_output["_contributing_url"] == (
+        "https://github.com/octocat/Hello-World/blob/HEAD/CONTRIBUTION.md"
+    )

@@ -28,6 +28,60 @@ DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 STRICT_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
+# Case-insensitive lookups against the repo-root aux file list. Keys are
+# lowercased filename matchers; values map to the `_*_url` internal
+# field that should be stamped when the matcher hits. Order within a
+# tuple is preference order — we use the first match. The provider
+# (`get_repository_aux_files`) is responsible for fetching these; the
+# agent only stamps a URL pointer so downstream stages (LLM refiners,
+# graph consumers) can quote the source.
+_REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("_citation_cff_url",  ("citation.cff",)),
+    ("_authors_url",       ("authors", "authors.md", "authors.rst", "authors.txt")),
+    # CONTRIBUTING is the standard spelling; CONTRIBUTION is rarer but
+    # ships in a handful of older research projects.
+    ("_contributing_url",  ("contributing.md", "contribution.md")),
+    ("_publiccode_url",    ("publiccode.yml", "publiccode.yaml")),
+)
+
+
+def _resolve_aux_file_urls(
+    aux_files: Any,
+    *,
+    full_name: str,
+) -> dict[str, str | None]:
+    """Return ``{field: url_or_None}`` for the supplementary repo-root
+    files we expose as internal fields. URL form is canonical
+    (`https://github.com/<owner>/<repo>/blob/HEAD/<filename>`), matching
+    the project-wide "everything is a URL" convention. None is emitted
+    when no case-insensitive match for that field's allowed filenames
+    is in ``aux_files``.
+    """
+    if not isinstance(aux_files, dict) or not full_name:
+        return {field: None for field, _ in _REPO_AUX_FILE_LOOKUPS}
+    # `aux_files` keys come back from GitHub with their original
+    # casing; build a once-only lookup so each field-level scan is O(1).
+    lower_to_original = {
+        str(name).lower(): name
+        for name in aux_files
+        if isinstance(name, str)
+    }
+    out: dict[str, str | None] = {}
+    for field, candidates in _REPO_AUX_FILE_LOOKUPS:
+        matched: str | None = None
+        for candidate in candidates:
+            original = lower_to_original.get(candidate)
+            if original is not None:
+                matched = original
+                break
+        out[field] = (
+            f"https://github.com/{full_name}/blob/HEAD/{matched}"
+            if matched
+            else None
+        )
+    return out
+
+
 def _to_list_of_strings(value: Any) -> list[str]:
     if isinstance(value, str) and value:
         return [value]
@@ -231,6 +285,7 @@ class RepositoryAgentV2:
         contributors: list[dict[str, Any]]
         languages: dict[str, Any]
 
+        aux_files: dict[str, str]
         if reuse_gathered_context and isinstance(repository_context, dict):
             metadata_candidate = repository_context.get("metadata")
             repository = metadata_candidate if isinstance(metadata_candidate, dict) else {}
@@ -244,16 +299,21 @@ class RepositoryAgentV2:
 
             languages_candidate = repository_context.get("languages")
             languages = languages_candidate if isinstance(languages_candidate, dict) else {}
+
+            aux_files_candidate = repository_context.get("aux_files")
+            aux_files = aux_files_candidate if isinstance(aux_files_candidate, dict) else {}
         else:
             repository = providers.github.get_repository(full_name)
             contributors = providers.github.get_contributors(full_name)
             languages = providers.github.get_languages(full_name)
+            aux_files = {}
 
         return {
             "full_name": full_name,
             "repository": repository,
             "contributors": contributors,
             "languages": languages,
+            "aux_files": aux_files,
         }
 
     async def _default_structured_output(  # noqa: C901
@@ -365,6 +425,19 @@ class RepositoryAgentV2:
             "_license_url": (repository.get("license") or {}).get("url"),
             "_avatar_url": (repository.get("owner") or {}).get("avatar_url"),
             "_visibility": repository.get("visibility"),
+            # Pointers to supplementary metadata files at the repo root
+            # (CITATION.cff, AUTHORS, CONTRIBUTING.md, publiccode.yml).
+            # The provider already fetches the *contents* into the
+            # `aux_files` slice of compiled_context for the LLM
+            # refiners; we surface a URL pointer here so non-LLM
+            # consumers (graph queries, dashboards) can link out to
+            # the source-of-truth file even when they don't have the
+            # content in hand. Each value is None when no case-
+            # insensitive match for that field's filename is present.
+            **_resolve_aux_file_urls(
+                compiled_context.get("aux_files"),
+                full_name=full_name,
+            ),
         }
 
     async def _default_repository_classifier(

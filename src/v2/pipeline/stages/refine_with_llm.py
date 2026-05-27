@@ -71,6 +71,21 @@ PERSON_PATCHABLE_FIELDS: frozenset[str] = frozenset({"schema:name"})
 MEMBERSHIP_PATCHABLE_FIELDS: frozenset[str] = frozenset({"org:role"})
 
 README_CONTEXT_MAX_CHARS = 1500
+# Aux file excerpts are short enough that we can ship more characters
+# than the README (the LLM cares about author names / institutional
+# affiliations / cited DOIs, which live in the first ~2-3 KB).
+AUX_FILE_CONTEXT_MAX_CHARS = 4_000
+# Case-insensitive filenames whose contents we forward to the LLM
+# refiners as additional context. Mirrors the agent-level URL pointers
+# in `repository_agent._REPO_AUX_FILE_LOOKUPS` (CITATION.cff / AUTHORS /
+# CONTRIBUTING.md / publiccode.yml). The key in the LLM context summary
+# is the slug; the value is the (capped) file content.
+_AUX_FILE_CONTEXT_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("citation_cff",  ("citation.cff",)),
+    ("authors",       ("authors", "authors.md", "authors.rst", "authors.txt")),
+    ("contributing",  ("contributing.md", "contribution.md")),
+    ("publiccode",    ("publiccode.yml", "publiccode.yaml")),
+)
 DEFAULT_MAX_CONCURRENCY = 4
 
 # Discovery refiner thresholds. The LLM is told to only propose
@@ -152,6 +167,30 @@ def _build_repo_context_summary(
     readme = repository_context.get("readme_content")
     if isinstance(readme, str) and readme:
         summary["readme_excerpt"] = readme[:README_CONTEXT_MAX_CHARS]
+
+    # Forward excerpts of supplementary attribution / governance /
+    # public-sector metadata files so the LLM refiners can quote
+    # author names and DOIs straight out of CITATION.cff and AUTHORS
+    # instead of having to re-derive them from the README.
+    aux_files = repository_context.get("aux_files")
+    if isinstance(aux_files, dict) and aux_files:
+        lower_to_original = {
+            str(name).lower(): name
+            for name in aux_files
+            if isinstance(name, str)
+        }
+        aux_excerpts: dict[str, str] = {}
+        for slug, candidates in _AUX_FILE_CONTEXT_LOOKUPS:
+            for candidate in candidates:
+                original = lower_to_original.get(candidate)
+                if original is None:
+                    continue
+                content = aux_files.get(original)
+                if isinstance(content, str) and content.strip():
+                    aux_excerpts[slug] = content[:AUX_FILE_CONTEXT_MAX_CHARS]
+                    break  # first match wins per slug
+        if aux_excerpts:
+            summary["aux_files"] = aux_excerpts
 
     return summary
 
