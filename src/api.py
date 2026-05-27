@@ -42,6 +42,9 @@ def _resolve_package_version(name: str) -> str:
     except PackageNotFoundError:
         return "unknown"
 
+
+from urllib.parse import urlparse
+
 from fastapi import (
     Depends,
     FastAPI,
@@ -73,6 +76,41 @@ setup_logging(level=log_level, use_colors=True)
 
 
 logger = logging.getLogger(__name__)
+
+
+_GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
+
+
+def _assert_github_host(full_path: str) -> None:
+    """Raise 422 if `full_path` is not a github.com URL/path.
+
+    The v1 user/org/repository routes wrap atomic-agent pipelines that are
+    hard-wired to GitHub's REST + GraphQL schemas: the agent prompts emit
+    `pulse:githubRepositoryHandle` literals, image URLs are absolutised
+    against the GitHub raw-content host, and `Repository.run_atomic_llm_pipeline`
+    eventually calls `parsers/github_*`. Feeding a `gitlab.epfl.ch` URL into
+    that path produces hallucinated `github.com/unknown/<repo>` outputs
+    instead of clean data (issues #11, #12).
+
+    GitLab support proper is tracked in #54. Until that lands, fail closed
+    here so the caller gets a clear 422 instead of garbage downstream.
+    """
+    candidate = (full_path or "").strip()
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    host = (urlparse(candidate).hostname or "").lower()
+    if host in _GITHUB_HOSTS:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=(
+            f"v1 endpoints only accept github.com URLs (got host '{host or full_path}'). "
+            "GitLab / self-hosted-Git providers are tracked in issue #54; until then "
+            "the LLM pipeline would emit hallucinated github.com identifiers (#11/#12). "
+            "Use the v2 `/v2/extract` endpoint, which returns the same 422 from its "
+            "URL classifier so the caller can branch cleanly."
+        ),
+    )
 
 
 async def startup_event(app: FastAPI | None = None):
@@ -806,6 +844,7 @@ async def get_org_json(
     - Organization Object with enriched metadata
     - Usage statistics (token counts, timing, status)
     """
+    _assert_github_host(full_path)
     org_name = full_path.split("/")[-1]
 
     # Ensure full_path is a valid URL
@@ -935,6 +974,7 @@ async def get_user_json(
     - User Object with enriched metadata (id field set to full GitHub profile URL)
     - Statistics (token usage, timing, and status)
     """
+    _assert_github_host(full_path)
     username = full_path.split("/")[-1]
 
     # Ensure full_path is a valid URL
@@ -1072,6 +1112,7 @@ async def gimie(
     - Statistics (timing and status)
     """
 
+    _assert_github_host(full_path)
     try:
         repository = Repository(full_path, force_refresh=force_refresh)
 
@@ -1274,6 +1315,7 @@ async def llm_jsonld(
     - Statistics (token usage, timing, and status)
     """
 
+    _assert_github_host(full_path)
     repository = Repository(full_path, force_refresh=force_refresh)
 
     await repository.run_analysis(
@@ -1442,6 +1484,7 @@ async def llm_json(
     - Repository Object with enriched metadata
     """
 
+    _assert_github_host(full_path)
     repository = Repository(full_path, force_refresh=force_refresh)
 
     await repository.run_analysis(
