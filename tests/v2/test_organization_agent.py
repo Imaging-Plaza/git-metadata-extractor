@@ -190,3 +190,29 @@ def test_organization_agent_repository_mode_owns_only_source_repo() -> None:
     )
 
     assert result.data["pulse:owns"] == ["owner-org/source-repo"]
+
+
+def test_organization_agent_surfaces_github_trust_and_activity_signals() -> None:
+    """The org agent should pass through `is_verified` (GitHub's
+    domain-ownership verification flag), `archived_at`, `public_gists`,
+    `following`, and the two `_projects` booleans into the internal
+    `_`-prefixed fields. The fixture sets `is_verified=true` so the
+    downstream `org_resolver` can short-circuit on a verified org."""
+    agent = OrganizationAgentV2()
+    providers = ProviderSet(
+        github=MockGitHubProvider(),
+        ror=MockRORProvider(),
+        infoscience=MockInfoscienceProvider(),
+    )
+
+    result = asyncio.run(
+        agent.run({"org_name": "github"}, providers),
+    )
+
+    raw = result.raw_output
+    assert raw["_is_verified"] is True
+    assert raw["_archived_at"] is None
+    assert raw["_public_gists"] == 12
+    assert raw["_following_count"] == 0
+    assert raw["_has_organization_projects"] is True
+    assert raw["_has_repository_projects"] is True

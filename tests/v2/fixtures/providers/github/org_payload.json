@@ -18,8 +18,11 @@
   "email": "support@github.com",
   "is_verified": true,
   "has_organization_projects": true,
+  "has_repository_projects": true,
   "public_repos": 500,
+  "public_gists": 12,
   "followers": 200000,
   "following": 0,
+  "archived_at": null,
   "type": "Organization"
 }

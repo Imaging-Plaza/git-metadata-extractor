@@ -462,6 +462,21 @@ class OrganizationAgentV2:
             "_github_created_at":  github_org.get("created_at"),
             "_github_updated_at":  github_org.get("updated_at"),
             "_github_account_type": github_org.get("type"),
+            # GitHub trust + activity signals we previously dropped on the
+            # floor. `is_verified` is GitHub's domain-ownership verification
+            # flag — when true, GitHub has confirmed the org owns the
+            # domain(s) listed on its profile, and the downstream
+            # `org_resolver` can short-circuit (the org is real, the
+            # ROR lookup is the only remaining question). `archived_at`
+            # is the org-level archival timestamp (distinct from per-repo
+            # `_archived`); pruning rollups against this is much cheaper
+            # than scanning all repos.
+            "_is_verified":            github_org.get("is_verified"),
+            "_archived_at":            github_org.get("archived_at"),
+            "_public_gists":           github_org.get("public_gists"),
+            "_following_count":        github_org.get("following"),
+            "_has_organization_projects": github_org.get("has_organization_projects"),
+            "_has_repository_projects":   github_org.get("has_repository_projects"),
             # ROR profile extras.
             "_ror_country":        ror_record.get("country") if isinstance(ror_record, dict) else None,
             "_ror_types":          ror_record.get("types") if isinstance(ror_record, dict) else None,
