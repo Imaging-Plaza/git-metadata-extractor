@@ -243,6 +243,108 @@ def test_repository_agent_emits_none_for_absent_aux_files() -> None:
     assert raw["_publiccode_url"] is None
 
 
+def test_repository_agent_parses_publiccode_into_internal_field() -> None:
+    """When a publiccode.yml is present in the aux_files, the agent
+    must surface the parsed payload under `_publiccode` so downstream
+    consumers (LLM refiners, graph dashboards) get typed access to
+    license / repoOwner / softwareType / contacts without reparsing."""
+    import textwrap
+    pcyml = textwrap.dedent("""
+        publiccodeYmlVersion: '0.4.0'
+        name: Hello World Service
+        url: https://github.com/octocat/Hello-World
+        softwareVersion: 1.0.0
+        developmentStatus: stable
+        softwareType: standalone/web
+        platforms:
+          - web
+        categories:
+          - office
+        legal:
+          license: MIT
+          mainCopyrightOwner: Octo Cat
+          repoOwner: Octo Cat
+        maintenance:
+          type: internal
+          contacts:
+            - name: Octo Cat
+              email: octo@example.com
+              affiliation: GitHub
+        description:
+          en:
+            shortDescription: Say hello to the world.
+    """)
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "name": "Hello-World",
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [{"login": "octocat"}],
+                    "languages": {"Python": 1},
+                    "aux_files": {"publiccode.yml": pcyml},
+                },
+            },
+            providers,
+        ),
+    )
+
+    pc = result.raw_output["_publiccode"]
+    assert pc is not None
+    assert pc["publiccodeYmlVersion"] == "0.4.0"
+    assert pc["name"] == "Hello World Service"
+    assert pc["softwareType"] == "standalone/web"
+    assert pc["legal"] == {
+        "license": "MIT", "mainCopyrightOwner": "Octo Cat", "repoOwner": "Octo Cat",
+    }
+    assert pc["maintenance"]["contacts"][0]["email"] == "octo@example.com"
+    assert pc["description"]["en"]["shortDescription"] == "Say hello to the world."
+
+
+def test_repository_agent_publiccode_is_none_when_absent() -> None:
+    """No publiccode.yml in the aux files → `_publiccode` is None."""
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "full_name": "octocat/Hello-World",
+                    "metadata": {
+                        "name": "Hello-World",
+                        "full_name": "octocat/Hello-World",
+                        "owner": {"login": "octocat", "type": "User"},
+                        "created_at": "2020-01-01T00:00:00Z",
+                        "license": {"spdx_id": "MIT"},
+                        "fork": False,
+                        "source": {"full_name": None},
+                    },
+                    "contributors": [{"login": "octocat"}],
+                    "languages": {"Python": 1},
+                    "aux_files": {"README.md": "Hello"},
+                },
+            },
+            providers,
+        ),
+    )
+
+    assert result.raw_output["_publiccode"] is None
+
+
 def test_repository_agent_accepts_alternate_contribution_spelling() -> None:
     """Some projects ship `CONTRIBUTION.md` (singular) — match that too."""
     agent = RepositoryAgentV2()

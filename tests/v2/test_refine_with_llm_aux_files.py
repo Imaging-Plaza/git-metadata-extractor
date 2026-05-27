@@ -101,6 +101,46 @@ def test_summary_caps_long_aux_file_contents():
     assert len(summary["aux_files"]["citation_cff"]) == AUX_FILE_CONTEXT_MAX_CHARS
 
 
+def test_summary_includes_parsed_publiccode_payload():
+    """The LLM context summary should carry the *parsed* publiccode
+    payload alongside the raw excerpt — the LLM gets typed fields
+    (license, softwareType, contacts) without having to reparse YAML."""
+    pc = (
+        "publiccodeYmlVersion: '0.4.0'\n"
+        "name: foo\n"
+        "softwareType: standalone/web\n"
+        "legal:\n  license: AGPL-3.0-or-later\n"
+    )
+    summary = _build_repo_context_summary(
+        gathered_context=_wrap_context({"publiccode.yml": pc}),
+    )
+    assert summary["publiccode"]["name"] == "foo"
+    assert summary["publiccode"]["softwareType"] == "standalone/web"
+    assert summary["publiccode"]["legal"] == {"license": "AGPL-3.0-or-later"}
+    # The raw excerpt is still there for verbatim quoting.
+    assert "publiccode" in summary["aux_files"]
+
+
+def test_summary_publiccode_payload_handled_for_yaml_extension():
+    pc = "publiccodeYmlVersion: '0.4.0'\nname: bar\n"
+    summary = _build_repo_context_summary(
+        gathered_context=_wrap_context({"publiccode.yaml": pc}),
+    )
+    assert summary["publiccode"]["name"] == "bar"
+
+
+def test_summary_omits_publiccode_key_when_payload_unparseable():
+    """A malformed publiccode.yml leaves the raw excerpt in
+    `aux_files` (caller may still want to show it) but does not pin a
+    bogus `publiccode` key on the summary."""
+    summary = _build_repo_context_summary(
+        gathered_context=_wrap_context({"publiccode.yml": "foo: : not yaml"}),
+    )
+    assert "publiccode" not in summary
+    # Raw excerpt still present.
+    assert "publiccode" in summary["aux_files"]
+
+
 def test_summary_picks_first_match_per_slug():
     """When both `authors` and `authors.md` are present, the first
     match in the candidate order wins — deterministic regardless of

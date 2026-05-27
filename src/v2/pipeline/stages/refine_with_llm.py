@@ -59,6 +59,7 @@ from src.v2.agents.llm.refiners.org_resolver import (
 from src.v2.agents.llm.runtime import LLMRuntimeError
 from src.v2.api_models.enums import OrganizationTypeV2
 from src.v2.ingest.providers.epfl_graph_rag import EpflGraphRagProvider
+from src.v2.parsers.publiccode import parse_publiccode
 from src.v2.pipeline.stages.models import ReconciledEntities
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,21 @@ def _build_repo_context_summary(
                     break  # first match wins per slug
         if aux_excerpts:
             summary["aux_files"] = aux_excerpts
+
+        # When a publiccode.yml is present, also surface the *parsed*
+        # payload so the LLM gets typed fields (license, softwareType,
+        # repoOwner, contacts) instead of having to reparse YAML. The
+        # raw excerpt above remains so the LLM can verify a quote
+        # verbatim if it needs to.
+        publiccode_filename = lower_to_original.get(
+            "publiccode.yml",
+        ) or lower_to_original.get("publiccode.yaml")
+        if publiccode_filename:
+            content = aux_files.get(publiccode_filename)
+            if isinstance(content, str):
+                parsed = parse_publiccode(content)
+                if parsed:
+                    summary["publiccode"] = parsed
 
     return summary
 

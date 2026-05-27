@@ -12,6 +12,7 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from src.v2.parsers.publiccode import parse_publiccode
 
 CompiledContextStage = Callable[[dict[str, Any], ProviderSet], dict[str, Any] | Awaitable[dict[str, Any]]]
 StructuredOutputStage = Callable[
@@ -43,6 +44,21 @@ _REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("_contributing_url",  ("contributing.md", "contribution.md")),
     ("_publiccode_url",    ("publiccode.yml", "publiccode.yaml")),
 )
+
+
+def _resolve_publiccode_payload(aux_files: Any) -> dict[str, Any] | None:
+    """Locate publiccode.yml / publiccode.yaml (case-insensitive) in
+    the gathered ``aux_files`` and return the parsed payload, or None
+    when none is present / parseable."""
+    if not isinstance(aux_files, dict):
+        return None
+    for filename, content in aux_files.items():
+        if not isinstance(filename, str) or not isinstance(content, str):
+            continue
+        lower = filename.lower()
+        if lower in ("publiccode.yml", "publiccode.yaml"):
+            return parse_publiccode(content)
+    return None
 
 
 def _resolve_aux_file_urls(
@@ -437,6 +453,15 @@ class RepositoryAgentV2:
             **_resolve_aux_file_urls(
                 compiled_context.get("aux_files"),
                 full_name=full_name,
+            ),
+            # Parsed publiccode.yml payload (when present). Keys are the
+            # camelCase publiccode v0.4 field names — caller-side
+            # consumers don't have to re-parse YAML. Future work
+            # (separate PR): promote selected fields (license, repoOwner,
+            # softwareType, developmentStatus) to first-class
+            # ontology terms via a `publiccode:` JSON-LD prefix.
+            "_publiccode": _resolve_publiccode_payload(
+                compiled_context.get("aux_files"),
             ),
         }
 
