@@ -60,6 +60,12 @@ class DuckDBStore:
     def bootstrap(self) -> None:
         conn = self.connect()
         conn.execute(_load_schema_sql())
+        # Promote `articles.doi` to canonical `https://doi.org/<bare>`.
+        from src.index._shared.doi import (  # noqa: PLC0415
+            migrate_doi_column_to_url,
+        )
+
+        migrate_doi_column_to_url(conn, table="articles", column="doi")
 
     def close(self) -> None:
         if self._conn is not None:
@@ -96,6 +102,10 @@ class DuckDBStore:
     # ---- Upserts ---------------------------------------------------------
 
     def upsert_article(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        from src.index._shared.doi import doi_iri  # noqa: PLC0415
+
+        if row.get("doi"):
+            row = {**row, "doi": doi_iri(row["doi"])}
         self._upsert(
             table="articles",
             cols=(

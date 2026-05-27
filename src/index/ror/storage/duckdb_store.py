@@ -296,6 +296,14 @@ class DuckDBStore:
         """Apply the canonical schema. Safe to call repeatedly."""
         conn = self.connect()
         conn.execute(_load_schema_sql())
+        # Promote the per-release Zenodo DOI to canonical URL form.
+        from src.index._shared.doi import (  # noqa: PLC0415
+            migrate_doi_column_to_url,
+        )
+
+        migrate_doi_column_to_url(
+            conn, table="manifests", column="ror_release_doi",
+        )
 
     def close(self) -> None:
         if self._conn is not None:
@@ -586,6 +594,8 @@ class DuckDBStore:
             "ror_release_doi = excluded.ror_release_doi, "
             "built_at_iso = excluded.built_at_iso"
         )
+        from src.index._shared.doi import doi_iri  # noqa: PLC0415
+
         self.connect().execute(
             sql,
             [
@@ -595,7 +605,9 @@ class DuckDBStore:
                 manifest.embedding_dim,
                 manifest.reranker_model,
                 manifest.ror_release_version,
-                manifest.ror_release_doi,
+                # Canonical DOI at write time. doi_iri is idempotent so
+                # callers that already pass a URL pass through unchanged.
+                doi_iri(manifest.ror_release_doi),
                 manifest.built_at_iso or _now_iso(),
             ],
         )

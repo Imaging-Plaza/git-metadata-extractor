@@ -54,7 +54,15 @@ class DuckDBStore:
         return self._conn
 
     def bootstrap(self) -> None:
-        self.connect().execute(_load_schema_sql())
+        conn = self.connect()
+        conn.execute(_load_schema_sql())
+        # Promote `output_publications.doi` to canonical
+        # `https://doi.org/<bare>`. Idempotent.
+        from src.index._shared.doi import (  # noqa: PLC0415
+            migrate_doi_column_to_url,
+        )
+
+        migrate_doi_column_to_url(conn, table="output_publications", column="doi")
 
     def close(self) -> None:
         if self._conn is not None:
@@ -244,7 +252,25 @@ class DuckDBStore:
                 "ScientificPublication_Title, ScientificPublication_Author, "
                 "ScientificPublication_State, "
                 "TRY_CAST(ScientificPublication_Year AS INTEGER), "
-                "ScientificPublication_ISBN, ScientificPublication_DOI, "
+                "ScientificPublication_ISBN, "
+                # Promote bare DOIs to canonical `https://doi.org/<doi>` at
+                # CSV-load time so readers don't have to wait for the next
+                # `bootstrap()` to converge. CASE handles NULL / already-URL
+                # rows untouched.
+                "CASE "
+                "  WHEN ScientificPublication_DOI IS NULL "
+                "       OR TRIM(ScientificPublication_DOI) = '' THEN NULL "
+                "  WHEN ScientificPublication_DOI LIKE 'https://doi.org/%' "
+                "       THEN ScientificPublication_DOI "
+                "  WHEN ScientificPublication_DOI LIKE 'https://dx.doi.org/%' "
+                "       THEN 'https://doi.org/' || "
+                "            SUBSTRING(ScientificPublication_DOI, "
+                "                      LENGTH('https://dx.doi.org/') + 1) "
+                "  WHEN LOWER(ScientificPublication_DOI) LIKE 'doi:%' "
+                "       THEN 'https://doi.org/' || "
+                "            SUBSTRING(ScientificPublication_DOI, 5) "
+                "  ELSE 'https://doi.org/' || ScientificPublication_DOI "
+                "END, "
                 "ScientificPublication_ImportSource, "
                 "TRY_CAST(ScientificPublication_OpenAccessStatusYesNo AS INTEGER), "
                 "ScientificPublication_OpenAccessStatus, ScientificPublication_Url, "
