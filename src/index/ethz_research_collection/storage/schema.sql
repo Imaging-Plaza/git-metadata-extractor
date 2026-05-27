@@ -2,6 +2,14 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 -- Mirrors the openalex / huggingface sister-index pattern.
 
+-- One-shot cleanup of the dead `chunks` table: chunks live exclusively
+-- in Qdrant (`ethz_research_collection_chunks` collection) and the
+-- DuckDB table never received any rows. Bootstrap now drops it on
+-- every run so existing on-disk DBs converge to the new shape; new
+-- DBs see it as a no-op.
+DROP INDEX IF EXISTS idx_chunks_entity;
+DROP TABLE IF EXISTS chunks;
+
 CREATE TABLE IF NOT EXISTS articles (
     article_uuid       TEXT PRIMARY KEY,
     title              TEXT,
@@ -68,21 +76,6 @@ CREATE TABLE IF NOT EXISTS article_links (
     PRIMARY KEY (article_uuid, host_label, url, source)
 );
 
--- chunk_id is deterministic: uuid5(NAMESPACE_URL, "<entity_type>|<entity_id>|<index>")
--- so the primary key alone provides the (entity_type, entity_id, chunk_index)
--- uniqueness guarantee. See `embed/pipeline.py:_chunk_id` for the canonical helper
--- (or build/store.py if it lives there for infoscience).
-CREATE TABLE IF NOT EXISTS chunks (
-    chunk_id        TEXT PRIMARY KEY,
-    entity_type     TEXT NOT NULL,
-    entity_id       TEXT NOT NULL,
-    chunk_index     INTEGER NOT NULL,
-    text            TEXT NOT NULL,
-    token_count     INTEGER NOT NULL,
-    vector_id       TEXT NOT NULL,
-    embedded_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE INDEX IF NOT EXISTS idx_articles_year      ON articles (publication_year);
 CREATE INDEX IF NOT EXISTS idx_articles_doi       ON articles (doi);
 CREATE INDEX IF NOT EXISTS idx_persons_orcid      ON persons (orcid);
@@ -91,4 +84,3 @@ CREATE INDEX IF NOT EXISTS idx_orgs_ror           ON organizations (ror_id);
 CREATE INDEX IF NOT EXISTS idx_orgs_parent        ON organizations (parent_org_uuid);
 CREATE INDEX IF NOT EXISTS idx_article_links_host ON article_links (host_label);
 CREATE INDEX IF NOT EXISTS idx_article_links_url  ON article_links (url);
-CREATE INDEX IF NOT EXISTS idx_chunks_entity      ON chunks (entity_type, entity_id);
