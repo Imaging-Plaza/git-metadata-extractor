@@ -87,3 +87,49 @@ CREATE INDEX IF NOT EXISTS idx_creators_orcid      ON creators (orcid);
 CREATE INDEX IF NOT EXISTS idx_chunks_entity       ON chunks (entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_record_creators_ck  ON record_creators (creator_key);
 CREATE INDEX IF NOT EXISTS idx_record_comm_cid     ON record_communities (community_id);
+
+-- One-shot IRI migration. Pre-existing rows used bare numeric ids
+-- (records.zenodo_id) and bare slugs (communities.community_id); new
+-- ingest writes IRI form. The UPDATEs below converge every legacy row
+-- to the canonical IRI; each clause is idempotent because the WHERE
+-- filter ('LIKE') matches zero rows on re-runs.
+
+-- records.zenodo_id: '18314844' → 'https://zenodo.org/records/18314844'
+UPDATE records
+   SET zenodo_id = 'https://zenodo.org/records/' || zenodo_id
+ WHERE zenodo_id NOT LIKE 'https://%';
+
+-- records.primary_community_id: 'epfl' → 'https://zenodo.org/communities/epfl'
+UPDATE records
+   SET primary_community_id = 'https://zenodo.org/communities/' || primary_community_id
+ WHERE primary_community_id IS NOT NULL
+   AND primary_community_id NOT LIKE 'https://%';
+
+-- records.community_ids JSON list — promote each element. DuckDB's
+-- json_transform can't easily rewrite list elements, so we rebuild
+-- the JSON array client-side via list_transform.
+UPDATE records
+   SET community_ids = (
+       SELECT to_json(list_transform(
+           CAST(community_ids AS VARCHAR[]),
+           x -> CASE WHEN x LIKE 'https://%'
+                     THEN x
+                     ELSE 'https://zenodo.org/communities/' || x
+                END
+       ))
+   )
+ WHERE community_ids IS NOT NULL
+   AND CAST(community_ids AS VARCHAR) LIKE '%"%"%'  -- non-empty list
+   AND CAST(community_ids AS VARCHAR) NOT LIKE '%"https://%';  -- has bare slugs
+
+-- communities.community_id: 'epfl' → 'https://zenodo.org/communities/epfl'
+UPDATE communities
+   SET community_id = 'https://zenodo.org/communities/' || community_id
+ WHERE community_id NOT LIKE 'https://%';
+
+-- NOTE: Link table FK rewrites (record_creators, record_communities,
+-- files, chunks.entity_id) are NOT handled here — DuckDB's index
+-- maintenance chokes on the bulk UPDATE for large tables
+-- (~24k record_creators rows hits "Failed to delete all rows from
+-- index"). Those migrations live in `duckdb_store.py::bootstrap()`,
+-- which uses a CTAS-swap idiom that sidesteps the bug.
