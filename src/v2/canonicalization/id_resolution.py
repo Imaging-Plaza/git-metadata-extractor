@@ -5,6 +5,8 @@ import re
 import uuid
 from typing import Any
 
+from src.v2.canonicalization.orcid import parse_orcid
+
 INFOSCIENCE_CORE_ITEMS_BASE_URI = "https://infoscience.epfl.ch/server/api/core/items/"
 INFOSCIENCE_PERSON_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
 INFOSCIENCE_ORGANIZATION_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
@@ -160,12 +162,12 @@ def _existing_resolution(
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:
-    if orcid is None:
-        return None
-    candidate = orcid
-    if candidate.lower().startswith(ORCID_BASE_URI):
-        candidate = candidate.rsplit("/", maxsplit=1)[-1]
-    return _clean_text(candidate)
+    """Return the bare-form ORCID. Delegates to the shared canonical
+    helper, which tolerates every input shape (bare / URL / `orcid:`
+    prefix / legacy `http` host / trailing slash / lowercase `x`
+    checksum) and rejects malformed input. Callers that need URL
+    form should use `orcid_iri` directly."""
+    return parse_orcid(orcid)
 
 
 def _normalize_ror(ror: str | None) -> str | None:

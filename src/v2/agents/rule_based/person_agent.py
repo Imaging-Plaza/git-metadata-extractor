@@ -5,6 +5,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from src.v2.canonicalization.orcid import parse_orcid
 from src.v2.agents.models import (
     AgentResult,
     ProviderSet,
@@ -18,12 +19,10 @@ HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNO
 
 
 def _normalize_orcid(orcid_value: Any) -> str | None:
-    if not isinstance(orcid_value, str):
-        return None
-    candidate = orcid_value.strip()
-    if candidate.lower().startswith("https://orcid.org/"):
-        candidate = candidate.rsplit("/", maxsplit=1)[-1]
-    return candidate or None
+    """Return the bare-form ORCID via the shared canonical helper.
+    Accepts every input shape (bare / URL / `orcid:` prefix / legacy
+    `http` host / trailing slash / lowercase `x` checksum)."""
+    return parse_orcid(orcid_value)
 
 
 def _anonymize_email(email: Any) -> str | None:

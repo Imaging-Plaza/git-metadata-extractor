@@ -152,14 +152,11 @@ def _extract_person_identifier(context: dict[str, Any]) -> str | None:
 
 
 def _normalize_orcid_hint(raw: Any) -> str | None:
-    """Strip ORCID URL prefix and return bare ORCID, or None."""
+    """Return the bare-form ORCID via the shared canonical helper.
+    Used to surface a clean ORCID hint to the LLM agent context."""
+    from src.v2.canonicalization.orcid import parse_orcid
 
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    candidate = raw.strip()
-    if candidate.lower().startswith("https://orcid.org/"):
-        candidate = candidate.rsplit("/", maxsplit=1)[-1]
-    return candidate or None
+    return parse_orcid(raw)
 
 
 def _strict_validate(payload: dict[str, Any]) -> list[str]:

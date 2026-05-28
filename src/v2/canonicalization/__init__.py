@@ -6,10 +6,14 @@ from src.v2.canonicalization.id_resolution import (
     resolve_person_id,
     resolve_repository_id,
 )
+from src.v2.canonicalization.orcid import ORCID_BARE_RE, orcid_iri, parse_orcid
 from src.v2.canonicalization.string_utils import normalize_string
 
 __all__ = [
+    "ORCID_BARE_RE",
     "normalize_string",
+    "orcid_iri",
+    "parse_orcid",
     "resolve_article_id",
     "resolve_organization_id",
     "resolve_person_id",

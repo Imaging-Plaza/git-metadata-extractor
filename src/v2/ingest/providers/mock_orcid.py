@@ -90,12 +90,14 @@ class MockORCIDProvider(ORCIDProvider):
 
     @staticmethod
     def _normalize_orcid(orcid_id: str) -> str:
-        candidate = orcid_id.strip()
-        if candidate.lower().startswith("https://orcid.org/"):
-            candidate = candidate.rsplit("/", maxsplit=1)[-1]
+        """Return the bare-form ORCID. Combines shape normalisation
+        (via the shared `parse_orcid` helper) with mod-11 checksum
+        validation — mirrors `orcid_provider._normalize_orcid` so
+        mock vs real providers reject the same invalid inputs."""
+        from src.v2.canonicalization.orcid import parse_orcid
 
-        normalized = candidate.upper()
-        if not ORCID_PATTERN.fullmatch(normalized):
+        normalized = parse_orcid(orcid_id)
+        if normalized is None:
             message = f"Invalid ORCID format: {orcid_id}"
             raise ValueError(message)
         if not MockORCIDProvider._has_valid_checksum(normalized):
