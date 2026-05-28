@@ -605,7 +605,7 @@ class Identifiers10(BaseModel):
         ...,
         alias="schema:identifier",
         description="DOI identifier (required per SHACL minCount 1)",
-        pattern="^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
+        pattern="^https://doi\\.org/10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
     )
     pulse_infoscienceArticleIdentifier: str | None = Field(
         None,
@@ -643,7 +643,7 @@ class ArticleModel(BaseModel):
         ...,
         alias="schema:identifier",
         description="DOI identifier (required per SHACL minCount 1)",
-        pattern="^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
+        pattern="^https://doi\\.org/10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$",
     )
     schema_datePublished: str = Field(
         ...,

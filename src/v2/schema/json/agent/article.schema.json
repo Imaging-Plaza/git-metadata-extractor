@@ -26,7 +26,7 @@
       "properties": {
         "schema:identifier": {
           "type": ["string", "null"],
-          "description": "DOI identifier. Format: 10.XXXX/suffix. Example: '10.1038/s41586-024-07856-z'"
+          "description": "DOI identifier in canonical URL form. Format: https://doi.org/10.XXXX/suffix. Example: 'https://doi.org/10.1038/s41586-024-07856-z'"
         },
         "pulse:infoscienceArticleIdentifier": {
           "type": ["string", "null"],
@@ -48,7 +48,7 @@
     },
     "schema:identifier": {
       "type": "string",
-      "description": "DOI identifier. REQUIRED per SHACL. Format: 10.XXXX/suffix. Example: '10.1038/s41586-024-07856-z'"
+      "description": "DOI identifier in canonical URL form. REQUIRED per SHACL. Format: https://doi.org/10.XXXX/suffix. Example: 'https://doi.org/10.1038/s41586-024-07856-z'"
     },
     "schema:datePublished": {
       "type": "string",

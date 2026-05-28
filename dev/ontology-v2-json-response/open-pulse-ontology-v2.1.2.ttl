@@ -216,8 +216,8 @@ pulse:DoiPropertyShape
     sh:path schema:identifier ;
     sh:datatype xsd:string ;
     sh:minCount 1 ;
-    sh:pattern "^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$" ;
-    sh:description "Standard DOI validation." .
+    sh:pattern "^https://doi\\.org/10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$" ;
+    sh:description "Canonical DOI URL (https://doi.org/<bare>). v2.2.0 — see CHANGELOG." .
 
 pulse:OrcidPropertyShape
     a sh:PropertyShape ;

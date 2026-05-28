@@ -11,7 +11,7 @@ Required fields:
 - `identifiers` with `schema:identifier`, `pulse:infoscienceArticleIdentifier`, `uuid`
 - `idSource` in `{ "schema:identifier", "pulse:infoscienceArticleIdentifier", "uuid" }`
 - `schema:name`
-- `schema:identifier` (DOI, format `10.xxxx/...`)
+- `schema:identifier` (DOI in canonical URL form, format `https://doi.org/10.xxxx/...`)
 - `schema:datePublished` (`YYYY-MM-DD`)
 - `schema:author` (non-empty list of Person IDs)
 
