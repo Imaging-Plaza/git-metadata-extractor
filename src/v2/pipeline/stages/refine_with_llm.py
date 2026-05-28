@@ -86,6 +86,7 @@ _AUX_FILE_CONTEXT_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("authors",       ("authors", "authors.md", "authors.rst", "authors.txt")),
     ("contributing",  ("contributing.md", "contribution.md")),
     ("publiccode",    ("publiccode.yml", "publiccode.yaml")),
+    ("security",      ("security.md",)),
 )
 DEFAULT_MAX_CONCURRENCY = 4
 
