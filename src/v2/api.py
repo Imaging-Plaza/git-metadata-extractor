@@ -131,6 +131,7 @@ from src.v2.pipeline.stages import (
     run_resolve_bio_to_ror_llm_stage,
     run_resolve_bio_to_ror_stage,
     run_resolve_company_to_ror_stage,
+    run_resolve_placeholder_orgs_to_ror_stage,
     validate_articles,
     validate_author_classes,
     validate_ownership,
@@ -203,6 +204,7 @@ STAGE_REFINE_WITH_LLM = "refine_with_llm"
 STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
 STAGE_RESOLVE_BIO_TO_ROR = "resolve_bio_to_ror"
 STAGE_RESOLVE_BIO_TO_ROR_LLM = "resolve_bio_to_ror_llm"
+STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR = "resolve_placeholder_orgs_to_ror"
 
 v2_router = APIRouter(prefix="/v2")
 
@@ -294,6 +296,22 @@ def _resolve_bio_to_ror_llm_enabled() -> bool:
     true.
     """
     raw = os.getenv("V2_RESOLVE_BIO_TO_ROR_LLM")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
+
+
+def _resolve_placeholder_orgs_to_ror_enabled() -> bool:
+    """Read `V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR` env var (default true).
+
+    When true (the default), the placeholder-resolver stage runs after
+    the three Person-side resolver stages and rewrites Organization
+    entities whose `idSource = "uuid"` (and which carry a `schema:name`
+    breadcrumb) into ROR-anchored Orgs, patching every referring
+    Membership composite in the same pass. Set to `false` to leave the
+    `urn:pulse:<uuid>` Org bucket untouched.
+    """
+    raw = os.getenv("V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR")
     if raw is None:
         return True
     return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
@@ -919,6 +937,42 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             _append_unique_warning(
                 warnings,
                 f"resolve_bio_to_ror_llm stage failed: {exc}",
+            )
+
+    # === resolve_placeholder_orgs_to_ror stage ====================
+    # Late pass that re-queries the ROR RAG against the `schema:name`
+    # of every `idSource == "uuid"` Organization (the breadcrumb
+    # carried by rescue / fallback paths that minted a placeholder
+    # Org without a registry id). Rewrites successful hits in place
+    # and patches every referring Membership composite. Runs after
+    # the three Person-side resolvers because it's strictly weaker —
+    # those stages have richer signal (`_company`, `_bio`, etc.) and
+    # should win first.
+    if _resolve_placeholder_orgs_to_ror_enabled():
+        stage_started_at = perf_counter()
+        try:
+            placeholder_result = await run_resolve_placeholder_orgs_to_ror_stage(
+                reconciled=reconciled,
+                provider=getattr(providers, "ror_rag", None),
+            )
+            logger.info(
+                "%s: examined=%d resolved=%d memberships_rewritten=%d "
+                "queries=%d accepted=%d in %.2fs",
+                STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
+                placeholder_result.placeholders_examined,
+                placeholder_result.placeholders_resolved,
+                placeholder_result.memberships_rewritten,
+                placeholder_result.queries_attempted,
+                placeholder_result.queries_accepted,
+                perf_counter() - stage_started_at,
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+            logger.exception(
+                "%s stage failed", STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
+            )
+            _append_unique_warning(
+                warnings,
+                f"resolve_placeholder_orgs_to_ror stage failed: {exc}",
             )
 
     apply_critic_pruning = _should_apply_critic_pruning()
