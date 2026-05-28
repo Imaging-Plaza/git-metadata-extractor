@@ -71,6 +71,10 @@ from src.v2.pipeline.stages.resolve_company_to_ror import (
     CompanyAffiliationResult,
     run_resolve_company_to_ror_stage,
 )
+from src.v2.pipeline.stages.resolve_placeholder_orgs_to_ror import (
+    PlaceholderResolutionResult,
+    run_resolve_placeholder_orgs_to_ror_stage,
+)
 from src.v2.pipeline.stages.refine_with_llm import (
     is_enabled as hybrid_refiner_is_enabled,
 )
@@ -90,6 +94,7 @@ __all__ = [
     "LLMCriticStageResult",
     "LLMDedupStageResult",
     "LinkVeracityStageResult",
+    "PlaceholderResolutionResult",
     "ReconciledEntities",
     "RefineWithLLMResult",
     "RootEntityValidationError",
@@ -122,6 +127,7 @@ __all__ = [
     "run_resolve_bio_to_ror_llm_stage",
     "run_resolve_bio_to_ror_stage",
     "run_resolve_company_to_ror_stage",
+    "run_resolve_placeholder_orgs_to_ror_stage",
     "tag_rule_based_disciplines",
     "validate_articles",
     "validate_author_classes",
