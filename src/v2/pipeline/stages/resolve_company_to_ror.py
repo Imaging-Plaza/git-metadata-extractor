@@ -1,14 +1,18 @@
-"""Stage: resolve gme-internal:company strings into ROR identifiers and
-stamp ``schema:affiliation`` directly on the Person entity.
+"""Stage: resolve ``_company`` strings to ROR ids and materialise the
+result as proper ``org:Membership`` + ``org:Organization`` entities on
+``reconciled.entities``. The Person itself is left alone — affiliation
+without evidence is modelled as a Membership pointing to an Org, per
+the v2 ontology. The stage does NOT emit a bare ``schema:affiliation``
+triple on Person (that property isn't in the Open Pulse ontology).
 
 Why this stage exists
 ---------------------
 ``reconciliation.py`` correctly requires *either* role/dates *or* an
 ORCID-on-Person + ROR-on-Org authority anchor before it materialises a
-``Membership`` (this prevents the "Statistics Botswana"-class false
-positives). The downstream ``refine_with_llm`` rescue pass can rescue
-some dropped memberships, but only when the README/CITATION text
-verbatim names the person + org.
+``Membership`` from raw agent output (this prevents the "Statistics
+Botswana"-class false positives that bit us in v1). The downstream
+``refine_with_llm`` rescue pass can rescue some dropped memberships,
+but only when the README/CITATION text verbatim names the person + org.
 
 That leaves a huge class of legitimate, evidence-free affiliations on
 the floor: any GitHub user who writes ``company: Google`` (or any
@@ -16,14 +20,12 @@ variant — ``@google``, ``Google Inc.``, ``Google Brain``) and does not
 also publish an ORCID iD ends up with **no** institutional link in the
 graph, even though ROR confidently resolves the string.
 
-This stage closes that gap by emitting ``schema:affiliation`` triples
-(not Memberships — Memberships still require evidence per the existing
-rule) when the GME's own ``search_ror`` skill returns a single high-
-confidence research-org candidate. The output is intentionally
-*weaker* than a Membership: ``schema:affiliation`` carries no role and
-no dates, so downstream consumers that need provenance (validation,
-critic pruning) can ignore it; consumers that only need org rollups
-(dashboards, CHAOSS metrics) get the link they actually wanted.
+This stage closes that gap by materialising Memberships when the GME's
+own ``search_ror`` skill returns a single high-confidence research-org
+candidate. The Memberships carry no ``org:role`` and no dates — that's
+honest (we have no evidence), and downstream consumers that need
+provenance can read ``_source`` (internal-only, stripped at output by
+default).
 
 Decision rule
 -------------
@@ -42,16 +44,23 @@ Reject every query whose canonical form is in ``NON_ORG_KEYS``
 The cross-encoder reranker is **off by default**. For single-word
 company queries it hurts: the reranker over-weights semantic
 similarity and promotes Calico / GamesThatWork over the literal
-match. Multi-word queries with ``--rerank`` would help — left as a
-future knob.
+match.
 
-Integration
------------
-The stage is meant to be invoked from ``api.py`` right after
-``reconcile_entities`` and before the LLM critic / refiner. The
-implementation is purely synchronous (vector search is fast: ~50 ms
-per query on the GPU embedder), so it does not need the orchestrator
-task machinery.
+Output shape
+------------
+For each accepted resolution the stage pushes:
+
+  * one minimal Organization entity to ``reconciled.entities['organizations']``
+    (id = ROR URL, type = ``org:Organization``, idSource = ``pulse:ror``,
+    schema:name = ROR's display name) when the ROR URL isn't already
+    represented in the graph;
+  * one Membership entity to ``reconciled.entities['memberships']``
+    (id = ``{personId}__{rorURL}``, type = ``org:Membership``,
+    org:organization = ROR URL, org:role / time:hasBeginning /
+    time:hasEnd = None) when the same composite isn't already present.
+
+Both writes are idempotent — re-running the stage on a graph that
+already contains its earlier output is a no-op.
 """
 from __future__ import annotations
 
@@ -61,6 +70,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.v2.agents.models import generate_uuid
 from src.v2.ingest.providers.ror_rag import RorRagProvider, build_default_provider
 
 if TYPE_CHECKING:
@@ -82,8 +92,13 @@ NON_ORG_KEYS: frozenset[str] = frozenset({
     "various", "multiple", "https",
 })
 
-# Schema IRIs (kept inline to avoid a pipeline-wide constants module).
-SCHEMA_AFFILIATION = "http://schema.org/affiliation"
+# Source tag stamped on `_source` for every Membership/Org this stage
+# generates, so downstream consumers (the critic, refine_with_llm,
+# the SHACL gate's logs) can distinguish resolver output from
+# text-extracted entities. Internal-only — `_drop_internal_keys` strips
+# it before strict validation + JSON-LD output by default.
+STAGE_SOURCE_TAG = "resolve_company_to_ror"
+
 # The Person dict carries the company under different keys depending on
 # where in the pipeline we run. In-pipeline (between reconciliation and
 # the LLM critic) it's the rule-based agent's `_company`. The
@@ -122,6 +137,8 @@ class CompanyAffiliationResult:
 
     persons_examined: int
     persons_resolved: int
+    memberships_created: int
+    organizations_created: int
     queries_attempted: int
     queries_accepted: int
     rejection_reasons: dict[str, int]
@@ -176,19 +193,23 @@ def _accept(hits: list[dict[str, Any]], query: str) -> tuple[dict | None, str]:
 
 async def _resolve_one(
     provider: RorRagProvider,
-    cache: dict[str, str | None],
+    cache: dict[str, dict[str, Any] | None],
     raw_company: str,
-) -> tuple[str | None, str]:
+) -> tuple[dict[str, Any] | None, str]:
     """Resolve one raw company string. Caches by cleaned query so
-    ``Google`` / ``@google`` / ``Google `` share a single search."""
+    ``Google`` / ``@google`` / ``Google `` share a single search.
+
+    Returns the winning ROR hit dict (with ``ror_id``, ``name``,
+    ``types``) so callers can mint a matching Org stub without a
+    second round trip. ``None`` when nothing clears the acceptance
+    gate."""
     q = _clean_query(raw_company)
     if not q or q.lower() in NON_ORG_KEYS:
         return None, "non-org key"
     if q in cache:
-        ror = cache[q]
-        return ror, "cache hit" if ror else "cached negative"
+        hit = cache[q]
+        return hit, "cache hit" if hit else "cached negative"
     hits = await provider.search(query=q, scope_mode="worldwide", top_k=5, rerank=False)
-    # Normalise hit dicts (provider may yield pydantic objects)
     norm: list[dict[str, Any]] = []
     for h in hits or []:
         if isinstance(h, dict):
@@ -198,9 +219,129 @@ async def _resolve_one(
         else:
             norm.append(dict(h.__dict__))
     winner, reason = _accept(norm, q)
-    ror_id = winner.get("ror_id") if winner else None
-    cache[q] = ror_id
-    return ror_id, reason
+    cache[q] = winner
+    return winner, reason
+
+
+# ---------------------------------------------------------------------------
+# Membership / Organization materialisation
+# ---------------------------------------------------------------------------
+
+
+def _build_org_stub(hit: dict[str, Any], *, source: str) -> dict[str, Any] | None:
+    """Build a minimal Organization entity from a ROR hit. Returns
+    ``None`` if the hit lacks a `ror_id`. Schema-conformant to
+    ``pulse:OrganizationShape`` (id, type, shacl, identifiers, idSource,
+    schema:name)."""
+    ror_id = hit.get("ror_id")
+    if not isinstance(ror_id, str) or not ror_id:
+        return None
+    name = _strip_country(str(hit.get("name") or "")) or ror_id
+    return {
+        "id": ror_id,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            "pulse:ror": ror_id,
+            "uuid": generate_uuid(),
+        },
+        "idSource": "pulse:ror",
+        "schema:name": name,
+        # Internal provenance — stripped at output by `_drop_internal_keys`
+        # unless `?include_internal_fields=true`. Not in the ontology;
+        # purely for tooling/debugging.
+        "_source": source,
+    }
+
+
+def _build_membership(
+    *, person_id: str, org_id: str, source: str,
+) -> dict[str, Any]:
+    """Build a Membership entity linking person→org. No role, no dates
+    (we have no evidence). Schema-conformant to ``pulse:MembershipShape``."""
+    composite_id = f"{person_id}__{org_id}"
+    return {
+        "id": composite_id,
+        "type": "org:Membership",
+        "shacl": "pulse:MembershipShape",
+        "identifiers": {
+            "pulse:composite": composite_id,
+            "uuid": generate_uuid(),
+        },
+        "idSource": "pulse:composite",
+        "org:organization": org_id,
+        "org:role": None,
+        "time:hasBeginning": None,
+        "time:hasEnd": None,
+        "_source": source,
+    }
+
+
+def _existing_org_ids(reconciled: "ReconciledEntities") -> set[str]:
+    out: set[str] = set()
+    for org in reconciled.entities.get("organizations") or []:
+        if isinstance(org, dict):
+            org_id = org.get("id")
+            if isinstance(org_id, str):
+                out.add(org_id)
+    return out
+
+
+def _existing_membership_keys(reconciled: "ReconciledEntities") -> set[str]:
+    out: set[str] = set()
+    for m in reconciled.entities.get("memberships") or []:
+        if isinstance(m, dict):
+            mid = m.get("id")
+            if isinstance(mid, str):
+                out.add(mid)
+    return out
+
+
+def _materialise(
+    *,
+    reconciled: "ReconciledEntities",
+    person_id: str,
+    hits: list[dict[str, Any]],
+    source: str,
+    existing_org_ids: set[str],
+    existing_membership_keys: set[str],
+) -> tuple[int, int]:
+    """Push Org stubs + Memberships for each accepted ROR hit. Returns
+    ``(memberships_added, organizations_added)``. Mutates ``reconciled``
+    in place; updates the existing-id sets so within a single stage
+    invocation later persons don't re-add the same org."""
+    orgs = reconciled.entities.setdefault("organizations", [])
+    memberships = reconciled.entities.setdefault("memberships", [])
+    m_added = 0
+    o_added = 0
+    for hit in hits:
+        ror_id = hit.get("ror_id")
+        if not isinstance(ror_id, str) or not ror_id:
+            continue
+        if ror_id not in existing_org_ids:
+            stub = _build_org_stub(hit, source=source)
+            if stub is not None:
+                orgs.append(stub)
+                existing_org_ids.add(ror_id)
+                o_added += 1
+        composite = f"{person_id}__{ror_id}"
+        if composite not in existing_membership_keys:
+            memberships.append(
+                _build_membership(person_id=person_id, org_id=ror_id, source=source),
+            )
+            existing_membership_keys.add(composite)
+            m_added += 1
+    return m_added, o_added
+
+
+def _person_canonical_id(person: dict[str, Any]) -> str | None:
+    """The membership composite needs a stable person id. Prefer the
+    pipeline's `id` field, fall back to `@id`."""
+    for key in ("id", "@id"):
+        value = person.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 async def run_resolve_company_to_ror_stage(
@@ -208,13 +349,13 @@ async def run_resolve_company_to_ror_stage(
     reconciled: "ReconciledEntities",
     provider: RorRagProvider | None = None,
 ) -> CompanyAffiliationResult:
-    """Stage entry. Mutates each Person dict in ``reconciled.entities['persons']``
-    by appending a ``schema:affiliation`` (str or list[str]) when a high-
-    confidence ROR match is found.
+    """Stage entry. Materialises one Membership + (when new) one
+    Organization per accepted ROR hit, idempotently.
 
-    The function is idempotent — re-running on already-stamped persons
-    will not duplicate existing affiliations and will not overwrite a
-    pre-existing value that points at a different ROR.
+    Re-running the stage on a graph that already contains its earlier
+    output is a no-op — both the org set and the membership composite
+    set are pre-computed from `reconciled.entities` so duplicates can't
+    creep in across re-runs.
     """
     provider = provider or build_default_provider()
     if provider is None:
@@ -222,15 +363,23 @@ async def run_resolve_company_to_ror_stage(
             "resolve_company_to_ror: RorRagProvider unavailable (check "
             "V2_ROR_RAG_ENABLED + INDEX_QDRANT_URL); stage skipped",
         )
-        return CompanyAffiliationResult(0, 0, 0, 0, {"provider_unavailable": 1})
+        return CompanyAffiliationResult(0, 0, 0, 0, 0, 0, {"provider_unavailable": 1})
 
     persons = reconciled.entities.get("persons") or []
-    cache: dict[str, str | None] = {}
+    cache: dict[str, dict[str, Any] | None] = {}
     reasons: dict[str, int] = {}
     resolved = 0
+    memberships_added = 0
+    organizations_added = 0
+
+    existing_org_ids = _existing_org_ids(reconciled)
+    existing_membership_keys = _existing_membership_keys(reconciled)
 
     for person in persons:
         if not isinstance(person, dict):
+            continue
+        person_id = _person_canonical_id(person)
+        if not person_id:
             continue
         raw_companies = _read_company(person)
         if not raw_companies:
@@ -242,46 +391,52 @@ async def run_resolve_company_to_ror_stage(
         else:
             continue
 
-        # Each raw company string may carry joint affiliations.
-        candidate_rors: list[str] = []
+        candidate_hits: list[dict[str, Any]] = []
         for raw in raw_list:
             for part in _split_joint(raw):
-                ror_id, reason = await _resolve_one(provider, cache, part)
-                if ror_id:
-                    if ror_id not in candidate_rors:
-                        candidate_rors.append(ror_id)
+                hit, reason = await _resolve_one(provider, cache, part)
+                if hit is not None:
+                    ror_id = hit.get("ror_id")
+                    if isinstance(ror_id, str) and ror_id and not any(
+                        h.get("ror_id") == ror_id for h in candidate_hits
+                    ):
+                        candidate_hits.append(hit)
                 else:
                     reasons[reason] = reasons.get(reason, 0) + 1
 
-        if not candidate_rors:
+        if not candidate_hits:
             continue
 
-        # Merge with any pre-existing affiliation triple, dedupe.
-        existing = person.get(SCHEMA_AFFILIATION)
-        if isinstance(existing, str):
-            merged = [existing] + [r for r in candidate_rors if r != existing]
-        elif isinstance(existing, list):
-            merged = list(existing) + [r for r in candidate_rors if r not in existing]
-        else:
-            merged = candidate_rors
-        # Single-element values stay as strings (schema.org convention);
-        # multi-element values become lists. JSON-LD output assembly
-        # already handles both shapes.
-        person[SCHEMA_AFFILIATION] = merged[0] if len(merged) == 1 else merged
-        resolved += 1
+        m_added, o_added = _materialise(
+            reconciled=reconciled,
+            person_id=person_id,
+            hits=candidate_hits,
+            source=STAGE_SOURCE_TAG,
+            existing_org_ids=existing_org_ids,
+            existing_membership_keys=existing_membership_keys,
+        )
+        if m_added > 0:
+            resolved += 1
+            memberships_added += m_added
+            organizations_added += o_added
 
     result = CompanyAffiliationResult(
         persons_examined=len(persons),
         persons_resolved=resolved,
+        memberships_created=memberships_added,
+        organizations_created=organizations_added,
         queries_attempted=len(cache),
         queries_accepted=sum(1 for v in cache.values() if v is not None),
         rejection_reasons=reasons,
     )
     logger.info(
         "resolve_company_to_ror: persons_examined=%d persons_resolved=%d "
+        "memberships_created=%d organizations_created=%d "
         "queries=%d accepted=%d",
         result.persons_examined,
         result.persons_resolved,
+        result.memberships_created,
+        result.organizations_created,
         result.queries_attempted,
         result.queries_accepted,
     )

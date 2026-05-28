@@ -62,9 +62,18 @@ from src.v2.pipeline.stages.resolve_bio_to_ror import (
     BLOG_KEYS,
     EMAIL_KEYS,
     ORCID_BIO_KEYS,
+    _persons_with_memberships,
     _read_first,
 )
-from src.v2.pipeline.stages.resolve_company_to_ror import SCHEMA_AFFILIATION
+from src.v2.pipeline.stages.resolve_company_to_ror import (
+    _build_membership,
+    _build_org_stub,
+    _existing_membership_keys,
+    _existing_org_ids,
+    _person_canonical_id,
+)
+
+STAGE_SOURCE_TAG = "resolve_bio_to_ror_llm"
 
 if TYPE_CHECKING:
     from src.v2.pipeline.stages.reconciliation import ReconciledEntities
@@ -117,6 +126,8 @@ class BioLLMAffiliationResult:
     persons_called: int
     persons_resolved: int
     persons_failed: int
+    memberships_created: int = 0
+    organizations_created: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -174,27 +185,57 @@ async def _resolve_one_person(
     return patch, None
 
 
-def _apply_patch(person: dict[str, Any], patch: BioResolverPatch) -> bool:
-    """Stamp `schema:affiliation` on the person when the patch carries
-    a high-confidence ROR. Returns True when something was written.
+def _apply_patch(
+    *,
+    person: dict[str, Any],
+    patch: BioResolverPatch,
+    reconciled: "ReconciledEntities",
+    existing_org_ids: set[str],
+    existing_membership_keys: set[str],
+) -> tuple[int, int]:
+    """Materialise the LLM patch as Membership + Org entities (when
+    the confidence floor is cleared and the ROR isn't already linked
+    to this person). Returns ``(memberships_added, organizations_added)``.
 
-    Idempotent: if the ROR is already present (string or in a list)
-    the call is a no-op."""
+    The agent already enforces the floor and a verbatim quote on the
+    `reason` field; the stage-side floor here is defensive — same as
+    the company-stage's strict acceptance gate.
+    """
     if not patch.pulse_ror or patch.confidence < CONFIDENCE_FLOOR:
-        return False
-    new_ror = patch.pulse_ror
-    existing = person.get(SCHEMA_AFFILIATION)
-    if existing == new_ror:
-        return False
-    if isinstance(existing, list):
-        if new_ror in existing:
-            return False
-        person[SCHEMA_AFFILIATION] = list(existing) + [new_ror]
-    elif isinstance(existing, str):
-        person[SCHEMA_AFFILIATION] = [existing, new_ror]
-    else:
-        person[SCHEMA_AFFILIATION] = new_ror
-    return True
+        return 0, 0
+    person_id = _person_canonical_id(person)
+    if not person_id:
+        return 0, 0
+    composite = f"{person_id}__{patch.pulse_ror}"
+    if composite in existing_membership_keys:
+        return 0, 0
+
+    orgs = reconciled.entities.setdefault("organizations", [])
+    memberships = reconciled.entities.setdefault("memberships", [])
+    o_added = 0
+    if patch.pulse_ror not in existing_org_ids:
+        # We don't have a ROR `name` from the LLM patch — `reason`
+        # carries a verbatim bio quote that may or may not be the
+        # canonical name. Use the ROR URL itself so the Org stub is
+        # well-formed; downstream refiners can backfill `schema:name`.
+        stub = _build_org_stub(
+            {"ror_id": patch.pulse_ror, "name": patch.pulse_ror},
+            source=STAGE_SOURCE_TAG,
+        )
+        if stub is not None:
+            orgs.append(stub)
+            existing_org_ids.add(patch.pulse_ror)
+            o_added = 1
+
+    memberships.append(
+        _build_membership(
+            person_id=person_id,
+            org_id=patch.pulse_ror,
+            source=STAGE_SOURCE_TAG,
+        ),
+    )
+    existing_membership_keys.add(composite)
+    return 1, o_added
 
 
 async def run_resolve_bio_to_ror_llm_stage(
@@ -204,17 +245,17 @@ async def run_resolve_bio_to_ror_llm_stage(
     agent: BioResolverAgent | None = None,
     max_concurrency: int | None = None,
 ) -> BioLLMAffiliationResult:
-    """Stage entry. For each Person still missing `schema:affiliation`
-    after Stage A, run the LLM bio-resolver and stamp the affiliation
-    when the LLM clears the confidence floor.
-
-    Idempotent: re-running on already-stamped persons is a no-op.
+    """Stage entry. For each Person without a Membership after Stage A
+    that still has bio / orcid bio / readme text, call the LLM
+    bio-resolver and (on a high-confidence patch) materialise a
+    Membership + Organization entity. Idempotent across re-runs.
     """
     persons_raw = reconciled.entities.get("persons") or []
+    affiliated_persons = _persons_with_memberships(reconciled)
     candidates: list[dict[str, Any]] = [
         p for p in persons_raw
         if isinstance(p, dict)
-        and not p.get(SCHEMA_AFFILIATION)
+        and (_person_canonical_id(p) or "") not in affiliated_persons
         and _has_extractable_text(p)
     ]
     if not candidates:
@@ -247,8 +288,13 @@ async def run_resolve_bio_to_ror_llm_stage(
     ]
     results = await asyncio.gather(*tasks)
 
+    existing_org_ids = _existing_org_ids(reconciled)
+    existing_membership_keys = _existing_membership_keys(reconciled)
+
     resolved = 0
     failed = 0
+    memberships_added = 0
+    organizations_added = 0
     warnings: list[str] = []
     for person, (patch, warning) in zip(candidates, results, strict=False):
         if warning:
@@ -257,22 +303,36 @@ async def run_resolve_bio_to_ror_llm_stage(
             continue
         if patch is None:
             continue
-        if _apply_patch(person, patch):
+        m_added, o_added = _apply_patch(
+            person=person,
+            patch=patch,
+            reconciled=reconciled,
+            existing_org_ids=existing_org_ids,
+            existing_membership_keys=existing_membership_keys,
+        )
+        if m_added > 0:
             resolved += 1
+            memberships_added += m_added
+            organizations_added += o_added
 
     result = BioLLMAffiliationResult(
         persons_examined=len(persons_raw),
         persons_called=len(candidates),
         persons_resolved=resolved,
         persons_failed=failed,
+        memberships_created=memberships_added,
+        organizations_created=organizations_added,
         warnings=warnings,
     )
     logger.info(
-        "resolve_bio_to_ror_llm: examined=%d called=%d resolved=%d failed=%d",
+        "resolve_bio_to_ror_llm: examined=%d called=%d resolved=%d failed=%d "
+        "memberships=%d organizations=%d",
         result.persons_examined,
         result.persons_called,
         result.persons_resolved,
         result.persons_failed,
+        result.memberships_created,
+        result.organizations_created,
     )
     return result
 
