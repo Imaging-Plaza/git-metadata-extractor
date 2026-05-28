@@ -211,7 +211,7 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
 - **Organization Endpoints**: Process GitHub organization data
 - **Cache Management**: Monitor and control the caching system
     """,
-    version="2.0.1",
+    version="2.1.0rc1",
     contact={
         "name": "EPFL Center for Imaging / SDSC",
         "url": "https://imaging-plaza.epfl.ch",
