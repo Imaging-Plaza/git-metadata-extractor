@@ -209,3 +209,63 @@ def test_internal_fields_renamed_to_gme_internal_terms_when_flag_on() -> None:
         URIRef("https://openpulse.science/git-metadata-extractor#homepage"),
         Literal("https://example.org"),
     ) in graph
+
+
+def test_schema_affiliation_round_trips_to_rdf_as_iri_node() -> None:
+    """Regression for the bug where the bio-resolver stages wrote the
+    full IRI `http://schema.org/affiliation` as a JSON key, putting it
+    outside every @context term mapping so rdflib silently dropped it
+    on `Graph().parse(..., format='json-ld')`. After fixing the stages
+    to emit the prefixed short form `schema:affiliation` AND adding
+    the matching @context entry with `@type: @id`, the JSON-LD
+    round-trips to a real IRI-node triple in the RDF graph.
+    """
+    assembled = AssembledOutput(
+        root_entity={
+            "id": "owner/repo",
+            "type": "schema:SoftwareSourceCode",
+            "schema:name": "owner/repo",
+        },
+        related_entities=[
+            {
+                "id": "alice",
+                "type": "schema:Person",
+                "schema:name": "Alice",
+                "schema:affiliation": "https://ror.org/02s376052",
+            },
+            {
+                "id": "bob",
+                "type": "schema:Person",
+                "schema:name": "Bob",
+                "schema:affiliation": [
+                    "https://ror.org/02s376052",
+                    "https://ror.org/05a28rw58",
+                ],
+            },
+        ],
+    )
+    payload = build_jsonld_output(
+        assembled=assembled,
+        jsonld_context=_context(),
+    )
+
+    graph = Graph()
+    graph.parse(data=json.dumps(payload), format="json-ld")
+
+    schema_affiliation = URIRef("http://schema.org/affiliation")
+    alice = URIRef(f"{ENTITY_URI_PREFIX}alice")
+    bob = URIRef(f"{ENTITY_URI_PREFIX}bob")
+
+    # Single-value: one IRI-node triple, NOT a literal string.
+    alice_objects = list(graph.objects(alice, schema_affiliation))
+    assert alice_objects == [URIRef("https://ror.org/02s376052")]
+    assert not any(isinstance(o, Literal) for o in alice_objects)
+
+    # Multi-value: two distinct IRI-node triples (no RDF list, since
+    # the @context declares `@container: @set`).
+    bob_objects = set(graph.objects(bob, schema_affiliation))
+    assert bob_objects == {
+        URIRef("https://ror.org/02s376052"),
+        URIRef("https://ror.org/05a28rw58"),
+    }
+    assert not any(isinstance(o, Literal) for o in bob_objects)

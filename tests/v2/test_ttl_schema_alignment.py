@@ -43,6 +43,18 @@ ENUM_CLASSES = {
 
 ENVELOPE_FIELDS = {"id", "type", "shacl", "identifiers", "idSource"}
 
+# Properties that intentionally exist in the strict JSON schema but
+# are NOT modelled in the SHACL ontology. The pipeline emits these at
+# runtime in cases where the ontology's preferred shape can't be
+# materialised (e.g. `schema:affiliation` on Person when there's no
+# Membership evidence to back a first-class `pulse:Membership`).
+# Listing them here documents the divergence and lets the
+# `test_json_schema_properties_exist_in_ttl_shape` alignment check
+# stay strict for everything else.
+ONTOLOGY_DIVERGENT_FIELDS: dict[str, set[str]] = {
+    "PersonShape": {"schema:affiliation"},
+}
+
 PREFIX_MAP = {
     str(SCHEMA): "schema:",
     str(ORG): "org:",
@@ -132,7 +144,11 @@ def test_ttl_shape_properties_exist_in_json_schema(shape_name: str) -> None:
 @pytest.mark.parametrize("shape_name", SHAPE_SCHEMA_MAP)
 def test_json_schema_properties_exist_in_ttl_shape(shape_name: str) -> None:
     ttl_properties = set(_shape_properties()[shape_name])
-    schema_properties = set(_load_schemas()[shape_name]["properties"]) - ENVELOPE_FIELDS
+    schema_properties = (
+        set(_load_schemas()[shape_name]["properties"])
+        - ENVELOPE_FIELDS
+        - ONTOLOGY_DIVERGENT_FIELDS.get(shape_name, set())
+    )
     assert schema_properties <= ttl_properties
 
 

@@ -57,6 +57,12 @@
       "type": ["string", "null"],
       "format": "uri"
     },
+    "schema:affiliation": {
+      "oneOf": [
+        {"type": "string", "format": "uri"},
+        {"type": "array", "items": {"type": "string", "format": "uri"}}
+      ]
+    },
     "pulse:githubUsername": {
       "type": ["string", "null"]
     },

@@ -83,7 +83,17 @@ NON_ORG_KEYS: frozenset[str] = frozenset({
 })
 
 # Schema IRIs (kept inline to avoid a pipeline-wide constants module).
-SCHEMA_AFFILIATION = "http://schema.org/affiliation"
+# Use the JSON-LD short form so the key matches the prefixed shape the
+# rest of the Person dict uses (`schema:name`, `schema:url`, …) AND
+# the @context's `schema:` prefix mapping. Writing the full IRI here
+# put the key outside every @context term mapping, so rdflib silently
+# dropped it on `Graph().parse(..., format="json-ld")` and zero
+# `schema:affiliation` triples landed in the SPARQL store despite the
+# stage logs reporting `persons_resolved>0`. The matching @context
+# entry in `src/v2/schema/json/context/v2.0.jsonld` declares
+# `@type: @id` + `@container: @set` so the ROR string value expands to
+# an IRI node rather than a literal.
+SCHEMA_AFFILIATION = "schema:affiliation"
 # The Person dict carries the company under different keys depending on
 # where in the pipeline we run. In-pipeline (between reconciliation and
 # the LLM critic) it's the rule-based agent's `_company`. The

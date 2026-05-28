@@ -61,6 +61,13 @@
       "type": ["string", "null"],
       "description": "Profile URL for personal webpage. Example: 'https://caviri.github.io'"
     },
+    "schema:affiliation": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "array", "items": {"type": "string"}}
+      ],
+      "description": "ROR identifier(s) of the institution(s) the person is affiliated with. Written as a single URL string when one match, or a list when multiple. Stamped by the resolve_company_to_ror / resolve_bio_to_ror / resolve_bio_to_ror_llm stages — agents should NOT emit this directly (use org:hasMembership when evidence is available). Example: 'https://ror.org/02s376052' or ['https://ror.org/02s376052', 'https://ror.org/05a28rw58']."
+    },
     "pulse:githubUsername": {
       "type": ["string", "null"],
       "description": "GitHub username. Example: 'caviri'"

@@ -30,6 +30,10 @@
     "schema:citation": {
       "@type": "@id"
     },
+    "schema:affiliation": {
+      "@type": "@id",
+      "@container": "@set"
+    },
     "org:organization": {
       "@type": "@id"
     },
