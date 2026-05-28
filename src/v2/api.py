@@ -828,10 +828,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
             logger.info(
                 "%s: persons_examined=%d persons_resolved=%d "
+                "memberships=%d organizations=%d "
                 "queries=%d accepted=%d in %.2fs",
                 STAGE_RESOLVE_COMPANY_TO_ROR,
                 company_result.persons_examined,
                 company_result.persons_resolved,
+                company_result.memberships_created,
+                company_result.organizations_created,
                 company_result.queries_attempted,
                 company_result.queries_accepted,
                 perf_counter() - stage_started_at,
@@ -860,10 +863,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
             logger.info(
                 "%s: persons_examined=%d persons_resolved=%d "
+                "memberships=%d organizations=%d "
                 "candidates=%d queries=%d accepted=%d in %.2fs",
                 STAGE_RESOLVE_BIO_TO_ROR,
                 bio_result.persons_examined,
                 bio_result.persons_resolved,
+                bio_result.memberships_created,
+                bio_result.organizations_created,
                 bio_result.candidates_extracted,
                 bio_result.queries_attempted,
                 bio_result.queries_accepted,
@@ -895,12 +901,15 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 provider=getattr(providers, "ror_rag", None),
             )
             logger.info(
-                "%s: persons_examined=%d called=%d resolved=%d failed=%d in %.2fs",
+                "%s: persons_examined=%d called=%d resolved=%d failed=%d "
+                "memberships=%d organizations=%d in %.2fs",
                 STAGE_RESOLVE_BIO_TO_ROR_LLM,
                 bio_llm_result.persons_examined,
                 bio_llm_result.persons_called,
                 bio_llm_result.persons_resolved,
                 bio_llm_result.persons_failed,
+                bio_llm_result.memberships_created,
+                bio_llm_result.organizations_created,
                 perf_counter() - stage_started_at,
             )
             for warning in bio_llm_result.warnings:

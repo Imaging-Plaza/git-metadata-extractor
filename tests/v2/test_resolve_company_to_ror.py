@@ -23,7 +23,6 @@ import pytest
 from src.v2.pipeline.stages.models import ReconciledEntities
 from src.v2.pipeline.stages.resolve_company_to_ror import (
     GME_INTERNAL_COMPANY,
-    SCHEMA_AFFILIATION,
     CompanyAffiliationResult,
     _accept,
     _clean_query,
@@ -31,6 +30,26 @@ from src.v2.pipeline.stages.resolve_company_to_ror import (
     _strip_country,
     run_resolve_company_to_ror_stage,
 )
+
+
+def _memberships(reconciled: ReconciledEntities) -> list[dict[str, Any]]:
+    return reconciled.entities.get("memberships") or []
+
+
+def _organizations(reconciled: ReconciledEntities) -> list[dict[str, Any]]:
+    return reconciled.entities.get("organizations") or []
+
+
+def _membership_org_ids(reconciled: ReconciledEntities, *, person_id: str) -> list[str]:
+    """Return the ROR org ids attached to ``person_id`` via Memberships."""
+    out: list[str] = []
+    for m in _memberships(reconciled):
+        composite = m.get("id", "")
+        if composite.startswith(f"{person_id}__"):
+            org_ref = m.get("org:organization")
+            if isinstance(org_ref, str):
+                out.append(org_ref)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +188,20 @@ def test_stage_reads_company_under_every_key_shape(key):
         },
     )
     result = _run(reconciled, provider)
+    # The Person dict is left alone — no `schema:affiliation` written.
     person = reconciled.entities["persons"][0]
-    assert person[SCHEMA_AFFILIATION] == "https://ror.org/google"
+    assert "schema:affiliation" not in person
+    assert "http://schema.org/affiliation" not in person
+    # Affiliation is modelled as a Membership pointing to the resolved Org.
+    assert _membership_org_ids(reconciled, person_id="p1") == [
+        "https://ror.org/google",
+    ]
+    # The resolver also mints a minimal Organization stub for the ROR.
+    org_ids = {o["id"] for o in _organizations(reconciled)}
+    assert "https://ror.org/google" in org_ids
     assert result.persons_resolved == 1
+    assert result.memberships_created == 1
+    assert result.organizations_created == 1
     assert result.queries_accepted == 1
 
 
@@ -191,8 +221,11 @@ def test_stage_skips_low_confidence():
         },
     )
     result = _run(reconciled, provider)
-    assert SCHEMA_AFFILIATION not in reconciled.entities["persons"][0]
+    # Below-threshold hit produces zero Memberships / Orgs.
+    assert _memberships(reconciled) == []
+    assert _organizations(reconciled) == []
     assert result.persons_resolved == 0
+    assert result.memberships_created == 0
     assert any("< 0.55" in reason for reason in result.rejection_reasons)
 
 
@@ -232,17 +265,20 @@ def test_stage_resolves_joint_affiliations_into_a_list():
         },
     )
     _run(reconciled, provider)
-    affiliations = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
-    assert isinstance(affiliations, list)
-    assert sorted(affiliations) == [
+    # Joint affiliations produce one Membership per resolved org, all
+    # linked to the same person.
+    assert sorted(_membership_org_ids(reconciled, person_id="p1")) == [
         "https://ror.org/02s376052",
         "https://ror.org/05a28rw58",
     ]
+    org_ids = {o["id"] for o in _organizations(reconciled)}
+    assert "https://ror.org/02s376052" in org_ids
+    assert "https://ror.org/05a28rw58" in org_ids
 
 
 def test_stage_is_idempotent_on_re_run():
-    """Re-running on a person that already carries the affiliation
-    leaves the value unchanged."""
+    """Re-running on a person whose Membership already exists is a
+    no-op: no duplicate Memberships or Organization stubs."""
     reconciled = ReconciledEntities(
         entities={
             "persons": [
@@ -258,12 +294,16 @@ def test_stage_is_idempotent_on_re_run():
         },
     )
     _run(reconciled, provider)
-    affiliation_first = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
+    memberships_first = list(_memberships(reconciled))
+    orgs_first = list(_organizations(reconciled))
     _run(reconciled, provider)
-    affiliation_second = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
-    assert affiliation_first == affiliation_second
-    # Cache means the second run issues no new queries either.
-    assert provider.queries == ["Google", "Google"]  # one per run, cached within run
+    memberships_second = list(_memberships(reconciled))
+    orgs_second = list(_organizations(reconciled))
+    # Same composite id ⇒ no second Membership; same ROR ⇒ no second Org.
+    assert [m["id"] for m in memberships_second] == [m["id"] for m in memberships_first]
+    assert [o["id"] for o in orgs_second] == [o["id"] for o in orgs_first]
+    assert len(memberships_second) == 1
+    assert len(orgs_second) == 1
 
 
 def test_stage_returns_zero_when_provider_missing():

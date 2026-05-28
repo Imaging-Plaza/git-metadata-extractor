@@ -33,7 +33,37 @@ from src.v2.pipeline.stages.resolve_bio_to_ror_llm import (
     _resolve_max_concurrency,
     run_resolve_bio_to_ror_llm_stage,
 )
-from src.v2.pipeline.stages.resolve_company_to_ror import SCHEMA_AFFILIATION
+def _memberships(reconciled: ReconciledEntities) -> list[dict[str, Any]]:
+    return reconciled.entities.get("memberships") or []
+
+
+def _membership_org_ids(reconciled: ReconciledEntities, *, person_id: str) -> list[str]:
+    return [
+        m["org:organization"]
+        for m in _memberships(reconciled)
+        if isinstance(m, dict)
+        and isinstance(m.get("id"), str)
+        and m["id"].startswith(f"{person_id}__")
+    ]
+
+
+def _seed_membership(
+    reconciled: ReconciledEntities, *, person_id: str, ror: str,
+) -> None:
+    composite = f"{person_id}__{ror}"
+    reconciled.entities.setdefault("memberships", []).append(
+        {
+            "id": composite,
+            "type": "org:Membership",
+            "shacl": "pulse:MembershipShape",
+            "identifiers": {"pulse:composite": composite, "uuid": "u"},
+            "idSource": "pulse:composite",
+            "org:organization": ror,
+            "org:role": None,
+            "time:hasBeginning": None,
+            "time:hasEnd": None,
+        },
+    )
 
 
 class _StubAgent:
@@ -84,18 +114,19 @@ def _run(reconciled: ReconciledEntities, *, agent: Any, provider: Any = None) ->
 
 
 def test_only_unaffiliated_persons_with_text_are_sent_to_the_llm():
-    """Skip persons already affiliated, and skip persons with no bio /
-    orcid / readme — the LLM has nothing to quote."""
+    """Skip persons that already have a Membership, and skip persons
+    with no bio / orcid / readme — the LLM has nothing to quote."""
     reconciled = ReconciledEntities(
         entities={
             "persons": [
-                {"id": "already", "_bio": "Engineer at X", SCHEMA_AFFILIATION: "https://ror.org/x"},
+                {"id": "already", "_bio": "Engineer at X"},
                 {"id": "empty"},  # no signal at all
                 {"id": "with-bio", "_bio": "Research Engineer at DeepMind"},
                 {"id": "with-readme", "_profile_readme": "# About me\nI work at MIT."},
             ],
         },
     )
+    _seed_membership(reconciled, person_id="already", ror="https://ror.org/x")
     agent = _StubAgent(patches={})  # returns no-op for every call
     result = _run(reconciled, agent=agent)
     # Only the last two were sent.
@@ -108,11 +139,10 @@ def test_only_unaffiliated_persons_with_text_are_sent_to_the_llm():
 def test_no_op_when_every_person_already_affiliated():
     reconciled = ReconciledEntities(
         entities={
-            "persons": [
-                {"id": "p1", "_bio": "...", SCHEMA_AFFILIATION: "https://ror.org/x"},
-            ],
+            "persons": [{"id": "p1", "_bio": "..."}],
         },
     )
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/x")
     agent = _StubAgent(patches={})
     result = _run(reconciled, agent=agent)
     assert result.persons_called == 0
@@ -124,7 +154,7 @@ def test_no_op_when_every_person_already_affiliated():
 # ---------------------------------------------------------------------------
 
 
-def test_high_confidence_ror_stamps_affiliation():
+def test_high_confidence_ror_creates_membership_and_organization():
     reconciled = ReconciledEntities(
         entities={
             "persons": [
@@ -142,74 +172,103 @@ def test_high_confidence_ror_stamps_affiliation():
         },
     )
     result = _run(reconciled, agent=agent)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/deepmind"
+    assert _membership_org_ids(reconciled, person_id="p1") == [
+        "https://ror.org/deepmind",
+    ]
+    org_ids = {o["id"] for o in reconciled.entities.get("organizations", [])}
+    assert "https://ror.org/deepmind" in org_ids
     assert result.persons_resolved == 1
+    assert result.memberships_created == 1
+    assert result.organizations_created == 1
     assert result.persons_failed == 0
 
 
+def _apply_kwargs(
+    *, reconciled: ReconciledEntities, existing_org_ids: set, existing_keys: set,
+) -> dict[str, Any]:
+    return {
+        "reconciled": reconciled,
+        "existing_org_ids": existing_org_ids,
+        "existing_membership_keys": existing_keys,
+    }
+
+
 def test_low_confidence_ror_is_dropped_at_apply_time():
-    """Even if the agent leaked a ROR with confidence < 0.7 past its
-    own internal floor, the stage-level `_apply_patch` re-checks."""
-    person: dict[str, Any] = {"id": "p1"}
+    """The stage-side `_apply_patch` re-checks the confidence floor
+    defensively — a low-confidence patch produces zero Memberships."""
+    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
+    person = reconciled.entities["persons"][0]
     patch = BioResolverPatch(
         pulse_ror="https://ror.org/x",
         reason="vague",
         confidence=0.5,
     )
-    assert _apply_patch(person, patch) is False
-    assert SCHEMA_AFFILIATION not in person
+    m_added, o_added = _apply_patch(
+        person=person, patch=patch,
+        **_apply_kwargs(reconciled=reconciled, existing_org_ids=set(), existing_keys=set()),
+    )
+    assert (m_added, o_added) == (0, 0)
+    assert _memberships(reconciled) == []
 
 
-def test_apply_patch_merges_with_existing_string_into_list():
-    person: dict[str, Any] = {
-        "id": "p1",
-        SCHEMA_AFFILIATION: "https://ror.org/existing",
-    }
+def test_apply_patch_adds_a_second_membership_when_person_has_one_already():
+    """An existing Membership to ROR /existing doesn't prevent a new
+    Membership to ROR /new from being created — they're distinct
+    composites."""
+    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/existing")
     patch = BioResolverPatch(
         pulse_ror="https://ror.org/new",
         reason="From bio: ...",
         confidence=0.9,
     )
-    assert _apply_patch(person, patch) is True
-    assert person[SCHEMA_AFFILIATION] == [
+    m_added, o_added = _apply_patch(
+        person=reconciled.entities["persons"][0],
+        patch=patch,
+        **_apply_kwargs(
+            reconciled=reconciled,
+            existing_org_ids={"https://ror.org/existing"},
+            existing_keys={"p1__https://ror.org/existing"},
+        ),
+    )
+    assert m_added == 1
+    assert sorted(_membership_org_ids(reconciled, person_id="p1")) == [
         "https://ror.org/existing",
         "https://ror.org/new",
     ]
 
 
-def test_apply_patch_appends_to_existing_list_without_dup():
-    person: dict[str, Any] = {
-        "id": "p1",
-        SCHEMA_AFFILIATION: ["https://ror.org/a", "https://ror.org/b"],
-    }
-    patch = BioResolverPatch(
-        pulse_ror="https://ror.org/b",
-        reason="...",
-        confidence=0.9,
-    )
-    # Already in the list → no-op.
-    assert _apply_patch(person, patch) is False
-    assert person[SCHEMA_AFFILIATION] == ["https://ror.org/a", "https://ror.org/b"]
-
-
-def test_apply_patch_no_op_on_idempotent_string_match():
-    person: dict[str, Any] = {
-        "id": "p1",
-        SCHEMA_AFFILIATION: "https://ror.org/x",
-    }
+def test_apply_patch_idempotent_when_membership_already_present():
+    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/x")
     patch = BioResolverPatch(
         pulse_ror="https://ror.org/x",
         reason="...",
         confidence=0.9,
     )
-    assert _apply_patch(person, patch) is False
+    m_added, _ = _apply_patch(
+        person=reconciled.entities["persons"][0],
+        patch=patch,
+        **_apply_kwargs(
+            reconciled=reconciled,
+            existing_org_ids={"https://ror.org/x"},
+            existing_keys={"p1__https://ror.org/x"},
+        ),
+    )
+    assert m_added == 0
+    assert len(_memberships(reconciled)) == 1
 
 
 def test_apply_patch_no_op_when_patch_carries_no_ror():
-    person: dict[str, Any] = {"id": "p1"}
+    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
     patch = BioResolverPatch(reason="LLM punted", confidence=0.3)
-    assert _apply_patch(person, patch) is False
-    assert SCHEMA_AFFILIATION not in person
+    m_added, _ = _apply_patch(
+        person=reconciled.entities["persons"][0],
+        patch=patch,
+        **_apply_kwargs(reconciled=reconciled, existing_org_ids=set(), existing_keys=set()),
+    )
+    assert m_added == 0
+    assert _memberships(reconciled) == []
 
 
 # ---------------------------------------------------------------------------

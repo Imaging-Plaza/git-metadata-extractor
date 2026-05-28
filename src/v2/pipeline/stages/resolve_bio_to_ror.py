@@ -60,9 +60,14 @@ from urllib.parse import urlparse
 
 from src.v2.ingest.providers.ror_rag import RorRagProvider, build_default_provider
 from src.v2.pipeline.stages.resolve_company_to_ror import (
-    SCHEMA_AFFILIATION,
+    _existing_membership_keys,
+    _existing_org_ids,
+    _materialise,
+    _person_canonical_id,
     _resolve_one,
 )
+
+STAGE_SOURCE_TAG = "resolve_bio_to_ror"
 
 if TYPE_CHECKING:
     from src.v2.pipeline.stages.reconciliation import ReconciledEntities
@@ -195,10 +200,32 @@ class BioAffiliationResult:
 
     persons_examined: int
     persons_resolved: int
+    memberships_created: int
+    organizations_created: int
     candidates_extracted: int
     queries_attempted: int
     queries_accepted: int
     rejection_reasons: dict[str, int]
+
+
+def _persons_with_memberships(reconciled: "ReconciledEntities") -> set[str]:
+    """Pre-compute the set of person ids that already have at least one
+    Membership entry in the graph. Used to honour the
+    `skip_if_already_affiliated` flag without re-checking on every
+    person."""
+    out: set[str] = set()
+    for m in reconciled.entities.get("memberships") or []:
+        if not isinstance(m, dict):
+            continue
+        composite: Any = None
+        identifiers = m.get("identifiers")
+        if isinstance(identifiers, dict):
+            composite = identifiers.get("pulse:composite")
+        if not isinstance(composite, str):
+            composite = m.get("id")
+        if isinstance(composite, str) and "__" in composite:
+            out.add(composite.split("__", 1)[0])
+    return out
 
 
 def _read_first(person: dict[str, Any], keys: tuple[str, ...]) -> str | None:
@@ -293,12 +320,15 @@ async def run_resolve_bio_to_ror_stage(
     provider: RorRagProvider | None = None,
     skip_if_already_affiliated: bool = True,
 ) -> BioAffiliationResult:
-    """Stage entry. Mutates each Person dict in ``reconciled.entities['persons']``
-    that has an extractable affiliation signal in bio / orcid bio / blog.
+    """Stage entry. For each Person whose bio / orcid bio / blog /
+    email carries an institution signal, push a matching Membership
+    (and Org stub, when new) onto ``reconciled.entities``.
 
-    The function is idempotent: re-running on already-stamped persons
-    leaves their `schema:affiliation` unchanged and (with
-    ``skip_if_already_affiliated=True``, the default) won't even re-query.
+    Idempotent: existing Memberships act as a de-dup set, so a
+    re-run on a graph that already contains this stage's output is a
+    no-op. With ``skip_if_already_affiliated=True`` (the default) the
+    stage won't even query ROR for persons that already have any
+    Membership — set to ``False`` to additively enrich.
     """
     provider = provider or build_default_provider()
     if provider is None:
@@ -306,18 +336,27 @@ async def run_resolve_bio_to_ror_stage(
             "resolve_bio_to_ror: RorRagProvider unavailable (check "
             "V2_ROR_RAG_ENABLED + INDEX_QDRANT_URL); stage skipped",
         )
-        return BioAffiliationResult(0, 0, 0, 0, 0, {"provider_unavailable": 1})
+        return BioAffiliationResult(0, 0, 0, 0, 0, 0, 0, {"provider_unavailable": 1})
 
     persons = reconciled.entities.get("persons") or []
-    cache: dict[str, str | None] = {}
+    cache: dict[str, Any] = {}
     reasons: dict[str, int] = {}
     candidates_extracted = 0
     resolved = 0
+    memberships_added = 0
+    organizations_added = 0
+
+    existing_org_ids = _existing_org_ids(reconciled)
+    existing_membership_keys = _existing_membership_keys(reconciled)
+    affiliated_persons = _persons_with_memberships(reconciled)
 
     for person in persons:
         if not isinstance(person, dict):
             continue
-        if skip_if_already_affiliated and person.get(SCHEMA_AFFILIATION):
+        person_id = _person_canonical_id(person)
+        if not person_id:
+            continue
+        if skip_if_already_affiliated and person_id in affiliated_persons:
             continue
 
         bio = _read_first(person, BIO_KEYS) or ""
@@ -344,31 +383,40 @@ async def run_resolve_bio_to_ror_stage(
             continue
         candidates_extracted += len(candidates)
 
-        candidate_rors: list[str] = []
+        candidate_hits: list[dict[str, Any]] = []
         for candidate in candidates:
-            ror_id, reason = await _resolve_one(provider, cache, candidate)
-            if ror_id:
-                if ror_id not in candidate_rors:
-                    candidate_rors.append(ror_id)
+            hit, reason = await _resolve_one(provider, cache, candidate)
+            if hit is not None:
+                ror_id = hit.get("ror_id")
+                if isinstance(ror_id, str) and ror_id and not any(
+                    h.get("ror_id") == ror_id for h in candidate_hits
+                ):
+                    candidate_hits.append(hit)
             else:
                 reasons[reason] = reasons.get(reason, 0) + 1
 
-        if not candidate_rors:
+        if not candidate_hits:
             continue
 
-        existing = person.get(SCHEMA_AFFILIATION)
-        if isinstance(existing, str):
-            merged = [existing] + [r for r in candidate_rors if r != existing]
-        elif isinstance(existing, list):
-            merged = list(existing) + [r for r in candidate_rors if r not in existing]
-        else:
-            merged = candidate_rors
-        person[SCHEMA_AFFILIATION] = merged[0] if len(merged) == 1 else merged
-        resolved += 1
+        m_added, o_added = _materialise(
+            reconciled=reconciled,
+            person_id=person_id,
+            hits=candidate_hits,
+            source=STAGE_SOURCE_TAG,
+            existing_org_ids=existing_org_ids,
+            existing_membership_keys=existing_membership_keys,
+        )
+        if m_added > 0:
+            resolved += 1
+            memberships_added += m_added
+            organizations_added += o_added
+            affiliated_persons.add(person_id)
 
     result = BioAffiliationResult(
         persons_examined=len(persons),
         persons_resolved=resolved,
+        memberships_created=memberships_added,
+        organizations_created=organizations_added,
         candidates_extracted=candidates_extracted,
         queries_attempted=len(cache),
         queries_accepted=sum(1 for v in cache.values() if v is not None),
@@ -376,9 +424,12 @@ async def run_resolve_bio_to_ror_stage(
     )
     logger.info(
         "resolve_bio_to_ror: persons_examined=%d persons_resolved=%d "
+        "memberships_created=%d organizations_created=%d "
         "candidates=%d queries=%d accepted=%d",
         result.persons_examined,
         result.persons_resolved,
+        result.memberships_created,
+        result.organizations_created,
         result.candidates_extracted,
         result.queries_attempted,
         result.queries_accepted,

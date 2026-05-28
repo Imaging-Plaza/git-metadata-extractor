@@ -36,7 +36,23 @@ from src.v2.pipeline.stages.resolve_bio_to_ror import (
     _extract_bio_candidates,
     run_resolve_bio_to_ror_stage,
 )
-from src.v2.pipeline.stages.resolve_company_to_ror import SCHEMA_AFFILIATION
+def _memberships(reconciled: ReconciledEntities) -> list[dict[str, Any]]:
+    return reconciled.entities.get("memberships") or []
+
+
+def _organizations(reconciled: ReconciledEntities) -> list[dict[str, Any]]:
+    return reconciled.entities.get("organizations") or []
+
+
+def _membership_org_ids(reconciled: ReconciledEntities, *, person_id: str) -> list[str]:
+    out: list[str] = []
+    for m in _memberships(reconciled):
+        composite = m.get("id", "")
+        if composite.startswith(f"{person_id}__"):
+            org_ref = m.get("org:organization")
+            if isinstance(org_ref, str):
+                out.append(org_ref)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +201,9 @@ def test_stage_resolves_from_bio_at_phrase():
         },
     )
     result = _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/deepmind"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/deepmind"]
     assert result.persons_resolved == 1
+    assert result.memberships_created == 1
     assert result.queries_accepted == 1
 
 
@@ -207,7 +224,7 @@ def test_stage_resolves_from_orcid_bio():
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
 def test_stage_resolves_from_anonymized_email_domain():
@@ -229,7 +246,7 @@ def test_stage_resolves_from_anonymized_email_domain():
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
 @pytest.mark.parametrize("email_key", EMAIL_KEYS)
@@ -250,7 +267,7 @@ def test_stage_reads_email_under_every_key_shape(email_key):
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
 def test_stage_resolves_from_blog_domain():
@@ -271,7 +288,7 @@ def test_stage_resolves_from_blog_domain():
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
 def test_stage_no_op_when_no_signals():
@@ -284,39 +301,62 @@ def test_stage_no_op_when_no_signals():
     assert result.persons_resolved == 0
 
 
-def test_stage_skips_already_affiliated_by_default():
-    """The stage is a backstop — when company-stage already stamped
-    an affiliation, the bio stage stays out of the way."""
-    reconciled = ReconciledEntities(
-        entities={
-            "persons": [
-                {
-                    "id": "p1",
-                    "_bio": "Now at Google DeepMind",
-                    SCHEMA_AFFILIATION: "https://ror.org/companyx",
-                },
-            ],
+def _seed_membership(reconciled: ReconciledEntities, *, person_id: str, ror: str) -> None:
+    """Plant an existing Membership in the graph as if the company
+    stage had already resolved this person to ``ror``."""
+    composite = f"{person_id}__{ror}"
+    reconciled.entities.setdefault("memberships", []).append(
+        {
+            "id": composite,
+            "type": "org:Membership",
+            "shacl": "pulse:MembershipShape",
+            "identifiers": {"pulse:composite": composite, "uuid": "x"},
+            "idSource": "pulse:composite",
+            "org:organization": ror,
+            "org:role": None,
+            "time:hasBeginning": None,
+            "time:hasEnd": None,
+            "_source": "test_seed",
         },
     )
+    reconciled.entities.setdefault("organizations", []).append(
+        {
+            "id": ror,
+            "type": "org:Organization",
+            "shacl": "pulse:OrganizationShape",
+            "identifiers": {"pulse:ror": ror, "uuid": "y"},
+            "idSource": "pulse:ror",
+            "schema:name": "seed",
+        },
+    )
+
+
+def test_stage_skips_already_affiliated_by_default():
+    """The stage is a backstop — when an earlier stage already
+    materialised a Membership for this person, the bio stage stays
+    out of the way."""
+    reconciled = ReconciledEntities(
+        entities={
+            "persons": [{"id": "p1", "_bio": "Now at Google DeepMind"}],
+        },
+    )
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/companyx")
     provider = _StubProvider(hits={})
     _run(reconciled, provider)
-    # Untouched: still just the company-stage value, no queries issued.
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/companyx"
+    # Only the seeded Membership; no new one added.
+    assert _membership_org_ids(reconciled, person_id="p1") == [
+        "https://ror.org/companyx",
+    ]
     assert provider.queries == []
 
 
 def test_stage_enriches_when_skip_disabled():
     reconciled = ReconciledEntities(
         entities={
-            "persons": [
-                {
-                    "id": "p1",
-                    "_bio": "Now at Google DeepMind",
-                    SCHEMA_AFFILIATION: "https://ror.org/companyx",
-                },
-            ],
+            "persons": [{"id": "p1", "_bio": "Now at Google DeepMind"}],
         },
     )
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/companyx")
     provider = _StubProvider(
         hits={
             "Google DeepMind": [
@@ -326,10 +366,10 @@ def test_stage_enriches_when_skip_disabled():
         },
     )
     _run(reconciled, provider, skip_if_already_affiliated=False)
-    affiliations = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
-    assert isinstance(affiliations, list)
-    assert "https://ror.org/companyx" in affiliations
-    assert "https://ror.org/deepmind" in affiliations
+    # Both Memberships now present — additive enrichment.
+    org_ids = sorted(_membership_org_ids(reconciled, person_id="p1"))
+    assert "https://ror.org/companyx" in org_ids
+    assert "https://ror.org/deepmind" in org_ids
 
 
 @pytest.mark.parametrize("bio_key", BIO_KEYS)
@@ -350,7 +390,7 @@ def test_stage_reads_bio_under_every_key_shape(bio_key):
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/deepmind"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/deepmind"]
 
 
 @pytest.mark.parametrize("blog_key", BLOG_KEYS)
@@ -371,7 +411,7 @@ def test_stage_reads_blog_under_every_key_shape(blog_key):
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/02s376052"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
 @pytest.mark.parametrize("orcid_key", ORCID_BIO_KEYS)
@@ -392,7 +432,7 @@ def test_stage_reads_orcid_bio_under_every_key_shape(orcid_key):
         },
     )
     _run(reconciled, provider)
-    assert reconciled.entities["persons"][0][SCHEMA_AFFILIATION] == "https://ror.org/05a28rw58"
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/05a28rw58"]
 
 
 def test_stage_dedups_candidates_across_sources():
@@ -438,7 +478,7 @@ def test_stage_rejects_low_confidence_bio_candidate():
         },
     )
     result = _run(reconciled, provider)
-    assert SCHEMA_AFFILIATION not in reconciled.entities["persons"][0]
+    assert _memberships(reconciled) == []
     assert result.persons_resolved == 0
 
 
@@ -460,14 +500,14 @@ def test_stage_is_idempotent_on_re_run_unaffiliated():
             ],
         },
     )
-    # First run skips no one (no prior affiliation). Second run hits
+    # First run skips no one (no prior Membership). Second run hits
     # the skip_if_already_affiliated guard and short-circuits.
     _run(reconciled, provider)
-    first = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
+    first_orgs = sorted(_membership_org_ids(reconciled, person_id="p1"))
     queries_after_first = len(provider.queries)
     _run(reconciled, provider)
-    second = reconciled.entities["persons"][0][SCHEMA_AFFILIATION]
-    assert first == second
+    second_orgs = sorted(_membership_org_ids(reconciled, person_id="p1"))
+    assert first_orgs == second_orgs
     assert len(provider.queries) == queries_after_first  # skip path → no new query
 
 
