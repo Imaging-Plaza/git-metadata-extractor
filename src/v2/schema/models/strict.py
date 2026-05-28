@@ -188,7 +188,7 @@ class Identifiers4(BaseModel):
     pulse_githubRepositoryHandle: str = Field(
         ...,
         alias="pulse:githubRepositoryHandle",
-        pattern="^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$",
+        pattern="^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$",
     )
     schema_citation: AnyUrl | None = Field(
         None, alias="schema:citation", description="DOI identifier"
@@ -278,7 +278,7 @@ class RepositoryModel(BaseModel):
     pulse_githubRepositoryHandle: str = Field(
         ...,
         alias="pulse:githubRepositoryHandle",
-        pattern="^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$",
+        pattern="^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$",
     )
     pulse_repositoryType: PulseRepositoryType | None = Field(
         None,

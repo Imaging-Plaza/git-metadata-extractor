@@ -50,7 +50,11 @@ from src.v2.pipeline.stages.reconciliation import reconcile_entities
 from src.v2.validation.schema_validation import StrictSchemaValidator
 
 SOMEUSER = "someuser"
-OWNED = [f"{SOMEUSER}/repo-one", f"{SOMEUSER}/repo-two", f"{SOMEUSER}/repo-three"]
+OWNED = [
+    f"https://github.com/{SOMEUSER}/repo-one",
+    f"https://github.com/{SOMEUSER}/repo-two",
+    f"https://github.com/{SOMEUSER}/repo-three",
+]
 
 
 def _person_payload(*, infoscience: bool) -> dict[str, Any]:
@@ -111,14 +115,15 @@ def _run_user_downstream(*, infoscience: bool, materialise_repos: bool) -> dict[
     person = _person_payload(infoscience=infoscience)
     repos: list[dict[str, Any]] = []
     if materialise_repos:
+        infoscience_uuid = "cc69e432-9742-4ebd-a318-02a491f44e69"
         person_canonical_id = (
-            "https://infoscience.epfl.ch/server/api/core/items/12345"
+            f"https://infoscience.epfl.ch/entities/person/{infoscience_uuid}"
             if infoscience
             else "https://github.com/someuser"
         )
         repos = [
             {
-                "id": f"https://github.com/{full_name}",
+                "id": full_name,
                 "type": "schema:SoftwareSourceCode",
                 "shacl": "pulse:RepositoryShape",
                 "identifiers": {
@@ -126,7 +131,7 @@ def _run_user_downstream(*, infoscience: bool, materialise_repos: bool) -> dict[
                     "uuid": str(uuid.uuid4()),
                 },
                 "idSource": "pulse:githubRepositoryHandle",
-                "schema:name": full_name.split("/", 1)[1],
+                "schema:name": full_name.rsplit("/", 1)[1],
                 "pulse:githubRepositoryHandle": full_name,
                 "schema:author": [person_canonical_id],
             }

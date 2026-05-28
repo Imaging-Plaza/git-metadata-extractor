@@ -5,7 +5,7 @@
     "schema:name": "Carlos Vivar Rios",
     "schema:email": "carlos.vivar@epfl.ch",
     "schema:url": "https://people.epfl.ch/carlos.vivar",
-    "pulse:githubUsername": "caviri",
+    "pulse:githubUsername": "https://github.com/caviri",
     "pulse:orcidIdentifier": "0000-0001-2345-6789",
     "pulse:infosciencePersonIdentifier": "https://infoscience.epfl.ch/entities/person/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
     "org:hasMembership": [
@@ -23,7 +23,7 @@
     "schema:name": "Alice Morin",
     "schema:email": "alice.morin@epfl.ch",
     "schema:url": "https://people.epfl.ch/alice.morin",
-    "pulse:githubUsername": "amorin",
+    "pulse:githubUsername": "https://github.com/amorin",
     "pulse:orcidIdentifier": "0000-0002-3456-7890",
     "pulse:infosciencePersonIdentifier": "https://infoscience.epfl.ch/entities/person/a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
     "org:hasMembership": [
@@ -39,7 +39,7 @@
     "type": "schema:Person",
     "schema:name": "Jean Dupont",
     "schema:email": "jean.dupont@cern.ch",
-    "pulse:githubUsername": "jdupont",
+    "pulse:githubUsername": "https://github.com/jdupont",
     "pulse:orcidIdentifier": "0000-0003-4567-8901",
     "org:hasMembership": [
       "0000-0003-4567-8901_https://ror.org/01ggx4157"
@@ -57,7 +57,7 @@
     "type": "schema:Person",
     "schema:name": "Marie Weber",
     "schema:email": "marie.weber@eth.ch",
-    "pulse:githubUsername": "mweber",
+    "pulse:githubUsername": "https://github.com/mweber",
     "org:hasMembership": [
       "mweber_https://ror.org/05a28rw58"
     ],

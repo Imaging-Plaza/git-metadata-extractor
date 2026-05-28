@@ -302,6 +302,7 @@ class OrganizationAgentV2:
         else:
             warnings.append("ROR provider not configured for organization enrichment")
 
+        from src.v2.canonicalization.github import github_org_iri
         from src.v2.canonicalization.infoscience import infoscience_org_iri
 
         ror_id = ror_record.get("id") if isinstance(ror_record, dict) else None
@@ -323,13 +324,17 @@ class OrganizationAgentV2:
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
 
+        # v2.2.0: pulse:githubOrganizationHandle is the canonical
+        # `https://github.com/<handle>` URL.
+        github_handle_url = github_org_iri(github_handle)
+
         identifier_hierarchy: list[tuple[str, str | None]] = [
             ("pulse:ror", ror_id if isinstance(ror_id, str) else None),
             (
                 "pulse:infoscienceOrganizationIdentifier",
                 infoscience_id if isinstance(infoscience_id, str) else None,
             ),
-            ("pulse:githubOrganizationHandle", github_handle),
+            ("pulse:githubOrganizationHandle", github_handle_url),
             ("uuid", uuid_value),
         ]
         id_source, resolved_id = next(
@@ -425,7 +430,7 @@ class OrganizationAgentV2:
                 "pulse:infoscienceOrganizationIdentifier": (
                     infoscience_id if isinstance(infoscience_id, str) else None
                 ),
-                "pulse:githubOrganizationHandle": github_handle,
+                "pulse:githubOrganizationHandle": github_handle_url,
                 "uuid": uuid_value,
             },
             "idSource": id_source,
@@ -433,7 +438,7 @@ class OrganizationAgentV2:
                 resolved_name
             ),
             "schema:identifier": ror_id if isinstance(ror_id, str) else None,
-            "pulse:githubOrganizationHandle": github_handle,
+            "pulse:githubOrganizationHandle": github_handle_url,
             "pulse:infoscienceOrganizationIdentifier": (
                 infoscience_id if isinstance(infoscience_id, str) else None
             ),

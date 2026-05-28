@@ -61,17 +61,40 @@ def _extract_github_owner_from_url(value: Any) -> str | None:
 
 
 def _entity_owner_handle(entity: dict[str, Any]) -> str | None:
+    """Return the BARE GitHub handle of the entity, regardless of whether
+    the persisted property stores the canonical URL form
+    (``https://github.com/<handle>``) or a legacy bare handle. The bare
+    form is what's compared against the owner extracted from a
+    repository URL by `_extract_github_owner_from_url`."""
     handle_field = OWNERS_BY_TYPE.get(entity.get("type") or "")
     if handle_field is None:
         return None
-    handle = entity.get(handle_field)
-    if isinstance(handle, str) and handle.strip():
-        return handle.strip().lower()
+
+    def _to_bare(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if candidate.startswith(("http://", "https://")):
+            # Reuse the URL parser to extract the first path segment.
+            parsed = urlparse(candidate)
+            if parsed.netloc.lower() != "github.com":
+                return None
+            parts = [segment for segment in parsed.path.split("/") if segment]
+            if not parts:
+                return None
+            return parts[0].lower()
+        return candidate.lower()
+
+    handle = _to_bare(entity.get(handle_field))
+    if handle:
+        return handle
     identifiers = entity.get("identifiers")
     if isinstance(identifiers, dict):
-        nested = identifiers.get(handle_field)
-        if isinstance(nested, str) and nested.strip():
-            return nested.strip().lower()
+        nested = _to_bare(identifiers.get(handle_field))
+        if nested:
+            return nested
     return None
 
 

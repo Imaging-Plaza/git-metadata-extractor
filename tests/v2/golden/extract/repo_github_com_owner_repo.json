@@ -114,7 +114,7 @@
         "@id": "https://github.com/octocat",
         "@type": "schema:Person",
         "schema:name": "The Octocat",
-        "pulse:githubUsername": "octocat",
+        "pulse:githubUsername": "https://github.com/octocat",
         "pulse:orcidIdentifier": null,
         "pulse:infosciencePersonIdentifier": null,
         "org:hasMembership": [],
@@ -133,7 +133,7 @@
         "@id": "https://github.com/octocat/Hello-World",
         "@type": "schema:SoftwareSourceCode",
         "schema:name": "Hello-World",
-        "pulse:githubRepositoryHandle": "octocat/Hello-World",
+        "pulse:githubRepositoryHandle": "https://github.com/octocat/Hello-World",
         "schema:author": [
           {
             "@id": "https://github.com/octocat"

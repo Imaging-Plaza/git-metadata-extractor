@@ -37,7 +37,7 @@
         },
         "pulse:githubOrganizationHandle": {
           "type": ["string", "null"],
-          "description": "GitHub organization handle. Example: 'EPFL-ENAC'"
+          "description": "GitHub organization URL (`https://github.com/<handle>`). Example: 'https://github.com/EPFL-ENAC'"
         },
         "uuid": {
           "type": "string",
@@ -59,7 +59,7 @@
     },
     "pulse:githubOrganizationHandle": {
       "type": ["string", "null"],
-      "description": "GitHub organization handle. Example: 'EPFL-ENAC'"
+      "description": "GitHub organization URL (`https://github.com/<handle>`). Example: 'https://github.com/EPFL-ENAC'"
     },
     "pulse:infoscienceOrganizationIdentifier": {
       "type": ["string", "null"],

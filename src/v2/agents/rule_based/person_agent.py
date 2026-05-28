@@ -5,6 +5,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from src.v2.canonicalization.github import github_repo_iri, github_user_iri
 from src.v2.canonicalization.infoscience import infoscience_person_iri
 from src.v2.canonicalization.orcid import orcid_iri
 from src.v2.agents.models import (
@@ -408,7 +409,11 @@ class PersonAgentV2:
             if infoscience_match
             else None,
         )
-        github_username = github_user.get("login")
+        raw_github_login = github_user.get("login")
+        # v2.2.0: pulse:githubUsername stores the canonical GitHub
+        # profile URL `https://github.com/<handle>`. The bare login is
+        # kept locally for cross-referencing into repository handles.
+        github_username = github_user_iri(raw_github_login)
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
@@ -448,9 +453,10 @@ class PersonAgentV2:
                 if isinstance(repository, str) and repository
             ]
         repositories = github_user.get("repositories")
-        if not repository_ownership and isinstance(repositories, list) and isinstance(github_username, str):
+        if not repository_ownership and isinstance(repositories, list) and isinstance(raw_github_login, str):
+            # v2.2.0: ownership uses the canonical repo URL.
             repository_ownership = [
-                f"{github_username}/{repo_name}"
+                github_repo_iri(f"{raw_github_login}/{repo_name}") or f"{raw_github_login}/{repo_name}"
                 for repo_name in repositories
                 if isinstance(repo_name, str) and repo_name
             ]
@@ -560,7 +566,9 @@ class PersonAgentV2:
 
         derivation_stats = {
             "person_id": validated_payload.get("id"),
-            "github_username": github_username,
+            # Derivation breadcrumb keeps the bare login for readability;
+            # canonical URL lives on `pulse:githubUsername`.
+            "github_username": raw_github_login,
             "source_repositories": deepcopy(repository_ownership),
             "affiliation_names": deepcopy(affiliations),
             "orcid_affiliations": _normalize_affiliation_entries(

@@ -37,7 +37,7 @@
         },
         "pulse:githubUsername": {
           "type": ["string", "null"],
-          "description": "GitHub username. Example: 'caviri'"
+          "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'"
         },
         "uuid": {
           "type": "string",
@@ -63,7 +63,7 @@
     },
     "pulse:githubUsername": {
       "type": ["string", "null"],
-      "description": "GitHub username. Example: 'caviri'"
+      "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'"
     },
     "pulse:orcidIdentifier": {
       "type": ["string", "null"],

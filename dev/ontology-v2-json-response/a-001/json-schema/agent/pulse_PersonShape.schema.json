@@ -50,7 +50,8 @@
             "string",
             "null"
           ],
-          "description": "GitHub username. Example: 'caviri'"
+          "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'",
+          "pattern": "^https://github\\.com/[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
         },
         "uuid": {
           "type": "string",
@@ -82,7 +83,8 @@
         "string",
         "null"
       ],
-      "description": "GitHub username. Example: 'caviri'"
+      "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'",
+      "pattern": "^https://github\\.com/[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
     },
     "pulse:orcidIdentifier": {
       "type": [

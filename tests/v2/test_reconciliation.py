@@ -818,5 +818,5 @@ def test_reconcile_derives_organization_github_handle_from_github_url_id() -> No
 
     assert organization["id"] == "https://github.com/sdsc-ordes"
     assert organization["idSource"] == "pulse:githubOrganizationHandle"
-    assert organization["pulse:githubOrganizationHandle"] == "sdsc-ordes"
-    assert organization["identifiers"]["pulse:githubOrganizationHandle"] == "sdsc-ordes"
+    assert organization["pulse:githubOrganizationHandle"] == "https://github.com/sdsc-ordes"
+    assert organization["identifiers"]["pulse:githubOrganizationHandle"] == "https://github.com/sdsc-ordes"

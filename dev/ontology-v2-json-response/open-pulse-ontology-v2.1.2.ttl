@@ -180,12 +180,14 @@ pulse:GithubUsernameShape
     a sh:PropertyShape ;
     sh:path pulse:githubUsername ;
     sh:datatype xsd:string ;
-    sh:description "The GitHub handle of a person." .
+    sh:pattern "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$" ;
+    sh:description "The GitHub profile URL of a person (`https://github.com/<handle>`)." .
 
 pulse:GithubOrganizationHandleShape a sh:PropertyShape ;
     sh:path pulse:githubOrganizationHandle ;
     sh:datatype xsd:string ;
-    sh:description "The GitHub handle of an organization." .
+    sh:pattern "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$" ;
+    sh:description "The GitHub organization URL (`https://github.com/<handle>`)." .
 
 pulse:GithubRepositoryHandleShape
     a sh:PropertyShape ;
@@ -193,8 +195,8 @@ pulse:GithubRepositoryHandleShape
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:datatype xsd:string ;
-    sh:pattern "^[a-zA-Z0-9\\-_]+/[a-zA-Z0-9\\-_\\.]+$" ;
-    sh:description "The GitHub repository handle in the format 'owner/repository'." .
+    sh:pattern "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$" ;
+    sh:description "The GitHub repository URL in the form `https://github.com/<owner>/<repo>`." .
 
 pulse:DisciplineShape
     a sh:PropertyShape ;

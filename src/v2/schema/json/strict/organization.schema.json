@@ -51,7 +51,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         },
         "uuid": {
           "type": "string",
@@ -84,7 +85,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
     },
     "pulse:infoscienceOrganizationIdentifier": {
       "type": [
@@ -155,7 +157,8 @@
       ],
       "properties": {
         "pulse:githubOrganizationHandle": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         }
       }
     },

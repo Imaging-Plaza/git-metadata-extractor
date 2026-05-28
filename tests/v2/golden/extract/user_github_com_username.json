@@ -10,11 +10,11 @@
       "identifiers": {
         "pulse:orcid": null,
         "pulse:infosciencePersonIdentifier": null,
-        "pulse:githubUsername": "octocat"
+        "pulse:githubUsername": "https://github.com/octocat"
       },
       "idSource": "pulse:githubUsername",
       "schema:name": "The Octocat",
-      "pulse:githubUsername": "octocat",
+      "pulse:githubUsername": "https://github.com/octocat",
       "pulse:orcidIdentifier": null,
       "pulse:infosciencePersonIdentifier": null,
       "org:hasMembership": [],
@@ -32,11 +32,11 @@
           "identifiers": {
             "pulse:orcid": null,
             "pulse:infosciencePersonIdentifier": null,
-            "pulse:githubUsername": "octocat"
+            "pulse:githubUsername": "https://github.com/octocat"
           },
           "idSource": "pulse:githubUsername",
           "schema:name": "The Octocat",
-          "pulse:githubUsername": "octocat",
+          "pulse:githubUsername": "https://github.com/octocat",
           "pulse:orcidIdentifier": null,
           "pulse:infosciencePersonIdentifier": null,
           "org:hasMembership": [],

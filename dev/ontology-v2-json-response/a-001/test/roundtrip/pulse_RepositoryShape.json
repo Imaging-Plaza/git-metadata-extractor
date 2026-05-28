@@ -3,7 +3,7 @@
     "id": "EPFL-ENAC/geodata-toolkit",
     "type": "schema:SoftwareSourceCode",
     "schema:name": "Open Pulse Platform",
-    "pulse:githubRepositoryHandle": "EPFL-ENAC/geodata-toolkit",
+    "pulse:githubRepositoryHandle": "https://github.com/EPFL-ENAC/geodata-toolkit",
     "pulse:repositoryType": "pulse:Software",
     "pulse:discipline": [
       "wd:Q21201",
@@ -27,7 +27,7 @@
     "id": "EPFL-ENAC/structural-analysis",
     "type": "schema:SoftwareSourceCode",
     "schema:name": "Gimie",
-    "pulse:githubRepositoryHandle": "EPFL-ENAC/structural-analysis",
+    "pulse:githubRepositoryHandle": "https://github.com/EPFL-ENAC/structural-analysis",
     "pulse:repositoryType": "pulse:Software",
     "pulse:discipline": [
       "wd:Q21201"
@@ -48,7 +48,7 @@
     "id": "mweber/data-pipeline",
     "type": "schema:SoftwareSourceCode",
     "schema:name": "Data Pipeline",
-    "pulse:githubRepositoryHandle": "mweber/data-pipeline",
+    "pulse:githubRepositoryHandle": "https://github.com/mweber/data-pipeline",
     "pulse:repositoryType": "pulse:Data",
     "pulse:discipline": [
       "wd:Q12483"
@@ -70,7 +70,7 @@
     "id": "jdupont/geodata-toolkit",
     "type": "schema:SoftwareSourceCode",
     "schema:name": "Geodata Toolkit (Fork)",
-    "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+    "pulse:githubRepositoryHandle": "https://github.com/jdupont/geodata-toolkit",
     "pulse:repositoryType": "pulse:Software",
     "pulse:discipline": [
       "wd:Q21201",

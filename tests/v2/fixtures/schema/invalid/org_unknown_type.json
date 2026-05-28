@@ -5,14 +5,14 @@
   "identifiers": {
     "pulse:ror": "https://ror.org/02s376052",
     "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/41674f42-ba15-4612-9817-2a6f60985c01",
-    "pulse:githubOrganizationHandle": "epaboratories",
+    "pulse:githubOrganizationHandle": "https://github.com/epaboratories",
     "uuid": "e5a3b1c9-7d8e-4f6a-ab4c-6d8e0f2a4b6c"
   },
   "idSource": "pulse:ror",
   "schema:name": "Ecole Polytechnique Federale de Lausanne",
   "schema:identifier": "https://ror.org/02s376052",
   "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/41674f42-ba15-4612-9817-2a6f60985c01",
-  "pulse:githubOrganizationHandle": "epaboratories",
+  "pulse:githubOrganizationHandle": "https://github.com/epaboratories",
   "pulse:OrganizationType": "pulse:UnknownType",
   "pulse:githubOrgFollowers": 89,
   "org:hasUnit": [
