@@ -2,7 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unpublished]
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Output is aligned with **Open Pulse Ontology v2.1.2** (see `src/v2/schema/json/context/v2.0.jsonld`).
+
+## [Unreleased]
+
+_No changes yet._
+
+## [2.1.0rc1] — 2026-05-28
+
+First release candidate for v2.1.0. Consolidates the v2 pipeline buildout, the nine RAG indices, the LLM agent toolkit, and the affiliation / publiccode / repo-aux-file work into a tagged release. **All `[Unpublished]` entries previously at the top of this file are part of this release** and are preserved verbatim below.
+
+### Highlights
+
+- **Membership-based affiliation resolution** — three-stage ladder (`resolve_company_to_ror` → `resolve_bio_to_ror` → `resolve_bio_to_ror_llm`) that materialises proper `org:Membership` + `org:Organization` entities into the reconciled graph instead of stamping `schema:affiliation` on Person. Keeps JSON-LD output ontology-pure.
+- **Repository supplementary metadata** — parses `publiccode.yml` (v0.2 / v0.3 / v0.4) into a typed `_publiccode` field; emits URL pointers for `CITATION.cff` / `AUTHORS` / `CONTRIBUTING.md` / `publiccode.yml`; forwards their content excerpts to the LLM refiners.
+- **`publiccode:` JSON-LD namespace** — scalar/list top-level publiccode fields hoisted to `publiccode:<field>` predicates when `include_internal_fields=true`, so SPARQL queries hit them directly.
+- **Operational hardening** — DuckDB IRI-migration CTAS-swap now atomic (BEGIN/COMMIT). Six new GitHub-org REST fields surfaced (`_is_verified`, `_archived_at`, `_public_gists`, `_following_count`, `_has_organization_projects`, `_has_repository_projects`).
+- **Public documentation** — `docs/v2-pipeline.md` (operator-facing overview with node-graph, load-bearing assumptions, affiliation strategy, env-flag reference). README rewritten for v2-first with worked extract example and production-use callout (`imagingplaza.epfl.ch`, `openpulse.science`).
+
+### Added (since v2.0.1, late-release additions)
+
+- New pipeline stage `resolve_company_to_ror` (`src/v2/pipeline/stages/resolve_company_to_ror.py`): reads each Person's `_company` field, queries the ROR RAG, and materialises a `org:Membership` + `org:Organization` stub when a hit clears the strict acceptance gate (score ≥ 0.55, type in {company, education, funder, facility, government, nonprofit}, gap ≥ 0.02 OR exact-name override). Idempotent across re-runs. Gated by `V2_RESOLVE_COMPANY_TO_ROR` (default `true`).
+- New pipeline stage `resolve_bio_to_ror` (`src/v2/pipeline/stages/resolve_bio_to_ror.py`): deterministic backstop for persons the company stage missed. Regex extraction over `_bio` / `_orcid_biography` (`at <Org>`, `@handle`, `, <Org>`, `from <Org>`) + `DOMAIN_HINTS` lookup over `_blog` and `_email` hosts. Email-domain match works on the hashed-local-part shape `_anonymize_email` produces. Gated by `V2_RESOLVE_BIO_TO_ROR` (default `true`).
+- New pipeline stage `resolve_bio_to_ror_llm` (`src/v2/pipeline/stages/resolve_bio_to_ror_llm.py`) + new agent `src/v2/agents/llm/refiners/bio_resolver/`: LLM long-tail over persons still without a Membership. Requires `confidence >= 0.7` + verbatim quote in `reason`. Bounded concurrency via `V2_RESOLVE_BIO_TO_ROR_LLM_CONCURRENCY` (default 4). Gated by `V2_RESOLVE_BIO_TO_ROR_LLM` + LLM/hybrid runtime (default `true`).
+- New module `src/v2/parsers/publiccode.py` (`parse_publiccode`): full v0.4 core schema parser, forward-compatible with country-extension blocks. Lenient — drops bad sub-trees instead of failing whole parse. Real-world fixture pinned at `tests/v2/fixtures/publiccode_foodsoft_1e3adaef.yml`.
+- Repository agent emits four URL pointers (`_citation_cff_url`, `_authors_url`, `_contributing_url`, `_publiccode_url`) when the corresponding file lives at the repo root. Case-insensitive filename match.
+- Repository agent emits `_publiccode` (parsed payload) when `publiccode.yml` (or `.yaml`) exists at root.
+- `refine_with_llm._build_repo_context_summary` forwards 4 KB excerpts of CITATION.cff / AUTHORS / CONTRIBUTING / publiccode.yml to LLM refiners, plus the parsed publiccode payload as a typed dict.
+- `GitHubProvider._AUX_FILE_PATTERNS` extended with `publiccode.yaml` (alt extension) and `contribution.md` (alt spelling).
+- Six new internal fields on Organization (from existing `/orgs/{org}` REST response): `_is_verified`, `_archived_at`, `_public_gists`, `_following_count`, `_has_organization_projects`, `_has_repository_projects`.
+- New `publiccode:` JSON-LD prefix registered in `build_jsonld_output` when `include_internal_fields=true`. Resolves to `https://yml.publiccode.tools/`.
+- Four new env vars in `.env.example`: `V2_RESOLVE_COMPANY_TO_ROR`, `V2_RESOLVE_BIO_TO_ROR`, `V2_RESOLVE_BIO_TO_ROR_LLM`, `V2_RESOLVE_BIO_TO_ROR_LLM_CONCURRENCY`.
+- New docs: `docs/v2-pipeline.md` (pipeline overview + assumptions + node-graph). `.internal/v2-pipeline-reference.md` extended with stages 8b/c/d and "Internal Namespaces" section (private; tracked locally only).
+- Cross-stage helpers exposed: `_build_org_stub`, `_build_membership`, `_existing_org_ids`, `_existing_membership_keys`, `_materialise`, `_person_canonical_id` (resolve_company_to_ror); `_persons_with_memberships` (resolve_bio_to_ror).
+- Regression coverage for new work: `tests/v2/test_resolve_company_to_ror.py` (30), `tests/v2/test_resolve_bio_to_ror.py` (53), `tests/v2/test_resolve_bio_to_ror_llm.py` (24), `tests/v2/test_parsers_publiccode.py` (17), plus repo-agent / refine_with_llm extensions and a CTAS-swap rollback test in `tests/index/zenodo/test_iri.py`.
+
+### Fixed (deploy-blockers caught in 2.1.0rc1)
+
+- **Affiliation triples silently dropped from SPARQL output.** Resolver stages wrote `person["http://schema.org/affiliation"] = ror_url` using the full-IRI key. rdflib's JSON-LD parser dropped the key because the `@context` had no matching term mapping and no `@vocab` fallback — `0` triples landed in the SPARQL store despite stage logs reporting `persons_resolved > 0`. Fixed by switching to Membership materialisation (no `schema:affiliation` on Person). (PR #85)
+- **DuckDB CTAS-swap not atomic.** HuggingFace + Zenodo IRI migrations ran `CREATE shadow → INSERT → DROP original → RENAME shadow` outside a transaction; a mid-migration crash left the original table gone and the replacement under its `__iri_migrate` shadow name. Wrapped in `BEGIN TRANSACTION / COMMIT` with `ROLLBACK` on exception. (PR #84)
+
+### Changed (in 2.1.0rc1)
+
+- **Affiliation contract**: resolver stages no longer write `person["schema:affiliation"] = ror_url`. Instead they materialise `org:Membership` + `org:Organization` entities into `reconciled.entities`. SPARQL queries that expected `<person> schema:affiliation <ror>` must switch to the chain `<person> org:hasMembership <m> ; <m> org:organization <ror>`. (PR #85)
+- README rewritten for v2-first (287 → 199 lines). Production-use callout with `imagingplaza.epfl.ch` + `openpulse.science`. Worked extract example. Docs index table replaces inline docs.
+- `.env.example` adds documentation for the four resolver env vars.
+- `pyproject.toml`: version bumped to `2.1.0rc1` (was `3.0.0`, speculatively bumped before this release was scoped).
+- `src/api.py`: FastAPI app `version` bumped to `2.1.0rc1` (was `2.0.1`).
+
+---
+
+## Accumulated entries from [Unpublished] (now part of 2.1.0rc1)
 
 ### Changed
 - `POST /v2/extract` is now an async job submitter rather than a synchronous proxy to the GET handler. The handler validates the URL synchronously (still 422 for unsupported URLs), persists a `pending` job in the `ProviderCache`-backed job store, schedules the pipeline as a background task, and returns `202 Accepted` with `{job_id, status, status_url, submitted_at}`. Returns `503` if the provider cache is disabled. `GET /v2/extract/{full_path}` remains synchronous and unchanged.
