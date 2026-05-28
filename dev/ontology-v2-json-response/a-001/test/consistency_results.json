@@ -13,87 +13,87 @@
   "details": {
     "Person": [
       {
-        "source_id": "0000-0001-2345-6789",
+        "source_id": "https://orcid.org/0000-0001-2345-6789",
         "field": "org:hasMembership",
-        "reference": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "reference": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
         "target_shape": "Membership",
-        "resolved_id": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789",
+        "source_id": "https://orcid.org/0000-0001-2345-6789",
         "field": "org:hasMembership",
-        "reference": "0000-0001-2345-6789_numpy",
+        "reference": "https://orcid.org/0000-0001-2345-6789_numpy",
         "target_shape": "Membership",
-        "resolved_id": "0000-0001-2345-6789_numpy",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789_numpy",
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789",
+        "source_id": "https://orcid.org/0000-0001-2345-6789",
         "field": "pulse:hasContribution",
-        "reference": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "reference": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789",
+        "source_id": "https://orcid.org/0000-0001-2345-6789",
         "field": "pulse:hasContribution",
-        "reference": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "reference": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890",
+        "source_id": "https://orcid.org/0000-0002-3456-7890",
         "field": "org:hasMembership",
-        "reference": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "reference": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
         "target_shape": "Membership",
-        "resolved_id": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890",
+        "source_id": "https://orcid.org/0000-0002-3456-7890",
         "field": "pulse:hasContribution",
-        "reference": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "reference": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890",
+        "source_id": "https://orcid.org/0000-0002-3456-7890",
         "field": "pulse:hasContribution",
-        "reference": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "reference": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901",
+        "source_id": "https://orcid.org/0000-0003-4567-8901",
         "field": "org:hasMembership",
-        "reference": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "reference": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
         "target_shape": "Membership",
-        "resolved_id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901",
+        "source_id": "https://orcid.org/0000-0003-4567-8901",
         "field": "pulse:hasContribution",
-        "reference": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "reference": "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901",
+        "source_id": "https://orcid.org/0000-0003-4567-8901",
         "field": "pulse:hasContribution",
-        "reference": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "reference": "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit",
         "target_shape": "Contribution",
-        "resolved_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit",
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901",
+        "source_id": "https://orcid.org/0000-0003-4567-8901",
         "field": "pulse:owns",
         "reference": "jdupont/geodata-toolkit",
         "target_shape": "Repository",
@@ -153,9 +153,9 @@
       {
         "source_id": "EPFL-ENAC/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0001-2345-6789",
+        "reference": "https://orcid.org/0000-0001-2345-6789",
         "target_shape": "Person",
-        "resolved_id": "0000-0001-2345-6789",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789",
         "status": "valid"
       },
       {
@@ -201,17 +201,17 @@
       {
         "source_id": "jdupont/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {
         "source_id": "jdupont/geodata-toolkit",
         "field": "pulse:ownedBy",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {
@@ -259,7 +259,7 @@
     ],
     "Membership": [
       {
-        "source_id": "0000-0001-2345-6789_https://ror.org/02s376052",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
         "field": "org:organization",
         "reference": "https://ror.org/02s376052",
         "target_shape": "Organization",
@@ -267,7 +267,7 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890_https://ror.org/02s376052",
+        "source_id": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
         "field": "org:organization",
         "reference": "https://ror.org/02s376052",
         "target_shape": "Organization",
@@ -275,7 +275,7 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+        "source_id": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
         "field": "org:organization",
         "reference": "https://ror.org/01ggx4157",
         "target_shape": "Organization",
@@ -291,7 +291,7 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789_numpy",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_numpy",
         "field": "org:organization",
         "reference": "numpy",
         "target_shape": "Organization",
@@ -309,7 +309,7 @@
     ],
     "Contribution": [
       {
-        "source_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
         "field": "pulse:contributionTo",
         "reference": "EPFL-ENAC/geodata-toolkit",
         "target_shape": "Repository",
@@ -317,15 +317,15 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0001-2345-6789",
+        "reference": "https://orcid.org/0000-0001-2345-6789",
         "target_shape": "Person",
-        "resolved_id": "0000-0001-2345-6789",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789",
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
         "field": "pulse:contributionTo",
         "reference": "EPFL-ENAC/structural-analysis",
         "target_shape": "Repository",
@@ -333,15 +333,15 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+        "source_id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
         "field": "schema:author",
-        "reference": "0000-0001-2345-6789",
+        "reference": "https://orcid.org/0000-0001-2345-6789",
         "target_shape": "Person",
-        "resolved_id": "0000-0001-2345-6789",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789",
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
         "field": "pulse:contributionTo",
         "reference": "EPFL-ENAC/geodata-toolkit",
         "target_shape": "Repository",
@@ -349,15 +349,15 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0002-3456-7890",
+        "reference": "https://orcid.org/0000-0002-3456-7890",
         "target_shape": "Person",
-        "resolved_id": "0000-0002-3456-7890",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890",
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "source_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
         "field": "pulse:contributionTo",
         "reference": "EPFL-ENAC/structural-analysis",
         "target_shape": "Repository",
@@ -365,15 +365,15 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+        "source_id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
         "field": "schema:author",
-        "reference": "0000-0002-3456-7890",
+        "reference": "https://orcid.org/0000-0002-3456-7890",
         "target_shape": "Person",
-        "resolved_id": "0000-0002-3456-7890",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890",
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
         "field": "pulse:contributionTo",
         "reference": "EPFL-ENAC/geodata-toolkit",
         "target_shape": "Repository",
@@ -381,11 +381,11 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {
@@ -421,7 +421,7 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit",
         "field": "pulse:contributionTo",
         "reference": "jdupont/geodata-toolkit",
         "target_shape": "Repository",
@@ -429,11 +429,11 @@
         "status": "valid"
       },
       {
-        "source_id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+        "source_id": "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit",
         "field": "schema:author",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {
@@ -457,17 +457,17 @@
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:author",
-        "reference": "0000-0001-2345-6789",
+        "reference": "https://orcid.org/0000-0001-2345-6789",
         "target_shape": "Person",
-        "resolved_id": "0000-0001-2345-6789",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789",
         "status": "valid"
       },
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:author",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {
@@ -481,17 +481,17 @@
       {
         "source_id": "10.1016/j.softx.2023.101456",
         "field": "schema:author",
-        "reference": "0000-0001-2345-6789",
+        "reference": "https://orcid.org/0000-0001-2345-6789",
         "target_shape": "Person",
-        "resolved_id": "0000-0001-2345-6789",
+        "resolved_id": "https://orcid.org/0000-0001-2345-6789",
         "status": "valid"
       },
       {
         "source_id": "10.1016/j.softx.2023.101456",
         "field": "schema:author",
-        "reference": "0000-0002-3456-7890",
+        "reference": "https://orcid.org/0000-0002-3456-7890",
         "target_shape": "Person",
-        "resolved_id": "0000-0002-3456-7890",
+        "resolved_id": "https://orcid.org/0000-0002-3456-7890",
         "status": "valid"
       },
       {
@@ -521,9 +521,9 @@
       {
         "source_id": "10.1145/3597503.3639187",
         "field": "schema:author",
-        "reference": "0000-0003-4567-8901",
+        "reference": "https://orcid.org/0000-0003-4567-8901",
         "target_shape": "Person",
-        "resolved_id": "0000-0003-4567-8901",
+        "resolved_id": "https://orcid.org/0000-0003-4567-8901",
         "status": "valid"
       },
       {

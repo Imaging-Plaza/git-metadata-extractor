@@ -447,12 +447,11 @@ def _gate_repo_type_patch(
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    """Return uppercased bare-form ORCID for use as a dedup key.
-    Delegates to the shared canonical helper, which already validates
-    shape AND uppercases the checksum char."""
-    from src.v2.canonicalization.orcid import parse_orcid
+    """Return canonical ORCID URL for use as a dedup key. v2.2.0:
+    URL form matches entity field values."""
+    from src.v2.canonicalization.orcid import orcid_iri
 
-    return parse_orcid(value)
+    return orcid_iri(value)
 
 
 def _normalize_github_handle(value: str | None) -> str | None:

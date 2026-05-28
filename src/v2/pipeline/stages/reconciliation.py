@@ -94,12 +94,12 @@ def _normalize_uuid_v4(value: Any) -> str | None:
 
 
 def _normalize_orcid_token(value: Any) -> str | None:
-    """Return the bare-form ORCID via the shared canonical helper.
-    Accepts URL form, `orcid:` prefix, lowercase `x` checksum,
-    legacy `http` host. Returns None on malformed shape."""
-    from src.v2.canonicalization.orcid import parse_orcid
+    """Return canonical ORCID URL via the shared helper. v2.2.0:
+    every ORCID-bearing field on Person entities lands as
+    `https://orcid.org/<bare>` URL form."""
+    from src.v2.canonicalization.orcid import orcid_iri
 
-    return parse_orcid(value)
+    return orcid_iri(value)
 
 
 def _normalize_infoscience_uuid(value: Any) -> str | None:
@@ -322,9 +322,27 @@ def _register_person_lookup_tokens(lookup: dict[str, str], person: dict[str, Any
     _register_lookup_token(lookup, person.get("pulse:infosciencePersonIdentifier"), canonical_id)
     _register_lookup_token(lookup, person.get("schema:name"), canonical_id)
 
+    # v2.2.0: ORCID fields are now URL form, but cross-entity author
+    # references can arrive bare (e.g., `article.schema:author =
+    # ["0000-0002-..."]` from a CITATION.cff or LLM extraction). Register
+    # the BARE shape too so those references resolve to the canonical
+    # URL person id.
+    from src.v2.canonicalization.orcid import parse_orcid
+
+    orcid_top = person.get("pulse:orcidIdentifier")
+    if isinstance(orcid_top, str):
+        bare = parse_orcid(orcid_top)
+        if bare:
+            _register_lookup_token(lookup, bare, canonical_id)
+
     identifiers = person.get("identifiers")
     if isinstance(identifiers, dict):
         _register_lookup_token(lookup, identifiers.get("pulse:orcid"), canonical_id)
+        nested_orcid = identifiers.get("pulse:orcid")
+        if isinstance(nested_orcid, str):
+            bare_nested = parse_orcid(nested_orcid)
+            if bare_nested:
+                _register_lookup_token(lookup, bare_nested, canonical_id)
         _register_lookup_token(
             lookup,
             identifiers.get("pulse:infosciencePersonIdentifier"),

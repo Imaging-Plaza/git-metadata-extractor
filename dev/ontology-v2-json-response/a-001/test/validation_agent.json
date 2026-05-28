@@ -16,21 +16,21 @@
       "total_count": 5,
       "instances": [
         {
-          "id": "0000-0001-2345-6789",
+          "id": "https://orcid.org/0000-0001-2345-6789",
           "index": 0,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0002-3456-7890",
+          "id": "https://orcid.org/0000-0002-3456-7890",
           "index": 1,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0003-4567-8901",
+          "id": "https://orcid.org/0000-0003-4567-8901",
           "index": 2,
           "valid": true,
           "error_count": 0,
@@ -141,21 +141,21 @@
       "total_count": 6,
       "instances": [
         {
-          "id": "0000-0001-2345-6789_https://ror.org/02s376052",
+          "id": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
           "index": 0,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0002-3456-7890_https://ror.org/02s376052",
+          "id": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
           "index": 1,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+          "id": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
           "index": 2,
           "valid": true,
           "error_count": 0,
@@ -169,7 +169,7 @@
           "errors": []
         },
         {
-          "id": "0000-0001-2345-6789_numpy",
+          "id": "https://orcid.org/0000-0001-2345-6789_numpy",
           "index": 4,
           "valid": true,
           "error_count": 0,
@@ -192,35 +192,35 @@
       "total_count": 9,
       "instances": [
         {
-          "id": "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+          "id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
           "index": 0,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
+          "id": "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis",
           "index": 1,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+          "id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
           "index": 2,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
+          "id": "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis",
           "index": 3,
           "valid": true,
           "error_count": 0,
           "errors": []
         },
         {
-          "id": "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+          "id": "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
           "index": 4,
           "valid": true,
           "error_count": 0,
@@ -241,7 +241,7 @@
           "errors": []
         },
         {
-          "id": "0000-0003-4567-8901_jdupont/geodata-toolkit",
+          "id": "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit",
           "index": 7,
           "valid": true,
           "error_count": 0,

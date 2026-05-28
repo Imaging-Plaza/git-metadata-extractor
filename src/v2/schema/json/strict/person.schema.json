@@ -26,7 +26,7 @@
       "properties": {
         "pulse:orcid": {
           "type": ["string", "null"],
-          "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
+          "pattern": "^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
         },
         "pulse:infosciencePersonIdentifier": {
           "type": ["string", "null"],
@@ -62,7 +62,7 @@
     },
     "pulse:orcidIdentifier": {
       "type": ["string", "null"],
-      "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
+      "pattern": "^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
     },
     "pulse:infosciencePersonIdentifier": {
       "type": ["string", "null"],

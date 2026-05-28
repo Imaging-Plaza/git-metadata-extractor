@@ -13,8 +13,8 @@
     "schema:identifier": "https://doi.org/10.1038/s41586-024-07856-z",
     "schema:datePublished": "2025-06-15",
     "schema:author": [
-      "0000-0001-2345-6789",
-      "0000-0003-4567-8901"
+      "https://orcid.org/0000-0001-2345-6789",
+      "https://orcid.org/0000-0003-4567-8901"
     ],
     "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
     "schema:sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
@@ -33,8 +33,8 @@
     "schema:identifier": "https://doi.org/10.1016/j.softx.2023.101456",
     "schema:datePublished": "2023-11-20",
     "schema:author": [
-      "0000-0001-2345-6789",
-      "0000-0002-3456-7890"
+      "https://orcid.org/0000-0001-2345-6789",
+      "https://orcid.org/0000-0002-3456-7890"
     ],
     "pulse:infoscienceArticleIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
     "schema:sourceOrganization": "https://ror.org/02s376052"
@@ -72,7 +72,7 @@
     "schema:identifier": "https://doi.org/10.1145/3597503.3639187",
     "schema:datePublished": "2024-04-22",
     "schema:author": [
-      "0000-0003-4567-8901",
+      "https://orcid.org/0000-0003-4567-8901",
       "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
     ],
     "pulse:infoscienceArticleIdentifier": null,

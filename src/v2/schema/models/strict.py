@@ -20,7 +20,7 @@ class Identifiers(BaseModel):
         extra="forbid",
     )
     pulse_orcid: str | None = Field(
-        None, alias="pulse:orcid", pattern="^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
+        None, alias="pulse:orcid", pattern="^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
     )
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
@@ -62,7 +62,7 @@ class PersonModel1(BaseModel):
     pulse_orcidIdentifier: str | None = Field(
         None,
         alias="pulse:orcidIdentifier",
-        pattern="^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
+        pattern="^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
     )
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
@@ -95,7 +95,7 @@ class PersonModel2(BaseModel):
     pulse_orcidIdentifier: str | None = Field(
         None,
         alias="pulse:orcidIdentifier",
-        pattern="^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
+        pattern="^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
     )
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
@@ -128,7 +128,7 @@ class PersonModel3(BaseModel):
     pulse_orcidIdentifier: str | None = Field(
         None,
         alias="pulse:orcidIdentifier",
-        pattern="^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
+        pattern="^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
     )
     pulse_infosciencePersonIdentifier: str = Field(
         ...,
@@ -161,7 +161,7 @@ class PersonModel4(BaseModel):
     pulse_orcidIdentifier: str = Field(
         ...,
         alias="pulse:orcidIdentifier",
-        pattern="^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
+        pattern="^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$",
     )
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,

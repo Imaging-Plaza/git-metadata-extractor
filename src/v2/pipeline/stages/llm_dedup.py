@@ -78,12 +78,12 @@ def _lookup_identifier(entity: dict[str, Any], *keys: str) -> str | None:
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    """Return uppercased bare-form ORCID for use as a dedup key.
-    Delegates to the shared canonical helper (which already
-    uppercases the checksum char for canonical-form equality)."""
-    from src.v2.canonicalization.orcid import parse_orcid
+    """Return canonical ORCID URL for use as a dedup key. v2.2.0:
+    URL form matches entity field values so dedup comparisons work
+    regardless of which input shape an upstream provider produced."""
+    from src.v2.canonicalization.orcid import orcid_iri
 
-    return parse_orcid(value)
+    return orcid_iri(value)
 
 
 def _normalize_ror(value: str | None) -> str | None:

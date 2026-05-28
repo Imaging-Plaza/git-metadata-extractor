@@ -152,11 +152,12 @@ def _extract_person_identifier(context: dict[str, Any]) -> str | None:
 
 
 def _normalize_orcid_hint(raw: Any) -> str | None:
-    """Return the bare-form ORCID via the shared canonical helper.
-    Used to surface a clean ORCID hint to the LLM agent context."""
-    from src.v2.canonicalization.orcid import parse_orcid
+    """Return the canonical ORCID URL via the shared helper.
+    v2.2.0: surfaces URL form to the LLM agent context to match what
+    will be written to the entity output."""
+    from src.v2.canonicalization.orcid import orcid_iri
 
-    return parse_orcid(raw)
+    return orcid_iri(raw)
 
 
 def _strict_validate(payload: dict[str, Any]) -> list[str]:

@@ -223,8 +223,8 @@ pulse:OrcidPropertyShape
     a sh:PropertyShape ;
     sh:path pulse:orcidIdentifier ;
     sh:datatype xsd:string ;
-    sh:pattern "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$" ;
-    sh:description "ORCID identifier validation." .
+    sh:pattern "^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$" ;
+    sh:description "ORCID identifier in canonical URL form (https://orcid.org/<bare>). v2.2.0 — see CHANGELOG." .
 
 pulse:InfoscienceArticleIdentifierShape
     a sh:PropertyShape ;

@@ -13,7 +13,7 @@
     "pulse:githubRepositoryHandle": "EPFL-ENAC/geodata-toolkit",
     "pulse:repositoryType": "pulse:Software",
     "pulse:discipline": ["wd:Q21201", "wd:Q8434"],
-    "schema:author": ["0000-0001-2345-6789"],
+    "schema:author": ["https://orcid.org/0000-0001-2345-6789"],
     "pulse:githubRepoStars": 45,
     "pulse:githubRepoForks": 12,
     "schema:dateCreated": "2023-03-15T10:30:00Z",
@@ -85,14 +85,14 @@
     "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
     "pulse:repositoryType": "pulse:Software",
     "pulse:discipline": ["wd:Q21201", "wd:Q8434"],
-    "schema:author": ["0000-0003-4567-8901"],
+    "schema:author": ["https://orcid.org/0000-0003-4567-8901"],
     "pulse:githubRepoStars": 2,
     "pulse:githubRepoForks": 0,
     "schema:dateCreated": "2024-02-01T13:00:00Z",
     "schema:license": "https://spdx.org/licenses/MIT.html",
     "schema:citation": null,
     "schema:programmingLanguage": ["Python", "TypeScript"],
-    "pulse:ownedBy": "0000-0003-4567-8901",
+    "pulse:ownedBy": "https://orcid.org/0000-0003-4567-8901",
     "pulse:isForkOf": "EPFL-ENAC/geodata-toolkit"
   }
 ]

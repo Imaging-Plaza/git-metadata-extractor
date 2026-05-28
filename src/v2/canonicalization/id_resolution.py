@@ -5,7 +5,7 @@ import re
 import uuid
 from typing import Any
 
-from src.v2.canonicalization.orcid import parse_orcid
+from src.v2.canonicalization.orcid import orcid_iri
 
 INFOSCIENCE_CORE_ITEMS_BASE_URI = "https://infoscience.epfl.ch/server/api/core/items/"
 INFOSCIENCE_PERSON_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
@@ -105,9 +105,9 @@ def _existing_resolution(
     normalized_id: str | None = None
 
     if normalized_source == "pulse:orcid":
-        normalized_orcid = _normalize_orcid(entity_id)
-        if normalized_orcid is not None:
-            normalized_id = f"{ORCID_BASE_URI}{normalized_orcid}"
+        # v2.2.0: `_normalize_orcid` now returns the canonical URL
+        # form directly; no need to prepend `ORCID_BASE_URI`.
+        normalized_id = _normalize_orcid(entity_id)
     elif normalized_source == "pulse:infosciencePersonIdentifier":
         normalized_infoscience_id = _normalize_infoscience_identifier(
             entity_id,
@@ -162,12 +162,10 @@ def _existing_resolution(
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:
-    """Return the bare-form ORCID. Delegates to the shared canonical
-    helper, which tolerates every input shape (bare / URL / `orcid:`
-    prefix / legacy `http` host / trailing slash / lowercase `x`
-    checksum) and rejects malformed input. Callers that need URL
-    form should use `orcid_iri` directly."""
-    return parse_orcid(orcid)
+    """Return the canonical ORCID URL via the shared helper. v2.2.0:
+    Person `@id` is the URL form directly (no `ORCID_BASE_URI` prepend
+    needed at the call site)."""
+    return orcid_iri(orcid)
 
 
 def _normalize_ror(ror: str | None) -> str | None:
@@ -310,7 +308,9 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if orcid is not None:
-        return f"{ORCID_BASE_URI}{orcid}", "pulse:orcid"
+        # v2.2.0: `_normalize_orcid` returns the canonical URL form
+        # directly — no `ORCID_BASE_URI` prepend.
+        return orcid, "pulse:orcid"
 
     infoscience_id = _normalize_infoscience_identifier(
         _lookup_identifier(

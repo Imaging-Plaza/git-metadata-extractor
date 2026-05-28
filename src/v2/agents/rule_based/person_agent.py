@@ -5,7 +5,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from src.v2.canonicalization.orcid import parse_orcid
+from src.v2.canonicalization.orcid import orcid_iri
 from src.v2.agents.models import (
     AgentResult,
     ProviderSet,
@@ -19,10 +19,11 @@ HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNO
 
 
 def _normalize_orcid(orcid_value: Any) -> str | None:
-    """Return the bare-form ORCID via the shared canonical helper.
-    Accepts every input shape (bare / URL / `orcid:` prefix / legacy
-    `http` host / trailing slash / lowercase `x` checksum)."""
-    return parse_orcid(orcid_value)
+    """Return the canonical ORCID URL via the shared helper. v2.2.0:
+    Person entity ORCID fields (`identifiers.pulse:orcid`,
+    `pulse:orcidIdentifier`, and the `@id` when ORCID wins the
+    hierarchy) all use the `https://orcid.org/<bare>` URL form."""
+    return orcid_iri(orcid_value)
 
 
 def _anonymize_email(email: Any) -> str | None:

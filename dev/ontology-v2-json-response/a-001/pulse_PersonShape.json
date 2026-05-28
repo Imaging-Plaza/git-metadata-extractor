@@ -1,10 +1,10 @@
 [
   {
-    "id": "0000-0001-2345-6789",
+    "id": "https://orcid.org/0000-0001-2345-6789",
     "type": "schema:Person",
     "shacl": "pulse:PersonShape",
     "identifiers": {
-      "pulse:orcid": "0000-0001-2345-6789",
+      "pulse:orcid": "https://orcid.org/0000-0001-2345-6789",
       "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
       "pulse:githubUsername": "caviri",
       "uuid": "a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e"
@@ -14,24 +14,24 @@
     "schema:email": "carlos.vivar@epfl.ch",
     "schema:url": "https://people.epfl.ch/carlos.vivar",
     "pulse:githubUsername": "caviri",
-    "pulse:orcidIdentifier": "0000-0001-2345-6789",
+    "pulse:orcidIdentifier": "https://orcid.org/0000-0001-2345-6789",
     "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
     "org:hasMembership": [
-      "0000-0001-2345-6789_https://ror.org/02s376052",
-      "0000-0001-2345-6789_numpy"
+      "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
+      "https://orcid.org/0000-0001-2345-6789_numpy"
     ],
     "pulse:hasContribution": [
-      "0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
-      "0000-0001-2345-6789_EPFL-ENAC/structural-analysis"
+      "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit",
+      "https://orcid.org/0000-0001-2345-6789_EPFL-ENAC/structural-analysis"
     ],
     "pulse:owns": []
   },
   {
-    "id": "0000-0002-3456-7890",
+    "id": "https://orcid.org/0000-0002-3456-7890",
     "type": "schema:Person",
     "shacl": "pulse:PersonShape",
     "identifiers": {
-      "pulse:orcid": "0000-0002-3456-7890",
+      "pulse:orcid": "https://orcid.org/0000-0002-3456-7890",
       "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
       "pulse:githubUsername": "amorin",
       "uuid": "a9b8c7d6-5e4f-4a3b-8c1d-9e8f7a6b5c4d"
@@ -41,21 +41,21 @@
     "schema:email": "alice.morin@epfl.ch",
     "schema:url": "https://people.epfl.ch/alice.morin",
     "pulse:githubUsername": "amorin",
-    "pulse:orcidIdentifier": "0000-0002-3456-7890",
+    "pulse:orcidIdentifier": "https://orcid.org/0000-0002-3456-7890",
     "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
-    "org:hasMembership": ["0000-0002-3456-7890_https://ror.org/02s376052"],
+    "org:hasMembership": ["https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052"],
     "pulse:hasContribution": [
-      "0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
-      "0000-0002-3456-7890_EPFL-ENAC/structural-analysis"
+      "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/geodata-toolkit",
+      "https://orcid.org/0000-0002-3456-7890_EPFL-ENAC/structural-analysis"
     ],
     "pulse:owns": []
   },
   {
-    "id": "0000-0003-4567-8901",
+    "id": "https://orcid.org/0000-0003-4567-8901",
     "type": "schema:Person",
     "shacl": "pulse:PersonShape",
     "identifiers": {
-      "pulse:orcid": "0000-0003-4567-8901",
+      "pulse:orcid": "https://orcid.org/0000-0003-4567-8901",
       "pulse:infosciencePersonIdentifier": null,
       "pulse:githubUsername": "jdupont",
       "uuid": "b3f2a1c4-5d6e-4b7a-8c9d-1e2f3a4b5c6d"
@@ -65,12 +65,12 @@
     "schema:email": "jean.dupont@cern.ch",
     "schema:url": null,
     "pulse:githubUsername": "jdupont",
-    "pulse:orcidIdentifier": "0000-0003-4567-8901",
+    "pulse:orcidIdentifier": "https://orcid.org/0000-0003-4567-8901",
     "pulse:infosciencePersonIdentifier": null,
-    "org:hasMembership": ["0000-0003-4567-8901_https://ror.org/01ggx4157"],
+    "org:hasMembership": ["https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157"],
     "pulse:hasContribution": [
-      "0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
-      "0000-0003-4567-8901_jdupont/geodata-toolkit"
+      "https://orcid.org/0000-0003-4567-8901_EPFL-ENAC/geodata-toolkit",
+      "https://orcid.org/0000-0003-4567-8901_jdupont/geodata-toolkit"
     ],
     "pulse:owns": ["jdupont/geodata-toolkit"]
   },
