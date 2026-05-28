@@ -2,6 +2,129 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.2.0] - 2026-05-28 — Identifier URL canonicalisation (breaking)
+
+This release standardises **every external identifier** to its canonical
+HTTPS URL form, end-to-end. Previously the codebase carried a split
+convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
+All identifiers now match.
+
+### Breaking — Persisted identifier shapes
+
+Every `pulse:*Identifier` / `pulse:github*Handle` field now stores the
+canonical URL form. The wire-input layer accepts either shape (bare or
+URL) on ingest; persisted output is always URL.
+
+| Property                                       | v2.1.x (bare)                    | v2.2.0 (URL)                                                                     |
+|-----------------------------------------------|----------------------------------|----------------------------------------------------------------------------------|
+| `schema:identifier` (DOI on Article)           | `10.1038/s41586-024-...`         | `https://doi.org/10.1038/s41586-024-...`                                         |
+| `pulse:orcidIdentifier` / `pulse:orcid`        | `0000-0001-2345-6789`            | `https://orcid.org/0000-0001-2345-6789`                                          |
+| `pulse:infosciencePersonIdentifier`            | `f97b60da-...`                   | `https://infoscience.epfl.ch/entities/person/f97b60da-...`                       |
+| `pulse:infoscienceOrganizationIdentifier`      | `95372c6b-...`                   | `https://infoscience.epfl.ch/entities/orgunit/95372c6b-...`                      |
+| `pulse:infoscienceArticleIdentifier`           | `dbce93b0-...`                   | `https://infoscience.epfl.ch/entities/publication/dbce93b0-...`                  |
+| `pulse:githubUsername`                         | `caviri`                         | `https://github.com/caviri`                                                      |
+| `pulse:githubOrganizationHandle`               | `EPFL-ENAC`                      | `https://github.com/EPFL-ENAC`                                                   |
+| `pulse:githubRepositoryHandle`                 | `EPFL-ENAC/geodata-toolkit`      | `https://github.com/EPFL-ENAC/geodata-toolkit`                                   |
+
+ROR was already URL-form; unchanged.
+
+### Breaking — Resolved `id` values
+
+`resolve_*_id()` helpers now produce the canonical URL for every
+identifier source (not just ROR / DOI). Composite IDs in Membership
+(`{personId}__{orgId}`) and Contribution (`{personId}__{repoId}`)
+therefore carry URLs on both sides:
+
+  `https://orcid.org/0000-0001-2345-6789__https://ror.org/02s376052`
+  `https://orcid.org/0000-0001-2345-6789__https://github.com/EPFL-ENAC/geodata-toolkit`
+
+### SPARQL migration
+
+Existing graph stores carry the old (bare) values. To migrate:
+
+```sparql
+# DOI (schema:identifier on ScholarlyArticle)
+DELETE { ?article schema:identifier ?bare }
+INSERT { ?article schema:identifier ?url }
+WHERE  { ?article a schema:ScholarlyArticle ; schema:identifier ?bare .
+         FILTER(STRSTARTS(STR(?bare), "10."))
+         BIND(IRI(CONCAT("https://doi.org/", STR(?bare))) AS ?url) }
+
+# ORCID
+DELETE { ?person pulse:orcidIdentifier ?bare }
+INSERT { ?person pulse:orcidIdentifier ?url }
+WHERE  { ?person pulse:orcidIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"))
+         BIND(IRI(CONCAT("https://orcid.org/", STR(?bare))) AS ?url) }
+
+# Infoscience Person
+DELETE { ?p pulse:infosciencePersonIdentifier ?bare }
+INSERT { ?p pulse:infosciencePersonIdentifier ?url }
+WHERE  { ?p pulse:infosciencePersonIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/person/", STR(?bare))) AS ?url) }
+
+# Infoscience Organization
+DELETE { ?o pulse:infoscienceOrganizationIdentifier ?bare }
+INSERT { ?o pulse:infoscienceOrganizationIdentifier ?url }
+WHERE  { ?o pulse:infoscienceOrganizationIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/orgunit/", STR(?bare))) AS ?url) }
+
+# Infoscience Article
+DELETE { ?a pulse:infoscienceArticleIdentifier ?bare }
+INSERT { ?a pulse:infoscienceArticleIdentifier ?url }
+WHERE  { ?a pulse:infoscienceArticleIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/publication/", STR(?bare))) AS ?url) }
+
+# GitHub user / org handles (same URL shape)
+DELETE { ?s ?p ?bare }
+INSERT { ?s ?p ?url }
+WHERE  { VALUES ?p { pulse:githubUsername pulse:githubOrganizationHandle }
+         ?s ?p ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+
+# GitHub repository handle
+DELETE { ?r pulse:githubRepositoryHandle ?bare }
+INSERT { ?r pulse:githubRepositoryHandle ?url }
+WHERE  { ?r pulse:githubRepositoryHandle ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+```
+
+### Added
+
+- `src/v2/canonicalization/{doi,orcid,infoscience,github}.py` — shared
+  identifier helpers (`*_iri()` to build the canonical URL, `parse_*`
+  to extract the bare form). Each helper is idempotent on canonical
+  input and tolerates every wire shape that arrived during the
+  v2.1.x lifetime.
+
+### Changed — SHACL ontology
+
+- `dev/ontology-v2-json-response/open-pulse-ontology-v2.1.2.ttl`:
+  `sh:pattern` on all eight identifier shapes (DOI, ORCID, Infoscience
+  person/org/article, GitHub username/org/repo) now constrains the
+  URL form. ROR was already URL-form; unchanged.
+
+### Changed — Pipeline
+
+- Rule-based and LLM agents stamp identifiers in URL form via the
+  canonicalisation helpers.
+- `reconciliation` promotes pre-resolved bare identifiers to URL form
+  on ingest, normalises legacy `core/items/<uuid>` URLs to the
+  `entities/<kind>/<uuid>` canonical form, and registers bare-shape
+  aliases in the entity-lookup tables so cross-references in either
+  shape resolve correctly.
+- `id_resolution.resolve_*_id()` returns the canonical URL on every
+  resolution path (no more f-string concatenation against base URIs).
+- `ownership_check._entity_owner_handle` returns the bare GitHub
+  handle regardless of whether the persisted property carries the
+  URL form or the legacy bare shape — keeps `pulse:owns` owner-equality
+  checks correct post-migration.
+
 ## [Unpublished]
 
 ### Changed
