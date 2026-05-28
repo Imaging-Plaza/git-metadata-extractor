@@ -44,6 +44,11 @@ _REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # ships in a handful of older research projects.
     ("_contributing_url",  ("contributing.md", "contribution.md")),
     ("_publiccode_url",    ("publiccode.yml", "publiccode.yaml")),
+    # SECURITY.md — GitHub's first-class security policy file. Surfacing
+    # this lets dashboards flag repos with explicit vulnerability-
+    # reporting guidance separately from undocumented ones, and gives
+    # LLM agents a place to read for embargo / disclosure timelines.
+    ("_security_url",      ("security.md",)),
 )
 
 

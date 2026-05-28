@@ -31,21 +31,25 @@ def _wrap_context(aux_files: dict[str, str] | None) -> dict[str, dict[str, objec
     }
 
 
-def test_summary_forwards_all_four_aux_files_when_present():
+def test_summary_forwards_all_aux_files_when_present():
     summary = _build_repo_context_summary(
         gathered_context=_wrap_context({
             "CITATION.cff": "cff-version: 1.2.0\nauthors:\n - given-names: Octo",
             "AUTHORS.md": "- Octo Cat\n- Alice",
             "CONTRIBUTING.md": "Open a PR.",
             "publiccode.yml": "publiccodeYmlVersion: '0.4'",
+            "SECURITY.md": "Report vulnerabilities to security@example.com.",
         }),
     )
     aux = summary["aux_files"]
-    assert set(aux.keys()) == {"citation_cff", "authors", "contributing", "publiccode"}
+    assert set(aux.keys()) == {
+        "citation_cff", "authors", "contributing", "publiccode", "security",
+    }
     assert aux["citation_cff"].startswith("cff-version:")
     assert aux["authors"].startswith("- Octo")
     assert aux["contributing"] == "Open a PR."
     assert aux["publiccode"].startswith("publiccodeYmlVersion:")
+    assert aux["security"].startswith("Report vulnerabilities")
 
 
 def test_summary_case_insensitive_match():
