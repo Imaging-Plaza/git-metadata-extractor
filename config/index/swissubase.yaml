@@ -1,0 +1,76 @@
+# SWISSUbase RAG indexer config.
+# Resolved by `src/index/swissubase/config.py` and merged with env vars
+# (`RCP_TOKEN`, `SELENIUM_REMOTE_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_QDRANT_URL`, `INDEX_DATA_DIR`, `INDEX_SWISSUBASE_SCOPE`) at
+# startup.
+
+rcp:
+  # Same RCP deployment as openalex / infoscience / zenodo indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant SWISSUbase studies, datasets, persons and institutions"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+catalogue:
+  # SWISSUbase is a Swiss social-science research-data platform run by
+  # FORS / UZH / U. Neuchâtel / DASCH. It exposes ~13k "studies" (UI
+  # label: Project) plus their datasets, principal investigators and
+  # affiliated institutions.
+  base_url: https://www.swissubase.ch
+  language: en
+  # The catalogue UI uses ps=10..50; bumping further hasn't been verified.
+  page_size: 50
+  # Polite spacing between page navigations.
+  page_delay_seconds: 1.0
+  # The Material table mounts after a JSON XHR; timeout on each page.
+  list_render_timeout_seconds: 30
+  # Per-study detail JSON XHR (overview-block + dynamic-blocks).
+  detail_timeout_seconds: 30
+
+  # ID-iteration mode: the search-studies endpoint silently caps deep
+  # pagination, so the ingest enumerates studyVersionIds directly. Per-
+  # study endpoints have no such cap. Observed live range is ~1..21,500
+  # with ~58% density. 25,000 leaves headroom for new studies.
+  id_start: 1
+  id_end: 25000
+  # Polite spacing between per-ID requests; lower than page_delay_seconds
+  # because we now make one Selenium-fetch per ID (vs per page of 50).
+  per_id_delay_seconds: 0.2
+
+scope:
+  default: epfl_sdsc_ethz
+  # SWISSUbase has no institution filter server-side, so the scope is
+  # applied as a post-filter on the rendered institution string.
+  # Studies that match get `affiliation_match=TRUE` and are the only
+  # ones embedded by default. Set INDEX_SWISSUBASE_SCOPE=switzerland
+  # to embed every study (option (a) in the project plan).
+  epfl_sdsc_ethz_patterns:
+    - EPFL
+    - École polytechnique fédérale de Lausanne
+    - Ecole polytechnique fédérale de Lausanne
+    - ETH Zurich
+    - ETHZ
+    - Eidgenössische Technische Hochschule
+    - SDSC
+    - Swiss Data Science Center
+
+selenium:
+  # The shared remote Selenium Grid (Firefox). Inside the devcontainer
+  # this is set by env to gme-selenium-firefox:4444.
+  page_load_timeout_seconds: 60
+  headless: true
+
+qdrant:
+  # Devcontainer compose service name — REST 6333, gRPC 6334.
+  # Use http://localhost:6333 from a host shell instead.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

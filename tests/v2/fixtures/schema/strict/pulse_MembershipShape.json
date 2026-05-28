@@ -1,0 +1,86 @@
+[
+  {
+    "id": "0000-0001-2345-6789_https://ror.org/02s376052",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "0000-0001-2345-6789_https://ror.org/02s376052",
+      "uuid": "c1a2b3c4-5d6e-4f7a-8b9c-0d1e2f3a4b5c"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/02s376052",
+    "org:role": "Research Engineer",
+    "time:hasBeginning": "2020-09-01",
+    "time:hasEnd": null
+  },
+  {
+    "id": "0000-0002-3456-7890_https://ror.org/02s376052",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "0000-0002-3456-7890_https://ror.org/02s376052",
+      "uuid": "c2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/02s376052",
+    "org:role": "Postdoctoral Researcher",
+    "time:hasBeginning": "2022-01-15",
+    "time:hasEnd": null
+  },
+  {
+    "id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+      "uuid": "c3c4d5e6-7f8a-4b9c-8d1e-2f3a4b5c6d7e"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/01ggx4157",
+    "org:role": "Software Engineer",
+    "time:hasBeginning": "2019-03-01",
+    "time:hasEnd": "2024-02-28"
+  },
+  {
+    "id": "mweber_https://ror.org/05a28rw58",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "mweber_https://ror.org/05a28rw58",
+      "uuid": "c4d5e6f7-8a9b-4c0d-9e2f-3a4b5c6d7e8f"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/05a28rw58",
+    "org:role": "PhD Student",
+    "time:hasBeginning": "2021-10-01",
+    "time:hasEnd": null
+  },
+  {
+    "id": "0000-0001-2345-6789_numpy",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "0000-0001-2345-6789_numpy",
+      "uuid": "c5e6f7a8-9b0c-4d1e-af3a-4b5c6d7e8f9a"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "numpy",
+    "org:role": "Contributor",
+    "time:hasBeginning": "2023-05-10",
+    "time:hasEnd": null
+  },
+  {
+    "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+    "type": "org:Membership",
+    "shacl": "pulse:MembershipShape",
+    "identifiers": {
+      "pulse:composite": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b_https://ror.org/01ggx4157",
+      "uuid": "c6f7a8b9-0c1d-4e2f-9a4b-5c6d7e8f9a0c"
+    },
+    "idSource": "pulse:composite",
+    "org:organization": "https://ror.org/01ggx4157",
+    "org:role": "Research Physicist",
+    "time:hasBeginning": "2023-01-15",
+    "time:hasEnd": null
+  }
+]

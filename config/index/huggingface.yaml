@@ -1,0 +1,395 @@
+# HuggingFace RAG indexer config.
+# Resolved by `src/index/huggingface/config.py` and merged with env vars
+# (RCP_TOKEN, HF_TOKEN, INDEX_QDRANT_URL, INDEX_QDRANT_API_KEY,
+# INDEX_QDRANT_PREFER_GRPC, INDEX_HUGGINGFACE_SCOPE, INDEX_DATA_DIR)
+# at startup.
+
+rcp:
+  # OpenAI-compatible inference endpoint. Same RCP deployment as the
+  # infoscience and openalex indexers.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  # Native dim for Qwen3-Embedding-8B is 4096. Configurable down to 32 if
+  # RCP deploys with Matryoshka truncation.
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant model and dataset cards"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+huggingface:
+  api_base: https://huggingface.co
+  # Default page size for HfApi list endpoints. Hub max is 100 (anonymous)
+  # and 100 (authenticated); leave at 100.
+  per_page: 100
+  max_concurrency: 4
+  # When true, snapshot_download README + *.json + *.yaml + *.md alongside
+  # the metadata pull. Weight files are always ignored.
+  full_cards: false
+  # Skip embedding rows whose card is shorter than this many characters —
+  # avoids embedding "# My Demo" placeholder cards as standalone chunks.
+  min_card_chars: 64
+
+scope:
+  # epfl | switzerland — picks which seed list to use. Override via
+  # INDEX_HUGGINGFACE_SCOPE.
+  active: epfl
+  seeds:
+    # Curated by hand. Add new entries below the relevant section header so
+    # the file stays scannable. The `discover-orgs` subcommand never edits
+    # this file — it only proposes candidates in logs/discover_orgs.jsonl.
+    epfl:
+      # Original seed (institutional + flagship lab orgs).
+      - epfl-llm
+      - epfl-nlp
+      - EPFL-VILAB
+      - epfl-ml4ed
+      - EPFL-ECEO
+      # Promoted from discover-orgs run on 2026-05-01 (EPFL labs/projects).
+      - epfl-dlab
+      - LIONS-EPFL
+      - EPFL-IVRL
+      - SAGESSE-EPFL
+      - EPFL-CVLAB-SPACECRAFT
+      - ADP-EPFL
+      - epfl-ml-ytf
+      - epfl-dhlab
+      - EPFL-LNMC
+      - EPFL-CVLab
+      - EPFL-DrivingVQA
+      - structure-epflai
+      - asl-epfl
+      - epfl-ihl
+      - epfl-radio-astro
+      # Promoted personal user accounts (EPFL-affiliated researchers).
+      - vanek-epfl
+      - rapieniuta-epfl
+      # Promoted from wider discover-orgs run on 2026-05-01 (EPFL projects).
+      - EPFL-DL-CER-project
+      # Promoted from extended-terms discover-orgs run on 2026-05-01.
+      - Idiap                # Idiap Research Institute, Martigny (EPFL-affiliated)
+      - epfml                # EPFL ML group (Jaggi/MLO alt namespace)
+      # Promoted 2026-05-01 from EPFL org member rosters (high-confidence:
+      # every HF org membership is an EPFL org).
+      - ViktorDo             # Viktor Domazetoski (EPFL-ECEO) — 94 models
+      - inrainbws            # Zhuoqian Yang (EPFL-IVRL) — 10 models, 1 dataset
+      - mdelmas              # Maxime Delmas (Idiap) — 6 models, 2 datasets
+      - faruk-zahiragic      # Faruk Zahiragic (epfl-ml-ytf) — 4 models
+      - matsant01            # Matteo Santelmo (SAGESSE-EPFL) — 2 models, 1 dataset
+      - Yusif-EPFL           # Yusif Askari (epfl-ml-ytf) — 2 models
+      - miaw1419             # Mahdi Shafiei (EPFL-VILAB) — 2 models
+      - ZhitongGao           # Zhitong Gao (EPFL-VILAB) — 1 model, 1 dataset
+      - Moglul               # Mog (structure-epflai) — 1 model
+      - cmlavo               # Christophe Michaud-Lavoie (EPFL-DL-CER-project) — 1 model
+      - natasa-jovanovic     # Nataša Jovanović (EPFL-VILAB) — 1 model
+      - sogandstormesalehi   # Sogand Salehi (EPFL-VILAB) — 1 model
+      - SkyeLu               # Skye Lu (EPFL-IVRL) — 1 dataset
+      - chrisfinlay          # Chris Finlay (epfl-radio-astro) — 1 dataset
+      - mxxsc                # Oscar Ma (epfl-dlab) — 1 dataset
+      - sraimund             # Raimund Schnürer (epfl-dhlab) — 1 dataset
+      # Promoted 2026-05-22 from wider discover-orgs sweep (per-term-limit
+      # 500). API-verified institutional orgs only.
+      - epfl-vita            # EPFL VITA Lab (Alahi) — 1 model, 1 dataset
+      - EPFLiGHT             # EPFL LiGHT Lab (intelligent global health) — 13 models, 1 dataset, 1 space
+    switzerland:
+      # EPFL block (mirrors `epfl` seed above).
+      - epfl-llm
+      - epfl-nlp
+      - EPFL-VILAB
+      - epfl-ml4ed
+      - EPFL-ECEO
+      - epfl-dlab
+      - LIONS-EPFL
+      - EPFL-IVRL
+      - SAGESSE-EPFL
+      - EPFL-CVLAB-SPACECRAFT
+      - ADP-EPFL
+      - epfl-ml-ytf
+      - epfl-dhlab
+      - EPFL-LNMC
+      - EPFL-CVLab
+      - EPFL-DrivingVQA
+      - structure-epflai
+      - asl-epfl
+      - epfl-ihl
+      - epfl-radio-astro
+      - vanek-epfl
+      - rapieniuta-epfl
+      - EPFL-DL-CER-project
+      - Idiap
+      - epfml
+      - ViktorDo
+      - inrainbws
+      - mdelmas
+      - faruk-zahiragic
+      - matsant01
+      - Yusif-EPFL
+      - miaw1419
+      - ZhitongGao
+      - Moglul
+      - cmlavo
+      - natasa-jovanovic
+      - sogandstormesalehi
+      - SkyeLu
+      - chrisfinlay
+      - mxxsc
+      - sraimund
+      # Promoted 2026-05-22 from wider discover-orgs sweep (mirrors `epfl`).
+      - epfl-vita
+      - EPFLiGHT
+      # Original ETH + Swiss block.
+      - swiss-ai
+      - swiss-ai-center
+      - ethz
+      - ETHZurich
+      - ETH-CVG
+      - prs-eth
+      - ethz-spylab
+      - lasgroup
+      - camlab-ethz
+      - ethzanalytics
+      - eth-student-project-house
+      - ZurichNLP
+      - rcds
+      # Promoted from discover-orgs run on 2026-05-01 (ETH labs/projects).
+      - ethz-mtc
+      - ethz-vlg
+      - eth-nlped
+      - eth-easl
+      - adhd-ethz
+      # Promoted 2026-05-22 from wider discover-orgs sweep (ETH labs).
+      - eth-sri              # ETH SRILab — Secure, Reliable, Intelligent Systems (Vechev) — 16 datasets
+      - disco-eth            # ETH DISCO — Distributed Computing Group (Wattenhofer) — 4 models, 13 datasets
+      # Promoted personal user accounts (ETH-affiliated researchers).
+      - arahmoun-ethz
+      - jayzhang-ethz
+      - ethzhou
+      - liushu-ethz
+      # Promoted from wider discover-orgs run on 2026-05-01
+      # (other Swiss universities + national centres).
+      - SDSC                 # Swiss Data Science Center (EPFL/ETH joint)
+      - dh-unibe             # Universität Bern, Digital Humanities
+      - cvg-unibe            # Universität Bern, Computer Vision Group
+      - prg-unibe            # Universität Bern, Pattern Recognition Group
+      - ivis-UZH             # UZH, Interactive Visualization
+      - CTPLab-DBE-UniBas    # UniBas D-BSSE Cellular Therapy & Pathology Lab
+      - unige-fti            # Université de Genève, Faculté de Traduction
+      - ALIRE-HESSO          # HES-SO ALIRE project
+      - HSLU-AAI             # Hochschule Luzern, Applied AI
+      - fhnw                 # FHNW institutional
+      - fhnwrover            # FHNW robotics project
+      # Promoted 2026-05-22 from wider discover-orgs sweep (API-verified).
+      - liri-uzh             # UZH Linguistic Research Infrastructure — 1 dataset
+      - irc-hslu             # Hochschule Luzern, Immersive Realities Center — 1 model
+      # Promoted 2026-05-01 from extended Swiss probe (ZHAW + SWE-Swiss).
+      - ZHAW                 # Zürcher Hochschule für Angewandte Wissenschaften
+      - SWE-Swiss            # Swiss SWE benchmark (SWE-Swiss-32B-SFT, SWESwiss-Repair-RL)
+      # Promoted 2026-05-01 from ETH/SDSC/UniBe org member rosters.
+      # High-confidence: every member's HF org affiliations are within our Swiss seed.
+      # Sorted by upload activity descending; top hauler `mtc` has 225 models.
+      - mtc                  # MTC (ETH Media Technology Center) — 225 models
+      - Stern5497            # Ronja Stern @ rcds — 20 models
+      - briannnyee           # Brian Lee @ ethz — 11 models, 8 datasets
+      - qchapp               # Quentin Chappuis @ SDSC
+      - AleBurzio            # Alessandro Burzio @ ethzanalytics
+      - Fuqianshi            # ChenruiFan @ cvg-unibe
+      - Paviththiren         # Sivasothilingam @ ethz
+      - haofeixu             # Haofei Xu @ ETH-CVG
+      - slochmann            # Sebastian Lochmann @ ethz
+      - mstupk               # Michael Stupka @ dh-unibe
+      - pstroe               # Phillip Benjamin Ströbel @ ZurichNLP/dh-unibe
+      - rbai86               # Radek @ ETHZurich
+      - yunkao               # Yunke Ao @ ethz
+      - yyyyifan             # Yifan Hou @ eth-nlped
+      - SinanAkkoyun         # Sinan Akkoyun @ ETHZurich
+      - javirandor           # Javier Rando @ ethz-spylab
+      - RoyYang0714          # Yung-Hsu Yang @ ETH-CVG
+      - davidhightown        # David Hohenstatt @ ethz
+      - hohs                 # Ho @ ethz
+      - igupta               # Isha Gupta @ ethz
+      - moritzmiller         # Moritz Miller @ ETHZurich/ethz
+      - rllover123           # Nicolas @ ethz
+      - ruili3               # Rui Li @ ETHZurich
+      - shtosti              # Hanna Hubarava @ ZurichNLP
+      - xarthurx             # Arthur MA @ ETHZurich
+      - SinaAhmadi           # Sina Ahmadi @ ZurichNLP
+      - alexpin03            # Wei Pin @ ethz
+      - feradauto            # Fernando Gonzalez Adauto @ ethzanalytics
+      - gerchowl             # lars gerchow @ ethz
+      - jmathys              # Joel Mathys @ ethz
+      - leosct               # Leo Schmidt-Traub @ lasgroup
+      - miwytt               # Michelle Wastl @ ZurichNLP
+      - nkristina            # Kristina Nikolic @ ethz-spylab
+      - ollibolli            # Oliver @ ethz/ethzanalytics
+      - pasztorb             # Barna Pasztor @ ethz
+      - AkmalAshirmatov      # Akmal Ashirmatov @ lasgroup
+      - AlexandreBinninger   # Alexandre Binninger @ ethz
+      - LheaB                # B @ ethz
+      - Pavidiran            # Pavidiran Ramanathan @ ethz
+      - abbatea              # Alessandro @ eth-nlped
+      - agrd                 # Arthur Girard @ ethz
+      - daemonkiller         # Himanshu Bansal @ ETHZurich
+      - dmacjam              # Jakub Macina @ eth-nlped
+      - isideris             # Iason Sideris @ ethz
+      - kadeck               # Karl D @ ethz
+      - BatofGo              # Ray @ ethz
+      - Danieldcglp          # Daniel Gaivao Lozano @ ethz
+      - MFerrari             # Marcel Ferrari @ ethz
+      - MariusWenk           # Marius Wenk @ ETHZurich
+      - PeterTor             # Torben Peters @ prs-eth
+      - Rsebti               # Rayane Sebti @ ethz
+      - SaraFlick            # Sara Flick @ dh-unibe
+      - Zixiang-Zhao         # Zixiang Zhao @ ethz
+      - cgoeldel             # Constantin Goeldel @ ethz
+      - david-e-g            # Davide Guidobene @ ETHZurich/ethz
+      - debaumann            # Dennis Baumann @ ethz
+      - eishatirraazia19     # Eisha Tir Raazia @ SDSC
+      - fedecomi             # Federico Cominelli @ ethz
+      - henning101           # Henning Metzmacher @ ethz
+      - imertan              # Ipek Mertan @ ethz
+      - mchami               # Mamoun Chami @ ETHZurich
+      - mikhaeljohanes       # Mikhael Johanes @ ethz
+      - mlichtsteiner        # Lichtsteiner @ ethz
+      - mortezajkhkhj        # Morteza Esmaeilpour @ ethz
+      - mwertich             # Martin Wertich @ ethz
+      - sarathsuresh         # Sarath Suresh @ ETHZurich
+      - shibuyanights        # Jenu @ ethz
+      - suvodip1212          # suvodip chakraborty @ ethz
+      - tobinski404          # t @ dh-unibe/prg-unibe
+      - veichta              # Alexander Veicht @ ethz
+      - zhopto3              # Zachary Hopton @ ZurichNLP
+      # Promoted 2026-05-02 from targeted Swiss-company probe.
+      # Verified Swiss-headquartered companies (not big tech) with HF presence.
+      - lakera               # Lakera AI — ETH spin-off, Zurich, AI security (19 repos)
+      - swisscom             # Swisscom — Swiss national telecom, Bern HQ
+      - LatticeFlow          # LatticeFlow AI — ETH spin-off, Zurich, model validation
+      - squirro              # Squirro — Zurich enterprise AI / insight engine
+      - eraneos              # Eraneos — Zurich IT consulting (formerly AWK)
+      - ubs-ai               # UBS AI Community — Swiss bank, Zurich HQ
+      # Promoted 2026-05-22 from the wide discover-orgs sweep — only the
+      # genuinely Swiss/EPFL namespaces; the rest of the verified set was
+      # fuzzy-match noise (Luxembourg/Spain/USC, "Empathy" cos, personal
+      # accounts named Bern/Basel/Cern) and was rejected.
+      - CERN                 # CERN — European Organization for Nuclear Research
+      - languagenet          # EPFL CS-552 Modern NLP — LanguageNet team
+      - usisoftware-org      # Software Institute — USI, Lugano
+
+discovery:
+  # Substrings fed to list_models(search=...) / list_datasets(search=...).
+  # Hits grouped by namespace; new namespaces written to
+  # logs/discover_orgs.jsonl for human review before promoting into
+  # `scope.seeds`. Never auto-added.
+  search_terms:
+    # EPFL institutional + adjacent institute / lab tokens. Substring
+    # matches are noisy by design — review the resulting jsonl before
+    # promoting any namespace to `scope.seeds`.
+    epfl:
+      # Institutional + city.
+      - epfl
+      - lausanne
+      # Affiliated / adjacent institutes.
+      - idiap          # Idiap Research Institute (Martigny, EPFL-affiliated)
+      - martigny
+      - c4dt           # Center for Digital Trust
+      - ai-center      # EPFL AI Center
+      # Lab / group acronyms commonly used as namespace prefixes.
+      - mlo            # Machine Learning and Optimization (Jaggi)
+      - lasa           # Learning Algorithms and Systems (Billard)
+      - vita           # Visual Intelligence for Transportation
+      - cvlab          # Computer Vision Lab (Fua)
+      - ivrl           # Image and Visual Representation Lab (Süsstrunk)
+      - vilab          # Visual Intelligence and Learning (Zamir)
+      - chili          # Computer-Human Interaction in Learning & Instruction
+      - lions          # Laboratory for Information and Inference Systems (Cevher)
+      - dlab           # Data Science Lab (West)
+      - dhlab          # Digital Humanities Lab (Kaplan)
+      - nlp            # NLP labs (paired with EPFL via namespace)
+      - lts2           # Signal Processing Lab 2 (Vandergheynst)
+      - lts4           # Signal Processing Lab 4 (Frossard)
+      - lcav           # Audiovisual Communications Lab (Vetterli)
+      - mlbio          # Machine Learning for Biology
+      - sage           # Scalable Computing Systems Lab
+    # Cast a wide net — discover-orgs only surfaces candidates for review,
+    # never auto-adds. Mix of institutional acronyms, university initials,
+    # and city names. False positives are expected (e.g. "bern" matches
+    # "Bernarderfds"); the human-review step in logs/discover_orgs.jsonl
+    # is where they get filtered out.
+    switzerland:
+      # Institutional acronyms.
+      - epfl
+      - eth
+      - ethz
+      - bsse        # D-BSSE Basel — ETH Zurich systems biology dept
+      - cscs        # Swiss National Supercomputing Centre
+      - empa        # Federal Laboratories for Materials Science
+      - psi         # Paul Scherrer Institute
+      - paul-scherrer
+      - sdsc        # Swiss Data Science Center
+      # Swiss university acronyms.
+      - usi         # Università della Svizzera italiana
+      - uzh         # Universität Zürich
+      - unibe       # Universität Bern
+      - unibas      # Universität Basel
+      - unil        # Université de Lausanne
+      - unige       # Université de Genève
+      - unifr       # Universität Freiburg
+      - unine       # Université de Neuchâtel
+      - hesso       # HES-SO (Western Switzerland)
+      - hslu        # Hochschule Luzern
+      - fhnw        # Fachhochschule Nordwestschweiz
+      # City + country tokens (noisy but catch the long tail).
+      - lausanne
+      - zurich
+      - geneva
+      - basel
+      - bern
+      - swiss
+      # EPFL adjacent / lab tokens (mirrors `epfl` scope).
+      - idiap
+      - martigny
+      - c4dt
+      - ai-center
+      - mlo
+      - lasa
+      - vita
+      - cvlab
+      - ivrl
+      - vilab
+      - chili
+      - lions
+      - dlab
+      - dhlab
+      - nlp
+      - lts2
+      - lts4
+      - lcav
+      - mlbio
+      - sage
+      # CERN-related tokens — CERN straddles the FR/CH border in Meyrin (GE).
+      # HF presence is small but the LHC sub-experiments (ATLAS/CMS/LHCb/
+      # ALICE) all have HF orgs / personal accounts worth surfacing.
+      - cern
+      - meyrin       # CERN's host commune in Geneva canton
+      - atlas        # ATLAS experiment (very noisy — false positives expected)
+      - cms-experiment
+      - lhcb
+      - alice-experiment
+      - openlab      # CERN openlab — public/private partnership
+      - hep          # high-energy physics (noisy, but catches CERN-adjacent)
+      - particle-physics
+
+qdrant:
+  # Compose service `gme-qdrant` on the `dev` network. Use the service name
+  # (not localhost) so this resolves correctly from inside the devcontainer.
+  # See `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  # Cards are short — bigger chunks than openalex's 256.
+  size_tokens: 512
+  overlap_tokens: 64
+  # tiktoken encoding name. cl100k_base is a reasonable proxy for the Qwen3
+  # tokenizer; counts are within ~10% for English text.
+  tokenizer: cl100k_base

@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-02-24T14:18:29Z",
+  "case": "search_epfl",
+  "provider": "ror",
+  "request": {
+    "auth_fallback_used": false,
+    "headers": {},
+    "method": "GET",
+    "query": {
+      "query": "EPFL"
+    },
+    "url": "https://api.ror.org/v2/organizations"
+  },
+  "response": {
+    "elapsed_ms": 79,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Tue, 24 Feb 2026 14:18:29 GMT"
+    },
+    "ok": true,
+    "status_code": 200
+  }
+}

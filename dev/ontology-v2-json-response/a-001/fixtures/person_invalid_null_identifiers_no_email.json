@@ -1,0 +1,20 @@
+{
+  "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+  "type": "schema:Person",
+  "shacl": "pulse:PersonShape",
+  "identifiers": {
+    "pulse:orcid": null,
+    "pulse:infosciencePersonIdentifier": null,
+    "pulse:githubUsername": null,
+    "uuid": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b"
+  },
+  "idSource": "uuid",
+  "schema:name": "Null Identifier Regression Case",
+  "schema:url": null,
+  "pulse:githubUsername": null,
+  "pulse:orcidIdentifier": null,
+  "pulse:infosciencePersonIdentifier": null,
+  "org:hasMembership": [],
+  "pulse:hasContribution": [],
+  "pulse:owns": []
+}

@@ -1,224 +1,199 @@
 # Git Metadata Extractor
 
-This project is designed to classify imaging software repositories and extract relevant information using AI models like GPT and Gemini. It integrates with external services to analyze repositories and store the extracted data in JSON-LD format.
+Turn a GitHub URL into a SHACL-validated [Open Pulse Ontology](https://open-pulse.epfl.ch/ontology) graph — repositories, the people who built them, the organizations behind them, and the papers they cite.
 
-The output of `/v1/extract` aligns with the softwareSourceCodeSchema of Imaging Plaza project.
+> 🌐 **In production at**
+> - **[imagingplaza.epfl.ch](https://imagingplaza.epfl.ch)** — discovery portal for EPFL imaging software.
+> - **[openpulse.science](https://openpulse.science)** — broader EPFL/Swiss open-science software graph.
 
-## Features
+---
 
-- Extracts repository metadata using GIMIE and AI models.
-- Merges extracted data into JSON-LD format.
-- Supports CLI usage for flexible execution.
+## What it does
 
-## Project Structure
+```
+                 ┌──────────────────────────────┐
+github.com/X  →  │  /v2/extract                 │  →  JSON-LD graph
+                 │   classify → gather context  │
+                 │   → root + fan-out agents    │     - schema:SoftwareSourceCode
+                 │   → reconcile + resolve ROR  │     - schema:Person
+                 │   → SHACL validate           │     - org:Organization
+                 └──────────────────────────────┘     - org:Membership
+                                                     - pulse:Contribution
+                                                     - schema:ScholarlyArticle
+```
+
+A single GitHub URL → a typed graph you can SPARQL. The pipeline combines deterministic provider lookups (GitHub REST, ORCID, ROR, Infoscience, GIMIE), nine RAG indices, and optional LLM agents.
+
+---
+
+## Try it in 30 seconds
 
 ```bash
-.
-├── CHANGELOG.md
-├── Dockerfile
-├── LICENSE
-├── pyproject.toml
-├── README.md
-├── requirements.txt
-└── src
-    ├── __init__.py
-    ├── __pycache__
-    │   └── __init__.cpython-311.pyc
-    ├── api.py
-    ├── core
-    │   ├── __init__.py
-    │   ├── __pycache__
-    │   │   ├── __init__.cpython-311.pyc
-    │   │   └── models.cpython-311.pyc
-    │   ├── genai_model.py
-    │   ├── gimie_methods.py
-    │   ├── models.py
-    │   ├── prompts.py
-    │   └── verification.py
-    ├── files
-    │   ├── json-ld-context.json
-    │   └── output_file.json
-    ├── main.py
-    ├── test
-    │   ├── __pycache__
-    │   │   └── test_conversion.cpython-311-pytest-8.4.1.pyc
-    │   └── test_conversion.py
-    └── utils
-        ├── __init__.py
-        ├── logging_config.py
-        └── utils.py
+# 1. Setup
+git clone https://github.com/Imaging-Plaza/git-metadata-extractor.git
+cd git-metadata-extractor
+just install-dev
+cp .env.example .env   # fill in GME_GITHUB_TOKEN + one LLM credential
+
+# 2. Run
+just serve-dev         # starts on http://localhost:1234
+
+# 3. Extract
+curl "http://localhost:1234/v2/extract/github.com/Imaging-Plaza/git-metadata-extractor?output_format=jsonld"
 ```
 
+You'll get a JSON-LD `@graph` like:
 
-## Installation
-
-Clone the repository and install dependencies:
-
-``` sh
-pip install -r requirements.txt
+```json
+{
+  "@context": "https://open-pulse.epfl.ch/ontology/v2.1.2.jsonld",
+  "@graph": [
+    {
+      "@id": "urn:pulse:Imaging-Plaza/git-metadata-extractor",
+      "@type": "schema:SoftwareSourceCode",
+      "schema:name": "git-metadata-extractor",
+      "schema:license": "https://spdx.org/licenses/MIT.html",
+      "schema:author": [
+        { "@id": "urn:pulse:caviri" }
+      ],
+      "pulse:githubRepositoryHandle": "Imaging-Plaza/git-metadata-extractor"
+    },
+    {
+      "@id": "urn:pulse:caviri",
+      "@type": "schema:Person",
+      "schema:name": "Carlos Vivar Rios",
+      "org:hasMembership": [
+        { "@id": "urn:pulse:caviri__https://ror.org/02hdt9m26" }
+      ]
+    },
+    {
+      "@id": "urn:pulse:caviri__https://ror.org/02hdt9m26",
+      "@type": "org:Membership",
+      "org:organization": { "@id": "https://ror.org/02hdt9m26" }
+    },
+    {
+      "@id": "https://ror.org/02hdt9m26",
+      "@type": "org:Organization",
+      "schema:name": "Swiss Data Science Center"
+    }
+  ]
+}
 ```
 
-Create a `.env` (or modify `.env.dist`) file and fill it as follows:
+That person → membership → organization chain was inferred by the ROR resolver stages — the pipeline reads `_company: "@SwissDataScienceCenter"` from GitHub, hits the ROR index, and materializes a proper `org:Membership` triple. See [`docs/v2-pipeline.md`](docs/v2-pipeline.md) for the full stage walkthrough.
 
-``` bash
-OPENAI_API_KEY="your_openai_api_key"
-OPENROUTER_API_KEY="your_openrouter_api_key"
-GITHUB_TOKEN=
-GITLAB_TOKEN=
-MODEL="model to be used"
-PROVIDER="openai" or "openrouter"
-```
+---
 
-## Usage
-
-You can run the script with the default settings or specify parameters via CLI:
-
-```sh
-python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
-```
-
-If no arguments are provided, it will use the default repository and output path.
-
-## Versioned documentation (GitHub Pages)
-
-The repository includes a versioned documentation site under `docs/` powered by MkDocs Material + Mike.
-
-Install docs dependencies:
+## More examples
 
 ```bash
-uv pip install -e ".[docs]"
+# Async extraction (returns a job id)
+curl -X POST http://localhost:1234/v2/extract \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://github.com/epfl-llm/meditron-7b"}'
+# {"job_id": "0193ab12-...", "status": "queued"}
+
+curl http://localhost:1234/v2/jobs/0193ab12-...
+
+# Extract a person profile (fans out to their owned repos)
+curl "http://localhost:1234/v2/extract/github.com/caviri"
+
+# Extract an organization
+curl "http://localhost:1234/v2/extract/github.com/Imaging-Plaza"
+
+# Surface the internal pipeline fields too (gme-internal: + publiccode: namespaces)
+curl "http://localhost:1234/v2/extract/github.com/X?include_internal_fields=true"
+
+# Switch runtime per request
+curl "http://localhost:1234/v2/extract/github.com/X?agent_runtime=rule_based"
 ```
 
-Local docs preview:
+Swagger UI: <http://localhost:1234/docs>
+
+---
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Pipeline overview, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
+| [docs/getting-started.md](docs/getting-started.md) | Install + first run, the long version |
+| [docs/v2-api-reference.md](docs/v2-api-reference.md) | `/v2/extract`, `/v2/jobs`, `/v2/graph` endpoints |
+| [docs/rag-indices.md](docs/rag-indices.md) | Nine RAG indices + federated layer |
+| [docs/v2-rag-tools.md](docs/v2-rag-tools.md) | Agent-side RAG tools wired into the pipeline |
+| [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) | `/v1` → `/v2` endpoint mapping |
+| [.env.example](.env.example) | Every env var with defaults and notes |
+
+Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
+
+---
+
+## Repository layout
+
+```
+src/v2/                  # v2 extraction pipeline (new work here)
+  api.py                 # /v2/extract endpoint
+  pipeline/stages/       # 25 sequential pipeline stages
+  agents/llm/            # LLM-backed entity agents + RAG tools
+  agents/rule_based/     # deterministic counterparts
+  ingest/providers/      # GitHub, ROR, ORCID, Infoscience clients
+  schema/                # JSON Schema + JSON-LD context + Pydantic models
+  validation/            # strict-schema + SHACL validators
+
+src/index/               # nine RAG indices (HuggingFace, OpenAlex, Infoscience,
+                         # ORCID, ROR, Zenodo, ETHZ, GitHub, SNSF) + federated
+
+src/v1/                  # frozen legacy pipeline — no new work
+tests/v2/                # default test target
+docs/                    # MkDocs site source
+```
+
+---
+
+## Configuration
+
+Everything is in `.env` — copy `.env.example` and fill in what you need. Required minimum:
+
+- `GME_GITHUB_TOKEN` — required for any real GitHub call.
+- **One LLM credential** — `RCP_TOKEN` (EPFL), `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`.
+
+Optional (only when you use the feature): `INFOSCIENCE_TOKEN`, `SELENIUM_REMOTE_URL`, `HF_TOKEN`, `ZENODO_TOKEN`, `OPENALEX_MAILTO`, `EPFL_GRAPH_USERNAME` / `EPFL_GRAPH_PASSWORD`.
+
+All ~40 env vars (with defaults + per-feature explanations) are in [`.env.example`](.env.example).
+
+---
+
+## Testing
 
 ```bash
-just docs-serve
+just test              # fast loop via testmon (recompiles only what changed)
+just test-full         # full deterministic run
+just lint              # ruff
+just type-check        # mypy
+just ci                # lint + type-check + coverage
 ```
 
-Strict docs build:
+Per-index suites: `just hf-test`, `just orcid-test`, `just openalex-test`, etc.
+
+---
+
+## Docker
 
 ```bash
-just docs-build
+docker build -t git-metadata-extractor -f tools/image/Dockerfile .
+docker run -it --rm --env-file .env -p 1234:1234 \
+    -v ./data:/app/data --name gme --network dev \
+    git-metadata-extractor
 ```
 
-Manual publish commands:
+Selenium (for the link-veracity stage) and Qdrant (for the RAG indices) wire up through the devcontainer compose file. See [docs/getting-started.md](docs/getting-started.md) for the full setup.
 
-```bash
-# Publish dev/latest from current branch
-just docs-deploy-dev
-
-# Publish a release version and update stable alias
-just docs-deploy-release 2.0.1
-
-# Set default version in selector
-just docs-set-default stable
-```
-
-Automation:
-
-- `.github/workflows/docs_pages.yml` publishes docs on:
-  - Pushes to `main` (`dev` + `latest`)
-  - Pushes of tags matching `v*` (release version + `stable`)
-- Configure GitHub Pages to serve from the `gh-pages` branch root.
-
-## How to run the tool using Docker?
-
-1. You need to build the image.
-
-    ``` bash
-    docker build -t git-metadata-extractor -f tools/image/Dockerfile .
-    ```
-
-2. Run the image.
-
-    ``` bash
-    docker run -it --env-file .env -p 1234:1234 --entrypoint bash git-metadata-extractor
-    ```
-
-    If you are developping the application it's useful to mount the app volume.
-
-    ``` bash
-    docker run -it --env-file .env -p 1234:1234 -v .:/app --entrypoint bash git-metadata-extractor
-    ```
-
-3. Then you can run the tool via
-
-    ``` bash
-    python src/main.py --url https://github.com/qchapp/lungs-segmentation --output_path output_file.json
-    ```
-
-4. Optional. If you are planning to use the ORCID functionality, you need to start a remote browser and configure the `.env` file.
-
-    **Option A: Standalone mode (single concurrent session - may cause errors with concurrent requests):**
-    ``` bash
-    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" --name selenium-standalone-firefox --network dev selenium/standalone-firefox
-    ```
-
-    **Option B: Standalone mode with multiple sessions (recommended for concurrent requests):**
-    ``` bash
-    docker run --rm -d -p 4444:4444 -p 7900:7900 --shm-size="2g" \
-      -e SE_NODE_MAX_SESSIONS=5 \
-      -e SE_NODE_SESSION_TIMEOUT=300 \
-      --name selenium-standalone-firefox \
-      --network dev \
-      selenium/standalone-firefox
-    ```
-
-
-
-
-    **Option C: Grid mode with hub and multiple nodes (best for high concurrency):**
-    ``` bash
-    # Start the hub
-    docker run --rm -d -p 4444:4444 --name selenium-hub --network dev selenium/hub:latest
-
-    # Start 3 Firefox nodes
-    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
-      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
-      --name selenium-node-firefox-1 --network dev selenium/node-firefox:latest
-
-    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
-      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
-      --name selenium-node-firefox-2 --network dev selenium/node-firefox:latest
-
-    docker run --rm -d --shm-size="2g" -e SE_EVENT_BUS_HOST=selenium-hub \
-      -e SE_EVENT_BUS_PUBLISH_PORT=4442 -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
-      --name selenium-node-firefox-3 --network dev selenium/node-firefox:latest
-
-    # Update .env to use: SELENIUM_REMOTE_URL=http://selenium-hub:4444
-    ```
-
-## How to develop using Docker?
-
-To facilitate the development we can mount the app folder in the docker. By doing this, all changes made in local will be accesible from the running container.
-
-``` bash
-docker run -it --env-file .env -p 1234:1234 -v .:/app git-metadata-extractor
-```
-
-
-## How to start the API?
-
-Simply run:
-
-``` bash
-docker run -it --rm --env-file .env -p 1234:1234 -v ./data:/app/data --name git-metadata-extractor --network dev git-metadata-extractor
-```
-
-This mounts the local `data` folder to persist cache files. To configure the cache directory, set `CACHE_DIR=/app/data` in your `.env` file.
-
-Then go to `localhost:1234`
-
-Or if you are running the container with `bash` as the entrypoint, please execute.
-
-``` bash
-uvicorn src.api:app --host 0.0.0.0 --workers 4 --port 1234 --reload
-```
-
-`--reload` allows you to modify the files and reload automatically the api endpoint. Excellent for development.
+---
 
 ## Credits
 
-- Quentin Chappuis - EPFL Center for Imaging
-- Robin Franken - SDSC
-- Carlos Vivar Rios - SDSC / EPFL Center for Imaging
+- **Quentin Chappuis** — EPFL Center for Imaging
+- **Robin Franken** — SDSC
+- **Carlos Vivar Rios** — SDSC / EPFL Center for Imaging
+
+Built at [SDSC](https://datascience.ch) and the [EPFL Center for Imaging](https://imaging.epfl.ch).

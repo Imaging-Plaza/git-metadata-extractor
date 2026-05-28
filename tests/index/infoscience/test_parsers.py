@@ -1,0 +1,34 @@
+"""DSpace JSON → record parsers exercise."""
+
+from __future__ import annotations
+
+from src.index.infoscience.parsers import (
+    parse_article,
+    parse_organization,
+    parse_person,
+)
+
+
+def test_parse_article(article_json: dict) -> None:
+    rec = parse_article(article_json, matched_urls=["https://github.com/x/y"])
+    assert rec.article_uuid
+    assert rec.title
+    assert rec.authors, "expected at least one author name"
+    # The fixture has at least one author with an authority — UUIDs flow through.
+    assert any(rec.author_uuids)
+    assert rec.matched_urls == ["https://github.com/x/y"]
+    assert rec.infoscience_url.startswith("https://infoscience.epfl.ch/entities/publication/")
+
+
+def test_parse_person(person_json: dict) -> None:
+    rec = parse_person(person_json)
+    assert rec.person_uuid
+    assert rec.name
+    assert rec.profile_url.startswith("https://infoscience.epfl.ch/entities/person/")
+
+
+def test_parse_organization(organization_json: dict) -> None:
+    rec = parse_organization(organization_json)
+    assert rec.org_uuid
+    assert rec.name
+    assert rec.infoscience_url.startswith("https://infoscience.epfl.ch/entities/orgunit/")

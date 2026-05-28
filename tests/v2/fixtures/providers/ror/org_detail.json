@@ -1,0 +1,33 @@
+{
+  "organization": {
+    "id": "https://ror.org/02s376052",
+    "name": "Ecole Polytechnique Federale de Lausanne",
+    "aliases": [
+      "EPF Lausanne",
+      "Swiss Federal Institute of Technology Lausanne"
+    ],
+    "acronyms": [
+      "EPFL"
+    ],
+    "types": [
+      "Education",
+      "Facility"
+    ],
+    "country": {
+      "country_name": "Switzerland",
+      "country_code": "CH"
+    },
+    "links": [
+      "https://www.epfl.ch"
+    ],
+    "relationships": {
+      "parent": null,
+      "children": [
+        {
+          "id": "https://ror.org/04f4a0c74",
+          "name": "EPFL Valais Wallis"
+        }
+      ]
+    }
+  }
+}

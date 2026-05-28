@@ -1,0 +1,113 @@
+# Configuration for the v2 terminal-agent runtime PoC.
+#
+# This is the third v2 runtime — alongside `llm` and `rule_based` — that
+# delegates JSON-LD production to a terminal agent (pi.dev) operating on a
+# per-repo temporary working directory. See the project memory note
+# "v2 terminal-agent runtime PoC" and the docs in this repo's CLAUDE.md
+# for the design rationale.
+#
+# All models are served by the EPFL RCP inference endpoint
+# (https://inference-rcp.epfl.ch/v1, OpenAI-compatible) using `RCP_TOKEN`.
+
+executor:
+  # Drives the agentic loop: many tool calls, structured-output emission.
+  # MiniMax-M2.x is explicitly tool-use-trained (no Instruct/Thinking
+  # suffix means no "explain everything before acting" overhead); on
+  # RCP/vLLM this gives noticeably higher throughput per turn than a
+  # comparable-quality Qwen3 Instruct, which matters because pi spawns
+  # one chat-completions call per agent turn and ~30s/turn was eating
+  # the entire wallclock cap before any progress.
+  #
+  # Reverted alternative kept here for fast reference:
+  #   model: "Qwen/Qwen3-235B-A22B-Instruct-2507-fp8"  # Instruct counterpart, slower per-turn
+  #   model: "MiniMaxAI/MiniMax-M2.7-fp8"               # agentic-tuned, M2 family
+  #
+  # Switched to the Thinking variant for runs that need careful
+  # property-by-property reasoning (closed-shape compliance, repair
+  # loop without regression). Run 7 with M2.7 + cheatsheet + repair
+  # showed iter 1 SHACL-clean but later iterations regressed when the
+  # agent had to balance "add missing entities" with "don't violate
+  # closed shapes". Thinking-2507 should reason about both at once.
+  model: "Qwen/Qwen3-235B-A22B-Thinking-2507-fp8"
+  base_url: "https://inference-rcp.epfl.ch/v1"
+  api_key_env: "RCP_TOKEN"
+  temperature: 0.1
+  max_tokens: 8000
+  timeout_s: 900
+
+judge:
+  # One-shot pass/fail vote on the executor's output. Cross-vendor on
+  # purpose (DeepSeek vs. Qwen executor) — same-family judges
+  # auto-confirm too easily.
+  model: "deepseek-ai/DeepSeek-V3.2-fp8"
+  base_url: "https://inference-rcp.epfl.ch/v1"
+  api_key_env: "RCP_TOKEN"
+  temperature: 0.0
+  max_tokens: 4000
+  timeout_s: 300
+
+caps:
+  # Hard ceilings. Any breach → run is failed and logged.
+  # max_tool_calls is advisory (we count, we don't enforce — pi has no
+  # tool-budget kill-switch). max_wallclock_s is the real hard cap.
+  # Bumped from 15 → 25 when MISSION expanded from PoC subset (repo +
+  # persons + orgs only) to the full v2 graph (added articles +
+  # memberships + contributions).
+  max_tool_calls: 25
+  # 2400s wallclock for the subagent runtime + scout-first pattern.
+  # Scout-pattern runs in 4 phases: scout fan-out (1 subagent), brief
+  # read, core entity fan-out (~7 subagents parallel), edge entity
+  # fan-out (~6 subagents parallel). Each subagent is its own pi
+  # process. RCP latency variability + scout's 20-tool budget pushed
+  # cell 1 of the scout matrix past 1500s; 2400s gives headroom.
+  max_wallclock_s: 2400
+  max_context_bytes: 1_048_576
+  # Repair loop: judge fail → feed missing/hallucinated back as MISSION
+  # addendum and re-invoke the executor. 1 = single-shot, no repair.
+  # 3 keeps the cost bounded while letting the agent fix obvious issues.
+  max_iterations: 3
+
+skills:
+  # Skills exposed to the executor as pi-loadable CLI tools (each is a
+  # console script declared in pyproject.toml + a README in
+  # src/v2/skills/<skill>/README.md). To add or remove skills for a run,
+  # edit this list — the runner only loads what's listed here.
+  #
+  # NOTE on `validate_output`: built and intentionally excluded from
+  # default. The 2026-05-04 overnight 6-model bake-off found that
+  # exposing the agent-facing SHACL self-check skill *degrades* output
+  # quality (M2.7 single-shot: 24 missing / 7 halluc with skill vs
+  # 13 missing / 2 halluc without it, in 3× the wallclock). The
+  # cheatsheet (in workdir) plus the deterministic Python scrubber
+  # already cover structural correctness; exposing the skill creates
+  # decision overhead. Re-enable only when a failure mode genuinely
+  # needs agent-driven self-validation.
+  - search_ror
+  - search_orcid
+  - search_infoscience
+  - search_openalex
+  - selenium_fetch
+
+harness:
+  # Which terminal agent to spawn. `pi` is the default. Swappable to
+  # `claude_code` / `codex` later without touching skill code, since
+  # skills are subprocess-portable CLIs.
+  kind: "pi"
+  binary: "pi"
+  # Pass-through flags appended after the prompt. `--mode json` makes
+  # output machine-parseable; `-p` activates non-interactive print mode.
+  extra_args: ["--mode", "json"]
+
+poc:
+  # Sample repositories used by scripts/v2/poc_terminal_agent.py. Chosen
+  # to span the difficulty axes (EPFL vs. external, single vs. many
+  # contributors, with vs. without DOI, fork vs. original).
+  sample_repos:
+    - "https://github.com/Imaging-Plaza/git-metadata-extractor"
+    # Canonical handle is SDSC-ORDES (the org renamed; SDSC-ORD redirects
+    # via GitHub but yields the wrong @id in output.jsonld).
+    - "https://github.com/SDSC-ORDES/gimie"
+    - "https://github.com/epfl-dlab/aiflows"
+    - "https://github.com/numpy/numpy"
+    - "https://github.com/zenodo/zenodo"
+  output_dir: ".cache/v2-terminal-poc"

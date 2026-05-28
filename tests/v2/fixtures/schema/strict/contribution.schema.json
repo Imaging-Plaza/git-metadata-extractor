@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:ContributionShape.schema.json",
+  "title": "ContributionShape",
+  "description": "Schema for validating Contribution entities following Open Pulse Ontology v2.1.2. ID hierarchy: composite (personId_repoId) → uuid",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "pulse:contributionTo", "pulse:contributionCount", "schema:author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier (composite format: personId_repoId, or uuid fallback)"
+    },
+    "type": {
+      "type": "string",
+      "const": "pulse:Contribution"
+    },
+    "shacl": {
+      "type": "string",
+      "const": "pulse:ContributionShape"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pulse:composite", "uuid"],
+      "properties": {
+        "pulse:composite": {
+          "type": "string",
+          "description": "Composite identifier in format: personId_repoId"
+        },
+        "uuid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "enum": ["pulse:composite", "uuid"]
+    },
+    "pulse:contributionTo": {
+      "type": "string",
+      "description": "Reference to RepositoryShape ID (GitHub handle format: owner/repo)"
+    },
+    "pulse:contributionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of commits/contributions"
+    },
+    "pulse:firstContributionDate": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "First contribution datetime in ISO 8601 format. Optional per SHACL."
+    },
+    "pulse:lastContributionDate": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "Last contribution datetime in ISO 8601 format. Optional per SHACL."
+    },
+    "schema:author": {
+      "type": "string",
+      "description": "Reference to PersonShape ID (hierarchical)"
+    }
+  }
+}

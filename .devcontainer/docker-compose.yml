@@ -1,0 +1,61 @@
+# Dev container stack. Compose publishes ports on the host (more reliable than
+# devcontainer forwardPorts in some setups). Interpolation vars (SSH_PORT, etc.)
+# can be set in `.devcontainer/.env` (see `.devcontainer/.env.example`).
+#
+# Internal SSH: devcontainers `sshd` feature listens on 2222, not 22 — map host:2222.
+#
+# Explicit DNS: containers on external networks (e.g. `dev`) sometimes get no working resolver
+# and `uv pip` fails with "dns error" / "failed to lookup address information".
+# Override in `.devcontainer/.env`: DEVCONTAINER_DNS_1 / DEVCONTAINER_DNS_2.
+services:
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    dns:
+      - "${DEVCONTAINER_DNS_1:-1.1.1.1}"
+      - "${DEVCONTAINER_DNS_2:-8.8.8.8}"
+    env_file:
+      - ../.env
+    environment:
+      # Avoid ~/.cache/uv (often root-owned after sshd/common-utils); workspace is bind-mounted as vscode.
+      UV_CACHE_DIR: /workspaces/project/.uv-cache
+      SELENIUM_REMOTE_URL: ${SELENIUM_REMOTE_URL:-http://gme-selenium-firefox:4444}
+    ports:
+      - "${SSH_PORT:-2222}:2222"
+      - "${APP_PORT:-1234}:1234"
+      - "${DEV_PORT:-8888}:8888"
+    volumes:
+      - ..:/workspaces/project:cached
+    command: sleep infinity
+    networks:
+      - dev
+  gme-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: gme-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ../data/qdrant/storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - dev
+  # README "Option B": multi-session standalone Firefox (ORCID, Selenium-backed tools).
+  gme-selenium-firefox:
+    image: selenium/standalone-firefox
+    container_name: gme-selenium-firefox
+    ports:
+      - "${SELENIUM_GRID_PORT:-4444}:4444"
+      - "${SELENIUM_VNC_PORT:-7900}:7900"
+    shm_size: "2g"
+    environment:
+      SE_NODE_MAX_SESSIONS: "5"
+      SE_NODE_SESSION_TIMEOUT: "300"
+    restart: unless-stopped
+    networks:
+      - dev
+
+networks:
+  dev:
+    external: true

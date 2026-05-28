@@ -1,0 +1,36 @@
+{
+  "query": "smith",
+  "total_results": 3,
+  "results": [
+    {
+      "infosciencePersonIdentifier": "1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d",
+      "name": "Alice Smith",
+      "orcid": "0000-0002-1825-0097",
+      "affiliations": [
+        "EPFL School of Engineering"
+      ],
+      "profileUrl": "https://infoscience.epfl.ch/entities/person/1f0b2b90-9e33-4f9a-9b14-8468f89f2e4d",
+      "score": 98.1
+    },
+    {
+      "infosciencePersonIdentifier": "a61d03ec-c38f-43fd-b785-a4555f11f95a",
+      "name": "Alain Smith",
+      "orcid": null,
+      "affiliations": [
+        "EPFL ENAC"
+      ],
+      "profileUrl": "https://infoscience.epfl.ch/entities/person/a61d03ec-c38f-43fd-b785-a4555f11f95a",
+      "score": 86.7
+    },
+    {
+      "infosciencePersonIdentifier": "fe7c0502-141a-468a-8950-bf2ef389b4ff",
+      "name": "Anna Maria Smith",
+      "orcid": "0000-0001-5000-0007",
+      "affiliations": [
+        "EPFL IC"
+      ],
+      "profileUrl": "https://infoscience.epfl.ch/entities/person/fe7c0502-141a-468a-8950-bf2ef389b4ff",
+      "score": 81.4
+    }
+  ]
+}

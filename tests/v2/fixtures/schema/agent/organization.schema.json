@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:OrganizationShape.schema.json",
+  "title": "OrganizationShape",
+  "description": "Schema for Organization entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name AND at least ONE of (schema:identifier, pulse:githubOrganizationHandle, pulse:infoscienceOrganizationIdentifier).",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^_": {}
+  },
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier. Set to the first non-null value from: pulse:ror, pulse:infoscienceOrganizationIdentifier, pulse:githubOrganizationHandle, or uuid (fallback). Example: 'https://ror.org/02s376052' or 'numpy'"
+    },
+    "type": {
+      "type": "string",
+      "description": "RDF type. Must be 'org:Organization'"
+    },
+    "shacl": {
+      "type": "string",
+      "description": "SHACL shape reference. Must be 'pulse:OrganizationShape'"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "All available identifiers for this organization. Contains pulse:ror, pulse:infoscienceOrganizationIdentifier, pulse:githubOrganizationHandle, and uuid",
+      "properties": {
+        "pulse:ror": {
+          "type": ["string", "null"],
+          "description": "ROR (Research Organization Registry) identifier. Format: https://ror.org/XXXXXXXXX (9 alphanumeric chars). Example: 'https://ror.org/02s376052'"
+        },
+        "pulse:infoscienceOrganizationIdentifier": {
+          "type": ["string", "null"],
+          "description": "Infoscience organization UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: '95372c6b-7d45-432e-a84e-660c9fa54e05'"
+        },
+        "pulse:githubOrganizationHandle": {
+          "type": ["string", "null"],
+          "description": "GitHub organization handle. Example: 'EPFL-ENAC'"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "UUID4 fallback identifier. Always present. Example: 'e2c4b6a8-1d3f-4e5a-9b7c-8d6e4f2a1b3c'"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:ror', 'pulse:infoscienceOrganizationIdentifier', 'pulse:githubOrganizationHandle', or 'uuid'"
+    },
+    "schema:name": {
+      "type": "string",
+      "description": "Organization name. Example: 'École Polytechnique Fédérale de Lausanne'"
+    },
+    "schema:identifier": {
+      "type": ["string", "null"],
+      "description": "Canonical identifier (typically ROR URL). Example: 'https://ror.org/02s376052'"
+    },
+    "pulse:githubOrganizationHandle": {
+      "type": ["string", "null"],
+      "description": "GitHub organization handle. Example: 'EPFL-ENAC'"
+    },
+    "pulse:infoscienceOrganizationIdentifier": {
+      "type": ["string", "null"],
+      "description": "Infoscience organization identifier (UUID format). Example: '41674f42-ba15-4612-9817-2a6f60985c01'"
+    },
+    "pulse:OrganizationType": {
+      "type": "string",
+      "enum": ["pulse:University", "pulse:ResearchInstitution", "pulse:GovernmentAgency", "pulse:SoftwareProject", "pulse:PrivateCompany", "pulse:NonProfitOrganization", "pulse:CommunitySpace", "pulse:OtherOrganizationType"],
+      "description": "Type of organization. One of: 'pulse:University', 'pulse:ResearchInstitution', 'pulse:GovernmentAgency', 'pulse:SoftwareProject', 'pulse:PrivateCompany', 'pulse:NonProfitOrganization', 'pulse:CommunitySpace', 'pulse:OtherOrganizationType'"
+    },
+    "pulse:githubOrgFollowers": {
+      "type": ["integer", "null"],
+      "description": "GitHub organization follower count. Example: 342"
+    },
+    "org:hasUnit": {
+      "type": "array",
+      "description": "Array of child OrganizationShape IDs (hierarchical). Example: ['95372c6b-7d45-432e-a84e-660c9fa54e05']",
+      "items": {
+        "type": "string"
+      }
+    },
+    "org:unitOf": {
+      "type": "array",
+      "description": "Parent OrganizationShape IDs (hierarchical). Most orgs have 0 or 1 parent; arrays support joint affiliations (e.g. a research center jointly run by two universities). Example: ['https://ror.org/02s376052']",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pulse:owns": {
+      "type": "array",
+      "description": "Array of RepositoryShape IDs (GitHub handles) owned by this organization. Example: ['EPFL-ENAC/geodata-toolkit']",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

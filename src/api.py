@@ -4,20 +4,69 @@ API
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
-from fastapi.responses import JSONResponse
 
-from .analysis import Organization, Repository, User
-from .cache import get_cache_manager
-from .data_models import (
+def _normalize_github_token_pool() -> None:
+    """Split a comma-separated GME_GITHUB_TOKEN into a per-process token pool.
+
+    Runs before any v1/gimie import so module-level `os.environ["GME_GITHUB_TOKEN"]`
+    reads see a single valid token. The full list (deduped, order preserved) is
+    exported as GME_GITHUB_TOKEN_POOL for v2 REST hot paths to round-robin over.
+    """
+    raw = os.environ.get("GME_GITHUB_TOKEN", "")
+    if "," not in raw:
+        return
+    seen: set[str] = set()
+    tokens: list[str] = []
+    for piece in raw.split(","):
+        token = piece.strip()
+        if token and token not in seen:
+            seen.add(token)
+            tokens.append(token)
+    if not tokens:
+        return
+    os.environ["GME_GITHUB_TOKEN_POOL"] = ",".join(tokens)
+    os.environ["GME_GITHUB_TOKEN"] = tokens[0]
+
+
+_normalize_github_token_pool()
+
+
+def _resolve_package_version(name: str) -> str:
+    try:
+        return package_version(name)
+    except PackageNotFoundError:
+        return "unknown"
+
+
+from urllib.parse import urlparse
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
+from fastapi.responses import HTMLResponse, JSONResponse
+
+from src.v2.api import v2_router
+
+from .v1.analysis import Organization, Repository, User
+from .v1.cache import get_cache_manager
+from .v1.data_models import (
     APIOutput,
     ResourceType,
 )
-from .utils.enhanced_logging import AsyncRequestContext, setup_logging
-from .utils.github_dependency import validate_github_token
+from .v2.log_context import AsyncRequestContext, setup_logging
+from .v1.utils.github_dependency import validate_github_token
 
 # Setup enhanced logging with colors
 # Allow LOG_LEVEL environment variable to override (DEBUG, INFO, WARNING, ERROR)
@@ -27,6 +76,108 @@ setup_logging(level=log_level, use_colors=True)
 
 
 logger = logging.getLogger(__name__)
+
+
+_GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
+
+
+def _assert_github_host(full_path: str) -> None:
+    """Raise 422 if `full_path` is not a github.com URL/path.
+
+    The v1 user/org/repository routes wrap atomic-agent pipelines that are
+    hard-wired to GitHub's REST + GraphQL schemas: the agent prompts emit
+    `pulse:githubRepositoryHandle` literals, image URLs are absolutised
+    against the GitHub raw-content host, and `Repository.run_atomic_llm_pipeline`
+    eventually calls `parsers/github_*`. Feeding a `gitlab.epfl.ch` URL into
+    that path produces hallucinated `github.com/unknown/<repo>` outputs
+    instead of clean data (issues #11, #12).
+
+    GitLab support proper is tracked in #54. Until that lands, fail closed
+    here so the caller gets a clear 422 instead of garbage downstream.
+    """
+    candidate = (full_path or "").strip()
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    host = (urlparse(candidate).hostname or "").lower()
+    if host in _GITHUB_HOSTS:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=(
+            f"v1 endpoints only accept github.com URLs (got host '{host or full_path}'). "
+            "GitLab / self-hosted-Git providers are tracked in issue #54; until then "
+            "the LLM pipeline would emit hallucinated github.com identifiers (#11/#12). "
+            "Use the v2 `/v2/extract` endpoint, which returns the same 422 from its "
+            "URL classifier so the caller can branch cleanly."
+        ),
+    )
+
+
+async def startup_event(app: FastAPI | None = None):
+    """Initialize resources on application startup."""
+    logger.info("🚀 Application startup - initializing resources")
+
+    # Pre-warm the v2 provider cache so the SQLite file exists in WAL mode
+    # before any request hits a worker. Without this, multi-worker uvicorn
+    # against a cold .cache/ races on first-request to create+init the
+    # file and the losing workers raise `database is locked`, surfacing
+    # as 500s for the first 1-2 jobs of a batch run.
+    if app is not None:
+        try:
+            from src.v2.dependencies import _resolve_provider_cache
+
+            cache = _resolve_provider_cache(app.state)
+            if cache is not None:
+                logger.info("✅ v2 provider cache initialized")
+        except Exception as exc:  # noqa: BLE001 — startup must not crash on cache issues
+            logger.warning(f"v2 provider cache pre-warm skipped: {exc}")
+
+
+async def shutdown_event():
+    """Cleanup resources on application shutdown"""
+    logger.info("🛑 Application shutdown - cleaning up resources")
+
+    # Cleanup PydanticAI agents
+    try:
+        from .v1.agents.agents_management import cleanup_agents
+
+        await cleanup_agents()
+        logger.info("✅ Cleaned up PydanticAI agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up PydanticAI agents: {e}")
+
+    # Cleanup user enrichment agents
+    try:
+        from .v1.agents.user_enrichment import cleanup_user_agents
+
+        await cleanup_user_agents()
+        logger.info("✅ Cleaned up user enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up user enrichment agents: {e}")
+
+    # Cleanup organization enrichment agents
+    try:
+        from .v1.agents.organization_enrichment import cleanup_org_agents
+
+        await cleanup_org_agents()
+        logger.info("✅ Cleaned up organization enrichment agents")
+    except Exception as e:
+        logger.warning(f"Error cleaning up organization enrichment agents: {e}")
+
+    # Run garbage collection
+    import gc
+
+    gc.collect()
+    logger.info("✅ Garbage collection completed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup_event(app)
+    try:
+        yield
+    finally:
+        await shutdown_event()
 
 
 app = FastAPI(
@@ -60,7 +211,7 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
 - **Organization Endpoints**: Process GitHub organization data
 - **Cache Management**: Monitor and control the caching system
     """,
-    version="2.0.1",
+    version="2.1.0rc1",
     contact={
         "name": "EPFL Center for Imaging / SDSC",
         "url": "https://imaging-plaza.epfl.ch",
@@ -88,53 +239,130 @@ Cache management endpoints are available under the `/v1/cache/` prefix.
         },
         {"name": "System", "description": "System information and health checks"},
     ],
+    lifespan=lifespan,
+    docs_url=None,
 )
 
 
-# Startup and shutdown events for resource management
-@app.on_event("startup")
-async def startup_event():
-    """Initialize resources on application startup"""
-    logger.info("🚀 Application startup - initializing resources")
+_SWAGGER_DARK_CSS = (
+    "https://cdn.jsdelivr.net/gh/Amoenus/SwaggerDark@master/SwaggerDark.css"
+)
+_SWAGGER_LIGHT_CSS = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+_SWAGGER_BUNDLE_JS = (
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"
+)
+_FAVICON_URL = "https://fastapi.tiangolo.com/img/favicon.png"
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup resources on application shutdown"""
-    logger.info("🛑 Application shutdown - cleaning up resources")
+@app.get("/docs", include_in_schema=False)
+def custom_swagger_ui_html() -> HTMLResponse:
+    title = f"{app.title} - Swagger UI"
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<link rel="shortcut icon" href="{_FAVICON_URL}">
+<script>
+  (function () {{
+    // Resolve theme override before stylesheets are parsed to avoid FOUC.
+    var override = null;
+    try {{ override = localStorage.getItem('docs-theme'); }} catch (e) {{}}
+    if (override === 'dark') document.documentElement.classList.add('dark');
+    if (override === 'light') document.documentElement.classList.add('light');
+    window.__docsThemeOverride = override;
+  }})();
+</script>
+<link rel="stylesheet" href="{_SWAGGER_LIGHT_CSS}">
+<link id="swagger-dark-css" rel="stylesheet" href="{_SWAGGER_DARK_CSS}"
+      media="(prefers-color-scheme: dark)">
+<style>
+  #theme-toggle {{
+    position: fixed; top: 12px; right: 16px; z-index: 9999;
+    background: rgba(255,255,255,0.85); color: #222;
+    border: 1px solid #ccc; border-radius: 999px;
+    padding: 6px 12px; font-size: 14px; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15); user-select: none;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    html:not(.light) #theme-toggle {{
+      background: rgba(40,40,40,0.85); color: #eee; border-color: #555;
+    }}
+  }}
+  html.dark #theme-toggle {{
+    background: rgba(40,40,40,0.85); color: #eee; border-color: #555;
+  }}
+</style>
+</head>
+<body>
+<button id="theme-toggle" type="button" aria-label="Toggle dark mode">Theme</button>
+<div id="swagger-ui"></div>
+<script src="{_SWAGGER_BUNDLE_JS}"></script>
+<script>
+  const ui = SwaggerUIBundle({{
+    url: '/openapi.json',
+    dom_id: '#swagger-ui',
+    layout: 'BaseLayout',
+    deepLinking: true,
+    showExtensions: true,
+    showCommonExtensions: true,
+    oauth2RedirectUrl: window.location.origin + '/docs/oauth2-redirect',
+    presets: [
+      SwaggerUIBundle.presets.apis,
+      SwaggerUIBundle.SwaggerUIStandalonePreset
+    ],
+  }});
+  (function () {{
+    var darkLink = document.getElementById('swagger-dark-css');
+    var btn = document.getElementById('theme-toggle');
+    var html = document.documentElement;
+    var systemDarkQuery = window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
-    # Cleanup PydanticAI agents
-    try:
-        from .agents.agents_management import cleanup_agents
+    function activeTheme() {{
+      if (html.classList.contains('dark')) return 'dark';
+      if (html.classList.contains('light')) return 'light';
+      return systemDarkQuery && systemDarkQuery.matches ? 'dark' : 'light';
+    }}
 
-        await cleanup_agents()
-        logger.info("✅ Cleaned up PydanticAI agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up PydanticAI agents: {e}")
+    function apply(override) {{
+      html.classList.remove('dark');
+      html.classList.remove('light');
+      if (override === 'dark') html.classList.add('dark');
+      if (override === 'light') html.classList.add('light');
 
-    # Cleanup user enrichment agents
-    try:
-        from .agents.user_enrichment import cleanup_user_agents
+      // Force-on / force-off / system: tweak the media attribute on the
+      // dark CSS so the override works without unloading the stylesheet.
+      if (darkLink) {{
+        if (override === 'dark') darkLink.media = 'all';
+        else if (override === 'light') darkLink.media = 'not all';
+        else darkLink.media = '(prefers-color-scheme: dark)';
+      }}
+      btn.textContent = activeTheme() === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }}
 
-        await cleanup_user_agents()
-        logger.info("✅ Cleaned up user enrichment agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up user enrichment agents: {e}")
+    apply(window.__docsThemeOverride);
 
-    # Cleanup organization enrichment agents
-    try:
-        from .agents.organization_enrichment import cleanup_org_agents
+    btn.addEventListener('click', function () {{
+      var next = activeTheme() === 'dark' ? 'light' : 'dark';
+      try {{ localStorage.setItem('docs-theme', next); }} catch (e) {{}}
+      apply(next);
+    }});
 
-        await cleanup_org_agents()
-        logger.info("✅ Cleaned up organization enrichment agents")
-    except Exception as e:
-        logger.warning(f"Error cleaning up organization enrichment agents: {e}")
+    if (systemDarkQuery && systemDarkQuery.addEventListener) {{
+      systemDarkQuery.addEventListener('change', function () {{
+        var stored = null;
+        try {{ stored = localStorage.getItem('docs-theme'); }} catch (e) {{}}
+        if (!stored) apply(null);
+      }});
+    }}
+  }})();
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
-    # Run garbage collection
-    import gc
-
-    gc.collect()
-    logger.info("✅ Garbage collection completed")
+app.include_router(v2_router)
 
 
 # Add middleware to automatically set request context for all endpoints
@@ -171,10 +399,29 @@ def index():
     """
     Get API welcome message and system information.
 
-    Returns basic information about the API version, GIMIE version, and configured LLM model.
+    Versions are resolved at runtime from installed package metadata
+    (`git-metadata-extractor`, `gimie`). The LLM model line reports what the
+    v2 runtime would resolve right now from `MODEL_CONFIGS`
+    (`src/v1/llm/model_config.py`) given the credentials available in the
+    environment.
     """
+    from src.v2.agents.llm.runtime import LLMRuntimeConfigError, V2LLMRuntime
+
+    try:
+        resolved = V2LLMRuntime()._resolve_model_config()  # noqa: SLF001
+        provider = resolved.get("provider", "unknown")
+        model_name = resolved.get("model", "unknown")
+        llm_model = f"{provider}:{model_name}"
+    except LLMRuntimeConfigError as exc:
+        llm_model = f"unconfigured ({exc})"
+
     return {
-        "title": f"Hello, welcome to the Git Metadata Extractor v2.0.1. Gimie Version 0.7.2. LLM Model {os.environ.get('MODEL', 'N/A (configured via model configs)')}",
+        "title": (
+            "Hello, welcome to the Git Metadata Extractor "
+            f"v{_resolve_package_version('git-metadata-extractor')}. "
+            f"Gimie Version {_resolve_package_version('gimie')}. "
+            f"LLM Model {llm_model}"
+        ),
     }
 
 
@@ -597,6 +844,7 @@ async def get_org_json(
     - Organization Object with enriched metadata
     - Usage statistics (token counts, timing, status)
     """
+    _assert_github_host(full_path)
     org_name = full_path.split("/")[-1]
 
     # Ensure full_path is a valid URL
@@ -616,7 +864,7 @@ async def get_org_json(
     usage_stats = organization.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -726,6 +974,7 @@ async def get_user_json(
     - User Object with enriched metadata (id field set to full GitHub profile URL)
     - Statistics (token usage, timing, and status)
     """
+    _assert_github_host(full_path)
     username = full_path.split("/")[-1]
 
     # Ensure full_path is a valid URL
@@ -745,7 +994,7 @@ async def get_user_json(
     usage_stats = user.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -863,54 +1112,87 @@ async def gimie(
     - Statistics (timing and status)
     """
 
-    repository = Repository(full_path, force_refresh=force_refresh)
+    _assert_github_host(full_path)
+    try:
+        repository = Repository(full_path, force_refresh=force_refresh)
 
-    await repository.run_analysis(
-        run_gimie=True,
-        run_llm=False,
-        run_user_enrichment=False,
-        run_organization_enrichment=False,
-    )
+        await repository.run_analysis(
+            run_gimie=True,
+            run_llm=False,
+            run_user_enrichment=False,
+            run_organization_enrichment=False,
+        )
 
-    # Get raw gimie JSON-LD output (not the Pydantic model)
-    gimie_output = repository.gimie
+        # Get raw gimie JSON-LD output (not the Pydantic model)
+        gimie_output = repository.gimie
 
-    # Get usage statistics from the repository (no tokens for gimie-only)
-    usage_stats = repository.get_usage_stats()
+        # Get usage statistics from the repository (no tokens for gimie-only)
+        usage_stats = repository.get_usage_stats()
 
-    # Create APIStats with timing information (no token usage since no LLM)
-    from .data_models.api import APIStats
+        # Create APIStats with timing information (no token usage since no LLM)
+        from .v1.data_models.api import APIStats
 
-    stats = APIStats(
-        agent_input_tokens=0,
-        agent_output_tokens=0,
-        estimated_input_tokens=0,
-        estimated_output_tokens=0,
-        duration=usage_stats["duration"],
-        start_time=usage_stats["start_time"],
-        end_time=usage_stats["end_time"],
-        status_code=usage_stats["status_code"],
-        github_rate_limit=github_info["rate_limit_limit"],
-        github_rate_remaining=github_info["rate_limit_remaining"],
-        github_rate_reset=github_info["rate_limit_reset"],
-    )
-    # Calculate total tokens (will be 0 for gimie-only)
-    stats.calculate_total_tokens()
+        stats = APIStats(
+            agent_input_tokens=0,
+            agent_output_tokens=0,
+            estimated_input_tokens=0,
+            estimated_output_tokens=0,
+            duration=usage_stats["duration"],
+            start_time=usage_stats["start_time"],
+            end_time=usage_stats["end_time"],
+            status_code=usage_stats["status_code"],
+            github_rate_limit=github_info["rate_limit_limit"],
+            github_rate_remaining=github_info["rate_limit_remaining"],
+            github_rate_reset=github_info["rate_limit_reset"],
+        )
+        # Calculate total tokens (will be 0 for gimie-only)
+        stats.calculate_total_tokens()
 
-    # Set rate limit response headers
-    response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
-    response.headers["X-RateLimit-Remaining"] = str(github_info["rate_limit_remaining"])
-    response.headers["X-RateLimit-Reset"] = github_info["rate_limit_reset"].isoformat()
+        # Set rate limit response headers
+        response.headers["X-RateLimit-Limit"] = str(github_info["rate_limit_limit"])
+        response.headers["X-RateLimit-Remaining"] = str(
+            github_info["rate_limit_remaining"],
+        )
+        rate_reset = github_info["rate_limit_reset"]
+        response.headers["X-RateLimit-Reset"] = (
+            rate_reset.isoformat() if rate_reset is not None else ""
+        )
 
-    api_response = APIOutput(
-        link=full_path,
-        type=ResourceType.REPOSITORY,
-        parsedTimestamp=datetime.now(),
-        output=gimie_output,
-        stats=stats,
-    )
+        api_response = APIOutput(
+            link=full_path,
+            type=ResourceType.REPOSITORY,
+            parsedTimestamp=datetime.now(),
+            output=gimie_output,
+            stats=stats,
+        )
 
-    return api_response
+        return api_response
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        # GIMIE raises ConnectionError for GitHub REST/GraphQL failures (incl. secondary rate limits).
+        msg = str(e)
+        lower = msg.lower()
+        logger.warning("GIMIE GitHub API error for %s: %s", full_path, msg)
+        if (
+            "secondary rate limit" in lower
+            or "rate limit exceeded" in lower
+            or "api rate limit exceeded" in lower
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=msg,
+            ) from e
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=msg,
+        ) from e
+    except Exception as e:
+        logger.exception("GIMIE JSON-LD failed for %s", full_path)
+        raise HTTPException(
+            status_code=502,
+            detail=f"GIMIE extraction failed: {e!s}",
+        ) from e
 
 
 @app.get(
@@ -1033,6 +1315,7 @@ async def llm_jsonld(
     - Statistics (token usage, timing, and status)
     """
 
+    _assert_github_host(full_path)
     repository = Repository(full_path, force_refresh=force_refresh)
 
     await repository.run_analysis(
@@ -1100,7 +1383,7 @@ async def llm_jsonld(
     usage_stats = repository.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],
@@ -1201,6 +1484,7 @@ async def llm_json(
     - Repository Object with enriched metadata
     """
 
+    _assert_github_host(full_path)
     repository = Repository(full_path, force_refresh=force_refresh)
 
     await repository.run_analysis(
@@ -1216,7 +1500,7 @@ async def llm_json(
     usage_stats = repository.get_usage_stats()
 
     # Create APIStats with token usage data, timing, and status
-    from .data_models.api import APIStats
+    from .v1.data_models.api import APIStats
 
     stats = APIStats(
         agent_input_tokens=usage_stats["input_tokens"],

@@ -1,0 +1,88 @@
+{
+  "source_url": "https://github.com/orgs/github",
+  "detected_type": "organization",
+  "output_format": "json",
+  "output": {
+    "root_entity": {
+      "id": "https://github.com/github",
+      "type": "org:Organization",
+      "shacl": "pulse:OrganizationShape",
+      "identifiers": {
+        "pulse:ror": null,
+        "pulse:infoscienceOrganizationIdentifier": null,
+        "pulse:githubOrganizationHandle": "github"
+      },
+      "idSource": "pulse:githubOrganizationHandle",
+      "schema:name": "GitHub",
+      "schema:identifier": null,
+      "pulse:githubOrganizationHandle": "github",
+      "pulse:infoscienceOrganizationIdentifier": null,
+      "pulse:OrganizationType": "pulse:OtherOrganizationType",
+      "pulse:githubOrgFollowers": 200000,
+      "org:hasUnit": [],
+      "org:unitOf": [],
+      "pulse:owns": null,
+      "_aliases": [
+        "github"
+      ],
+      "_acronyms": [],
+      "_labels": []
+    },
+    "related_entities": [],
+    "entities_by_type": {
+      "repositories": [],
+      "persons": [],
+      "organizations": [
+        {
+          "id": "https://github.com/github",
+          "type": "org:Organization",
+          "shacl": "pulse:OrganizationShape",
+          "identifiers": {
+            "pulse:ror": null,
+            "pulse:infoscienceOrganizationIdentifier": null,
+            "pulse:githubOrganizationHandle": "github"
+          },
+          "idSource": "pulse:githubOrganizationHandle",
+          "schema:name": "GitHub",
+          "schema:identifier": null,
+          "pulse:githubOrganizationHandle": "github",
+          "pulse:infoscienceOrganizationIdentifier": null,
+          "pulse:OrganizationType": "pulse:OtherOrganizationType",
+          "pulse:githubOrgFollowers": 200000,
+          "org:hasUnit": [],
+          "org:unitOf": [],
+          "pulse:owns": null,
+          "_aliases": [
+            "github"
+          ],
+          "_acronyms": [],
+          "_labels": []
+        }
+      ],
+      "articles": [],
+      "memberships": [],
+      "contributions": []
+    }
+  },
+  "warnings": [],
+  "stats": {
+    "entities_count": 1,
+    "triples_count": 0,
+    "stages_completed": [
+      "context_gather",
+      "org_agent",
+      "person_agents",
+      "repo_agents",
+      "article_agents",
+      "membership_agents",
+      "contribution_agents",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate"
+    ]
+  }
+}

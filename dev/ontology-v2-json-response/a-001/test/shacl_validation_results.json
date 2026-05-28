@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-02-10T17:31:45.363025",
+  "ontology_file": "open-pulse-ontology-v2.0.0.ttl",
+  "jsonld_file": "jsonld_output.json",
+  "conforms": true,
+  "summary": {
+    "violations": 0,
+    "warnings": 0,
+    "infos": 0
+  },
+  "violations": [],
+  "warnings": [],
+  "infos": []
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:MembershipShape.schema.json",
+  "title": "MembershipShape",
+  "description": "Schema for Membership entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: composite (personId_orgId) → uuid. SHACL requires: org:organization only. Role and dates are optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "org:organization"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier. Composite format: personId_orgId, or uuid (fallback). Example: '0000-0001-2345-6789_https://ror.org/02s376052'"
+    },
+    "type": {
+      "type": "string",
+      "description": "RDF type. Must be 'org:Membership'"
+    },
+    "shacl": {
+      "type": "string",
+      "description": "SHACL shape reference. Must be 'pulse:MembershipShape'"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "All available identifiers for this membership. Contains pulse:composite and uuid",
+      "properties": {
+        "pulse:composite": {
+          "type": "string",
+          "description": "Composite identifier. Format: personId_orgId (uses underscore separator). Example: '0000-0001-2345-6789_https://ror.org/02s376052'"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "UUID4 fallback identifier. Always present. Example: 'c1a2b3c4-5d6e-4f7a-8b9c-0d1e2f3a4b5c'"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:composite' or 'uuid'"
+    },
+    "org:organization": {
+      "type": "string",
+      "description": "Reference to OrganizationShape ID (hierarchical). REQUIRED per SHACL. Example: 'https://ror.org/02s376052'"
+    },
+    "org:role": {
+      "type": ["string", "null"],
+      "description": "Role or position title within the organization. OPTIONAL per SHACL. Example: 'Research Engineer', 'PhD Student'"
+    },
+    "time:hasBeginning": {
+      "type": ["string", "null"],
+      "description": "Start date of membership. Format: ISO 8601 date (YYYY-MM-DD). Example: '2020-09-01'"
+    },
+    "time:hasEnd": {
+      "type": ["string", "null"],
+      "description": "End date of membership. Format: ISO 8601 date (YYYY-MM-DD). Null if current/ongoing. Example: '2024-02-28'"
+    }
+  }
+}

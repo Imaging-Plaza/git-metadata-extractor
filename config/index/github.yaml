@@ -1,0 +1,56 @@
+# GitHub repository RAG indexer config.
+# Resolved by `src/index/github/config.py` and merged with env vars
+# (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_DATA_DIR`, `INDEX_GITHUB_SCOPE`) at startup.
+
+rcp:
+  # Same RCP deployment as the openalex / zenodo / huggingface / infoscience
+  # indexers — single Qwen3-Embedding-8B / Qwen3-Reranker-8B pair.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant GitHub repositories"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+github:
+  api_base: https://api.github.com
+  per_page: 100
+  max_concurrency: 4
+  # Skip embedding repos whose composite text (full_name + description +
+  # topics + README) is shorter than this — defends against placeholder
+  # READMEs (same dynamic as huggingface spaces).
+  min_card_chars: 64
+  # Truncate READMEs larger than this before chunking (1 MiB).
+  readme_max_bytes: 1048576
+
+scope:
+  active: epfl                   # epfl | switzerland (or any other key in `seeds`)
+  seeds:
+    epfl:
+      # Curated EPFL starter — extend as we discover. The openalex
+      # `work_github_urls` table (populated by `openalex find-github`) is
+      # the principled source of new candidates; review and add here.
+      - epfl-lts2/gspbox
+      - epfl-dlab/transformers-CFG
+      - epfl-lasa/control-libraries
+    switzerland:
+      - epfl-lts2/gspbox
+      - epfl-dlab/transformers-CFG
+      - epfl-lasa/control-libraries
+      - eth-cscs/firecrest
+      - eth-easl/modyn
+      - ethz-asl/maplab
+
+qdrant:
+  # Compose service `gme-qdrant` on the `dev` network. See
+  # `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 512               # READMEs are short; bigger chunks than openalex's 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

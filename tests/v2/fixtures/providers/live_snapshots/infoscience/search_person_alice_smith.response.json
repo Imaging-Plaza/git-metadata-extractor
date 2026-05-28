@@ -1,0 +1,91 @@
+{
+  "_embedded": {
+    "facets": [
+      {
+        "_embedded": {
+          "values": []
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/personOrgUnits?query=alice%20smith&configuration=person&f.personOrgUnits=%5B*%20TO%20*%5D,notequals"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/personOrgUnits?query=alice%20smith&configuration=person"
+          }
+        },
+        "facetLimit": 5,
+        "facetType": "text",
+        "missing": "0",
+        "name": "personOrgUnits",
+        "uniqueType": "discover.discover"
+      },
+      {
+        "_embedded": {
+          "values": []
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/role?query=alice%20smith&configuration=person&f.role=%5B*%20TO%20*%5D,notequals"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/role?query=alice%20smith&configuration=person"
+          }
+        },
+        "facetLimit": 5,
+        "facetType": "text",
+        "maxValue": "Webmaster",
+        "minValue": "#PLACEHOLDER_PARENT_METADATA_VALUE#",
+        "missing": "0",
+        "name": "role",
+        "uniqueType": "discover.discover"
+      },
+      {
+        "_embedded": {
+          "values": []
+        },
+        "_links": {
+          "missing": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/researcherActive?query=alice%20smith&configuration=person&f.researcherActive=%5B*%20TO%20*%5D,notequals"
+          },
+          "self": {
+            "href": "https://infoscience.epfl.ch/server/api/discover/facets/researcherActive?query=alice%20smith&configuration=person"
+          }
+        },
+        "facetLimit": 2,
+        "facetType": "text",
+        "missing": "0",
+        "name": "researcherActive",
+        "uniqueType": "discover.discover"
+      }
+    ],
+    "searchResult": {
+      "_embedded": {
+        "objects": []
+      },
+      "_links": {
+        "self": {
+          "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=alice%20smith&configuration=person&size=10"
+        }
+      },
+      "page": {
+        "number": 0,
+        "size": 10,
+        "totalElements": 0,
+        "totalPages": 0
+      }
+    }
+  },
+  "_links": {
+    "self": {
+      "href": "https://infoscience.epfl.ch/server/api/discover/search/objects?query=alice%2520smith&configuration=person"
+    }
+  },
+  "appliedFilters": null,
+  "configuration": "person",
+  "id": null,
+  "query": "alice smith",
+  "scope": null,
+  "sort": null,
+  "type": "discover",
+  "uniqueType": "discover.discover"
+}

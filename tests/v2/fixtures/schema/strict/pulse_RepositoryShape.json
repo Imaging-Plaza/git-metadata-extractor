@@ -1,0 +1,98 @@
+[
+  {
+    "id": "EPFL-ENAC/geodata-toolkit",
+    "type": "schema:SoftwareSourceCode",
+    "shacl": "pulse:RepositoryShape",
+    "identifiers": {
+      "pulse:githubRepositoryHandle": "EPFL-ENAC/geodata-toolkit",
+      "schema:citation": "https://doi.org/10.5281/zenodo.12345678",
+      "uuid": "b1c2d3e4-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+    },
+    "idSource": "pulse:githubRepositoryHandle",
+    "schema:name": "Open Pulse Platform",
+    "pulse:githubRepositoryHandle": "EPFL-ENAC/geodata-toolkit",
+    "pulse:repositoryType": "pulse:Software",
+    "pulse:discipline": ["wd:Q21201", "wd:Q8434"],
+    "schema:author": ["0000-0001-2345-6789"],
+    "pulse:githubRepoStars": 45,
+    "pulse:githubRepoForks": 12,
+    "schema:dateCreated": "2023-03-15T10:30:00Z",
+    "schema:license": "https://spdx.org/licenses/MIT.html",
+    "schema:citation": "https://doi.org/10.5281/zenodo.12345678",
+    "schema:programmingLanguage": ["Python", "TypeScript"],
+    "pulse:ownedBy": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "pulse:isForkOf": null
+  },
+  {
+    "id": "EPFL-ENAC/structural-analysis",
+    "type": "schema:SoftwareSourceCode",
+    "shacl": "pulse:RepositoryShape",
+    "identifiers": {
+      "pulse:githubRepositoryHandle": "EPFL-ENAC/structural-analysis",
+      "schema:citation": null,
+      "uuid": "b2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+    },
+    "idSource": "pulse:githubRepositoryHandle",
+    "schema:name": "Gimie",
+    "pulse:githubRepositoryHandle": "EPFL-ENAC/structural-analysis",
+    "pulse:repositoryType": "pulse:Software",
+    "pulse:discipline": ["wd:Q21201"],
+    "schema:author": ["mweber"],
+    "pulse:githubRepoStars": 128,
+    "pulse:githubRepoForks": 34,
+    "schema:dateCreated": "2022-01-10T08:00:00Z",
+    "schema:license": "https://spdx.org/licenses/Apache-2.0.html",
+    "schema:citation": null,
+    "schema:programmingLanguage": ["Python"],
+    "pulse:ownedBy": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "pulse:isForkOf": null
+  },
+  {
+    "id": "mweber/data-pipeline",
+    "type": "schema:SoftwareSourceCode",
+    "shacl": "pulse:RepositoryShape",
+    "identifiers": {
+      "pulse:githubRepositoryHandle": "mweber/data-pipeline",
+      "schema:citation": null,
+      "uuid": "b3e4f5a6-7b8c-4d9e-8f1a-2b3c4d5e6f7a"
+    },
+    "idSource": "pulse:githubRepositoryHandle",
+    "schema:name": "Data Pipeline",
+    "pulse:githubRepositoryHandle": "mweber/data-pipeline",
+    "pulse:repositoryType": "pulse:Data",
+    "pulse:discipline": ["wd:Q12483"],
+    "schema:author": ["mweber"],
+    "pulse:githubRepoStars": 5,
+    "pulse:githubRepoForks": 1,
+    "schema:dateCreated": "2024-06-20T14:15:00Z",
+    "schema:license": "https://spdx.org/licenses/GPL-3.0-only.html",
+    "schema:citation": null,
+    "schema:programmingLanguage": ["R", "Python"],
+    "pulse:ownedBy": "mweber",
+    "pulse:isForkOf": null
+  },
+  {
+    "id": "jdupont/geodata-toolkit",
+    "type": "schema:SoftwareSourceCode",
+    "shacl": "pulse:RepositoryShape",
+    "identifiers": {
+      "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+      "schema:citation": null,
+      "uuid": "b4f5a6b7-8c9d-4e0f-a1b2-3c4d5e6f7a8b"
+    },
+    "idSource": "pulse:githubRepositoryHandle",
+    "schema:name": "Geodata Toolkit (Fork)",
+    "pulse:githubRepositoryHandle": "jdupont/geodata-toolkit",
+    "pulse:repositoryType": "pulse:Software",
+    "pulse:discipline": ["wd:Q21201", "wd:Q8434"],
+    "schema:author": ["0000-0003-4567-8901"],
+    "pulse:githubRepoStars": 2,
+    "pulse:githubRepoForks": 0,
+    "schema:dateCreated": "2024-02-01T13:00:00Z",
+    "schema:license": "https://spdx.org/licenses/MIT.html",
+    "schema:citation": null,
+    "schema:programmingLanguage": ["Python", "TypeScript"],
+    "pulse:ownedBy": "0000-0003-4567-8901",
+    "pulse:isForkOf": "EPFL-ENAC/geodata-toolkit"
+  }
+]

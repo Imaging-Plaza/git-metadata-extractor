@@ -1,0 +1,125 @@
+# ORCID RAG indexer config.
+# Resolved by `src/index/orcid/config.py` and merged with env vars
+# (`RCP_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`,
+# `INDEX_ORCID_SCOPE`) at startup.
+
+rcp:
+  # Same RCP deployment as openalex/infoscience.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant ORCID person profiles"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+orcid:
+  # Public ORCID API. Member API requires OAuth and is not used here.
+  base_url: https://pub.orcid.org/v3.0
+  timeout_seconds: 20
+  # Hard cap from ORCID's expanded-search endpoint.
+  search_max_rows: 200
+  # Rate-limit pacing — tightened after a 429 storm at ~8200/10072 on a fresh
+  # IP. The public API doesn't return x-ratelimit-remaining, so the proactive
+  # throttle in v2 RateLimiter never fires; we cap effective rate here instead.
+  max_retries: 6                       # 7 total attempts; worst-case backoff ≈ 60s
+  base_delay_seconds: 0.5
+  max_delay_seconds: 60.0
+  request_min_interval_seconds: 1.5    # ≤ 0.67 req/s steady-state
+  # Identify ourselves on every request — ORCID may fingerprint UA in addition
+  # to IP. Override via INDEX_ORCID_USER_AGENT. Leave blank/null to fall back
+  # to the requests default.
+  user_agent: "git-metadata-extractor-orcid-index/0.1"
+
+scope:
+  # EPFL ROR (used by the `epfl` scope). Override via INDEX_ORCID_SCOPE_ROR.
+  ror: https://ror.org/02s376052
+  # Switzerland country code (used by the `switzerland` scope). Override via INDEX_ORCID_SCOPE_COUNTRY.
+  country: ch
+  # Per-scope affiliation aliases, used both by ORCID `expanded-search`
+  # discovery (one search per alias) and by the post-filter that decides
+  # `in_scope` for ORCID-search-only seeds. Aliases are case-insensitive
+  # substring-matched against employment.organization / education.organization
+  # — keep them distinctive (avoid 3-4 letter abbreviations like "PSI", "USI",
+  # "WSL", "SDSC" that would over-match in non-Swiss contexts).
+  # `load_config` collapses this dict to the active scope's list at load-time.
+  affiliation_aliases:
+    epfl:
+      - "EPFL"
+      - "École polytechnique fédérale de Lausanne"
+      - "Ecole polytechnique federale de Lausanne"
+      - "Swiss Federal Institute of Technology Lausanne"
+    switzerland:
+      # EPFL family
+      - "EPFL"
+      - "École polytechnique fédérale de Lausanne"
+      - "Ecole polytechnique federale de Lausanne"
+      - "Swiss Federal Institute of Technology Lausanne"
+      # ETHZ family
+      - "ETH Zurich"
+      - "ETH Zürich"
+      - "Eidgenössische Technische Hochschule Zürich"
+      # Cantonal universities
+      - "University of Lausanne"
+      - "Université de Lausanne"
+      - "University of Geneva"
+      - "Université de Genève"
+      - "University of Zurich"
+      - "Universität Zürich"
+      - "University of Bern"
+      - "Universität Bern"
+      - "Université de Berne"
+      - "University of Basel"
+      - "Universität Basel"
+      - "University of Fribourg"
+      - "Université de Fribourg"
+      - "Universität Freiburg"
+      - "University of Neuchâtel"
+      - "Université de Neuchâtel"
+      - "University of St. Gallen"
+      - "Universität St. Gallen"
+      - "Università della Svizzera italiana"
+      # Universities of applied sciences
+      - "Haute école spécialisée de Suisse occidentale"
+      - "HES-SO"
+      # National research institutes (long-form aliases only)
+      - "Paul Scherrer Institute"
+      - "Paul Scherrer Institut"
+      - "Empa"
+      - "Swiss Federal Laboratories for Materials Science and Technology"
+      - "Eawag"
+      - "Swiss Federal Institute of Aquatic Science and Technology"
+      - "Swiss Federal Institute for Forest"   # WSL — long form to disambiguate
+      - "Idiap Research Institute"
+      - "CSEM"
+      - "CERN"
+      - "European Organization for Nuclear Research"
+      - "Swiss Data Science Center"
+      # University hospitals
+      - "Centre Hospitalier Universitaire Vaudois"
+      - "CHUV"
+      - "Hôpitaux Universitaires de Genève"
+      - "University Hospital of Lausanne"
+      - "University Hospital Zurich"
+      - "Universitätsspital Zürich"
+      - "University Hospital Basel"
+      # Industry research
+      - "IBM Research - Zurich"
+      - "IBM Research Zurich"
+
+discovery:
+  # `openalex` | `orcid_search` | `both`. Override via INDEX_ORCID_DISCOVERY_SOURCE.
+  source: both
+  # Path to a previously-built openalex DuckDB (the seed of source A).
+  # Override via INDEX_ORCID_OPENALEX_DB.
+  openalex_db: data/index/openalex/duckdb/openalex.duckdb
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

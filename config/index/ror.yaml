@@ -1,0 +1,43 @@
+# ROR (Research Organization Registry) RAG indexer config.
+# Resolved by `src/index/ror/config.py` and merged with env vars
+# (`RCP_TOKEN`, `INDEX_DATA_DIR`) at startup.
+
+rcp:
+  # OpenAI-compatible inference endpoint. Same RCP gateway as infoscience.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  # Native dim for Qwen3-Embedding-8B is 4096. Asserted on first response.
+  embedding_dim: 4096
+  # Prepended to query embeddings (not record embeddings) per Qwen3-Embedding format.
+  query_instruction: "Given a query, retrieve research organization records that match"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  # Per-batch input count for /v1/embeddings.
+  batch_size: 32
+  # Concurrent in-flight embed/rerank calls.
+  max_concurrency: 8
+  # Generous to accommodate RCP cold-start (model load can take minutes).
+  timeout_seconds: 120
+
+scope:
+  # `epfl_ethz` (BFS from seeds), `switzerland` (CH country), `europe` (UN geoscheme), or `worldwide` (full dump).
+  mode: europe
+  seeds:
+    - https://ror.org/02s376052       # EPFL
+    - https://ror.org/05a28rw58       # ETHZ
+  expand: [parent, child, related]
+  max_depth: 2
+
+ror_dump:
+  # Zenodo concept DOI resolves to the latest release.
+  zenodo_concept_doi: 10.5281/zenodo.6347574
+
+retrieval:
+  top_k: 50
+  rerank_top_k: 10
+
+qdrant:
+  # Vector DB. Override at runtime with INDEX_QDRANT_URL / INDEX_QDRANT_API_KEY.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+  # Collection name = "<prefix>_<scope.mode>" (e.g. ror_worldwide, ror_switzerland).
+  collection_prefix: ror

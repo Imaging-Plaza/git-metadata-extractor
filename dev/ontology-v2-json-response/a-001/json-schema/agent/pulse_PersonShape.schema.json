@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "pulse:PersonShape.schema.json",
+  "title": "PersonShape",
+  "description": "Schema for Person entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: orcid → infosciencePersonIdentifier → githubUsername → uuid. SHACL requires: schema:name AND at least ONE of (pulse:githubUsername, schema:email, pulse:infosciencePersonIdentifier, pulse:orcidIdentifier).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Resolved hierarchical identifier. Set to the first non-null value from: pulse:orcid, pulse:infosciencePersonIdentifier, pulse:githubUsername, or uuid (fallback). Example: '0000-0001-2345-6789' or 'mweber'"
+    },
+    "type": {
+      "type": "string",
+      "description": "RDF type. Must be 'schema:Person'"
+    },
+    "shacl": {
+      "type": "string",
+      "description": "SHACL shape reference. Must be 'pulse:PersonShape'"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "All available identifiers for this person. Contains pulse:orcid, pulse:infosciencePersonIdentifier, pulse:githubUsername, and uuid (always present)",
+      "properties": {
+        "pulse:orcid": {
+          "type": ["string", "null"],
+          "description": "ORCID identifier. Format: four groups of 4 digits separated by hyphens, last character can be 0-9 or X. Example: '0000-0001-2345-6789'"
+        },
+        "pulse:infosciencePersonIdentifier": {
+          "type": ["string", "null"],
+          "description": "Infoscience person UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+        },
+        "pulse:githubUsername": {
+          "type": ["string", "null"],
+          "description": "GitHub username. Example: 'caviri'"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "UUID4 fallback identifier. Always present. Format: 8-4-4-4-12 hexadecimal characters. Example: 'a7d4e2b1-3c8f-4a5b-9d6e-2f1a3b4c5d6e'"
+        }
+      }
+    },
+    "idSource": {
+      "type": "string",
+      "description": "Indicates which identifier was used as the primary 'id'. One of: 'pulse:orcid', 'pulse:infosciencePersonIdentifier', 'pulse:githubUsername', or 'uuid'"
+    },
+    "schema:name": {
+      "type": "string",
+      "description": "Full name of the person. REQUIRED per SHACL. Example: 'Carlos Vivar Rios'"
+    },
+    "schema:email": {
+      "type": "string",
+      "description": "Email address. Format: standard email pattern. Example: 'carlos.vivar@epfl.ch'"
+    },
+    "schema:url": {
+      "type": ["string", "null"],
+      "description": "Profile URL. Example: 'https://people.epfl.ch/carlos.vivar'"
+    },
+    "pulse:githubUsername": {
+      "type": ["string", "null"],
+      "description": "GitHub username. Example: 'caviri'"
+    },
+    "pulse:orcidIdentifier": {
+      "type": ["string", "null"],
+      "description": "ORCID identifier. Format: 0000-0001-2345-6789 (four groups of 4 digits, last can be X). Example: '0000-0001-2345-6789'"
+    },
+    "pulse:infosciencePersonIdentifier": {
+      "type": ["string", "null"],
+      "description": "Infoscience person UUID4 identifier. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+    },
+    "org:hasMembership": {
+      "type": "array",
+      "description": "Array of MembershipShape IDs. Format: composite (personId_orgId). Example: ['0000-0001-2345-6789_https://ror.org/02s376052']",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pulse:hasContribution": {
+      "type": "array",
+      "description": "Array of ContributionShape IDs. Format: composite (personId_repoId). Example: ['0000-0001-2345-6789_EPFL-ENAC/geodata-toolkit']",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pulse:owns": {
+      "type": "array",
+      "description": "Array of RepositoryShape IDs owned by this person. Format: GitHub handle (owner/repo). Example: ['EPFL-ENAC/geodata-toolkit']",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

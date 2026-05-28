@@ -1,0 +1,51 @@
+# SNSF P3 (Swiss National Science Foundation) RAG indexer config.
+# Resolved by `src/index/snsf/config.py`.
+#
+# Phase 1 only uses the manual bulk-CSV ingest path (data downloaded by hand
+# from data.snf.ch and dropped into a local directory). Phase 2 will add
+# RCP embeddings + Qdrant — see `.internal/snsf/README.md` for the plan.
+
+snsf:
+  base_url: https://data.snf.ch
+  request_timeout_s: 60
+  page_size: 1000
+  inter_request_sleep_s: 0.2
+  user_agent: >-
+    git-metadata-extractor/snsf (polite scraper; please email if issues)
+
+scope:
+  # Active scope. Drives which subset is materialised into `scope_records`
+  # at `load-local` time. Override on the CLI with `--scope`.
+  active: epfl
+  # Filter clause = (Solr field name → list of UUIDs/IDs). Used by the
+  # parked API path in `ingest/snsf_client.py` (Phase 2). The CSV ingest
+  # path in `ingest/local_ingest.py` derives equivalent SQL WHEREs from
+  # `ingest/scope.py:SCOPE_WHERE` instead — both resolve to the same row
+  # set, just different filter expressions.
+  filters:
+    epfl:
+      research_institution_id: ["a8095007-f9b3-4170-ab92-59fbecfbba10"]
+    ethz:
+      research_institution_id: ["3501eb73-70f2-4abd-b626-2c764d7f73dd"]
+    eth_domain:
+      research_institution_type_id: ["6ee0a15d-934b-416f-bfb6-0f0b5638edb3"]
+    switzerland: {}
+
+# Phase 2 additions (kept commented so the schema is forward-compatible):
+# rcp:
+#   base_url: https://inference-rcp.epfl.ch/v1
+#   embedding_model: Qwen/Qwen3-Embedding-8B
+#   embedding_dim: 4096
+#   query_instruction: "Given a query, retrieve SNSF grant titles and abstracts that match"
+#   reranker_model: Qwen/Qwen3-Reranker-8B
+#   batch_size: 32
+#   max_concurrency: 4
+#   timeout_seconds: 120
+# qdrant:
+#   url: http://gme-qdrant:6333
+#   prefer_grpc: false
+#   collection_prefix: snsf
+# chunking:
+#   size_tokens: 512
+#   overlap_tokens: 64
+#   tokenizer: cl100k_base

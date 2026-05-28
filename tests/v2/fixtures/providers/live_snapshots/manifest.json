@@ -1,0 +1,103 @@
+{
+  "dataset": "gimie-baseline",
+  "entries": [
+    {
+      "captured_at": "2026-02-24T14:18:28Z",
+      "case": "contributors_sdsc-ordes_gimie",
+      "meta_path": "github/contributors_sdsc-ordes_gimie.meta.json",
+      "provider": "github",
+      "response_path": "github/contributors_sdsc-ordes_gimie.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:28Z",
+      "case": "languages_sdsc-ordes_gimie",
+      "meta_path": "github/languages_sdsc-ordes_gimie.meta.json",
+      "provider": "github",
+      "response_path": "github/languages_sdsc-ordes_gimie.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:29Z",
+      "case": "org_sdsc-ordes",
+      "meta_path": "github/org_sdsc-ordes.meta.json",
+      "provider": "github",
+      "response_path": "github/org_sdsc-ordes.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:28Z",
+      "case": "repo_sdsc-ordes_gimie",
+      "meta_path": "github/repo_sdsc-ordes_gimie.meta.json",
+      "provider": "github",
+      "response_path": "github/repo_sdsc-ordes_gimie.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:30Z",
+      "case": "search_orgunit_epfl",
+      "meta_path": "infoscience/search_orgunit_epfl.meta.json",
+      "provider": "infoscience",
+      "response_path": "infoscience/search_orgunit_epfl.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:30Z",
+      "case": "search_person_alice_smith",
+      "meta_path": "infoscience/search_person_alice_smith.meta.json",
+      "provider": "infoscience",
+      "response_path": "infoscience/search_person_alice_smith.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:31Z",
+      "case": "search_publications_metadata",
+      "meta_path": "infoscience/search_publications_metadata.meta.json",
+      "provider": "infoscience",
+      "response_path": "infoscience/search_publications_metadata.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:30Z",
+      "case": "educations_0000-0002-1825-0097",
+      "meta_path": "orcid/educations_0000-0002-1825-0097.meta.json",
+      "provider": "orcid",
+      "response_path": "orcid/educations_0000-0002-1825-0097.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:30Z",
+      "case": "employments_0000-0002-1825-0097",
+      "meta_path": "orcid/employments_0000-0002-1825-0097.meta.json",
+      "provider": "orcid",
+      "response_path": "orcid/employments_0000-0002-1825-0097.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:29Z",
+      "case": "person_0000-0002-1825-0097",
+      "meta_path": "orcid/person_0000-0002-1825-0097.meta.json",
+      "provider": "orcid",
+      "response_path": "orcid/person_0000-0002-1825-0097.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:29Z",
+      "case": "org_02s376052",
+      "meta_path": "ror/org_02s376052.meta.json",
+      "provider": "ror",
+      "response_path": "ror/org_02s376052.response.json",
+      "status_code": 200
+    },
+    {
+      "captured_at": "2026-02-24T14:18:29Z",
+      "case": "search_epfl",
+      "meta_path": "ror/search_epfl.meta.json",
+      "provider": "ror",
+      "response_path": "ror/search_epfl.response.json",
+      "status_code": 200
+    }
+  ],
+  "updated_at": "2026-02-24T14:19:00Z",
+  "version": 1
+}

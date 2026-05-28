@@ -1,0 +1,20 @@
+{
+  "id": "doi:10.1038/s41586-024-07856-z",
+  "type": "schema:ScholarlyArticle",
+  "shacl": "pulse:ArticleShape",
+  "identifiers": {
+    "schema:identifier": "doi:10.1038/s41586-024-07856-z",
+    "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
+    "uuid": "f8a3b2c1-4d5e-4f6a-8b9c-1d2e3f4a5b6c"
+  },
+  "idSource": "schema:identifier",
+  "schema:name": "Open Pulse: A Framework for Tracking Scientific Software Contributions",
+  "schema:identifier": "doi:10.1038/s41586-024-07856-z",
+  "schema:datePublished": "2025-06-15",
+  "schema:author": [
+    "0000-0001-2345-6789",
+    "0000-0003-4567-8901"
+  ],
+  "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
+  "schema:sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
+}

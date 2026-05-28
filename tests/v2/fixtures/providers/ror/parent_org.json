@@ -1,0 +1,31 @@
+{
+  "organization": {
+    "id": "https://ror.org/05a28rw58",
+    "name": "ETH Zurich",
+    "aliases": [
+      "Swiss Federal Institute of Technology Zurich"
+    ],
+    "acronyms": [
+      "ETH"
+    ],
+    "types": [
+      "Education"
+    ],
+    "country": {
+      "country_name": "Switzerland",
+      "country_code": "CH"
+    },
+    "links": [
+      "https://ethz.ch"
+    ],
+    "relationships": {
+      "parent": null,
+      "children": [
+        {
+          "id": "https://ror.org/03j4x1x95",
+          "name": "ETH AI Center"
+        }
+      ]
+    }
+  }
+}

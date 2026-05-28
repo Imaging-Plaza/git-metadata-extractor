@@ -1,8 +1,15 @@
+extraction_results
+logs/
 .cursor/mcp.json
+.cursor/plans
+.claude/
+.opentix-worktree/
 .ruff_cache
+.uv-cache/
 data
 api_cache.db
 .env2
+.cache/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -55,6 +62,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.testmondata
 cover/
 
 # Translations
@@ -172,3 +180,4 @@ DeepLabCutDeepLabCut.json
 MalloryWittwer.json
 output.jsonld
 sdsc-ordes.json
+.internal/RISKS.md
