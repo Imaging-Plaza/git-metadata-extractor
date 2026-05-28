@@ -78,14 +78,12 @@ def _lookup_identifier(entity: dict[str, Any], *keys: str) -> str | None:
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    if not isinstance(value, str):
-        return None
-    candidate = value.strip()
-    if not candidate:
-        return None
-    if candidate.lower().startswith("https://orcid.org/"):
-        candidate = candidate.rsplit("/", maxsplit=1)[-1]
-    return candidate.upper()
+    """Return uppercased bare-form ORCID for use as a dedup key.
+    Delegates to the shared canonical helper (which already
+    uppercases the checksum char for canonical-form equality)."""
+    from src.v2.canonicalization.orcid import parse_orcid
+
+    return parse_orcid(value)
 
 
 def _normalize_ror(value: str | None) -> str | None:

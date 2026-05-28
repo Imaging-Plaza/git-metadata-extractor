@@ -225,11 +225,16 @@ class RealORCIDProvider(ORCIDProvider):
 
     @classmethod
     def _normalize_orcid(cls, orcid_id: str) -> str:
-        candidate = orcid_id.strip()
-        if candidate.lower().startswith("https://orcid.org/"):
-            candidate = candidate.rsplit("/", maxsplit=1)[-1]
-        candidate = candidate.upper()
-        if not ORCID_PATTERN.fullmatch(candidate):
+        """Return the bare-form ORCID for use as a path component
+        against `pub.orcid.org`. Combines shape normalisation (via
+        the shared `parse_orcid` helper) with mod-11 checksum
+        validation that the shared helper deliberately doesn't do —
+        bogus IDs should fail loudly when they reach a real provider,
+        not silently pass through."""
+        from src.v2.canonicalization.orcid import parse_orcid
+
+        candidate = parse_orcid(orcid_id)
+        if candidate is None:
             message = f"Invalid ORCID format: {orcid_id}"
             raise ValueError(message)
         if not cls._has_valid_checksum(candidate):

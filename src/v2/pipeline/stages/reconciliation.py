@@ -94,14 +94,12 @@ def _normalize_uuid_v4(value: Any) -> str | None:
 
 
 def _normalize_orcid_token(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    candidate = value.strip()
-    if candidate.lower().startswith("https://orcid.org/"):
-        candidate = candidate.rsplit("/", maxsplit=1)[-1]
-    if not candidate or not ORCID_PATTERN.match(candidate):
-        return None
-    return candidate
+    """Return the bare-form ORCID via the shared canonical helper.
+    Accepts URL form, `orcid:` prefix, lowercase `x` checksum,
+    legacy `http` host. Returns None on malformed shape."""
+    from src.v2.canonicalization.orcid import parse_orcid
+
+    return parse_orcid(value)
 
 
 def _normalize_infoscience_uuid(value: Any) -> str | None:

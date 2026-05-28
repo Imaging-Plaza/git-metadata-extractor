@@ -447,15 +447,12 @@ def _gate_repo_type_patch(
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    if not isinstance(value, str):
-        return None
-    candidate = value.strip()
-    if candidate.startswith("https://orcid.org/"):
-        candidate = candidate[len("https://orcid.org/"):]
-    candidate = candidate.upper()
-    if _ORCID_RE.fullmatch(candidate):
-        return candidate
-    return None
+    """Return uppercased bare-form ORCID for use as a dedup key.
+    Delegates to the shared canonical helper, which already validates
+    shape AND uppercases the checksum char."""
+    from src.v2.canonicalization.orcid import parse_orcid
+
+    return parse_orcid(value)
 
 
 def _normalize_github_handle(value: str | None) -> str | None:
