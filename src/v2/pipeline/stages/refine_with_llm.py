@@ -59,6 +59,7 @@ from src.v2.agents.llm.refiners.org_resolver import (
 from src.v2.agents.llm.runtime import LLMRuntimeError
 from src.v2.api_models.enums import OrganizationTypeV2
 from src.v2.ingest.providers.epfl_graph_rag import EpflGraphRagProvider
+from src.v2.parsers.citation_cff import parse_citation_cff
 from src.v2.parsers.publiccode import parse_publiccode
 from src.v2.pipeline.stages.models import ReconciledEntities
 
@@ -207,6 +208,17 @@ def _build_repo_context_summary(
                 parsed = parse_publiccode(content)
                 if parsed:
                     summary["publiccode"] = parsed
+
+        # Same treatment for CITATION.cff — parsed payload alongside
+        # the raw excerpt so LLM refiners can read typed authors /
+        # identifiers / preferred-citation without YAML-grepping.
+        citation_filename = lower_to_original.get("citation.cff")
+        if citation_filename:
+            content = aux_files.get(citation_filename)
+            if isinstance(content, str):
+                parsed_cff = parse_citation_cff(content)
+                if parsed_cff:
+                    summary["citation_cff"] = parsed_cff
 
     return summary
 
