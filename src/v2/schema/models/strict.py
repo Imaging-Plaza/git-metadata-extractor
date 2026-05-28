@@ -25,7 +25,7 @@ class Identifiers(BaseModel):
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
         alias="pulse:infosciencePersonIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     pulse_githubUsername: str | None = Field(None, alias="pulse:githubUsername")
     uuid: str = Field(
@@ -67,7 +67,7 @@ class PersonModel1(BaseModel):
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
         alias="pulse:infosciencePersonIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     org_hasMembership: list[str] | None = Field(None, alias="org:hasMembership")
     pulse_hasContribution: list[str] | None = Field(None, alias="pulse:hasContribution")
@@ -100,7 +100,7 @@ class PersonModel2(BaseModel):
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
         alias="pulse:infosciencePersonIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     org_hasMembership: list[str] | None = Field(None, alias="org:hasMembership")
     pulse_hasContribution: list[str] | None = Field(None, alias="pulse:hasContribution")
@@ -133,7 +133,7 @@ class PersonModel3(BaseModel):
     pulse_infosciencePersonIdentifier: str = Field(
         ...,
         alias="pulse:infosciencePersonIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     org_hasMembership: list[str] | None = Field(None, alias="org:hasMembership")
     pulse_hasContribution: list[str] | None = Field(None, alias="pulse:hasContribution")
@@ -166,7 +166,7 @@ class PersonModel4(BaseModel):
     pulse_infosciencePersonIdentifier: str | None = Field(
         None,
         alias="pulse:infosciencePersonIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     org_hasMembership: list[str] | None = Field(None, alias="org:hasMembership")
     pulse_hasContribution: list[str] | None = Field(None, alias="pulse:hasContribution")
@@ -328,7 +328,7 @@ class Identifiers5(BaseModel):
     pulse_infoscienceOrganizationIdentifier: str | None = Field(
         None,
         alias="pulse:infoscienceOrganizationIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     pulse_githubOrganizationHandle: str | None = Field(
         None, alias="pulse:githubOrganizationHandle"
@@ -383,7 +383,7 @@ class OrganizationModel1(BaseModel):
         None,
         alias="pulse:infoscienceOrganizationIdentifier",
         description="Infoscience organization identifier (UUID4 format).",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     pulse_OrganizationType: PulseOrganizationType | None = Field(
         None, alias="pulse:OrganizationType"
@@ -422,7 +422,7 @@ class OrganizationModel2(BaseModel):
         None,
         alias="pulse:infoscienceOrganizationIdentifier",
         description="Infoscience organization identifier (UUID4 format).",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     pulse_OrganizationType: PulseOrganizationType | None = Field(
         None, alias="pulse:OrganizationType"
@@ -461,7 +461,7 @@ class OrganizationModel3(BaseModel):
         ...,
         alias="pulse:infoscienceOrganizationIdentifier",
         description="Infoscience organization identifier (UUID4 format).",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     pulse_OrganizationType: PulseOrganizationType | None = Field(
         None, alias="pulse:OrganizationType"
@@ -610,7 +610,7 @@ class Identifiers10(BaseModel):
     pulse_infoscienceArticleIdentifier: str | None = Field(
         None,
         alias="pulse:infoscienceArticleIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/publication/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     uuid: str = Field(
         ...,
@@ -655,7 +655,7 @@ class ArticleModel(BaseModel):
     pulse_infoscienceArticleIdentifier: str | None = Field(
         None,
         alias="pulse:infoscienceArticleIdentifier",
-        pattern="^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        pattern="^https://infoscience\\.epfl\\.ch/entities/publication/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     )
     schema_sourceOrganization: str | None = Field(
         None,

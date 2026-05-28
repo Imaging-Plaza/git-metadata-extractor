@@ -5,12 +5,22 @@ import re
 import uuid
 from typing import Any
 
+from src.v2.canonicalization.infoscience import (
+    infoscience_article_iri,
+    infoscience_org_iri,
+    infoscience_person_iri,
+)
 from src.v2.canonicalization.orcid import orcid_iri
 
+# v2.2.0: Infoscience IDs are canonical entity URLs of the form
+# `https://infoscience.epfl.ch/entities/<kind>/<uuid>`. The legacy
+# `core/items` BASE constants are kept only for backwards-compat with
+# any downstream caller importing them; new code should use the
+# canonicalization helpers.
 INFOSCIENCE_CORE_ITEMS_BASE_URI = "https://infoscience.epfl.ch/server/api/core/items/"
-INFOSCIENCE_PERSON_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
-INFOSCIENCE_ORGANIZATION_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
-INFOSCIENCE_PUBLICATION_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
+INFOSCIENCE_PERSON_BASE_URI = "https://infoscience.epfl.ch/entities/person/"
+INFOSCIENCE_ORGANIZATION_BASE_URI = "https://infoscience.epfl.ch/entities/orgunit/"
+INFOSCIENCE_PUBLICATION_BASE_URI = "https://infoscience.epfl.ch/entities/publication/"
 GITHUB_BASE_URI = "https://github.com/"
 ORCID_BASE_URI = "https://orcid.org/"
 ROR_BASE_URI = "https://ror.org/"
@@ -115,7 +125,7 @@ def _existing_resolution(
             legacy_path="person",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = f"{INFOSCIENCE_PERSON_BASE_URI}{normalized_infoscience_id}"
+            normalized_id = infoscience_person_iri(normalized_infoscience_id)
     elif normalized_source == "pulse:githubUsername":
         normalized_github_username = _normalize_github_handle(entity_id)
         if normalized_github_username is not None:
@@ -131,9 +141,7 @@ def _existing_resolution(
             legacy_path="organization",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = (
-                f"{INFOSCIENCE_ORGANIZATION_BASE_URI}{normalized_infoscience_id}"
-            )
+            normalized_id = infoscience_org_iri(normalized_infoscience_id)
     elif normalized_source == "pulse:githubOrganizationHandle":
         normalized_github_handle = _normalize_github_handle(entity_id)
         if normalized_github_handle is not None:
@@ -152,7 +160,7 @@ def _existing_resolution(
             entity_path="publication",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = f"{INFOSCIENCE_PUBLICATION_BASE_URI}{normalized_infoscience_id}"
+            normalized_id = infoscience_article_iri(normalized_infoscience_id)
     elif normalized_source == "uuid":
         normalized_id = _normalize_uuid(entity_id)
 

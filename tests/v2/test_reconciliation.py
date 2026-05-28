@@ -234,7 +234,7 @@ def test_reconcile_normalizes_article_ids_and_article_relationship_references() 
     organization_id = reconciled.entities["organizations"][0]["id"]
 
     assert article["id"] == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/publication/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
     assert article["idSource"] == "pulse:infoscienceArticleIdentifier"
@@ -272,9 +272,10 @@ def test_reconcile_resolves_article_author_when_article_references_person_orcid_
 def test_reconcile_normalizes_infoscience_organization_identifier_url_to_uuid() -> None:
     infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
     infoscience_url = (
-        "https://infoscience.epfl.ch/server/api/entities/organization/"
+        "https://infoscience.epfl.ch/server/api/entities/orgunit/"
         f"{infoscience_uuid}/full"
     )
+    canonical_url = f"https://infoscience.epfl.ch/entities/orgunit/{infoscience_uuid}"
     entities = {
         "persons": [],
         "organizations": [
@@ -297,14 +298,15 @@ def test_reconcile_normalizes_infoscience_organization_identifier_url_to_uuid() 
     reconciled = reconcile_entities(entities)
     organization = reconciled.entities["organizations"][0]
 
-    assert organization["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
-    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
-    assert organization["id"] == f"https://infoscience.epfl.ch/server/api/core/items/{infoscience_uuid}"
+    assert organization["pulse:infoscienceOrganizationIdentifier"] == canonical_url
+    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == canonical_url
+    assert organization["id"] == canonical_url
     assert organization["idSource"] == "pulse:infoscienceOrganizationIdentifier"
 
 
 def test_reconcile_preserves_uuid_infoscience_organization_identifier() -> None:
     infoscience_uuid = "41674f42-ba15-4612-9817-2a6f60985c01"
+    canonical_url = f"https://infoscience.epfl.ch/entities/orgunit/{infoscience_uuid}"
     entities = {
         "persons": [],
         "organizations": [
@@ -327,9 +329,9 @@ def test_reconcile_preserves_uuid_infoscience_organization_identifier() -> None:
     reconciled = reconcile_entities(entities)
     organization = reconciled.entities["organizations"][0]
 
-    assert organization["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
-    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
-    assert organization["id"] == f"https://infoscience.epfl.ch/server/api/core/items/{infoscience_uuid}"
+    assert organization["pulse:infoscienceOrganizationIdentifier"] == canonical_url
+    assert organization["identifiers"]["pulse:infoscienceOrganizationIdentifier"] == canonical_url
+    assert organization["id"] == canonical_url
     assert organization["idSource"] == "pulse:infoscienceOrganizationIdentifier"
 
 
@@ -642,8 +644,11 @@ def test_reconcile_preserves_resolvable_organization_hierarchy_links() -> None:
 def test_reconcile_merges_ror_and_infoscience_variants_and_remaps_memberships() -> None:
     infoscience_uuid = "95372c6b-7d45-432e-a84e-660c9fa54e05"
     infoscience_org_id = (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/orgunit/"
         f"{infoscience_uuid}"
+    )
+    canonical_infoscience_url = (
+        f"https://infoscience.epfl.ch/entities/orgunit/{infoscience_uuid}"
     )
     entities = {
         "persons": [_person("alice", affiliations=[infoscience_org_id])],
@@ -680,9 +685,9 @@ def test_reconcile_merges_ror_and_infoscience_variants_and_remaps_memberships() 
     assert canonical_org["identifiers"]["pulse:ror"] == "https://ror.org/02hdt9m26"
     assert (
         canonical_org["identifiers"]["pulse:infoscienceOrganizationIdentifier"]
-        == infoscience_uuid
+        == canonical_infoscience_url
     )
-    assert canonical_org["pulse:infoscienceOrganizationIdentifier"] == infoscience_uuid
+    assert canonical_org["pulse:infoscienceOrganizationIdentifier"] == canonical_infoscience_url
     assert canonical_org["schema:identifier"] == "https://ror.org/02hdt9m26"
     assert reconciled.memberships == [_membership(person_id, "https://ror.org/02hdt9m26")]
     assert reconciled.reconciliation_debug["merged_group_count"] == 1

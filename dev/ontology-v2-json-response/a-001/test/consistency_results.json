@@ -161,9 +161,9 @@
       {
         "source_id": "EPFL-ENAC/geodata-toolkit",
         "field": "pulse:ownedBy",
-        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "reference": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "target_shape": "Organization",
-        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "resolved_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "status": "valid"
       },
       {
@@ -177,9 +177,9 @@
       {
         "source_id": "EPFL-ENAC/structural-analysis",
         "field": "pulse:ownedBy",
-        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "reference": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "target_shape": "Organization",
-        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "resolved_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "status": "valid"
       },
       {
@@ -225,7 +225,7 @@
     ],
     "Organization": [
       {
-        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "source_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "field": "org:unitOf",
         "reference": "https://ror.org/02s376052",
         "target_shape": "Organization",
@@ -233,7 +233,7 @@
         "status": "valid"
       },
       {
-        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "source_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "field": "pulse:owns",
         "reference": "EPFL-ENAC/geodata-toolkit",
         "target_shape": "Repository",
@@ -241,7 +241,7 @@
         "status": "valid"
       },
       {
-        "source_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "source_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "field": "pulse:owns",
         "reference": "EPFL-ENAC/structural-analysis",
         "target_shape": "Repository",
@@ -251,9 +251,9 @@
       {
         "source_id": "https://ror.org/02s376052",
         "field": "org:hasUnit",
-        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "reference": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "target_shape": "Organization",
-        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "resolved_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "status": "valid"
       }
     ],
@@ -473,9 +473,9 @@
       {
         "source_id": "10.1038/s41586-024-07856-z",
         "field": "schema:sourceOrganization",
-        "reference": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "reference": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "target_shape": "Organization",
-        "resolved_id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+        "resolved_id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
         "status": "valid"
       },
       {

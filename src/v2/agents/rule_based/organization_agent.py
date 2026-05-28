@@ -302,11 +302,16 @@ class OrganizationAgentV2:
         else:
             warnings.append("ROR provider not configured for organization enrichment")
 
+        from src.v2.canonicalization.infoscience import infoscience_org_iri
+
         ror_id = ror_record.get("id") if isinstance(ror_record, dict) else None
-        infoscience_id = (
+        # v2.2.0: stamp Infoscience IDs in canonical URL form
+        # (`https://infoscience.epfl.ch/entities/orgunit/<uuid>`). The
+        # helper tolerates bare-UUID input.
+        infoscience_id = infoscience_org_iri(
             infoscience_match.get("infoscienceOrgUnitIdentifier")
             if isinstance(infoscience_match, dict)
-            else None
+            else None,
         )
         github_handle: str | None = None
         github_login = github_org.get("login")

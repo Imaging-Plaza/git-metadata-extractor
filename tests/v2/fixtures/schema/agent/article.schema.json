@@ -30,7 +30,7 @@
         },
         "pulse:infoscienceArticleIdentifier": {
           "type": ["string", "null"],
-          "description": "Infoscience article UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+          "description": "Infoscience article identifier in canonical URL form (`https://infoscience.epfl.ch/entities/publication/<uuid>`). Example: 'https://infoscience.epfl.ch/entities/publication/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
         },
         "uuid": {
           "type": "string",
@@ -64,7 +64,7 @@
     },
     "pulse:infoscienceArticleIdentifier": {
       "type": ["string", "null"],
-      "description": "Infoscience article UUID4 identifier. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+      "description": "Infoscience article identifier in canonical URL form (`https://infoscience.epfl.ch/entities/publication/<uuid>`). Example: 'https://infoscience.epfl.ch/entities/publication/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
     },
     "schema:sourceOrganization": {
       "type": ["string", "null"],

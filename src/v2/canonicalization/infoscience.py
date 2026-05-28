@@ -24,6 +24,7 @@ import re
 _BASE = "https://infoscience.epfl.ch/entities/"
 
 # Strict UUID4 (matches the regex used in `pulse:*Identifier` schemas).
+# Per RFC 4122 UUIDs are case-insensitive; we lowercase before matching.
 _UUID4_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
 )
@@ -51,15 +52,18 @@ def _build(kind: str, value: str | None) -> str | None:
         if len(parts) != 2:
             return None
         url_kind, uuid = parts
+        url_kind = url_kind.lower()
+        uuid = uuid.lower()
         if url_kind != kind:
             return None
         if not _UUID4_RE.fullmatch(uuid):
             return None
         return f"{_BASE}{kind}/{uuid}"
-    # Bare UUID4.
-    if not _UUID4_RE.fullmatch(s):
+    # Bare UUID4 — accept mixed case per RFC 4122.
+    s_lower = s.lower()
+    if not _UUID4_RE.fullmatch(s_lower):
         return None
-    return f"{_BASE}{kind}/{s}"
+    return f"{_BASE}{kind}/{s_lower}"
 
 
 def infoscience_person_iri(value: str | None) -> str | None:
@@ -85,13 +89,15 @@ def parse_infoscience_iri(iri: str | None) -> tuple[str, str] | None:
     if not isinstance(iri, str):
         return None
     s = iri.strip().rstrip("/")
-    if not s.startswith(_BASE):
+    if not s.lower().startswith(_BASE):
         return None
     rest = s[len(_BASE):]
     parts = rest.split("/", 1)
     if len(parts) != 2:
         return None
     kind, uuid = parts
+    kind = kind.lower()
+    uuid = uuid.lower()
     if kind not in ("person", "orgunit", "publication"):
         return None
     if not _UUID4_RE.fullmatch(uuid):

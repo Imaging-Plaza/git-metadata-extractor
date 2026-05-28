@@ -71,20 +71,21 @@ def _person_payload(*, infoscience: bool) -> dict[str, Any]:
         "pulse:owns": list(OWNED),
     }
     if infoscience:
-        # Pre-reconciliation the agent stamps the bare infoscience id;
+        # Pre-reconciliation the agent stamps the bare infoscience uuid;
         # reconcile_entities -> resolve_person_id rewrites it to the URL.
+        infoscience_uuid = "cc69e432-9742-4ebd-a318-02a491f44e69"
         return {
             **common,
-            "id": "12345",
+            "id": infoscience_uuid,
             "identifiers": {
                 "pulse:orcid": None,
-                "pulse:infosciencePersonIdentifier": "12345",
+                "pulse:infosciencePersonIdentifier": infoscience_uuid,
                 "pulse:githubUsername": SOMEUSER,
                 "uuid": "00000000-0000-0000-0000-000000000001",
             },
             "idSource": "pulse:infosciencePersonIdentifier",
-            "schema:url": "https://infoscience.epfl.ch/entities/person/12345",
-            "pulse:infosciencePersonIdentifier": "12345",
+            "schema:url": f"https://infoscience.epfl.ch/entities/person/{infoscience_uuid}",
+            "pulse:infosciencePersonIdentifier": infoscience_uuid,
         }
     return {
         **common,
@@ -245,13 +246,13 @@ class _InfoscienceMatchProvider(MockInfoscienceProvider):
         if query.strip().lower() == "alice smith":
             return [
                 {
-                    "infosciencePersonIdentifier": "abc-123-infoscience-id",
+                    "infosciencePersonIdentifier": "cc69e432-9742-4ebd-a318-02a491f44e69",
                     "name": "Alice Smith",
                     "orcid": None,
                     "affiliations": ["EPFL School of Engineering"],
                     "profileUrl": (
                         "https://infoscience.epfl.ch/entities/person/"
-                        "abc-123-infoscience-id"
+                        "cc69e432-9742-4ebd-a318-02a491f44e69"
                     ),
                     "score": 99.8,
                 },

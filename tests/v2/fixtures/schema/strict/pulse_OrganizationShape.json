@@ -1,11 +1,11 @@
 [
   {
-    "id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
     "type": "org:Organization",
     "shacl": "pulse:OrganizationShape",
     "identifiers": {
       "pulse:ror": null,
-      "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+      "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
       "pulse:githubOrganizationHandle": "EPFL-ENAC",
       "uuid": "e2c4b6a8-1d3f-4e5a-9b7c-8d6e4f2a1b3c"
     },
@@ -13,7 +13,7 @@
     "schema:name": "EPFL School of Architecture, Civil and Environmental Engineering",
     "schema:identifier": null,
     "pulse:githubOrganizationHandle": "EPFL-ENAC",
-    "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
     "pulse:OrganizationType": "pulse:University",
     "pulse:githubOrgFollowers": 342,
     "org:hasUnit": [],
@@ -31,19 +31,19 @@
     "shacl": "pulse:OrganizationShape",
     "identifiers": {
       "pulse:ror": "https://ror.org/02s376052",
-      "pulse:infoscienceOrganizationIdentifier": "41674f42-ba15-4612-9817-2a6f60985c01",
+      "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/41674f42-ba15-4612-9817-2a6f60985c01",
       "pulse:githubOrganizationHandle": "epaboratories",
       "uuid": "e5a3b1c9-7d8e-4f6a-ab4c-6d8e0f2a4b6c"
     },
     "idSource": "pulse:ror",
-    "schema:name": "\u00c9cole Polytechnique F\u00e9d\u00e9rale de Lausanne",
+    "schema:name": "École Polytechnique Fédérale de Lausanne",
     "schema:identifier": "https://ror.org/02s376052",
-    "pulse:infoscienceOrganizationIdentifier": "41674f42-ba15-4612-9817-2a6f60985c01",
+    "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/41674f42-ba15-4612-9817-2a6f60985c01",
     "pulse:githubOrganizationHandle": "epaboratories",
     "pulse:OrganizationType": "pulse:University",
     "pulse:githubOrgFollowers": 89,
     "org:hasUnit": [
-      "95372c6b-7d45-432e-a84e-660c9fa54e05"
+      "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05"
     ],
     "org:unitOf": [],
     "pulse:owns": []
@@ -80,7 +80,7 @@
       "uuid": "e4d3c2b1-6a5f-4e8d-9c9b-0a1f2e3d4c5b"
     },
     "idSource": "pulse:ror",
-    "schema:name": "ETH Z\u00fcrich",
+    "schema:name": "ETH Zürich",
     "pulse:infoscienceOrganizationIdentifier": null,
     "schema:identifier": "https://ror.org/05a28rw58",
     "pulse:githubOrganizationHandle": null,

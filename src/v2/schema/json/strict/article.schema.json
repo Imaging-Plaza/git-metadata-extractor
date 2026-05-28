@@ -5,7 +5,17 @@
   "description": "Schema for validating Article entities following Open Pulse Ontology v2.1.2. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. Cross-references use hierarchical IDs when available.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "schema:identifier", "schema:datePublished", "schema:author"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name",
+    "schema:identifier",
+    "schema:datePublished",
+    "schema:author"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -22,7 +32,10 @@
     "identifiers": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema:identifier", "uuid"],
+      "required": [
+        "schema:identifier",
+        "uuid"
+      ],
       "properties": {
         "schema:identifier": {
           "type": "string",
@@ -30,8 +43,11 @@
           "description": "DOI identifier (required per SHACL minCount 1)"
         },
         "pulse:infoscienceArticleIdentifier": {
-          "type": ["string", "null"],
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://infoscience\\.epfl\\.ch/entities/publication/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "uuid": {
           "type": "string",
@@ -41,7 +57,11 @@
     },
     "idSource": {
       "type": "string",
-      "enum": ["schema:identifier", "pulse:infoscienceArticleIdentifier", "uuid"]
+      "enum": [
+        "schema:identifier",
+        "pulse:infoscienceArticleIdentifier",
+        "uuid"
+      ]
     },
     "schema:name": {
       "type": "string",
@@ -67,11 +87,17 @@
       }
     },
     "pulse:infoscienceArticleIdentifier": {
-      "type": ["string", "null"],
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://infoscience\\.epfl\\.ch/entities/publication/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "schema:sourceOrganization": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Reference to OrganizationShape hierarchical ID (ror, infoscienceOrganizationIdentifier, githubOrganizationHandle, or uuid)"
     }
   }

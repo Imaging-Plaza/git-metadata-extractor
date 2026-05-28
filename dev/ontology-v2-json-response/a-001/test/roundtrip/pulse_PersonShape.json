@@ -7,7 +7,7 @@
     "schema:url": "https://people.epfl.ch/carlos.vivar",
     "pulse:githubUsername": "caviri",
     "pulse:orcidIdentifier": "0000-0001-2345-6789",
-    "pulse:infosciencePersonIdentifier": "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
+    "pulse:infosciencePersonIdentifier": "https://infoscience.epfl.ch/entities/person/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb",
     "org:hasMembership": [
       "0000-0001-2345-6789_https://ror.org/02s376052",
       "0000-0001-2345-6789_numpy"
@@ -25,7 +25,7 @@
     "schema:url": "https://people.epfl.ch/alice.morin",
     "pulse:githubUsername": "amorin",
     "pulse:orcidIdentifier": "0000-0002-3456-7890",
-    "pulse:infosciencePersonIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+    "pulse:infosciencePersonIdentifier": "https://infoscience.epfl.ch/entities/person/a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
     "org:hasMembership": [
       "0000-0002-3456-7890_https://ror.org/02s376052"
     ],

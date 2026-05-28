@@ -5,6 +5,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from src.v2.canonicalization.infoscience import infoscience_person_iri
 from src.v2.canonicalization.orcid import orcid_iri
 from src.v2.agents.models import (
     AgentResult,
@@ -399,10 +400,13 @@ class PersonAgentV2:
         )
         if not normalized_orcid and not providers.orcid:
             normalized_orcid = orcid_identifier_hint
-        infoscience_id = (
+        # v2.2.0: stamp Infoscience IDs in canonical URL form
+        # (`https://infoscience.epfl.ch/entities/person/<uuid>`). The
+        # helper tolerates bare-UUID input from upstream catalog data.
+        infoscience_id = infoscience_person_iri(
             (infoscience_match or {}).get("infosciencePersonIdentifier")
             if infoscience_match
-            else None
+            else None,
         )
         github_username = github_user.get("login")
         uuid_value = context.get("uuid")

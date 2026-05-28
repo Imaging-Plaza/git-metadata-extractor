@@ -648,7 +648,7 @@ def _build_article_payload(
     publication_date: str,
     article_uuid: str,
 ) -> dict[str, Any]:
-    from src.v2.canonicalization import doi_iri
+    from src.v2.canonicalization import doi_iri, infoscience_article_iri
 
     raw_doi = _as_string(publication.get("doi"))
     # v2.2.0: every DOI lands in canonical `https://doi.org/<bare>`
@@ -656,7 +656,10 @@ def _build_article_payload(
     # URL on the way in (catalog backends produce mixed shapes
     # depending on the provider source).
     doi = doi_iri(raw_doi)
-    infoscience_id = _as_string(publication.get("infosciencePublicationIdentifier"))
+    # v2.2.0: Infoscience IDs also canonical URL form.
+    infoscience_id = infoscience_article_iri(
+        _as_string(publication.get("infosciencePublicationIdentifier")),
+    )
 
     identifier_value = doi or infoscience_id or _as_string(publication.get("url")) or article_uuid
     if doi:

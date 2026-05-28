@@ -21,7 +21,7 @@ UUID_V4_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 INFOSCIENCE_UUID_PATTERN = re.compile(
-    r"(?:entities/(?:person|organization|publication)|core/items)/"
+    r"(?:entities/(?:person|orgunit|organization|publication)|core/items)/"
     r"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})",
     flags=re.IGNORECASE,
 )
@@ -119,12 +119,24 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
     if not isinstance(identifiers, dict):
         identifiers = {}
 
+    from src.v2.canonicalization.infoscience import infoscience_person_iri
+
     normalized_orcid = _normalize_orcid_token(
         identifiers.get("pulse:orcid") or person.get("pulse:orcidIdentifier"),
     )
-    normalized_infoscience_id = _normalize_infoscience_uuid(
+    # v2.2.0: Infoscience IDs canonicalised to URL form via the shared
+    # helper. The `_normalize_infoscience_uuid` helper extracted the
+    # bare UUID; we now feed that into `infoscience_person_iri` to get
+    # the canonical URL. The helper accepts URL input idempotently so
+    # pre-canonicalized data passes through unchanged.
+    raw_infoscience_id = (
         identifiers.get("pulse:infosciencePersonIdentifier")
-        or person.get("pulse:infosciencePersonIdentifier"),
+        or person.get("pulse:infosciencePersonIdentifier")
+    )
+    bare_uuid = _normalize_infoscience_uuid(raw_infoscience_id)
+    normalized_infoscience_id = (
+        infoscience_person_iri(raw_infoscience_id)
+        or infoscience_person_iri(bare_uuid)
     )
     github_username = identifiers.get("pulse:githubUsername")
     if not isinstance(github_username, str) or not github_username:
@@ -168,9 +180,16 @@ def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
         if re.fullmatch(r"[0-9a-z]{9}", ror_token):
             normalized_ror = f"https://ror.org/{ror_token}"
 
-    normalized_infoscience_id = _normalize_infoscience_uuid(
+    from src.v2.canonicalization.infoscience import infoscience_org_iri
+
+    raw_org_infoscience = (
         normalized_identifiers.get("pulse:infoscienceOrganizationIdentifier")
-        or organization.get("pulse:infoscienceOrganizationIdentifier"),
+        or organization.get("pulse:infoscienceOrganizationIdentifier")
+    )
+    bare_org_uuid = _normalize_infoscience_uuid(raw_org_infoscience)
+    normalized_infoscience_id = (
+        infoscience_org_iri(raw_org_infoscience)
+        or infoscience_org_iri(bare_org_uuid)
     )
     normalized_github_handle: str | None = None
     for candidate in (
