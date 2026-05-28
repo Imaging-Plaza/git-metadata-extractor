@@ -24,6 +24,7 @@ The repository ships **two cooperating subsystems**:
 
 - [Documentation site](https://imaging-plaza.github.io/git-metadata-extractor/) (versioned via MkDocs + Mike)
 - [`docs/getting-started.md`](docs/getting-started.md) — install + first run
+- [`docs/v2-pipeline.md`](docs/v2-pipeline.md) — pipeline overview, load-bearing assumptions, affiliation strategy, env flags
 - [`docs/v2-api-reference.md`](docs/v2-api-reference.md) — `/v2/extract`, `/v2/jobs`, `/v2/graph`
 - [`docs/rag-indices.md`](docs/rag-indices.md) — the nine RAG indices + federated layer
 - [`docs/v2-rag-tools.md`](docs/v2-rag-tools.md) — agent-side RAG tools wired into the v2 pipeline
