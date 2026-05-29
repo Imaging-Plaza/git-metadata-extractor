@@ -13,6 +13,7 @@ from src.v2.agents.models import (
     validate_permissive,
 )
 from src.v2.canonicalization.github import github_repo_iri, github_user_iri
+from src.v2.parsers.citation_cff import parse_citation_cff
 from src.v2.parsers.publiccode import parse_publiccode
 
 CompiledContextStage = Callable[[dict[str, Any], ProviderSet], dict[str, Any] | Awaitable[dict[str, Any]]]
@@ -44,6 +45,11 @@ _REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # ships in a handful of older research projects.
     ("_contributing_url",  ("contributing.md", "contribution.md")),
     ("_publiccode_url",    ("publiccode.yml", "publiccode.yaml")),
+    # SECURITY.md — GitHub's first-class security policy file. Surfacing
+    # this lets dashboards flag repos with explicit vulnerability-
+    # reporting guidance separately from undocumented ones, and gives
+    # LLM agents a place to read for embargo / disclosure timelines.
+    ("_security_url",      ("security.md",)),
 )
 
 
@@ -59,6 +65,25 @@ def _resolve_publiccode_payload(aux_files: Any) -> dict[str, Any] | None:
         lower = filename.lower()
         if lower in ("publiccode.yml", "publiccode.yaml"):
             return parse_publiccode(content)
+    return None
+
+
+def _resolve_citation_cff_payload(aux_files: Any) -> dict[str, Any] | None:
+    """Locate CITATION.cff (any case) in the gathered ``aux_files`` and
+    return the parsed payload, or None when none is present / parseable.
+
+    Mirrors `_resolve_publiccode_payload` — Layer 1 of the citation
+    integration: pure parse, no enrichment of the Repository's
+    `schema:*` fields. Downstream consumers (LLM refiners, dashboards,
+    a future `enrich_repo_from_citation_cff` stage) read the typed
+    payload from `_citation_cff` instead of re-parsing YAML."""
+    if not isinstance(aux_files, dict):
+        return None
+    for filename, content in aux_files.items():
+        if not isinstance(filename, str) or not isinstance(content, str):
+            continue
+        if filename.lower() == "citation.cff":
+            return parse_citation_cff(content)
     return None
 
 
@@ -469,6 +494,17 @@ class RepositoryAgentV2:
             # softwareType, developmentStatus) to first-class
             # ontology terms via a `publiccode:` JSON-LD prefix.
             "_publiccode": _resolve_publiccode_payload(
+                compiled_context.get("aux_files"),
+            ),
+            # Parsed CITATION.cff payload (when present). Same Layer-1
+            # contract as `_publiccode` — pure data, no automatic
+            # enrichment of `schema:*` fields. A future stage
+            # (`enrich_repo_from_citation_cff`) is the right place to
+            # backfill `schema:citation` / `schema:dateCreated` /
+            # `schema:author` from the parsed payload; that's an
+            # opinionated policy (does CITATION.cff trump what an
+            # agent emitted?) and lives separately.
+            "_citation_cff": _resolve_citation_cff_payload(
                 compiled_context.get("aux_files"),
             ),
         }

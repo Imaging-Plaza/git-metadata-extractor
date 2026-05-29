@@ -191,6 +191,7 @@ def test_repository_agent_emits_aux_file_urls_for_present_files() -> None:
                         "AUTHORS.md": "- Octo Cat",
                         "CONTRIBUTING.md": "Open a PR.",
                         "publiccode.yaml": "publiccodeYmlVersion: '0.4'",
+                        "SECURITY.md": "Report vulnerabilities to security@example.com.",
                     },
                 },
             },
@@ -203,6 +204,7 @@ def test_repository_agent_emits_aux_file_urls_for_present_files() -> None:
     assert raw["_authors_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/AUTHORS.md"
     assert raw["_contributing_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/CONTRIBUTING.md"
     assert raw["_publiccode_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/publiccode.yaml"
+    assert raw["_security_url"] == "https://github.com/octocat/Hello-World/blob/HEAD/SECURITY.md"
 
 
 def test_repository_agent_emits_none_for_absent_aux_files() -> None:
@@ -241,6 +243,7 @@ def test_repository_agent_emits_none_for_absent_aux_files() -> None:
     assert raw["_authors_url"] is None
     assert raw["_contributing_url"] is None
     assert raw["_publiccode_url"] is None
+    assert raw["_security_url"] is None
 
 
 def test_repository_agent_parses_publiccode_into_internal_field() -> None:
