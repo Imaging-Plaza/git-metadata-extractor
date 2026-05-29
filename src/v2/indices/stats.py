@@ -44,7 +44,7 @@ INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     "infoscience",
     "snsf",
     "epfl_graph",
-    "communities",
+    "zenodo_communities",
 )
 
 # Common "this row was last touched" column names, in priority order.
@@ -244,7 +244,7 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
             app_state, "v2_epfl_graph_store",
             "src.index.epfl_graph.storage.duckdb_store", "EpflGraphStore",
         )
-    if provider == "communities":
+    if provider == "zenodo_communities":
         return _open_communities_store(app_state)
     return None
 
@@ -273,20 +273,20 @@ def _cli_store(
 
 
 def _open_communities_store(app_state: Any) -> Any | None:
-    """`CommunitiesStore` lacks `.connect()` (uses `_connect()` + `read_only()`),
+    """`ZenodoCommunitiesStore` lacks `.connect()` (uses `_connect()` + `read_only()`),
     so the stats endpoint can't call it directly. Wrap it in a tiny shim that
     exposes a cached read-only handle as `.connect()`.
     """
-    cached = getattr(app_state, "v2_communities_store", None)
+    cached = getattr(app_state, "v2_zenodo_communities_store", None)
     if cached is not None:
         return cached
     try:
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
         import duckdb as _duckdb  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return None
 
-    class _CommunitiesStoreShim:
+    class _ZenodoCommunitiesStoreShim:
         def __init__(self, path: Any) -> None:
             self.db_path = path  # surfaced for compact_duckdb()
             self._conn: Any = None
@@ -302,11 +302,11 @@ def _open_communities_store(app_state: Any) -> Any | None:
                 self._conn = None
 
     try:
-        shim = _CommunitiesStoreShim(duckdb_path())
+        shim = _ZenodoCommunitiesStoreShim(duckdb_path())
     except Exception:  # noqa: BLE001
         return None
     try:
-        setattr(app_state, "v2_communities_store", shim)
+        setattr(app_state, "v2_zenodo_communities_store", shim)
     except Exception:  # noqa: BLE001
         return shim
     return shim

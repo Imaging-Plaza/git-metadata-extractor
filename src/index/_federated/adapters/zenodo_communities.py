@@ -1,10 +1,10 @@
-"""Federated adapter for the `communities` index.
+"""Federated adapter for the `zenodo_communities` index.
 
 DuckDB-backed (no vector store) — `search` and `lookup` both run direct
-SQL against `data/index/communities/duckdb/communities.duckdb`. Keyword
-matching uses case-insensitive `LIKE` on title/source_slug/parent_org;
-exact-acronym/slug match is used as a strong-signal fallback when no
-LIKE hits land.
+SQL against `data/index/zenodo_communities/duckdb/zenodo_communities.duckdb`.
+Keyword matching uses case-insensitive `LIKE` on title/source_slug/
+parent_org; exact-acronym/slug match is used as a strong-signal
+fallback when no LIKE hits land.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 def _open_read_only():
-    """Lazy open — keeps `from src.index._federated.adapters.communities`
+    """Lazy open — keeps `from src.index._federated.adapters.zenodo_communities`
     cheap and tolerates a missing DB file gracefully."""
-    from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+    from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
 
     path = duckdb_path()
     if not path.exists():
@@ -32,7 +32,7 @@ def _open_read_only():
 
 def _row_to_hit(row: dict[str, Any], score: float) -> Hit:
     return Hit(
-        index="communities",
+        index="zenodo_communities",
         entity_type="community",
         id=row["community_id"],
         title=row.get("title") or row.get("source_slug"),
@@ -43,8 +43,8 @@ def _row_to_hit(row: dict[str, Any], score: float) -> Hit:
     )
 
 
-class CommunitiesAdapter:
-    name = "communities"
+class ZenodoCommunitiesAdapter:
+    name = "zenodo_communities"
     entity_types = ["community"]
 
     def search(
@@ -89,7 +89,7 @@ class CommunitiesAdapter:
                 out.append(_row_to_hit(record, score))
             return out
         except Exception:  # noqa: BLE001
-            logger.exception("communities.search failed for %r", query)
+            logger.exception("zenodo_communities.search failed for %r", query)
             return []
         finally:
             try:
@@ -129,7 +129,7 @@ class CommunitiesAdapter:
             for row in rows:
                 record = dict(zip(cols, row, strict=False))
                 out.append(EntityRecord(
-                    index="communities",
+                    index="zenodo_communities",
                     entity_type="community",
                     id=record["community_id"],
                     data=record,
@@ -137,7 +137,7 @@ class CommunitiesAdapter:
                 ))
             return out
         except Exception:  # noqa: BLE001
-            logger.exception("communities.lookup failed for %r", identifier)
+            logger.exception("zenodo_communities.lookup failed for %r", identifier)
             return []
         finally:
             try:
@@ -146,4 +146,4 @@ class CommunitiesAdapter:
                 pass
 
 
-register(CommunitiesAdapter())
+register(ZenodoCommunitiesAdapter())

@@ -397,7 +397,7 @@ IndexName = Literal[
     "infoscience",
     "snsf",
     "epfl_graph",
-    "communities",
+    "zenodo_communities",
 ]
 
 

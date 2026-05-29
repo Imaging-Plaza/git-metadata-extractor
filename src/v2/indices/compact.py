@@ -186,7 +186,7 @@ _RESOURCE_ATTRS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
     "infoscience": ("v2_infoscience_store",),
     "snsf": ("v2_snsf_store",),
     "epfl_graph": ("v2_epfl_graph_store",),
-    "communities": ("v2_communities_store",),
+    "zenodo_communities": ("v2_zenodo_communities_store",),
 }
 
 

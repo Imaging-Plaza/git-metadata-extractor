@@ -3188,26 +3188,27 @@ async def epfl_graph_search_post(
 
 
 @v2_router.post(
-    "/indices/communities/search",
+    "/indices/zenodo_communities/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
 )
-async def communities_search_post(
+async def zenodo_communities_search_post(
     payload: IndexSearchRequest,
     request: Request,
     _token: Annotated[str, Depends(verify_token)],
 ) -> IndexSearchResponse | JSONResponse:
-    """Lexical (ILIKE) search against the institutional communities registry.
+    """Lexical (ILIKE) search against the institutional Zenodo communities
+    registry.
 
-    No semantic infrastructure — communities is a tiny 469-row DuckDB-only
-    registry where substring scans across `title` / `description` /
-    `keywords` finish in milliseconds. Title hits outrank description
-    hits outrank keyword hits.
+    No semantic infrastructure — zenodo_communities is a tiny ~469-row
+    DuckDB-only registry where substring scans across `title` /
+    `description` / `keywords` finish in milliseconds. Title hits
+    outrank description hits outrank keyword hits.
     """
     return await _search_response_or_unavailable(
         await run_communities_search(payload, request.app.state),
-        index_name="communities",
+        index_name="zenodo_communities",
     )
 
 

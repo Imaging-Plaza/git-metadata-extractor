@@ -1,4 +1,4 @@
-"""Pydantic models for the communities index."""
+"""Pydantic models for the zenodo_communities index."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ class CommunityRecord(BaseModel):
 
     `community_id` is the canonical IRI for the community at its source
     (e.g. `https://zenodo.org/communities/epfl-chili`). The
-    `src.index.communities.iri.canonical_community_id(source, slug)`
+    `src.index.zenodo_communities.iri.canonical_community_id(source, slug)`
     helper centralises the mapping; legacy `zenodo:<slug>` rows are
     migrated in-place by `bootstrap()`.
     """

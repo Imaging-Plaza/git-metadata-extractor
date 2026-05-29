@@ -45,7 +45,7 @@ def canonical_community_id(source: str, slug: str) -> str:
     if template is None:
         msg = (
             f"No canonical IRI template registered for community source "
-            f"{source!r}. Register one in src/index/communities/iri.py."
+            f"{source!r}. Register one in src/index/zenodo_communities/iri.py."
         )
         raise UnknownCommunitySource(msg)
     return template.format(slug=slug)

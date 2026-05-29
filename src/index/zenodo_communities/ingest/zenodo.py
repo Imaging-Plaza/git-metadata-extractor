@@ -50,7 +50,7 @@ def _normalize_record(payload: dict[str, Any], parent_org: str | None) -> dict[s
         val = metadata.get(key) if isinstance(metadata, dict) else None
         if isinstance(val, list):
             keywords.extend(str(v) for v in val if isinstance(v, (str, dict)))
-    from src.index.communities.iri import canonical_community_id  # noqa: PLC0415
+    from src.index.zenodo_communities.iri import canonical_community_id  # noqa: PLC0415
 
     return {
         "community_id": canonical_community_id("zenodo", slug),
@@ -82,13 +82,13 @@ def fetch_by_slug(slug: str, parent_org: str | None = None) -> dict[str, Any] | 
     try:
         response = requests.get(url, timeout=_REQUEST_TIMEOUT)
     except Exception:  # noqa: BLE001
-        logger.exception("communities.ingest.zenodo: fetch_by_slug failed (%s)", slug)
+        logger.exception("zenodo_communities.ingest.zenodo: fetch_by_slug failed (%s)", slug)
         return None
     if response.status_code == 404:
         return None
     if response.status_code != 200:
         logger.info(
-            "communities.ingest.zenodo: %s returned %d", slug, response.status_code,
+            "zenodo_communities.ingest.zenodo: %s returned %d", slug, response.status_code,
         )
         return None
     try:
@@ -113,13 +113,13 @@ def discover_by_query(
             response = requests.get(_ZENODO_BASE, params=params, timeout=_REQUEST_TIMEOUT)
         except Exception:  # noqa: BLE001
             logger.exception(
-                "communities.ingest.zenodo: discover_by_query failed (%s, page=%d)",
+                "zenodo_communities.ingest.zenodo: discover_by_query failed (%s, page=%d)",
                 keyword, page,
             )
             return
         if response.status_code != 200:
             logger.info(
-                "communities.ingest.zenodo: discover %s page=%d returned %d",
+                "zenodo_communities.ingest.zenodo: discover %s page=%d returned %d",
                 keyword, page, response.status_code,
             )
             return

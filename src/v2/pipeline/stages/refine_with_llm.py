@@ -1076,7 +1076,7 @@ def _query_communities_index(query: str) -> list[dict[str, Any]]:
         return []
     try:
         import duckdb  # noqa: PLC0415
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return []
     db_path = duckdb_path()

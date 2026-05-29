@@ -1,4 +1,4 @@
-"""Tests for `GET /v2/indices/freshness` + `POST /v2/indices/communities/search`."""
+"""Tests for `GET /v2/indices/freshness` + `POST /v2/indices/zenodo_communities/search`."""
 
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ def test_freshness_endpoint_rolls_up_per_provider(tmp_path: Path, monkeypatch):
     assert isinstance(body["catalogs"], list)
     # All supported providers appear.
     providers = {c["provider"] for c in body["catalogs"]}
-    assert "github" in providers and "ror" in providers and "communities" in providers
+    assert "github" in providers and "ror" in providers and "zenodo_communities" in providers
 
     by_provider = {c["provider"]: c for c in body["catalogs"]}
     gh = by_provider["github"]
@@ -141,7 +141,7 @@ def _seed_communities_db(path: Path) -> None:
     """Seed `communities.duckdb` with three rows the search will hit."""
     schema = (
         Path(__file__).resolve().parents[2]
-        / "src" / "index" / "communities" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_communities" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn = duckdb.connect(str(path))
     for stmt in [s.strip() for s in schema.split(";") if s.strip()]:
@@ -174,18 +174,18 @@ def test_communities_search_title_hits_outrank_description_hits(
     _seed_communities_db(db)
 
     # Point the adapter at the tmp DB.
-    from src.index.communities import paths as communities_paths
+    from src.index.zenodo_communities import paths as zenodo_communities_paths
 
-    monkeypatch.setattr(communities_paths, "duckdb_path", lambda: db)
+    monkeypatch.setattr(zenodo_communities_paths, "duckdb_path", lambda: db)
 
     app = _build_test_app()
     code, body = _request(
-        app, "POST", "/v2/indices/communities/search",
+        app, "POST", "/v2/indices/zenodo_communities/search",
         json={"query": "EPFL", "top_k": 10},
     )
 
     assert code == HTTP_OK
-    assert body["index_name"] == "communities"
+    assert body["index_name"] == "zenodo_communities"
     titles = [h["payload"].get("title") for h in body["hits"]]
     assert titles[0] == "EPFL"  # title hit ranks first
 
@@ -197,13 +197,13 @@ def test_communities_search_falls_back_to_keywords(
     db = tmp_path / "communities.duckdb"
     _seed_communities_db(db)
 
-    from src.index.communities import paths as communities_paths
+    from src.index.zenodo_communities import paths as zenodo_communities_paths
 
-    monkeypatch.setattr(communities_paths, "duckdb_path", lambda: db)
+    monkeypatch.setattr(zenodo_communities_paths, "duckdb_path", lambda: db)
 
     app = _build_test_app()
     code, body = _request(
-        app, "POST", "/v2/indices/communities/search",
+        app, "POST", "/v2/indices/zenodo_communities/search",
         json={"query": "physics", "top_k": 10},
     )
 
@@ -216,17 +216,17 @@ def test_communities_search_returns_empty_when_db_missing(
     tmp_path: Path, monkeypatch,
 ):
     """No `communities.duckdb` on disk → hits=[] + `extra.error` filled."""
-    from src.index.communities import paths as communities_paths
+    from src.index.zenodo_communities import paths as zenodo_communities_paths
 
     monkeypatch.setattr(
-        communities_paths,
+        zenodo_communities_paths,
         "duckdb_path",
         lambda: tmp_path / "does-not-exist.duckdb",
     )
 
     app = _build_test_app()
     code, body = _request(
-        app, "POST", "/v2/indices/communities/search",
+        app, "POST", "/v2/indices/zenodo_communities/search",
         json={"query": "anything", "top_k": 5},
     )
 

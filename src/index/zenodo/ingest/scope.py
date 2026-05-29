@@ -68,7 +68,7 @@ def _slugs_from_communities_index(parent_org: str | None) -> list[str]:
 
     try:
         import duckdb  # noqa: PLC0415
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return []
     db_path = duckdb_path()

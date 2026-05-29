@@ -1,4 +1,4 @@
-"""Tiny CLI: `python -m src.index.communities.cli build`."""
+"""Tiny CLI: `python -m src.index.zenodo_communities.cli build`."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import json
 import logging
 from pathlib import Path
 
-from src.index.communities.build import DEFAULT_CONFIG, build_from_config
-from src.index.communities.paths import duckdb_path
-from src.index.communities.storage.duckdb_store import CommunitiesStore
+from src.index.zenodo_communities.build import DEFAULT_CONFIG, build_from_config
+from src.index.zenodo_communities.paths import duckdb_path
+from src.index.zenodo_communities.storage.duckdb_store import ZenodoCommunitiesStore
 
 
 def _cmd_build(args: argparse.Namespace) -> None:
@@ -26,7 +26,7 @@ def _cmd_build(args: argparse.Namespace) -> None:
 
 
 def _cmd_stats(_args: argparse.Namespace) -> None:
-    store = CommunitiesStore.open()
+    store = ZenodoCommunitiesStore.open()
     with store.read_only() as con:
         total = con.execute("SELECT COUNT(*) FROM communities").fetchone()[0]
         by_parent = con.execute(
@@ -44,7 +44,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    parser = argparse.ArgumentParser(prog="communities-index")
+    parser = argparse.ArgumentParser(prog="zenodo-communities-index")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     build_p = sub.add_parser("build", help="Ingest communities from the config file.")

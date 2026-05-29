@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from src.index.communities.iri import (
+from src.index.zenodo_communities.iri import (
     UnknownCommunitySource,
     canonical_community_id,
 )
@@ -32,7 +32,7 @@ def _run_schema(db_path: Path) -> None:
     """Bootstrap the schema (statement-by-statement, like the store does)."""
     schema = (
         Path(__file__).resolve().parents[3]
-        / "src" / "index" / "communities" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_communities" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn = duckdb.connect(str(db_path))
     for stmt in [s.strip() for s in schema.split(";") if s.strip()]:

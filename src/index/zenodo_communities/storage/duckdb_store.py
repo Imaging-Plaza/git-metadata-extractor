@@ -1,4 +1,4 @@
-"""Minimal DuckDB store for the communities index."""
+"""Minimal DuckDB store for the zenodo_communities index."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _load_schema_sql() -> str:
     return path.read_text(encoding="utf-8")
 
 
-class CommunitiesStore:
+class ZenodoCommunitiesStore:
     """Tiny wrapper — `open()`, `bootstrap()`, `upsert()`, `count()`."""
 
     def __init__(self, db_path: Path) -> None:
@@ -26,8 +26,8 @@ class CommunitiesStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def open(cls, db_path: Optional[Path] = None) -> "CommunitiesStore":
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+    def open(cls, db_path: Optional[Path] = None) -> "ZenodoCommunitiesStore":
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
 
         store = cls(db_path or duckdb_path())
         store.bootstrap()
@@ -85,5 +85,8 @@ class CommunitiesStore:
                 self.upsert(row)
                 ok += 1
             except Exception:  # noqa: BLE001
-                logger.exception("communities upsert failed for %s", row.get("community_id"))
+                logger.exception(
+                    "zenodo_communities upsert failed for %s",
+                    row.get("community_id"),
+                )
         return ok

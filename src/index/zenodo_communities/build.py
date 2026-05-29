@@ -1,4 +1,4 @@
-"""Build the communities DuckDB index from a parent-org config file."""
+"""Build the zenodo_communities DuckDB index from a parent-org config file."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from typing import Any
 
 import yaml
 
-from src.index.communities.ingest.zenodo import discover_by_query, fetch_by_slug
-from src.index.communities.storage.duckdb_store import CommunitiesStore
+from src.index.zenodo_communities.ingest.zenodo import discover_by_query, fetch_by_slug
+from src.index.zenodo_communities.storage.duckdb_store import ZenodoCommunitiesStore
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_CONFIG = Path("config/index/communities.yaml")
+DEFAULT_CONFIG = Path("config/index/zenodo_communities.yaml")
 
 
 def _load_config(path: Path) -> dict[str, Any]:
@@ -26,7 +26,7 @@ def _load_config(path: Path) -> dict[str, Any]:
 def build_from_config(
     *,
     config_path: Path = DEFAULT_CONFIG,
-    store: CommunitiesStore | None = None,
+    store: ZenodoCommunitiesStore | None = None,
     include_discovery: bool = True,
 ) -> dict[str, int]:
     """Ingest every community listed (or matched) by the config.
@@ -37,10 +37,10 @@ def build_from_config(
     cfg = _load_config(config_path)
     parents = cfg.get("parents") if isinstance(cfg.get("parents"), dict) else {}
     if not parents:
-        logger.warning("communities.build: no parents in config %s", config_path)
+        logger.warning("zenodo_communities.build: no parents in config %s", config_path)
         return {}
 
-    store = store or CommunitiesStore.open()
+    store = store or ZenodoCommunitiesStore.open()
     store.bootstrap()
 
     summary: dict[str, int] = {}
@@ -76,13 +76,13 @@ def build_from_config(
                     rows_for_parent.setdefault(record["community_id"], record)
             if check_pattern is not None and dropped:
                 logger.info(
-                    "communities.build: dropped %d fuzzy-match false-positives for parent=%s",
+                    "zenodo_communities.build: dropped %d fuzzy-match false-positives for parent=%s",
                     dropped, parent_org,
                 )
         ok = store.upsert_many(list(rows_for_parent.values()))
         summary[parent_org] = ok
         logger.info(
-            "communities.build: ingested %d communities for parent=%s",
+            "zenodo_communities.build: ingested %d communities for parent=%s",
             ok, parent_org,
         )
 

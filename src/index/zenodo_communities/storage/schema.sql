@@ -1,10 +1,10 @@
--- Communities index schema. Idempotent.
+-- Zenodo communities index schema. Idempotent.
 
 CREATE TABLE IF NOT EXISTS communities (
     -- Canonical IRI: the dereferenceable landing-page URL for the
-    -- community at its source (`https://zenodo.org/communities/<slug>`,
-    -- `https://github.com/<org>`, …). Built by
-    -- `src.index.communities.iri.canonical_community_id(source, slug)`.
+    -- community at its source (`https://zenodo.org/communities/<slug>`).
+    -- Built by
+    -- `src.index.zenodo_communities.iri.canonical_community_id(source, slug)`.
     community_id    TEXT PRIMARY KEY,
     source          TEXT NOT NULL,        -- 'zenodo' (later: 'github', 'openalex', ...)
     source_slug     TEXT NOT NULL,        -- raw slug at the source
