@@ -1,0 +1,1 @@
+# SWISSUbase study identifiers — one per line (numeric).

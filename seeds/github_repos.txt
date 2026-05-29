@@ -1,0 +1,2 @@
+# GitHub repo handles — one per line, in the form owner/name.
+pallets/click

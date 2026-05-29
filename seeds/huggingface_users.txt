@@ -1,0 +1,2 @@
+# HuggingFace user slugs — one per line (bare handle, no URL).
+julien-c

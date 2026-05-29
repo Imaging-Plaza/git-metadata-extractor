@@ -1,0 +1,3 @@
+# OpenAlex work identifiers — one per line.
+# Accepts: short W… id, https://openalex.org/W… URL, or DOI.
+W2150220236
