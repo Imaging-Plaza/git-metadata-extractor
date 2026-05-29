@@ -17,6 +17,7 @@ from src.v2.api_models import (
     IndexSearchResponse,
     RenkulabIngestRequest,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -96,7 +97,7 @@ async def run_renkulab_ingest_job(
             existing.error = "renkulab index module unavailable on this deployment"
             job_store.set(existing)
             return
-        _, client, store = resources
+        config, client, store = resources
 
         items_results: list[dict[str, Any]] = []
         for project_id in payload.project_ids:
@@ -106,7 +107,6 @@ async def run_renkulab_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         persisted = sum(1 for r in items_results if r["outcome"] == "persisted")
         not_found = sum(1 for r in items_results if r["outcome"] == "not_found")
@@ -114,6 +114,15 @@ async def run_renkulab_ingest_job(
             1 for r in items_results if r["outcome"] == "projection_skipped"
         )
         errors = sum(1 for r in items_results if r["outcome"] == "error")
+
+        from src.index.renkulab.embed.pipeline import embed_entities  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_entities(config=config, store=store),
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.project_ids),
             "persisted": persisted,
@@ -121,6 +130,7 @@ async def run_renkulab_ingest_job(
             "projection_skipped": skipped,
             "errors": errors,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

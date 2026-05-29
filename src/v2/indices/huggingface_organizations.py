@@ -13,6 +13,7 @@ from src.v2.api_models import (
     IndexSearchRequest,
     IndexSearchResponse,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -101,12 +102,20 @@ async def run_huggingface_organizations_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         ingested = sum(1 for r in items_results if r["outcome"] == "ingested")
         skipped_404 = sum(1 for r in items_results if r["outcome"] == "skipped_404")
         skipped_user = sum(1 for r in items_results if r["outcome"] == "skipped_user")
         failed = sum(1 for r in items_results if r["outcome"] == "failed")
+
+        from src.index.huggingface_organizations.embed.pipeline import embed_organizations  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_organizations(config=config, store=store),
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.slugs),
             "ingested": ingested,
@@ -114,6 +123,7 @@ async def run_huggingface_organizations_ingest_job(
             "skipped_user": skipped_user,
             "failed": failed,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

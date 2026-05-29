@@ -21,6 +21,7 @@ from src.v2.api_models import (
     OamonitorIngestItem,
     OamonitorIngestRequest,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -140,12 +141,23 @@ async def run_oamonitor_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         persisted = sum(1 for r in items_results if r["outcome"] == "persisted")
         not_found = sum(1 for r in items_results if r["outcome"] == "not_found")
         rejected = sum(1 for r in items_results if r["outcome"] == "rejected")
         errors = sum(1 for r in items_results if r["outcome"] == "error")
+
+        from src.index.oamonitor.embed.pipeline import embed_entities  # noqa: PLC0415
+        from src.index.oamonitor.storage.duckdb_store import ENTITY_TABLES  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_entities(
+                config=config, store=store, entities=list(ENTITY_TABLES),
+            ),
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.items),
             "persisted": persisted,
@@ -153,6 +165,7 @@ async def run_oamonitor_ingest_job(
             "rejected": rejected,
             "errors": errors,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

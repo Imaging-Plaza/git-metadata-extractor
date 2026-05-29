@@ -13,6 +13,7 @@ from src.v2.api_models import (
     IndexSearchResponse,
     OpenAlexIngestRequest,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -95,12 +96,23 @@ async def run_openalex_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         persisted = sum(1 for r in items_results if r["outcome"] == "persisted")
         not_found = sum(1 for r in items_results if r["outcome"] == "not_found")
         rejected = sum(1 for r in items_results if r["outcome"] == "rejected")
         errors = sum(1 for r in items_results if r["outcome"] == "error")
+
+        from src.index.openalex.embed.pipeline import embed_entities  # noqa: PLC0415
+        from src.index.openalex.models import ALL_ENTITY_TYPES  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_entities(
+                config=config, store=store, entity_types=list(ALL_ENTITY_TYPES),
+            ),
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.ids),
             "persisted": persisted,
@@ -108,6 +120,7 @@ async def run_openalex_ingest_job(
             "rejected": rejected,
             "errors": errors,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

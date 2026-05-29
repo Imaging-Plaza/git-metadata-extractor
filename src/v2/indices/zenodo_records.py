@@ -19,6 +19,7 @@ from src.v2.api_models import (
     IndexSearchResponse,
     ZenodoIngestRequest,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -122,9 +123,19 @@ async def run_zenodo_records_ingest_job(
             summary = {**summary, "unparsed_input": unparsed}
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
-        finished.summary = summary if isinstance(summary, dict) else {"result": summary}
+        normalised_summary = summary if isinstance(summary, dict) else {"result": summary}
+
+        from src.index.zenodo_records.embed.pipeline import embed_records  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_records(config=config, store=store),
+        )
+        normalised_summary["embed"] = embed_summary
+
+        finished.status = IndexIngestJobStatus.COMPLETED
+        finished.summary = normalised_summary
         job_store.set(finished)
     except Exception as exc:
         logger.exception("zenodo ingest job %s failed", job_id)
