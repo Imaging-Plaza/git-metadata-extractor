@@ -37,7 +37,7 @@ class ZenodoPaths:
 
     @property
     def duckdb_path(self) -> Path:
-        return self.duckdb_dir / "zenodo.duckdb"
+        return self.duckdb_dir / "zenodo_records.duckdb"
 
     @property
     def state_dir(self) -> Path:
@@ -54,7 +54,7 @@ class ZenodoPaths:
 
 def get_zenodo_paths() -> ZenodoPaths:
     """Resolve `<INDEX_DATA_DIR>/zenodo/` and ensure subdirectories exist."""
-    root = _resolve_index_data_dir() / "zenodo"
+    root = _resolve_index_data_dir() / "zenodo_records"
     paths = ZenodoPaths(root=root)
     paths.duckdb_dir.mkdir(parents=True, exist_ok=True)
     paths.state_dir.mkdir(parents=True, exist_ok=True)

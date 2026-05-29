@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     # Providers that already have a v2 ingest/search surface and a
     # long-lived `get_or_create_<provider>_resources()` cache on `app_state`.
-    "zenodo",
+    "zenodo_records",
     "github_repos",
     "huggingface",
     "openalex",
@@ -168,11 +168,11 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
         )
         res = get_or_create_github_repos_resources(app_state)
         return res[1] if res else None
-    if provider == "zenodo":
-        from src.v2.indices.zenodo import (  # noqa: PLC0415
-            get_or_create_zenodo_store,
+    if provider == "zenodo_records":
+        from src.v2.indices.zenodo_records import (  # noqa: PLC0415
+            get_or_create_zenodo_records_store,
         )
-        res = get_or_create_zenodo_store(app_state)
+        res = get_or_create_zenodo_records_store(app_state)
         return res[1] if res else None
     if provider == "huggingface":
         from src.v2.indices.huggingface import (  # noqa: PLC0415

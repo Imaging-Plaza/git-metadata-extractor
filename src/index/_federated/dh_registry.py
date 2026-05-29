@@ -52,7 +52,7 @@ def register_hydrator(hydrator: IndexHydrator) -> None:
 _CANDIDATES = [
     "openalex",
     "orcid",
-    "zenodo",
+    "zenodo_records",
     "infoscience",
     "ethz_research_collection",
     "github_repos",

@@ -18,8 +18,8 @@ from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:
-    from src.index.zenodo.config import ZenodoIndexConfig
-    from src.index.zenodo.storage.duckdb_store import ZenodoStore
+    from src.index.zenodo_records.config import ZenodoIndexConfig
+    from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def _row_to_payload(row: dict[str, Any]) -> dict[str, Any]:
 async def _embed_records_async(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     limit: int | None,
 ) -> int:
     # The openalex RCP/Qdrant clients are duck-typed against `config.rcp.*`
@@ -135,7 +135,7 @@ async def _embed_records_async(
 def embed_records(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     limit: int | None = None,
 ) -> dict[str, int]:
     """Synchronously embed Zenodo records (only entity type today)."""

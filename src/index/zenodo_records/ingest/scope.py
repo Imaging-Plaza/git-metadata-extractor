@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from src.index.zenodo.config import ZenodoIndexConfig
+    from src.index.zenodo_records.config import ZenodoIndexConfig
 
 logger = logging.getLogger(__name__)
 

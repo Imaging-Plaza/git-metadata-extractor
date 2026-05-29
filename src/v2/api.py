@@ -111,7 +111,10 @@ from src.v2.indices.swissubase import (
     run_swissubase_ingest_job,
     run_swissubase_search,
 )
-from src.v2.indices.zenodo import run_zenodo_ingest_job, run_zenodo_search
+from src.v2.indices.zenodo_records import (
+    run_zenodo_records_ingest_job,
+    run_zenodo_records_search,
+)
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.jobs import JobStore
@@ -2263,7 +2266,7 @@ def _index_job_status_path(job_id: str) -> str:
 
 
 @v2_router.post(
-    "/indices/zenodo/ingest",
+    "/indices/zenodo_records/ingest",
     response_model=IndexIngestJobAccepted,
     response_model_exclude_none=True,
     status_code=status.HTTP_202_ACCEPTED,
@@ -2289,7 +2292,7 @@ async def zenodo_ingest_post(
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
         job_id=job_id,
-        index_name="zenodo",
+        index_name="zenodo_records",
         status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"),
         submitted_at=submitted_at,
@@ -2297,7 +2300,7 @@ async def zenodo_ingest_post(
     job_store.set(job)
 
     task = asyncio.create_task(
-        run_zenodo_ingest_job(
+        run_zenodo_records_ingest_job(
             payload=payload,
             app_state=request.app.state,
             job_store=job_store,
@@ -2314,7 +2317,7 @@ async def zenodo_ingest_post(
     )
     return IndexIngestJobAccepted(
         job_id=job_id,
-        index_name="zenodo",
+        index_name="zenodo_records",
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id),
         submitted_at=submitted_at,
@@ -2865,7 +2868,7 @@ async def _search_response_or_unavailable(
 
 
 @v2_router.post(
-    "/indices/zenodo/search",
+    "/indices/zenodo_records/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
@@ -2877,7 +2880,7 @@ async def zenodo_search_post(
 ) -> IndexSearchResponse | JSONResponse:
     """Semantic search against the Zenodo index."""
     return await _search_response_or_unavailable(
-        await run_zenodo_search(payload, request.app.state), index_name="zenodo",
+        await run_zenodo_records_search(payload, request.app.state), index_name="zenodo_records",
     )
 
 

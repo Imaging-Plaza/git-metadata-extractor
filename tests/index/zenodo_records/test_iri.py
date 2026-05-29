@@ -9,7 +9,7 @@ from typing import Any
 import duckdb
 import pytest
 
-from src.index.zenodo.iri import (
+from src.index.zenodo_records.iri import (
     community_iri,
     doi_iri,
     parse_community_slug,
@@ -17,7 +17,7 @@ from src.index.zenodo.iri import (
     parse_record_id,
     record_iri,
 )
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ def test_bootstrap_migrates_dois_to_url_form(tmp_path: Path):
     """Pre-PR rows carry bare DOI / legacy dx.doi.org host → bootstrap
     rewrites both to the canonical `https://doi.org/…` form.
     """
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     # Pre-PR table shape: original columns only (no concept_doi yet —
     # exercise the case where the new ALTER + DOI migration both fire
     # in the same bootstrap pass).
@@ -146,7 +146,7 @@ def test_bootstrap_migrates_dois_to_url_form(tmp_path: Path):
         conn.execute(ddl)
     conn.close()
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -186,11 +186,11 @@ def test_ctas_swap_failure_after_drop_rolls_back_original_table(tmp_path: Path):
     `execute` so the ALTER RENAME raises, then asserts that the original
     table is fully restored after bootstrap unwinds.
     """
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     conn = duckdb.connect(str(db_path))
     schema = (
         Path(__file__).resolve().parents[3]
-        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_records" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn.execute(schema)
     # Plant a bare-id row so `_table_has_bare` returns True and the
@@ -208,7 +208,7 @@ def test_ctas_swap_failure_after_drop_rolls_back_original_table(tmp_path: Path):
     assert len(pre_rows) == 2
     conn.close()
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     real_connect = store.connect
 
     class _CrashingConn:
@@ -252,11 +252,11 @@ def test_ctas_swap_failure_after_drop_rolls_back_original_table(tmp_path: Path):
 
 def test_doi_migration_is_idempotent(tmp_path: Path):
     """Bootstrap N times; URLs stay URLs and no double-prefixing happens."""
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     conn = duckdb.connect(str(db_path))
     schema = (
         Path(__file__).resolve().parents[3]
-        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_records" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn.execute(schema)
     conn.execute(
@@ -273,7 +273,7 @@ def test_doi_migration_is_idempotent(tmp_path: Path):
     conn.close()
 
     for _ in range(3):
-        store = ZenodoStore(db_path)
+        store = ZenodoRecordsStore(db_path)
         store.bootstrap()
         store.close()
 
@@ -293,7 +293,7 @@ def _seed_legacy_db(db_path: Path) -> None:
     """Seed a DB with the pre-migration bare-id shape."""
     schema = (
         Path(__file__).resolve().parents[3]
-        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_records" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn = duckdb.connect(str(db_path))
     conn.execute(schema)
@@ -355,10 +355,10 @@ def _seed_legacy_db(db_path: Path) -> None:
 
 
 def test_bootstrap_migrates_every_pk_and_fk_in_lockstep(tmp_path: Path):
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     _seed_legacy_db(db_path)
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -416,17 +416,17 @@ def test_bootstrap_migrates_every_pk_and_fk_in_lockstep(tmp_path: Path):
 
 
 def test_bootstrap_is_idempotent_after_migration(tmp_path: Path):
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     _seed_legacy_db(db_path)
 
     # First bootstrap does the work.
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()
     store.close()
 
     # Subsequent bootstraps must be no-ops — no rows change.
     for _ in range(3):
-        store = ZenodoStore(db_path)
+        store = ZenodoRecordsStore(db_path)
         store.bootstrap()
         store.close()
 
@@ -448,7 +448,7 @@ def test_bootstrap_backfills_stats_and_version_columns(tmp_path: Path):
     bootstrap must ALTER the table, run the migration, and backfill every
     new column from the raw API payload.
     """
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     # Hand-craft a pre-migration table shape — only the original columns.
     conn = duckdb.connect(str(db_path))
     conn.execute(
@@ -516,7 +516,7 @@ def test_bootstrap_backfills_stats_and_version_columns(tmp_path: Path):
     )
     conn.close()
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -561,10 +561,10 @@ def test_bootstrap_backfills_stats_and_version_columns(tmp_path: Path):
 
 def test_existing_record_ids_handles_iri_form(tmp_path: Path):
     """`existing_record_ids([bare])` should still return bare for downstream diffing."""
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     _seed_legacy_db(db_path)
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()  # migrates to IRI form
 
     # Caller passes bare numeric ids (discovery sources extract those).

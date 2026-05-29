@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, Any
 from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
 from src.index.openalex.rerank.rcp_client import RCPRerankerClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
-from src.index.zenodo.embed.pipeline import ZENODO_COLLECTION
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.embed.pipeline import ZENODO_COLLECTION
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 if TYPE_CHECKING:
-    from src.index.zenodo.config import ZenodoIndexConfig
+    from src.index.zenodo_records.config import ZenodoIndexConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _payload_to_doc(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _hydrate(store: ZenodoStore, zenodo_id: str) -> dict[str, Any] | None:
+def _hydrate(store: ZenodoRecordsStore, zenodo_id: str) -> dict[str, Any] | None:
     record = store.fetch_record(zenodo_id)
     if record is None:
         return None
@@ -67,7 +67,7 @@ async def _async_search(
     top_k: int,
     candidate_k: int,
     filter_payload: dict[str, Any] | None,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
 ) -> list[dict[str, Any]]:
     # See note in src/index/zenodo/embed/pipeline.py: clients are
     # duck-typed against the openalex config shape, which Zenodo mirrors.
@@ -120,10 +120,10 @@ def semantic_search(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: ZenodoStore | None = None,
+    store: ZenodoRecordsStore | None = None,
 ) -> list[dict[str, Any]]:
     if store is None:
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
     return asyncio.run(
         _async_search(
             config=config,

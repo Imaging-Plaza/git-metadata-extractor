@@ -25,7 +25,7 @@ ZENODO_DOI_PREFIX = "10.5281/zenodo."
 
 
 class ZenodoDiscoverer:
-    name = "zenodo"
+    name = "zenodo_records"
     accepted_sources = ("infoscience",)
 
     def discover(self, source: str, **opts: Any) -> Iterator[Seed]:
@@ -34,10 +34,10 @@ class ZenodoDiscoverer:
             raise ValueError(message)
 
         from pathlib import Path
-        from src.index.zenodo.ingest.discover import discover_from_infoscience
-        from src.index.zenodo.storage.duckdb_store import ZenodoStore
+        from src.index.zenodo_records.ingest.discover import discover_from_infoscience
+        from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
         text_dir = opts.get("text_dir")
         result = discover_from_infoscience(
             store=store,
@@ -57,7 +57,7 @@ class ZenodoDiscoverer:
 
 
 class ZenodoHydrator:
-    name = "zenodo"
+    name = "zenodo_records"
     accepted_seed_types = ("zenodo_id", "doi")
 
     def hydrate(
@@ -66,9 +66,9 @@ class ZenodoHydrator:
         *,
         only_unfetched: bool = True,
     ) -> HydrationSummary:
-        from src.index.zenodo.config import load_config
-        from src.index.zenodo.ingest.records import ingest_by_ids
-        from src.index.zenodo.storage.duckdb_store import ZenodoStore
+        from src.index.zenodo_records.config import load_config
+        from src.index.zenodo_records.ingest.records import ingest_by_ids
+        from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
         ids: list[str] = []
         for s in seeds:
@@ -84,7 +84,7 @@ class ZenodoHydrator:
             return HydrationSummary()
 
         config = load_config()
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
         result = ingest_by_ids(
             config=config, store=store, ids=ids, refresh=not only_unfetched,
         )

@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from bs4 import BeautifulSoup
 
-from src.index.zenodo.ingest.scope import Scope
-from src.index.zenodo.ingest.zenodo_client import ZenodoClient
+from src.index.zenodo_records.ingest.scope import Scope
+from src.index.zenodo_records.ingest.zenodo_client import ZenodoClient
 
 if TYPE_CHECKING:
-    from src.index.zenodo.config import ZenodoIndexConfig
-    from src.index.zenodo.storage.duckdb_store import ZenodoStore
+    from src.index.zenodo_records.config import ZenodoIndexConfig
+    from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def _project_record(item: dict[str, Any]) -> dict[str, Any]:
     else:
         resource_type = str(resource_type_block) if resource_type_block else None
     concept_recid = item.get("conceptrecid")
-    from src.index.zenodo.iri import doi_iri, record_iri  # noqa: PLC0415
+    from src.index.zenodo_records.iri import doi_iri, record_iri  # noqa: PLC0415
 
     bare_id = str(item.get("id") or item.get("conceptrecid") or "")
     stats = item.get("stats") if isinstance(item.get("stats"), dict) else {}
@@ -183,7 +183,7 @@ def _project_creators(item: dict[str, Any]) -> list[tuple[dict[str, Any], int]]:
 
 def _project_communities(item: dict[str, Any]) -> list[str]:
     """Return canonical community IRIs, one per linked community."""
-    from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+    from src.index.zenodo_records.iri import community_iri  # noqa: PLC0415
 
     metadata = item.get("metadata") or {}
     blocks = metadata.get("communities") or []
@@ -220,7 +220,7 @@ def _project_files(record_id: str, item: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def persist_record(
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     item: dict[str, Any],
     *,
     crawling_community: str | None = None,
@@ -238,7 +238,7 @@ def persist_record(
     # "primary" colour even when the record belongs to several.
     communities = _project_communities(item)
     row["community_ids"] = list(communities)
-    from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+    from src.index.zenodo_records.iri import community_iri  # noqa: PLC0415
 
     if crawling_community and not row.get("primary_community_id"):
         # Callers pass bare slugs ("epfl") for the community they were
@@ -296,7 +296,7 @@ def _save_state(config: ZenodoIndexConfig, scope_name: str, state: dict[str, Any
 async def _ingest_async(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     scope: Scope,
     limit: int | None,
     refresh: bool,
@@ -323,7 +323,7 @@ async def _ingest_async(
         if community is None:
             LOGGER.warning("community %s not found on Zenodo; skipping", slug)
             continue
-        from src.index.zenodo.iri import community_iri  # noqa: PLC0415
+        from src.index.zenodo_records.iri import community_iri  # noqa: PLC0415
 
         store.upsert_community(
             {
@@ -389,7 +389,7 @@ async def _ingest_async(
 def ingest_records(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     scope: Scope,
     limit: int | None = None,
     refresh: bool = False,
@@ -447,7 +447,7 @@ def load_ids_file(path: Path) -> list[str]:
 async def _ingest_by_ids_async(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     ids: list[str],
     refresh: bool,
 ) -> dict[str, Any]:
@@ -490,7 +490,7 @@ async def _ingest_by_ids_async(
 def ingest_by_ids(
     *,
     config: ZenodoIndexConfig,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     ids: list[str],
     refresh: bool = False,
 ) -> dict[str, Any]:

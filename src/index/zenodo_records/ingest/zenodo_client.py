@@ -22,7 +22,7 @@ from tenacity import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from src.index.zenodo.config import ZenodoIndexConfig
+    from src.index.zenodo_records.config import ZenodoIndexConfig
 
 LOGGER = logging.getLogger(__name__)
 

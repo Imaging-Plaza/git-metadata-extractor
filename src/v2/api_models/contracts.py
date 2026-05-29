@@ -378,7 +378,7 @@ class IndexSearchResponse(BaseModel):
 
 
 IndexName = Literal[
-    "zenodo",
+    "zenodo_records",
     "huggingface",
     "huggingface_papers",
     "github_repos",

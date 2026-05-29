@@ -9,15 +9,15 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from src.index.openalex.vector.qdrant_store import QdrantStore
-from src.index.zenodo.config import load_config
-from src.index.zenodo.embed.pipeline import ZENODO_COLLECTION
-from src.index.zenodo.retrieval.semantic import semantic_search
-from src.index.zenodo.retrieval.sql import (
+from src.index.zenodo_records.config import load_config
+from src.index.zenodo_records.embed.pipeline import ZENODO_COLLECTION
+from src.index.zenodo_records.retrieval.semantic import semantic_search
+from src.index.zenodo_records.retrieval.sql import (
     PREDEFINED_QUERIES,
     run_adhoc,
     run_predefined,
 )
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def healthz() -> dict[str, Any]:
     duck_status = "ok"
     qdrant_status = "ok"
     try:
-        ZenodoStore.open().count("records")
+        ZenodoRecordsStore.open().count("records")
     except Exception as exc:  # noqa: BLE001
         duck_status = f"error: {exc}"
     try:
@@ -98,7 +98,7 @@ def list_predefined() -> dict[str, list[str]]:
 
 @app.get("/record/{zenodo_id}")
 def get_record(zenodo_id: str) -> dict[str, Any]:
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     record = store.fetch_record(zenodo_id)
     if record is None:
         raise HTTPException(status_code=404, detail="not found")

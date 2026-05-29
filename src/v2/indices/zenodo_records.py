@@ -1,9 +1,9 @@
 """Async ingest helper for the Zenodo index, called from `/v2/indices/zenodo/ingest`.
 
-Wraps :func:`src.index.zenodo.ingest.records.ingest_by_ids` in a background
+Wraps :func:`src.index.zenodo_records.ingest.records.ingest_by_ids` in a background
 task that persists the outcome on the shared :class:`IndexIngestJobStore`.
 The store and config are loaded lazily on first request and cached on
-``app.state.v2_zenodo_store`` so subsequent requests reuse them.
+``app.state.v2_zenodo_records_store`` so subsequent requests reuse them.
 """
 
 from __future__ import annotations
@@ -26,37 +26,37 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-INDEX_NAME = "zenodo"
+INDEX_NAME = "zenodo_records"
 
 
-def get_or_create_zenodo_store(app_state: Any) -> Any | None:
-    """Lazy-init the ZenodoStore + config on ``app.state``.
+def get_or_create_zenodo_records_store(app_state: Any) -> Any | None:
+    """Lazy-init the ZenodoRecordsStore + config on ``app.state``.
 
     Returns ``None`` if the Zenodo index module isn't importable (e.g. the
     deployment is shipped without it). The returned tuple-shaped value is
-    cached on ``app_state.v2_zenodo_resources`` for subsequent reuse.
+    cached on ``app_state.v2_zenodo_records_resources`` for subsequent reuse.
     """
 
-    cached = getattr(app_state, "v2_zenodo_resources", None)
+    cached = getattr(app_state, "v2_zenodo_records_resources", None)
     if cached is not None:
         return cached
     try:
-        from src.index.zenodo.config import load_config  # noqa: PLC0415
-        from src.index.zenodo.storage.duckdb_store import ZenodoStore  # noqa: PLC0415
+        from src.index.zenodo_records.config import load_config  # noqa: PLC0415
+        from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("zenodo ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
-        store = ZenodoStore.open(config.paths.duckdb_path)
+        store = ZenodoRecordsStore.open(config.paths.duckdb_path)
     except Exception as exc:  # noqa: BLE001
         logger.warning("zenodo ingest: store init failed — %s", exc)
         return None
-    app_state.v2_zenodo_resources = (config, store)
-    return app_state.v2_zenodo_resources
+    app_state.v2_zenodo_records_resources = (config, store)
+    return app_state.v2_zenodo_records_resources
 
 
-async def run_zenodo_ingest_job(
+async def run_zenodo_records_ingest_job(
     *,
     payload: ZenodoIngestRequest,
     app_state: Any,
@@ -73,7 +73,7 @@ async def run_zenodo_ingest_job(
         existing.started_at = datetime.now(timezone.utc)
         job_store.set(existing)
 
-        resources = get_or_create_zenodo_store(app_state)
+        resources = get_or_create_zenodo_records_store(app_state)
         if resources is None:
             existing.status = IndexIngestJobStatus.FAILED
             existing.completed_at = datetime.now(timezone.utc)
@@ -82,7 +82,7 @@ async def run_zenodo_ingest_job(
             return
         config, store = resources
 
-        from src.index.zenodo.ingest.records import (  # noqa: PLC0415
+        from src.index.zenodo_records.ingest.records import (  # noqa: PLC0415
             _normalize_id_token,
             ingest_by_ids,
         )
@@ -137,15 +137,15 @@ async def run_zenodo_ingest_job(
         job_store.set(record)
 
 
-async def run_zenodo_search(
+async def run_zenodo_records_search(
     payload: IndexSearchRequest, app_state: Any,
 ) -> IndexSearchResponse | None:
     """Run a semantic search against the Zenodo index. ``None`` if unavailable."""
-    resources = get_or_create_zenodo_store(app_state)
+    resources = get_or_create_zenodo_records_store(app_state)
     if resources is None:
         return None
     config, store = resources
-    from src.index.zenodo.retrieval.semantic import semantic_search  # noqa: PLC0415
+    from src.index.zenodo_records.retrieval.semantic import semantic_search  # noqa: PLC0415
     raw_hits = await asyncio.to_thread(
         semantic_search,
         config=config, query=payload.query,
@@ -155,7 +155,7 @@ async def run_zenodo_search(
         store=store,
     )
     return IndexSearchResponse(
-        index_name="zenodo",
+        index_name="zenodo_records",
         target=None,
         query=payload.query,
         hits=[hit_from_raw(h) for h in raw_hits],
@@ -164,7 +164,7 @@ async def run_zenodo_search(
 
 __all__ = [
     "INDEX_NAME",
-    "get_or_create_zenodo_store",
-    "run_zenodo_ingest_job",
-    "run_zenodo_search",
+    "get_or_create_zenodo_records_store",
+    "run_zenodo_records_ingest_job",
+    "run_zenodo_records_search",
 ]

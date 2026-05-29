@@ -21,7 +21,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel
 
-from src.index.zenodo.paths import ZenodoPaths, get_zenodo_paths
+from src.index.zenodo_records.paths import ZenodoPaths, get_zenodo_paths
 
 DEFAULT_CONFIG_PATH = Path("config/index/zenodo.yaml")
 

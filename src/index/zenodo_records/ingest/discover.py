@@ -6,7 +6,7 @@ mention of `zenodo.org/...` URLs or `10.5281/zenodo.<id>` DOIs, then diffs
 the extracted IDs against `records.zenodo_id` already in the Zenodo DuckDB.
 
 The output `DiscoveryResult` is consumable by `ingest_by_ids` in
-`src.index.zenodo.ingest.records` to actually fetch + persist the new
+`src.index.zenodo_records.ingest.records` to actually fetch + persist the new
 records via the Zenodo REST API.
 
 The Infoscience server-side `fulltext:"zenodo.org/"` query (used by the
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.index.zenodo.storage.duckdb_store import ZenodoStore
+    from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def _read_text_resilient(path: str) -> str | None:
 
 def discover_from_infoscience(
     *,
-    store: ZenodoStore,
+    store: ZenodoRecordsStore,
     text_dir: Path | None = None,
 ) -> DiscoveryResult:
     """Scan Infoscience full-text and return Zenodo IDs to consider ingesting.

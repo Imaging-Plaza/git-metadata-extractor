@@ -15,8 +15,8 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from src.index.zenodo.ingest.records import _strip_html
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.ingest.records import _strip_html
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ def _seed_dirty_db(db_path: Path) -> None:
     """
     schema = (
         Path(__file__).resolve().parents[3]
-        / "src" / "index" / "zenodo" / "storage" / "schema.sql"
+        / "src" / "index" / "zenodo_records" / "storage" / "schema.sql"
     ).read_text(encoding="utf-8")
     conn = duckdb.connect(str(db_path))
     conn.execute(schema)
@@ -137,10 +137,10 @@ def _seed_dirty_db(db_path: Path) -> None:
 
 
 def test_bootstrap_recleans_dirty_descriptions(tmp_path: Path):
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     _seed_dirty_db(db_path)
 
-    store = ZenodoStore(db_path)
+    store = ZenodoRecordsStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -168,11 +168,11 @@ def test_bootstrap_recleans_dirty_descriptions(tmp_path: Path):
 
 
 def test_bootstrap_strip_migration_is_idempotent(tmp_path: Path):
-    db_path = tmp_path / "zenodo.duckdb"
+    db_path = tmp_path / "zenodo_records.duckdb"
     _seed_dirty_db(db_path)
 
     for _ in range(3):
-        store = ZenodoStore(db_path)
+        store = ZenodoRecordsStore(db_path)
         store.bootstrap()
         store.close()
 

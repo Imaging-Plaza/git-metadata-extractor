@@ -3,7 +3,7 @@
 Reuses `RCPEmbeddingClient`, `QdrantStore`, and the token chunker from
 `src.index.openalex` directly — those modules only access `config.rcp.*`
 and `config.qdrant.*` at runtime, both of which `GitHubIndexConfig`
-mirrors field-for-field. Same pattern as `src.index.zenodo`.
+mirrors field-for-field. Same pattern as `src.index.zenodo_records`.
 
 Two entry points:
 

@@ -1,4 +1,4 @@
-"""Adapter wrapping `src.index.zenodo` for federated search/lookup."""
+"""Adapter wrapping `src.index.zenodo_records` for federated search/lookup."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ _RE_ZENODO_URL = re.compile(
 _RE_ZENODO_DOI = re.compile(r"10\.5281/zenodo\.(\d+)", re.I)
 
 
-class ZenodoAdapter:
-    name = "zenodo"
+class ZenodoRecordsAdapter:
+    name = "zenodo_records"
     entity_types = ["zenodo_records"]
 
     def search(
@@ -27,8 +27,8 @@ class ZenodoAdapter:
         top_k: int,
         filters: dict[str, Any] | None,
     ) -> list[Hit]:
-        from src.index.zenodo.config import load_config
-        from src.index.zenodo.retrieval.semantic import semantic_search
+        from src.index.zenodo_records.config import load_config
+        from src.index.zenodo_records.retrieval.semantic import semantic_search
 
         config = load_config()
         try:
@@ -67,10 +67,10 @@ class ZenodoAdapter:
         else:
             return []
         try:
-            from src.index.zenodo.storage.duckdb_store import ZenodoStore
+            from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
         except Exception:  # noqa: BLE001
             return []
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
         try:
             row = store.fetch_record(zid)
             if row is None:
@@ -99,4 +99,4 @@ def _summary(payload: dict[str, Any]) -> str | None:
     return " — ".join(parts) if parts else None
 
 
-register(ZenodoAdapter())
+register(ZenodoRecordsAdapter())

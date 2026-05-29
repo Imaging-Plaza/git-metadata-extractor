@@ -19,18 +19,18 @@ import logging
 import sys
 from typing import Any
 
-from src.index.zenodo.config import load_config
-from src.index.zenodo.embed.pipeline import ZENODO_COLLECTION, embed_records
-from src.index.zenodo.ingest.discover import discover_from_infoscience
-from src.index.zenodo.ingest.records import ingest_by_ids, ingest_records, load_ids_file
-from src.index.zenodo.ingest.scope import resolve_scope
-from src.index.zenodo.retrieval.semantic import semantic_search
-from src.index.zenodo.retrieval.sql import (
+from src.index.zenodo_records.config import load_config
+from src.index.zenodo_records.embed.pipeline import ZENODO_COLLECTION, embed_records
+from src.index.zenodo_records.ingest.discover import discover_from_infoscience
+from src.index.zenodo_records.ingest.records import ingest_by_ids, ingest_records, load_ids_file
+from src.index.zenodo_records.ingest.scope import resolve_scope
+from src.index.zenodo_records.retrieval.semantic import semantic_search
+from src.index.zenodo_records.retrieval.sql import (
     PREDEFINED_QUERIES,
     run_adhoc,
     run_predefined,
 )
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         if not ids:
             message = f"no parseable Zenodo IDs found in {args.ids}"
             raise SystemExit(message)
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
         try:
             summary = ingest_by_ids(
                 config=config,
@@ -82,7 +82,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             "Edit config/index/zenodo.yaml under `scope.{name}_communities`."
         )
         raise SystemExit(message)
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     try:
         summary = ingest_records(
             config=config,
@@ -100,7 +100,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
 def _cmd_embed(args: argparse.Namespace) -> int:
     config = load_config()
     config.require_rcp()
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     try:
         summary = embed_records(config=config, store=store, limit=args.limit)
     finally:
@@ -156,7 +156,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     del args
     config = load_config()
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     try:
         counts = {
             t: store.count(t)
@@ -194,7 +194,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 def _cmd_backfill_communities(args: argparse.Namespace) -> int:
     del args
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     try:
         orphans = [
             row[0]
@@ -222,7 +222,7 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     config = load_config()
-    store = ZenodoStore.open()
+    store = ZenodoRecordsStore.open()
     try:
         result = discover_from_infoscience(store=store)
         if args.out:
@@ -283,7 +283,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     uvicorn.run(
-        "src.index.zenodo.api:app",
+        "src.index.zenodo_records.api:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
@@ -292,7 +292,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="src.index.zenodo")
+    parser = argparse.ArgumentParser(prog="src.index.zenodo_records")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_discover = sub.add_parser(

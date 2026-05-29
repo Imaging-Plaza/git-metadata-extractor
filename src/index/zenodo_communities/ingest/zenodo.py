@@ -54,7 +54,7 @@ def _normalize_record(payload: dict[str, Any], parent_org: str | None) -> dict[s
 
     return {
         "community_id": canonical_community_id("zenodo", slug),
-        "source": "zenodo",
+        "source": "zenodo_records",
         "source_slug": slug,
         "parent_org": parent_org,
         "title": (

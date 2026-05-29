@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.index.zenodo.storage.duckdb_store import ZenodoStore
+from src.index.zenodo_records.storage.duckdb_store import ZenodoRecordsStore
 
 INVALID_QUERY_PREFIX_ERROR = "Only SELECT/WITH queries are allowed"
 FORBIDDEN_KEYWORD_ERROR = "Forbidden keyword in query: {kw}"
@@ -90,11 +90,11 @@ def _row_to_dict(cur: Any) -> list[dict[str, Any]]:
 def _execute(
     sql: str,
     params: dict[str, Any] | None,
-    store: ZenodoStore | None,
+    store: ZenodoRecordsStore | None,
 ) -> list[dict[str, Any]]:
     owned = False
     if store is None:
-        store = ZenodoStore.open()
+        store = ZenodoRecordsStore.open()
         owned = True
     try:
         cur = store.connect().execute(sql, params or {})
@@ -108,7 +108,7 @@ def run_adhoc(
     sql: str,
     params: dict[str, Any] | None = None,
     *,
-    store: ZenodoStore | None = None,
+    store: ZenodoRecordsStore | None = None,
 ) -> list[dict[str, Any]]:
     _validate_adhoc(sql)
     return _execute(sql, params, store)
@@ -118,7 +118,7 @@ def run_predefined(
     name: str,
     params: dict[str, Any] | None = None,
     *,
-    store: ZenodoStore | None = None,
+    store: ZenodoRecordsStore | None = None,
 ) -> list[dict[str, Any]]:
     if name not in PREDEFINED_QUERIES:
         message = (
