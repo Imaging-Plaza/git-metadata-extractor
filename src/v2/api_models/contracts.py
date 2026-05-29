@@ -223,6 +223,61 @@ class HuggingFacePapersIngestRequest(BaseModel):
     )
 
 
+class HuggingFaceModelsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_models/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF model repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceDatasetsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_datasets/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF dataset repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceSpacesIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_spaces/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF space repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceUsersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_users/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slugs: list[str] = Field(
+        min_length=1,
+        description="One or more HF user namespace slugs (bare handles).",
+    )
+
+
+class HuggingFaceOrganizationsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_organizations/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slugs: list[str] = Field(
+        min_length=1,
+        description="One or more HF organization namespace slugs (bare handles).",
+    )
+
+
 class OpenAlexIngestRequest(BaseModel):
     """Body for `POST /v2/indices/openalex/ingest`.
 
@@ -381,6 +436,11 @@ IndexName = Literal[
     "zenodo_records",
     "huggingface",
     "huggingface_papers",
+    "huggingface_models",
+    "huggingface_datasets",
+    "huggingface_spaces",
+    "huggingface_users",
+    "huggingface_organizations",
     "github_repos",
     "github_users",
     "github_organizations",
