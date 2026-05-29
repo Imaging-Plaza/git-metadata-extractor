@@ -206,6 +206,23 @@ class GitHubOrgsIngestRequest(BaseModel):
     )
 
 
+class HuggingFacePapersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_papers/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    arxiv_ids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more arXiv identifiers. Accepts any wire shape: bare id "
+            "(`2310.01234`), versioned (`2310.01234v2`), arXiv URL "
+            "(`https://arxiv.org/abs/...`), HF Papers URL "
+            "(`https://huggingface.co/papers/...`), `arxiv:<id>` tag, or "
+            "arXiv DOI (`10.48550/arXiv.<id>` / `https://doi.org/...`)."
+        ),
+    )
+
+
 class OpenAlexIngestRequest(BaseModel):
     """Body for `POST /v2/indices/openalex/ingest`.
 
@@ -363,6 +380,7 @@ class IndexSearchResponse(BaseModel):
 IndexName = Literal[
     "zenodo",
     "huggingface",
+    "huggingface_papers",
     "github",
     "github_users",
     "github_organizations",
