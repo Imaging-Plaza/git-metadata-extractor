@@ -949,9 +949,10 @@ class RealGitHubProvider(GitHubProvider):
                 if response is None:
                     continue
                 if response.status_code in (401, 403):
-                    logger.info(
-                        "github packages list %d for %s — token likely lacks "
-                        "read:packages scope; skipping container images",
+                    logger.warning(
+                        "github packages list %d for %s — GitHub token lacks the "
+                        "'read:packages' scope; skipping container-image extraction. "
+                        "Add read:packages to GME_GITHUB_TOKEN to enable it.",
                         response.status_code, owner,
                     )
                     return {"scope": None, "packages": []}
