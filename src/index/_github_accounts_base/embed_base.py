@@ -48,7 +48,7 @@ def _chunk_id(entity_type: str, entity_id: str, chunk_index: int) -> str:
 
 async def embed_accounts_async(
     *,
-    config: AccountIndexConfigBase,
+    config: Any,
     conn: duckdb.DuckDBPyConnection,
     table: str,
     id_column: str,
@@ -57,6 +57,7 @@ async def embed_accounts_async(
     compose_text: Callable[[dict[str, Any]], str],
     build_payload: Callable[[dict[str, Any]], dict[str, Any]],
     limit: int | None = None,
+    min_card_chars: int | None = None,
 ) -> int:
     """Embed un-embedded rows from `<table>` into `<collection>`.
 
@@ -147,7 +148,11 @@ async def embed_accounts_async(
 
     rows_seen = 0
     rows_skipped = 0
-    min_card_chars = config.github.min_card_chars
+    if min_card_chars is None:
+        # Back-compat: when called without an explicit threshold,
+        # fall back to `config.github.min_card_chars` (the github
+        # account indices reach into the config this way).
+        min_card_chars = config.github.min_card_chars
     for row in stream_unembedded(
         conn,
         table=table,

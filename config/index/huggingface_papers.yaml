@@ -1,0 +1,38 @@
+# HuggingFace Papers RAG indexer config.
+# Resolved by `src/index/huggingface_papers/config.py` and merged with env vars
+# (`RCP_TOKEN`, `HF_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_QDRANT_PREFER_GRPC`, `INDEX_DATA_DIR`) at startup.
+#
+# The HF Papers endpoint `GET /api/papers/{arxiv_id}` is anonymously
+# accessible for public papers, so `HF_TOKEN` is optional. Set it to
+# avoid rate limits when ingesting large batches.
+
+rcp:
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a query about an AI / ML research topic, retrieve relevant arXiv papers from the HuggingFace Papers feed"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+huggingface:
+  api_base: https://huggingface.co
+  max_concurrency: 4
+  # Papers always carry a title; the abstract is occasionally missing for
+  # very-new daily-papers entries. 32 chars filters out title-only stubs
+  # without dropping real but terse papers.
+  min_card_chars: 32
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  # Title + abstract + AI summary + keywords + authors typically fits in
+  # 300-800 tokens. 768 covers most papers in a single chunk; long
+  # abstracts spill into a 2nd chunk with 64-token overlap.
+  size_tokens: 768
+  overlap_tokens: 64
+  tokenizer: cl100k_base
