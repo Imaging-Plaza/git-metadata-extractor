@@ -85,9 +85,10 @@ def load_adapters(only: list[str] | None = None) -> list[IndexAdapter]:
     from importlib import import_module
 
     candidates = [
-        "huggingface", "openalex", "infoscience", "orcid", "ror", "zenodo",
-        "ethz_research_collection", "github", "snsf", "renkulab", "epfl_graph",
-        "swissubase", "zenodo_communities",
+        "huggingface", "huggingface_papers", "openalex", "infoscience", "orcid",
+        "ror", "zenodo", "ethz_research_collection", "github", "github_users",
+        "github_organizations", "snsf", "renkulab", "epfl_graph", "swissubase",
+        "zenodo_communities",
     ]
     targets = [c for c in candidates if (only is None or c in only)]
     for name in targets:
