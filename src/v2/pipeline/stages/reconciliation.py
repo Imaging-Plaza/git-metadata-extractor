@@ -161,6 +161,54 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
     person["pulse:githubUsername"] = github_username
 
 
+def _normalize_repository_identifiers(repository: dict[str, Any]) -> None:
+    """v2.2.0: promote bare GitHub repo handles to canonical URL form so
+    persisted properties match the schema constraint, regardless of
+    whether the agent or a legacy fixture supplied the value."""
+    from src.v2.canonicalization.github import github_repo_iri
+
+    identifiers = repository.get("identifiers")
+    if isinstance(identifiers, dict):
+        raw = identifiers.get("pulse:githubRepositoryHandle")
+        url = github_repo_iri(raw) if isinstance(raw, str) else None
+        if url is not None:
+            identifiers["pulse:githubRepositoryHandle"] = url
+
+    top = repository.get("pulse:githubRepositoryHandle")
+    top_url = github_repo_iri(top) if isinstance(top, str) else None
+    if top_url is not None:
+        repository["pulse:githubRepositoryHandle"] = top_url
+
+
+def _normalize_article_identifiers(article: dict[str, Any]) -> None:
+    """v2.2.0: promote bare DOI + bare Infoscience publication UUID to
+    canonical URL form on persisted properties (both nested in
+    `identifiers` and top-level mirrors). The Article `id` is set
+    separately by the resolver."""
+    from src.v2.canonicalization.doi import doi_iri
+    from src.v2.canonicalization.infoscience import infoscience_article_iri
+
+    identifiers = article.get("identifiers")
+    if isinstance(identifiers, dict):
+        raw_doi = identifiers.get("schema:identifier")
+        doi_url = doi_iri(raw_doi) if isinstance(raw_doi, str) else None
+        if doi_url is not None:
+            identifiers["schema:identifier"] = doi_url
+        raw_info = identifiers.get("pulse:infoscienceArticleIdentifier")
+        info_url = infoscience_article_iri(raw_info) if isinstance(raw_info, str) else None
+        if info_url is not None:
+            identifiers["pulse:infoscienceArticleIdentifier"] = info_url
+
+    top_doi = article.get("schema:identifier")
+    top_doi_url = doi_iri(top_doi) if isinstance(top_doi, str) else None
+    if top_doi_url is not None:
+        article["schema:identifier"] = top_doi_url
+    top_info = article.get("pulse:infoscienceArticleIdentifier")
+    top_info_url = infoscience_article_iri(top_info) if isinstance(top_info, str) else None
+    if top_info_url is not None:
+        article["pulse:infoscienceArticleIdentifier"] = top_info_url
+
+
 def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
     identifiers = organization.get("identifiers")
     normalized_identifiers = (
@@ -1224,15 +1272,21 @@ def _ensure_github_org_units_for_repository_owners(
             organizations.append(github_unit)
             organizations_by_id[github_org_id] = github_unit
 
+        # v2.2.0: persisted `pulse:githubOrganizationHandle` is the URL
+        # form. `github_handle` here is the bare lookup key, so wrap it.
+        from src.v2.canonicalization.github import github_org_iri
+
+        github_handle_url = github_org_iri(github_handle) or github_org_id
+
         github_unit["org:unitOf"] = [canonical_org_id]
         github_unit["type"] = "org:Organization"
         github_unit["shacl"] = "pulse:OrganizationShape"
-        github_unit["pulse:githubOrganizationHandle"] = github_handle
+        github_unit["pulse:githubOrganizationHandle"] = github_handle_url
 
         github_identifiers = github_unit.get("identifiers")
         if not isinstance(github_identifiers, dict):
             github_identifiers = {}
-        github_identifiers["pulse:githubOrganizationHandle"] = github_handle
+        github_identifiers["pulse:githubOrganizationHandle"] = github_handle_url
         if not isinstance(github_identifiers.get("uuid"), str) or not github_identifiers.get("uuid"):
             github_identifiers["uuid"] = str(uuid4())
         github_unit["identifiers"] = github_identifiers
@@ -1576,6 +1630,9 @@ def _normalize_membership_entities(
         normalized_membership["identifiers"] = normalized_identifiers
         normalized_membership["idSource"] = "pulse:composite"
         normalized_membership["org:organization"] = canonical_org_id
+        # v2.2.0: `org:member` is canonicalised to the URL form for
+        # symmetry with `org:organization` and the composite id.
+        normalized_membership["org:member"] = canonical_person_id
         normalized_membership["_person_ref"] = canonical_person_id
         if not isinstance(normalized_membership.get("org:role"), str):
             normalized_membership["org:role"] = None
@@ -1826,12 +1883,14 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
             )
 
     for repository in repositories:
+        _normalize_repository_identifiers(repository)
         canonical_id, id_source = resolve_repository_id(repository)
         repository["id"] = canonical_id
         repository["idSource"] = id_source
         _register_repository_lookup_tokens(repository_lookup, repository)
 
     for article in articles:
+        _normalize_article_identifiers(article)
         canonical_id, id_source = resolve_article_id(article)
         article["id"] = canonical_id
         article["idSource"] = id_source

@@ -92,6 +92,7 @@ def _membership(person_ref: str, org_ref: str) -> dict:
         "identifiers": {"pulse:composite": membership_id, "uuid": "11111111-1111-4111-8111-111111111111"},
         "idSource": "pulse:composite",
         "org:organization": org_ref,
+        "org:member": person_ref,
         "_person_ref": person_ref,
         "org:role": "Researcher",
         "time:hasBeginning": "2021-01-01",
@@ -435,7 +436,7 @@ def test_reconcile_models_github_org_account_as_unit_for_repository_owner() -> N
 
     assert "https://github.com/sdsc-ordes" in canonical_org["org:hasUnit"]
     assert github_org_account["org:unitOf"] == ["https://ror.org/02hdt9m26"]
-    assert github_org_account["pulse:githubOrganizationHandle"] == "sdsc-ordes"
+    assert github_org_account["pulse:githubOrganizationHandle"] == "https://github.com/sdsc-ordes"
     assert reconciled.entities["repositories"][0]["pulse:ownedBy"] == "https://github.com/sdsc-ordes"
 
 
