@@ -26,6 +26,8 @@ from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
 from src.v2.api_models import (
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
+    GitHubOrgsIngestRequest,
+    GitHubUsersIngestRequest,
     HuggingFaceIngestRequest,
     IndexIngestJob,
     IndexIngestJobAccepted,
@@ -58,6 +60,14 @@ from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_search,
 )
 from src.v2.indices.github import run_github_ingest_job, run_github_search
+from src.v2.indices.github_organizations import (
+    run_github_orgs_ingest_job,
+    run_github_orgs_search,
+)
+from src.v2.indices.github_users import (
+    run_github_users_ingest_job,
+    run_github_users_search,
+)
 from src.v2.indices.huggingface import (
     run_huggingface_ingest_job,
     run_huggingface_search,
@@ -1621,11 +1631,49 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         classification=classification,
         run_id=run_id,
     )
+    _maybe_schedule_github_users_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
+    _maybe_schedule_github_orgs_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
 
     return response_model
 
 
 _GITHUB_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
+
+
+def _github_account_login_from_url(normalized_url: Any) -> str | None:
+    """Extract a bare GitHub login from a normalised user/org URL, or None.
+
+    Accepts the same URL shapes the classifier emits for user/org
+    targets: `https://github.com/<login>` or `https://github.com/orgs/<login>`.
+    Returns the bare handle on success, or None if the URL has the
+    wrong host, an extra path segment (which would indicate a repo),
+    or is malformed.
+    """
+    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
+        return None
+    rest = (
+        normalized_url.removeprefix("https://github.com/")
+        .removeprefix("http://github.com/")
+        .strip("/")
+    )
+    if not rest:
+        return None
+    # `/orgs/<login>` is GitHub's web UI URL for an org; strip the prefix.
+    if rest.startswith("orgs/"):
+        rest = rest[len("orgs/"):]
+    # User/org URLs are a single path segment — anything with a `/`
+    # left is a repo and shouldn't reach this helper.
+    if "/" in rest:
+        return None
+    return rest or None
 
 
 def _maybe_schedule_github_auto_ingest(
@@ -1720,6 +1768,177 @@ def _maybe_schedule_github_auto_ingest(
         # No running event loop (e.g. unit tests that call extract
         # synchronously). Skip silently — the auto-ingest is a
         # non-essential background enrichment.
+        return
+
+
+def _maybe_schedule_github_users_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background ingest into the github_users index when
+    the operator opts in via `V2_GITHUB_USERS_RAG_AUTO_INGEST=true`.
+
+    Same gating shape as `_maybe_schedule_github_auto_ingest` but
+    fires only for `detected_type == "user"` targets. Org-typed
+    extracts are handled by the sibling helper below.
+    """
+    if os.getenv("V2_GITHUB_USERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "detected_type"):
+        return
+    if str(classification.detected_type.value).lower() != "user":
+        return
+    login = _github_account_login_from_url(
+        getattr(classification, "normalized_url", None),
+    )
+    if login is None:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_users.config import load_config  # noqa: PLC0415
+            from src.index.github_users.embed.pipeline import embed_users  # noqa: PLC0415
+            from src.index.github_users.ingest.users import ingest_single_user  # noqa: PLC0415
+            from src.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
+                GitHubUsersStore,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_users auto-ingest (run_id=%s, login=%s): module import failed",
+                run_id, login,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_config()
+            cfg.require_github()
+            with _GITHUB_USERS_AUTO_INGEST_LOCK:
+                store = GitHubUsersStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_user(login)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = GitHubClient(
+                        api_base=cfg.github.api_base,
+                        token=cfg.github.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
+                    outcome = ingest_single_user(
+                        config=cfg, store=store, client=client, login=login,
+                    )
+                    if outcome in {"skipped_404", "skipped_org"}:
+                        return (outcome, 0)
+                    embed_summary = embed_users(config=cfg, store=store, limit=None)
+                    return (outcome, int(embed_summary.get("users", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_users auto-ingest (run_id=%s, login=%s): failed",
+                run_id, login,
+            )
+            return
+        logger.info(
+            "github_users auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
+            run_id, login, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        return
+
+
+def _maybe_schedule_github_orgs_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background ingest into the github_organizations index
+    when `V2_GITHUB_ORGS_RAG_AUTO_INGEST=true`.
+
+    Fires only for `detected_type == "organization"` targets — uses
+    the v2 detected-type enum (`organization`, not `org`).
+    """
+    if os.getenv("V2_GITHUB_ORGS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "detected_type"):
+        return
+    if str(classification.detected_type.value).lower() != "organization":
+        return
+    login = _github_account_login_from_url(
+        getattr(classification, "normalized_url", None),
+    )
+    if login is None:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_organizations.config import load_config  # noqa: PLC0415
+            from src.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
+                embed_organizations,
+            )
+            from src.index.github_organizations.ingest.organizations import (  # noqa: PLC0415
+                ingest_single_organization,
+            )
+            from src.index.github_organizations.storage.duckdb_store import (  # noqa: PLC0415
+                GitHubOrganizationsStore,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_organizations auto-ingest (run_id=%s, login=%s): module import failed",
+                run_id, login,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_config()
+            cfg.require_github()
+            with _GITHUB_ORGS_AUTO_INGEST_LOCK:
+                store = GitHubOrganizationsStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_organization(login)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = GitHubClient(
+                        api_base=cfg.github.api_base,
+                        token=cfg.github.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
+                    outcome = ingest_single_organization(
+                        config=cfg, store=store, client=client, login=login,
+                    )
+                    if outcome in {"skipped_404", "skipped_user"}:
+                        return (outcome, 0)
+                    embed_summary = embed_organizations(
+                        config=cfg, store=store, limit=None,
+                    )
+                    return (outcome, int(embed_summary.get("organizations", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_organizations auto-ingest (run_id=%s, login=%s): failed",
+                run_id, login,
+            )
+            return
+        logger.info(
+            "github_organizations auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
+            run_id, login, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
         return
 
 
@@ -2083,6 +2302,108 @@ async def github_ingest_post(
 
 
 @v2_router.post(
+    "/indices/github_users/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def github_users_ingest_post(
+    payload: GitHubUsersIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a github_users ingest for one or more user logins.
+
+    Each login is fetched via `GET /users/{login}` and persisted to the
+    github_users DuckDB + Qdrant collection. Org-typed payloads are
+    skipped (they belong in github_organizations).
+    """
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="github_users", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_github_users_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "github_users ingest job submitted: job_id=%s logins=%d",
+        job_id, len(payload.logins),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="github_users",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/github_organizations/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def github_organizations_ingest_post(
+    payload: GitHubOrgsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a github_organizations ingest for one or more org handles.
+
+    Each handle is fetched via `GET /orgs/{org}` and persisted to the
+    github_organizations DuckDB + Qdrant collection.
+    """
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="github_organizations",
+        status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_github_orgs_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "github_organizations ingest job submitted: job_id=%s orgs=%d",
+        job_id, len(payload.orgs),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="github_organizations",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
     "/indices/openalex/ingest",
     response_model=IndexIngestJobAccepted,
     response_model_exclude_none=True,
@@ -2422,6 +2743,46 @@ async def github_search_post(
     """Semantic search against the GitHub repos index."""
     return await _search_response_or_unavailable(
         await run_github_search(payload, request.app.state), index_name="github",
+    )
+
+
+@v2_router.post(
+    "/indices/github_users/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def github_users_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the github_users index.
+
+    Returns user cards ordered by relevance to the query — useful for
+    disambiguating affiliations or finding a researcher by topic.
+    """
+    return await _search_response_or_unavailable(
+        await run_github_users_search(payload, request.app.state),
+        index_name="github_users",
+    )
+
+
+@v2_router.post(
+    "/indices/github_organizations/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def github_organizations_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the github_organizations index."""
+    return await _search_response_or_unavailable(
+        await run_github_orgs_search(payload, request.app.state),
+        index_name="github_organizations",
     )
 
 
