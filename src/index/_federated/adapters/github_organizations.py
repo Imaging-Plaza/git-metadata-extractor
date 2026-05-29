@@ -45,6 +45,8 @@ class GitHubOrganizationsAdapter:
             login = payload.get("login")
             if not login:
                 continue
+            if r.get("entity") is None:
+                continue
             out.append(Hit(
                 index=self.name, entity_type="organization",
                 id=str(login),

@@ -39,6 +39,8 @@ class HuggingFacePapersAdapter:
             arxiv_id = payload.get("arxiv_id")
             if not arxiv_id:
                 continue
+            if r.get("entity") is None:
+                continue
             out.append(Hit(
                 index=self.name, entity_type="paper",
                 id=str(arxiv_id),

@@ -45,6 +45,8 @@ class GitHubUsersAdapter:
             login = payload.get("login")
             if not login:
                 continue
+            if r.get("entity") is None:
+                continue
             out.append(Hit(
                 index=self.name, entity_type="user",
                 id=str(login),

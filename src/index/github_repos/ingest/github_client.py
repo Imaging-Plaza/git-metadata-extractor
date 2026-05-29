@@ -195,6 +195,34 @@ class GitHubClient:
             return []
         return [c for c in result if isinstance(c, dict) and c.get("login")]
 
+    def get_user(self, login: str) -> dict[str, Any] | None:
+        """``GET /users/{login}``. Returns the user card or ``None`` on 404.
+
+        The same endpoint serves both users and organisations; the caller
+        is expected to filter on ``payload["type"]``.
+        """
+        url = f"{self._api_base}/users/{login}"
+        key = ProviderCache.make_key("github_index", "get_user", login=login)
+        return self._cache.get_or_set(
+            key,
+            lambda: self._get_json(url),
+            label=f"github_index.get_user({login})",
+        )
+
+    def get_organization(self, login: str) -> dict[str, Any] | None:
+        """``GET /orgs/{login}``. Returns the organisation card or ``None`` on 404.
+
+        Strictly orgs — unlike ``/users/{login}`` this endpoint 404s for
+        personal accounts.
+        """
+        url = f"{self._api_base}/orgs/{login}"
+        key = ProviderCache.make_key("github_index", "get_organization", login=login)
+        return self._cache.get_or_set(
+            key,
+            lambda: self._get_json(url),
+            label=f"github_index.get_organization({login})",
+        )
+
     def get_readme(self, full_name: str, *, max_bytes: int) -> tuple[str | None, str | None]:
         """Return (markdown_text, original_path) or (None, None) on absence/error.
 
