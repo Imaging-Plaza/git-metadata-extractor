@@ -28,7 +28,6 @@ from src.v2.api_models import (
     GitHubIngestRequest,
     GitHubOrgsIngestRequest,
     GitHubUsersIngestRequest,
-    HuggingFaceIngestRequest,
     HuggingFacePapersIngestRequest,
     IndexIngestJob,
     IndexIngestJobAccepted,
@@ -76,9 +75,25 @@ from src.v2.indices.huggingface_papers import (
     run_huggingface_papers_ingest_job,
     run_huggingface_papers_search,
 )
-from src.v2.indices.huggingface import (
-    run_huggingface_ingest_job,
-    run_huggingface_search,
+from src.v2.indices.huggingface_datasets import (
+    run_huggingface_datasets_ingest_job,
+    run_huggingface_datasets_search,
+)
+from src.v2.indices.huggingface_models import (
+    run_huggingface_models_ingest_job,
+    run_huggingface_models_search,
+)
+from src.v2.indices.huggingface_organizations import (
+    run_huggingface_organizations_ingest_job,
+    run_huggingface_organizations_search,
+)
+from src.v2.indices.huggingface_spaces import (
+    run_huggingface_spaces_ingest_job,
+    run_huggingface_spaces_search,
+)
+from src.v2.indices.huggingface_users import (
+    run_huggingface_users_ingest_job,
+    run_huggingface_users_search,
 )
 from src.v2.indices.jobs import IndexIngestJobStore
 from src.v2.indices.oamonitor import (
@@ -2324,20 +2339,17 @@ async def zenodo_ingest_post(
     )
 
 
-@v2_router.post(
-    "/indices/huggingface/ingest",
-    response_model=IndexIngestJobAccepted,
-    response_model_exclude_none=True,
-    status_code=status.HTTP_202_ACCEPTED,
-    tags=["Indices"],
-)
-async def huggingface_ingest_post(
-    payload: HuggingFaceIngestRequest,
+def _hf_entity_ingest_post(
     request: Request,
-    _token: Annotated[str, Depends(verify_token)],
+    *,
+    index_name: str,
+    payload: Any,
+    runner: Any,
+    item_count: int,
 ) -> IndexIngestJobAccepted | JSONResponse:
-    """Enqueue a HuggingFace ingest for one or more (type, repo_id) items."""
-
+    """Shared body for the five per-entity HF ingest endpoints. Each
+    POST handler delegates here after pulling its typed payload + the
+    matching `run_*_ingest_job` coroutine."""
     job_store = _resolve_index_ingest_job_store(request)
     if job_store is None:
         return JSONResponse(
@@ -2346,20 +2358,18 @@ async def huggingface_ingest_post(
                 "detail": "index ingest job store unavailable: provider cache is disabled",
             },
         )
-
     job_id = str(uuid4())
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
         job_id=job_id,
-        index_name="huggingface",
+        index_name=index_name,
         status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"),
         submitted_at=submitted_at,
     )
     job_store.set(job)
-
     task = asyncio.create_task(
-        run_huggingface_ingest_job(
+        runner(
             payload=payload,
             app_state=request.app.state,
             job_store=job_store,
@@ -2367,18 +2377,126 @@ async def huggingface_ingest_post(
         ),
     )
     _track_background_task(request, task)
-
     logger.info(
-        "huggingface ingest job submitted: job_id=%s items=%d",
-        job_id,
-        len(payload.items),
+        "%s ingest job submitted: job_id=%s items=%d",
+        index_name, job_id, item_count,
     )
     return IndexIngestJobAccepted(
         job_id=job_id,
-        index_name="huggingface",
+        index_name=index_name,
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id),
         submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_models/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_models_ingest_post(
+    payload: HuggingFaceModelsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace models ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_models",
+        payload=payload,
+        runner=run_huggingface_models_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_datasets/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_datasets_ingest_post(
+    payload: HuggingFaceDatasetsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace datasets ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_datasets",
+        payload=payload,
+        runner=run_huggingface_datasets_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_spaces/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_spaces_ingest_post(
+    payload: HuggingFaceSpacesIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace spaces ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_spaces",
+        payload=payload,
+        runner=run_huggingface_spaces_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_users/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_users_ingest_post(
+    payload: HuggingFaceUsersIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace users ingest for one or more namespace slugs."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_users",
+        payload=payload,
+        runner=run_huggingface_users_ingest_job,
+        item_count=len(payload.slugs),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_organizations/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_organizations_ingest_post(
+    payload: HuggingFaceOrganizationsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace organizations ingest for one or more namespace slugs."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_organizations",
+        payload=payload,
+        runner=run_huggingface_organizations_ingest_job,
+        item_count=len(payload.slugs),
     )
 
 
@@ -2885,24 +3003,92 @@ async def zenodo_search_post(
 
 
 @v2_router.post(
-    "/indices/huggingface/search",
+    "/indices/huggingface_models/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
 )
-async def huggingface_search_post(
+async def huggingface_models_search_post(
     payload: IndexSearchRequest,
     request: Request,
     _token: Annotated[str, Depends(verify_token)],
 ) -> IndexSearchResponse | JSONResponse:
-    """Semantic search against the HuggingFace index.
-
-    Use ``target`` to pick the entity table: ``models`` (default), ``datasets``,
-    ``spaces``, or ``orgs``.
-    """
+    """Semantic search against the huggingface_models index."""
     return await _search_response_or_unavailable(
-        await run_huggingface_search(payload, request.app.state),
-        index_name="huggingface",
+        await run_huggingface_models_search(payload, request.app.state),
+        index_name="huggingface_models",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_datasets/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_datasets_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_datasets index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_datasets_search(payload, request.app.state),
+        index_name="huggingface_datasets",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_spaces/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_spaces_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_spaces index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_spaces_search(payload, request.app.state),
+        index_name="huggingface_spaces",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_users/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_users_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_users index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_users_search(payload, request.app.state),
+        index_name="huggingface_users",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_organizations/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_organizations_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_organizations index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_organizations_search(payload, request.app.state),
+        index_name="huggingface_organizations",
     )
 
 

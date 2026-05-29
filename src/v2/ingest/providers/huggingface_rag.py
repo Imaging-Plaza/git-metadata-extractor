@@ -24,12 +24,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index.huggingface.embed.rcp_client import (
+from src.index.openalex.embed.rcp_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index.huggingface.rerank.rcp_client import RCPRerankerClient
-from src.index.huggingface.vector.qdrant_store import QdrantStore
+from src.index.openalex.rerank.rcp_client import RCPRerankerClient
+from src.index.openalex.vector.qdrant_store import QdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -41,7 +41,9 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.huggingface.config import HuggingFaceIndexConfig
+    from src.index._huggingface_base.config_base import (
+        HFEntityIndexConfigBase as HuggingFaceIndexConfig,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -55,33 +57,41 @@ async def lineage(
 ) -> dict[str, Any]:
     """Walk the HuggingFace `base_models` graph from `repo_id`.
 
-    Returns ancestors (parent models), descendants (models fine-tuned from
-    `repo_id`), and the explicit edge list. Pure local DuckDB lookup —
-    no RCP / Qdrant calls. Cheap (sub-second).
+    Stub during the H7 transition: the legacy catch-all
+    ``src.index.huggingface`` module was retired in favour of five
+    per-entity modules (huggingface_models, huggingface_datasets,
+    huggingface_spaces, huggingface_users, huggingface_organizations).
+    Lineage compute previously walked a unified DuckDB; the new
+    per-entity stores need a cross-store walker which is a follow-up.
+
+    Until then, returns an empty lineage payload. Lineage was always
+    best-effort (the call site wraps it in try/except + warning log),
+    so returning empty doesn't break /v2/extract.
     """
     if not isinstance(repo_id, str) or not repo_id.strip():
         return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
-    try:
-        from src.index.huggingface.retrieval.lineage import compute_lineage as _compute
-        from src.index.huggingface.storage.duckdb_store import HuggingFaceStore as _Store
-        return await asyncio.to_thread(_walk_lineage, repo_id, depth, _compute, _Store)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("huggingface.rag.lineage(%r) failed — %s", repo_id, exc)
-        return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
+    # TODO: re-implement against HuggingFaceModelsStore once a cross-
+    # store walker lands. See git history for the legacy implementation.
+    logger.info(
+        "huggingface.rag.lineage(%r): stubbed during H7 transition (returns empty)",
+        repo_id,
+    )
+    return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
 
-
-def _walk_lineage(repo_id: str, depth: int, compute_fn: Any, store_cls: Any) -> dict[str, Any]:
-    store = store_cls.open()
-    return compute_fn(repo_id, store=store, depth=depth)
 
 # Maps the LLM-facing collection name to the actual Qdrant collection.
-# Extends the upstream COLLECTION_FOR_TABLE (which only knows about the
-# three indexed entity tables) with `orgs` for the hf_orgs collection.
+# Updated for the H7 split: the legacy `hf_*` collection names are
+# replaced by `huggingface_*`, and the catch-all `orgs` collection
+# splits into `huggingface_users` + `huggingface_organizations`.
+# Note: this map is keyed on the LLM-facing logical name, so we
+# keep `"orgs"` as a logical key but route it to the organizations
+# collection by default (the more common case for org-shaped queries).
 _HF_COLLECTION_MAP: dict[str, str] = {
-    "models": "hf_models",
-    "datasets": "hf_datasets",
-    "spaces": "hf_spaces",
-    "orgs": "hf_orgs",
+    "models": "huggingface_models",
+    "datasets": "huggingface_datasets",
+    "spaces": "huggingface_spaces",
+    "orgs": "huggingface_organizations",
+    "users": "huggingface_users",
 }
 
 _ALLOWED_FILTER_KEYS: frozenset[str] = frozenset({

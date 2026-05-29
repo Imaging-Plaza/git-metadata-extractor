@@ -85,8 +85,10 @@ def load_adapters(only: list[str] | None = None) -> list[IndexAdapter]:
     from importlib import import_module
 
     candidates = [
-        "huggingface", "huggingface_papers", "openalex", "infoscience", "orcid",
-        "ror", "zenodo", "ethz_research_collection", "github", "github_users",
+        "huggingface_models", "huggingface_datasets", "huggingface_spaces",
+        "huggingface_users", "huggingface_organizations", "huggingface_papers",
+        "openalex", "infoscience", "orcid", "ror", "zenodo_records",
+        "ethz_research_collection", "github_repos", "github_users",
         "github_organizations", "snsf", "renkulab", "epfl_graph", "swissubase",
         "zenodo_communities",
     ]

@@ -150,29 +150,6 @@ class ZenodoIngestRequest(BaseModel):
     )
 
 
-class HFIngestItem(BaseModel):
-    """One repository to ingest into the HuggingFace index."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["model", "dataset", "space"]
-    repo_id: str = Field(
-        min_length=1,
-        description="HuggingFace repo handle. Format: `<author>/<name>`.",
-    )
-
-
-class HuggingFaceIngestRequest(BaseModel):
-    """Body for `POST /v2/indices/huggingface/ingest`."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[HFIngestItem] = Field(
-        min_length=1,
-        description="One or more {type, repo_id} pairs to ingest.",
-    )
-
-
 class GitHubIngestRequest(BaseModel):
     """Body for `POST /v2/indices/github/ingest`."""
 
@@ -434,7 +411,6 @@ class IndexSearchResponse(BaseModel):
 
 IndexName = Literal[
     "zenodo_records",
-    "huggingface",
     "huggingface_papers",
     "huggingface_models",
     "huggingface_datasets",

@@ -30,7 +30,11 @@ INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     # long-lived `get_or_create_<provider>_resources()` cache on `app_state`.
     "zenodo_records",
     "github_repos",
-    "huggingface",
+    "huggingface_models",
+    "huggingface_datasets",
+    "huggingface_spaces",
+    "huggingface_users",
+    "huggingface_organizations",
     "openalex",
     "orcid",
     "renkulab",
@@ -174,12 +178,36 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
         )
         res = get_or_create_zenodo_records_store(app_state)
         return res[1] if res else None
-    if provider == "huggingface":
-        from src.v2.indices.huggingface import (  # noqa: PLC0415
-            get_or_create_huggingface_resources,
+    if provider == "huggingface_models":
+        from src.v2.indices.huggingface_models import (  # noqa: PLC0415
+            get_or_create_huggingface_models_resources,
         )
-        res = get_or_create_huggingface_resources(app_state)
-        return res[2] if res else None
+        res = get_or_create_huggingface_models_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_datasets":
+        from src.v2.indices.huggingface_datasets import (  # noqa: PLC0415
+            get_or_create_huggingface_datasets_resources,
+        )
+        res = get_or_create_huggingface_datasets_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_spaces":
+        from src.v2.indices.huggingface_spaces import (  # noqa: PLC0415
+            get_or_create_huggingface_spaces_resources,
+        )
+        res = get_or_create_huggingface_spaces_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_users":
+        from src.v2.indices.huggingface_users import (  # noqa: PLC0415
+            get_or_create_huggingface_users_resources,
+        )
+        res = get_or_create_huggingface_users_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_organizations":
+        from src.v2.indices.huggingface_organizations import (  # noqa: PLC0415
+            get_or_create_huggingface_organizations_resources,
+        )
+        res = get_or_create_huggingface_organizations_resources(app_state)
+        return res[1] if res else None
     if provider == "openalex":
         from src.v2.indices.openalex import (  # noqa: PLC0415
             get_or_create_openalex_resources,

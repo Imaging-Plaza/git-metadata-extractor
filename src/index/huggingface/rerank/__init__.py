@@ -1,1 +1,0 @@
-"""RCP reranker client."""
