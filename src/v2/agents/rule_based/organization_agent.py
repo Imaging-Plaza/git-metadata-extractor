@@ -306,7 +306,7 @@ class OrganizationAgentV2:
         from src.v2.canonicalization.infoscience import infoscience_org_iri
 
         ror_id = ror_record.get("id") if isinstance(ror_record, dict) else None
-        # v2.2.0: stamp Infoscience IDs in canonical URL form
+        # v3.0.0: stamp Infoscience IDs in canonical URL form
         # (`https://infoscience.epfl.ch/entities/orgunit/<uuid>`). The
         # helper tolerates bare-UUID input.
         infoscience_id = infoscience_org_iri(
@@ -324,7 +324,7 @@ class OrganizationAgentV2:
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
 
-        # v2.2.0: pulse:githubOrganizationHandle is the canonical
+        # v3.0.0: pulse:githubOrganizationHandle is the canonical
         # `https://github.com/<handle>` URL.
         github_handle_url = github_org_iri(github_handle)
 

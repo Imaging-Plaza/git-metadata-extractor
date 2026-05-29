@@ -651,12 +651,12 @@ def _build_article_payload(
     from src.v2.canonicalization import doi_iri, infoscience_article_iri
 
     raw_doi = _as_string(publication.get("doi"))
-    # v2.2.0: every DOI lands in canonical `https://doi.org/<bare>`
+    # v3.0.0: every DOI lands in canonical `https://doi.org/<bare>`
     # form. Tolerates bare / `doi:` / legacy `dx.doi.org` / canonical
     # URL on the way in (catalog backends produce mixed shapes
     # depending on the provider source).
     doi = doi_iri(raw_doi)
-    # v2.2.0: Infoscience IDs also canonical URL form.
+    # v3.0.0: Infoscience IDs also canonical URL form.
     infoscience_id = infoscience_article_iri(
         _as_string(publication.get("infosciencePublicationIdentifier")),
     )

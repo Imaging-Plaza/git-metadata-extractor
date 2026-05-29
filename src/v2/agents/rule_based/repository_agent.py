@@ -409,7 +409,7 @@ class RepositoryAgentV2:
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
 
-        # v2.2.0: pulse:githubRepositoryHandle is the canonical
+        # v3.0.0: pulse:githubRepositoryHandle is the canonical
         # `https://github.com/<owner>/<repo>` URL; `pulse:ownedBy`
         # references the owning user/org via its canonical github URL.
         github_repo_url = github_repo_iri(full_name)

@@ -78,7 +78,7 @@ def _lookup_identifier(entity: dict[str, Any], *keys: str) -> str | None:
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    """Return canonical ORCID URL for use as a dedup key. v2.2.0:
+    """Return canonical ORCID URL for use as a dedup key. v3.0.0:
     URL form matches entity field values so dedup comparisons work
     regardless of which input shape an upstream provider produced."""
     from src.v2.canonicalization.orcid import orcid_iri

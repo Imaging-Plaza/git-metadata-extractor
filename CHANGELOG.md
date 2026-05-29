@@ -8,7 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 _No changes yet._
 
-## [v2.2.0] - 2026-05-28 — Identifier URL canonicalisation (breaking)
+## [3.0.0rc1] — Proposed — Identifier URL canonicalisation + per-entity RAG indices (breaking)
+
+> **Status: proposed.** This is the candidate for the next major release
+> (v3.0.0), sitting above the released `2.1.0rc1` below. Breaking
+> identifier-shape and env-var changes warrant the major bump. Nothing
+> here is tagged yet; the version string is `3.0.0rc1`.
 
 This release standardises **every external identifier** to its canonical
 HTTPS URL form, end-to-end. Previously the codebase carried a split
@@ -21,7 +26,7 @@ Every `pulse:*Identifier` / `pulse:github*Handle` field now stores the
 canonical URL form. The wire-input layer accepts either shape (bare or
 URL) on ingest; persisted output is always URL.
 
-| Property                                       | v2.1.x (bare)                    | v2.2.0 (URL)                                                                     |
+| Property                                       | v2.1.x (bare)                    | v3.0.0 (URL)                                                                     |
 |-----------------------------------------------|----------------------------------|----------------------------------------------------------------------------------|
 | `schema:identifier` (DOI on Article)           | `10.1038/s41586-024-...`         | `https://doi.org/10.1038/s41586-024-...`                                         |
 | `pulse:orcidIdentifier` / `pulse:orcid`        | `0000-0001-2345-6789`            | `https://orcid.org/0000-0001-2345-6789`                                          |

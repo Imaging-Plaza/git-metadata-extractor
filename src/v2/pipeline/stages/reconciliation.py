@@ -94,7 +94,7 @@ def _normalize_uuid_v4(value: Any) -> str | None:
 
 
 def _normalize_orcid_token(value: Any) -> str | None:
-    """Return canonical ORCID URL via the shared helper. v2.2.0:
+    """Return canonical ORCID URL via the shared helper. v3.0.0:
     every ORCID-bearing field on Person entities lands as
     `https://orcid.org/<bare>` URL form."""
     from src.v2.canonicalization.orcid import orcid_iri
@@ -124,7 +124,7 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
     normalized_orcid = _normalize_orcid_token(
         identifiers.get("pulse:orcid") or person.get("pulse:orcidIdentifier"),
     )
-    # v2.2.0: Infoscience IDs canonicalised to URL form via the shared
+    # v3.0.0: Infoscience IDs canonicalised to URL form via the shared
     # helper. The `_normalize_infoscience_uuid` helper extracted the
     # bare UUID; we now feed that into `infoscience_person_iri` to get
     # the canonical URL. The helper accepts URL input idempotently so
@@ -140,7 +140,7 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
     )
     from src.v2.canonicalization.github import github_user_iri
 
-    # v2.2.0: pulse:githubUsername is the canonical GitHub profile URL.
+    # v3.0.0: pulse:githubUsername is the canonical GitHub profile URL.
     raw_github = identifiers.get("pulse:githubUsername")
     if not isinstance(raw_github, str) or not raw_github:
         raw_github = person.get("pulse:githubUsername")
@@ -162,7 +162,7 @@ def _normalize_person_identifiers(person: dict[str, Any]) -> None:
 
 
 def _normalize_repository_identifiers(repository: dict[str, Any]) -> None:
-    """v2.2.0: promote bare GitHub repo handles to canonical URL form so
+    """v3.0.0: promote bare GitHub repo handles to canonical URL form so
     persisted properties match the schema constraint, regardless of
     whether the agent or a legacy fixture supplied the value."""
     from src.v2.canonicalization.github import github_repo_iri
@@ -181,7 +181,7 @@ def _normalize_repository_identifiers(repository: dict[str, Any]) -> None:
 
 
 def _normalize_article_identifiers(article: dict[str, Any]) -> None:
-    """v2.2.0: promote bare DOI + bare Infoscience publication UUID to
+    """v3.0.0: promote bare DOI + bare Infoscience publication UUID to
     canonical URL form on persisted properties (both nested in
     `identifiers` and top-level mirrors). The Article `id` is set
     separately by the resolver."""
@@ -270,7 +270,7 @@ def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
     if normalized_github_handle is not None:
         normalized_github_handle = normalized_github_handle.strip()
 
-    # v2.2.0: pulse:githubOrganizationHandle is the canonical GitHub
+    # v3.0.0: pulse:githubOrganizationHandle is the canonical GitHub
     # organization URL. The internal `_normalize_github_org_handle`
     # strips to the bare handle (used as a reconciliation key); the
     # persisted property gets the URL form via `github_org_iri`.
@@ -382,7 +382,7 @@ def _register_organization_handle_lookup_tokens(
     if not stripped_handle:
         return
 
-    # v2.2.0: handle may be either URL form (`https://github.com/<bare>`)
+    # v3.0.0: handle may be either URL form (`https://github.com/<bare>`)
     # or the legacy bare/@bare shape. Reduce to the bare handle for the
     # alias set so cross-refs in either shape resolve.
     if stripped_handle.startswith(("http://", "https://")):
@@ -418,7 +418,7 @@ def _register_person_lookup_tokens(lookup: dict[str, str], person: dict[str, Any
     _register_lookup_token(lookup, person.get("pulse:infosciencePersonIdentifier"), canonical_id)
     _register_lookup_token(lookup, person.get("schema:name"), canonical_id)
 
-    # v2.2.0: ORCID + GitHub fields are now URL form, but cross-entity
+    # v3.0.0: ORCID + GitHub fields are now URL form, but cross-entity
     # references can arrive bare (e.g., `article.schema:author =
     # ["0000-0002-..."]` from a CITATION.cff, or a contribution composite
     # built from `<bare_login>/<repo>` strings). Register the BARE shape
@@ -1183,7 +1183,7 @@ def _build_github_org_account_unit(
     from src.v2.canonicalization.github import github_org_iri
 
     github_org_id = _github_org_account_id(github_handle)
-    # v2.2.0: persisted `pulse:githubOrganizationHandle` is the URL form.
+    # v3.0.0: persisted `pulse:githubOrganizationHandle` is the URL form.
     github_url = github_org_iri(github_handle) or github_org_id
     return {
         "id": github_org_id,
@@ -1272,7 +1272,7 @@ def _ensure_github_org_units_for_repository_owners(
             organizations.append(github_unit)
             organizations_by_id[github_org_id] = github_unit
 
-        # v2.2.0: persisted `pulse:githubOrganizationHandle` is the URL
+        # v3.0.0: persisted `pulse:githubOrganizationHandle` is the URL
         # form. `github_handle` here is the bare lookup key, so wrap it.
         from src.v2.canonicalization.github import github_org_iri
 
@@ -1366,7 +1366,7 @@ def _register_repository_lookup_tokens(
 
     def _register_with_bare(value: Any) -> None:
         _register_lookup_token(lookup, value, canonical_id)
-        # v2.2.0: GitHub repo handles are URL form. Also register the
+        # v3.0.0: GitHub repo handles are URL form. Also register the
         # bare `<owner>/<repo>` so legacy cross-references still resolve.
         if isinstance(value, str):
             parts = parse_github_repo_iri(value)
@@ -1630,7 +1630,7 @@ def _normalize_membership_entities(
         normalized_membership["identifiers"] = normalized_identifiers
         normalized_membership["idSource"] = "pulse:composite"
         normalized_membership["org:organization"] = canonical_org_id
-        # v2.2.0: `org:member` is canonicalised to the URL form for
+        # v3.0.0: `org:member` is canonicalised to the URL form for
         # symmetry with `org:organization` and the composite id.
         normalized_membership["org:member"] = canonical_person_id
         normalized_membership["_person_ref"] = canonical_person_id

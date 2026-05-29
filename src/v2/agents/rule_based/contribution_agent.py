@@ -101,7 +101,7 @@ def _build_organization_lookup(organizations: list[dict[str, Any]]) -> set[str]:
         normalized = _normalize_token(token)
         if normalized is not None:
             lookup.add(normalized)
-        # v2.2.0: also register the bare-handle alias so signals carrying
+        # v3.0.0: also register the bare-handle alias so signals carrying
         # the legacy bare handle still resolve to the URL-keyed org.
         if isinstance(token, str) and token.startswith(("http://", "https://")):
             bare = parse_github_org_iri(token)
@@ -136,7 +136,7 @@ def _build_person_lookup(persons: list[dict[str, Any]]) -> dict[str, str]:
     lookup: dict[str, str] = {}
 
     def _register_github(value: Any, canonical_id: str) -> None:
-        """v2.2.0: pulse:githubUsername can be URL or bare. Register both
+        """v3.0.0: pulse:githubUsername can be URL or bare. Register both
         the URL form (for direct ID matching) and the bare handle (so
         contribution signals carrying `login: 'octocat'` still resolve)."""
         _register_lookup_token(lookup, value, canonical_id)
@@ -264,7 +264,7 @@ def _person_github_login(person: Any) -> str | None:
     not ``https://github.com/octocat``). Compared against bare logins
     from contributor signals, so it MUST be the bare shape.
 
-    v2.2.0: `pulse:githubUsername` is canonical URL form, so the helper
+    v3.0.0: `pulse:githubUsername` is canonical URL form, so the helper
     parses the bare handle out of it.
     """
     from src.v2.canonicalization.github import parse_github_user_iri

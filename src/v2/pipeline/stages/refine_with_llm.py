@@ -460,7 +460,7 @@ def _gate_repo_type_patch(
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    """Return canonical ORCID URL for use as a dedup key. v2.2.0:
+    """Return canonical ORCID URL for use as a dedup key. v3.0.0:
     URL form matches entity field values."""
     from src.v2.canonicalization.orcid import orcid_iri
 

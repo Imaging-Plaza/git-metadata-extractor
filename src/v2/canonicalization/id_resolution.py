@@ -12,7 +12,7 @@ from src.v2.canonicalization.infoscience import (
 )
 from src.v2.canonicalization.orcid import orcid_iri
 
-# v2.2.0: Infoscience IDs are canonical entity URLs of the form
+# v3.0.0: Infoscience IDs are canonical entity URLs of the form
 # `https://infoscience.epfl.ch/entities/<kind>/<uuid>`. The legacy
 # `core/items` BASE constants are kept only for backwards-compat with
 # any downstream caller importing them; new code should use the
@@ -115,7 +115,7 @@ def _existing_resolution(
     normalized_id: str | None = None
 
     if normalized_source == "pulse:orcid":
-        # v2.2.0: `_normalize_orcid` now returns the canonical URL
+        # v3.0.0: `_normalize_orcid` now returns the canonical URL
         # form directly; no need to prepend `ORCID_BASE_URI`.
         normalized_id = _normalize_orcid(entity_id)
     elif normalized_source == "pulse:infosciencePersonIdentifier":
@@ -170,7 +170,7 @@ def _existing_resolution(
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:
-    """Return the canonical ORCID URL via the shared helper. v2.2.0:
+    """Return the canonical ORCID URL via the shared helper. v3.0.0:
     Person `@id` is the URL form directly (no `ORCID_BASE_URI` prepend
     needed at the call site)."""
     return orcid_iri(orcid)
@@ -316,7 +316,7 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if orcid is not None:
-        # v2.2.0: `_normalize_orcid` returns the canonical URL form
+        # v3.0.0: `_normalize_orcid` returns the canonical URL form
         # directly — no `ORCID_BASE_URI` prepend.
         return orcid, "pulse:orcid"
 

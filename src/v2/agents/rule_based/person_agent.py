@@ -21,7 +21,7 @@ HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNO
 
 
 def _normalize_orcid(orcid_value: Any) -> str | None:
-    """Return the canonical ORCID URL via the shared helper. v2.2.0:
+    """Return the canonical ORCID URL via the shared helper. v3.0.0:
     Person entity ORCID fields (`identifiers.pulse:orcid`,
     `pulse:orcidIdentifier`, and the `@id` when ORCID wins the
     hierarchy) all use the `https://orcid.org/<bare>` URL form."""
@@ -401,7 +401,7 @@ class PersonAgentV2:
         )
         if not normalized_orcid and not providers.orcid:
             normalized_orcid = orcid_identifier_hint
-        # v2.2.0: stamp Infoscience IDs in canonical URL form
+        # v3.0.0: stamp Infoscience IDs in canonical URL form
         # (`https://infoscience.epfl.ch/entities/person/<uuid>`). The
         # helper tolerates bare-UUID input from upstream catalog data.
         infoscience_id = infoscience_person_iri(
@@ -410,7 +410,7 @@ class PersonAgentV2:
             else None,
         )
         raw_github_login = github_user.get("login")
-        # v2.2.0: pulse:githubUsername stores the canonical GitHub
+        # v3.0.0: pulse:githubUsername stores the canonical GitHub
         # profile URL `https://github.com/<handle>`. The bare login is
         # kept locally for cross-referencing into repository handles.
         github_username = github_user_iri(raw_github_login)
@@ -454,7 +454,7 @@ class PersonAgentV2:
             ]
         repositories = github_user.get("repositories")
         if not repository_ownership and isinstance(repositories, list) and isinstance(raw_github_login, str):
-            # v2.2.0: ownership uses the canonical repo URL.
+            # v3.0.0: ownership uses the canonical repo URL.
             repository_ownership = [
                 github_repo_iri(f"{raw_github_login}/{repo_name}") or f"{raw_github_login}/{repo_name}"
                 for repo_name in repositories

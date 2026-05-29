@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "git-metadata-extractor"
-version = "2.1.0rc1"
+version = "3.0.0rc1"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
 requires-python = ">=3.10"

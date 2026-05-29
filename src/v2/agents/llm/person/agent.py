@@ -153,7 +153,7 @@ def _extract_person_identifier(context: dict[str, Any]) -> str | None:
 
 def _normalize_orcid_hint(raw: Any) -> str | None:
     """Return the canonical ORCID URL via the shared helper.
-    v2.2.0: surfaces URL form to the LLM agent context to match what
+    v3.0.0: surfaces URL form to the LLM agent context to match what
     will be written to the entity output."""
     from src.v2.canonicalization.orcid import orcid_iri
 
