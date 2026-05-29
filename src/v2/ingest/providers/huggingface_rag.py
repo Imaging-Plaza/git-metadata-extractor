@@ -55,28 +55,54 @@ async def lineage(
     *,
     depth: int = 3,
 ) -> dict[str, Any]:
-    """Walk the HuggingFace `base_models` graph from `repo_id`.
+    """Walk the HuggingFace ``base_models`` graph from ``repo_id``.
 
-    Stub during the H7 transition: the legacy catch-all
-    ``src.index.huggingface`` module was retired in favour of five
-    per-entity modules (huggingface_models, huggingface_datasets,
-    huggingface_spaces, huggingface_users, huggingface_organizations).
-    Lineage compute previously walked a unified DuckDB; the new
-    per-entity stores need a cross-store walker which is a follow-up.
+    Returns ancestors (parent models), descendants (models fine-tuned
+    from ``repo_id``), and the explicit edge list. Pure local DuckDB
+    lookup against the ``huggingface_models`` store — no RCP / Qdrant
+    calls. Cheap (sub-second).
 
-    Until then, returns an empty lineage payload. Lineage was always
-    best-effort (the call site wraps it in try/except + warning log),
-    so returning empty doesn't break /v2/extract.
+    J1: re-implemented against the per-entity HuggingFaceModelsStore
+    after H7 retired the legacy catch-all module. Same output shape as
+    the legacy version so downstream consumers don't need to change.
     """
     if not isinstance(repo_id, str) or not repo_id.strip():
-        return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
-    # TODO: re-implement against HuggingFaceModelsStore once a cross-
-    # store walker lands. See git history for the legacy implementation.
-    logger.info(
-        "huggingface.rag.lineage(%r): stubbed during H7 transition (returns empty)",
-        repo_id,
-    )
-    return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
+        return {
+            "root": repo_id,
+            "ancestors": {},
+            "descendants": {},
+            "edges": [],
+            "depth": depth,
+        }
+    try:
+        from src.index.huggingface_models.retrieval.lineage import (
+            compute_lineage as _compute,
+        )
+        from src.index.huggingface_models.storage.duckdb_store import (
+            HuggingFaceModelsStore as _Store,
+        )
+        return await asyncio.to_thread(_walk_lineage, repo_id, depth, _compute, _Store)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("huggingface.rag.lineage(%r) failed — %s", repo_id, exc)
+        return {
+            "root": repo_id,
+            "ancestors": {},
+            "descendants": {},
+            "edges": [],
+            "depth": depth,
+        }
+
+
+def _walk_lineage(
+    repo_id: str, depth: int, compute_fn: Any, store_cls: Any,
+) -> dict[str, Any]:
+    """Open the store and delegate. Kept as a sync helper so
+    `asyncio.to_thread` has something to wrap."""
+    store = store_cls.open()
+    try:
+        return compute_fn(repo_id, store=store, depth=depth)
+    finally:
+        store.close()
 
 
 # Maps the LLM-facing collection name to the actual Qdrant collection.
