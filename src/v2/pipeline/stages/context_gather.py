@@ -334,6 +334,28 @@ def _optional_repository_context(
             f"Repository aux-files lookup failed for {full_name}: {exc}",
         )
 
+    # Releases + published container (Docker) images. Both ride along in
+    # `metadata` so the repository agent can surface them as `_releases`
+    # / `_container_images` internal fields (the ontology has no
+    # predicate for them yet). Best-effort, like aux_files: container
+    # images need the `read:packages` scope and degrade to [] without it.
+    try:
+        releases = providers.github.get_repository_releases(full_name)
+        if isinstance(releases, list) and releases:
+            repository_metadata["releases"] = releases
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository releases lookup failed for {full_name}: {exc}",
+        )
+    try:
+        container_images = providers.github.get_repository_container_images(full_name)
+        if isinstance(container_images, list) and container_images:
+            repository_metadata["container_images"] = container_images
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository container-images lookup failed for {full_name}: {exc}",
+        )
+
     return {
         "full_name": full_name,
         "metadata": repository_metadata,

@@ -507,6 +507,15 @@ class RepositoryAgentV2:
             "_citation_cff": _resolve_citation_cff_payload(
                 compiled_context.get("aux_files"),
             ),
+            # Published releases + GHCR container (Docker) images, fetched
+            # by the context_gather stage and carried on the repository
+            # metadata. Layer-1 internal fields: the Pulse v2.1.2 ontology
+            # has no predicate for software releases or container images
+            # (v1 had a commented-out `hasSoftwareImage`), so they ride
+            # under the `_` convention until a v3.0.0 enrichment stage
+            # promotes them to canonical `schema:`/`pulse:` terms.
+            "_releases": (repository.get("releases") or None),
+            "_container_images": (repository.get("container_images") or None),
         }
 
     async def _default_repository_classifier(

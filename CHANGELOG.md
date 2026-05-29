@@ -20,6 +20,30 @@ HTTPS URL form, end-to-end. Previously the codebase carried a split
 convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
 All identifiers now match.
 
+### Added — Repository releases + GHCR container images
+
+The repository extractor now surfaces a repo's **published releases**
+and the **GHCR container (Docker) images** built from it:
+
+- `GitHubProvider.get_repository_releases` — thinned release list
+  (tag, name, dates, draft/prerelease flags, assets) from
+  `/repos/{owner}/{repo}/releases`. Public endpoint, no extra scope.
+- `GitHubProvider.get_repository_container_images` — owner-scoped
+  `container` packages filtered to those linked to (or named after)
+  the repo, each with its `ghcr.io/...` reference and version tags.
+  Requires the `read:packages` token scope; degrades to an empty list
+  without it.
+- `context_gather` fetches both (best-effort, like aux-files) and the
+  repository agent stamps them onto the internal `_releases` /
+  `_container_images` fields (surfaced when
+  `include_internal_fields=true`).
+
+Layer 1 only: the Pulse ontology has no predicate for releases or
+container images yet (v1 carried a never-shipped `hasSoftwareImage`),
+so these ride under the `_`-prefix convention. Promoting them to
+canonical `schema:`/`pulse:` terms is a tracked v3.0.0 ontology
+follow-up.
+
 ### Breaking — Persisted identifier shapes
 
 Every `pulse:*Identifier` / `pulse:github*Handle` field now stores the
