@@ -20,6 +20,17 @@ HTTPS URL form, end-to-end. Previously the codebase carried a split
 convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
 All identifiers now match.
 
+### Added — `GET /v2/crawl/{job_id}` extract-job status endpoint
+
+Lightweight status endpoint for async extract jobs, for cheap polling
+and parity with the v1 crawl-status surface. Returns just the lifecycle
+fields (`status` + timestamps + `error`) plus a `result_url` pointing at
+the full record/graph — previously a job's status could only be read
+from the `status` field buried inside the full `GET /v2/jobs/{job_id}`
+response. Shares the same store lookup + orphaned-job (stale-heartbeat)
+detection as `/v2/jobs/{job_id}` via extracted helpers, so both agree on
+liveness; 503/404 behaviour matches.
+
 ### Added — `dockerhub` RAG index
 
 New per-provider index for **Docker Hub repositories (images)**, with

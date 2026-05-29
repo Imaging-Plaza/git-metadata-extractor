@@ -125,6 +125,26 @@ class V2ExtractJobAccepted(BaseModel):
     submitted_at: datetime
 
 
+class V2JobStatus(BaseModel):
+    """Compact status view of an extract job — the lifecycle fields without
+    the (potentially large) `result` graph.
+
+    Served by `GET /v2/crawl/{job_id}` for cheap polling and v1-style
+    parity; the full record + extracted graph stays at `result_url`
+    (`GET /v2/jobs/{job_id}`).
+    """
+
+    job_id: str
+    status: V2ExtractJobStatus
+    source_url: str | None = None
+    submitted_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    error: V2ErrorResponse | None = None
+    result_url: str
+
+
 class IndexIngestJobStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"

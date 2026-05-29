@@ -54,6 +54,7 @@ from src.v2.api_models import (
     V2ExtractResponse,
     V2FieldError,
     V2HealthResponse,
+    V2JobStatus,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
     ZenodoIngestRequest,
@@ -2235,18 +2236,57 @@ async def extract_post(
     )
 
 
-@v2_router.get(
-    "/jobs/{job_id}",
-    response_model=V2ExtractJob,
-    response_model_exclude_none=True,
-)
-async def extract_job(
-    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> V2ExtractJob | JSONResponse:
-    """Retrieve a previously submitted extraction job by id."""
+def _maybe_mark_extract_job_stale(
+    record: V2ExtractJob, job_store: Any,
+) -> V2ExtractJob:
+    """Flip an orphaned RUNNING job to FAILED in place.
 
+    The worker executing this job may have died (OS kill, deploy, OOM, …)
+    without flipping the status, leaving the stored record stuck in
+    RUNNING. We detect that when no heartbeat has landed in over
+    ``_JOB_STALE_THRESHOLD_SECONDS``, flip to FAILED, persist, and return
+    the updated record so the client stops polling. New `POST /v2/extract`
+    calls start a fresh job. No-op for non-RUNNING or still-fresh jobs.
+
+    Shared by `GET /v2/jobs/{job_id}` (full record) and
+    `GET /v2/crawl/{job_id}` (compact status) so both agree on liveness.
+    """
+    if record.status != V2ExtractJobStatus.RUNNING:
+        return record
+    now = datetime.now(timezone.utc)
+    beat = record.last_heartbeat_at or record.started_at or record.submitted_at
+    if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
+        stale_seconds = (now - beat).total_seconds()
+        logger.warning(
+            "marking job %s as FAILED: no heartbeat for %.0fs "
+            "(threshold=%.0fs) — worker likely died mid-flight",
+            record.job_id,
+            stale_seconds,
+            _JOB_STALE_THRESHOLD_SECONDS,
+        )
+        record.status = V2ExtractJobStatus.FAILED
+        record.completed_at = now
+        record.error = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail=(
+                "extract job orphaned: worker process died mid-extraction "
+                f"(no heartbeat for {int(stale_seconds)}s)"
+            ),
+            source_url=record.request.source_url,
+        )
+        job_store.set(record)
+    return record
+
+
+def _resolve_extract_record(
+    request: Request, job_id: str,
+) -> V2ExtractJob | JSONResponse:
+    """Resolve an extract job by id, with liveness check.
+
+    Returns the (stale-checked) :class:`V2ExtractJob`, or a `JSONResponse`
+    error: 503 when the async job store is unavailable, 404 when no job
+    matches. Shared by `GET /v2/jobs/{job_id}` and `GET /v2/crawl/{job_id}`.
+    """
     job_store = _resolve_job_store(request)
     if job_store is None:
         error_payload = V2ErrorResponse(
@@ -2257,7 +2297,6 @@ async def extract_job(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
-
     record = job_store.get(job_id)
     if record is None:
         error_payload = V2ErrorResponse(
@@ -2268,36 +2307,56 @@ async def extract_job(
             status_code=status.HTTP_404_NOT_FOUND,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
-    # Detect orphaned jobs: the worker that was executing this job died
-    # (OS kill, deploy, OOM, …) without flipping the status, so the
-    # stored record is stuck in RUNNING. We notice because no heartbeat
-    # has been written in over `_JOB_STALE_THRESHOLD_SECONDS`. Flip to
-    # FAILED, persist, and return the failed view so the client stops
-    # polling. New `POST /v2/extract` calls will start a fresh job.
-    if record.status == V2ExtractJobStatus.RUNNING:
-        now = datetime.now(timezone.utc)
-        beat = record.last_heartbeat_at or record.started_at or record.submitted_at
-        if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
-            stale_seconds = (now - beat).total_seconds()
-            logger.warning(
-                "marking job %s as FAILED: no heartbeat for %.0fs "
-                "(threshold=%.0fs) — worker likely died mid-flight",
-                job_id,
-                stale_seconds,
-                _JOB_STALE_THRESHOLD_SECONDS,
-            )
-            record.status = V2ExtractJobStatus.FAILED
-            record.completed_at = now
-            record.error = V2ErrorResponse(
-                error_type=V2ErrorType.PIPELINE_ERROR,
-                detail=(
-                    "extract job orphaned: worker process died mid-extraction "
-                    f"(no heartbeat for {int(stale_seconds)}s)"
-                ),
-                source_url=record.request.source_url,
-            )
-            job_store.set(record)
-    return record
+    return _maybe_mark_extract_job_stale(record, job_store)
+
+
+@v2_router.get(
+    "/jobs/{job_id}",
+    response_model=V2ExtractJob,
+    response_model_exclude_none=True,
+)
+async def extract_job(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> V2ExtractJob | JSONResponse:
+    """Retrieve a previously submitted extraction job (full record + graph)."""
+
+    return _resolve_extract_record(request, job_id)
+
+
+@v2_router.get(
+    "/crawl/{job_id}",
+    response_model=V2JobStatus,
+    response_model_exclude_none=True,
+    tags=["Extraction"],
+)
+async def crawl_status(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> V2JobStatus | JSONResponse:
+    """Lightweight status of an extract job, without the result graph.
+
+    Parity with the v1 crawl-status surface and a cheap polling target:
+    returns just the lifecycle fields (status + timestamps + error). The
+    full extracted graph lives at ``result_url`` (`GET /v2/jobs/{job_id}`).
+    503 if the async job store is unavailable, 404 if no job matches.
+    """
+    resolved = _resolve_extract_record(request, job_id)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    return V2JobStatus(
+        job_id=resolved.job_id,
+        status=resolved.status,
+        source_url=resolved.request.source_url,
+        submitted_at=resolved.submitted_at,
+        started_at=resolved.started_at,
+        completed_at=resolved.completed_at,
+        last_heartbeat_at=resolved.last_heartbeat_at,
+        error=resolved.error,
+        result_url=f"/v2/jobs/{resolved.job_id}",
+    )
 
 
 @v2_router.post(
