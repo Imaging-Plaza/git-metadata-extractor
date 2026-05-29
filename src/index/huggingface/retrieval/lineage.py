@@ -19,7 +19,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from src.index.huggingface.storage.duckdb_store import DuckDBStore
+    from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 def compute_lineage(
     repo_id: str,
     *,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     depth: int = 3,
 ) -> dict[str, Any]:
     """Return the ancestor + descendant subgraphs of `repo_id` up to `depth` hops.
@@ -102,7 +102,7 @@ def compute_lineage(
     }
 
 
-def _find_children(store: DuckDBStore, parent_id: str) -> list[dict[str, Any]]:
+def _find_children(store: HuggingFaceStore, parent_id: str) -> list[dict[str, Any]]:
     """Return rows whose `base_models` list contains `parent_id`.
 
     DuckDB JSON-array containment is best expressed as a string scan since

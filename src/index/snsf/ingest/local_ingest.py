@@ -19,7 +19,7 @@ from typing import Optional
 from src.index.snsf.config import SnsfIndexConfig
 from src.index.snsf.ingest.scope import where_for
 from src.index.snsf.models import IngestManifest, IngestSummary
-from src.index.snsf.storage.duckdb_store import DuckDBStore
+from src.index.snsf.storage.duckdb_store import SnsfStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ PERSONS_FILE = "persons.csv"
 DISCIPLINES_FILE = "SNF_field_of_research_disciplines.csv"
 
 # (csv filename, store-method-name, log-label).
-# Loader methods on `DuckDBStore` all take a single Path arg and return an int.
+# Loader methods on `SnsfStore` all take a single Path arg and return an int.
 OUTPUT_LOADERS: tuple[tuple[str, str, str], ...] = (
     ("output_data_scientific_publications.csv", "load_output_publications",          "publications"),
     ("output_data_academicevents.csv",          "load_output_academic_events",       "academic events"),
@@ -80,7 +80,7 @@ def run(
         raise FileNotFoundError(msg)
 
     LOGGER.info("Ingesting SNSF bulk CSVs from %s", src)
-    store = DuckDBStore.open(db_path)
+    store = SnsfStore.open(db_path)
 
     grants_csv = src / GRANTS_FILE
     grants_n = store.load_grants(grants_csv)

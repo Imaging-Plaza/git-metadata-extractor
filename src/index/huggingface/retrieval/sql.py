@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.index.huggingface.storage.duckdb_store import DuckDBStore
+from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 INVALID_QUERY_PREFIX_ERROR = "Only SELECT/WITH queries are allowed"
 FORBIDDEN_KEYWORD_ERROR = "Forbidden keyword in query: {kw}"
@@ -98,11 +98,11 @@ def _row_to_dict(cur: Any) -> list[dict[str, Any]]:
 def _execute(
     sql: str,
     params: dict[str, Any] | None,
-    store: DuckDBStore | None,
+    store: HuggingFaceStore | None,
 ) -> list[dict[str, Any]]:
     owned = False
     if store is None:
-        store = DuckDBStore.open()
+        store = HuggingFaceStore.open()
         owned = True
     try:
         cur = store.connect().execute(sql, params or {})
@@ -116,7 +116,7 @@ def run_adhoc(
     sql: str,
     params: dict[str, Any] | None = None,
     *,
-    store: DuckDBStore | None = None,
+    store: HuggingFaceStore | None = None,
 ) -> list[dict[str, Any]]:
     _validate_adhoc(sql)
     return _execute(sql, params, store)
@@ -126,7 +126,7 @@ def run_predefined(
     name: str,
     params: dict[str, Any] | None = None,
     *,
-    store: DuckDBStore | None = None,
+    store: HuggingFaceStore | None = None,
 ) -> list[dict[str, Any]]:
     if name not in PREDEFINED_QUERIES:
         message = (

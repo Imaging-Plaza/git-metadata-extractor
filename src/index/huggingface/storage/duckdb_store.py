@@ -45,10 +45,10 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class DuckDBStore:
+class HuggingFaceStore:
     """Thin wrapper around DuckDB tuned for the HuggingFace schema.
 
-    Construct with `DuckDBStore.open()` for the default repo path.
+    Construct with `HuggingFaceStore.open()` for the default repo path.
     `bootstrap()` is idempotent.
     """
 
@@ -57,7 +57,7 @@ class DuckDBStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> DuckDBStore:
+    def open(cls, db_path: Path | None = None) -> HuggingFaceStore:
         if db_path is None:
             db_path = get_huggingface_paths().duckdb_path
         store = cls(db_path)

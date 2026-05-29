@@ -32,7 +32,7 @@ import requests
 from src.index._federated.protocols import HydrationSummary, IndexHydrator, Seed
 from src.index.openalex.ingest.authors import _project_author
 from src.index.openalex.ingest.works import persist_work
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def _ror_to_openalex_institution(ror: str, cache: dict[str, str]) -> str | None:
 def _hydrate_dois(
     seeds: list[Seed],
     *,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     only_unfetched: bool,
     summary: HydrationSummary,
     ror_cache: dict[str, str],
@@ -130,7 +130,7 @@ def _hydrate_dois(
 def _hydrate_works_full(
     seeds: list[Seed],
     *,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     only_unfetched: bool,
     summary: HydrationSummary,
     ror_cache: dict[str, str],
@@ -174,7 +174,7 @@ def _hydrate_works_full(
 def _hydrate_works_refs_only(
     seeds: list[Seed],
     *,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     summary: HydrationSummary,
 ) -> None:
     """Bulk references backfill — 100 IDs / request, only updates work_references.
@@ -233,7 +233,7 @@ def _hydrate_works_refs_only(
 def _hydrate_authors(
     seeds: list[Seed],
     *,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     only_unfetched: bool,
     summary: HydrationSummary,
 ) -> None:
@@ -272,7 +272,7 @@ def _hydrate_authors(
 
 
 def _stamp(
-    work_id: str, seed: Seed, store: DuckDBStore,
+    work_id: str, seed: Seed, store: OpenAlexStore,
     ror_cache: dict[str, str], summary: HydrationSummary,
 ) -> None:
     """If seed.hint specifies an affiliation_ror, stamp work_institutions."""
@@ -291,7 +291,7 @@ def _stamp(
 
 
 def _maybe_stamp(
-    seed: Seed, store: DuckDBStore,
+    seed: Seed, store: OpenAlexStore,
     ror_cache: dict[str, str], summary: HydrationSummary,
 ) -> None:
     """Stamp affiliation for a seed whose work is already in DB."""
@@ -326,7 +326,7 @@ class OpenAlexHydrator:
         *,
         only_unfetched: bool = True,
     ) -> HydrationSummary:
-        store = DuckDBStore.open()
+        store = OpenAlexStore.open()
         summary = HydrationSummary()
         ror_cache: dict[str, str] = {}
 

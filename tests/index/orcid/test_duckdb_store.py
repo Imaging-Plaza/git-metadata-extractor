@@ -1,4 +1,4 @@
-"""Tests for OrcidDuckDBStore lifecycle + upsert semantics."""
+"""Tests for OrcidStore lifecycle + upsert semantics."""
 
 from __future__ import annotations
 

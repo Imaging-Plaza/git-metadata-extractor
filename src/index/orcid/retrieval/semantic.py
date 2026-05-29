@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.index.orcid.embed.rcp_client import RCPEmbeddingClient
 from src.index.orcid.rerank.rcp_client import RCPRerankerClient
-from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+from src.index.orcid.storage.duckdb_store import OrcidStore
 from src.index.orcid.vector.qdrant_store import OrcidQdrantStore
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ async def _async_search(
     top_k: int,
     candidate_k: int,
     filter_payload: dict[str, Any] | None,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
 ) -> list[dict[str, Any]]:
     embed = RCPEmbeddingClient(config)
     qdrant = OrcidQdrantStore(config)
@@ -91,11 +91,11 @@ def semantic_search(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: OrcidDuckDBStore | None = None,
+    store: OrcidStore | None = None,
 ) -> list[dict[str, Any]]:
     """Synchronous entrypoint used by the CLI and the FastAPI app."""
     if store is None:
-        store = OrcidDuckDBStore.open(scope=config.paths.scope)
+        store = OrcidStore.open(scope=config.paths.scope)
     return asyncio.run(
         _async_search(
             config=config,

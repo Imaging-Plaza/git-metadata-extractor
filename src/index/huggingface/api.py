@@ -15,7 +15,7 @@ from src.index.huggingface.retrieval.sql import (
     run_adhoc,
     run_predefined,
 )
-from src.index.huggingface.storage.duckdb_store import ENTITY_TABLES, DuckDBStore
+from src.index.huggingface.storage.duckdb_store import ENTITY_TABLES, HuggingFaceStore
 from src.index.huggingface.vector.qdrant_store import COLLECTION_FOR_TABLE, QdrantStore
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def healthz() -> dict[str, Any]:
     duck_status = "ok"
     qdrant_status: dict[str, Any] = {}
     try:
-        DuckDBStore.open().count("models")
+        HuggingFaceStore.open().count("models")
     except Exception as exc:  # noqa: BLE001
         duck_status = f"error: {exc}"
     try:
@@ -107,7 +107,7 @@ def get_entity(entity_table: str, repo_id: str) -> dict[str, Any]:
             status_code=404,
             detail=f"unknown entity table: {entity_table}",
         )
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     row = store.fetch_repo(entity_table, repo_id)
     if row is None:
         raise HTTPException(status_code=404, detail="not found")

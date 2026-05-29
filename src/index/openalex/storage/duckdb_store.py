@@ -24,10 +24,10 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class DuckDBStore:
+class OpenAlexStore:
     """Thin wrapper around DuckDB tuned for the OpenAlex schema.
 
-    Construct with `DuckDBStore.open()` for the default repo path. Re-running
+    Construct with `OpenAlexStore.open()` for the default repo path. Re-running
     `bootstrap()` is idempotent.
     """
 
@@ -36,7 +36,7 @@ class DuckDBStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> DuckDBStore:
+    def open(cls, db_path: Path | None = None) -> OpenAlexStore:
         if db_path is None:
             db_path = get_openalex_paths().duckdb_path
         store = cls(db_path)

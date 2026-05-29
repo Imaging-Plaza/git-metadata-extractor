@@ -29,7 +29,7 @@ from src.index.snsf.document import to_document
 from src.index.snsf.embed import embed_passages
 from src.index.snsf.embed_pipeline import _payload, _scope_grant_rows
 from src.index.snsf.qdrant_store import QdrantSnsfStore
-from src.index.snsf.storage.duckdb_store import DuckDBStore
+from src.index.snsf.storage.duckdb_store import SnsfStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def run(scope_mode: str) -> Dict[str, Any]:
     existing = _existing_point_ids(qstore, coll)
     LOGGER.info("Already in %s: %d point ids", coll, len(existing))
 
-    store = DuckDBStore.open()
+    store = SnsfStore.open()
     try:
         all_rows = _scope_grant_rows(store, scope_mode)
     finally:

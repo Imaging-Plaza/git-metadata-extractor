@@ -1,7 +1,7 @@
 """Stream DuckDB rows → chunk card → embed → upsert into Qdrant.
 
 Idempotent: rows whose card has already been embedded are skipped via
-`DuckDBStore.stream_rows_for_embedding`.
+`HuggingFaceStore.stream_rows_for_embedding`.
 
 The text fed to the embedder is built per-row from:
 
@@ -31,7 +31,7 @@ from src.index.huggingface.vector.qdrant_store import COLLECTION_FOR_TABLE, Qdra
 
 if TYPE_CHECKING:
     from src.index.huggingface.config import HuggingFaceIndexConfig
-    from src.index.huggingface.storage.duckdb_store import DuckDBStore
+    from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ def _coerce_base_models(value: Any) -> list[str] | None:
 async def _embed_table_async(
     *,
     config: HuggingFaceIndexConfig,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     entity_table: str,
     limit: int | None,
 ) -> int:
@@ -306,7 +306,7 @@ def _org_to_payload(*, org_row: dict[str, Any]) -> dict[str, Any]:
 async def _embed_orgs_async(
     *,
     config: HuggingFaceIndexConfig,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     limit: int | None,
 ) -> int:
     client = RCPEmbeddingClient(config)
@@ -368,7 +368,7 @@ async def _embed_orgs_async(
 def embed_entities(
     *,
     config: HuggingFaceIndexConfig,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     entity_tables: list[str],
     limit: int | None = None,
 ) -> dict[str, int]:
@@ -394,7 +394,7 @@ def embed_entities(
 def backfill_model_base_payloads(
     *,
     config: HuggingFaceIndexConfig,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
 ) -> int:
     """One-shot: for every model in DuckDB with non-empty `base_models`, push the
     `base_model` payload field to its existing Qdrant points without re-embedding.

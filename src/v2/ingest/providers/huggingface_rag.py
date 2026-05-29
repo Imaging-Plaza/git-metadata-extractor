@@ -63,7 +63,7 @@ async def lineage(
         return {"root": repo_id, "ancestors": {}, "descendants": {}, "edges": [], "depth": depth}
     try:
         from src.index.huggingface.retrieval.lineage import compute_lineage as _compute
-        from src.index.huggingface.storage.duckdb_store import DuckDBStore as _Store
+        from src.index.huggingface.storage.duckdb_store import HuggingFaceStore as _Store
         return await asyncio.to_thread(_walk_lineage, repo_id, depth, _compute, _Store)
     except Exception as exc:  # noqa: BLE001
         logger.warning("huggingface.rag.lineage(%r) failed — %s", repo_id, exc)

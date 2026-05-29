@@ -41,11 +41,11 @@ class ORCIDDiscoverer:
 
         from src.index.orcid.config import load_config
         from src.index.orcid.ingest.discover import discover_seeds
-        from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+        from src.index.orcid.storage.duckdb_store import OrcidStore
 
         scope = opts.get("scope", "switzerland")
         config = load_config(scope=scope)
-        store = OrcidDuckDBStore.open(scope=scope)
+        store = OrcidStore.open(scope=scope)
 
         # Run discover_seeds — populates the seeds table.
         summary = discover_seeds(config=config, store=store, source=source)
@@ -91,7 +91,7 @@ class ORCIDHydrator:
     ) -> HydrationSummary:
         from src.index.orcid.config import load_config
         from src.index.orcid.ingest.persons import ingest_persons
-        from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+        from src.index.orcid.storage.duckdb_store import OrcidStore
 
         seed_list = [s for s in seeds if s.seed_type == "orcid"]
         if not seed_list:
@@ -101,7 +101,7 @@ class ORCIDHydrator:
         # they should hydrate twice.
         scope = (seed_list[0].hint or {}).get("scope") or "switzerland"
         config = load_config(scope=scope)
-        store = OrcidDuckDBStore.open(scope=scope)
+        store = OrcidStore.open(scope=scope)
 
         # Upsert each seed into the seeds table so ingest_persons can pick it up.
         # If the seed came from another index's discover, this is the bridge.

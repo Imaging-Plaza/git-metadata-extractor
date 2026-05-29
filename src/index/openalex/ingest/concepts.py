@@ -9,7 +9,7 @@ from src.index.openalex.ingest.openalex_client import batched, iter_concepts
 
 if TYPE_CHECKING:
     from src.index.openalex.config import OpenAlexIndexConfig
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def _project_concept(item: dict[str, Any]) -> dict[str, Any]:
 def ingest_concepts(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     filters: dict[str, Any] | None = None,
     limit: int | None = None,
 ) -> int:

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from src.index.snsf.config import DEFAULT_CONFIG_PATH, load_config
-from src.index.snsf.storage.duckdb_store import DuckDBStore
+from src.index.snsf.storage.duckdb_store import SnsfStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ def main(argv=None) -> int:
     if args.cmd == "stats":
         cfg = load_config(args.config)
         scope = args.scope or cfg.scope.active
-        store = DuckDBStore.open()
+        store = SnsfStore.open()
         try:
             counts = {
                 "grants_total":  store.count_grants(),
@@ -180,7 +180,7 @@ def main(argv=None) -> int:
         return 0 if counts["manifest"] is not None else 1
 
     if args.cmd == "lookup":
-        store = DuckDBStore.open()
+        store = SnsfStore.open()
         try:
             row = store.fetch_grant(args.grant_number)
         finally:

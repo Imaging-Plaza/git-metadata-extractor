@@ -11,7 +11,7 @@ from src.index.huggingface.embed.rcp_client import RCPEmbeddingClient
 from src.index.huggingface.models import ENTITY_TYPE_SINGULAR
 from src.index.huggingface.rerank.rcp_client import RCPRerankerClient
 from src.index.huggingface.retrieval import infoscience_links
-from src.index.huggingface.storage.duckdb_store import DuckDBStore
+from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 from src.index.huggingface.vector.qdrant_store import COLLECTION_FOR_TABLE, QdrantStore
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ async def _async_search(
     top_k: int,
     candidate_k: int,
     filter_payload: dict[str, Any] | None,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     facet_keys: tuple[str, ...] = (),
     facet_top_n: int = 10,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
@@ -153,7 +153,7 @@ def semantic_search(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: DuckDBStore | None = None,
+    store: HuggingFaceStore | None = None,
 ) -> list[dict[str, Any]]:
     """Backward-compat entrypoint — returns just the hits list."""
     hits, _ = semantic_search_with_facets(
@@ -172,7 +172,7 @@ def semantic_search_with_facets(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: DuckDBStore | None = None,
+    store: HuggingFaceStore | None = None,
     facet_keys: tuple[str, ...] = (),
     facet_top_n: int = 10,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
@@ -183,7 +183,7 @@ def semantic_search_with_facets(
     """
     table = entity_type if entity_type in COLLECTION_FOR_TABLE else _table_from_singular(entity_type)
     if store is None:
-        store = DuckDBStore.open()
+        store = HuggingFaceStore.open()
     return asyncio.run(
         _async_search(
             config=config,

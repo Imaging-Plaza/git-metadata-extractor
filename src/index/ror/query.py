@@ -3,7 +3,7 @@ lookup over the full ROR dump.
 
 `query_rag` runs Qdrant retrieval and reranks via the RCP cross-encoder.
 `lookup_dump` searches the full registry by ROR ID, name tokens, and/or
-country code (no RCP calls) — backed by `DuckDBStore` (D16). `query(mode='auto')`
+country code (no RCP calls) — backed by `RorStore` (D16). `query(mode='auto')`
 tries RAG first and falls back to `lookup_dump` when the top score is below
 `score_floor`.
 """
@@ -21,7 +21,7 @@ from .embed import embed_query
 from .models import DumpMatch, ScoredRecord
 from .qdrant_store import QdrantRorStore
 from .rerank import rerank
-from .storage.duckdb_store import DuckDBStore
+from .storage.duckdb_store import RorStore
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def lookup_dump(
         msg = "lookup_dump requires at least one filter (text, ror_id, country, type_, status)."
         raise ValueError(msg)
 
-    store = DuckDBStore.open()
+    store = RorStore.open()
     try:
         rows = store.lookup(
             text=text,

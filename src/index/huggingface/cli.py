@@ -28,7 +28,7 @@ from src.index.huggingface.ingest.scope import resolve_scope
 from src.index.huggingface.ingest.spaces_ingest import ingest_spaces
 from src.index.huggingface.models import ALL_EMBEDDABLE_TYPES, ALL_ENTITY_TYPES
 from src.index.huggingface.retrieval.sql import run_adhoc, run_predefined
-from src.index.huggingface.storage.duckdb_store import DuckDBStore
+from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 from src.index.huggingface.vector.qdrant_store import COLLECTION_FOR_TABLE, QdrantStore
 
 LOGGER = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
     scope = resolve_scope(args.scope, config)
     entities = _split_entities(args.types)
     client = HFClient(config)
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     summary: dict[str, int] = {}
     for entity in entities:
         ingester = ENTITY_INGESTERS[entity]
@@ -105,7 +105,7 @@ def _cmd_embed(args: argparse.Namespace) -> int:
     entities = _split_entities(args.types, valid=EMBEDDABLE_TABLES)
     config = load_config()
     config.require_rcp()
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     summary = embed_entities(
         config=config,
         store=store,
@@ -200,7 +200,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
 def _cmd_lineage(args: argparse.Namespace) -> int:
     from src.index.huggingface.retrieval.lineage import compute_lineage
 
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     result = compute_lineage(args.repo_id, store=store, depth=args.depth)
     _emit_json(result)
     return 0
@@ -210,7 +210,7 @@ def _cmd_backfill_payloads(_: argparse.Namespace) -> int:
     from src.index.huggingface.embed.pipeline import backfill_model_base_payloads
 
     config = load_config()
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     n = backfill_model_base_payloads(config=config, store=store)
     _emit_json({"chunks_updated": n})
     return 0
@@ -218,7 +218,7 @@ def _cmd_backfill_payloads(_: argparse.Namespace) -> int:
 
 def _cmd_status(_: argparse.Namespace) -> int:
     config = load_config()
-    store = DuckDBStore.open()
+    store = HuggingFaceStore.open()
     counts = {
         "orgs": store.count("orgs"),
         "models": store.count("models"),

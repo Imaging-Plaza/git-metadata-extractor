@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 
 from src.index.huggingface.config import HuggingFaceIndexConfig, load_config
-from src.index.huggingface.storage.duckdb_store import DuckDBStore
+from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 
 @pytest.fixture()
-def tmp_store(tmp_path) -> DuckDBStore:
+def tmp_store(tmp_path) -> HuggingFaceStore:
     db_path = tmp_path / "huggingface.duckdb"
-    store = DuckDBStore(db_path)
+    store = HuggingFaceStore(db_path)
     store.bootstrap()
     yield store
     store.close()

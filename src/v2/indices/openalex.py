@@ -31,13 +31,13 @@ def get_or_create_openalex_resources(app_state: Any) -> Any | None:
         return cached
     try:
         from src.index.openalex.config import load_config  # noqa: PLC0415
-        from src.index.openalex.storage.duckdb_store import DuckDBStore  # noqa: PLC0415
+        from src.index.openalex.storage.duckdb_store import OpenAlexStore  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("openalex ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
-        store = DuckDBStore.open()
+        store = OpenAlexStore.open()
     except Exception as exc:  # noqa: BLE001
         logger.warning("openalex ingest: resource init failed — %s", exc)
         return None

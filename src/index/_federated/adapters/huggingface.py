@@ -96,10 +96,10 @@ class HuggingFaceAdapter:
 
         records: list[EntityRecord] = []
         try:
-            from src.index.huggingface.storage.duckdb_store import DuckDBStore
+            from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
         except Exception:  # noqa: BLE001
             return records
-        store = DuckDBStore.open()
+        store = HuggingFaceStore.open()
 
         if repo_id:
             for table in ("models", "datasets", "spaces"):

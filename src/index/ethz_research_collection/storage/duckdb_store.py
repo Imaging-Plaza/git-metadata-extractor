@@ -32,10 +32,10 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class DuckDBStore:
+class EthzResearchCollectionStore:
     """Thin wrapper around DuckDB tuned for the ETH Research Collection schema.
 
-    Construct with `DuckDBStore.open()` for the canonical path. Re-running
+    Construct with `EthzResearchCollectionStore.open()` for the canonical path. Re-running
     `bootstrap()` is idempotent; `transaction()` batches writes.
     """
 
@@ -44,7 +44,7 @@ class DuckDBStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> "DuckDBStore":
+    def open(cls, db_path: Path | None = None) -> "EthzResearchCollectionStore":
         if db_path is None:
             db_path = duckdb_path()
         store = cls(db_path)

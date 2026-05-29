@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 
 from src.index.orcid.config import OrcidIndexConfig, load_config
-from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+from src.index.orcid.storage.duckdb_store import OrcidStore
 
 
 @pytest.fixture()
-def tmp_store(tmp_path) -> OrcidDuckDBStore:
+def tmp_store(tmp_path) -> OrcidStore:
     """Fresh DuckDB store rooted in a tmp_path-isolated file."""
     db_path = tmp_path / "orcid.duckdb"
-    store = OrcidDuckDBStore(db_path)
+    store = OrcidStore(db_path)
     store.bootstrap()
     yield store
     store.close()

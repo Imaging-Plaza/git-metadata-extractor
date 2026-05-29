@@ -1,7 +1,7 @@
 """Legacy sidecar readers for the ROR index.
 
 After D16 (see `.internal/ror/duckdb-migration.md`), all writes go through
-`storage.duckdb_store.DuckDBStore`. This module survives only to support:
+`storage.duckdb_store.RorStore`. This module survives only to support:
 
   - reading existing `records.jsonl` / `manifest.json` files left on disk
     by pre-D16 builds (used by the `migrate-storage` porter and the

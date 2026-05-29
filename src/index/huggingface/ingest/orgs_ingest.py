@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from src.index.huggingface.config import HuggingFaceIndexConfig
     from src.index.huggingface.ingest.hf_client import HFClient
     from src.index.huggingface.ingest.scope import Scope
-    from src.index.huggingface.storage.duckdb_store import DuckDBStore
+    from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def ingest_orgs(
     *,
     config: HuggingFaceIndexConfig,  # noqa: ARG001 - kept for ingester signature parity
     client: HFClient,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     scope: Scope,
     limit: int | None = None,  # noqa: ARG001 - same signature as repo ingesters
 ) -> int:

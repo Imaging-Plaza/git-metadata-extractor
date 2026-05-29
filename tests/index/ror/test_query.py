@@ -13,7 +13,7 @@ from src.index.ror.models import DumpMatch
 from src.index.ror.paths import ror_data_dir
 from src.index.ror.query import lookup_dump, query, query_rag
 from src.index.ror.rerank import RerankResult
-from src.index.ror.storage.duckdb_store import DuckDBStore, extract_record_columns
+from src.index.ror.storage.duckdb_store import RorStore, extract_record_columns
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def _make_cfg(mode="epfl_ethz"):
 def _seed_duckdb(mini_dump_path: Path) -> None:
     """Populate the DuckDB `records` table from the mini dump fixture."""
     records = json.loads(mini_dump_path.read_text(encoding="utf-8"))
-    store = DuckDBStore.open()
+    store = RorStore.open()
     try:
         store.bulk_replace_records(extract_record_columns(r) for r in records)
     finally:

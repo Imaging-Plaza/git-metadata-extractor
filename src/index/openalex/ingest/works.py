@@ -9,7 +9,7 @@ from src.index.openalex.ingest.openalex_client import batched, iter_works
 
 if TYPE_CHECKING:
     from src.index.openalex.config import OpenAlexIndexConfig
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def _author_links(item: dict[str, Any]) -> tuple[list[tuple[str, int]], list[str
     return authors, institutions
 
 
-def persist_work(store: DuckDBStore, item: dict[str, Any]) -> str | None:
+def persist_work(store: OpenAlexStore, item: dict[str, Any]) -> str | None:
     row = _project_work(item)
     work_id = row["openalex_id"]
     if not work_id:
@@ -75,7 +75,7 @@ def persist_work(store: DuckDBStore, item: dict[str, Any]) -> str | None:
 def ingest_single_work(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     work_id: str,
 ) -> str:
     """Fetch + upsert one Work by OpenAlex id, URL, or DOI.
@@ -99,7 +99,7 @@ def ingest_single_work(
 def ingest_works(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     filters: dict[str, Any],
     limit: int | None = None,
 ) -> int:

@@ -44,14 +44,14 @@ def get_or_create_huggingface_resources(app_state: Any) -> Any | None:
     try:
         from src.index.huggingface.config import load_config  # noqa: PLC0415
         from src.index.huggingface.ingest.hf_client import HFClient  # noqa: PLC0415
-        from src.index.huggingface.storage.duckdb_store import DuckDBStore  # noqa: PLC0415
+        from src.index.huggingface.storage.duckdb_store import HuggingFaceStore  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("huggingface ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
         client = HFClient(config)
-        store = DuckDBStore.open()
+        store = HuggingFaceStore.open()
     except Exception as exc:  # noqa: BLE001
         logger.warning("huggingface ingest: resource init failed — %s", exc)
         return None

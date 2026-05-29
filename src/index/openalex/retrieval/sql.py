@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 if TYPE_CHECKING:
     pass
@@ -97,14 +97,14 @@ def _row_to_dict(cur: Any) -> list[dict[str, Any]]:
 def _execute(
     sql: str,
     params: dict[str, Any] | None,
-    store: DuckDBStore | None,
+    store: OpenAlexStore | None,
 ) -> list[dict[str, Any]]:
     # DuckDB forbids opening a second handle to the same file with a
     # different config in one process, so we always go through the writer
     # connection. The `_validate_adhoc` allowlist is the safety boundary.
     owned = False
     if store is None:
-        store = DuckDBStore.open()
+        store = OpenAlexStore.open()
         owned = True
     try:
         cur = store.connect().execute(sql, params or {})
@@ -118,7 +118,7 @@ def run_adhoc(
     sql: str,
     params: dict[str, Any] | None = None,
     *,
-    store: DuckDBStore | None = None,
+    store: OpenAlexStore | None = None,
 ) -> list[dict[str, Any]]:
     """Execute a guarded ad-hoc SELECT/WITH."""
     _validate_adhoc(sql)
@@ -129,7 +129,7 @@ def run_predefined(
     name: str,
     params: dict[str, Any] | None = None,
     *,
-    store: DuckDBStore | None = None,
+    store: OpenAlexStore | None = None,
 ) -> list[dict[str, Any]]:
     """Execute a named predefined query with the given params."""
     if name not in PREDEFINED_QUERIES:

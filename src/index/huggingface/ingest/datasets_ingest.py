@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.index.huggingface.config import HuggingFaceIndexConfig
     from src.index.huggingface.ingest.hf_client import HFClient
     from src.index.huggingface.ingest.scope import Scope
-    from src.index.huggingface.storage.duckdb_store import DuckDBStore
+    from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def ingest_single_dataset(
     repo_id: str,
     config: HuggingFaceIndexConfig,
     client: HFClient,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
 ) -> bool:
     """Fetch + upsert a single dataset. Returns True when persisted, False on miss."""
     info = client.dataset_info(repo_id, expand=DATASET_EXPAND_FIELDS)
@@ -60,7 +60,7 @@ def ingest_datasets(
     *,
     config: HuggingFaceIndexConfig,
     client: HFClient,
-    store: DuckDBStore,
+    store: HuggingFaceStore,
     scope: Scope,
     limit: int | None = None,
 ) -> int:

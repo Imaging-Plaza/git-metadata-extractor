@@ -64,7 +64,7 @@ class GitHubDiscoverer:
         # source == "from-references"
         # Pull github URLs that OpenAlex's find-github discovered into work_github_urls.
         try:
-            from src.index.openalex.storage.duckdb_store import DuckDBStore as OAStore
+            from src.index.openalex.storage.duckdb_store import OpenAlexStore as OAStore
         except ImportError:
             LOGGER.warning("OpenAlex DB not available for from-references discover")
             return

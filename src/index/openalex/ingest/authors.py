@@ -9,7 +9,7 @@ from src.index.openalex.ingest.openalex_client import batched, iter_authors
 
 if TYPE_CHECKING:
     from src.index.openalex.config import OpenAlexIndexConfig
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def _project_author(item: dict[str, Any]) -> dict[str, Any]:
 def ingest_authors(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     filters: dict[str, Any],
     limit: int | None = None,
 ) -> int:

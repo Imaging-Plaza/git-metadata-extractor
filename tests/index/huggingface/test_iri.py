@@ -20,7 +20,7 @@ from src.index.huggingface.iri import (
     parse_repo_id,
     space_iri,
 )
-from src.index.huggingface.storage.duckdb_store import DuckDBStore
+from src.index.huggingface.storage.duckdb_store import HuggingFaceStore
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ def test_bootstrap_migrates_every_pk_and_fk(tmp_path: Path):
     db_path = tmp_path / "hf.duckdb"
     _seed_legacy_hf_db(db_path)
 
-    store = DuckDBStore(db_path)
+    store = HuggingFaceStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -192,12 +192,12 @@ def test_bootstrap_is_idempotent_after_migration(tmp_path: Path):
     db_path = tmp_path / "hf.duckdb"
     _seed_legacy_hf_db(db_path)
 
-    store = DuckDBStore(db_path)
+    store = HuggingFaceStore(db_path)
     store.bootstrap()
     store.close()
 
     for _ in range(3):
-        store = DuckDBStore(db_path)
+        store = HuggingFaceStore(db_path)
         store.bootstrap()
         store.close()
 
@@ -347,7 +347,7 @@ def test_bootstrap_backfills_citation_surface(tmp_path: Path):
     )
     conn.close()
 
-    store = DuckDBStore(db_path)
+    store = HuggingFaceStore(db_path)
     store.bootstrap()
     conn = store.connect()
 
@@ -394,7 +394,7 @@ def test_lookup_methods_accept_bare_or_iri_input(tmp_path: Path):
     """`fetch_org` / `fetch_repo` / `repo_sha` should accept both shapes."""
     db_path = tmp_path / "hf.duckdb"
     _seed_legacy_hf_db(db_path)
-    store = DuckDBStore(db_path)
+    store = HuggingFaceStore(db_path)
     store.bootstrap()
 
     # Bare input — promoted internally.

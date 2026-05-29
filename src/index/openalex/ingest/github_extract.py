@@ -15,7 +15,7 @@ from src.v2.ingest.detection.github_url_classifier import classify_github_url
 from src.v2.ingest.detection.models import UnsupportedGitHubURL
 
 if TYPE_CHECKING:
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def _classify_safe(url: str) -> tuple[str, str | None, str | None] | None:
 
 
 def extract_and_persist_for_work(
-    store: DuckDBStore,
+    store: OpenAlexStore,
     *,
     work_id: str,
     text: str,
@@ -93,7 +93,7 @@ def extract_and_persist_for_work(
     return persisted
 
 
-def extract_for_persisted_works(store: DuckDBStore) -> tuple[int, int]:
+def extract_for_persisted_works(store: OpenAlexStore) -> tuple[int, int]:
     """Sweep over all `works` rows and extract abstract URLs.
 
     Returns (works_scanned, urls_persisted).

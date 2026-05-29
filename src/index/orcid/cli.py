@@ -25,7 +25,7 @@ import sys
 from src.index.orcid.config import load_config
 from src.index.orcid.models import ALL_ENTITY_TYPES
 from src.index.orcid.retrieval.sql import run_adhoc, run_predefined
-from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+from src.index.orcid.storage.duckdb_store import OrcidStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _cmd_discover(args: argparse.Namespace) -> int:
 
     _apply_scope_env(args.scope)
     config = load_config(scope=args.scope)
-    store = OrcidDuckDBStore.open(scope=args.scope)
+    store = OrcidStore.open(scope=args.scope)
     summary = discover_seeds(config=config, store=store, source=args.source)
     _emit_json({"scope": args.scope, "seeded": summary})
     return 0
@@ -68,7 +68,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
 
     _apply_scope_env(args.scope)
     config = load_config(scope=args.scope)
-    store = OrcidDuckDBStore.open(scope=args.scope)
+    store = OrcidStore.open(scope=args.scope)
     summary = ingest_persons(
         config=config,
         store=store,
@@ -87,7 +87,7 @@ def _cmd_embed(args: argparse.Namespace) -> int:
     entities = _split_entities(args.entities)
     config = load_config(scope=args.scope)
     config.require_rcp()
-    store = OrcidDuckDBStore.open(scope=args.scope)
+    store = OrcidStore.open(scope=args.scope)
     summary = embed_entities(
         config=config,
         store=store,
@@ -124,7 +124,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
             raise SystemExit(message)
         key, value = raw.split("=", 1)
         params[key] = int(value) if value.isdigit() else value
-    store = OrcidDuckDBStore.open(scope=args.scope)
+    store = OrcidStore.open(scope=args.scope)
     if args.predefined:
         rows = run_predefined(args.predefined, params, store=store)
     elif args.sql:
@@ -139,7 +139,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     _apply_scope_env(args.scope)
     config = load_config(scope=args.scope)
-    store = OrcidDuckDBStore.open(scope=args.scope)
+    store = OrcidStore.open(scope=args.scope)
     counts = {
         "seeds": store.count("seeds"),
         "persons": store.count("persons"),

@@ -30,7 +30,7 @@ from typing import Any, Iterator
 import requests
 
 from src.index._federated.protocols import IndexDiscoverer, Seed
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def _from_references(**_unused: Any) -> Iterator[Seed]:
     ``hint={"refs_only": True}`` so the hydrator knows to populate only
     ``work_references`` (cheap select) rather than re-upserting the work.
     """
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     cur = store.connect()
     rows = cur.execute("""
       SELECT w.openalex_id FROM works w

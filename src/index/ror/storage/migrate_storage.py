@@ -26,7 +26,7 @@ from src.index.ror.config import RorIndexConfig
 from src.index.ror.paths import dump_dir, index_data_root, manifest_path, records_path
 from src.index.ror.qdrant_store import QdrantRorStore
 from src.index.ror.storage.duckdb_store import (
-    DuckDBStore,
+    RorStore,
     ScopeRecord,
     StoreManifest,
     extract_record_columns,
@@ -122,7 +122,7 @@ def iter_jsonl_records(jsonl_path: Path) -> Iterator[dict[str, Any]]:
 
 
 def populate_full_dump(
-    store: DuckDBStore,
+    store: RorStore,
     json_path: Path,
     *,
     release_version: Optional[str] = None,
@@ -130,7 +130,7 @@ def populate_full_dump(
 ) -> int:
     """Load all records from the cached ROR dump JSON into the `records` table.
 
-    Uses `DuckDBStore.bulk_replace_records` (COPY FROM CSV) — ~230× faster
+    Uses `RorStore.bulk_replace_records` (COPY FROM CSV) — ~230× faster
     than the per-row INSERT/UPSERT path (measured 4170 rec/sec vs 18 rec/sec
     on this schema). The `records` table is fully replaced inside a single
     transaction, so a partial run leaves the previous state intact.
@@ -156,7 +156,7 @@ def populate_full_dump(
     return n
 
 
-def populate_scope(store: DuckDBStore, scope_mode: str) -> dict[str, Any]:
+def populate_scope(store: RorStore, scope_mode: str) -> dict[str, Any]:
     """Port one scope's `records.jsonl` + `manifest.json` into DuckDB.
 
     Returns a summary dict including the row count written and the manifest.
@@ -206,7 +206,7 @@ def populate_scope(store: DuckDBStore, scope_mode: str) -> dict[str, Any]:
 
 
 def verify_against_qdrant(
-    cfg: RorIndexConfig, store: DuckDBStore, scope_mode: str,
+    cfg: RorIndexConfig, store: RorStore, scope_mode: str,
 ) -> dict[str, Any]:
     """Read-only Qdrant point count + DuckDB scope_records count, compared."""
     duck_count = store.count_scope_records(scope_mode)
@@ -237,7 +237,7 @@ def migrate_all(
     skip_qdrant_check: bool = False,
 ) -> dict[str, Any]:
     """Run the full storage migration. Returns a summary suitable for printing."""
-    store = DuckDBStore.open(db_path)
+    store = RorStore.open(db_path)
 
     json_path = dump_path or find_cached_dump_json()
     if json_path is None:
