@@ -93,6 +93,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
     ProviderSpec("swissubase",                "swissubase.txt",                "study_ids"),
     ProviderSpec("ethz_research_collection",  "ethz_research_collection.txt",  "uuids"),
     ProviderSpec("oamonitor",                 "oamonitor.txt",                 "items", "oamonitor_item"),
+    ProviderSpec("dockerhub",                 "dockerhub.txt",                 "images"),
     ProviderSpec("zenodo_communities",        None,                            None),
     ProviderSpec("ror",                       None,                            None),
     ProviderSpec("infoscience",               None,                            None),

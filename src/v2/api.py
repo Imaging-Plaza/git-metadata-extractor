@@ -24,6 +24,7 @@ from rdflib import Graph as RDFGraph
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
 from src.v2.api_models import (
+    DockerhubIngestRequest,
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
     GitHubOrgsIngestRequest,
@@ -60,6 +61,10 @@ from src.v2.api_models import (
 from src.v2.auth import verify_token
 from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
+from src.v2.indices.dockerhub import (
+    run_dockerhub_ingest_job,
+    run_dockerhub_search,
+)
 from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_ingest_job,
     run_ethz_research_collection_search,
@@ -3031,6 +3036,52 @@ async def oamonitor_ingest_post(
     )
 
 
+@v2_router.post(
+    "/indices/dockerhub/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def dockerhub_ingest_post(
+    payload: DockerhubIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a Docker Hub ingest for one or more image references."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="dockerhub", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_dockerhub_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "dockerhub ingest job submitted: job_id=%s images=%d",
+        job_id, len(payload.images),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="dockerhub", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
 async def _search_response_or_unavailable(
     response: IndexSearchResponse | None, *, index_name: str,
 ) -> IndexSearchResponse | JSONResponse:
@@ -3352,6 +3403,24 @@ async def oamonitor_search_post(
     return await _search_response_or_unavailable(
         await run_oamonitor_search(payload, request.app.state),
         index_name="oamonitor",
+    )
+
+
+@v2_router.post(
+    "/indices/dockerhub/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def dockerhub_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the Docker Hub index."""
+    return await _search_response_or_unavailable(
+        await run_dockerhub_search(payload, request.app.state),
+        index_name="dockerhub",
     )
 
 

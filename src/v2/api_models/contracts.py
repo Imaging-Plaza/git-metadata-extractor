@@ -351,6 +351,23 @@ class OamonitorIngestRequest(BaseModel):
     )
 
 
+class DockerhubIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/dockerhub/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    images: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more Docker Hub image references. Accepts `namespace/name`, "
+            "a bare official-image name (`python` -> `library/python`), a "
+            "`https://hub.docker.com/r/<ns>/<name>` or `/_/<name>` URL, or a "
+            "`docker.io/...` pull reference (any `:tag` is dropped — repositories "
+            "are the indexed unit)."
+        ),
+    )
+
+
 class IndexSearchRequest(BaseModel):
     """Body for `POST /v2/indices/<name>/search`.
 
@@ -426,6 +443,7 @@ IndexName = Literal[
     "swissubase",
     "ethz_research_collection",
     "oamonitor",
+    "dockerhub",
     # CLI-managed catalogs — search routes added in the stats/search
     # coverage extension PR. No v2 ingest route (ingest happens via
     # `python -m src.index.<name> ingest`).

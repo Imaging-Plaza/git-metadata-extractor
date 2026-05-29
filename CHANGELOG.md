@@ -20,6 +20,27 @@ HTTPS URL form, end-to-end. Previously the codebase carried a split
 convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
 All identifiers now match.
 
+### Added — `dockerhub` RAG index
+
+New per-provider index for **Docker Hub repositories (images)**, with
+full parity to the existing indices: dedicated DuckDB store + `dockerhub`
+Qdrant collection, `POST /v2/indices/dockerhub/{ingest,search}` routes
+(ingest chains the embed step + WAL checkpoint like the others),
+federated search/lookup adapter, reset spec, `IndexName` enum entry,
+`seeds/dockerhub.txt`, and a `dockerhub` entry in the cold-start
+re-ingest driver.
+
+- One row per `namespace/name` (official images under `library/`);
+  metadata from the public Docker Hub v2 API
+  (`https://hub.docker.com/v2/repositories/{namespace}/{name}`), which
+  serves public repos anonymously. `DOCKERHUB_TOKEN` is optional (raises
+  the rate limit only).
+- Ingest accepts flexible references: `namespace/name`, bare official
+  names, `hub.docker.com/r/…` and `/_/…` URLs, and `docker.io/…` pull
+  refs (any `:tag` is dropped — repositories are the indexed unit).
+- Embedding text = `repo_id` + short description + `full_description`
+  (README); tags / pull_count / star_count ride in the payload.
+
 ### Added — Repository releases + GHCR container images
 
 The repository extractor now surfaces a repo's **published releases**

@@ -1,4 +1,5 @@
 from src.v2.api_models.contracts import (
+    DockerhubIngestRequest,
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
     GitHubOrgsIngestRequest,
@@ -38,6 +39,7 @@ from src.v2.api_models.errors import V2ErrorResponse, V2ErrorType, V2FieldError
 
 __all__ = [
     "DisciplineV2",
+    "DockerhubIngestRequest",
     "EthzResearchCollectionIngestRequest",
     "GitHubIngestRequest",
     "GitHubOrgsIngestRequest",

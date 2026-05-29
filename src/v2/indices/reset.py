@@ -132,6 +132,15 @@ def _github_repos_spec() -> _ResetSpec:
     )
 
 
+def _dockerhub_spec() -> _ResetSpec:
+    from src.index.dockerhub.paths import get_dockerhub_paths
+    return _ResetSpec(
+        duckdb_path_getter=lambda g=get_dockerhub_paths: g().duckdb_path,
+        qdrant_collections=("dockerhub",),
+        config_loader_dotted="src.index.dockerhub.config:load_config",
+    )
+
+
 def _github_users_spec() -> _ResetSpec:
     from src.index.github_users.paths import get_github_users_paths
     return _ResetSpec(
@@ -315,6 +324,7 @@ _SPEC_LOADERS: dict[str, Any] = {
     "huggingface_organizations": _hf_organizations_spec,
     "huggingface_papers": _hf_papers_spec,
     "github_repos": _github_repos_spec,
+    "dockerhub": _dockerhub_spec,
     "github_users": _github_users_spec,
     "github_organizations": _github_organizations_spec,
     "zenodo_records": _zenodo_records_spec,
