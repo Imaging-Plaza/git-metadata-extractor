@@ -131,6 +131,7 @@ async def run_zenodo_records_ingest_job(
             provider=INDEX_NAME,
             job_id=job_id,
             embed_call=lambda: embed_records(config=config, store=store),
+            checkpoint_store=store,
         )
         normalised_summary["embed"] = embed_summary
 

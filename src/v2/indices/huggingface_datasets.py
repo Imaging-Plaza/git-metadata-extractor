@@ -104,6 +104,7 @@ async def run_huggingface_datasets_ingest_job(
             provider=INDEX_NAME,
             job_id=job_id,
             embed_call=lambda: embed_datasets(config=config, store=store),
+            checkpoint_store=store,
         )
 
         finished.status = IndexIngestJobStatus.COMPLETED

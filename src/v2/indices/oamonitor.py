@@ -155,6 +155,7 @@ async def run_oamonitor_ingest_job(
             embed_call=lambda: embed_entities(
                 config=config, store=store, entities=list(ENTITY_TABLES),
             ),
+            checkpoint_store=store,
         )
 
         finished.status = IndexIngestJobStatus.COMPLETED

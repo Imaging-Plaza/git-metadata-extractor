@@ -121,6 +121,7 @@ async def run_orcid_ingest_job(
             embed_call=lambda: embed_entities(
                 config=config, store=store, entity_types=list(ALL_ENTITY_TYPES),
             ),
+            checkpoint_store=store,
         )
 
         finished.status = IndexIngestJobStatus.COMPLETED

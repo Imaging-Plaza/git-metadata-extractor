@@ -123,6 +123,7 @@ async def run_github_users_ingest_job(
             provider=INDEX_NAME,
             job_id=job_id,
             embed_call=lambda: embed_users(config=config, store=store),
+            checkpoint_store=store,
         )
 
         finished.status = IndexIngestJobStatus.COMPLETED
