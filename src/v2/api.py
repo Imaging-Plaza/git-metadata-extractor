@@ -3632,6 +3632,109 @@ async def index_ingest_job_status(
     return record
 
 
+# --- /v2/indices/<provider>/reset ----------------------------------------
+# Cold-start a single provider's index: wipe DuckDB + Qdrant collection(s).
+# The opt-in `wipe_cache=true` query param also clears the per-provider
+# ProviderCache so re-ingest re-fetches from upstream instead of replaying
+# cached responses. Token-gated; intentionally not idempotent-on-DELETE
+# at the HTTP level (200 + structured result), since clients usually want
+# to know what was actually reclaimed.
+
+
+@v2_router.delete(
+    "/indices/{provider}/reset",
+    tags=["Indices"],
+    response_model=None,
+)
+async def reset_provider_index(
+    provider: str,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+    wipe_qdrant: bool = True,
+    wipe_cache: bool = False,
+) -> dict[str, Any] | JSONResponse:
+    """Wipe one provider's DuckDB + Qdrant collection(s), enabling a
+    cold-start re-ingest.
+
+    Query flags:
+      - ``wipe_qdrant=true|false`` (default true): drop Qdrant
+        collections too. Set false for a DuckDB-only reset.
+      - ``wipe_cache=true|false`` (default false): also clear the
+        per-provider ProviderCache. Use when upstream data has
+        shifted; default keeps cached upstream responses so
+        re-ingest is fast.
+    """
+    from src.v2.indices.reset import (  # noqa: PLC0415
+        UnknownProviderError,
+        reset_index,
+    )
+
+    try:
+        result = await asyncio.to_thread(
+            reset_index,
+            provider,
+            app_state=request.app.state,
+            wipe_qdrant=wipe_qdrant,
+            wipe_cache=wipe_cache,
+        )
+    except UnknownProviderError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+    return {
+        "provider": result.provider,
+        "duckdb_deleted": result.duckdb_deleted,
+        "duckdb_bytes_reclaimed": result.duckdb_bytes_reclaimed,
+        "qdrant_collections_attempted": list(result.qdrant_collections_attempted),
+        "qdrant_collections_dropped": list(result.qdrant_collections_dropped),
+        "qdrant_skipped": result.qdrant_skipped,
+        "cache_cleared": result.cache_cleared,
+        "elapsed_seconds": result.elapsed_seconds,
+    }
+
+
+@v2_router.delete(
+    "/indices/reset-all",
+    tags=["Indices"],
+)
+async def reset_all_indices(
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+    wipe_qdrant: bool = True,
+    wipe_cache: bool = False,
+) -> dict[str, Any]:
+    """Wipe every known provider in one call.
+
+    Failures on individual providers don't stop the rest; each provider
+    returns its own result entry. Use carefully — this is an operator
+    tool for full re-ingest, not a routine cache flush.
+    """
+    from src.v2.indices.reset import reset_all  # noqa: PLC0415
+
+    results = await asyncio.to_thread(
+        reset_all,
+        app_state=request.app.state,
+        wipe_qdrant=wipe_qdrant,
+        wipe_cache=wipe_cache,
+    )
+    return {
+        "count": len(results),
+        "results": [
+            {
+                "provider": r.provider,
+                "duckdb_deleted": r.duckdb_deleted,
+                "duckdb_bytes_reclaimed": r.duckdb_bytes_reclaimed,
+                "qdrant_collections_dropped": list(r.qdrant_collections_dropped),
+                "qdrant_skipped": r.qdrant_skipped,
+                "cache_cleared": r.cache_cleared,
+                "elapsed_seconds": r.elapsed_seconds,
+            }
+            for r in results
+        ],
+    }
+
+
 @v2_router.get(
     "/health",
     response_model=V2HealthResponse,
