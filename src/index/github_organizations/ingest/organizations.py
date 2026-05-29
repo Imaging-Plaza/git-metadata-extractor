@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from src.index.github_organizations.models import OrgRecord
 
 if TYPE_CHECKING:
-    from src.index.github.ingest.github_client import GitHubClient
+    from src.index.github_repos.ingest.github_client import GitHubClient
     from src.index.github_organizations.config import (
         GitHubOrganizationsIndexConfig,
     )

@@ -34,7 +34,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GitHubDiscoverer:
-    name = "github"
+    name = "github_repos"
     accepted_sources = ("dependents", "from-references")
 
     def discover(self, source: str, **opts: Any) -> Iterator[Seed]:
@@ -83,7 +83,7 @@ class GitHubDiscoverer:
 
 
 class GitHubHydrator:
-    name = "github"
+    name = "github_repos"
     accepted_seed_types = ("github_repo",)
 
     def hydrate(self, seeds, *, only_unfetched: bool = True) -> HydrationSummary:

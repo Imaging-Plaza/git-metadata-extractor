@@ -6,7 +6,7 @@ embedding of their composed text (name + bio + company + location +
 blog). Used by v2 extraction for disambiguation: given a candidate
 handle or affiliation string, find the most likely matching user.
 
-Module layout follows the existing ``src.index.github`` repo-index
+Module layout follows the existing ``src.index.github_repos`` repo-index
 pattern, with the cross-cutting infra factored into
 ``src.index._github_accounts_base``.
 """

@@ -37,7 +37,7 @@ class GitHubPaths:
 
     @property
     def duckdb_path(self) -> Path:
-        return self.duckdb_dir / "github.duckdb"
+        return self.duckdb_dir / "github_repos.duckdb"
 
     @property
     def cache_dir(self) -> Path:
@@ -63,7 +63,7 @@ class GitHubPaths:
 
 def get_github_paths() -> GitHubPaths:
     """Resolve `<INDEX_DATA_DIR>/github/` and ensure subdirectories exist."""
-    root = _resolve_index_data_dir() / "github"
+    root = _resolve_index_data_dir() / "github_repos"
     paths = GitHubPaths(root=root)
     paths.duckdb_dir.mkdir(parents=True, exist_ok=True)
     paths.cache_dir.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 """Regression for #51 / #55: the auto-ingest closure built `GitHubClient(cfg)`
 positionally, but `GitHubClient.__init__` is keyword-only — so every
-`V2_GITHUB_RAG_AUTO_INGEST=true` deployment was silently 100%-failing the
+`V2_GITHUB_REPOS_RAG_AUTO_INGEST=true` deployment was silently 100%-failing the
 background ingest with a `TypeError` (catalogs stuck since 2026-05-13 / -24).
 
 The minimal guard: schedule the closure end-to-end with every heavy dep
@@ -78,7 +78,7 @@ class _GitHubStoreStub:
 def _patched_ingest_modules(monkeypatch, *, config: Any, client_cls: type) -> Any:
     """Stub every module the closure imports lazily.
 
-    The closure does `from src.index.github.* import ...` inside `_run`, so
+    The closure does `from src.index.github_repos.* import ...` inside `_run`, so
     inserting fake modules into `sys.modules` before the closure runs is
     enough to intercept those imports without monkeypatching attributes
     on objects the closure never touches.
@@ -91,20 +91,20 @@ def _patched_ingest_modules(monkeypatch, *, config: Any, client_cls: type) -> An
         return {"repos": 1}
 
     fakes = {
-        "src.index.github.config": types.SimpleNamespace(
+        "src.index.github_repos.config": types.SimpleNamespace(
             load_config=lambda: config,
         ),
-        "src.index.github.embed.pipeline": types.SimpleNamespace(
+        "src.index.github_repos.embed.pipeline": types.SimpleNamespace(
             embed_repos=_embed_repos,
         ),
-        "src.index.github.ingest.github_client": types.SimpleNamespace(
+        "src.index.github_repos.ingest.github_client": types.SimpleNamespace(
             GitHubClient=client_cls,
         ),
-        "src.index.github.ingest.repos": types.SimpleNamespace(
+        "src.index.github_repos.ingest.repos": types.SimpleNamespace(
             ingest_single_repo=_ingest_single_repo,
         ),
-        "src.index.github.storage.duckdb_store": types.SimpleNamespace(
-            GitHubStore=_GitHubStoreStub,
+        "src.index.github_repos.storage.duckdb_store": types.SimpleNamespace(
+            GitHubReposStore=_GitHubStoreStub,
         ),
     }
     originals = {name: sys.modules.get(name) for name in fakes}
@@ -126,7 +126,7 @@ def test_auto_ingest_constructs_github_client_with_keyword_args(
     fake_classification,
     fake_config,
 ):
-    monkeypatch.setenv("V2_GITHUB_RAG_AUTO_INGEST", "true")
+    monkeypatch.setenv("V2_GITHUB_REPOS_RAG_AUTO_INGEST", "true")
     _GitHubClientSpy.reset()
 
     with _patched_ingest_modules(
@@ -134,7 +134,7 @@ def test_auto_ingest_constructs_github_client_with_keyword_args(
     ):
         async def _drive() -> None:
             with caplog.at_level(logging.INFO, logger="src.v2.api"):
-                v2_api._maybe_schedule_github_auto_ingest(
+                v2_api._maybe_schedule_github_repos_auto_ingest(
                     classification=fake_classification, run_id="test-run",
                 )
                 # Yield once so the asyncio.create_task() inside has a
@@ -164,12 +164,12 @@ def test_auto_ingest_constructs_github_client_with_keyword_args(
 def test_auto_ingest_is_no_op_when_env_disabled(
     monkeypatch, fake_classification, fake_config,
 ):
-    monkeypatch.delenv("V2_GITHUB_RAG_AUTO_INGEST", raising=False)
+    monkeypatch.delenv("V2_GITHUB_REPOS_RAG_AUTO_INGEST", raising=False)
     _GitHubClientSpy.reset()
     with _patched_ingest_modules(
         monkeypatch, config=fake_config, client_cls=_GitHubClientSpy,
     ):
-        v2_api._maybe_schedule_github_auto_ingest(
+        v2_api._maybe_schedule_github_repos_auto_ingest(
             classification=fake_classification, run_id="test-run",
         )
     assert _GitHubClientSpy.last_kwargs is None

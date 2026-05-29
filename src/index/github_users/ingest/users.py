@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from src.index.github_users.models import UserRecord
 
 if TYPE_CHECKING:
-    from src.index.github.ingest.github_client import GitHubClient
+    from src.index.github_repos.ingest.github_client import GitHubClient
     from src.index.github_users.config import GitHubUsersIndexConfig
     from src.index.github_users.storage.duckdb_store import GitHubUsersStore
 

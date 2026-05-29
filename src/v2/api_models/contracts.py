@@ -381,7 +381,7 @@ IndexName = Literal[
     "zenodo",
     "huggingface",
     "huggingface_papers",
-    "github",
+    "github_repos",
     "github_users",
     "github_organizations",
     "openalex",

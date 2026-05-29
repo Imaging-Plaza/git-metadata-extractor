@@ -17,7 +17,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.github.embed.pipeline import GITHUB_COLLECTION
+from src.index.github_repos.embed.pipeline import GITHUB_REPOS_COLLECTION
 from src.index.openalex.embed.rcp_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
@@ -35,7 +35,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.github.config import GitHubIndexConfig
+    from src.index.github_repos.config import GitHubIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +103,10 @@ class GitHubRagProvider:
     ) -> list[dict[str, Any]]:
         if not isinstance(query, str) or not query.strip():
             return []
-        if not self._store.client.collection_exists(GITHUB_COLLECTION):
+        if not self._store.client.collection_exists(GITHUB_REPOS_COLLECTION):
             logger.info(
                 "%s: collection %s missing — returning [] without indexing",
-                _LOG_LABEL, GITHUB_COLLECTION,
+                _LOG_LABEL, GITHUB_REPOS_COLLECTION,
             )
             return []
 
@@ -127,7 +127,7 @@ class GitHubRagProvider:
         try:
             hits = await asyncio.to_thread(
                 self._store.search,
-                GITHUB_COLLECTION,
+                GITHUB_REPOS_COLLECTION,
                 query_vector=vector,
                 top_k=candidate_k,
                 filter_payload=filter_payload,
@@ -148,7 +148,7 @@ class GitHubRagProvider:
                 extras={
                     "id": hit.get("id"),
                     "score": hit.get("score"),
-                    "collection": GITHUB_COLLECTION,
+                    "collection": GITHUB_REPOS_COLLECTION,
                 },
             )
             for hit in hits
@@ -178,7 +178,7 @@ def build_default_provider(
     if not env_enabled("V2_GITHUB_RAG_ENABLED"):
         return None
     try:
-        from src.index.github.config import load_config  # noqa: PLC0415
+        from src.index.github_repos.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

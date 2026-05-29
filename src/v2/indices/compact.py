@@ -173,7 +173,7 @@ def _close_cached_store(app_state: Any, attr: str) -> None:
 
 
 _RESOURCE_ATTRS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
-    "github": ("v2_github_resources",),
+    "github_repos": ("v2_github_repos_resources",),
     "zenodo": ("v2_zenodo_resources",),
     "huggingface": ("v2_huggingface_resources",),
     "openalex": ("v2_openalex_resources",),

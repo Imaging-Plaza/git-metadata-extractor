@@ -33,14 +33,14 @@ from src.index.openalex.vector.qdrant_store import QdrantStore
 _QDRANT_RETRY_DELAYS_SECONDS: tuple[int, ...] = (5, 15, 45, 135)
 
 if TYPE_CHECKING:
-    from src.index.github.config import GitHubIndexConfig
-    from src.index.github.storage.duckdb_store import GitHubStore
+    from src.index.github_repos.config import GitHubIndexConfig
+    from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 
 LOGGER = logging.getLogger(__name__)
 
 _CHUNK_NAMESPACE = uuid.NAMESPACE_URL
 
-GITHUB_COLLECTION = "github_repos"
+GITHUB_REPOS_COLLECTION = "github_repos"
 
 
 def _chunk_id(entity_type: str, entity_id: str, chunk_index: int) -> str:
@@ -117,12 +117,12 @@ def _row_to_payload(row: dict[str, Any]) -> dict[str, Any]:
 async def _embed_repos_async(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
     limit: int | None,
 ) -> int:
     client = RCPEmbeddingClient(config)  # type: ignore[arg-type]
     qdrant = QdrantStore(config)  # type: ignore[arg-type]
-    qdrant.ensure_collection(GITHUB_COLLECTION)
+    qdrant.ensure_collection(GITHUB_REPOS_COLLECTION)
 
     pending: list[tuple[str, dict[str, Any], Chunk]] = []
     total = 0
@@ -167,7 +167,7 @@ async def _embed_repos_async(
                 time.sleep(delay)
             try:
                 qdrant.upsert_points(
-                    GITHUB_COLLECTION,
+                    GITHUB_REPOS_COLLECTION,
                     ids=ids,
                     vectors=vectors,
                     payloads=payloads,
@@ -223,7 +223,7 @@ async def _embed_repos_async(
 def embed_repos(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
     limit: int | None = None,
 ) -> dict[str, int]:
     """Synchronously embed GitHub repos."""
@@ -239,11 +239,11 @@ def embed_repos(
 async def _rebuild_async(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
 ) -> int:
     client = RCPEmbeddingClient(config)  # type: ignore[arg-type]
     qdrant = QdrantStore(config)  # type: ignore[arg-type]
-    qdrant.ensure_collection(GITHUB_COLLECTION)
+    qdrant.ensure_collection(GITHUB_REPOS_COLLECTION)
 
     cur = store.connect().execute(
         "SELECT c.chunk_id, c.entity_id, c.chunk_index, c.text, "
@@ -288,7 +288,7 @@ async def _rebuild_async(
                 },
             )
         qdrant.upsert_points(
-            GITHUB_COLLECTION,
+            GITHUB_REPOS_COLLECTION,
             ids=ids,
             vectors=vectors,
             payloads=payloads,
@@ -301,7 +301,7 @@ async def _rebuild_async(
 def rebuild_qdrant_from_chunks(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
 ) -> dict[str, int]:
     """Rebuild the `github_repos` collection from the existing `chunks` table.
 

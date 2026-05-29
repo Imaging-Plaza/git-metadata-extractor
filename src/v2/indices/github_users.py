@@ -35,7 +35,7 @@ def get_or_create_github_users_resources(app_state: Any) -> Any | None:
     if cached is not None:
         return cached
     try:
-        from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+        from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
         from src.index.github_users.config import load_config  # noqa: PLC0415
         from src.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
             GitHubUsersStore,

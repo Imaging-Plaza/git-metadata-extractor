@@ -1,4 +1,4 @@
-"""Adapter wrapping `src.index.github` for federated search/lookup."""
+"""Adapter wrapping `src.index.github_repos` for federated search/lookup."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ _RE_GH_NS_URL = re.compile(
 )
 
 
-class GitHubAdapter:
-    name = "github"
+class GitHubReposAdapter:
+    name = "github_repos"
     entity_types = ["repos"]
 
     def search(
@@ -30,8 +30,8 @@ class GitHubAdapter:
         filters: dict[str, Any] | None,
     ) -> list[Hit]:
         try:
-            from src.index.github.config import load_config
-            from src.index.github.retrieval.semantic import semantic_search
+            from src.index.github_repos.config import load_config
+            from src.index.github_repos.retrieval.semantic import semantic_search
         except Exception:  # noqa: BLE001
             return []
         cfg = load_config()
@@ -74,10 +74,10 @@ class GitHubAdapter:
             # Bare org slug → no lookup yet (no orgs table in github index)
             return []
         try:
-            from src.index.github.storage.duckdb_store import GitHubStore
+            from src.index.github_repos.storage.duckdb_store import GitHubReposStore
         except Exception:  # noqa: BLE001
             return []
-        store = GitHubStore.open()
+        store = GitHubReposStore.open()
         if hasattr(store, "fetch_repo"):
             row = store.fetch_repo(repo_id)
             if row is not None:
@@ -98,4 +98,4 @@ def _summary(payload: dict[str, Any]) -> str | None:
     return " — ".join(parts) if parts else None
 
 
-register(GitHubAdapter())
+register(GitHubReposAdapter())

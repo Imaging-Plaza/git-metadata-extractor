@@ -20,21 +20,21 @@ import logging
 import sys
 from typing import Any
 
-from src.index.github.config import load_config
-from src.index.github.embed.pipeline import (
-    GITHUB_COLLECTION,
+from src.index.github_repos.config import load_config
+from src.index.github_repos.embed.pipeline import (
+    GITHUB_REPOS_COLLECTION,
     embed_repos,
     rebuild_qdrant_from_chunks,
 )
-from src.index.github.ingest.repos import ingest_repos
-from src.index.github.ingest.scope import merge_openalex_repos, resolve_scope
-from src.index.github.retrieval.semantic import semantic_search
-from src.index.github.retrieval.sql import (
+from src.index.github_repos.ingest.repos import ingest_repos
+from src.index.github_repos.ingest.scope import merge_openalex_repos, resolve_scope
+from src.index.github_repos.retrieval.semantic import semantic_search
+from src.index.github_repos.retrieval.sql import (
     PREDEFINED_QUERIES,
     run_adhoc,
     run_predefined,
 )
-from src.index.github.storage.duckdb_store import GitHubStore
+from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             "or pass --repos / --repos-file."
         )
         raise SystemExit(message)
-    store = GitHubStore.open()
+    store = GitHubReposStore.open()
     try:
         summary = ingest_repos(
             config=config,
@@ -92,7 +92,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
 def _cmd_embed(args: argparse.Namespace) -> int:
     config = load_config()
     config.require_rcp()
-    store = GitHubStore.open()
+    store = GitHubReposStore.open()
     try:
         summary = embed_repos(config=config, store=store, limit=args.limit)
     finally:
@@ -105,7 +105,7 @@ def _cmd_rebuild_qdrant(args: argparse.Namespace) -> int:
     del args
     config = load_config()
     config.require_rcp()
-    store = GitHubStore.open()
+    store = GitHubReposStore.open()
     try:
         summary = rebuild_qdrant_from_chunks(config=config, store=store)
     finally:
@@ -160,7 +160,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     del args
     config = load_config()
-    store = GitHubStore.open()
+    store = GitHubReposStore.open()
     try:
         counts = {t: store.count(t) for t in ("repos", "chunks")}
     finally:
@@ -169,14 +169,14 @@ def _cmd_status(args: argparse.Namespace) -> int:
     try:
         from src.index.openalex.vector.qdrant_store import QdrantStore
 
-        qdrant_count = QdrantStore(config).count(GITHUB_COLLECTION)  # type: ignore[arg-type]
+        qdrant_count = QdrantStore(config).count(GITHUB_REPOS_COLLECTION)  # type: ignore[arg-type]
     except Exception as exc:  # noqa: BLE001
         qdrant_count = f"error: {exc}"
     _emit_json(
         {
             "duckdb_path": str(config.paths.duckdb_path),
             "duckdb_counts": counts,
-            "qdrant_collection": GITHUB_COLLECTION,
+            "qdrant_collection": GITHUB_REPOS_COLLECTION,
             "qdrant_points": qdrant_count,
             "scope_active": config.scope.active,
             "scope_seed_sizes": {k: len(v) for k, v in config.scope.seeds.items()},
@@ -189,7 +189,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     uvicorn.run(
-        "src.index.github.api:app",
+        "src.index.github_repos.api:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
@@ -202,7 +202,7 @@ def _split_repos(raw: str) -> list[str]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="src.index.github")
+    parser = argparse.ArgumentParser(prog="src.index.github_repos")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_ingest = sub.add_parser("ingest", help="Fetch GitHub repo metadata + README into DuckDB")

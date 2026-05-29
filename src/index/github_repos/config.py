@@ -19,7 +19,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel
 
-from src.index.github.paths import GitHubPaths, get_github_paths
+from src.index.github_repos.paths import GitHubPaths, get_github_paths
 
 DEFAULT_CONFIG_PATH = Path("config/index/github.yaml")
 

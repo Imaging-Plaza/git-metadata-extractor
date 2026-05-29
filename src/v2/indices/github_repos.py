@@ -1,8 +1,8 @@
-"""Async ingest helper for the GitHub index, called from `/v2/indices/github/ingest`.
+"""Async ingest helper for the github_repos index, called from `/v2/indices/github_repos/ingest`.
 
 Each item in the request body is dispatched to
-:func:`src.index.github.ingest.repos.ingest_single_repo` against a shared
-``GitHubStore`` + ``GitHubClient`` cached on ``app.state``. A failure on one
+:func:`src.index.github_repos.ingest.repos.ingest_single_repo` against a shared
+``GitHubReposStore`` + ``GitHubClient`` cached on ``app.state``. A failure on one
 repo does not stop the rest; per-repo outcomes land on the job summary.
 """
 
@@ -26,26 +26,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-INDEX_NAME = "github"
+INDEX_NAME = "github_repos"
 
 
-def get_or_create_github_resources(app_state: Any) -> Any | None:
+def get_or_create_github_repos_resources(app_state: Any) -> Any | None:
     """Lazy-init (config, store, client) on ``app.state``."""
 
-    cached = getattr(app_state, "v2_github_resources", None)
+    cached = getattr(app_state, "v2_github_repos_resources", None)
     if cached is not None:
         return cached
     try:
-        from src.index.github.config import load_config  # noqa: PLC0415
-        from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
-        from src.index.github.storage.duckdb_store import GitHubStore  # noqa: PLC0415
+        from src.index.github_repos.config import load_config  # noqa: PLC0415
+        from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+        from src.index.github_repos.storage.duckdb_store import GitHubReposStore  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("github ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
         config.require_github()
-        store = GitHubStore.open(config.paths.duckdb_path)
+        store = GitHubReposStore.open(config.paths.duckdb_path)
         client = GitHubClient(
             api_base=config.github.api_base,
             token=config.github.token,
@@ -54,8 +54,8 @@ def get_or_create_github_resources(app_state: Any) -> Any | None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("github ingest: resource init failed — %s", exc)
         return None
-    app_state.v2_github_resources = (config, store, client)
-    return app_state.v2_github_resources
+    app_state.v2_github_repos_resources = (config, store, client)
+    return app_state.v2_github_repos_resources
 
 
 def _ingest_one_repo(
@@ -63,7 +63,7 @@ def _ingest_one_repo(
 ) -> dict[str, Any]:
     """Run a single per-repo ingest; never raises."""
     try:
-        from src.index.github.ingest.repos import (  # noqa: PLC0415
+        from src.index.github_repos.ingest.repos import (  # noqa: PLC0415
             ingest_single_repo,
         )
         outcome = ingest_single_repo(
@@ -75,7 +75,7 @@ def _ingest_one_repo(
     return {"repo": repo, "outcome": outcome}
 
 
-async def run_github_ingest_job(
+async def run_github_repos_ingest_job(
     *,
     payload: GitHubIngestRequest,
     app_state: Any,
@@ -92,7 +92,7 @@ async def run_github_ingest_job(
         existing.started_at = datetime.now(timezone.utc)
         job_store.set(existing)
 
-        resources = get_or_create_github_resources(app_state)
+        resources = get_or_create_github_repos_resources(app_state)
         if resources is None:
             existing.status = IndexIngestJobStatus.FAILED
             existing.completed_at = datetime.now(timezone.utc)
@@ -134,15 +134,15 @@ async def run_github_ingest_job(
         job_store.set(record)
 
 
-async def run_github_search(
+async def run_github_repos_search(
     payload: IndexSearchRequest, app_state: Any,
 ) -> IndexSearchResponse | None:
     """Run a semantic search against the GitHub repos index."""
-    resources = get_or_create_github_resources(app_state)
+    resources = get_or_create_github_repos_resources(app_state)
     if resources is None:
         return None
     config, store, _ = resources
-    from src.index.github.retrieval.semantic import semantic_search  # noqa: PLC0415
+    from src.index.github_repos.retrieval.semantic import semantic_search  # noqa: PLC0415
     raw_hits = await asyncio.to_thread(
         semantic_search,
         config=config, query=payload.query,
@@ -152,7 +152,7 @@ async def run_github_search(
         store=store,
     )
     return IndexSearchResponse(
-        index_name="github",
+        index_name="github_repos",
         target=None,
         query=payload.query,
         hits=[hit_from_raw(h) for h in raw_hits],
@@ -161,7 +161,7 @@ async def run_github_search(
 
 __all__ = [
     "INDEX_NAME",
-    "get_or_create_github_resources",
-    "run_github_ingest_job",
-    "run_github_search",
+    "get_or_create_github_repos_resources",
+    "run_github_repos_ingest_job",
+    "run_github_repos_search",
 ]

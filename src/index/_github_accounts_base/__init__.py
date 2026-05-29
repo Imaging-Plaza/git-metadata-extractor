@@ -20,7 +20,7 @@ identical between the two. This module owns the shared pieces as
 plain helpers (no class hierarchy) so each concrete module stays
 small and easy to read.
 
-The existing `src.index.github.ingest.github_client.GitHubClient` is
+The existing `src.index.github_repos.ingest.github_client.GitHubClient` is
 reused verbatim — it already has `get_user(login)` and
 `get_organization(org_name)` methods backed by the same multi-token /
 `ProviderCache` flow the repo index uses.

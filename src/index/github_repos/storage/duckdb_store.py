@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING, Any
 
 import duckdb
 
-from src.index.github.paths import get_github_paths
+from src.index.github_repos.paths import get_github_paths
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from src.index.github.models import RepoRecord
+    from src.index.github_repos.models import RepoRecord
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class GitHubStore:
+class GitHubReposStore:
     """Thin DuckDB wrapper for the GitHub schema. `bootstrap()` is idempotent."""
 
     def __init__(self, db_path: Path) -> None:
@@ -37,7 +37,7 @@ class GitHubStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> GitHubStore:
+    def open(cls, db_path: Path | None = None) -> GitHubReposStore:
         if db_path is None:
             db_path = get_github_paths().duckdb_path
         store = cls(db_path)

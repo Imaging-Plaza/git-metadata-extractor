@@ -60,7 +60,10 @@ from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_ingest_job,
     run_ethz_research_collection_search,
 )
-from src.v2.indices.github import run_github_ingest_job, run_github_search
+from src.v2.indices.github_repos import (
+    run_github_repos_ingest_job,
+    run_github_repos_search,
+)
 from src.v2.indices.github_organizations import (
     run_github_orgs_ingest_job,
     run_github_orgs_search,
@@ -1626,13 +1629,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         logger.info("query log written: %s", written_log_path)
 
     # Auto-ingest hook (Bug-class extension): when the operator opts in
-    # via `V2_GITHUB_RAG_AUTO_INGEST=true`, every successful repository
+    # via `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true`, every successful repository
     # extract triggers a background ingest of the repo card into the
     # GitHub RAG DuckDB + Qdrant collection. This grows the index
     # organically as new repos are seen, so subsequent extractions find
     # them via `search_github_rag`. Fire-and-forget — the caller's
     # response is already built, the ingest is best-effort.
-    _maybe_schedule_github_auto_ingest(
+    _maybe_schedule_github_repos_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
@@ -1652,7 +1655,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     return response_model
 
 
-_GITHUB_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_REPOS_AUTO_INGEST_LOCK = threading.Lock()
 _GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
 _GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
 _HF_PAPERS_AUTO_INGEST_LOCK = threading.Lock()
@@ -1705,7 +1708,7 @@ def _github_account_login_from_url(normalized_url: Any) -> str | None:
     return rest or None
 
 
-def _maybe_schedule_github_auto_ingest(
+def _maybe_schedule_github_repos_auto_ingest(
     *,
     classification: Any,
     run_id: str,
@@ -1713,7 +1716,7 @@ def _maybe_schedule_github_auto_ingest(
     """Schedule a background GitHub RAG ingest when the operator opts in.
 
     Gates:
-    - `V2_GITHUB_RAG_AUTO_INGEST=true` env var (off by default — every
+    - `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true` env var (off by default — every
       existing deployment keeps its current behaviour).
     - The extract target must be a repository (we have no index for
       user/org/article cards yet).
@@ -1725,7 +1728,7 @@ def _maybe_schedule_github_auto_ingest(
     writes across uvicorn worker tasks. The single-repo ingest is
     fast (~1-3s) so contention is negligible.
     """
-    if os.getenv("V2_GITHUB_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+    if os.getenv("V2_GITHUB_REPOS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
         return
     if not hasattr(classification, "detected_type"):
         return
@@ -1742,11 +1745,11 @@ def _maybe_schedule_github_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github.config import load_config as load_github_config  # noqa: PLC0415
-            from src.index.github.embed.pipeline import embed_repos  # noqa: PLC0415
-            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
-            from src.index.github.ingest.repos import ingest_single_repo  # noqa: PLC0415
-            from src.index.github.storage.duckdb_store import GitHubStore  # noqa: PLC0415
+            from src.index.github_repos.config import load_config as load_github_config  # noqa: PLC0415
+            from src.index.github_repos.embed.pipeline import embed_repos  # noqa: PLC0415
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_repos.ingest.repos import ingest_single_repo  # noqa: PLC0415
+            from src.index.github_repos.storage.duckdb_store import GitHubReposStore  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             logger.exception(
                 "github auto-ingest (run_id=%s, repo=%s): module import failed",
@@ -1757,8 +1760,8 @@ def _maybe_schedule_github_auto_ingest(
         def _do_ingest() -> tuple[str, int]:
             cfg = load_github_config()
             cfg.require_github()
-            with _GITHUB_AUTO_INGEST_LOCK:
-                store = GitHubStore.open(cfg.paths.duckdb_path)
+            with _GITHUB_REPOS_AUTO_INGEST_LOCK:
+                store = GitHubReposStore.open(cfg.paths.duckdb_path)
                 try:
                     existing = store.fetch_repo(full_name)
                     if existing is not None:
@@ -1808,7 +1811,7 @@ def _maybe_schedule_github_users_auto_ingest(
     """Schedule a background ingest into the github_users index when
     the operator opts in via `V2_GITHUB_USERS_RAG_AUTO_INGEST=true`.
 
-    Same gating shape as `_maybe_schedule_github_auto_ingest` but
+    Same gating shape as `_maybe_schedule_github_repos_auto_ingest` but
     fires only for `detected_type == "user"` targets. Org-typed
     extracts are handled by the sibling helper below.
     """
@@ -1826,7 +1829,7 @@ def _maybe_schedule_github_users_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
             from src.index.github_users.config import load_config  # noqa: PLC0415
             from src.index.github_users.embed.pipeline import embed_users  # noqa: PLC0415
             from src.index.github_users.ingest.users import ingest_single_user  # noqa: PLC0415
@@ -1908,7 +1911,7 @@ def _maybe_schedule_github_orgs_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
             from src.index.github_organizations.config import load_config  # noqa: PLC0415
             from src.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
                 embed_organizations,
@@ -2377,7 +2380,7 @@ async def huggingface_ingest_post(
 
 
 @v2_router.post(
-    "/indices/github/ingest",
+    "/indices/github_repos/ingest",
     response_model=IndexIngestJobAccepted,
     response_model_exclude_none=True,
     status_code=status.HTTP_202_ACCEPTED,
@@ -2401,12 +2404,12 @@ async def github_ingest_post(
     job_id = str(uuid4())
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
-        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        job_id=job_id, index_name="github_repos", status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"), submitted_at=submitted_at,
     )
     job_store.set(job)
     task = asyncio.create_task(
-        run_github_ingest_job(
+        run_github_repos_ingest_job(
             payload=payload, app_state=request.app.state,
             job_store=job_store, job_id=job_id,
         ),
@@ -2414,7 +2417,7 @@ async def github_ingest_post(
     _track_background_task(request, task)
     logger.info("github ingest job submitted: job_id=%s repos=%d", job_id, len(payload.repos))
     return IndexIngestJobAccepted(
-        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        job_id=job_id, index_name="github_repos", status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
     )
 
@@ -2901,7 +2904,7 @@ async def huggingface_search_post(
 
 
 @v2_router.post(
-    "/indices/github/search",
+    "/indices/github_repos/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
@@ -2913,7 +2916,7 @@ async def github_search_post(
 ) -> IndexSearchResponse | JSONResponse:
     """Semantic search against the GitHub repos index."""
     return await _search_response_or_unavailable(
-        await run_github_search(payload, request.app.state), index_name="github",
+        await run_github_repos_search(payload, request.app.state), index_name="github_repos",
     )
 
 

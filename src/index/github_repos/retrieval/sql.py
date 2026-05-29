@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.index.github.storage.duckdb_store import GitHubStore
+from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 
 INVALID_QUERY_PREFIX_ERROR = "Only SELECT/WITH queries are allowed"
 FORBIDDEN_KEYWORD_ERROR = "Forbidden keyword in query: {kw}"
@@ -89,11 +89,11 @@ def _row_to_dict(cur: Any) -> list[dict[str, Any]]:
 def _execute(
     sql: str,
     params: dict[str, Any] | None,
-    store: GitHubStore | None,
+    store: GitHubReposStore | None,
 ) -> list[dict[str, Any]]:
     owned = False
     if store is None:
-        store = GitHubStore.open()
+        store = GitHubReposStore.open()
         owned = True
     try:
         cur = store.connect().execute(sql, params or {})
@@ -107,7 +107,7 @@ def run_adhoc(
     sql: str,
     params: dict[str, Any] | None = None,
     *,
-    store: GitHubStore | None = None,
+    store: GitHubReposStore | None = None,
 ) -> list[dict[str, Any]]:
     _validate_adhoc(sql)
     return _execute(sql, params, store)
@@ -117,7 +117,7 @@ def run_predefined(
     name: str,
     params: dict[str, Any] | None = None,
     *,
-    store: GitHubStore | None = None,
+    store: GitHubReposStore | None = None,
 ) -> list[dict[str, Any]]:
     if name not in PREDEFINED_QUERIES:
         message = (

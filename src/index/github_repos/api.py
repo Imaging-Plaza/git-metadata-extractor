@@ -8,15 +8,15 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from src.index.github.config import load_config
-from src.index.github.embed.pipeline import GITHUB_COLLECTION
-from src.index.github.retrieval.semantic import semantic_search
-from src.index.github.retrieval.sql import (
+from src.index.github_repos.config import load_config
+from src.index.github_repos.embed.pipeline import GITHUB_REPOS_COLLECTION
+from src.index.github_repos.retrieval.semantic import semantic_search
+from src.index.github_repos.retrieval.sql import (
     PREDEFINED_QUERIES,
     run_adhoc,
     run_predefined,
 )
-from src.index.github.storage.duckdb_store import GitHubStore
+from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 LOGGER = logging.getLogger(__name__)
@@ -43,11 +43,11 @@ def healthz() -> dict[str, Any]:
     duck_status = "ok"
     qdrant_status = "ok"
     try:
-        GitHubStore.open().count("repos")
+        GitHubReposStore.open().count("repos")
     except Exception as exc:  # noqa: BLE001
         duck_status = f"error: {exc}"
     try:
-        QdrantStore(config).count(GITHUB_COLLECTION)  # type: ignore[arg-type]
+        QdrantStore(config).count(GITHUB_REPOS_COLLECTION)  # type: ignore[arg-type]
     except Exception as exc:  # noqa: BLE001
         qdrant_status = f"error: {exc}"
     return {
@@ -98,7 +98,7 @@ def list_predefined() -> dict[str, list[str]]:
 
 @app.get("/repo/{owner}/{name}")
 def get_repo(owner: str, name: str) -> dict[str, Any]:
-    store = GitHubStore.open()
+    store = GitHubReposStore.open()
     repo = store.fetch_repo(f"{owner}/{name}")
     if repo is None:
         raise HTTPException(status_code=404, detail="not found")

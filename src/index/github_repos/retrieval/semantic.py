@@ -11,14 +11,14 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.github.embed.pipeline import GITHUB_COLLECTION
-from src.index.github.storage.duckdb_store import GitHubStore
+from src.index.github_repos.embed.pipeline import GITHUB_REPOS_COLLECTION
+from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
 from src.index.openalex.rerank.rcp_client import RCPRerankerClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:
-    from src.index.github.config import GitHubIndexConfig
+    from src.index.github_repos.config import GitHubIndexConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ async def _async_search(
     top_k: int,
     candidate_k: int,
     filter_payload: dict[str, Any] | None,
-    store: GitHubStore,
+    store: GitHubReposStore,
 ) -> list[dict[str, Any]]:
     embed = RCPEmbeddingClient(config)  # type: ignore[arg-type]
     qdrant = QdrantStore(config)  # type: ignore[arg-type]
@@ -45,7 +45,7 @@ async def _async_search(
 
     [query_vec] = await embed.embed_all([query])
     candidates = qdrant.search(
-        GITHUB_COLLECTION,
+        GITHUB_REPOS_COLLECTION,
         query_vector=query_vec,
         top_k=candidate_k,
         filter_payload=filter_payload,
@@ -88,10 +88,10 @@ def semantic_search(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: GitHubStore | None = None,
+    store: GitHubReposStore | None = None,
 ) -> list[dict[str, Any]]:
     if store is None:
-        store = GitHubStore.open()
+        store = GitHubReposStore.open()
     return asyncio.run(
         _async_search(
             config=config,

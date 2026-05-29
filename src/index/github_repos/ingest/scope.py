@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.index.github.config import GitHubIndexConfig
+    from src.index.github_repos.config import GitHubIndexConfig
 
 LOGGER = logging.getLogger(__name__)
 

@@ -55,7 +55,7 @@ _CANDIDATES = [
     "zenodo",
     "infoscience",
     "ethz_research_collection",
-    "github",
+    "github_repos",
     "huggingface",
     "snsf",
     "renkulab",

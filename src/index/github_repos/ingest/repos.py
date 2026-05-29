@@ -7,13 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.index.github.ingest.github_client import GitHubClient
-from src.index.github.models import ContributorEntry, RepoRecord
+from src.index.github_repos.ingest.github_client import GitHubClient
+from src.index.github_repos.models import ContributorEntry, RepoRecord
 
 if TYPE_CHECKING:
-    from src.index.github.config import GitHubIndexConfig
-    from src.index.github.ingest.scope import Scope
-    from src.index.github.storage.duckdb_store import GitHubStore
+    from src.index.github_repos.config import GitHubIndexConfig
+    from src.index.github_repos.ingest.scope import Scope
+    from src.index.github_repos.storage.duckdb_store import GitHubReposStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def _persist_readme(*, owner: str, name: str, text: str, cards_dir: Path) -> str
 def ingest_single_repo(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
     client: GitHubClient,
     full_name: str,
 ) -> str:
@@ -140,7 +140,7 @@ def ingest_single_repo(
 def ingest_repos(
     *,
     config: GitHubIndexConfig,
-    store: GitHubStore,
+    store: GitHubReposStore,
     scope: Scope,
     limit: int | None = None,
 ) -> dict[str, Any]:

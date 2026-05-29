@@ -73,7 +73,7 @@ def _request(app: FastAPI, method: str, path: str, **kwargs: Any) -> tuple[int, 
 
 def test_freshness_endpoint_rolls_up_per_provider(tmp_path: Path, monkeypatch):
     """One catalog populated, the rest unavailable → roll-up still works."""
-    db = tmp_path / "github.duckdb"
+    db = tmp_path / "github_repos.duckdb"
     yesterday = datetime(2026, 5, 26, 12, 0, 0, tzinfo=timezone.utc)
     _seed_stats_db(db, count=42, ingested_at=yesterday)
 
@@ -82,7 +82,7 @@ def test_freshness_endpoint_rolls_up_per_provider(tmp_path: Path, monkeypatch):
     from src.v2 import api as v2_api
 
     def _fake_fetch(provider: str, app_state: Any) -> Any | None:
-        return _FakeStore(db) if provider == "github" else None
+        return _FakeStore(db) if provider == "github_repos" else None
 
     monkeypatch.setattr(v2_api, "fetch_store_for_stats", _fake_fetch)
 
@@ -94,10 +94,10 @@ def test_freshness_endpoint_rolls_up_per_provider(tmp_path: Path, monkeypatch):
     assert isinstance(body["catalogs"], list)
     # All supported providers appear.
     providers = {c["provider"] for c in body["catalogs"]}
-    assert "github" in providers and "ror" in providers and "zenodo_communities" in providers
+    assert "github_repos" in providers and "ror" in providers and "zenodo_communities" in providers
 
     by_provider = {c["provider"]: c for c in body["catalogs"]}
-    gh = by_provider["github"]
+    gh = by_provider["github_repos"]
     assert gh["count"] == 42
     assert gh["last_updated"] is not None
     assert gh["age_seconds"] > 0
@@ -109,7 +109,7 @@ def test_freshness_endpoint_rolls_up_per_provider(tmp_path: Path, monkeypatch):
     assert ror.get("age_seconds") is None
 
     # The oldest_* convenience fields point at the only catalog we seeded.
-    assert body["oldest_provider"] == "github"
+    assert body["oldest_provider"] == "github_repos"
     assert body["oldest_age_seconds"] >= gh["age_seconds"] - 0.001
 
 
