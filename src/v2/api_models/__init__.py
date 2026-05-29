@@ -1,6 +1,8 @@
 from src.v2.api_models.contracts import (
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
+    GitHubOrgsIngestRequest,
+    GitHubUsersIngestRequest,
     HFIngestItem,
     HuggingFaceIngestRequest,
     IndexIngestJob,
@@ -34,6 +36,8 @@ __all__ = [
     "DisciplineV2",
     "EthzResearchCollectionIngestRequest",
     "GitHubIngestRequest",
+    "GitHubOrgsIngestRequest",
+    "GitHubUsersIngestRequest",
     "HFIngestItem",
     "HuggingFaceIngestRequest",
     "IndexIngestJob",

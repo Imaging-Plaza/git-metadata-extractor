@@ -184,6 +184,28 @@ class GitHubIngestRequest(BaseModel):
     )
 
 
+class GitHubUsersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github_users/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logins: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub user logins (bare handles, not URLs).",
+    )
+
+
+class GitHubOrgsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github_organizations/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    orgs: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub organization handles (bare, not URLs).",
+    )
+
+
 class OpenAlexIngestRequest(BaseModel):
     """Body for `POST /v2/indices/openalex/ingest`.
 
@@ -342,6 +364,8 @@ IndexName = Literal[
     "zenodo",
     "huggingface",
     "github",
+    "github_users",
+    "github_organizations",
     "openalex",
     "orcid",
     "renkulab",
