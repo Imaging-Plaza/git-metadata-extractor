@@ -38,7 +38,7 @@ from src.index.openalex.embed.chunker import (
     chunk_for_simple_entity,
     chunk_for_work,
 )
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:

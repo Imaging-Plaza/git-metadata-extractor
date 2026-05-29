@@ -14,7 +14,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from src.index.openalex.embed.chunker import Chunk, chunk_text
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient as _BaseEmbed
+from src.index._rcp.embed_client import RCPEmbeddingClient as _BaseEmbed
 
 if TYPE_CHECKING:
     from src.index.orcid.config import OrcidIndexConfig

@@ -12,8 +12,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
-from src.index.openalex.rerank.rcp_client import RCPRerankerClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
+from src.index._rcp.reranker_client import RCPRerankerClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 from src.index.swissubase.embed.pipeline import SWISSUBASE_COLLECTION
 from src.index.swissubase.storage.duckdb_store import SwissubaseStore

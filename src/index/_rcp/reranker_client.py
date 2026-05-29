@@ -1,14 +1,18 @@
 """Async client for the RCP reranker (Cohere-compatible shape).
 
 If the RCP deployment exposes a different path or body shape, override
-`RCP_RERANK_PATH` via env or pass `path=` at construction time.
+``RCP_RERANK_PATH`` via env or pass ``path=`` at construction time.
+
+Shared across every index module — same generality as the sibling
+``embed_client.py``. Any config exposing the ``RCPConfigProtocol``
+contract works.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import httpx
 from tenacity import (
@@ -18,8 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-if TYPE_CHECKING:
-    from src.index.openalex.config import OpenAlexIndexConfig
+from src.index._rcp.embed_client import RCPConfigProtocol
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ def _is_retryable(exc: BaseException) -> bool:
 class RCPRerankerClient:
     def __init__(
         self,
-        config: OpenAlexIndexConfig,
+        config: RCPConfigProtocol,
         *,
         path: str | None = None,
         timeout_s: float | None = None,

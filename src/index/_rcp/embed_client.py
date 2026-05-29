@@ -1,9 +1,20 @@
-"""Async OpenAI-compatible client for the RCP `/embeddings` endpoint."""
+"""Async OpenAI-compatible client for the RCP ``/embeddings`` endpoint.
+
+Shared across every index module (openalex, orcid, github_*, huggingface_*,
+zenodo_*, oamonitor, renkulab, swissubase, infoscience, ethz_research_collection,
+snsf, epfl_graph). The class only touches ``config.rcp.*`` and
+``config.require_rcp()``; any per-index config that exposes those is
+acceptable — see ``RCPConfigProtocol`` below for the exact contract.
+
+Modules that want tighter typing (e.g. ORCID) can subclass and re-type
+the constructor argument; see ``src/index/orcid/embed/rcp_client.py``
+for the canonical pattern.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 from tenacity import (
@@ -13,8 +24,31 @@ from tenacity import (
     wait_exponential,
 )
 
+
+class _RCPBlock(Protocol):
+    base_url: str
+    batch_size: int
+    timeout_seconds: int
+    token: str | None
+
+
+class RCPConfigProtocol(Protocol):
+    """Minimum contract any index config must satisfy to be passed to
+    ``RCPEmbeddingClient``. ``OpenAlexIndexConfig``, ``OrcidIndexConfig``,
+    ``HFEntityIndexConfigBase``, ``AccountIndexConfigBase``,
+    ``GitHubIndexConfig``, etc. all match this shape via duck typing.
+    """
+
+    rcp: _RCPBlock
+
+    def require_rcp(self) -> None: ...
+
+
 if TYPE_CHECKING:
-    from src.index.openalex.config import OpenAlexIndexConfig
+    # Kept under TYPE_CHECKING so the original `OpenAlexIndexConfig`
+    # type-only import doesn't pull the heavyweight pydantic graph at
+    # runtime. Callers can pass any RCPConfigProtocol-shaped object.
+    pass
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +75,7 @@ class RCPEmbeddingClient:
 
     def __init__(
         self,
-        config: OpenAlexIndexConfig,
+        config: RCPConfigProtocol,
         *,
         batch_size: int | None = None,
         timeout_s: float | None = None,

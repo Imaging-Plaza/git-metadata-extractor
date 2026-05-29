@@ -24,7 +24,7 @@ from src.index._github_accounts_base.storage_base import (
     upsert_chunk,
 )
 from src.index.openalex.embed.chunker import Chunk, chunk_text
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:
