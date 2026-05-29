@@ -1,6 +1,6 @@
 """Config loader for the GitHub indexer.
 
-Reads `config/index/github.yaml` and merges in env-sourced credentials
+Reads `config/index/github_repos.yaml` and merges in env-sourced credentials
 (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_API_KEY`) plus the resolved
 data dir.
 
@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from src.index.github_repos.paths import GitHubPaths, get_github_paths
 
-DEFAULT_CONFIG_PATH = Path("config/index/github.yaml")
+DEFAULT_CONFIG_PATH = Path("config/index/github_repos.yaml")
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}

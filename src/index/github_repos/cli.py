@@ -71,7 +71,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
     if not scope.repos:
         message = (
             f"scope={scope.name} resolved to zero repos. "
-            "Edit config/index/github.yaml under `scope.seeds.<name>` "
+            "Edit config/index/github_repos.yaml under `scope.seeds.<name>` "
             "or pass --repos / --repos-file."
         )
         raise SystemExit(message)

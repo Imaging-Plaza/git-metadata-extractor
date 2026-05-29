@@ -1,6 +1,6 @@
 """Config loader for the Zenodo indexer.
 
-Reads `config/index/zenodo.yaml` and merges in env-sourced credentials
+Reads `config/index/zenodo_records.yaml` and merges in env-sourced credentials
 (`RCP_TOKEN`, `ZENODO_TOKEN`, `INDEX_QDRANT_API_KEY`) plus the resolved data
 dir.
 
@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from src.index.zenodo_records.paths import ZenodoPaths, get_zenodo_paths
 
-DEFAULT_CONFIG_PATH = Path("config/index/zenodo.yaml")
+DEFAULT_CONFIG_PATH = Path("config/index/zenodo_records.yaml")
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}

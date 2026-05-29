@@ -23,7 +23,6 @@ _SPACE_EXPAND: tuple[str, ...] = (
     "sha",
     "lastModified",
     "sdk",
-    "license",
     "likes",
     "createdAt",
     "tags",

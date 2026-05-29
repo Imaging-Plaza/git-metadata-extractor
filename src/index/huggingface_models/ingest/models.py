@@ -27,7 +27,6 @@ _MODEL_EXPAND: tuple[str, ...] = (
     "lastModified",
     "pipeline_tag",
     "library_name",
-    "license",
     "downloads",
     "downloadsAllTime",
     "likes",

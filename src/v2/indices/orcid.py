@@ -35,14 +35,14 @@ def get_or_create_orcid_resources(app_state: Any) -> Any | None:
             build_orcid_provider,
         )
         from src.index.orcid.storage.duckdb_store import (  # noqa: PLC0415
-            OrcidDuckDBStore,
+            OrcidStore,
         )
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("orcid ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
-        store = OrcidDuckDBStore.open(config.paths.duckdb_path)
+        store = OrcidStore.open(config.paths.duckdb_path)
         provider = build_orcid_provider(config)
     except Exception as exc:  # noqa: BLE001
         logger.warning("orcid ingest: resource init failed — %s", exc)

@@ -79,7 +79,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
     if not scope.communities:
         message = (
             f"scope={scope.name} has no communities configured. "
-            "Edit config/index/zenodo.yaml under `scope.{name}_communities`."
+            "Edit config/index/zenodo_records.yaml under `scope.{name}_communities`."
         )
         raise SystemExit(message)
     store = ZenodoRecordsStore.open()

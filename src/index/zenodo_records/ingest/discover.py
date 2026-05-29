@@ -78,7 +78,7 @@ def discover_from_infoscience(
     The result also reports which Infoscience UUIDs cited which Zenodo
     IDs (`file_to_rec`) and which Zenodo community slugs appeared in the
     extracted URL paths — useful for surfacing communities not yet in
-    `config/index/zenodo.yaml`.
+    `config/index/zenodo_records.yaml`.
     """
     target_dir = text_dir or _default_infoscience_text_dir()
     record_ids: Counter[str] = Counter()

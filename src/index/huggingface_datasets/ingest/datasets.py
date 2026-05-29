@@ -23,7 +23,6 @@ LOGGER = logging.getLogger(__name__)
 _DATASET_EXPAND: tuple[str, ...] = (
     "sha",
     "lastModified",
-    "license",
     "downloads",
     "downloadsAllTime",
     "likes",

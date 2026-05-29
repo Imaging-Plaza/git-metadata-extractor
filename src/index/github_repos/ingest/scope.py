@@ -31,7 +31,7 @@ class Scope:
 
 
 SCOPE_NOT_CONFIGURED_ERROR = (
-    "scope={name} not found in config.scope.seeds. Edit config/index/github.yaml."
+    "scope={name} not found in config.scope.seeds. Edit config/index/github_repos.yaml."
 )
 
 
