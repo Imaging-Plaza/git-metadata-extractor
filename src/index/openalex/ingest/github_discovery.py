@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from src.index.openalex.config import OpenAlexIndexConfig
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def _iter_search(
 def discover_github_works(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     scope_filter: dict[str, Any],
     mode: SearchMode = "both",
     term: str = GITHUB_TERM,

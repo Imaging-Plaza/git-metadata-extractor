@@ -74,7 +74,7 @@ def test_search_returns_thin_model_hits() -> None:
 
     out = _run(p.search("swiss german model", collection="models", top_k=5))
 
-    assert store.search_calls[0]["collection"] == "hf_models"
+    assert store.search_calls[0]["collection"] == "huggingface_models"
     assert emb.calls == [["swiss german model"]]
     assert out[0]["repo_id"] == "ZurichNLP/swissbert"
     assert out[0]["library_name"] == "transformers"

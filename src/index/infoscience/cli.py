@@ -177,10 +177,10 @@ def query_cmd(
 @click.pass_context
 def ingest_duckdb(ctx: click.Context, links_dump: Optional[Path]) -> None:
     """Ingest raw/{items,persons,organizations}/*.json into the DuckDB store."""
-    from .storage import DuckDBStore
+    from .storage import InfoscienceStore
     from .storage.ingest_raw import ingest_all
 
-    store = DuckDBStore.open()
+    store = InfoscienceStore.open()
     try:
         summary = ingest_all(store, links_dump=links_dump)
     finally:
@@ -222,9 +222,9 @@ def status(ctx: click.Context) -> None:
         counts["qdrant_error"] = str(exc)
     try:
         from .paths import duckdb_path
-        from .storage import DuckDBStore
+        from .storage import InfoscienceStore
         if duckdb_path().exists():
-            ddb = DuckDBStore.open()
+            ddb = InfoscienceStore.open()
             try:
                 counts["duckdb_path"] = str(duckdb_path())
                 counts["duckdb_counts"] = {

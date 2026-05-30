@@ -1,7 +1,7 @@
 """Stream DuckDB rows → chunk → embed → upsert into Qdrant.
 
 Idempotent: rows with existing chunks are skipped via
-`DuckDBStore.stream_rows_for_embedding`.
+`OpenAlexStore.stream_rows_for_embedding`.
 
 Rebuild path: `rebuild_qdrant_from_chunks` re-derives Qdrant points from the
 existing `chunks` table (re-embedding `chunks.text` via RCP) without touching
@@ -38,12 +38,12 @@ from src.index.openalex.embed.chunker import (
     chunk_for_simple_entity,
     chunk_for_work,
 )
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:
     from src.index.openalex.config import OpenAlexIndexConfig
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def _row_to_payload(entity_type: str, row: dict[str, Any]) -> dict[str, Any]:
 async def _embed_entity_async(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     entity_type: str,
     limit: int | None,
 ) -> int:
@@ -157,7 +157,7 @@ async def _embed_entity_async(
 def embed_entities(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     entity_types: list[str],
     limit: int | None = None,
 ) -> dict[str, int]:
@@ -214,7 +214,7 @@ def _rebuild_payload(entity_type: str, row: dict[str, Any]) -> dict[str, Any]:
 async def _rebuild_entity_async(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     entity_type: str,
     batch_size: int | None = None,
 ) -> int:
@@ -262,7 +262,7 @@ async def _rebuild_entity_async(
 def rebuild_qdrant_from_chunks(
     *,
     config: OpenAlexIndexConfig,
-    store: DuckDBStore,
+    store: OpenAlexStore,
     entity_types: list[str],
     batch_size: int | None = None,
 ) -> dict[str, int]:

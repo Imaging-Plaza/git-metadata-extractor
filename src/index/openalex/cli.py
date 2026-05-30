@@ -31,7 +31,7 @@ from src.index.openalex.ingest.sources import ingest_sources
 from src.index.openalex.ingest.topics import ingest_topics
 from src.index.openalex.ingest.works import ingest_works
 from src.index.openalex.retrieval.sql import run_adhoc, run_predefined
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 if TYPE_CHECKING:
     pass
@@ -67,7 +67,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
     config.require_ingest()
     scope = resolve_scope(args.scope, config)
     entities = _split_entities(args.entities)
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     summary: dict[str, int] = {}
     scope_filters = {
         "works": scope.works,
@@ -96,7 +96,7 @@ def _cmd_find_github(args: argparse.Namespace) -> int:
     config = load_config()
     config.require_ingest()
     scope = resolve_scope(args.scope, config)
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     seen, persisted = discover_github_works(
         config=config,
         store=store,
@@ -150,7 +150,7 @@ def _cmd_embed(args: argparse.Namespace) -> int:
     entities = _split_entities(args.entities)
     config = load_config()
     config.require_rcp()
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     summary = embed_entities(
         config=config,
         store=store,
@@ -167,7 +167,7 @@ def _cmd_rebuild_qdrant(args: argparse.Namespace) -> int:
     entities = _split_entities(args.entities)
     config = load_config()
     config.require_rcp()
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     summary = rebuild_qdrant_from_chunks(
         config=config,
         store=store,

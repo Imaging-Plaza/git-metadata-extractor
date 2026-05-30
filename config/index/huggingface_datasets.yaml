@@ -1,0 +1,28 @@
+# HuggingFace datasets RAG indexer config.
+# Same env-var conventions as huggingface_models.
+
+rcp:
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a query about a dataset, task domain, or licensing, retrieve relevant HuggingFace dataset cards"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+huggingface:
+  api_base: https://huggingface.co
+  per_page: 100
+  max_concurrency: 4
+  full_cards: false
+  min_card_chars: 32
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 512
+  overlap_tokens: 64
+  tokenizer: cl100k_base

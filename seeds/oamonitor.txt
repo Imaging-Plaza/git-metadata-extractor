@@ -1,0 +1,3 @@
+# Open Access Monitor (OAM-CH) items — one per line in the form <entity>:<id>.
+# entity ∈ {journals, publications, publishers, organisations}.
+organisations:https://ror.org/02s376052

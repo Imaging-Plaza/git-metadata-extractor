@@ -5,12 +5,22 @@ import re
 import uuid
 from typing import Any
 
-from src.v2.canonicalization.orcid import parse_orcid
+from src.v2.canonicalization.infoscience import (
+    infoscience_article_iri,
+    infoscience_org_iri,
+    infoscience_person_iri,
+)
+from src.v2.canonicalization.orcid import orcid_iri
 
+# v3.0.0: Infoscience IDs are canonical entity URLs of the form
+# `https://infoscience.epfl.ch/entities/<kind>/<uuid>`. The legacy
+# `core/items` BASE constants are kept only for backwards-compat with
+# any downstream caller importing them; new code should use the
+# canonicalization helpers.
 INFOSCIENCE_CORE_ITEMS_BASE_URI = "https://infoscience.epfl.ch/server/api/core/items/"
-INFOSCIENCE_PERSON_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
-INFOSCIENCE_ORGANIZATION_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
-INFOSCIENCE_PUBLICATION_BASE_URI = INFOSCIENCE_CORE_ITEMS_BASE_URI
+INFOSCIENCE_PERSON_BASE_URI = "https://infoscience.epfl.ch/entities/person/"
+INFOSCIENCE_ORGANIZATION_BASE_URI = "https://infoscience.epfl.ch/entities/orgunit/"
+INFOSCIENCE_PUBLICATION_BASE_URI = "https://infoscience.epfl.ch/entities/publication/"
 GITHUB_BASE_URI = "https://github.com/"
 ORCID_BASE_URI = "https://orcid.org/"
 ROR_BASE_URI = "https://ror.org/"
@@ -105,9 +115,9 @@ def _existing_resolution(
     normalized_id: str | None = None
 
     if normalized_source == "pulse:orcid":
-        normalized_orcid = _normalize_orcid(entity_id)
-        if normalized_orcid is not None:
-            normalized_id = f"{ORCID_BASE_URI}{normalized_orcid}"
+        # v3.0.0: `_normalize_orcid` now returns the canonical URL
+        # form directly; no need to prepend `ORCID_BASE_URI`.
+        normalized_id = _normalize_orcid(entity_id)
     elif normalized_source == "pulse:infosciencePersonIdentifier":
         normalized_infoscience_id = _normalize_infoscience_identifier(
             entity_id,
@@ -115,7 +125,7 @@ def _existing_resolution(
             legacy_path="person",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = f"{INFOSCIENCE_PERSON_BASE_URI}{normalized_infoscience_id}"
+            normalized_id = infoscience_person_iri(normalized_infoscience_id)
     elif normalized_source == "pulse:githubUsername":
         normalized_github_username = _normalize_github_handle(entity_id)
         if normalized_github_username is not None:
@@ -131,9 +141,7 @@ def _existing_resolution(
             legacy_path="organization",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = (
-                f"{INFOSCIENCE_ORGANIZATION_BASE_URI}{normalized_infoscience_id}"
-            )
+            normalized_id = infoscience_org_iri(normalized_infoscience_id)
     elif normalized_source == "pulse:githubOrganizationHandle":
         normalized_github_handle = _normalize_github_handle(entity_id)
         if normalized_github_handle is not None:
@@ -152,7 +160,7 @@ def _existing_resolution(
             entity_path="publication",
         )
         if normalized_infoscience_id is not None:
-            normalized_id = f"{INFOSCIENCE_PUBLICATION_BASE_URI}{normalized_infoscience_id}"
+            normalized_id = infoscience_article_iri(normalized_infoscience_id)
     elif normalized_source == "uuid":
         normalized_id = _normalize_uuid(entity_id)
 
@@ -162,12 +170,10 @@ def _existing_resolution(
 
 
 def _normalize_orcid(orcid: str | None) -> str | None:
-    """Return the bare-form ORCID. Delegates to the shared canonical
-    helper, which tolerates every input shape (bare / URL / `orcid:`
-    prefix / legacy `http` host / trailing slash / lowercase `x`
-    checksum) and rejects malformed input. Callers that need URL
-    form should use `orcid_iri` directly."""
-    return parse_orcid(orcid)
+    """Return the canonical ORCID URL via the shared helper. v3.0.0:
+    Person `@id` is the URL form directly (no `ORCID_BASE_URI` prepend
+    needed at the call site)."""
+    return orcid_iri(orcid)
 
 
 def _normalize_ror(ror: str | None) -> str | None:
@@ -310,7 +316,9 @@ def resolve_person_id(person: dict[str, Any]) -> tuple[str, str]:
         ),
     )
     if orcid is not None:
-        return f"{ORCID_BASE_URI}{orcid}", "pulse:orcid"
+        # v3.0.0: `_normalize_orcid` returns the canonical URL form
+        # directly — no `ORCID_BASE_URI` prepend.
+        return orcid, "pulse:orcid"
 
     infoscience_id = _normalize_infoscience_identifier(
         _lookup_identifier(

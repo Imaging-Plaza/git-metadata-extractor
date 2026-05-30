@@ -32,7 +32,7 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class DuckDBStore:
+class SnsfStore:
     """Thin wrapper around DuckDB tuned for the SNSF schema."""
 
     def __init__(self, db_path: Path) -> None:
@@ -40,7 +40,7 @@ class DuckDBStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> DuckDBStore:
+    def open(cls, db_path: Path | None = None) -> SnsfStore:
         if db_path is None:
             db_path = duckdb_path()
         store = cls(db_path)
@@ -498,4 +498,4 @@ def _now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
-__all__ = ["DuckDBStore"]
+__all__ = ["SnsfStore"]

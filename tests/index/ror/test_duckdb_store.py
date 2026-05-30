@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from src.index.ror.storage.duckdb_store import (
-    DuckDBStore,
+    RorStore,
     ScopeRecord,
     StoreManifest,
     build_search_blob,
@@ -28,7 +28,7 @@ def isolated_data_dir(monkeypatch, tmp_path):
 
 @pytest.fixture
 def store(isolated_data_dir):
-    s = DuckDBStore.open()
+    s = RorStore.open()
     yield s
     s.close()
 
@@ -119,12 +119,12 @@ def test_extract_record_columns_rejects_record_without_id():
 
 
 def test_bootstrap_is_idempotent(isolated_data_dir):
-    s1 = DuckDBStore.open()
+    s1 = RorStore.open()
     s1.bootstrap()
     s1.bootstrap()
     s1.close()
     # Re-open a second store on the same file.
-    s2 = DuckDBStore.open()
+    s2 = RorStore.open()
     s2.bootstrap()
     assert s2.count_records() == 0
     s2.close()

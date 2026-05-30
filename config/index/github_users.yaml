@@ -1,0 +1,35 @@
+# GitHub users RAG indexer config.
+# Resolved by `src/index/github_users/config.py` and merged with env vars
+# (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_DATA_DIR`) at startup. No `scope.seeds` block — this index grows
+# organically via `/v2/extract` auto-ingest and manual `POST /v2/indices/
+# github_users/ingest` calls; no batch ingest from a static list.
+
+rcp:
+  # Same RCP deployment as the github / openalex / zenodo indices.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a query about a researcher, developer, or open-source author, retrieve relevant GitHub user profiles"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+github:
+  api_base: https://api.github.com
+  max_concurrency: 4
+  # Most users have at least a login + name, so a 16-char floor is
+  # enough to filter "login-only" stubs we can't usefully embed.
+  min_card_chars: 16
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  # User cards are tiny (login + bio + company + location + blog).
+  # Single-chunk semantics — 512 tokens is plenty for any real profile.
+  size_tokens: 512
+  overlap_tokens: 0
+  tokenizer: cl100k_base

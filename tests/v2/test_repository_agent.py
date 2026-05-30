@@ -40,7 +40,7 @@ def test_repository_agent_output_validates_against_agent_schema(
     validate(instance=result.data, schema=schema)
 
     assert result.data["schema:name"] == "Hello-World"
-    assert result.data["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
+    assert result.data["pulse:githubRepositoryHandle"] == "https://github.com/octocat/Hello-World"
     assert result.data["schema:author"]
     assert result.data["pulse:repositoryType"]
     # `pulse:discipline` is now allowed to be empty when no domain

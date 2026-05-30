@@ -15,7 +15,7 @@ from src.v2.ingest.providers.base import (
 
 if TYPE_CHECKING:
     from src.index.orcid.config import OrcidIndexConfig
-    from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+    from src.index.orcid.storage.duckdb_store import OrcidStore
     from src.v2.ingest.providers.base import ORCIDAffiliation, ORCIDRecord
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 def ingest_single_orcid(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     orcid_id: str,
     scope: str = "switzerland",
     discovered_via: str = "api_post",
@@ -69,7 +69,7 @@ def ingest_single_orcid(
 def ingest_persons(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     scope: str,
     limit: int | None = None,
     priority_hints: list[str] | None = None,
@@ -132,7 +132,7 @@ def ingest_persons(
 
 def _persist(
     *,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     record: ORCIDRecord,
     in_scope: bool,
     scope_reason: str | None,

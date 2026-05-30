@@ -125,6 +125,26 @@ class V2ExtractJobAccepted(BaseModel):
     submitted_at: datetime
 
 
+class V2JobStatus(BaseModel):
+    """Compact status view of an extract job — the lifecycle fields without
+    the (potentially large) `result` graph.
+
+    Served by `GET /v2/crawl/{job_id}` for cheap polling and v1-style
+    parity; the full record + extracted graph stays at `result_url`
+    (`GET /v2/jobs/{job_id}`).
+    """
+
+    job_id: str
+    status: V2ExtractJobStatus
+    source_url: str | None = None
+    submitted_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    error: V2ErrorResponse | None = None
+    result_url: str
+
+
 class IndexIngestJobStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -150,29 +170,6 @@ class ZenodoIngestRequest(BaseModel):
     )
 
 
-class HFIngestItem(BaseModel):
-    """One repository to ingest into the HuggingFace index."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["model", "dataset", "space"]
-    repo_id: str = Field(
-        min_length=1,
-        description="HuggingFace repo handle. Format: `<author>/<name>`.",
-    )
-
-
-class HuggingFaceIngestRequest(BaseModel):
-    """Body for `POST /v2/indices/huggingface/ingest`."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[HFIngestItem] = Field(
-        min_length=1,
-        description="One or more {type, repo_id} pairs to ingest.",
-    )
-
-
 class GitHubIngestRequest(BaseModel):
     """Body for `POST /v2/indices/github/ingest`."""
 
@@ -181,6 +178,100 @@ class GitHubIngestRequest(BaseModel):
     repos: list[str] = Field(
         min_length=1,
         description="One or more GitHub repo handles in the form `owner/name`.",
+    )
+
+
+class GitHubUsersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github_users/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logins: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub user logins (bare handles, not URLs).",
+    )
+
+
+class GitHubOrgsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/github_organizations/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    orgs: list[str] = Field(
+        min_length=1,
+        description="One or more GitHub organization handles (bare, not URLs).",
+    )
+
+
+class HuggingFacePapersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_papers/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    arxiv_ids: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more arXiv identifiers. Accepts any wire shape: bare id "
+            "(`2310.01234`), versioned (`2310.01234v2`), arXiv URL "
+            "(`https://arxiv.org/abs/...`), HF Papers URL "
+            "(`https://huggingface.co/papers/...`), `arxiv:<id>` tag, or "
+            "arXiv DOI (`10.48550/arXiv.<id>` / `https://doi.org/...`)."
+        ),
+    )
+
+
+class HuggingFaceModelsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_models/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF model repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceDatasetsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_datasets/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF dataset repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceSpacesIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_spaces/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_ids: list[str] = Field(
+        min_length=1,
+        description="One or more HF space repo_ids in the form `namespace/name`.",
+    )
+
+
+class HuggingFaceUsersIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_users/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slugs: list[str] = Field(
+        min_length=1,
+        description="One or more HF user namespace slugs (bare handles).",
+    )
+
+
+class HuggingFaceOrganizationsIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/huggingface_organizations/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slugs: list[str] = Field(
+        min_length=1,
+        description="One or more HF organization namespace slugs (bare handles).",
     )
 
 
@@ -280,6 +371,23 @@ class OamonitorIngestRequest(BaseModel):
     )
 
 
+class DockerhubIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/dockerhub/ingest`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    images: list[str] = Field(
+        min_length=1,
+        description=(
+            "One or more Docker Hub image references. Accepts `namespace/name`, "
+            "a bare official-image name (`python` -> `library/python`), a "
+            "`https://hub.docker.com/r/<ns>/<name>` or `/_/<name>` URL, or a "
+            "`docker.io/...` pull reference (any `:tag` is dropped — repositories "
+            "are the indexed unit)."
+        ),
+    )
+
+
 class IndexSearchRequest(BaseModel):
     """Body for `POST /v2/indices/<name>/search`.
 
@@ -339,15 +447,23 @@ class IndexSearchResponse(BaseModel):
 
 
 IndexName = Literal[
-    "zenodo",
-    "huggingface",
-    "github",
+    "zenodo_records",
+    "huggingface_papers",
+    "huggingface_models",
+    "huggingface_datasets",
+    "huggingface_spaces",
+    "huggingface_users",
+    "huggingface_organizations",
+    "github_repos",
+    "github_users",
+    "github_organizations",
     "openalex",
     "orcid",
     "renkulab",
     "swissubase",
     "ethz_research_collection",
     "oamonitor",
+    "dockerhub",
     # CLI-managed catalogs — search routes added in the stats/search
     # coverage extension PR. No v2 ingest route (ingest happens via
     # `python -m src.index.<name> ingest`).
@@ -355,7 +471,7 @@ IndexName = Literal[
     "infoscience",
     "snsf",
     "epfl_graph",
-    "communities",
+    "zenodo_communities",
 ]
 
 

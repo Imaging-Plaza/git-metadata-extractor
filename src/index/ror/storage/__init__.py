@@ -4,7 +4,7 @@ See `.internal/ror/duckdb-migration.md` (D16) for the design rationale.
 """
 
 from src.index.ror.storage.duckdb_store import (
-    DuckDBStore,
+    RorStore,
     ScopeRecord,
     build_search_blob,
     extract_record_columns,
@@ -12,7 +12,7 @@ from src.index.ror.storage.duckdb_store import (
 )
 
 __all__ = [
-    "DuckDBStore",
+    "RorStore",
     "ScopeRecord",
     "build_search_blob",
     "extract_record_columns",

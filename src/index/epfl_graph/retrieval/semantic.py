@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.index.epfl_graph.embed.pipeline import EPFL_GRAPH_COLLECTION
 from src.index.epfl_graph.storage.duckdb_store import EpflGraphStore
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
-from src.index.openalex.rerank.rcp_client import RCPRerankerClient
+from src.index._rcp.embed_client import RCPEmbeddingClient
+from src.index._rcp.reranker_client import RCPRerankerClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:

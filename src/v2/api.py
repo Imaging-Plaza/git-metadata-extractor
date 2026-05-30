@@ -24,9 +24,17 @@ from rdflib import Graph as RDFGraph
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
 from src.v2.api_models import (
+    DockerhubIngestRequest,
     EthzResearchCollectionIngestRequest,
     GitHubIngestRequest,
-    HuggingFaceIngestRequest,
+    GitHubOrgsIngestRequest,
+    GitHubUsersIngestRequest,
+    HuggingFaceDatasetsIngestRequest,
+    HuggingFaceModelsIngestRequest,
+    HuggingFaceOrganizationsIngestRequest,
+    HuggingFacePapersIngestRequest,
+    HuggingFaceSpacesIngestRequest,
+    HuggingFaceUsersIngestRequest,
     IndexIngestJob,
     IndexIngestJobAccepted,
     IndexIngestJobStatus,
@@ -46,6 +54,7 @@ from src.v2.api_models import (
     V2ExtractResponse,
     V2FieldError,
     V2HealthResponse,
+    V2JobStatus,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
     ZenodoIngestRequest,
@@ -53,14 +62,49 @@ from src.v2.api_models import (
 from src.v2.auth import verify_token
 from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
+from src.v2.indices.dockerhub import (
+    run_dockerhub_ingest_job,
+    run_dockerhub_search,
+)
 from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_ingest_job,
     run_ethz_research_collection_search,
 )
-from src.v2.indices.github import run_github_ingest_job, run_github_search
-from src.v2.indices.huggingface import (
-    run_huggingface_ingest_job,
-    run_huggingface_search,
+from src.v2.indices.github_repos import (
+    run_github_repos_ingest_job,
+    run_github_repos_search,
+)
+from src.v2.indices.github_organizations import (
+    run_github_orgs_ingest_job,
+    run_github_orgs_search,
+)
+from src.v2.indices.github_users import (
+    run_github_users_ingest_job,
+    run_github_users_search,
+)
+from src.v2.indices.huggingface_papers import (
+    run_huggingface_papers_ingest_job,
+    run_huggingface_papers_search,
+)
+from src.v2.indices.huggingface_datasets import (
+    run_huggingface_datasets_ingest_job,
+    run_huggingface_datasets_search,
+)
+from src.v2.indices.huggingface_models import (
+    run_huggingface_models_ingest_job,
+    run_huggingface_models_search,
+)
+from src.v2.indices.huggingface_organizations import (
+    run_huggingface_organizations_ingest_job,
+    run_huggingface_organizations_search,
+)
+from src.v2.indices.huggingface_spaces import (
+    run_huggingface_spaces_ingest_job,
+    run_huggingface_spaces_search,
+)
+from src.v2.indices.huggingface_users import (
+    run_huggingface_users_ingest_job,
+    run_huggingface_users_search,
 )
 from src.v2.indices.jobs import IndexIngestJobStore
 from src.v2.indices.oamonitor import (
@@ -93,7 +137,10 @@ from src.v2.indices.swissubase import (
     run_swissubase_ingest_job,
     run_swissubase_search,
 )
-from src.v2.indices.zenodo import run_zenodo_ingest_job, run_zenodo_search
+from src.v2.indices.zenodo_records import (
+    run_zenodo_records_ingest_job,
+    run_zenodo_records_search,
+)
 from src.v2.ingest.cache import ProviderCache
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.jobs import JobStore
@@ -1665,13 +1712,25 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         logger.info("query log written: %s", written_log_path)
 
     # Auto-ingest hook (Bug-class extension): when the operator opts in
-    # via `V2_GITHUB_RAG_AUTO_INGEST=true`, every successful repository
+    # via `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true`, every successful repository
     # extract triggers a background ingest of the repo card into the
     # GitHub RAG DuckDB + Qdrant collection. This grows the index
     # organically as new repos are seen, so subsequent extractions find
     # them via `search_github_rag`. Fire-and-forget — the caller's
     # response is already built, the ingest is best-effort.
-    _maybe_schedule_github_auto_ingest(
+    _maybe_schedule_github_repos_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
+    _maybe_schedule_github_users_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
+    _maybe_schedule_github_orgs_auto_ingest(
+        classification=classification,
+        run_id=run_id,
+    )
+    _maybe_schedule_huggingface_papers_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
@@ -1679,10 +1738,60 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     return response_model
 
 
-_GITHUB_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_REPOS_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
+_GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
+_HF_PAPERS_AUTO_INGEST_LOCK = threading.Lock()
 
 
-def _maybe_schedule_github_auto_ingest(
+def _hf_papers_arxiv_id_from_url(normalized_url: Any) -> str | None:
+    """Extract an arXiv id from a `huggingface.co/papers/<arxiv_id>` URL.
+
+    Only fires for HF Papers URLs — does NOT fire for raw `arxiv.org`
+    URLs or arXiv DOIs, by design (the user opted in for HF Papers
+    URLs specifically). Uses the canonical arXiv id normaliser so
+    version suffixes are stripped.
+    """
+    if not isinstance(normalized_url, str) or "huggingface.co/papers/" not in normalized_url:
+        return None
+    try:
+        from src.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
+            normalize_arxiv_id,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    return normalize_arxiv_id(normalized_url)
+
+
+def _github_account_login_from_url(normalized_url: Any) -> str | None:
+    """Extract a bare GitHub login from a normalised user/org URL, or None.
+
+    Accepts the same URL shapes the classifier emits for user/org
+    targets: `https://github.com/<login>` or `https://github.com/orgs/<login>`.
+    Returns the bare handle on success, or None if the URL has the
+    wrong host, an extra path segment (which would indicate a repo),
+    or is malformed.
+    """
+    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
+        return None
+    rest = (
+        normalized_url.removeprefix("https://github.com/")
+        .removeprefix("http://github.com/")
+        .strip("/")
+    )
+    if not rest:
+        return None
+    # `/orgs/<login>` is GitHub's web UI URL for an org; strip the prefix.
+    if rest.startswith("orgs/"):
+        rest = rest[len("orgs/"):]
+    # User/org URLs are a single path segment — anything with a `/`
+    # left is a repo and shouldn't reach this helper.
+    if "/" in rest:
+        return None
+    return rest or None
+
+
+def _maybe_schedule_github_repos_auto_ingest(
     *,
     classification: Any,
     run_id: str,
@@ -1690,7 +1799,7 @@ def _maybe_schedule_github_auto_ingest(
     """Schedule a background GitHub RAG ingest when the operator opts in.
 
     Gates:
-    - `V2_GITHUB_RAG_AUTO_INGEST=true` env var (off by default — every
+    - `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true` env var (off by default — every
       existing deployment keeps its current behaviour).
     - The extract target must be a repository (we have no index for
       user/org/article cards yet).
@@ -1702,7 +1811,7 @@ def _maybe_schedule_github_auto_ingest(
     writes across uvicorn worker tasks. The single-repo ingest is
     fast (~1-3s) so contention is negligible.
     """
-    if os.getenv("V2_GITHUB_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+    if os.getenv("V2_GITHUB_REPOS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
         return
     if not hasattr(classification, "detected_type"):
         return
@@ -1719,11 +1828,11 @@ def _maybe_schedule_github_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github.config import load_config as load_github_config  # noqa: PLC0415
-            from src.index.github.embed.pipeline import embed_repos  # noqa: PLC0415
-            from src.index.github.ingest.github_client import GitHubClient  # noqa: PLC0415
-            from src.index.github.ingest.repos import ingest_single_repo  # noqa: PLC0415
-            from src.index.github.storage.duckdb_store import GitHubStore  # noqa: PLC0415
+            from src.index.github_repos.config import load_config as load_github_config  # noqa: PLC0415
+            from src.index.github_repos.embed.pipeline import embed_repos  # noqa: PLC0415
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_repos.ingest.repos import ingest_single_repo  # noqa: PLC0415
+            from src.index.github_repos.storage.duckdb_store import GitHubReposStore  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             logger.exception(
                 "github auto-ingest (run_id=%s, repo=%s): module import failed",
@@ -1734,8 +1843,8 @@ def _maybe_schedule_github_auto_ingest(
         def _do_ingest() -> tuple[str, int]:
             cfg = load_github_config()
             cfg.require_github()
-            with _GITHUB_AUTO_INGEST_LOCK:
-                store = GitHubStore.open(cfg.paths.duckdb_path)
+            with _GITHUB_REPOS_AUTO_INGEST_LOCK:
+                store = GitHubReposStore.open(cfg.paths.duckdb_path)
                 try:
                     existing = store.fetch_repo(full_name)
                     if existing is not None:
@@ -1774,6 +1883,266 @@ def _maybe_schedule_github_auto_ingest(
         # No running event loop (e.g. unit tests that call extract
         # synchronously). Skip silently — the auto-ingest is a
         # non-essential background enrichment.
+        return
+
+
+def _maybe_schedule_github_users_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background ingest into the github_users index when
+    the operator opts in via `V2_GITHUB_USERS_RAG_AUTO_INGEST=true`.
+
+    Same gating shape as `_maybe_schedule_github_repos_auto_ingest` but
+    fires only for `detected_type == "user"` targets. Org-typed
+    extracts are handled by the sibling helper below.
+    """
+    if os.getenv("V2_GITHUB_USERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "detected_type"):
+        return
+    if str(classification.detected_type.value).lower() != "user":
+        return
+    login = _github_account_login_from_url(
+        getattr(classification, "normalized_url", None),
+    )
+    if login is None:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_users.config import load_config  # noqa: PLC0415
+            from src.index.github_users.embed.pipeline import embed_users  # noqa: PLC0415
+            from src.index.github_users.ingest.users import ingest_single_user  # noqa: PLC0415
+            from src.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
+                GitHubUsersStore,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_users auto-ingest (run_id=%s, login=%s): module import failed",
+                run_id, login,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_config()
+            cfg.require_github()
+            with _GITHUB_USERS_AUTO_INGEST_LOCK:
+                store = GitHubUsersStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_user(login)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = GitHubClient(
+                        api_base=cfg.github.api_base,
+                        token=cfg.github.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
+                    outcome = ingest_single_user(
+                        config=cfg, store=store, client=client, login=login,
+                    )
+                    if outcome in {"skipped_404", "skipped_org"}:
+                        return (outcome, 0)
+                    embed_summary = embed_users(config=cfg, store=store, limit=None)
+                    return (outcome, int(embed_summary.get("users", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_users auto-ingest (run_id=%s, login=%s): failed",
+                run_id, login,
+            )
+            return
+        logger.info(
+            "github_users auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
+            run_id, login, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        return
+
+
+def _maybe_schedule_github_orgs_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background ingest into the github_organizations index
+    when `V2_GITHUB_ORGS_RAG_AUTO_INGEST=true`.
+
+    Fires only for `detected_type == "organization"` targets — uses
+    the v2 detected-type enum (`organization`, not `org`).
+    """
+    if os.getenv("V2_GITHUB_ORGS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "detected_type"):
+        return
+    if str(classification.detected_type.value).lower() != "organization":
+        return
+    login = _github_account_login_from_url(
+        getattr(classification, "normalized_url", None),
+    )
+    if login is None:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_organizations.config import load_config  # noqa: PLC0415
+            from src.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
+                embed_organizations,
+            )
+            from src.index.github_organizations.ingest.organizations import (  # noqa: PLC0415
+                ingest_single_organization,
+            )
+            from src.index.github_organizations.storage.duckdb_store import (  # noqa: PLC0415
+                GitHubOrganizationsStore,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_organizations auto-ingest (run_id=%s, login=%s): module import failed",
+                run_id, login,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_config()
+            cfg.require_github()
+            with _GITHUB_ORGS_AUTO_INGEST_LOCK:
+                store = GitHubOrganizationsStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_organization(login)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = GitHubClient(
+                        api_base=cfg.github.api_base,
+                        token=cfg.github.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
+                    outcome = ingest_single_organization(
+                        config=cfg, store=store, client=client, login=login,
+                    )
+                    if outcome in {"skipped_404", "skipped_user"}:
+                        return (outcome, 0)
+                    embed_summary = embed_organizations(
+                        config=cfg, store=store, limit=None,
+                    )
+                    return (outcome, int(embed_summary.get("organizations", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "github_organizations auto-ingest (run_id=%s, login=%s): failed",
+                run_id, login,
+            )
+            return
+        logger.info(
+            "github_organizations auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
+            run_id, login, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        return
+
+
+def _maybe_schedule_huggingface_papers_auto_ingest(
+    *,
+    classification: Any,
+    run_id: str,
+) -> None:
+    """Schedule a background ingest into the huggingface_papers index
+    when `V2_HF_PAPERS_RAG_AUTO_INGEST=true` AND the extract target
+    is a `huggingface.co/papers/<arxiv_id>` URL.
+
+    Unlike the github_users / github_organizations helpers, this one
+    does NOT check `classification.detected_type` — HF Papers URLs
+    don't necessarily have a dedicated detected_type, so we gate
+    purely on the URL pattern. The narrow URL match is the safety
+    net: only true HF Papers URLs trigger; raw arXiv URLs and DOIs
+    are skipped (per the operator's choice when this feature was
+    designed).
+    """
+    if os.getenv("V2_HF_PAPERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+        return
+    if not hasattr(classification, "normalized_url"):
+        return
+    arxiv_id = _hf_papers_arxiv_id_from_url(
+        getattr(classification, "normalized_url", None),
+    )
+    if arxiv_id is None:
+        return
+
+    async def _run() -> None:
+        try:
+            from src.index.huggingface_papers.config import load_config  # noqa: PLC0415
+            from src.index.huggingface_papers.embed.pipeline import embed_papers  # noqa: PLC0415
+            from src.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
+                HFPapersClient,
+            )
+            from src.index.huggingface_papers.ingest.papers import (  # noqa: PLC0415
+                ingest_single_paper,
+            )
+            from src.index.huggingface_papers.storage.duckdb_store import (  # noqa: PLC0415
+                HuggingFacePapersStore,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): module import failed",
+                run_id, arxiv_id,
+            )
+            return
+
+        def _do_ingest() -> tuple[str, int]:
+            cfg = load_config()
+            with _HF_PAPERS_AUTO_INGEST_LOCK:
+                store = HuggingFacePapersStore.open(cfg.paths.duckdb_path)
+                try:
+                    existing = store.fetch_paper(arxiv_id)
+                    if existing is not None:
+                        return ("skipped_already_indexed", 0)
+                    client = HFPapersClient(
+                        api_base=cfg.huggingface.api_base,
+                        token=cfg.huggingface.token,
+                        cache_path=cfg.paths.cache_db_path,
+                    )
+                    outcome = ingest_single_paper(
+                        config=cfg, store=store, client=client, arxiv_id=arxiv_id,
+                    )
+                    if outcome == "skipped_404":
+                        return (outcome, 0)
+                    embed_summary = embed_papers(config=cfg, store=store, limit=None)
+                    return (outcome, int(embed_summary.get("papers", 0)))
+                finally:
+                    store.close()
+
+        try:
+            outcome, embedded = await asyncio.to_thread(_do_ingest)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): failed",
+                run_id, arxiv_id,
+            )
+            return
+        logger.info(
+            "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): %s (chunks_embedded=%d)",
+            run_id, arxiv_id, outcome, embedded,
+        )
+
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
         return
 
 
@@ -1867,18 +2236,57 @@ async def extract_post(
     )
 
 
-@v2_router.get(
-    "/jobs/{job_id}",
-    response_model=V2ExtractJob,
-    response_model_exclude_none=True,
-)
-async def extract_job(
-    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> V2ExtractJob | JSONResponse:
-    """Retrieve a previously submitted extraction job by id."""
+def _maybe_mark_extract_job_stale(
+    record: V2ExtractJob, job_store: Any,
+) -> V2ExtractJob:
+    """Flip an orphaned RUNNING job to FAILED in place.
 
+    The worker executing this job may have died (OS kill, deploy, OOM, …)
+    without flipping the status, leaving the stored record stuck in
+    RUNNING. We detect that when no heartbeat has landed in over
+    ``_JOB_STALE_THRESHOLD_SECONDS``, flip to FAILED, persist, and return
+    the updated record so the client stops polling. New `POST /v2/extract`
+    calls start a fresh job. No-op for non-RUNNING or still-fresh jobs.
+
+    Shared by `GET /v2/jobs/{job_id}` (full record) and
+    `GET /v2/crawl/{job_id}` (compact status) so both agree on liveness.
+    """
+    if record.status != V2ExtractJobStatus.RUNNING:
+        return record
+    now = datetime.now(timezone.utc)
+    beat = record.last_heartbeat_at or record.started_at or record.submitted_at
+    if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
+        stale_seconds = (now - beat).total_seconds()
+        logger.warning(
+            "marking job %s as FAILED: no heartbeat for %.0fs "
+            "(threshold=%.0fs) — worker likely died mid-flight",
+            record.job_id,
+            stale_seconds,
+            _JOB_STALE_THRESHOLD_SECONDS,
+        )
+        record.status = V2ExtractJobStatus.FAILED
+        record.completed_at = now
+        record.error = V2ErrorResponse(
+            error_type=V2ErrorType.PIPELINE_ERROR,
+            detail=(
+                "extract job orphaned: worker process died mid-extraction "
+                f"(no heartbeat for {int(stale_seconds)}s)"
+            ),
+            source_url=record.request.source_url,
+        )
+        job_store.set(record)
+    return record
+
+
+def _resolve_extract_record(
+    request: Request, job_id: str,
+) -> V2ExtractJob | JSONResponse:
+    """Resolve an extract job by id, with liveness check.
+
+    Returns the (stale-checked) :class:`V2ExtractJob`, or a `JSONResponse`
+    error: 503 when the async job store is unavailable, 404 when no job
+    matches. Shared by `GET /v2/jobs/{job_id}` and `GET /v2/crawl/{job_id}`.
+    """
     job_store = _resolve_job_store(request)
     if job_store is None:
         error_payload = V2ErrorResponse(
@@ -1889,7 +2297,6 @@ async def extract_job(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
-
     record = job_store.get(job_id)
     if record is None:
         error_payload = V2ErrorResponse(
@@ -1900,36 +2307,56 @@ async def extract_job(
             status_code=status.HTTP_404_NOT_FOUND,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
-    # Detect orphaned jobs: the worker that was executing this job died
-    # (OS kill, deploy, OOM, …) without flipping the status, so the
-    # stored record is stuck in RUNNING. We notice because no heartbeat
-    # has been written in over `_JOB_STALE_THRESHOLD_SECONDS`. Flip to
-    # FAILED, persist, and return the failed view so the client stops
-    # polling. New `POST /v2/extract` calls will start a fresh job.
-    if record.status == V2ExtractJobStatus.RUNNING:
-        now = datetime.now(timezone.utc)
-        beat = record.last_heartbeat_at or record.started_at or record.submitted_at
-        if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
-            stale_seconds = (now - beat).total_seconds()
-            logger.warning(
-                "marking job %s as FAILED: no heartbeat for %.0fs "
-                "(threshold=%.0fs) — worker likely died mid-flight",
-                job_id,
-                stale_seconds,
-                _JOB_STALE_THRESHOLD_SECONDS,
-            )
-            record.status = V2ExtractJobStatus.FAILED
-            record.completed_at = now
-            record.error = V2ErrorResponse(
-                error_type=V2ErrorType.PIPELINE_ERROR,
-                detail=(
-                    "extract job orphaned: worker process died mid-extraction "
-                    f"(no heartbeat for {int(stale_seconds)}s)"
-                ),
-                source_url=record.request.source_url,
-            )
-            job_store.set(record)
-    return record
+    return _maybe_mark_extract_job_stale(record, job_store)
+
+
+@v2_router.get(
+    "/jobs/{job_id}",
+    response_model=V2ExtractJob,
+    response_model_exclude_none=True,
+)
+async def extract_job(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> V2ExtractJob | JSONResponse:
+    """Retrieve a previously submitted extraction job (full record + graph)."""
+
+    return _resolve_extract_record(request, job_id)
+
+
+@v2_router.get(
+    "/crawl/{job_id}",
+    response_model=V2JobStatus,
+    response_model_exclude_none=True,
+    tags=["Extraction"],
+)
+async def crawl_status(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> V2JobStatus | JSONResponse:
+    """Lightweight status of an extract job, without the result graph.
+
+    Parity with the v1 crawl-status surface and a cheap polling target:
+    returns just the lifecycle fields (status + timestamps + error). The
+    full extracted graph lives at ``result_url`` (`GET /v2/jobs/{job_id}`).
+    503 if the async job store is unavailable, 404 if no job matches.
+    """
+    resolved = _resolve_extract_record(request, job_id)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    return V2JobStatus(
+        job_id=resolved.job_id,
+        status=resolved.status,
+        source_url=resolved.request.source_url,
+        submitted_at=resolved.submitted_at,
+        started_at=resolved.started_at,
+        completed_at=resolved.completed_at,
+        last_heartbeat_at=resolved.last_heartbeat_at,
+        error=resolved.error,
+        result_url=f"/v2/jobs/{resolved.job_id}",
+    )
 
 
 @v2_router.post(
@@ -1977,7 +2404,7 @@ def _index_job_status_path(job_id: str) -> str:
 
 
 @v2_router.post(
-    "/indices/zenodo/ingest",
+    "/indices/zenodo_records/ingest",
     response_model=IndexIngestJobAccepted,
     response_model_exclude_none=True,
     status_code=status.HTTP_202_ACCEPTED,
@@ -2003,7 +2430,7 @@ async def zenodo_ingest_post(
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
         job_id=job_id,
-        index_name="zenodo",
+        index_name="zenodo_records",
         status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"),
         submitted_at=submitted_at,
@@ -2011,7 +2438,7 @@ async def zenodo_ingest_post(
     job_store.set(job)
 
     task = asyncio.create_task(
-        run_zenodo_ingest_job(
+        run_zenodo_records_ingest_job(
             payload=payload,
             app_state=request.app.state,
             job_store=job_store,
@@ -2028,27 +2455,24 @@ async def zenodo_ingest_post(
     )
     return IndexIngestJobAccepted(
         job_id=job_id,
-        index_name="zenodo",
+        index_name="zenodo_records",
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id),
         submitted_at=submitted_at,
     )
 
 
-@v2_router.post(
-    "/indices/huggingface/ingest",
-    response_model=IndexIngestJobAccepted,
-    response_model_exclude_none=True,
-    status_code=status.HTTP_202_ACCEPTED,
-    tags=["Indices"],
-)
-async def huggingface_ingest_post(
-    payload: HuggingFaceIngestRequest,
+def _hf_entity_ingest_post(
     request: Request,
-    _token: Annotated[str, Depends(verify_token)],
+    *,
+    index_name: str,
+    payload: Any,
+    runner: Any,
+    item_count: int,
 ) -> IndexIngestJobAccepted | JSONResponse:
-    """Enqueue a HuggingFace ingest for one or more (type, repo_id) items."""
-
+    """Shared body for the five per-entity HF ingest endpoints. Each
+    POST handler delegates here after pulling its typed payload + the
+    matching `run_*_ingest_job` coroutine."""
     job_store = _resolve_index_ingest_job_store(request)
     if job_store is None:
         return JSONResponse(
@@ -2057,20 +2481,18 @@ async def huggingface_ingest_post(
                 "detail": "index ingest job store unavailable: provider cache is disabled",
             },
         )
-
     job_id = str(uuid4())
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
         job_id=job_id,
-        index_name="huggingface",
+        index_name=index_name,
         status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"),
         submitted_at=submitted_at,
     )
     job_store.set(job)
-
     task = asyncio.create_task(
-        run_huggingface_ingest_job(
+        runner(
             payload=payload,
             app_state=request.app.state,
             job_store=job_store,
@@ -2078,15 +2500,13 @@ async def huggingface_ingest_post(
         ),
     )
     _track_background_task(request, task)
-
     logger.info(
-        "huggingface ingest job submitted: job_id=%s items=%d",
-        job_id,
-        len(payload.items),
+        "%s ingest job submitted: job_id=%s items=%d",
+        index_name, job_id, item_count,
     )
     return IndexIngestJobAccepted(
         job_id=job_id,
-        index_name="huggingface",
+        index_name=index_name,
         status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id),
         submitted_at=submitted_at,
@@ -2094,7 +2514,117 @@ async def huggingface_ingest_post(
 
 
 @v2_router.post(
-    "/indices/github/ingest",
+    "/indices/huggingface_models/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_models_ingest_post(
+    payload: HuggingFaceModelsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace models ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_models",
+        payload=payload,
+        runner=run_huggingface_models_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_datasets/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_datasets_ingest_post(
+    payload: HuggingFaceDatasetsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace datasets ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_datasets",
+        payload=payload,
+        runner=run_huggingface_datasets_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_spaces/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_spaces_ingest_post(
+    payload: HuggingFaceSpacesIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace spaces ingest for one or more repo_ids."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_spaces",
+        payload=payload,
+        runner=run_huggingface_spaces_ingest_job,
+        item_count=len(payload.repo_ids),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_users/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_users_ingest_post(
+    payload: HuggingFaceUsersIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace users ingest for one or more namespace slugs."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_users",
+        payload=payload,
+        runner=run_huggingface_users_ingest_job,
+        item_count=len(payload.slugs),
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_organizations/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_organizations_ingest_post(
+    payload: HuggingFaceOrganizationsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a HuggingFace organizations ingest for one or more namespace slugs."""
+    return _hf_entity_ingest_post(
+        request,
+        index_name="huggingface_organizations",
+        payload=payload,
+        runner=run_huggingface_organizations_ingest_job,
+        item_count=len(payload.slugs),
+    )
+
+
+@v2_router.post(
+    "/indices/github_repos/ingest",
     response_model=IndexIngestJobAccepted,
     response_model_exclude_none=True,
     status_code=status.HTTP_202_ACCEPTED,
@@ -2118,12 +2648,12 @@ async def github_ingest_post(
     job_id = str(uuid4())
     submitted_at = datetime.now(timezone.utc)
     job = IndexIngestJob(
-        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        job_id=job_id, index_name="github_repos", status=IndexIngestJobStatus.PENDING,
         request=payload.model_dump(mode="json"), submitted_at=submitted_at,
     )
     job_store.set(job)
     task = asyncio.create_task(
-        run_github_ingest_job(
+        run_github_repos_ingest_job(
             payload=payload, app_state=request.app.state,
             job_store=job_store, job_id=job_id,
         ),
@@ -2131,7 +2661,162 @@ async def github_ingest_post(
     _track_background_task(request, task)
     logger.info("github ingest job submitted: job_id=%s repos=%d", job_id, len(payload.repos))
     return IndexIngestJobAccepted(
-        job_id=job_id, index_name="github", status=IndexIngestJobStatus.PENDING,
+        job_id=job_id, index_name="github_repos", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/github_users/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def github_users_ingest_post(
+    payload: GitHubUsersIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a github_users ingest for one or more user logins.
+
+    Each login is fetched via `GET /users/{login}` and persisted to the
+    github_users DuckDB + Qdrant collection. Org-typed payloads are
+    skipped (they belong in github_organizations).
+    """
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="github_users", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_github_users_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "github_users ingest job submitted: job_id=%s logins=%d",
+        job_id, len(payload.logins),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="github_users",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/github_organizations/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def github_organizations_ingest_post(
+    payload: GitHubOrgsIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a github_organizations ingest for one or more org handles.
+
+    Each handle is fetched via `GET /orgs/{org}` and persisted to the
+    github_organizations DuckDB + Qdrant collection.
+    """
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="github_organizations",
+        status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_github_orgs_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "github_organizations ingest job submitted: job_id=%s orgs=%d",
+        job_id, len(payload.orgs),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="github_organizations",
+        status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_papers/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def huggingface_papers_ingest_post(
+    payload: HuggingFacePapersIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a huggingface_papers ingest for one or more arXiv ids.
+
+    Each id can arrive in any wire shape — bare (`2310.01234`), with
+    version suffix, as an arXiv or HF Papers URL, as an `arxiv:` tag,
+    or as an arXiv DOI. The job normaliser strips to the canonical id
+    before fetch.
+    """
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="huggingface_papers",
+        status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_huggingface_papers_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "huggingface_papers ingest job submitted: job_id=%s arxiv_ids=%d",
+        job_id, len(payload.arxiv_ids),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="huggingface_papers",
+        status=IndexIngestJobStatus.PENDING,
         status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
     )
 
@@ -2410,6 +3095,52 @@ async def oamonitor_ingest_post(
     )
 
 
+@v2_router.post(
+    "/indices/dockerhub/ingest",
+    response_model=IndexIngestJobAccepted,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Indices"],
+)
+async def dockerhub_ingest_post(
+    payload: DockerhubIngestRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexIngestJobAccepted | JSONResponse:
+    """Enqueue a Docker Hub ingest for one or more image references."""
+
+    job_store = _resolve_index_ingest_job_store(request)
+    if job_store is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "index ingest job store unavailable: provider cache is disabled",
+            },
+        )
+    job_id = str(uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    job = IndexIngestJob(
+        job_id=job_id, index_name="dockerhub", status=IndexIngestJobStatus.PENDING,
+        request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+    )
+    job_store.set(job)
+    task = asyncio.create_task(
+        run_dockerhub_ingest_job(
+            payload=payload, app_state=request.app.state,
+            job_store=job_store, job_id=job_id,
+        ),
+    )
+    _track_background_task(request, task)
+    logger.info(
+        "dockerhub ingest job submitted: job_id=%s images=%d",
+        job_id, len(payload.images),
+    )
+    return IndexIngestJobAccepted(
+        job_id=job_id, index_name="dockerhub", status=IndexIngestJobStatus.PENDING,
+        status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+    )
+
+
 async def _search_response_or_unavailable(
     response: IndexSearchResponse | None, *, index_name: str,
 ) -> IndexSearchResponse | JSONResponse:
@@ -2424,7 +3155,7 @@ async def _search_response_or_unavailable(
 
 
 @v2_router.post(
-    "/indices/zenodo/search",
+    "/indices/zenodo_records/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
@@ -2436,34 +3167,102 @@ async def zenodo_search_post(
 ) -> IndexSearchResponse | JSONResponse:
     """Semantic search against the Zenodo index."""
     return await _search_response_or_unavailable(
-        await run_zenodo_search(payload, request.app.state), index_name="zenodo",
+        await run_zenodo_records_search(payload, request.app.state), index_name="zenodo_records",
     )
 
 
 @v2_router.post(
-    "/indices/huggingface/search",
+    "/indices/huggingface_models/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
 )
-async def huggingface_search_post(
+async def huggingface_models_search_post(
     payload: IndexSearchRequest,
     request: Request,
     _token: Annotated[str, Depends(verify_token)],
 ) -> IndexSearchResponse | JSONResponse:
-    """Semantic search against the HuggingFace index.
-
-    Use ``target`` to pick the entity table: ``models`` (default), ``datasets``,
-    ``spaces``, or ``orgs``.
-    """
+    """Semantic search against the huggingface_models index."""
     return await _search_response_or_unavailable(
-        await run_huggingface_search(payload, request.app.state),
-        index_name="huggingface",
+        await run_huggingface_models_search(payload, request.app.state),
+        index_name="huggingface_models",
     )
 
 
 @v2_router.post(
-    "/indices/github/search",
+    "/indices/huggingface_datasets/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_datasets_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_datasets index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_datasets_search(payload, request.app.state),
+        index_name="huggingface_datasets",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_spaces/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_spaces_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_spaces index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_spaces_search(payload, request.app.state),
+        index_name="huggingface_spaces",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_users/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_users_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_users index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_users_search(payload, request.app.state),
+        index_name="huggingface_users",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_organizations/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_organizations_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_organizations index."""
+    return await _search_response_or_unavailable(
+        await run_huggingface_organizations_search(payload, request.app.state),
+        index_name="huggingface_organizations",
+    )
+
+
+@v2_router.post(
+    "/indices/github_repos/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
@@ -2475,7 +3274,70 @@ async def github_search_post(
 ) -> IndexSearchResponse | JSONResponse:
     """Semantic search against the GitHub repos index."""
     return await _search_response_or_unavailable(
-        await run_github_search(payload, request.app.state), index_name="github",
+        await run_github_repos_search(payload, request.app.state), index_name="github_repos",
+    )
+
+
+@v2_router.post(
+    "/indices/github_users/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def github_users_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the github_users index.
+
+    Returns user cards ordered by relevance to the query — useful for
+    disambiguating affiliations or finding a researcher by topic.
+    """
+    return await _search_response_or_unavailable(
+        await run_github_users_search(payload, request.app.state),
+        index_name="github_users",
+    )
+
+
+@v2_router.post(
+    "/indices/github_organizations/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def github_organizations_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the github_organizations index."""
+    return await _search_response_or_unavailable(
+        await run_github_orgs_search(payload, request.app.state),
+        index_name="github_organizations",
+    )
+
+
+@v2_router.post(
+    "/indices/huggingface_papers/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def huggingface_papers_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the huggingface_papers index.
+
+    Returns arXiv paper cards (HF-curated) ordered by relevance to
+    the query. Useful for "find papers about X" queries grounded in
+    the HF Papers daily feed and AI-summary metadata.
+    """
+    return await _search_response_or_unavailable(
+        await run_huggingface_papers_search(payload, request.app.state),
+        index_name="huggingface_papers",
     )
 
 
@@ -2603,6 +3465,24 @@ async def oamonitor_search_post(
     )
 
 
+@v2_router.post(
+    "/indices/dockerhub/search",
+    response_model=IndexSearchResponse,
+    response_model_exclude_none=True,
+    tags=["Indices"],
+)
+async def dockerhub_search_post(
+    payload: IndexSearchRequest,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> IndexSearchResponse | JSONResponse:
+    """Semantic search against the Docker Hub index."""
+    return await _search_response_or_unavailable(
+        await run_dockerhub_search(payload, request.app.state),
+        index_name="dockerhub",
+    )
+
+
 # --- /v2/indices/<name>/search for the CLI-managed catalogs ---------------
 # These catalogs are populated by `python -m src.index.<name>` from cron
 # (no v2 ingest route) but have populated Qdrant collections. The thin
@@ -2687,26 +3567,27 @@ async def epfl_graph_search_post(
 
 
 @v2_router.post(
-    "/indices/communities/search",
+    "/indices/zenodo_communities/search",
     response_model=IndexSearchResponse,
     response_model_exclude_none=True,
     tags=["Indices"],
 )
-async def communities_search_post(
+async def zenodo_communities_search_post(
     payload: IndexSearchRequest,
     request: Request,
     _token: Annotated[str, Depends(verify_token)],
 ) -> IndexSearchResponse | JSONResponse:
-    """Lexical (ILIKE) search against the institutional communities registry.
+    """Lexical (ILIKE) search against the institutional Zenodo communities
+    registry.
 
-    No semantic infrastructure — communities is a tiny 469-row DuckDB-only
-    registry where substring scans across `title` / `description` /
-    `keywords` finish in milliseconds. Title hits outrank description
-    hits outrank keyword hits.
+    No semantic infrastructure — zenodo_communities is a tiny ~469-row
+    DuckDB-only registry where substring scans across `title` /
+    `description` / `keywords` finish in milliseconds. Title hits
+    outrank description hits outrank keyword hits.
     """
     return await _search_response_or_unavailable(
         await run_communities_search(payload, request.app.state),
-        index_name="communities",
+        index_name="zenodo_communities",
     )
 
 
@@ -2936,6 +3817,109 @@ async def index_ingest_job_status(
             content={"detail": f"no index ingest job found with id '{job_id}'"},
         )
     return record
+
+
+# --- /v2/indices/<provider>/reset ----------------------------------------
+# Cold-start a single provider's index: wipe DuckDB + Qdrant collection(s).
+# The opt-in `wipe_cache=true` query param also clears the per-provider
+# ProviderCache so re-ingest re-fetches from upstream instead of replaying
+# cached responses. Token-gated; intentionally not idempotent-on-DELETE
+# at the HTTP level (200 + structured result), since clients usually want
+# to know what was actually reclaimed.
+
+
+@v2_router.delete(
+    "/indices/{provider}/reset",
+    tags=["Indices"],
+    response_model=None,
+)
+async def reset_provider_index(
+    provider: str,
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+    wipe_qdrant: bool = True,
+    wipe_cache: bool = False,
+) -> dict[str, Any] | JSONResponse:
+    """Wipe one provider's DuckDB + Qdrant collection(s), enabling a
+    cold-start re-ingest.
+
+    Query flags:
+      - ``wipe_qdrant=true|false`` (default true): drop Qdrant
+        collections too. Set false for a DuckDB-only reset.
+      - ``wipe_cache=true|false`` (default false): also clear the
+        per-provider ProviderCache. Use when upstream data has
+        shifted; default keeps cached upstream responses so
+        re-ingest is fast.
+    """
+    from src.v2.indices.reset import (  # noqa: PLC0415
+        UnknownProviderError,
+        reset_index,
+    )
+
+    try:
+        result = await asyncio.to_thread(
+            reset_index,
+            provider,
+            app_state=request.app.state,
+            wipe_qdrant=wipe_qdrant,
+            wipe_cache=wipe_cache,
+        )
+    except UnknownProviderError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+    return {
+        "provider": result.provider,
+        "duckdb_deleted": result.duckdb_deleted,
+        "duckdb_bytes_reclaimed": result.duckdb_bytes_reclaimed,
+        "qdrant_collections_attempted": list(result.qdrant_collections_attempted),
+        "qdrant_collections_dropped": list(result.qdrant_collections_dropped),
+        "qdrant_skipped": result.qdrant_skipped,
+        "cache_cleared": result.cache_cleared,
+        "elapsed_seconds": result.elapsed_seconds,
+    }
+
+
+@v2_router.delete(
+    "/indices/reset-all",
+    tags=["Indices"],
+)
+async def reset_all_indices(
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+    wipe_qdrant: bool = True,
+    wipe_cache: bool = False,
+) -> dict[str, Any]:
+    """Wipe every known provider in one call.
+
+    Failures on individual providers don't stop the rest; each provider
+    returns its own result entry. Use carefully — this is an operator
+    tool for full re-ingest, not a routine cache flush.
+    """
+    from src.v2.indices.reset import reset_all  # noqa: PLC0415
+
+    results = await asyncio.to_thread(
+        reset_all,
+        app_state=request.app.state,
+        wipe_qdrant=wipe_qdrant,
+        wipe_cache=wipe_cache,
+    )
+    return {
+        "count": len(results),
+        "results": [
+            {
+                "provider": r.provider,
+                "duckdb_deleted": r.duckdb_deleted,
+                "duckdb_bytes_reclaimed": r.duckdb_bytes_reclaimed,
+                "qdrant_collections_dropped": list(r.qdrant_collections_dropped),
+                "qdrant_skipped": r.qdrant_skipped,
+                "cache_cleared": r.cache_cleared,
+                "elapsed_seconds": r.elapsed_seconds,
+            }
+            for r in results
+        ],
+    }
 
 
 @v2_router.get(

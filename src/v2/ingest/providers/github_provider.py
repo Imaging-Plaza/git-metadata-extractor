@@ -7,7 +7,7 @@ import os
 import re
 import time
 from typing import TYPE_CHECKING, Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 
@@ -847,6 +847,234 @@ class RealGitHubProvider(GitHubProvider):
             _fetch,
             label=f"github.get_repository_rest({full_name})",
         )
+
+    def get_repository_releases(self, full_name: str) -> list[dict[str, Any]]:
+        """Fetch published releases for ``owner/repo`` via the REST API
+        (`/repos/{owner}/{repo}/releases`), newest first, cached.
+
+        Public endpoint — no extra token scope. Capped at the first page
+        (100); repos with more releases are rare and the newest are what
+        downstream consumers care about. Returns a thinned list; empty on
+        404 / non-200 / transport error so extraction never breaks here.
+        """
+
+        def _thin(release: dict[str, Any]) -> dict[str, Any]:
+            assets_raw = release.get("assets")
+            assets = assets_raw if isinstance(assets_raw, list) else []
+            return {
+                "tag_name": release.get("tag_name"),
+                "name": release.get("name"),
+                "draft": bool(release.get("draft")),
+                "prerelease": bool(release.get("prerelease")),
+                "published_at": release.get("published_at"),
+                "created_at": release.get("created_at"),
+                "html_url": release.get("html_url"),
+                "tarball_url": release.get("tarball_url"),
+                "zipball_url": release.get("zipball_url"),
+                "assets": [
+                    {
+                        "name": a.get("name"),
+                        "browser_download_url": a.get("browser_download_url"),
+                        "content_type": a.get("content_type"),
+                        "size": a.get("size"),
+                        "download_count": a.get("download_count"),
+                    }
+                    for a in assets
+                    if isinstance(a, dict)
+                ],
+            }
+
+        def _fetch() -> list[dict[str, Any]]:
+            url = f"https://api.github.com/repos/{full_name}/releases?per_page=100"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github releases fetch failed: %s", full_name)
+                return []
+            if response.status_code == 404:
+                return []
+            if response.status_code != 200:
+                logger.info(
+                    "github releases fetch returned %d for %s",
+                    response.status_code, full_name,
+                )
+                return []
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github releases response not JSON: %s", full_name)
+                return []
+            if not isinstance(payload, list):
+                return []
+            return [_thin(r) for r in payload if isinstance(r, dict)]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_releases_v1", full_name=full_name)
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.get_releases({full_name})",
+        )
+
+    def _list_owner_container_packages(self, owner: str) -> dict[str, Any]:
+        """List an owner's GHCR container packages, cached by owner.
+
+        GitHub has no per-repo packages endpoint, so we enumerate per
+        owner and the caller filters. Tries the org endpoint first and
+        falls back to the user endpoint on 404 (owner is a user, not an
+        org). Returns ``{"scope": "orgs"|"users"|None, "packages": [...]}``;
+        ``scope`` records which endpoint won so version lookups hit the
+        same one. On 401/403 (token lacks ``read:packages``) returns an
+        empty result — releases and the rest of extraction are
+        unaffected.
+        """
+
+        def _request(scope: str) -> requests.Response | None:
+            url = (
+                f"https://api.github.com/{scope}/{owner}/packages"
+                "?package_type=container&per_page=100"
+            )
+            try:
+                return self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github packages list failed: %s (%s)", owner, scope)
+                return None
+
+        def _fetch() -> dict[str, Any]:
+            for scope in ("orgs", "users"):
+                response = _request(scope)
+                if response is None:
+                    continue
+                if response.status_code in (401, 403):
+                    logger.warning(
+                        "github packages list %d for %s — GitHub token lacks the "
+                        "'read:packages' scope; skipping container-image extraction. "
+                        "Add read:packages to GME_GITHUB_TOKEN to enable it.",
+                        response.status_code, owner,
+                    )
+                    return {"scope": None, "packages": []}
+                if response.status_code == 404:
+                    # Not this owner-kind; try the next scope.
+                    continue
+                if response.status_code != 200:
+                    logger.info(
+                        "github packages list returned %d for %s (%s)",
+                        response.status_code, owner, scope,
+                    )
+                    continue
+                try:
+                    payload = response.json()
+                except ValueError:
+                    return {"scope": None, "packages": []}
+                if isinstance(payload, list):
+                    return {
+                        "scope": scope,
+                        "packages": [p for p in payload if isinstance(p, dict)],
+                    }
+            return {"scope": None, "packages": []}
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "list_container_packages_v1", owner=owner)
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.list_container_packages({owner})",
+        )
+
+    def _list_container_package_tags(
+        self, owner: str, scope: str, package_name: str,
+    ) -> list[str]:
+        """Collect the tag strings across all versions of one container
+        package, cached. Package names can contain ``/`` so they are
+        URL-encoded. Empty list on error."""
+
+        def _fetch() -> list[str]:
+            encoded = quote(package_name, safe="")
+            url = (
+                f"https://api.github.com/{scope}/{owner}"
+                f"/packages/container/{encoded}/versions?per_page=100"
+            )
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github package versions failed: %s/%s", owner, package_name)
+                return []
+            if response.status_code != 200:
+                return []
+            try:
+                versions = response.json()
+            except ValueError:
+                return []
+            if not isinstance(versions, list):
+                return []
+            tags: list[str] = []
+            for version in versions:
+                if not isinstance(version, dict):
+                    continue
+                container = (version.get("metadata") or {}).get("container") or {}
+                for tag in container.get("tags") or []:
+                    if isinstance(tag, str) and tag not in tags:
+                        tags.append(tag)
+            return tags
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github", "container_pkg_tags_v1", owner=owner, package=package_name,
+        )
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.container_pkg_tags({owner}/{package_name})",
+        )
+
+    def get_repository_container_images(self, full_name: str) -> list[dict[str, Any]]:
+        """Fetch GHCR container (Docker) images published from ``owner/repo``.
+
+        Lists the owner's container packages (cached per owner) and keeps
+        those whose `repository.full_name` matches, with a name-convention
+        fallback (`package.name == <repo>`). For each match the version
+        tags are collected. Requires ``read:packages``; without it the
+        owner listing returns empty and so does this. The repo→image link
+        is only as reliable as the image's `org.opencontainers.image.source`
+        label — name-convention matches are flagged as such.
+        """
+        if "/" not in full_name:
+            return []
+        owner, repo_short = full_name.split("/", maxsplit=1)
+        listing = self._list_owner_container_packages(owner)
+        scope = listing.get("scope")
+        packages = listing.get("packages") or []
+        if not scope or not packages:
+            return []
+
+        images: list[dict[str, Any]] = []
+        for pkg in packages:
+            name = pkg.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            repo_block = pkg.get("repository") if isinstance(pkg.get("repository"), dict) else {}
+            linked_full = repo_block.get("full_name")
+            linked_match = isinstance(linked_full, str) and linked_full.lower() == full_name.lower()
+            name_match = name.lower() == repo_short.lower()
+            if not (linked_match or name_match):
+                continue
+            images.append(
+                {
+                    "name": name,
+                    "image": f"ghcr.io/{owner}/{name}",
+                    "visibility": pkg.get("visibility"),
+                    "linked_repository": linked_full if isinstance(linked_full, str) else None,
+                    "match": "repository" if linked_match else "name_convention",
+                    "tags": self._list_container_package_tags(owner, scope, name),
+                    "updated_at": pkg.get("updated_at"),
+                    "created_at": pkg.get("created_at"),
+                    "html_url": pkg.get("html_url"),
+                },
+            )
+        return images
 
     def get_repository_readme(self, full_name: str) -> str:
         """Fetch the README content for a repository via the GitHub REST

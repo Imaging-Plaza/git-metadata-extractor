@@ -1,10 +1,10 @@
 [
   {
-    "id": "0000-0001-2345-6789_https://ror.org/02s376052",
+    "id": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
     "type": "org:Membership",
     "shacl": "pulse:MembershipShape",
     "identifiers": {
-      "pulse:composite": "0000-0001-2345-6789_https://ror.org/02s376052",
+      "pulse:composite": "https://orcid.org/0000-0001-2345-6789_https://ror.org/02s376052",
       "uuid": "c1a2b3c4-5d6e-4f7a-8b9c-0d1e2f3a4b5c"
     },
     "idSource": "pulse:composite",
@@ -14,11 +14,11 @@
     "time:hasEnd": null
   },
   {
-    "id": "0000-0002-3456-7890_https://ror.org/02s376052",
+    "id": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
     "type": "org:Membership",
     "shacl": "pulse:MembershipShape",
     "identifiers": {
-      "pulse:composite": "0000-0002-3456-7890_https://ror.org/02s376052",
+      "pulse:composite": "https://orcid.org/0000-0002-3456-7890_https://ror.org/02s376052",
       "uuid": "c2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
     },
     "idSource": "pulse:composite",
@@ -28,11 +28,11 @@
     "time:hasEnd": null
   },
   {
-    "id": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+    "id": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
     "type": "org:Membership",
     "shacl": "pulse:MembershipShape",
     "identifiers": {
-      "pulse:composite": "0000-0003-4567-8901_https://ror.org/01ggx4157",
+      "pulse:composite": "https://orcid.org/0000-0003-4567-8901_https://ror.org/01ggx4157",
       "uuid": "c3c4d5e6-7f8a-4b9c-8d1e-2f3a4b5c6d7e"
     },
     "idSource": "pulse:composite",
@@ -56,11 +56,11 @@
     "time:hasEnd": null
   },
   {
-    "id": "0000-0001-2345-6789_numpy",
+    "id": "https://orcid.org/0000-0001-2345-6789_numpy",
     "type": "org:Membership",
     "shacl": "pulse:MembershipShape",
     "identifiers": {
-      "pulse:composite": "0000-0001-2345-6789_numpy",
+      "pulse:composite": "https://orcid.org/0000-0001-2345-6789_numpy",
       "uuid": "c5e6f7a8-9b0c-4d1e-af3a-4b5c6d7e8f9a"
     },
     "idSource": "pulse:composite",

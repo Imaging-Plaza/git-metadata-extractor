@@ -29,7 +29,7 @@ from src.index.ethz_research_collection.paths import (
     raw_persons_dir,
 )
 
-from .duckdb_store import DuckDBStore
+from .duckdb_store import EthzResearchCollectionStore
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +241,7 @@ ON CONFLICT (org_uuid) DO UPDATE SET
 # ---------------------------------------------------------------------------
 
 
-def ingest_articles(store: DuckDBStore, items_dir: Path | None = None) -> int:
+def ingest_articles(store: EthzResearchCollectionStore, items_dir: Path | None = None) -> int:
     items_dir = items_dir or raw_items_dir()
     glob = str(items_dir / "*.json")
     conn = store.connect()
@@ -276,7 +276,7 @@ def _has_json_files(directory: Path) -> bool:
     return False
 
 
-def ingest_persons(store: DuckDBStore, persons_dir: Path | None = None) -> int:
+def ingest_persons(store: EthzResearchCollectionStore, persons_dir: Path | None = None) -> int:
     persons_dir = persons_dir or raw_persons_dir()
     if not _has_json_files(persons_dir):
         logger.info("ingest_persons: 0 (no JSON files in %s)", persons_dir)
@@ -303,7 +303,7 @@ def ingest_persons(store: DuckDBStore, persons_dir: Path | None = None) -> int:
 
 
 def ingest_organizations(
-    store: DuckDBStore,
+    store: EthzResearchCollectionStore,
     orgs_dir: Path | None = None,
 ) -> int:
     orgs_dir = orgs_dir or raw_organizations_dir()
@@ -331,7 +331,7 @@ def ingest_organizations(
     return int(n)
 
 
-def ingest_links_dump(store: DuckDBStore, dump_path: Path) -> int:
+def ingest_links_dump(store: EthzResearchCollectionStore, dump_path: Path) -> int:
     """Read a `scripts/dump_link_articles.py` output and upsert article_links.
 
     The heavy dump is a single ~400 MB JSON. Read once with DuckDB's JSON
@@ -379,7 +379,7 @@ def ingest_links_dump(store: DuckDBStore, dump_path: Path) -> int:
     return len(rows)
 
 
-def ingest_all(store: DuckDBStore, *, links_dump: Path | None = None) -> Dict[str, int]:
+def ingest_all(store: EthzResearchCollectionStore, *, links_dump: Path | None = None) -> Dict[str, int]:
     summary = {
         "articles": ingest_articles(store),
         "persons": ingest_persons(store),

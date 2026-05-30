@@ -27,7 +27,7 @@ from src.index.orcid.ingest.orcid_client import build_orcid_provider
 
 if TYPE_CHECKING:
     from src.index.orcid.config import OrcidIndexConfig
-    from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+    from src.index.orcid.storage.duckdb_store import OrcidStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ HTTP_BAD_REQUEST = 400
 def discover_seeds(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     source: str | None = None,
 ) -> dict[str, int]:
     """Run the configured discovery sources and persist seeds."""
@@ -62,7 +62,7 @@ def discover_seeds(
 def _seed_from_openalex(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
 ) -> int:
     db_path = Path(config.discovery.openalex_db)
     if not db_path.exists():
@@ -116,7 +116,7 @@ def _normalize_orcid(value: str) -> str | None:
 def _seed_from_orcid_search(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
 ) -> int:
     provider = build_orcid_provider(config)
     aliases = [a for a in config.scope.affiliation_aliases if a.strip()]

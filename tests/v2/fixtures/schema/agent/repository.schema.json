@@ -103,7 +103,7 @@
     },
     "pulse:ownedBy": {
       "type": ["string", "null"],
-      "description": "PersonShape or OrganizationShape ID (hierarchical) that owns this repository. Example: '95372c6b-7d45-432e-a84e-660c9fa54e05'"
+      "description": "PersonShape or OrganizationShape ID (hierarchical) that owns this repository. Example: 'https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05'"
     },
     "pulse:isForkOf": {
       "type": ["string", "null"],

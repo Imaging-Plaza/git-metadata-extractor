@@ -5,7 +5,14 @@
   "description": "Schema for validating Person entities following Open Pulse Ontology v2.1.2. ID hierarchy: orcid → infosciencePersonIdentifier → githubUsername → uuid",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -22,18 +29,30 @@
     "identifiers": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["uuid"],
+      "required": [
+        "uuid"
+      ],
       "properties": {
         "pulse:orcid": {
-          "type": ["string", "null"],
-          "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
         },
         "pulse:infosciencePersonIdentifier": {
-          "type": ["string", "null"],
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "pulse:githubUsername": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         },
         "uuid": {
           "type": "string",
@@ -43,7 +62,12 @@
     },
     "idSource": {
       "type": "string",
-      "enum": ["pulse:orcid", "pulse:infosciencePersonIdentifier", "pulse:githubUsername", "uuid"]
+      "enum": [
+        "pulse:orcid",
+        "pulse:infosciencePersonIdentifier",
+        "pulse:githubUsername",
+        "uuid"
+      ]
     },
     "schema:name": {
       "type": "string",
@@ -54,19 +78,32 @@
       "pattern": "^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
     },
     "schema:url": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "format": "uri"
     },
     "pulse:githubUsername": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
     },
     "pulse:orcidIdentifier": {
-      "type": ["string", "null"],
-      "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://orcid\\.org/\\d{4}-\\d{4}-\\d{4}-\\d{3}[0-9X]$"
     },
     "pulse:infosciencePersonIdentifier": {
-      "type": ["string", "null"],
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://infoscience\\.epfl\\.ch/entities/person/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "org:hasMembership": {
       "type": "array",
@@ -93,16 +130,21 @@
   "anyOf": [
     {
       "description": "At least githubUsername required",
-      "required": ["pulse:githubUsername"],
+      "required": [
+        "pulse:githubUsername"
+      ],
       "properties": {
         "pulse:githubUsername": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         }
       }
     },
     {
       "description": "At least email required",
-      "required": ["schema:email"],
+      "required": [
+        "schema:email"
+      ],
       "properties": {
         "schema:email": {
           "type": "string"
@@ -111,7 +153,9 @@
     },
     {
       "description": "At least infosciencePersonIdentifier required",
-      "required": ["pulse:infosciencePersonIdentifier"],
+      "required": [
+        "pulse:infosciencePersonIdentifier"
+      ],
       "properties": {
         "pulse:infosciencePersonIdentifier": {
           "type": "string"
@@ -120,7 +164,9 @@
     },
     {
       "description": "At least orcidIdentifier required",
-      "required": ["pulse:orcidIdentifier"],
+      "required": [
+        "pulse:orcidIdentifier"
+      ],
       "properties": {
         "pulse:orcidIdentifier": {
           "type": "string"

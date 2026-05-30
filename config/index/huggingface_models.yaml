@@ -1,0 +1,30 @@
+# HuggingFace models RAG indexer config.
+# Resolved by `src/index/huggingface_models/config.py` and merged with env vars
+# (`RCP_TOKEN`, `HF_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_QDRANT_PREFER_GRPC`, `INDEX_DATA_DIR`) at startup.
+
+rcp:
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a query about an ML model architecture, task, or library, retrieve relevant HuggingFace model cards"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+huggingface:
+  api_base: https://huggingface.co
+  per_page: 100
+  max_concurrency: 4
+  full_cards: false
+  min_card_chars: 32
+
+qdrant:
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 512
+  overlap_tokens: 64
+  tokenizer: cl100k_base

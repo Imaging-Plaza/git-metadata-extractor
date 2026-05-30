@@ -15,7 +15,7 @@ from src.index.orcid.retrieval.sql import (
     run_adhoc,
     run_predefined,
 )
-from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+from src.index.orcid.storage.duckdb_store import OrcidStore
 from src.index.orcid.vector.qdrant_store import OrcidQdrantStore
 
 LOGGER = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def healthz() -> dict[str, Any]:
     duck_status = "ok"
     qdrant_status = "ok"
     try:
-        OrcidDuckDBStore.open().count("persons")
+        OrcidStore.open().count("persons")
     except Exception as exc:  # noqa: BLE001
         duck_status = f"error: {exc}"
     try:
@@ -99,7 +99,7 @@ def list_predefined() -> dict[str, list[str]]:
 
 @app.get("/person/{orcid_id}")
 def get_person(orcid_id: str) -> dict[str, Any]:
-    store = OrcidDuckDBStore.open()
+    store = OrcidStore.open()
     person = store.fetch_person(orcid_id)
     if person is None:
         raise HTTPException(status_code=404, detail="not found")

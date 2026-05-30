@@ -8,7 +8,16 @@
   "patternProperties": {
     "^_": {}
   },
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "pulse:githubRepositoryHandle", "schema:author"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name",
+    "pulse:githubRepositoryHandle",
+    "schema:author"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -29,10 +38,14 @@
       "properties": {
         "pulse:githubRepositoryHandle": {
           "type": "string",
-          "description": "GitHub repository handle. Format: owner/repo. Example: 'EPFL-ENAC/geodata-toolkit'"
+          "description": "GitHub repository handle. Format: owner/repo. Example: 'EPFL-ENAC/geodata-toolkit'",
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$"
         },
         "schema:citation": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "DOI identifier. Example: 'https://doi.org/10.5281/zenodo.1234567845678'"
         },
         "uuid": {
@@ -51,11 +64,18 @@
     },
     "pulse:githubRepositoryHandle": {
       "type": "string",
-      "description": "GitHub repository handle. REQUIRED per SHACL. Format: owner/repo. Example: 'EPFL-ENAC/geodata-toolkit'"
+      "description": "GitHub repository handle. REQUIRED per SHACL. Format: owner/repo. Example: 'EPFL-ENAC/geodata-toolkit'",
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$"
     },
     "pulse:repositoryType": {
       "type": "string",
-      "enum": ["pulse:Software", "pulse:Data", "pulse:Documentation", "pulse:EducationalResource", "pulse:Other"],
+      "enum": [
+        "pulse:Software",
+        "pulse:Data",
+        "pulse:Documentation",
+        "pulse:EducationalResource",
+        "pulse:Other"
+      ],
       "description": "Type of repository. One of: 'pulse:Software', 'pulse:Data', 'pulse:Documentation', 'pulse:EducationalResource', 'pulse:Other'"
     },
     "pulse:discipline": {
@@ -63,7 +83,54 @@
       "description": "Array of Wikidata IRIs for disciplines. Format: wd:QXXXXX. Example: ['wd:Q21201', 'wd:Q8434']",
       "items": {
         "type": "string",
-        "enum": ["wd:Q1254373", "wd:Q101333", "wd:Q1071", "wd:Q11680831", "wd:Q12271", "wd:Q12483", "wd:Q18351432", "wd:Q188847", "wd:Q192386", "wd:Q21201", "wd:Q2167061", "wd:Q2329", "wd:Q23404", "wd:Q2878974", "wd:Q309", "wd:Q333", "wd:Q3353193", "wd:Q34749", "wd:Q3606845", "wd:Q395", "wd:Q413", "wd:Q420", "wd:Q42240", "wd:Q428691", "wd:Q43035", "wd:Q4830453", "wd:Q580689", "wd:Q5891", "wd:Q7112556", "wd:Q7163", "wd:Q735", "wd:Q7748", "wd:Q77590", "wd:Q7991", "wd:Q8008", "wd:Q80083", "wd:Q8078", "wd:Q8134", "wd:Q8162", "wd:Q816264", "wd:Q8242", "wd:Q83588", "wd:Q8434", "wd:Q843601", "wd:Q9174", "wd:Q9418"]
+        "enum": [
+          "wd:Q1254373",
+          "wd:Q101333",
+          "wd:Q1071",
+          "wd:Q11680831",
+          "wd:Q12271",
+          "wd:Q12483",
+          "wd:Q18351432",
+          "wd:Q188847",
+          "wd:Q192386",
+          "wd:Q21201",
+          "wd:Q2167061",
+          "wd:Q2329",
+          "wd:Q23404",
+          "wd:Q2878974",
+          "wd:Q309",
+          "wd:Q333",
+          "wd:Q3353193",
+          "wd:Q34749",
+          "wd:Q3606845",
+          "wd:Q395",
+          "wd:Q413",
+          "wd:Q420",
+          "wd:Q42240",
+          "wd:Q428691",
+          "wd:Q43035",
+          "wd:Q4830453",
+          "wd:Q580689",
+          "wd:Q5891",
+          "wd:Q7112556",
+          "wd:Q7163",
+          "wd:Q735",
+          "wd:Q7748",
+          "wd:Q77590",
+          "wd:Q7991",
+          "wd:Q8008",
+          "wd:Q80083",
+          "wd:Q8078",
+          "wd:Q8134",
+          "wd:Q8162",
+          "wd:Q816264",
+          "wd:Q8242",
+          "wd:Q83588",
+          "wd:Q8434",
+          "wd:Q843601",
+          "wd:Q9174",
+          "wd:Q9418"
+        ]
       }
     },
     "schema:author": {
@@ -75,23 +142,38 @@
       }
     },
     "pulse:githubRepoStars": {
-      "type": ["integer", "null"],
+      "type": [
+        "integer",
+        "null"
+      ],
       "description": "GitHub star count. Example: 45"
     },
     "pulse:githubRepoForks": {
-      "type": ["integer", "null"],
+      "type": [
+        "integer",
+        "null"
+      ],
       "description": "GitHub fork count. Example: 12"
     },
     "schema:dateCreated": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Creation datetime in ISO 8601 format. Format: YYYY-MM-DDTHH:MM:SSZ. Example: '2023-03-15T10:30:00Z'"
     },
     "schema:license": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "SPDX license IRI. Example: 'https://spdx.org/licenses/MIT.html'"
     },
     "schema:citation": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "DOI URL for citation. Example: 'https://doi.org/10.5281/zenodo.12345678'"
     },
     "schema:programmingLanguage": {
@@ -102,11 +184,17 @@
       }
     },
     "pulse:ownedBy": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "PersonShape or OrganizationShape ID (hierarchical) that owns this repository. Example: '95372c6b-7d45-432e-a84e-660c9fa54e05'"
     },
     "pulse:isForkOf": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Parent RepositoryShape ID (GitHub handle) if this is a fork. Example: 'numpy/numpy'"
     }
   }

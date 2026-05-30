@@ -5,7 +5,9 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from src.v2.canonicalization.orcid import parse_orcid
+from src.v2.canonicalization.github import github_repo_iri, github_user_iri
+from src.v2.canonicalization.infoscience import infoscience_person_iri
+from src.v2.canonicalization.orcid import orcid_iri
 from src.v2.agents.models import (
     AgentResult,
     ProviderSet,
@@ -19,10 +21,11 @@ HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNO
 
 
 def _normalize_orcid(orcid_value: Any) -> str | None:
-    """Return the bare-form ORCID via the shared canonical helper.
-    Accepts every input shape (bare / URL / `orcid:` prefix / legacy
-    `http` host / trailing slash / lowercase `x` checksum)."""
-    return parse_orcid(orcid_value)
+    """Return the canonical ORCID URL via the shared helper. v3.0.0:
+    Person entity ORCID fields (`identifiers.pulse:orcid`,
+    `pulse:orcidIdentifier`, and the `@id` when ORCID wins the
+    hierarchy) all use the `https://orcid.org/<bare>` URL form."""
+    return orcid_iri(orcid_value)
 
 
 def _anonymize_email(email: Any) -> str | None:
@@ -398,12 +401,19 @@ class PersonAgentV2:
         )
         if not normalized_orcid and not providers.orcid:
             normalized_orcid = orcid_identifier_hint
-        infoscience_id = (
+        # v3.0.0: stamp Infoscience IDs in canonical URL form
+        # (`https://infoscience.epfl.ch/entities/person/<uuid>`). The
+        # helper tolerates bare-UUID input from upstream catalog data.
+        infoscience_id = infoscience_person_iri(
             (infoscience_match or {}).get("infosciencePersonIdentifier")
             if infoscience_match
-            else None
+            else None,
         )
-        github_username = github_user.get("login")
+        raw_github_login = github_user.get("login")
+        # v3.0.0: pulse:githubUsername stores the canonical GitHub
+        # profile URL `https://github.com/<handle>`. The bare login is
+        # kept locally for cross-referencing into repository handles.
+        github_username = github_user_iri(raw_github_login)
         uuid_value = context.get("uuid")
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
@@ -443,9 +453,10 @@ class PersonAgentV2:
                 if isinstance(repository, str) and repository
             ]
         repositories = github_user.get("repositories")
-        if not repository_ownership and isinstance(repositories, list) and isinstance(github_username, str):
+        if not repository_ownership and isinstance(repositories, list) and isinstance(raw_github_login, str):
+            # v3.0.0: ownership uses the canonical repo URL.
             repository_ownership = [
-                f"{github_username}/{repo_name}"
+                github_repo_iri(f"{raw_github_login}/{repo_name}") or f"{raw_github_login}/{repo_name}"
                 for repo_name in repositories
                 if isinstance(repo_name, str) and repo_name
             ]
@@ -555,7 +566,9 @@ class PersonAgentV2:
 
         derivation_stats = {
             "person_id": validated_payload.get("id"),
-            "github_username": github_username,
+            # Derivation breadcrumb keeps the bare login for readability;
+            # canonical URL lives on `pulse:githubUsername`.
+            "github_username": raw_github_login,
             "source_repositories": deepcopy(repository_ownership),
             "affiliation_names": deepcopy(affiliations),
             "orcid_affiliations": _normalize_affiliation_entries(

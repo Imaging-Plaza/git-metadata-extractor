@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 
 @pytest.mark.openalex()
-def test_bootstrap_idempotent(tmp_store: DuckDBStore):
+def test_bootstrap_idempotent(tmp_store: OpenAlexStore):
     tmp_store.bootstrap()  # second call should be a no-op
     assert tmp_store.count("works") == 0
 
 
 @pytest.mark.openalex()
-def test_upsert_work_round_trip(tmp_store: DuckDBStore):
+def test_upsert_work_round_trip(tmp_store: OpenAlexStore):
     work = {
         "openalex_id": "https://openalex.org/W1",
         "doi": "10.1/x",
@@ -38,7 +38,7 @@ def test_upsert_work_round_trip(tmp_store: DuckDBStore):
 
 
 @pytest.mark.openalex()
-def test_upsert_github_url_idempotent(tmp_store: DuckDBStore):
+def test_upsert_github_url_idempotent(tmp_store: OpenAlexStore):
     tmp_store.upsert_github_url(
         work_id="W1",
         url="https://github.com/owner/repo",
@@ -62,7 +62,7 @@ def test_upsert_github_url_idempotent(tmp_store: DuckDBStore):
 
 
 @pytest.mark.openalex()
-def test_transaction_commits_on_success(tmp_store: DuckDBStore):
+def test_transaction_commits_on_success(tmp_store: OpenAlexStore):
     with tmp_store.transaction():
         for i in range(3):
             tmp_store.upsert_work(
@@ -81,7 +81,7 @@ def test_transaction_commits_on_success(tmp_store: DuckDBStore):
 
 
 @pytest.mark.openalex()
-def test_transaction_rolls_back_on_error(tmp_store: DuckDBStore):
+def test_transaction_rolls_back_on_error(tmp_store: OpenAlexStore):
     class BoomError(Exception):
         pass
 
@@ -105,7 +105,7 @@ def test_transaction_rolls_back_on_error(tmp_store: DuckDBStore):
 
 
 @pytest.mark.openalex()
-def test_chunks_unique_constraint_blocks_duplicate_indexes(tmp_store: DuckDBStore):
+def test_chunks_unique_constraint_blocks_duplicate_indexes(tmp_store: OpenAlexStore):
     tmp_store.upsert_chunk(
         chunk_id="c1",
         entity_type="works",

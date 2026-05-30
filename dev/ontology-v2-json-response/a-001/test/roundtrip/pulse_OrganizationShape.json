@@ -1,10 +1,10 @@
 [
   {
-    "id": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "id": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
     "type": "org:Organization",
     "schema:name": "EPFL School of Architecture, Civil and Environmental Engineering",
-    "pulse:githubOrganizationHandle": "EPFL-ENAC",
-    "pulse:infoscienceOrganizationIdentifier": "95372c6b-7d45-432e-a84e-660c9fa54e05",
+    "pulse:githubOrganizationHandle": "https://github.com/EPFL-ENAC",
+    "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05",
     "pulse:OrganizationType": "pulse:University",
     "pulse:githubOrgFollowers": 342,
     "org:unitOf": "https://ror.org/02s376052",
@@ -18,12 +18,12 @@
     "type": "org:Organization",
     "schema:name": "École Polytechnique Fédérale de Lausanne",
     "schema:identifier": "https://ror.org/02s376052",
-    "pulse:infoscienceOrganizationIdentifier": "41674f42-ba15-4612-9817-2a6f60985c01",
-    "pulse:githubOrganizationHandle": "epaboratories",
+    "pulse:infoscienceOrganizationIdentifier": "https://infoscience.epfl.ch/entities/orgunit/41674f42-ba15-4612-9817-2a6f60985c01",
+    "pulse:githubOrganizationHandle": "https://github.com/epaboratories",
     "pulse:OrganizationType": "pulse:University",
     "pulse:githubOrgFollowers": 89,
     "org:hasUnit": [
-      "95372c6b-7d45-432e-a84e-660c9fa54e05"
+      "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05"
     ]
   },
   {
@@ -44,7 +44,7 @@
     "id": "numpy",
     "type": "org:Organization",
     "schema:name": "NumPy",
-    "pulse:githubOrganizationHandle": "numpy",
+    "pulse:githubOrganizationHandle": "https://github.com/numpy",
     "pulse:OrganizationType": "pulse:SoftwareProject",
     "pulse:githubOrgFollowers": 1250
   }

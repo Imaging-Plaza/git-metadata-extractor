@@ -11,13 +11,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.openalex.embed.rcp_client import (
+from src.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index.openalex.rerank.rcp_client import RCPRerankerClient
+from src.index._rcp.reranker_client import RCPRerankerClient
 from src.index.openalex.vector.qdrant_store import QdrantStore
-from src.index.zenodo.embed.pipeline import ZENODO_COLLECTION
+from src.index.zenodo_records.embed.pipeline import ZENODO_COLLECTION
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -31,7 +31,7 @@ from src.v2.ingest.providers._rag_helpers import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from src.index.zenodo.config import ZenodoIndexConfig
+    from src.index.zenodo_records.config import ZenodoIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -171,12 +171,12 @@ class ZenodoRagProvider:
 
     @staticmethod
     def _fetch_records_sync(ids: list[str]) -> list[dict[str, Any]]:
-        from src.index.zenodo.storage.duckdb_store import (  # noqa: PLC0415
-            ZenodoStore,
+        from src.index.zenodo_records.storage.duckdb_store import (  # noqa: PLC0415
+            ZenodoRecordsStore,
         )
 
         try:
-            store = ZenodoStore.open()
+            store = ZenodoRecordsStore.open()
         except Exception as exc:  # noqa: BLE001
             logger.warning("%s: cannot open store — %s", _LOG_LABEL, exc)
             return []
@@ -232,7 +232,7 @@ def build_default_provider(
     if not env_enabled("V2_ZENODO_RAG_ENABLED"):
         return None
     try:
-        from src.index.zenodo.config import load_config  # noqa: PLC0415
+        from src.index.zenodo_records.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

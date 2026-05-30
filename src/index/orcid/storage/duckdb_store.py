@@ -28,10 +28,10 @@ def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-class OrcidDuckDBStore:
+class OrcidStore:
     """Thin wrapper around DuckDB tuned for the ORCID schema.
 
-    Construct with `OrcidDuckDBStore.open()` for the scope-resolved repo
+    Construct with `OrcidStore.open()` for the scope-resolved repo
     path. Re-running `bootstrap()` is idempotent.
     """
 
@@ -45,7 +45,7 @@ class OrcidDuckDBStore:
         db_path: Path | None = None,
         *,
         scope: str | None = None,
-    ) -> OrcidDuckDBStore:
+    ) -> OrcidStore:
         if db_path is None:
             db_path = get_orcid_paths(scope).duckdb_path
         store = cls(db_path)

@@ -3,7 +3,7 @@
 The 9 mature v2 catalogs each ship their own `src/v2/indices/<name>.py`
 with `run_<name>_search` + `run_<name>_ingest_job` + a tuple cached on
 `app_state.v2_<name>_resources`. The 5 CLI-only catalogs (ror,
-infoscience, snsf, epfl_graph, communities) don't have that surface
+infoscience, snsf, epfl_graph, zenodo_communities) don't have that surface
 because they're driven by `python -m src.index.<name> …` from cron, not
 by per-record v2 ingest calls.
 
@@ -16,10 +16,11 @@ them keep using the CLI. The intent here is to give the open-pulse
 Hub a uniform `/v2/indices/{provider}/search` for every catalog
 whose Qdrant collection already exists.
 
-`communities` is intentionally absent — it has no semantic search
-infrastructure (DuckDB-only registry, no embeddings, no Qdrant
-collection). Adding it would mean building a search path from
-scratch, which belongs in a separate PR.
+`zenodo_communities` is intentionally absent from the list above —
+it has no semantic search infrastructure (DuckDB-only registry, no
+embeddings, no Qdrant collection); the lexical-search helper
+`run_communities_search` below fills that gap with a direct
+ILIKE / score-by-section scan.
 """
 
 from __future__ import annotations
@@ -227,21 +228,21 @@ async def run_communities_search(
 ) -> IndexSearchResponse | None:
     del app_state  # we open a fresh read-only handle per request
     try:
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
-        from src.index.communities.storage.duckdb_store import (  # noqa: PLC0415
-            CommunitiesStore,
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.storage.duckdb_store import (  # noqa: PLC0415
+            ZenodoCommunitiesStore,
         )
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("communities search: module unavailable — %s", exc)
+        LOGGER.warning("zenodo_communities search: module unavailable — %s", exc)
         return None
     db_path = duckdb_path()
     if not db_path.exists():
         return IndexSearchResponse(
-            index_name="communities",
+            index_name="zenodo_communities",
             target=payload.target,
             query=payload.query,
             hits=[],
-            extra={"error": "communities.duckdb does not exist"},
+            extra={"error": "zenodo_communities.duckdb does not exist"},
         )
     pattern = f"%{payload.query}%"
     sql = (
@@ -259,7 +260,7 @@ async def run_communities_search(
         "ORDER BY score DESC, title ASC "
         "LIMIT ?"
     )
-    store = CommunitiesStore.open(db_path)
+    store = ZenodoCommunitiesStore.open(db_path)
     try:
         with store.read_only() as conn:
             rows = conn.execute(
@@ -284,7 +285,7 @@ async def run_communities_search(
             hit_input["vector_score"] = float(score)
         hits.append(hit_from_raw(hit_input))
     return IndexSearchResponse(
-        index_name="communities",
+        index_name="zenodo_communities",
         target=payload.target,
         query=payload.query,
         hits=hits,

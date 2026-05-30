@@ -49,7 +49,7 @@ Return strict JSON of shape `DiscoveryProposal` with three lists. Each list defa
 - **Orgs require** at least one identifier: `pulse:ror` (full ROR URL) OR `pulse:githubOrganizationHandle`. The README mentioning "EPFL" alone is not enough — you need a verifiable identifier in the text or a derivable handle.
 - **Articles require** a DOI URL in `schema:identifier`. Papers cited only by title without a DOI must NOT be proposed (the rule-based path drops these on purpose).
 - **`reason` must be a verbatim quote** from the README or CITATION.cff that supports the proposal. If you cannot find an exact supporting snippet, you do not have evidence and must not propose the entity.
-- **`pulse:OrganizationType`** must be one of: `pulse:University`, `pulse:ResearchInstitution`, `pulse:Company`, `pulse:GovernmentAgency`, `pulse:NonProfitOrganization`, `pulse:SoftwareProject`, `pulse:OtherOrganizationType`.
+- **`pulse:OrganizationType`** must be one of: `pulse:University`, `pulse:ResearchInstitution`, `pulse:GovernmentAgency`, `pulse:SoftwareProject`, `pulse:PrivateCompany`, `pulse:NonProfitOrganization`, `pulse:CommunitySpace`, `pulse:OtherOrganizationType`.
 
 ## What counts as a real discovery
 

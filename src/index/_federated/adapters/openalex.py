@@ -66,10 +66,10 @@ class OpenAlexAdapter:
             return []
         oid = m.group(1)
         try:
-            from src.index.openalex.storage.duckdb_store import DuckDBStore
+            from src.index.openalex.storage.duckdb_store import OpenAlexStore
         except Exception:  # noqa: BLE001
             return []
-        store = DuckDBStore.open()
+        store = OpenAlexStore.open()
         # Only `fetch_work` is exposed today; hydrate that for W-IDs.
         if oid.startswith("W") and hasattr(store, "fetch_work"):
             row = store.fetch_work(oid)

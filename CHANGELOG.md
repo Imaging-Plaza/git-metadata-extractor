@@ -8,6 +8,216 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 _No changes yet._
 
+## [3.0.0rc1] — Proposed — Identifier URL canonicalisation + per-entity RAG indices (breaking)
+
+> **Status: proposed.** This is the candidate for the next major release
+> (v3.0.0), sitting above the released `2.1.0rc1` below. Breaking
+> identifier-shape and env-var changes warrant the major bump. Nothing
+> here is tagged yet; the version string is `3.0.0rc1`.
+
+This release standardises **every external identifier** to its canonical
+HTTPS URL form, end-to-end. Previously the codebase carried a split
+convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
+All identifiers now match.
+
+### Fixed — SHACL gate ships its ontology + invalid `pulse:Company` enum
+
+- **SHACL gate was dead in the container.** The open-pulse ontology TTL
+  lived under `dev/`, which the Docker image does not copy, so
+  `ontology_ttl_path()` resolved to `/app/dev/…` → `FileNotFoundError`
+  and the SHACL gate never ran in production. Moved the TTL into the
+  package (`src/v2/validation/open-pulse-ontology-v2.1.2.ttl`, shipped by
+  `COPY src` and via `[tool.setuptools.package-data]`). Resolution is now
+  a chain: `GME_ONTOLOGY_TTL` env override → packaged copy → `dev/`
+  source-checkout fallback, with an informative error listing all three.
+- **Invalid `pulse:OrganizationType` value.** Two LLM refiners
+  (`discovery`, `org_resolver`) could emit `pulse:Company`, which is not
+  a member of `pulse:OrganizationTypeEnumeration` (the ontology defines
+  `pulse:PrivateCompany`). `org_resolver` even allowed it via its
+  `Literal` with no normalisation, so it reached the graph and failed
+  `sh:class` (`ClassConstraintComponent`) even when the ontology was
+  loaded. Removed `pulse:Company` from both prompts + the Literal;
+  refiners now emit only the 8 real enum members.
+
+Note for downstream SHACL validators: the remaining bulk of
+`ClassConstraintComponent` findings on `pulse:repositoryType` /
+`pulse:OrganizationType` / `pulse:discipline` are **not** output defects
+— those values are enum IRIs whose class-membership triples live in the
+ontology. Validate `data + ontology` (load the TTL as `ont_graph`, as the
+in-pipeline gate does); validating data-only reports them spuriously.
+
+### Added — `GET /v2/crawl/{job_id}` extract-job status endpoint
+
+Lightweight status endpoint for async extract jobs, for cheap polling
+and parity with the v1 crawl-status surface. Returns just the lifecycle
+fields (`status` + timestamps + `error`) plus a `result_url` pointing at
+the full record/graph — previously a job's status could only be read
+from the `status` field buried inside the full `GET /v2/jobs/{job_id}`
+response. Shares the same store lookup + orphaned-job (stale-heartbeat)
+detection as `/v2/jobs/{job_id}` via extracted helpers, so both agree on
+liveness; 503/404 behaviour matches.
+
+### Added — `dockerhub` RAG index
+
+New per-provider index for **Docker Hub repositories (images)**, with
+full parity to the existing indices: dedicated DuckDB store + `dockerhub`
+Qdrant collection, `POST /v2/indices/dockerhub/{ingest,search}` routes
+(ingest chains the embed step + WAL checkpoint like the others),
+federated search/lookup adapter, reset spec, `IndexName` enum entry,
+`seeds/dockerhub.txt`, and a `dockerhub` entry in the cold-start
+re-ingest driver.
+
+- One row per `namespace/name` (official images under `library/`);
+  metadata from the public Docker Hub v2 API
+  (`https://hub.docker.com/v2/repositories/{namespace}/{name}`), which
+  serves public repos anonymously. `DOCKERHUB_TOKEN` is optional (raises
+  the rate limit only).
+- Ingest accepts flexible references: `namespace/name`, bare official
+  names, `hub.docker.com/r/…` and `/_/…` URLs, and `docker.io/…` pull
+  refs (any `:tag` is dropped — repositories are the indexed unit).
+- Embedding text = `repo_id` + short description + `full_description`
+  (README); tags / pull_count / star_count ride in the payload.
+
+### Added — Repository releases + GHCR container images
+
+The repository extractor now surfaces a repo's **published releases**
+and the **GHCR container (Docker) images** built from it:
+
+- `GitHubProvider.get_repository_releases` — thinned release list
+  (tag, name, dates, draft/prerelease flags, assets) from
+  `/repos/{owner}/{repo}/releases`. Public endpoint, no extra scope.
+- `GitHubProvider.get_repository_container_images` — owner-scoped
+  `container` packages filtered to those linked to (or named after)
+  the repo, each with its `ghcr.io/...` reference and version tags.
+  Requires the `read:packages` token scope; degrades to an empty list
+  without it.
+- `context_gather` fetches both (best-effort, like aux-files) and the
+  repository agent stamps them onto the internal `_releases` /
+  `_container_images` fields (surfaced when
+  `include_internal_fields=true`).
+
+Layer 1 only: the Pulse ontology has no predicate for releases or
+container images yet (v1 carried a never-shipped `hasSoftwareImage`),
+so these ride under the `_`-prefix convention. Promoting them to
+canonical `schema:`/`pulse:` terms is a tracked v3.0.0 ontology
+follow-up.
+
+### Breaking — Persisted identifier shapes
+
+Every `pulse:*Identifier` / `pulse:github*Handle` field now stores the
+canonical URL form. The wire-input layer accepts either shape (bare or
+URL) on ingest; persisted output is always URL.
+
+| Property                                       | v2.1.x (bare)                    | v3.0.0 (URL)                                                                     |
+|-----------------------------------------------|----------------------------------|----------------------------------------------------------------------------------|
+| `schema:identifier` (DOI on Article)           | `10.1038/s41586-024-...`         | `https://doi.org/10.1038/s41586-024-...`                                         |
+| `pulse:orcidIdentifier` / `pulse:orcid`        | `0000-0001-2345-6789`            | `https://orcid.org/0000-0001-2345-6789`                                          |
+| `pulse:infosciencePersonIdentifier`            | `f97b60da-...`                   | `https://infoscience.epfl.ch/entities/person/f97b60da-...`                       |
+| `pulse:infoscienceOrganizationIdentifier`      | `95372c6b-...`                   | `https://infoscience.epfl.ch/entities/orgunit/95372c6b-...`                      |
+| `pulse:infoscienceArticleIdentifier`           | `dbce93b0-...`                   | `https://infoscience.epfl.ch/entities/publication/dbce93b0-...`                  |
+| `pulse:githubUsername`                         | `caviri`                         | `https://github.com/caviri`                                                      |
+| `pulse:githubOrganizationHandle`               | `EPFL-ENAC`                      | `https://github.com/EPFL-ENAC`                                                   |
+| `pulse:githubRepositoryHandle`                 | `EPFL-ENAC/geodata-toolkit`      | `https://github.com/EPFL-ENAC/geodata-toolkit`                                   |
+
+ROR was already URL-form; unchanged.
+
+### Breaking — Resolved `id` values
+
+`resolve_*_id()` helpers now produce the canonical URL for every
+identifier source (not just ROR / DOI). Composite IDs in Membership
+(`{personId}__{orgId}`) and Contribution (`{personId}__{repoId}`)
+therefore carry URLs on both sides:
+
+  `https://orcid.org/0000-0001-2345-6789__https://ror.org/02s376052`
+  `https://orcid.org/0000-0001-2345-6789__https://github.com/EPFL-ENAC/geodata-toolkit`
+
+### SPARQL migration
+
+Existing graph stores carry the old (bare) values. To migrate:
+
+```sparql
+# DOI (schema:identifier on ScholarlyArticle)
+DELETE { ?article schema:identifier ?bare }
+INSERT { ?article schema:identifier ?url }
+WHERE  { ?article a schema:ScholarlyArticle ; schema:identifier ?bare .
+         FILTER(STRSTARTS(STR(?bare), "10."))
+         BIND(IRI(CONCAT("https://doi.org/", STR(?bare))) AS ?url) }
+
+# ORCID
+DELETE { ?person pulse:orcidIdentifier ?bare }
+INSERT { ?person pulse:orcidIdentifier ?url }
+WHERE  { ?person pulse:orcidIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"))
+         BIND(IRI(CONCAT("https://orcid.org/", STR(?bare))) AS ?url) }
+
+# Infoscience Person
+DELETE { ?p pulse:infosciencePersonIdentifier ?bare }
+INSERT { ?p pulse:infosciencePersonIdentifier ?url }
+WHERE  { ?p pulse:infosciencePersonIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/person/", STR(?bare))) AS ?url) }
+
+# Infoscience Organization
+DELETE { ?o pulse:infoscienceOrganizationIdentifier ?bare }
+INSERT { ?o pulse:infoscienceOrganizationIdentifier ?url }
+WHERE  { ?o pulse:infoscienceOrganizationIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/orgunit/", STR(?bare))) AS ?url) }
+
+# Infoscience Article
+DELETE { ?a pulse:infoscienceArticleIdentifier ?bare }
+INSERT { ?a pulse:infoscienceArticleIdentifier ?url }
+WHERE  { ?a pulse:infoscienceArticleIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/publication/", STR(?bare))) AS ?url) }
+
+# GitHub user / org handles (same URL shape)
+DELETE { ?s ?p ?bare }
+INSERT { ?s ?p ?url }
+WHERE  { VALUES ?p { pulse:githubUsername pulse:githubOrganizationHandle }
+         ?s ?p ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+
+# GitHub repository handle
+DELETE { ?r pulse:githubRepositoryHandle ?bare }
+INSERT { ?r pulse:githubRepositoryHandle ?url }
+WHERE  { ?r pulse:githubRepositoryHandle ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+```
+
+### Added
+
+- `src/v2/canonicalization/{doi,orcid,infoscience,github}.py` — shared
+  identifier helpers (`*_iri()` to build the canonical URL, `parse_*`
+  to extract the bare form). Each helper is idempotent on canonical
+  input and tolerates every wire shape that arrived during the
+  v2.1.x lifetime.
+
+### Changed — SHACL ontology
+
+- `dev/ontology-v2-json-response/open-pulse-ontology-v2.1.2.ttl`:
+  `sh:pattern` on all eight identifier shapes (DOI, ORCID, Infoscience
+  person/org/article, GitHub username/org/repo) now constrains the
+  URL form. ROR was already URL-form; unchanged.
+
+### Changed — Pipeline
+
+- Rule-based and LLM agents stamp identifiers in URL form via the
+  canonicalisation helpers.
+- `reconciliation` promotes pre-resolved bare identifiers to URL form
+  on ingest, normalises legacy `core/items/<uuid>` URLs to the
+  `entities/<kind>/<uuid>` canonical form, and registers bare-shape
+  aliases in the entity-lookup tables so cross-references in either
+  shape resolve correctly.
+- `id_resolution.resolve_*_id()` returns the canonical URL on every
+  resolution path (no more f-string concatenation against base URIs).
+- `ownership_check._entity_owner_handle` returns the bare GitHub
+  handle regardless of whether the persisted property carries the
+  URL form or the legacy bare shape — keeps `pulse:owns` owner-equality
+  checks correct post-migration.
+
 ## [2.1.0rc1] — 2026-05-28
 
 First release candidate for v2.1.0. Consolidates the v2 pipeline buildout, the nine RAG indices, the LLM agent toolkit, and the affiliation / publiccode / repo-aux-file work into a tagged release. **All `[Unpublished]` entries previously at the top of this file are part of this release** and are preserved verbatim below.

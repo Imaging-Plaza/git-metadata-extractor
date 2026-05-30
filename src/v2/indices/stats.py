@@ -28,9 +28,13 @@ if TYPE_CHECKING:
 INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     # Providers that already have a v2 ingest/search surface and a
     # long-lived `get_or_create_<provider>_resources()` cache on `app_state`.
-    "zenodo",
-    "github",
-    "huggingface",
+    "zenodo_records",
+    "github_repos",
+    "huggingface_models",
+    "huggingface_datasets",
+    "huggingface_spaces",
+    "huggingface_users",
+    "huggingface_organizations",
     "openalex",
     "orcid",
     "renkulab",
@@ -44,7 +48,7 @@ INDEX_STATS_SUPPORTED_PROVIDERS: tuple[str, ...] = (
     "infoscience",
     "snsf",
     "epfl_graph",
-    "communities",
+    "zenodo_communities",
 )
 
 # Common "this row was last touched" column names, in priority order.
@@ -162,24 +166,48 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
             f"supported: {', '.join(INDEX_STATS_SUPPORTED_PROVIDERS)}",
         )
 
-    if provider == "github":
-        from src.v2.indices.github import (  # noqa: PLC0415
-            get_or_create_github_resources,
+    if provider == "github_repos":
+        from src.v2.indices.github_repos import (  # noqa: PLC0415
+            get_or_create_github_repos_resources,
         )
-        res = get_or_create_github_resources(app_state)
+        res = get_or_create_github_repos_resources(app_state)
         return res[1] if res else None
-    if provider == "zenodo":
-        from src.v2.indices.zenodo import (  # noqa: PLC0415
-            get_or_create_zenodo_store,
+    if provider == "zenodo_records":
+        from src.v2.indices.zenodo_records import (  # noqa: PLC0415
+            get_or_create_zenodo_records_store,
         )
-        res = get_or_create_zenodo_store(app_state)
+        res = get_or_create_zenodo_records_store(app_state)
         return res[1] if res else None
-    if provider == "huggingface":
-        from src.v2.indices.huggingface import (  # noqa: PLC0415
-            get_or_create_huggingface_resources,
+    if provider == "huggingface_models":
+        from src.v2.indices.huggingface_models import (  # noqa: PLC0415
+            get_or_create_huggingface_models_resources,
         )
-        res = get_or_create_huggingface_resources(app_state)
-        return res[2] if res else None
+        res = get_or_create_huggingface_models_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_datasets":
+        from src.v2.indices.huggingface_datasets import (  # noqa: PLC0415
+            get_or_create_huggingface_datasets_resources,
+        )
+        res = get_or_create_huggingface_datasets_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_spaces":
+        from src.v2.indices.huggingface_spaces import (  # noqa: PLC0415
+            get_or_create_huggingface_spaces_resources,
+        )
+        res = get_or_create_huggingface_spaces_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_users":
+        from src.v2.indices.huggingface_users import (  # noqa: PLC0415
+            get_or_create_huggingface_users_resources,
+        )
+        res = get_or_create_huggingface_users_resources(app_state)
+        return res[1] if res else None
+    if provider == "huggingface_organizations":
+        from src.v2.indices.huggingface_organizations import (  # noqa: PLC0415
+            get_or_create_huggingface_organizations_resources,
+        )
+        res = get_or_create_huggingface_organizations_resources(app_state)
+        return res[1] if res else None
     if provider == "openalex":
         from src.v2.indices.openalex import (  # noqa: PLC0415
             get_or_create_openalex_resources,
@@ -244,7 +272,7 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
             app_state, "v2_epfl_graph_store",
             "src.index.epfl_graph.storage.duckdb_store", "EpflGraphStore",
         )
-    if provider == "communities":
+    if provider == "zenodo_communities":
         return _open_communities_store(app_state)
     return None
 
@@ -273,20 +301,20 @@ def _cli_store(
 
 
 def _open_communities_store(app_state: Any) -> Any | None:
-    """`CommunitiesStore` lacks `.connect()` (uses `_connect()` + `read_only()`),
+    """`ZenodoCommunitiesStore` lacks `.connect()` (uses `_connect()` + `read_only()`),
     so the stats endpoint can't call it directly. Wrap it in a tiny shim that
     exposes a cached read-only handle as `.connect()`.
     """
-    cached = getattr(app_state, "v2_communities_store", None)
+    cached = getattr(app_state, "v2_zenodo_communities_store", None)
     if cached is not None:
         return cached
     try:
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
         import duckdb as _duckdb  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return None
 
-    class _CommunitiesStoreShim:
+    class _ZenodoCommunitiesStoreShim:
         def __init__(self, path: Any) -> None:
             self.db_path = path  # surfaced for compact_duckdb()
             self._conn: Any = None
@@ -302,11 +330,11 @@ def _open_communities_store(app_state: Any) -> Any | None:
                 self._conn = None
 
     try:
-        shim = _CommunitiesStoreShim(duckdb_path())
+        shim = _ZenodoCommunitiesStoreShim(duckdb_path())
     except Exception:  # noqa: BLE001
         return None
     try:
-        setattr(app_state, "v2_communities_store", shim)
+        setattr(app_state, "v2_zenodo_communities_store", shim)
     except Exception:  # noqa: BLE001
         return shim
     return shim

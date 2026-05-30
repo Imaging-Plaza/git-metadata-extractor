@@ -29,6 +29,7 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from src.v2.canonicalization.github import parse_github_org_iri
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 OWNS_KEY = "pulse:owns"
@@ -61,17 +62,40 @@ def _extract_github_owner_from_url(value: Any) -> str | None:
 
 
 def _entity_owner_handle(entity: dict[str, Any]) -> str | None:
+    """Return the BARE GitHub handle of the entity, regardless of whether
+    the persisted property stores the canonical URL form
+    (``https://github.com/<handle>``) or a legacy bare handle. The bare
+    form is what's compared against the owner extracted from a
+    repository URL by `_extract_github_owner_from_url`."""
     handle_field = OWNERS_BY_TYPE.get(entity.get("type") or "")
     if handle_field is None:
         return None
-    handle = entity.get(handle_field)
-    if isinstance(handle, str) and handle.strip():
-        return handle.strip().lower()
+
+    def _to_bare(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if candidate.startswith(("http://", "https://")):
+            # Reuse the URL parser to extract the first path segment.
+            parsed = urlparse(candidate)
+            if parsed.netloc.lower() != "github.com":
+                return None
+            parts = [segment for segment in parsed.path.split("/") if segment]
+            if not parts:
+                return None
+            return parts[0].lower()
+        return candidate.lower()
+
+    handle = _to_bare(entity.get(handle_field))
+    if handle:
+        return handle
     identifiers = entity.get("identifiers")
     if isinstance(identifiers, dict):
-        nested = identifiers.get(handle_field)
-        if isinstance(nested, str) and nested.strip():
-            return nested.strip().lower()
+        nested = _to_bare(identifiers.get(handle_field))
+        if nested:
+            return nested
     return None
 
 
@@ -536,16 +560,26 @@ def _entity_ror_id(entity: dict[str, Any]) -> str | None:
     return None
 
 
+def _bare_github_handle(value: str) -> str:
+    """v3.0.0: `pulse:githubOrganizationHandle` is stored as the canonical
+    `https://github.com/<handle>` URL. ROR queries and handle comparisons
+    need the *bare* handle — feeding the URL to the ROR API 500s it, and
+    tokenising the URL pollutes the overlap score. Accepts URL or bare;
+    returns the lowercased bare handle."""
+    bare = parse_github_org_iri(value)
+    return (bare or value.strip()).lower()
+
+
 def _entity_github_org_handle(entity: dict[str, Any]) -> str | None:
-    """Return the github organization handle (lowercased), or None."""
+    """Return the bare github organization handle (lowercased), or None."""
     direct = entity.get("pulse:githubOrganizationHandle")
     if isinstance(direct, str) and direct.strip():
-        return direct.strip().lower()
+        return _bare_github_handle(direct)
     identifiers = entity.get("identifiers")
     if isinstance(identifiers, dict):
         nested = identifiers.get("pulse:githubOrganizationHandle")
         if isinstance(nested, str) and nested.strip():
-            return nested.strip().lower()
+            return _bare_github_handle(nested)
     return None
 
 

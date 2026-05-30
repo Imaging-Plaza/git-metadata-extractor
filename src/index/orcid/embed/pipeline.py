@@ -1,7 +1,7 @@
 """Stream DuckDB rows → chunk → embed → upsert into Qdrant.
 
 Idempotent: rows with existing chunks are skipped via
-`OrcidDuckDBStore.stream_rows_for_embedding`.
+`OrcidStore.stream_rows_for_embedding`.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from src.index.orcid.vector.qdrant_store import OrcidQdrantStore
 
 if TYPE_CHECKING:
     from src.index.orcid.config import OrcidIndexConfig
-    from src.index.orcid.storage.duckdb_store import OrcidDuckDBStore
+    from src.index.orcid.storage.duckdb_store import OrcidStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def _row_entity_id(entity_type: str, row: dict[str, Any]) -> str:
     return f"{row['orcid_id']}#{row['seq']}"
 
 
-def _person_display_name(store: OrcidDuckDBStore, orcid_id: str) -> str | None:
+def _person_display_name(store: OrcidStore, orcid_id: str) -> str | None:
     person = store.fetch_person(orcid_id)
     if not person:
         return None
@@ -75,7 +75,7 @@ def _build_chunks(
     *,
     entity_type: str,
     row: dict[str, Any],
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     chunk_tokens: int,
     overlap: int,
 ) -> list[Chunk]:
@@ -106,7 +106,7 @@ def _build_chunks(
 async def _embed_entity_async(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     entity_type: str,
     limit: int | None,
 ) -> int:
@@ -181,7 +181,7 @@ async def _embed_entity_async(
 def embed_entities(
     *,
     config: OrcidIndexConfig,
-    store: OrcidDuckDBStore,
+    store: OrcidStore,
     entity_types: list[str],
     limit: int | None = None,
 ) -> dict[str, int]:

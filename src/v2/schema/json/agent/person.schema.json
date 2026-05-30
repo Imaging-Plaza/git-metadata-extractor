@@ -8,7 +8,14 @@
   "patternProperties": {
     "^_": {}
   },
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -28,16 +35,26 @@
       "description": "All available identifiers for this person. Contains pulse:orcid, pulse:infosciencePersonIdentifier, pulse:githubUsername, and uuid (always present)",
       "properties": {
         "pulse:orcid": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "ORCID identifier. Format: four groups of 4 digits separated by hyphens, last character can be 0-9 or X. Example: '0000-0001-2345-6789'"
         },
         "pulse:infosciencePersonIdentifier": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Infoscience person UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
         },
         "pulse:githubUsername": {
-          "type": ["string", "null"],
-          "description": "GitHub username. Example: 'caviri'"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'",
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         },
         "uuid": {
           "type": "string",
@@ -58,19 +75,32 @@
       "description": "Email address. Format: standard email pattern. Example: 'carlos.vivar@epfl.ch'"
     },
     "schema:url": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Profile URL for personal webpage. Example: 'https://caviri.github.io'"
     },
     "pulse:githubUsername": {
-      "type": ["string", "null"],
-      "description": "GitHub username. Example: 'caviri'"
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'",
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
     },
     "pulse:orcidIdentifier": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "ORCID identifier. Format: 0000-0001-2345-6789 (four groups of 4 digits, last can be X). Example: '0000-0001-2345-6789'"
     },
     "pulse:infosciencePersonIdentifier": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Infoscience person UUID4 identifier. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
     },
     "org:hasMembership": {

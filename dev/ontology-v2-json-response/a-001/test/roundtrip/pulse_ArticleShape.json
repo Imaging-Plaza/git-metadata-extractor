@@ -1,47 +1,47 @@
 [
   {
-    "id": "10.1038/s41586-024-07856-z",
+    "id": "https://doi.org/10.1038/s41586-024-07856-z",
     "type": "schema:ScholarlyArticle",
     "schema:name": "Open Pulse: A Framework for Tracking Scientific Software Contributions",
-    "schema:identifier": "10.1038/s41586-024-07856-z",
+    "schema:identifier": "https://doi.org/10.1038/s41586-024-07856-z",
     "schema:datePublished": "2025-06-15",
     "schema:author": [
       "0000-0001-2345-6789",
       "0000-0003-4567-8901"
     ],
-    "pulse:infoscienceArticleIdentifier": "c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
-    "schema:sourceOrganization": "95372c6b-7d45-432e-a84e-660c9fa54e05"
+    "pulse:infoscienceArticleIdentifier": "https://infoscience.epfl.ch/entities/publication/c8e2a1b4-5f3d-47a9-b6c8-9d4e7f2a3b1c",
+    "schema:sourceOrganization": "https://infoscience.epfl.ch/entities/orgunit/95372c6b-7d45-432e-a84e-660c9fa54e05"
   },
   {
-    "id": "10.1016/j.softx.2023.101456",
+    "id": "https://doi.org/10.1016/j.softx.2023.101456",
     "type": "schema:ScholarlyArticle",
     "schema:name": "Gimie: Automated Git Metadata Extraction for Research Software",
-    "schema:identifier": "10.1016/j.softx.2023.101456",
+    "schema:identifier": "https://doi.org/10.1016/j.softx.2023.101456",
     "schema:datePublished": "2023-11-20",
     "schema:author": [
       "0000-0001-2345-6789",
       "0000-0002-3456-7890"
     ],
-    "pulse:infoscienceArticleIdentifier": "a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
+    "pulse:infoscienceArticleIdentifier": "https://infoscience.epfl.ch/entities/publication/a4c8e2f1-7d3b-49a6-b5c8-2e1f9a7b6c4d",
     "schema:sourceOrganization": "https://ror.org/02s376052"
   },
   {
-    "id": "10.1109/TBME.2024.3123456",
+    "id": "https://doi.org/10.1109/TBME.2024.3123456",
     "type": "schema:ScholarlyArticle",
     "schema:name": "Deep Learning Approaches for Biomedical Image Segmentation",
-    "schema:identifier": "10.1109/TBME.2024.3123456",
+    "schema:identifier": "https://doi.org/10.1109/TBME.2024.3123456",
     "schema:datePublished": "2024-08-10",
     "schema:author": [
       "mweber"
     ],
-    "pulse:infoscienceArticleIdentifier": "b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
+    "pulse:infoscienceArticleIdentifier": "https://infoscience.epfl.ch/entities/publication/b3d7e9f2-1a4c-48e6-9f5d-7c2b8a6e4f1d",
     "schema:sourceOrganization": "https://ror.org/05a28rw58"
   },
   {
-    "id": "10.1145/3597503.3639187",
+    "id": "https://doi.org/10.1145/3597503.3639187",
     "type": "schema:ScholarlyArticle",
     "schema:name": "Reproducible Workflows for Large-Scale Particle Physics Simulations",
-    "schema:identifier": "10.1145/3597503.3639187",
+    "schema:identifier": "https://doi.org/10.1145/3597503.3639187",
     "schema:datePublished": "2024-04-22",
     "schema:author": [
       "0000-0003-4567-8901",

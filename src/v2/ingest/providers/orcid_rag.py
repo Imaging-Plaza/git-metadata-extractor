@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index.openalex.embed.rcp_client import RCPEmbeddingError
+from src.index._rcp.embed_client import RCPEmbeddingError
 from src.index.orcid.embed.rcp_client import RCPEmbeddingClient
 from src.index.orcid.rerank.rcp_client import RCPRerankerClient
 from src.index.orcid.vector.qdrant_store import ENTITY_TYPES, OrcidQdrantStore

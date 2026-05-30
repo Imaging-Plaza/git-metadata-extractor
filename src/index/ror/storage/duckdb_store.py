@@ -267,10 +267,10 @@ _RECORDS_UPSERT_SQL: str = _build_records_upsert_sql()
 _DEFAULT_CHUNK_SIZE: int = 2000
 
 
-class DuckDBStore:
+class RorStore:
     """Thin wrapper around DuckDB tuned for the ROR schema.
 
-    Construct with `DuckDBStore.open()` for the default repo path. Re-running
+    Construct with `RorStore.open()` for the default repo path. Re-running
     `bootstrap()` is idempotent.
     """
 
@@ -279,7 +279,7 @@ class DuckDBStore:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @classmethod
-    def open(cls, db_path: Path | None = None) -> DuckDBStore:
+    def open(cls, db_path: Path | None = None) -> RorStore:
         if db_path is None:
             db_path = default_db_path()
         store = cls(db_path)

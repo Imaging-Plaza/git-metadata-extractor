@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.index.ror.storage import migrate_storage
-from src.index.ror.storage.duckdb_store import DuckDBStore, vector_id_for
+from src.index.ror.storage.duckdb_store import RorStore, vector_id_for
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +133,7 @@ def test_list_scope_dirs_sorted(isolated_index_dir):
 
 def test_populate_full_dump_writes_records_table(isolated_index_dir):
     json_path = _seed_dump_json(isolated_index_dir)
-    store = DuckDBStore.open()
+    store = RorStore.open()
     n = migrate_storage.populate_full_dump(store, json_path, release_version="v2.6")
     assert n == 3
     assert store.count_records() == 3
@@ -150,7 +150,7 @@ def test_populate_scope_replaces_rows_and_writes_manifest(isolated_index_dir):
         "https://ror.org/02s376052",
         "https://ror.org/05a28rw58",
     ])
-    store = DuckDBStore.open()
+    store = RorStore.open()
     summary = migrate_storage.populate_scope(store, "epfl_ethz")
     assert summary["rows"] == 2
     assert store.count_scope_records("epfl_ethz") == 2
@@ -171,7 +171,7 @@ def test_populate_scope_replaces_rows_and_writes_manifest(isolated_index_dir):
 
 
 def test_populate_scope_raises_when_sidecar_missing(isolated_index_dir):
-    store = DuckDBStore.open()
+    store = RorStore.open()
     with pytest.raises(FileNotFoundError):
         migrate_storage.populate_scope(store, "ghost_scope")
     store.close()

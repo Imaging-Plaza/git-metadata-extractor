@@ -550,6 +550,63 @@ def test_get_job_returns_404_for_unknown_id(tmp_path: Any) -> None:
     assert payload["error_type"] == "not_found"
 
 
+def test_crawl_status_returns_compact_status_for_completed_job(tmp_path: Any) -> None:
+    """GET /v2/crawl/{job_id} mirrors the job's status but omits the result
+    graph and links to the full record via `result_url`."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any], dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers=_AUTH_HEADERS,
+        ) as client:
+            submit = await client.post(
+                "/v2/extract",
+                json={
+                    "source_url": "github.com/octocat/Hello-World",
+                    "agent_runtime": "rule_based",
+                },
+            )
+            job_id = submit.json()["job_id"]
+            await _wait_for_job_completion(client, job_id)
+            crawl = await client.get(f"/v2/crawl/{job_id}")
+        return crawl.status_code, crawl.json(), {"job_id": job_id}
+
+    status_code, status_payload, meta = asyncio.run(_run())
+    assert status_code == HTTP_OK
+    assert status_payload["job_id"] == meta["job_id"]
+    assert status_payload["status"] == "completed"
+    assert status_payload["result_url"] == f"/v2/jobs/{meta['job_id']}"
+    assert status_payload["source_url"].endswith("github.com/octocat/Hello-World")
+    # The compact view must NOT carry the (potentially large) result graph.
+    assert "result" not in status_payload
+
+
+def test_crawl_status_returns_404_for_unknown_id(tmp_path: Any) -> None:
+    """Parity with GET /v2/jobs/{job_id}: unknown id -> typed 404."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers=_AUTH_HEADERS,
+        ) as client:
+            response = await client.get("/v2/crawl/does-not-exist")
+        return response.status_code, response.json()
+
+    status_code, payload = asyncio.run(_run())
+    assert status_code == HTTP_NOT_FOUND
+    assert payload["error_type"] == "not_found"
+
+
 def test_extract_post_persists_job_in_provider_cache(tmp_path: Any) -> None:
     cache_db = tmp_path / "providers.db"
 

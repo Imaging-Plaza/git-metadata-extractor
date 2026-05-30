@@ -124,9 +124,9 @@ def _post_filter_by_institute(
     grant_ids = [c["grant_number"] for c in candidates if c.get("grant_number") is not None]
     if not grant_ids:
         return []
-    from src.index.snsf.storage.duckdb_store import DuckDBStore  # noqa: PLC0415
+    from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
 
-    store = DuckDBStore.open()
+    store = SnsfStore.open()
     try:
         placeholders = ",".join(["?"] * len(grant_ids))
         rows = store.connect().execute(

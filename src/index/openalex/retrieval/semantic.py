@@ -7,9 +7,9 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.openalex.embed.rcp_client import RCPEmbeddingClient
-from src.index.openalex.rerank.rcp_client import RCPRerankerClient
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index._rcp.embed_client import RCPEmbeddingClient
+from src.index._rcp.reranker_client import RCPRerankerClient
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ async def _async_search(
     top_k: int,
     candidate_k: int,
     filter_payload: dict[str, Any] | None,
-    store: DuckDBStore,
+    store: OpenAlexStore,
 ) -> list[dict[str, Any]]:
     embed = RCPEmbeddingClient(config)
     qdrant = QdrantStore(config)
@@ -82,7 +82,7 @@ def _payload_to_doc(payload: dict[str, Any]) -> str:
 
 
 def _hydrate(
-    store: DuckDBStore,
+    store: OpenAlexStore,
     entity_type: str,
     entity_id: str,
 ) -> dict[str, Any] | None:
@@ -105,11 +105,11 @@ def semantic_search(
     top_k: int = 10,
     candidate_k: int = 50,
     filter_payload: dict[str, Any] | None = None,
-    store: DuckDBStore | None = None,
+    store: OpenAlexStore | None = None,
 ) -> list[dict[str, Any]]:
     """Synchronous entrypoint used by the CLI and the FastAPI app."""
     if store is None:
-        store = DuckDBStore.open()
+        store = OpenAlexStore.open()
     return asyncio.run(
         _async_search(
             config=config,

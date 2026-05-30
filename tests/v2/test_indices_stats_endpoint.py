@@ -148,7 +148,7 @@ def test_collect_index_stats_picks_max_timestamp_across_tables(tmp_path: Path) -
     )
     conn = duckdb.connect(str(db))
     try:
-        stats = collect_index_stats("github", conn)
+        stats = collect_index_stats("github_repos", conn)
     finally:
         conn.close()
     assert stats.count == 2
@@ -159,7 +159,7 @@ def test_collect_index_stats_empty_catalog(tmp_path: Path) -> None:
     db = _build_test_db(tmp_path, tables={"repos": []}, timestamp_column="ingested_at")
     conn = duckdb.connect(str(db))
     try:
-        stats = collect_index_stats("github", conn)
+        stats = collect_index_stats("github_repos", conn)
     finally:
         conn.close()
     assert stats.count == 0
@@ -196,13 +196,13 @@ def test_stats_endpoint_returns_counts_for_github(tmp_path: Path) -> None:
     app = _build_test_app()
     # github resources tuple is (config, store, client) — only the store
     # is read by the stats path, so the other slots can be plain Nones.
-    app.state.v2_github_resources = (None, _FakeStore(db), None)
+    app.state.v2_github_repos_resources = (None, _FakeStore(db), None)
 
-    status_code, body = _get(app, "/v2/indices/github/stats")
+    status_code, body = _get(app, "/v2/indices/github_repos/stats")
 
     assert status_code == HTTP_OK
     parsed = IndexStatsResponse.model_validate(body)
-    assert parsed.provider == "github"
+    assert parsed.provider == "github_repos"
     assert parsed.count == 2
     assert parsed.by_table == {"repos": 2}
     assert parsed.last_updated == datetime(2026, 5, 24, tzinfo=timezone.utc)

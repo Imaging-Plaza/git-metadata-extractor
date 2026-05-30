@@ -1,0 +1,1 @@
+# Renku v2 project identifiers — one per line (slug or UUID).

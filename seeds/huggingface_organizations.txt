@@ -1,0 +1,2 @@
+# HuggingFace organization slugs — one per line (bare handle, no URL).
+ZurichNLP

@@ -12,6 +12,7 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from src.v2.canonicalization.github import github_repo_iri, github_user_iri
 from src.v2.parsers.citation_cff import parse_citation_cff
 from src.v2.parsers.publiccode import parse_publiccode
 
@@ -408,18 +409,25 @@ class RepositoryAgentV2:
         if not isinstance(uuid_value, str) or not uuid_value.strip():
             uuid_value = generate_uuid()
 
+        # v3.0.0: pulse:githubRepositoryHandle is the canonical
+        # `https://github.com/<owner>/<repo>` URL; `pulse:ownedBy`
+        # references the owning user/org via its canonical github URL.
+        github_repo_url = github_repo_iri(full_name)
+        owner_handle = repository.get("owner", {}).get("login")
+        owner_url = github_user_iri(owner_handle) if owner_handle else None
+
         return {
-            "id": full_name,
+            "id": github_repo_url or full_name,
             "type": "schema:SoftwareSourceCode",
             "shacl": "pulse:RepositoryShape",
             "identifiers": {
-                "pulse:githubRepositoryHandle": full_name,
+                "pulse:githubRepositoryHandle": github_repo_url,
                 "schema:citation": doi_value,
                 "uuid": uuid_value,
             },
             "idSource": "pulse:githubRepositoryHandle",
             "schema:name": repository.get("name") or full_name.split("/", maxsplit=1)[-1],
-            "pulse:githubRepositoryHandle": full_name,
+            "pulse:githubRepositoryHandle": github_repo_url,
             "schema:author": author_ids,
             "pulse:githubRepoStars": repository.get("stargazers_count"),
             "pulse:githubRepoForks": repository.get("forks_count"),
@@ -429,7 +437,7 @@ class RepositoryAgentV2:
             ),
             "schema:citation": f"https://doi.org/{doi_value}" if doi_value else None,
             "schema:programmingLanguage": programming_languages,
-            "pulse:ownedBy": repository.get("owner", {}).get("login"),
+            "pulse:ownedBy": owner_url or owner_handle,
             "pulse:isForkOf": _resolve_fork_parent_url(repository),
             # Internal-only fields (`_` prefix is stripped before the
             # SHACL gate and JSON-LD output by default; surfaced when
@@ -499,6 +507,15 @@ class RepositoryAgentV2:
             "_citation_cff": _resolve_citation_cff_payload(
                 compiled_context.get("aux_files"),
             ),
+            # Published releases + GHCR container (Docker) images, fetched
+            # by the context_gather stage and carried on the repository
+            # metadata. Layer-1 internal fields: the Pulse v2.1.2 ontology
+            # has no predicate for software releases or container images
+            # (v1 had a commented-out `hasSoftwareImage`), so they ride
+            # under the `_` convention until a v3.0.0 enrichment stage
+            # promotes them to canonical `schema:`/`pulse:` terms.
+            "_releases": (repository.get("releases") or None),
+            "_container_images": (repository.get("container_images") or None),
         }
 
     async def _default_repository_classifier(
@@ -592,12 +609,24 @@ class RepositoryAgentV2:
                 if isinstance(language, str) and language
             ],
         )
+        # Derivation breadcrumbs carry the bare `owner/repo` form for
+        # human readability; the canonical URL lives on the property
+        # `pulse:githubRepositoryHandle`.
+        from src.v2.canonicalization.github import parse_github_repo_iri
+
+        canonical_repo_url = validated_payload.get("pulse:githubRepositoryHandle")
+        if isinstance(canonical_repo_url, str):
+            parts = parse_github_repo_iri(canonical_repo_url)
+            bare_repo_full_name = (
+                f"{parts[0]}/{parts[1]}" if parts else canonical_repo_url
+            )
+        else:
+            bare_repo_full_name = None
+
         derivation_stats = {
-            "repository_full_name": validated_payload.get("pulse:githubRepositoryHandle"),
-            "source_repositories": [
-                validated_payload.get("pulse:githubRepositoryHandle"),
-            ]
-            if isinstance(validated_payload.get("pulse:githubRepositoryHandle"), str)
+            "repository_full_name": bare_repo_full_name,
+            "source_repositories": [bare_repo_full_name]
+            if isinstance(bare_repo_full_name, str)
             else [],
             "owner_login": owner_login if isinstance(owner_login, str) else None,
             "owner_type": owner_type if isinstance(owner_type, str) else None,

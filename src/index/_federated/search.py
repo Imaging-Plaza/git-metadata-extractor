@@ -132,8 +132,8 @@ def _build_reranker() -> Any | None:  # noqa: ANN401 — duck-typed RCP reranker
          "src.index.huggingface.rerank.rcp_client", "RCPRerankerClient"),
         ("src.index.openalex.config", "load_config",
          "src.index.openalex.rerank.rcp_client", "RCPRerankerClient"),
-        ("src.index.zenodo.config", "load_config",
-         "src.index.zenodo.rerank.rcp_client", "RCPRerankerClient"),
+        ("src.index.zenodo_records.config", "load_config",
+         "src.index.zenodo_records.rerank.rcp_client", "RCPRerankerClient"),
         ("src.index.orcid.config", "load_config",
          "src.index.orcid.rerank.rcp_client", "RCPRerankerClient"),
     )

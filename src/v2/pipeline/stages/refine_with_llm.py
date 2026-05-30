@@ -460,12 +460,11 @@ def _gate_repo_type_patch(
 
 
 def _normalize_orcid(value: str | None) -> str | None:
-    """Return uppercased bare-form ORCID for use as a dedup key.
-    Delegates to the shared canonical helper, which already validates
-    shape AND uppercases the checksum char."""
-    from src.v2.canonicalization.orcid import parse_orcid
+    """Return canonical ORCID URL for use as a dedup key. v3.0.0:
+    URL form matches entity field values."""
+    from src.v2.canonicalization.orcid import orcid_iri
 
-    return parse_orcid(value)
+    return orcid_iri(value)
 
 
 def _normalize_github_handle(value: str | None) -> str | None:
@@ -1090,7 +1089,7 @@ def _query_communities_index(query: str) -> list[dict[str, Any]]:
         return []
     try:
         import duckdb  # noqa: PLC0415
-        from src.index.communities.paths import duckdb_path  # noqa: PLC0415
+        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return []
     db_path = duckdb_path()

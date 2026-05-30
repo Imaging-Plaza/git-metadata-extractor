@@ -318,3 +318,18 @@ def test_guarantee_repo_author_person_owner_uses_person_id() -> None:
     # No new persons synthesized — Person owner was reused.
     assert new_reconciled.entities["persons"] == [alice]
     assert any("stamped fallback owner 'https://github.com/alice'" in w for w in warnings)
+
+
+def test_entity_github_org_handle_returns_bare_handle_from_canonical_url() -> None:
+    """v3.0.0: handles are stored as canonical URLs, but ROR queries +
+    handle comparisons need the bare handle (the URL 500s the ROR API)."""
+    from src.v2.pipeline.stages.ownership_check import _entity_github_org_handle
+
+    assert _entity_github_org_handle(
+        {"pulse:githubOrganizationHandle": "https://github.com/epfl-lts2"},
+    ) == "epfl-lts2"
+    # Nested under identifiers, and bare input still resolves.
+    assert _entity_github_org_handle(
+        {"identifiers": {"pulse:githubOrganizationHandle": "EPFL-LTS2"}},
+    ) == "epfl-lts2"
+    assert _entity_github_org_handle({"schema:name": "no handle"}) is None

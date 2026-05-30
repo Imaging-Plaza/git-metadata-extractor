@@ -89,12 +89,12 @@ class SnsfAdapter:
             )]
 
         try:
-            from src.index.snsf.storage.duckdb_store import DuckDBStore
+            from src.index.snsf.storage.duckdb_store import SnsfStore
         except Exception:  # noqa: BLE001
             return self._fallback_record(grant_id_str)
 
         try:
-            store = DuckDBStore.open()
+            store = SnsfStore.open()
         except Exception:  # noqa: BLE001
             return self._fallback_record(grant_id_str)
         try:

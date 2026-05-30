@@ -1,0 +1,4 @@
+# arXiv identifiers — one per line.
+# Accepts: bare id (2310.01234), versioned id, arXiv URL, HF Papers URL,
+# `arxiv:<id>` tag, or arXiv DOI.
+2310.06825

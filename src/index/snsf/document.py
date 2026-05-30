@@ -20,7 +20,7 @@ def _coalesce(*values: Any) -> str:
 def to_document(grant: Dict[str, Any]) -> str:
     """Flatten a `grants` row dict into a single embedding-ready string.
 
-    `grant` is the dict shape returned by `DuckDBStore.fetch_grant`; columns
+    `grant` is the dict shape returned by `SnsfStore.fetch_grant`; columns
     are snake_case (per `storage/schema.sql`).
     """
     title = _coalesce(grant.get("title_english"), grant.get("title"))

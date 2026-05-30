@@ -5,7 +5,17 @@
   "description": "Schema for Article entities following Open Pulse Ontology v2.1.2. Optimized for LLM agent parsing with descriptive guidance. ID hierarchy: doi → infoscienceArticleIdentifier → uuid. SHACL requires: schema:name, schema:identifier (DOI), schema:datePublished, schema:author (min 1).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name", "schema:identifier", "schema:datePublished", "schema:author"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name",
+    "schema:identifier",
+    "schema:datePublished",
+    "schema:author"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -25,11 +35,17 @@
       "description": "All available identifiers for this article. Contains schema:identifier (DOI), pulse:infoscienceArticleIdentifier, and uuid",
       "properties": {
         "schema:identifier": {
-          "type": ["string", "null"],
-          "description": "DOI identifier. Format: 10.XXXX/suffix. Example: '10.1038/s41586-024-07856-z'"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "DOI identifier in canonical URL form. Format: https://doi.org/10.XXXX/suffix. Example: 'https://doi.org/10.1038/s41586-024-07856-z'"
         },
         "pulse:infoscienceArticleIdentifier": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Infoscience article UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
         },
         "uuid": {
@@ -48,7 +64,7 @@
     },
     "schema:identifier": {
       "type": "string",
-      "description": "DOI identifier. REQUIRED per SHACL. Format: 10.XXXX/suffix. Example: '10.1038/s41586-024-07856-z'"
+      "description": "DOI identifier in canonical URL form. REQUIRED per SHACL. Format: https://doi.org/10.XXXX/suffix. Example: 'https://doi.org/10.1038/s41586-024-07856-z'"
     },
     "schema:datePublished": {
       "type": "string",
@@ -63,11 +79,17 @@
       }
     },
     "pulse:infoscienceArticleIdentifier": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Infoscience article UUID4 identifier. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
     },
     "schema:sourceOrganization": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Reference to OrganizationShape hierarchical ID. Uses target's resolved id (could be ROR, GitHub org handle, or UUID). Example: 'https://ror.org/02s376052'"
     }
   }

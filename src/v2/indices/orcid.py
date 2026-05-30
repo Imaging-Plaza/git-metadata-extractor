@@ -13,6 +13,7 @@ from src.v2.api_models import (
     IndexSearchResponse,
     OrcidIngestRequest,
 )
+from src.v2.indices._embed_step import run_embed_step
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -35,14 +36,14 @@ def get_or_create_orcid_resources(app_state: Any) -> Any | None:
             build_orcid_provider,
         )
         from src.index.orcid.storage.duckdb_store import (  # noqa: PLC0415
-            OrcidDuckDBStore,
+            OrcidStore,
         )
     except Exception as exc:  # noqa: BLE001 — optional dependency
         logger.warning("orcid ingest: index module unavailable — %s", exc)
         return None
     try:
         config = load_config()
-        store = OrcidDuckDBStore.open(config.paths.duckdb_path)
+        store = OrcidStore.open(config.paths.duckdb_path)
         provider = build_orcid_provider(config)
     except Exception as exc:  # noqa: BLE001
         logger.warning("orcid ingest: resource init failed — %s", exc)
@@ -106,12 +107,24 @@ async def run_orcid_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         in_scope = sum(1 for r in items_results if r["outcome"] == "in_scope")
         out_of_scope = sum(1 for r in items_results if r["outcome"] == "out_of_scope")
         not_found = sum(1 for r in items_results if r["outcome"] == "not_found")
         errors = sum(1 for r in items_results if r["outcome"] == "error")
+
+        from src.index.orcid.embed.pipeline import embed_entities  # noqa: PLC0415
+        from src.index.orcid.models import ALL_ENTITY_TYPES  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: embed_entities(
+                config=config, store=store, entity_types=list(ALL_ENTITY_TYPES),
+            ),
+            checkpoint_store=store,
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.orcid_ids),
             "in_scope": in_scope,
@@ -119,6 +132,7 @@ async def run_orcid_ingest_job(
             "not_found": not_found,
             "errors": errors,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

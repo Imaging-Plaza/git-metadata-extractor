@@ -10,9 +10,12 @@ for this route.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+from src.v2.indices._embed_step import run_embed_step
 
 from src.v2.api_models import (
     EthzResearchCollectionIngestRequest,
@@ -192,7 +195,6 @@ async def run_ethz_research_collection_ingest_job(
             items_results.append(result)
 
         finished = job_store.get(job_id) or existing
-        finished.status = IndexIngestJobStatus.COMPLETED
         finished.completed_at = datetime.now(timezone.utc)
         persisted = sum(1 for r in items_results if r.get("item") == "persisted")
         already_present = sum(
@@ -205,6 +207,15 @@ async def run_ethz_research_collection_ingest_job(
             1 for r in items_results
             if isinstance(r.get("matches"), dict) and r["matches"].get("found")
         )
+
+        from src.index.ethz_research_collection.build import build  # noqa: PLC0415
+        embed_summary = await run_embed_step(
+            provider=INDEX_NAME,
+            job_id=job_id,
+            embed_call=lambda: asyncio.run(build(config, scope="all")),
+        )
+
+        finished.status = IndexIngestJobStatus.COMPLETED
         finished.summary = {
             "requested": len(payload.uuids),
             "item_persisted": persisted,
@@ -214,6 +225,7 @@ async def run_ethz_research_collection_ingest_job(
             "text_written": text_written,
             "matches_found": matches_found,
             "items": items_results,
+            "embed": embed_summary,
         }
         job_store.set(finished)
     except Exception as exc:

@@ -19,7 +19,7 @@ from src.index.snsf.config import SnsfIndexConfig
 from src.index.snsf.document import to_document
 from src.index.snsf.embed import embed_passages
 from src.index.snsf.qdrant_store import QdrantSnsfStore
-from src.index.snsf.storage.duckdb_store import DuckDBStore
+from src.index.snsf.storage.duckdb_store import SnsfStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _iso(v: Any) -> Optional[str]:
     return str(v)
 
 
-def _scope_grant_rows(store: DuckDBStore, scope_mode: str) -> List[Dict[str, Any]]:
+def _scope_grant_rows(store: SnsfStore, scope_mode: str) -> List[Dict[str, Any]]:
     """Return all grant rows for `scope_mode`, ordered by grant_number desc."""
     cur = store.connect().execute(
         """
@@ -86,7 +86,7 @@ async def run(
     active = scope_mode or cfg.scope.active
     LOGGER.info("Starting SNSF embed pipeline for scope=%s", active)
 
-    store = DuckDBStore.open()
+    store = SnsfStore.open()
     try:
         rows = _scope_grant_rows(store, active)
     finally:

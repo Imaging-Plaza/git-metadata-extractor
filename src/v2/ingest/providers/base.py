@@ -154,6 +154,33 @@ class GitHubProvider(BaseProvider, ABC):
         del full_name
         return {}
 
+    def get_repository_releases(self, full_name: str) -> list[dict[str, Any]]:
+        """Return published releases for ``owner/repo``, newest first.
+
+        Each entry is a thinned release dict (``tag_name``, ``name``,
+        dates, ``draft`` / ``prerelease`` flags, ``html_url``, and
+        ``assets``). Default implementation returns an empty list so
+        providers that don't surface releases (test fakes, partial
+        mocks) need not stub it. Must not raise on absence — only
+        transport-level failures are exceptional.
+        """
+        del full_name
+        return []
+
+    def get_repository_container_images(self, full_name: str) -> list[dict[str, Any]]:
+        """Return GHCR container (Docker) images published from ``owner/repo``.
+
+        GitHub packages are owner-scoped — there is no per-repo packages
+        endpoint — so implementations list the owner's ``container``
+        packages and keep those linked to (or named after) the repo,
+        each with its image reference and tags. Requires the
+        ``read:packages`` token scope; without it implementations
+        degrade to an empty list rather than raising. Default returns
+        ``[]``.
+        """
+        del full_name
+        return []
+
 
 class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""

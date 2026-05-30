@@ -93,12 +93,22 @@ def _register_lookup_token(lookup: dict[str, str], token: Any, canonical_id: str
 
 
 def _build_organization_lookup(organizations: list[dict[str, Any]]) -> set[str]:
+    from src.v2.canonicalization.github import parse_github_org_iri
+
     lookup: set[str] = set()
 
     def _register(token: Any) -> None:
         normalized = _normalize_token(token)
         if normalized is not None:
             lookup.add(normalized)
+        # v3.0.0: also register the bare-handle alias so signals carrying
+        # the legacy bare handle still resolve to the URL-keyed org.
+        if isinstance(token, str) and token.startswith(("http://", "https://")):
+            bare = parse_github_org_iri(token)
+            if bare:
+                normalized_bare = _normalize_token(bare)
+                if normalized_bare is not None:
+                    lookup.add(normalized_bare)
 
     for organization in organizations:
         _register(organization.get("id"))
@@ -121,7 +131,20 @@ def _collect_known_organizations(context: dict[str, Any]) -> list[dict[str, Any]
 
 
 def _build_person_lookup(persons: list[dict[str, Any]]) -> dict[str, str]:
+    from src.v2.canonicalization.github import parse_github_user_iri
+
     lookup: dict[str, str] = {}
+
+    def _register_github(value: Any, canonical_id: str) -> None:
+        """v3.0.0: pulse:githubUsername can be URL or bare. Register both
+        the URL form (for direct ID matching) and the bare handle (so
+        contribution signals carrying `login: 'octocat'` still resolve)."""
+        _register_lookup_token(lookup, value, canonical_id)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            bare = parse_github_user_iri(value)
+            if bare:
+                _register_lookup_token(lookup, bare, canonical_id)
+
     for person in persons:
         person_id = _as_string(person.get("id"))
         if person_id is None:
@@ -129,12 +152,11 @@ def _build_person_lookup(persons: list[dict[str, Any]]) -> dict[str, str]:
 
         _register_lookup_token(lookup, person_id, person_id)
         _register_lookup_token(lookup, person.get("schema:name"), person_id)
-        _register_lookup_token(lookup, person.get("pulse:githubUsername"), person_id)
+        _register_github(person.get("pulse:githubUsername"), person_id)
 
         identifiers = person.get("identifiers")
         if isinstance(identifiers, dict):
-            _register_lookup_token(
-                lookup,
+            _register_github(
                 identifiers.get("pulse:githubUsername"),
                 person_id,
             )
@@ -238,17 +260,26 @@ def _build_contribution_payload(  # noqa: PLR0913
 
 
 def _person_github_login(person: Any) -> str | None:
-    """Best-effort GitHub login for a person entity.
+    """Best-effort BARE GitHub login for a person entity (i.e., ``octocat``
+    not ``https://github.com/octocat``). Compared against bare logins
+    from contributor signals, so it MUST be the bare shape.
 
-    Mirrors the LLM contribution agent's helper: prefers the explicit
-    `pulse:githubUsername`, falls back to parsing `id` when shaped like
-    `https://github.com/{login}`.
+    v3.0.0: `pulse:githubUsername` is canonical URL form, so the helper
+    parses the bare handle out of it.
     """
+    from src.v2.canonicalization.github import parse_github_user_iri
+
     if not isinstance(person, dict):
         return None
     handle = person.get("pulse:githubUsername")
     if isinstance(handle, str) and handle.strip():
-        return handle.strip()
+        candidate = handle.strip()
+        if candidate.startswith(("http://", "https://")):
+            bare = parse_github_user_iri(candidate)
+            if bare:
+                return bare
+        else:
+            return candidate
     identifier = person.get("id")
     if isinstance(identifier, str) and identifier.startswith("https://github.com/"):
         candidate = identifier.removeprefix("https://github.com/").strip("/")

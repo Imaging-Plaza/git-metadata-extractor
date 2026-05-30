@@ -53,7 +53,7 @@ Return strict JSON of shape `OrgResolverPatch`. Only emit fields you confidently
   - Uppercase code, no whitespace, ≤16 chars, starts with `UP`/`IC`/`EPFL`/`ENAC`/`SB`/`STI` → call `search_infoscience_rag` FIRST.
   - Composite `"<parent>, <unit>"` (comma-separated) → call `search_ror_rag(parent)` for `pulse:ror`, then `search_ror_rag(unit)` for a more specific match; set `org:unitOf` if you find both.
   - Otherwise → call `search_ror_rag` then `search_infoscience_rag`.
-- **`pulse:OrganizationType`** must be one of: `pulse:University`, `pulse:ResearchInstitution`, `pulse:Company` (== `pulse:PrivateCompany`), `pulse:GovernmentAgency`, `pulse:NonProfitOrganization`, `pulse:SoftwareProject`, `pulse:CommunitySpace`, `pulse:OtherOrganizationType`. Set it only when the tool result strongly implies the type.
+- **`pulse:OrganizationType`** must be one of: `pulse:University`, `pulse:ResearchInstitution`, `pulse:GovernmentAgency`, `pulse:SoftwareProject`, `pulse:PrivateCompany`, `pulse:NonProfitOrganization`, `pulse:CommunitySpace`, `pulse:OtherOrganizationType`. Set it only when the tool result strongly implies the type.
 - **`org:unitOf`** must be a full org @id (ROR URL or another org's existing @id), not a free-text string.
 - **Never invent identifiers.** If ROR doesn't have a match, leave `pulse:ror` null. The strict downstream validator rejects fabricated URLs.
 

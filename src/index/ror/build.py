@@ -30,7 +30,7 @@ from .embed import embed_passages
 from .filter import EUROPE_COUNTRY_CODES, filter_countries, filter_country_code, filter_subtree
 from .qdrant_store import QdrantRorStore
 from .storage.duckdb_store import (
-    DuckDBStore,
+    RorStore,
     ScopeRecord,
     StoreManifest,
     extract_record_columns,
@@ -96,7 +96,7 @@ async def build(cfg: RorIndexConfig, *, refresh: bool = False) -> Dict[str, Any]
     embeddings = await embed_passages(cfg.rcp, texts, normalize=True)
 
     # ---- DuckDB writes (records + scope_records + manifests) ------------
-    duck = DuckDBStore.open()
+    duck = RorStore.open()
     try:
         duck_records_count = duck.bulk_replace_records(
             extract_record_columns(r, ror_release_version=cached.release_version)

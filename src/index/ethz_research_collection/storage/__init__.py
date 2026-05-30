@@ -6,6 +6,6 @@ Mirrors the sister-index pattern in `src/index/openalex/storage/` and
 `src/index/huggingface/storage/`.
 """
 
-from .duckdb_store import DuckDBStore
+from .duckdb_store import EthzResearchCollectionStore
 
-__all__ = ["DuckDBStore"]
+__all__ = ["EthzResearchCollectionStore"]

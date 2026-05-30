@@ -1,0 +1,5 @@
+# Docker Hub image references — one per line.
+# Accepts: namespace/name, a bare official name (python -> library/python),
+# a https://hub.docker.com/r/<ns>/<name> or /_/<name> URL, or a docker.io/...
+# pull reference (any :tag is dropped — repositories are the indexed unit).
+grafana/grafana

@@ -14,7 +14,7 @@ ScopeMode = Literal["epfl", "ethz", "eth_domain", "switzerland"]
 
 
 # `(where_clause, params)` for each scope. Used by
-# `DuckDBStore.replace_scope_records_by_filter`.
+# `SnsfStore.replace_scope_records_by_filter`.
 SCOPE_WHERE: dict[ScopeMode, tuple[str, list]] = {
     "epfl": ("research_institution = ?", ["EPF Lausanne – EPFL"]),
     "ethz": ("research_institution = ?", ["ETH Zurich – ETHZ"]),

@@ -69,7 +69,7 @@ def test_person_agent_output_validates_and_merges_affiliations(
     validate(instance=result.data, schema=schema)
 
     assert result.data["schema:name"] == "Alice Example"
-    assert result.data["pulse:githubUsername"] == "octocat"
+    assert result.data["pulse:githubUsername"] == "https://github.com/octocat"
     assert result.data["schema:email"] == "2bd806c97f0e@example.org"
     assert len(result.data["org:hasMembership"]) >= MIN_EXPECTED_MEMBERSHIPS
     assert "affiliations" not in result.data
@@ -101,7 +101,7 @@ def test_person_agent_warns_and_falls_back_when_orcid_record_is_unavailable() ->
 
     assert result.warnings
     assert result.data["idSource"] == "pulse:githubUsername"
-    assert result.data["pulse:githubUsername"] == "octocat"
+    assert result.data["pulse:githubUsername"] == "https://github.com/octocat"
 
 
 def test_person_agent_permissive_validation_warns_without_raising() -> None:

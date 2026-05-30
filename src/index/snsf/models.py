@@ -1,7 +1,7 @@
 """Pydantic models for the SNSF P3 index.
 
 Phase 1 only needs lightweight carriers — the heavy lifting is done by
-DuckDB SQL inside `storage.duckdb_store.DuckDBStore.load_*` (no row-by-row
+DuckDB SQL inside `storage.duckdb_store.SnsfStore.load_*` (no row-by-row
 Python iteration over the 90 k-grant dump).
 """
 

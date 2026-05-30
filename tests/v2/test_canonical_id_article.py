@@ -37,7 +37,7 @@ def test_resolve_article_id_normalizes_infoscience_api_url_with_full_suffix() ->
     canonical_id, id_source = resolve_article_id(article)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/publication/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
     assert id_source == "pulse:infoscienceArticleIdentifier"
@@ -57,7 +57,7 @@ def test_resolve_article_id_normalizes_infoscience_core_items_url() -> None:
     canonical_id, id_source = resolve_article_id(article)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/publication/"
         "dbce93b0-4ad7-45f2-8a53-b85bf39aeec9"
     )
     assert id_source == "pulse:infoscienceArticleIdentifier"

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "git-metadata-extractor"
-version = "2.1.0rc1"
+version = "3.0.0rc1"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -85,6 +85,12 @@ docs = [
     "mike>=2.1.3",
     "pymdown-extensions>=10.14.0"
 ]
+
+[tool.setuptools.package-data]
+# Ship the open-pulse ontology TTL (and any other in-package data) inside
+# the wheel — the SHACL gate loads it at runtime from src/v2/validation/.
+# The Docker image also gets it via `COPY src ./src`; this covers pip installs.
+"*" = ["*.ttl"]
 
 [tool.ruff]
 line-length = 88

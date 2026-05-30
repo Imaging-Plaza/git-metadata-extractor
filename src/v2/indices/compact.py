@@ -173,9 +173,13 @@ def _close_cached_store(app_state: Any, attr: str) -> None:
 
 
 _RESOURCE_ATTRS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
-    "github": ("v2_github_resources",),
-    "zenodo": ("v2_zenodo_resources",),
-    "huggingface": ("v2_huggingface_resources",),
+    "github_repos": ("v2_github_repos_resources",),
+    "zenodo_records": ("v2_zenodo_records_resources",),
+    "huggingface_models": ("v2_huggingface_models_resources",),
+    "huggingface_datasets": ("v2_huggingface_datasets_resources",),
+    "huggingface_spaces": ("v2_huggingface_spaces_resources",),
+    "huggingface_users": ("v2_huggingface_users_resources",),
+    "huggingface_organizations": ("v2_huggingface_organizations_resources",),
     "openalex": ("v2_openalex_resources",),
     "orcid": ("v2_orcid_resources",),
     "renkulab": ("v2_renkulab_resources",),
@@ -186,7 +190,7 @@ _RESOURCE_ATTRS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
     "infoscience": ("v2_infoscience_store",),
     "snsf": ("v2_snsf_store",),
     "epfl_graph": ("v2_epfl_graph_store",),
-    "communities": ("v2_communities_store",),
+    "zenodo_communities": ("v2_zenodo_communities_store",),
 }
 
 

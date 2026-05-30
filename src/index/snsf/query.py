@@ -80,13 +80,13 @@ def _post_filter_by_institute(
     `institute` isn't in the Qdrant payload (it would balloon every point),
     so we resolve it from DuckDB after the ANN. Substring match, case-folded.
     """
-    from src.index.snsf.storage.duckdb_store import DuckDBStore
+    from src.index.snsf.storage.duckdb_store import SnsfStore
 
     needle = institute_substring.lower()
     grant_ids = [c["grant_number"] for c in candidates]
     if not grant_ids:
         return []
-    store = DuckDBStore.open()
+    store = SnsfStore.open()
     try:
         placeholders = ",".join(["?"] * len(grant_ids))
         rows = store.connect().execute(

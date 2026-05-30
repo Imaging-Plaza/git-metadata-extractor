@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 
 from src.index.openalex.config import OpenAlexIndexConfig, load_config
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 
 @pytest.fixture()
-def tmp_store(tmp_path) -> DuckDBStore:
+def tmp_store(tmp_path) -> OpenAlexStore:
     """Fresh DuckDB store rooted in a tmp_path-isolated file."""
     db_path = tmp_path / "openalex.duckdb"
-    store = DuckDBStore(db_path)
+    store = OpenAlexStore(db_path)
     store.bootstrap()
     yield store
     store.close()

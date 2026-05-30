@@ -33,11 +33,11 @@
         },
         "pulse:infosciencePersonIdentifier": {
           "type": ["string", "null"],
-          "description": "Infoscience person UUID4 identifier. Format: 8-4-4-4-12 hexadecimal characters. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+          "description": "Infoscience person identifier in canonical URL form (`https://infoscience.epfl.ch/entities/person/<uuid>`). Example: 'https://infoscience.epfl.ch/entities/person/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
         },
         "pulse:githubUsername": {
           "type": ["string", "null"],
-          "description": "GitHub username. Example: 'caviri'"
+          "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'"
         },
         "uuid": {
           "type": "string",
@@ -63,7 +63,7 @@
     },
     "pulse:githubUsername": {
       "type": ["string", "null"],
-      "description": "GitHub username. Example: 'caviri'"
+      "description": "GitHub profile URL (`https://github.com/<handle>`). Example: 'https://github.com/caviri'"
     },
     "pulse:orcidIdentifier": {
       "type": ["string", "null"],
@@ -71,7 +71,7 @@
     },
     "pulse:infosciencePersonIdentifier": {
       "type": ["string", "null"],
-      "description": "Infoscience person UUID4 identifier. Example: 'f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
+      "description": "Infoscience person identifier in canonical URL form (`https://infoscience.epfl.ch/entities/person/<uuid>`). Example: 'https://infoscience.epfl.ch/entities/person/f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb'"
     },
     "org:hasMembership": {
       "type": "array",

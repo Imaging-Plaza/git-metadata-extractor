@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from src.index.openalex.rerank.rcp_client import RCPRerankerClient as _BaseRerank
+from src.index._rcp.reranker_client import RCPRerankerClient as _BaseRerank
 
 if TYPE_CHECKING:
     from src.index.orcid.config import OrcidIndexConfig

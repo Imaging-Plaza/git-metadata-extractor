@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .query import lookup_dump, query_rag_sync
-from .storage.duckdb_store import DuckDBStore
+from .storage.duckdb_store import RorStore
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ def main(argv=None) -> int:
 
     if args.cmd == "stats":
         cfg = load_config(args.config)
-        store = DuckDBStore.open()
+        store = RorStore.open()
         try:
             manifest = store.fetch_manifest(cfg.scope.mode)
         finally:

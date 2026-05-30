@@ -15,7 +15,7 @@ from src.index.openalex.retrieval.sql import (
     run_adhoc,
     run_predefined,
 )
-from src.index.openalex.storage.duckdb_store import DuckDBStore
+from src.index.openalex.storage.duckdb_store import OpenAlexStore
 from src.index.openalex.vector.qdrant_store import QdrantStore
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def healthz() -> dict[str, Any]:
     duck_status = "ok"
     qdrant_status = "ok"
     try:
-        DuckDBStore.open().count("works")
+        OpenAlexStore.open().count("works")
     except Exception as exc:  # noqa: BLE001
         duck_status = f"error: {exc}"
     try:
@@ -111,7 +111,7 @@ def get_entity(entity_type: str, openalex_id: str) -> dict[str, Any]:
         "concepts",
     }:
         raise HTTPException(status_code=404, detail=f"unknown entity type: {entity_type}")
-    store = DuckDBStore.open()
+    store = OpenAlexStore.open()
     cur = store.connect().execute(
         f"SELECT * FROM {entity_type} WHERE openalex_id = ?",  # noqa: S608
         [openalex_id],

@@ -112,12 +112,12 @@ def test_close_cached_resources_for_unsets_attr_and_calls_close():
     app_state = _AppState()
     closeable = _Closeable()
     # Tuple shape (mirrors `app_state.v2_<provider>_resources`).
-    app_state.v2_github_resources = (None, closeable, None)
+    app_state.v2_github_repos_resources = (None, closeable, None)
 
-    close_cached_resources_for("github", app_state)
+    close_cached_resources_for("github_repos", app_state)
 
     assert closeable.closed is True
-    assert app_state.v2_github_resources is None
+    assert app_state.v2_github_repos_resources is None
 
 
 def test_close_cached_resources_for_handles_unknown_provider_silently():

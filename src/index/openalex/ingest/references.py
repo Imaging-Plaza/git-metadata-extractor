@@ -17,14 +17,14 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.index.openalex.storage.duckdb_store import DuckDBStore
+    from src.index.openalex.storage.duckdb_store import OpenAlexStore
 
 LOGGER = logging.getLogger(__name__)
 
 BATCH = 5000
 
 
-def extract_from_raw(store: DuckDBStore) -> dict[str, int]:
+def extract_from_raw(store: OpenAlexStore) -> dict[str, int]:
     """Walk every row in ``works`` whose ``raw.referenced_works`` is populated,
     and bulk-insert the edges into ``work_references``.
 
