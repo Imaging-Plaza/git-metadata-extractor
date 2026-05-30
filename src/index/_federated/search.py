@@ -126,24 +126,38 @@ def _clone_hit(h: Hit, *, score: float) -> Hit:
 
 
 def _build_reranker() -> Any | None:  # noqa: ANN401 — duck-typed RCP reranker
-    """Try each known per-index module's reranker until one loads."""
-    candidates = (
-        ("src.index.huggingface.config", "load_config",
-         "src.index.huggingface.rerank.rcp_client", "RCPRerankerClient"),
-        ("src.index.openalex.config", "load_config",
-         "src.index.openalex.rerank.rcp_client", "RCPRerankerClient"),
-        ("src.index.zenodo_records.config", "load_config",
-         "src.index.zenodo_records.rerank.rcp_client", "RCPRerankerClient"),
-        ("src.index.orcid.config", "load_config",
-         "src.index.orcid.rerank.rcp_client", "RCPRerankerClient"),
-    )
+    """Build an RCP reranker from any available per-index config.
+
+    The reranker is index-agnostic: every per-index ``config.load_config()``
+    returns the same RCP coordinates (base_url / token / reranker_model), so
+    we load the first config module that imports and hand it to the shared
+    ``RCPRerankerClient`` (extracted into ``_rcp`` by K1).
+
+    This replaces an older per-index ``rerank.rcp_client`` lookup that had
+    gone stale: its first candidate (``src.index.huggingface.*``) was deleted
+    when the catch-all HuggingFace module was retired, and the openalex /
+    zenodo_records candidates never had a ``rerank/rcp_client`` submodule —
+    so in practice only the orcid fallback ever loaded, by accident.
+
+    Returns ``None`` if no config loads or RCP isn't configured (the
+    ``RCPRerankerClient`` ctor calls ``config.require_rcp()``), in which case
+    the caller skips reranking.
+    """
     from importlib import import_module
-    for cfg_mod, cfg_attr, rerank_mod, rerank_class in candidates:
+
+    from src.index._rcp.reranker_client import RCPRerankerClient
+
+    config_modules = (
+        "src.index.openalex.config",
+        "src.index.zenodo_records.config",
+        "src.index.orcid.config",
+        "src.index.github_repos.config",
+    )
+    for cfg_mod in config_modules:
         try:
-            cfg = getattr(import_module(cfg_mod), cfg_attr)()
-            klass = getattr(import_module(rerank_mod), rerank_class)
-            return klass(cfg)
-        except Exception:  # noqa: BLE001
+            cfg = import_module(cfg_mod).load_config()
+            return RCPRerankerClient(cfg)
+        except Exception:  # noqa: BLE001 — try the next config source
             continue
     return None
 
