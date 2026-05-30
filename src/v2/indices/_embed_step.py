@@ -99,6 +99,28 @@ async def _maybe_checkpoint(
         return {"enabled": True, "ran": True, "ok": False, "error": str(exc)}
 
 
+async def _maybe_snapshot(
+    *, provider: str, job_id: str, store: Any | None,
+) -> dict[str, Any]:
+    """Publish a read-only `.ro.duckdb` snapshot of the store. Never raises.
+
+    Lets a separate process (the Hub) read the data without contending on
+    the live file's write lock. Best-effort; runs after the checkpoint so
+    it copies a freshly-folded DB.
+    """
+    if store is None or not hasattr(store, "connect") or not hasattr(store, "db_path"):
+        return {"ran": False, "reason": "no store"}
+    from src.index._snapshot import publish_snapshot  # noqa: PLC0415
+
+    try:
+        return await asyncio.to_thread(
+            lambda: publish_snapshot(store.connect(), store.db_path),
+        )
+    except Exception as exc:  # noqa: BLE001 — snapshot is best-effort
+        LOGGER.warning("%s snapshot failed (job=%s): %s", provider, job_id, exc)
+        return {"published": False, "error": str(exc)}
+
+
 async def run_embed_step(
     *,
     provider: str,
@@ -134,6 +156,9 @@ async def run_embed_step(
         out["error"] = str(exc)
 
     out["checkpoint"] = await _maybe_checkpoint(
+        provider=provider, job_id=job_id, store=checkpoint_store,
+    )
+    out["snapshot"] = await _maybe_snapshot(
         provider=provider, job_id=job_id, store=checkpoint_store,
     )
 
