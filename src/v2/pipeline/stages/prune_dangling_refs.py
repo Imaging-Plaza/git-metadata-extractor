@@ -35,6 +35,14 @@ from src.v2.pipeline.stages.models import AssembledOutput
 MEMBERSHIP_TYPE = "org:Membership"
 CONTRIBUTION_TYPE = "pulse:Contribution"
 
+# Internal (`_`-prefixed → stripped from the default output) home for real
+# owned-repository IRIs that aren't materialised as typed
+# schema:SoftwareSourceCode nodes in this graph. Keeping them in public
+# `pulse:owns` dangles the shape's `sh:class` constraint (1285 such
+# violations observed extracting pallets/click — every contributor's full
+# GitHub portfolio). The data is real (GitHub API), so move, don't drop.
+INTERNAL_OWNS_KEY = "_owned_repositories"
+
 LIST_REF_FIELDS: tuple[str, ...] = (
     "org:unitOf",
     "org:hasUnit",
@@ -101,34 +109,34 @@ def _filter_list_refs(value: Any, live: set[str]) -> tuple[Any, int]:
     return kept, dropped
 
 
-def _filter_owns_refs(value: Any, live: set[str]) -> tuple[Any, int]:
-    """Same shape as ``_filter_list_refs`` but preserves stable
-    external IRIs for `pulse:owns`.
+def _split_owns_refs(value: Any, live: set[str]) -> tuple[Any, list[str], int]:
+    """Split a `pulse:owns` list into (kept_public, external_internal, dropped).
 
-    When the user/organization flow skips per-repo materialisation
-    (``V2_EXPAND_OWNED_REPOS=false``) the `pulse:owns` array still
-    carries references to the owned repos. They won't appear in the
-    `live` set because we never created a Repository entity for
-    them, but the IRI is a stable external identifier
-    (``https://github.com/<owner>/<repo>``) consumers can resolve
-    independently. Drop only non-IRI references; keep the URLs.
+    `pulse:owns` requires its target to be a typed
+    ``schema:SoftwareSourceCode`` node (shape ``sh:class``). Entries that
+    resolve to a live in-graph repo stay public. Real but un-materialised
+    owned repos — well-formed ``https://…`` IRIs not in ``live`` (e.g. a
+    contributor's wider GitHub portfolio when ``V2_EXPAND_OWNED_REPOS`` is
+    off) — are genuine data but would dangle the constraint, so they are
+    returned separately to move onto the internal ``_owned_repositories``
+    field. Mangled / non-IRI refs are dropped.
     """
 
     if not isinstance(value, list):
-        return value, 0
+        return value, [], 0
     kept: list[Any] = []
+    external: list[str] = []
     dropped = 0
     for ref in value:
         target = _resolve_id_ref(ref)
         if target is None or target in live:
             kept.append(ref)
             continue
-        # External well-formed IRI — keep it. Drop only mangled refs.
         if isinstance(target, str) and target.startswith(("http://", "https://")):
-            kept.append(ref)
+            external.append(target)
         else:
             dropped += 1
-    return kept, dropped
+    return kept, external, dropped
 
 
 def _clear_scalar_if_dangling(value: Any, live: set[str]) -> tuple[Any, bool]:
@@ -244,17 +252,35 @@ def prune_dangling_refs(
     live = _live_ids(_candidates())  # recompute after pass-1 drops
     cleared_scalars = 0
     filtered_list_entries = 0
+    moved_owns = 0
     for entity in _candidates():
         if not isinstance(entity, dict):
             continue
         for field in LIST_REF_FIELDS:
             if field not in entity:
                 continue
-            # `pulse:owns` uses the IRI-preserving filter so external
-            # `<owner>/<repo>` references survive when we deliberately
-            # skipped the repo materialisation step.
-            filter_fn = _filter_owns_refs if field == "pulse:owns" else _filter_list_refs
-            new_value, dropped = filter_fn(entity[field], live)
+            if field == "pulse:owns":
+                # Keep live in-graph repos public; move real-but-
+                # unmaterialised external repo IRIs to the internal
+                # `_owned_repositories` field (preserved, stripped from
+                # the default output) so they don't dangle the shape's
+                # `sh:class schema:SoftwareSourceCode` constraint. Mangled
+                # refs are dropped.
+                kept, external, dropped = _split_owns_refs(entity[field], live)
+                entity[field] = kept or None
+                if external:
+                    existing = entity.get(INTERNAL_OWNS_KEY)
+                    merged = list(existing) if isinstance(existing, list) else []
+                    seen = set(merged)
+                    for iri in external:
+                        if iri not in seen:
+                            merged.append(iri)
+                            seen.add(iri)
+                    entity[INTERNAL_OWNS_KEY] = merged
+                    moved_owns += len(external)
+                filtered_list_entries += dropped
+                continue
+            new_value, dropped = _filter_list_refs(entity[field], live)
             if dropped:
                 entity[field] = new_value
                 filtered_list_entries += dropped
@@ -337,14 +363,18 @@ def prune_dangling_refs(
         )
     new_related = surviving_after_orphans
 
-    if dropped_memberships or dropped_contribs or cleared_scalars or filtered_list_entries or dropped_orphan_orgs:
+    if (
+        dropped_memberships or dropped_contribs or cleared_scalars
+        or filtered_list_entries or dropped_orphan_orgs or moved_owns
+    ):
         warnings.append(
             "prune_dangling_refs: summary "
             f"dropped_memberships={dropped_memberships} "
             f"dropped_contributions={dropped_contribs} "
             f"dropped_orphan_orgs={dropped_orphan_orgs} "
             f"cleared_scalar_refs={cleared_scalars} "
-            f"filtered_list_entries={filtered_list_entries}",
+            f"filtered_list_entries={filtered_list_entries} "
+            f"moved_owns_to_internal={moved_owns}",
         )
 
     return (

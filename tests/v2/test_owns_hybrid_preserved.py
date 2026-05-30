@@ -162,7 +162,9 @@ def _run_user_downstream(*, infoscience: bool, materialise_repos: bool) -> dict[
     assembled, _ = validate_ownership(assembled)
     assembled, _ = prune_dangling_refs(assembled)
 
-    return {"owns": _owns(assembled.root_entity)}
+    root = assembled.root_entity
+    owned_internal = root.get("_owned_repositories") if isinstance(root, dict) else None
+    return {"owns": _owns(root), "owned_internal": owned_internal}
 
 
 def _owns_as_targets(owns: Any) -> set[str]:
@@ -181,18 +183,33 @@ def _owns_as_targets(owns: Any) -> set[str]:
 
 
 def test_hybrid_downstream_preserves_owns_for_both_identity_anchors() -> None:
-    """The downstream pipeline keeps every owned repo regardless of whether
-    the person is Infoscience- or github-anchored."""
+    """Un-materialised owned repos are preserved across both identity
+    anchors — without dangling the SHACL ``sh:class`` constraint.
+
+    These repos are NOT materialised as ``schema:SoftwareSourceCode``
+    nodes, so keeping them in public ``pulse:owns`` would fail
+    ``sh:class``. Per the "fits the schema → public, else → internal"
+    rule, the real GitHub data moves to the internal
+    ``_owned_repositories`` field instead of being dropped. No data is
+    lost and both anchors agree.
+    """
     github = _run_user_downstream(infoscience=False, materialise_repos=False)
     infoscience = _run_user_downstream(infoscience=True, materialise_repos=False)
 
-    assert len(_owns_as_targets(github["owns"])) == len(OWNED)
-    assert len(_owns_as_targets(infoscience["owns"])) == len(OWNED), (
-        "Infoscience-anchored person lost pulse:owns downstream — "
-        f"final owns={infoscience['owns']!r}"
+    # Public pulse:owns is empty — the repos aren't typed nodes here.
+    assert _owns_as_targets(github["owns"]) == set()
+    assert _owns_as_targets(infoscience["owns"]) == set()
+
+    # …but the ownership data is preserved on the internal field, intact
+    # and identical across both identity flavours.
+    assert _owns_as_targets(github["owned_internal"]) == _owns_as_targets(OWNED)
+    assert _owns_as_targets(infoscience["owned_internal"]) == _owns_as_targets(OWNED), (
+        "Infoscience-anchored person lost owned repos downstream — "
+        f"_owned_repositories={infoscience['owned_internal']!r}"
     )
-    # The two identity flavours resolve owns to the same repo IRIs.
-    assert _owns_as_targets(github["owns"]) == _owns_as_targets(infoscience["owns"])
+    assert _owns_as_targets(github["owned_internal"]) == _owns_as_targets(
+        infoscience["owned_internal"],
+    )
 
 
 def test_materialised_repos_preserve_owns_for_infoscience_person() -> None:
@@ -295,3 +312,37 @@ def test_rule_based_person_agent_emits_owns_regardless_of_infoscience_match() ->
 
     # The actual guard: owns is identical regardless of the match.
     assert matched.get("pulse:owns") == unmatched.get("pulse:owns") == OWNED
+
+
+def test_prune_dangling_refs_splits_owns_live_vs_external() -> None:
+    """prune_dangling_refs keeps live in-graph repos in public `pulse:owns`,
+    moves real external repo IRIs to the internal `_owned_repositories`,
+    and drops mangled (non-IRI) refs."""
+    from src.v2.pipeline.stages.models import AssembledOutput
+    from src.v2.pipeline.stages.prune_dangling_refs import INTERNAL_OWNS_KEY
+
+    repo = {
+        "id": "https://github.com/pallets/click",
+        "type": "schema:SoftwareSourceCode",
+        "pulse:ownedBy": "https://github.com/pallets",  # anchors the org
+    }
+    org = {
+        "id": "https://github.com/pallets",
+        "type": "org:Organization",
+        "pulse:owns": [
+            "https://github.com/pallets/click",   # live node → public
+            "https://github.com/pallets/flask",   # real external → internal
+            "not-an-iri",                          # mangled → dropped
+        ],
+    }
+    out, _ = prune_dangling_refs(
+        AssembledOutput(
+            root_entity=repo, related_entities=[org],
+            excluded_entities=[], warnings=[],
+        ),
+    )
+    pallets = next(e for e in out.related_entities if e["id"] == "https://github.com/pallets")
+    assert pallets["pulse:owns"] == ["https://github.com/pallets/click"]
+    assert pallets[INTERNAL_OWNS_KEY] == ["https://github.com/pallets/flask"]
+    # The mangled ref is gone from both public and internal.
+    assert "not-an-iri" not in (pallets.get(INTERNAL_OWNS_KEY) or [])
