@@ -142,10 +142,16 @@ def test_llm_repository_agent_real_provider_call() -> None:
     # Note: pydantic-ai already validated the output against AgentRepositoryShape
     # (first pass) during the LLM call, so a redundant jsonschema.validate() here
     # would fail on optional array fields the LLM returns as null rather than [].
-    assert result.data["id"] == "octocat/Hello-World"
+    # v3.0.0: identifiers are canonical URL form (the regenerated agent
+    # schema describes pulse:githubRepositoryHandle as the GitHub URL, so
+    # the LLM emits the URL — matching the rule-based agent output).
+    assert result.data["id"] == "https://github.com/octocat/Hello-World"
     assert result.data["type"] == "schema:SoftwareSourceCode"
     assert result.data["shacl"] == "pulse:RepositoryShape"
-    assert result.data["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
+    assert (
+        result.data["pulse:githubRepositoryHandle"]
+        == "https://github.com/octocat/Hello-World"
+    )
     assert len(result.data["schema:author"]) >= 1
 
     # LLM metadata should be populated.
