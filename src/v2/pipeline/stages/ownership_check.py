@@ -29,6 +29,7 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from src.v2.canonicalization.github import parse_github_org_iri
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 OWNS_KEY = "pulse:owns"
@@ -559,16 +560,26 @@ def _entity_ror_id(entity: dict[str, Any]) -> str | None:
     return None
 
 
+def _bare_github_handle(value: str) -> str:
+    """v3.0.0: `pulse:githubOrganizationHandle` is stored as the canonical
+    `https://github.com/<handle>` URL. ROR queries and handle comparisons
+    need the *bare* handle — feeding the URL to the ROR API 500s it, and
+    tokenising the URL pollutes the overlap score. Accepts URL or bare;
+    returns the lowercased bare handle."""
+    bare = parse_github_org_iri(value)
+    return (bare or value.strip()).lower()
+
+
 def _entity_github_org_handle(entity: dict[str, Any]) -> str | None:
-    """Return the github organization handle (lowercased), or None."""
+    """Return the bare github organization handle (lowercased), or None."""
     direct = entity.get("pulse:githubOrganizationHandle")
     if isinstance(direct, str) and direct.strip():
-        return direct.strip().lower()
+        return _bare_github_handle(direct)
     identifiers = entity.get("identifiers")
     if isinstance(identifiers, dict):
         nested = identifiers.get("pulse:githubOrganizationHandle")
         if isinstance(nested, str) and nested.strip():
-            return nested.strip().lower()
+            return _bare_github_handle(nested)
     return None
 
 

@@ -28,6 +28,7 @@ import re
 from typing import Any
 
 from src.v2.agents.models import ProviderSet
+from src.v2.canonicalization.github import github_org_iri
 from src.v2.pipeline.stages.models import ReconciledEntities
 
 logger = logging.getLogger(__name__)
@@ -60,12 +61,16 @@ def _existing_handle(entity: dict[str, Any]) -> str | None:
 
 
 def _stamp_handle(entity: dict[str, Any], handle: str) -> None:
-    entity[HANDLE_KEY] = handle
+    # v3.0.0: pulse:githubOrganizationHandle is the canonical
+    # `https://github.com/<handle>` URL — the strict schema enforces that
+    # pattern, so stamping the bare handle here gets the org excluded.
+    canonical = github_org_iri(handle) or handle
+    entity[HANDLE_KEY] = canonical
     identifiers = entity.get("identifiers")
     if not isinstance(identifiers, dict):
         identifiers = {}
         entity["identifiers"] = identifiers
-    identifiers[HANDLE_KEY] = handle
+    identifiers[HANDLE_KEY] = canonical
     name = entity.get("schema:name")
     if isinstance(name, str) and name.strip().startswith("@"):
         entity["schema:name"] = name.strip().lstrip("@")

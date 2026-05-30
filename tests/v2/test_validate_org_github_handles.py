@@ -48,8 +48,13 @@ def test_stamps_handle_when_github_says_organization() -> None:
 
     orgs = result.entities["organizations"]
     assert len(orgs) == 1
-    assert orgs[0]["pulse:githubOrganizationHandle"] == "10xGenomics"
-    assert orgs[0]["identifiers"]["pulse:githubOrganizationHandle"] == "10xGenomics"
+    # v3.0.0: stamped in canonical URL form so it passes the strict
+    # `^https://github\.com/…` pattern (bare handle got the org excluded).
+    assert orgs[0]["pulse:githubOrganizationHandle"] == "https://github.com/10xGenomics"
+    assert (
+        orgs[0]["identifiers"]["pulse:githubOrganizationHandle"]
+        == "https://github.com/10xGenomics"
+    )
     assert orgs[0]["schema:name"] == "10xGenomics"  # leading @ stripped
     assert any("Stamped pulse:githubOrganizationHandle='10xGenomics'" in w for w in warnings)
 
