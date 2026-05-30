@@ -92,7 +92,8 @@ def _membership(person_ref: str, org_ref: str) -> dict:
         "identifiers": {"pulse:composite": membership_id, "uuid": "11111111-1111-4111-8111-111111111111"},
         "idSource": "pulse:composite",
         "org:organization": org_ref,
-        "org:member": person_ref,
+        # No public `org:member`: pulse:MembershipShape is sh:closed and the
+        # strict schema forbids it; the person rides on `_person_ref`.
         "_person_ref": person_ref,
         "org:role": "Researcher",
         "time:hasBeginning": "2021-01-01",
