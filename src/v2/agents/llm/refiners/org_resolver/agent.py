@@ -43,7 +43,6 @@ OrganizationTypeLiteral = Literal[
     "pulse:GovernmentAgency",
     "pulse:SoftwareProject",
     "pulse:PrivateCompany",
-    "pulse:Company",
     "pulse:NonProfitOrganization",
     "pulse:CommunitySpace",
     "pulse:OtherOrganizationType",

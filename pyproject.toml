@@ -86,6 +86,12 @@ docs = [
     "pymdown-extensions>=10.14.0"
 ]
 
+[tool.setuptools.package-data]
+# Ship the open-pulse ontology TTL (and any other in-package data) inside
+# the wheel — the SHACL gate loads it at runtime from src/v2/validation/.
+# The Docker image also gets it via `COPY src ./src`; this covers pip installs.
+"*" = ["*.ttl"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py38"

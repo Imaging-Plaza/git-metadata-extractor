@@ -20,6 +20,32 @@ HTTPS URL form, end-to-end. Previously the codebase carried a split
 convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
 All identifiers now match.
 
+### Fixed — SHACL gate ships its ontology + invalid `pulse:Company` enum
+
+- **SHACL gate was dead in the container.** The open-pulse ontology TTL
+  lived under `dev/`, which the Docker image does not copy, so
+  `ontology_ttl_path()` resolved to `/app/dev/…` → `FileNotFoundError`
+  and the SHACL gate never ran in production. Moved the TTL into the
+  package (`src/v2/validation/open-pulse-ontology-v2.1.2.ttl`, shipped by
+  `COPY src` and via `[tool.setuptools.package-data]`). Resolution is now
+  a chain: `GME_ONTOLOGY_TTL` env override → packaged copy → `dev/`
+  source-checkout fallback, with an informative error listing all three.
+- **Invalid `pulse:OrganizationType` value.** Two LLM refiners
+  (`discovery`, `org_resolver`) could emit `pulse:Company`, which is not
+  a member of `pulse:OrganizationTypeEnumeration` (the ontology defines
+  `pulse:PrivateCompany`). `org_resolver` even allowed it via its
+  `Literal` with no normalisation, so it reached the graph and failed
+  `sh:class` (`ClassConstraintComponent`) even when the ontology was
+  loaded. Removed `pulse:Company` from both prompts + the Literal;
+  refiners now emit only the 8 real enum members.
+
+Note for downstream SHACL validators: the remaining bulk of
+`ClassConstraintComponent` findings on `pulse:repositoryType` /
+`pulse:OrganizationType` / `pulse:discipline` are **not** output defects
+— those values are enum IRIs whose class-membership triples live in the
+ontology. Validate `data + ontology` (load the TTL as `ont_graph`, as the
+in-pipeline gate does); validating data-only reports them spuriously.
+
 ### Added — `GET /v2/crawl/{job_id}` extract-job status endpoint
 
 Lightweight status endpoint for async extract jobs, for cheap polling
