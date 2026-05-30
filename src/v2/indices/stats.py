@@ -241,12 +241,12 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
     if provider == "ethz_research_collection":
         try:
             from src.index.ethz_research_collection.storage import (  # noqa: PLC0415
-                DuckDBStore,
+                EthzResearchCollectionStore,
             )
         except Exception:  # noqa: BLE001 — optional dependency
             return None
         try:
-            return DuckDBStore.open()
+            return EthzResearchCollectionStore.open()
         except Exception:  # noqa: BLE001 — config / disk issues
             return None
 
@@ -255,17 +255,17 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
     if provider == "ror":
         return _cli_store(
             app_state, "v2_ror_store",
-            "src.index.ror.storage.duckdb_store", "DuckDBStore",
+            "src.index.ror.storage.duckdb_store", "RorStore",
         )
     if provider == "infoscience":
         return _cli_store(
             app_state, "v2_infoscience_store",
-            "src.index.infoscience.storage.duckdb_store", "DuckDBStore",
+            "src.index.infoscience.storage.duckdb_store", "InfoscienceStore",
         )
     if provider == "snsf":
         return _cli_store(
             app_state, "v2_snsf_store",
-            "src.index.snsf.storage.duckdb_store", "DuckDBStore",
+            "src.index.snsf.storage.duckdb_store", "SnsfStore",
         )
     if provider == "epfl_graph":
         return _cli_store(
