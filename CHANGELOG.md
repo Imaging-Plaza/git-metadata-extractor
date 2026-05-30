@@ -20,6 +20,32 @@ HTTPS URL form, end-to-end. Previously the codebase carried a split
 convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
 All identifiers now match.
 
+### Fixed — read-only DuckDB snapshot (Hub 404s from write-lock contention)
+
+The serving process holds a persistent **read-write** DuckDB handle on
+every v2-ingest provider's store (cached on `app.state`). DuckDB allows
+N readers **or** 1 writer — so a separate process (the Hub) opening the
+live file read-only to sniff the schema failed with a lock conflict, the
+collection never registered, and queries 404'd.
+
+Fix (zero-contention via separate files): after each ingest+embed job,
+`run_embed_step` publishes a read-only copy to `<provider>.ro.duckdb`
+(`src/index/_snapshot.py`) — `CHECKPOINT`, copy the data tables into a
+temp DB via `CREATE TABLE … AS SELECT`, atomic `os.replace`. The heavy
+`chunks` table is skipped. The Hub points at the `.ro.duckdb` snapshot;
+the live file stays owned solely by GME (which reads it in-process via
+its own writer connection — no change to serving). Writer and readers
+operate on different files → zero contention, even mid-ingest.
+
+- Toggles: `INDEX_DUCKDB_SNAPSHOT` (default on),
+  `INDEX_SNAPSHOT_MIN_INTERVAL_SECONDS` (debounce for large stores).
+- `reset` deletes the snapshot alongside the live DB.
+- The CLI-managed catalogs (ror/infoscience/snsf/epfl_graph/
+  zenodo_communities) and ethz already serve read-only-per-request /
+  config-only, so they never held the lock and need no snapshot.
+- **Hub-side change required:** point its read-only opens at
+  `<provider>.ro.duckdb` instead of the live `<provider>.duckdb`.
+
 ### Fixed — SHACL gate ships its ontology + invalid `pulse:Company` enum
 
 - **SHACL gate was dead in the container.** The open-pulse ontology TTL

@@ -1630,9 +1630,11 @@ def _normalize_membership_entities(
         normalized_membership["identifiers"] = normalized_identifiers
         normalized_membership["idSource"] = "pulse:composite"
         normalized_membership["org:organization"] = canonical_org_id
-        # v3.0.0: `org:member` is canonicalised to the URL form for
-        # symmetry with `org:organization` and the composite id.
-        normalized_membership["org:member"] = canonical_person_id
+        # The person side rides on the internal `_person_ref` (stripped from
+        # output). NOT a public `org:member`: pulse:MembershipShape is
+        # `sh:closed` and the strict schema is `additionalProperties:false`,
+        # neither of which allows `org:member` — stamping it got the whole
+        # Membership excluded by strict validation. Nothing downstream reads it.
         normalized_membership["_person_ref"] = canonical_person_id
         if not isinstance(normalized_membership.get("org:role"), str):
             normalized_membership["org:role"] = None

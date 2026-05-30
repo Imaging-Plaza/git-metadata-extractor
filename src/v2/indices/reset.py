@@ -409,6 +409,11 @@ def _delete_duckdb(db_path: Path) -> tuple[bool, int]:
             wal_path.unlink()
         except OSError:  # noqa: BLE001
             pass
+    # Also drop the read-only snapshot (`<file>.ro.duckdb`) so a wiped
+    # provider stops serving stale rows to the Hub.
+    from src.index._snapshot import delete_snapshot  # noqa: PLC0415
+
+    delete_snapshot(db_path)
     return True, bytes_freed
 
 
