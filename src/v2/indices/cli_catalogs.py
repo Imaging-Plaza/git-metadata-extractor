@@ -83,7 +83,11 @@ async def run_ror_search(
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("ror search: config init failed — %s", exc)
         return None
-    records = await query_rag(cfg, payload.query, top_k=payload.top_k)
+    try:
+        records = await query_rag(cfg, payload.query, top_k=payload.top_k)
+    except Exception as exc:  # noqa: BLE001 — Qdrant/backend down → fail soft to 503
+        LOGGER.warning("ror search: query backend unavailable — %s", exc)
+        return None
     return IndexSearchResponse(
         index_name="ror",
         target=payload.target,
@@ -112,7 +116,11 @@ async def run_snsf_search(
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning("snsf search: config init failed — %s", exc)
         return None
-    records = await query_rag(cfg, payload.query, top_k=payload.top_k)
+    try:
+        records = await query_rag(cfg, payload.query, top_k=payload.top_k)
+    except Exception as exc:  # noqa: BLE001 — Qdrant/backend down → fail soft to 503
+        LOGGER.warning("snsf search: query backend unavailable — %s", exc)
+        return None
     return IndexSearchResponse(
         index_name="snsf",
         target=payload.target,
@@ -158,6 +166,9 @@ async def run_infoscience_search(
             hits=[],
             extra={"error": str(exc)},
         )
+    except Exception as exc:  # noqa: BLE001 — Qdrant/backend down → fail soft to 503
+        LOGGER.warning("infoscience search: query backend unavailable — %s", exc)
+        return None
     records: Iterable[Any]
     if hasattr(result, "results"):
         records = result.results

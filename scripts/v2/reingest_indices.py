@@ -20,6 +20,25 @@ resets them and skips ingest with an explanatory log line.
 
 Designed to be safe to re-run: the only destructive action is the
 explicit ``DELETE`` reset, which can be skipped with ``--no-reset``.
+
+Why HTTP and not ``python -m src.index.<provider> ingest``
+----------------------------------------------------------
+DuckDB allows **N readers OR one writer**, and the running GME keeps a
+long-lived read-WRITE handle cached on ``app.state`` for every index it
+serves (``github_repos``, ``huggingface_models``, ``zenodo_records``,
+…). A standalone ``python -m src.index.<provider> ingest`` is a
+*separate process*: it would try to open the same DuckDB read-write and
+fail with ``Could not set lock on file`` — so re-ingesting via the CLI
+forces you to **stop GME for the whole ingest (hours)**.
+
+This driver avoids that entirely. It posts to
+``POST /v2/indices/{provider}/ingest``, whose job runner writes through
+GME's *already-open* cached handle **in-process** — same lock, no
+contention — so the API keeps serving reads (and publishes a refreshed
+``.ro.duckdb`` snapshot) throughout. **Re-ingest the 17 HTTP-ingest
+providers this way with zero downtime; never run their per-process CLIs
+against a live GME.** The 5 reset-only catalogs above have no in-process
+ingest route yet, so they remain CLI/batch-driven.
 """
 
 from __future__ import annotations
