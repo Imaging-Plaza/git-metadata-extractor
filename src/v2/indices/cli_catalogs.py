@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from src.v2.api_models import IndexSearchRequest, IndexSearchResponse
@@ -36,6 +37,24 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _search_timeout_s() -> float:
+    """Wall-clock cap for one CLI-catalog search (embed → Qdrant → rerank).
+
+    The happy path is ~2-3s, but if the GME process can't reach the RCP
+    inference host or Qdrant, the underlying httpx call blocks on its own
+    (much longer) connect/read budget — observed as a ~40s hang that ties
+    up the request before any error surfaces. Bounding the whole coroutine
+    with ``asyncio.wait_for`` turns that into a fast, clean 503 (the
+    raised ``TimeoutError`` is caught by each runner's ``except Exception``
+    → ``_search_response_or_unavailable`` → 503 JSON). Override with
+    ``V2_CLI_CATALOG_SEARCH_TIMEOUT_S``.
+    """
+    try:
+        return float(os.getenv("V2_CLI_CATALOG_SEARCH_TIMEOUT_S", "20"))
+    except ValueError:
+        return 20.0
 
 
 def _hits_from_records(records: Iterable[Any]) -> list[Any]:
@@ -84,9 +103,12 @@ async def run_ror_search(
         LOGGER.warning("ror search: config init failed — %s", exc)
         return None
     try:
-        records = await query_rag(cfg, payload.query, top_k=payload.top_k)
-    except Exception as exc:  # noqa: BLE001 — Qdrant/backend down → fail soft to 503
-        LOGGER.warning("ror search: query backend unavailable — %s", exc)
+        records = await asyncio.wait_for(
+            query_rag(cfg, payload.query, top_k=payload.top_k),
+            timeout=_search_timeout_s(),
+        )
+    except Exception as exc:  # noqa: BLE001 — backend down/slow → fail soft to 503
+        LOGGER.warning("ror search: query backend unavailable/timed out — %s", exc)
         return None
     return IndexSearchResponse(
         index_name="ror",
@@ -117,9 +139,12 @@ async def run_snsf_search(
         LOGGER.warning("snsf search: config init failed — %s", exc)
         return None
     try:
-        records = await query_rag(cfg, payload.query, top_k=payload.top_k)
-    except Exception as exc:  # noqa: BLE001 — Qdrant/backend down → fail soft to 503
-        LOGGER.warning("snsf search: query backend unavailable — %s", exc)
+        records = await asyncio.wait_for(
+            query_rag(cfg, payload.query, top_k=payload.top_k),
+            timeout=_search_timeout_s(),
+        )
+    except Exception as exc:  # noqa: BLE001 — backend down/slow → fail soft to 503
+        LOGGER.warning("snsf search: query backend unavailable/timed out — %s", exc)
         return None
     return IndexSearchResponse(
         index_name="snsf",
@@ -153,8 +178,11 @@ async def run_infoscience_search(
         return None
     target = payload.target or "chunks"
     try:
-        result = await infoscience_query(
-            cfg, payload.query, target=target, top_n=payload.top_k,
+        result = await asyncio.wait_for(
+            infoscience_query(
+                cfg, payload.query, target=target, top_n=payload.top_k,
+            ),
+            timeout=_search_timeout_s(),
         )
     except ValueError as exc:
         # Bad `target`, missing collection — surface as a hits=[] result.
@@ -211,12 +239,19 @@ async def run_epfl_graph_search(
         LOGGER.warning("epfl_graph search: config init failed — %s", exc)
         return None
     candidate_k = payload.candidate_k or max(payload.top_k * 5, 50)
-    records = await asyncio.to_thread(
-        semantic_search,
-        config=cfg, query=payload.query,
-        top_k=payload.top_k,
-        candidate_k=candidate_k,
-    )
+    try:
+        records = await asyncio.wait_for(
+            asyncio.to_thread(
+                semantic_search,
+                config=cfg, query=payload.query,
+                top_k=payload.top_k,
+                candidate_k=candidate_k,
+            ),
+            timeout=_search_timeout_s(),
+        )
+    except Exception as exc:  # noqa: BLE001 — backend down/slow → fail soft to 503
+        LOGGER.warning("epfl_graph search: query backend unavailable/timed out — %s", exc)
+        return None
     return IndexSearchResponse(
         index_name="epfl_graph",
         target=payload.target,
