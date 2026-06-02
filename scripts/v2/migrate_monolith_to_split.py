@@ -239,16 +239,57 @@ def _migrate_provider(plan: ProviderPlan, *, apply: bool) -> list[TableResult] |
     return results
 
 
-def _run_embed(plan: ProviderPlan) -> str:
+def _run_embed(plan: ProviderPlan, *, force: bool) -> str:
     """Rebuild the provider's Qdrant collection from its (now populated)
-    DuckDB by invoking the same embed pipeline the ingest job uses."""
+    DuckDB by invoking the same embed pipeline the ingest job uses.
+
+    The embed pipeline only processes rows with **no matching ``chunks``
+    row** (``stream_unembedded`` does a ``NOT EXISTS`` against the chunks
+    table). After a bulk row copy that is normally exactly right — the
+    copied rows have no chunks yet. But if the split store's ``chunks``
+    table already carried bookkeeping for those ids (e.g. a prior partial
+    embed), the pipeline sees 0 work and leaves the collection empty.
+
+    ``force`` handles that case: it clears the store's ``chunks`` table and
+    drops the Qdrant collection first, so EVERY row is re-embedded from
+    scratch into a clean collection. Each split store is single-provider,
+    so wiping its whole ``chunks`` table is safe.
+    """
     cfg = importlib.import_module(f"src.index.{plan.provider}.config").load_config()
     store_cls = getattr(
         importlib.import_module(plan.store_module), plan.store_class,
     )
-    embed_fn = getattr(
-        importlib.import_module(plan.embed_module), plan.embed_callable,
-    )
+    pipeline_mod = importlib.import_module(plan.embed_module)
+    embed_fn = getattr(pipeline_mod, plan.embed_callable)
+
+    if force:
+        # Clear chunk bookkeeping so stream_unembedded yields EVERY row.
+        # DuckDB refuses to DELETE/TRUNCATE all rows of the indexed `chunks`
+        # table ("Failed to delete all rows from index"), so DROP it on a raw
+        # handle — the store recreates it empty on the next open() below.
+        raw = duckdb.connect(str(cfg.paths.duckdb_path))
+        try:
+            raw.execute("DROP TABLE IF EXISTS chunks")
+        finally:
+            raw.close()
+        # Drop the Qdrant collection too, so embed re-creates it clean and no
+        # stale points from a previous run/naming survive.
+        collection = next(
+            (v for k, v in vars(pipeline_mod).items() if k.endswith("COLLECTION")),
+            None,
+        )
+        if collection:
+            try:
+                from qdrant_client import QdrantClient  # noqa: PLC0415
+
+                QdrantClient(
+                    url=cfg.qdrant.url,
+                    api_key=getattr(cfg.qdrant, "api_key", None),
+                ).delete_collection(collection)
+                print(f"    force: dropped chunks table + Qdrant collection {collection!r}")
+            except Exception as exc:  # noqa: BLE001 — recreated by embed anyway
+                print(f"    force: collection {collection!r} drop skipped ({exc})")
+
     store = store_cls.open(cfg.paths.duckdb_path)
     try:
         summary: Any = embed_fn(config=cfg, store=store)
@@ -272,9 +313,17 @@ def main() -> int:
     )
     parser.add_argument(
         "--embed", action="store_true",
-        help="After copying, rebuild each provider's Qdrant collection "
-             "(DuckDB → RCP → Qdrant). Needs RCP reachable. Implies work over "
-             "the network.",
+        help="After copying, embed each selected provider's still-unembedded "
+             "rows into Qdrant (DuckDB → RCP → Qdrant). Needs RCP reachable. "
+             "Runs for every selected provider regardless of how many rows this "
+             "run inserted, so it is safe to invoke after a prior --apply.",
+    )
+    parser.add_argument(
+        "--reembed", action="store_true",
+        help="Force a full rebuild: clear each store's `chunks` bookkeeping and "
+             "drop its Qdrant collection first, so EVERY row is re-embedded into "
+             "a clean collection. Use when --embed produced an empty collection "
+             "because the chunks table already had entries. Implies --embed.",
     )
     parser.add_argument(
         "--provider", action="append", choices=[p.provider for p in PLAN],
@@ -282,45 +331,43 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    do_embed = args.embed or args.reembed
     selected = [p for p in PLAN if not args.provider or p.provider in args.provider]
-    mode = "APPLY" if args.apply else "DRY-RUN"
+    mode = "APPLY" if args.apply else ("EMBED-ONLY" if do_embed else "DRY-RUN")
     print(f"== monolith → split migration ({mode}) ==")
-    if not args.apply:
-        print("  (no writes — pass --apply to copy; --embed to rebuild Qdrant)")
+    if not args.apply and not do_embed:
+        print("  (no writes — pass --apply to copy; --embed/--reembed to build Qdrant)")
 
+    # --- copy phase ---
     grand_inserted = 0
-    embed_targets: list[ProviderPlan] = []
-    for plan in selected:
-        print(f"\n[{plan.provider}]  ⟵  {plan.old_db}")
-        results = _migrate_provider(plan, apply=args.apply)
-        if not results:
-            continue
-        provider_inserted = 0
-        for r in results:
-            verb = "inserted" if args.apply else "source"
-            n = r.inserted if args.apply else r.source_rows
-            extra = f"  (target {r.target_before}→{r.target_after})" if args.apply else \
-                    f"  (target has {r.target_before})"
-            drop = f"  [dropped cols: {', '.join(r.dropped_columns)}]" if r.dropped_columns else ""
-            print(f"    {r.old_table:18s} -> {r.new_table:18s} {verb}={n:>6}{extra}{drop}")
-            provider_inserted += r.inserted
-        grand_inserted += provider_inserted
-        if args.apply and provider_inserted > 0:
-            embed_targets.append(plan)
-
     if args.apply:
+        for plan in selected:
+            print(f"\n[{plan.provider}]  ⟵  {plan.old_db}")
+            results = _migrate_provider(plan, apply=True)
+            for r in results or []:
+                drop = f"  [dropped cols: {', '.join(r.dropped_columns)}]" if r.dropped_columns else ""
+                print(f"    {r.old_table:18s} -> {r.new_table:18s} inserted={r.inserted:>6}"
+                      f"  (target {r.target_before}→{r.target_after}){drop}")
+                grand_inserted += r.inserted
         print(f"\nTotal rows inserted: {grand_inserted}")
+    elif not do_embed:
+        for plan in selected:
+            print(f"\n[{plan.provider}]  ⟵  {plan.old_db}")
+            for r in _migrate_provider(plan, apply=False) or []:
+                drop = f"  [dropped cols: {', '.join(r.dropped_columns)}]" if r.dropped_columns else ""
+                print(f"    {r.old_table:18s} -> {r.new_table:18s} source={r.source_rows:>6}"
+                      f"  (target has {r.target_before}){drop}")
 
-    if args.embed and args.apply:
-        print("\n== embed (rebuild Qdrant from DuckDB) ==")
-        for plan in embed_targets:
+    # --- embed phase (incremental, or full rebuild with --reembed) ---
+    if do_embed:
+        label = "full rebuild" if args.reembed else "incremental"
+        print(f"\n== embed ({label}: DuckDB → RCP → Qdrant) ==")
+        for plan in selected:
             print(f"[{plan.provider}] embedding…")
             try:
-                print(f"    {_run_embed(plan)}")
+                print(f"    {_run_embed(plan, force=args.reembed)}")
             except Exception as exc:  # noqa: BLE001 — report, keep going
                 print(f"    ✗ embed failed: {type(exc).__name__}: {exc}")
-    elif args.embed and not args.apply:
-        print("\n(--embed ignored in dry-run; combine with --apply)")
 
     return 0
 
