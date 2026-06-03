@@ -23,6 +23,10 @@ from rdflib import Graph as RDFGraph
 
 from src.v2.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
+from src.v2.agents.llm.runtime import (
+    reset_request_model_override,
+    set_request_model_override,
+)
 from src.v2.api_models import (
     DockerhubIngestRequest,
     EthzResearchCollectionIngestRequest,
@@ -442,6 +446,15 @@ def _resolve_job_store(request: Request) -> JobStore | None:
     return JobStore(cache)
 
 
+_TERMINAL_JOB_STATUSES = frozenset(
+    {
+        V2ExtractJobStatus.COMPLETED,
+        V2ExtractJobStatus.FAILED,
+        V2ExtractJobStatus.CANCELLED,
+    },
+)
+
+
 def _track_background_task(request: Request, task: asyncio.Task[Any]) -> None:
     """Hold a strong reference to a background task so it isn't GC'd mid-flight."""
     tasks: set[asyncio.Task[Any]] | None = getattr(
@@ -454,6 +467,25 @@ def _track_background_task(request: Request, task: asyncio.Task[Any]) -> None:
         request.app.state._v2_job_tasks = tasks  # noqa: SLF001
     tasks.add(task)
     task.add_done_callback(tasks.discard)
+
+
+def _register_job_task(request: Request, job_id: str, task: asyncio.Task[Any]) -> None:
+    """Index a running extract job's task by job id so it can be cancelled."""
+    registry: dict[str, asyncio.Task[Any]] | None = getattr(
+        request.app.state, "_v2_job_task_by_id", None,
+    )
+    if registry is None:
+        registry = {}
+        request.app.state._v2_job_task_by_id = registry  # noqa: SLF001
+    registry[job_id] = task
+    task.add_done_callback(lambda _t: registry.pop(job_id, None))
+
+
+def _get_job_task(request: Request, job_id: str) -> asyncio.Task[Any] | None:
+    registry = getattr(request.app.state, "_v2_job_task_by_id", None)
+    if not isinstance(registry, dict):
+        return None
+    return registry.get(job_id)
 
 
 def _job_status_path(job_id: str) -> str:
@@ -474,6 +506,11 @@ async def _run_extract_job(
     success/error result onto the persisted V2ExtractJob record.
     """
     heartbeat_task: asyncio.Task[Any] | None = None
+    override_token = set_request_model_override(
+        payload.model_override.model_dump(exclude_none=True)
+        if payload.model_override is not None
+        else None,
+    )
     try:
         existing = job_store.get(job_id)
         if existing is None:
@@ -534,6 +571,17 @@ async def _run_extract_job(
                     source_url=payload.source_url,
                 )
         job_store.set(finished)
+    except asyncio.CancelledError:
+        # Cooperative cancel via POST /v2/jobs/{id}/cancel (task.cancel()).
+        # Mark the record cancelled, then re-raise so the task ends cleanly.
+        logger.info("extract job %s cancelled", job_id)
+        record = job_store.get(job_id)
+        if record is not None and record.status not in _TERMINAL_JOB_STATUSES:
+            record.status = V2ExtractJobStatus.CANCELLED
+            record.completed_at = datetime.now(timezone.utc)
+            record.last_heartbeat_at = record.completed_at
+            job_store.set(record)
+        raise
     except Exception as exc:
         logger.exception("extract job %s failed", job_id)
         record = job_store.get(job_id)
@@ -549,6 +597,7 @@ async def _run_extract_job(
         )
         job_store.set(record)
     finally:
+        reset_request_model_override(override_token)
         if heartbeat_task is not None:
             heartbeat_task.cancel()
             with contextlib.suppress(Exception):
@@ -2221,6 +2270,7 @@ async def extract_post(
         ),
     )
     _track_background_task(request, task)
+    _register_job_task(request, job_id, task)
 
     logger.info(
         "extract job submitted: job_id=%s url=%s detected_type=%s",
@@ -2323,6 +2373,50 @@ async def extract_job(
     """Retrieve a previously submitted extraction job (full record + graph)."""
 
     return _resolve_extract_record(request, job_id)
+
+
+@v2_router.post(
+    "/jobs/{job_id}/cancel",
+    response_model=V2ExtractJob,
+    response_model_exclude_none=True,
+    tags=["Extraction"],
+)
+async def cancel_extract_job(
+    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
+    request: Request,
+    _token: Annotated[str, Depends(verify_token)],
+) -> V2ExtractJob | JSONResponse:
+    """Cancel a pending/running extract job and free its worker.
+
+    Cooperative async cancellation: cancels the job's asyncio task (which
+    interrupts the pipeline at its next ``await`` — e.g. an in-flight LLM or
+    HTTP call) and marks the record ``cancelled``. Idempotent: a job already in
+    a terminal state is returned unchanged. 404 if no job matches, 503 if the
+    async job store is unavailable.
+    """
+    resolved = _resolve_extract_record(request, job_id)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    if resolved.status in _TERMINAL_JOB_STATUSES:
+        return resolved
+
+    task = _get_job_task(request, job_id)
+    if task is not None and not task.done():
+        task.cancel()
+
+    # Mark cancelled immediately for an authoritative response even if the task
+    # is wedged on a blocking call; the task's own CancelledError handler is a
+    # no-op then (status already terminal).
+    job_store = _resolve_job_store(request)
+    if job_store is not None:
+        record = job_store.get(job_id)
+        if record is not None and record.status not in _TERMINAL_JOB_STATUSES:
+            record.status = V2ExtractJobStatus.CANCELLED
+            record.completed_at = datetime.now(timezone.utc)
+            record.last_heartbeat_at = record.completed_at
+            job_store.set(record)
+            resolved = record
+    return resolved
 
 
 @v2_router.get(

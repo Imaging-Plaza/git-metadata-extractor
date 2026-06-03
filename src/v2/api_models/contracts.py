@@ -35,6 +35,31 @@ class V2JSONOutputEnvelope(BaseModel):
     entities_by_type: dict[str, list[dict[str, Any]]]
 
 
+class V2ModelOverride(BaseModel):
+    """Per-request LLM model/provider override.
+
+    Only honored when the server sets ``V2_ALLOW_REQUEST_MODEL_OVERRIDE`` (it
+    can carry a ``base_url``/``api_key_env``, a mild SSRF / secret surface that
+    stays opt-in). Lets a single ``/v2/extract`` target a different chat model
+    or endpoint — e.g. an RCP OpenAI-compatible model — without editing the
+    global deploy config. All fields optional; only the provided ones override.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str | None = Field(
+        default=None,
+        description="Provider kind: 'openai', 'openai-compatible', 'openrouter', 'ollama'.",
+    )
+    model: str | None = Field(default=None, description="Model name, e.g. 'Qwen/Qwen3-235B'.")
+    base_url: str | None = Field(
+        default=None, description="OpenAI-compatible base URL (e.g. RCP '/v1').",
+    )
+    api_key_env: str | None = Field(
+        default=None, description="Env var holding the API key (e.g. 'RCP_TOKEN').",
+    )
+
+
 class V2ExtractRequest(BaseModel):
     source_url: str = Field(
         description="GitHub repository, user, or organization URL or handle.",
@@ -64,6 +89,14 @@ class V2ExtractRequest(BaseModel):
             "aren't part of the Open Pulse ontology yet. Strict SHACL "
             "validation still runs identically — this flag only affects what "
             "the consumer sees. Default false for ontology compliance."
+        ),
+    )
+    model_override: V2ModelOverride | None = Field(
+        default=None,
+        description=(
+            "Per-request LLM model/provider override for `llm`/`hybrid` runtimes. "
+            "Only applied when the server enables V2_ALLOW_REQUEST_MODEL_OVERRIDE; "
+            "ignored otherwise. Target a different chat model/endpoint for a single run."
         ),
     )
 
@@ -100,6 +133,7 @@ class V2ExtractJobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class V2ExtractJob(BaseModel):
