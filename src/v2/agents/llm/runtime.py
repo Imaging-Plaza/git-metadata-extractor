@@ -112,6 +112,30 @@ def _coerce_positive_int_env(name: str, fallback: int) -> int:
     return max(1, value)
 
 
+_DEFAULT_LLM_TIMEOUT_SECONDS = 120.0
+_LLM_TIMEOUT_ENV = "V2_LLM_TIMEOUT_SECONDS"
+
+
+def _default_timeout_seconds() -> float:
+    """Per-request timeout floor for the LLM chat call.
+
+    Without it, a chat request to an unreachable/misconfigured provider
+    (empty key, wrong base_url, dead host) blocks the agent — and the single
+    extract worker — *forever*: the job never returns and can't be cancelled.
+    Applying a default per-request timeout turns that into a bounded failure
+    (the call raises, surfaced as an LLM runtime error) so the worker frees.
+    Tunable via ``V2_LLM_TIMEOUT_SECONDS``.
+    """
+    raw = os.getenv(_LLM_TIMEOUT_ENV)
+    if raw is None:
+        return _DEFAULT_LLM_TIMEOUT_SECONDS
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        return _DEFAULT_LLM_TIMEOUT_SECONDS
+    return value if value > 0 else _DEFAULT_LLM_TIMEOUT_SECONDS
+
+
 def _default_usage_limits() -> UsageLimits:
     """Per-agent caps on LLM roundtrips and tool calls.
 
@@ -242,6 +266,10 @@ class V2LLMRuntime:
             timeout = config.get("timeout")
             if isinstance(timeout, (int, float)) and timeout > 0:
                 model_parameters["timeout"] = float(timeout)
+            else:
+                # No explicit per-config timeout → apply a default so a stuck
+                # provider call can't hang the worker forever (see #1).
+                model_parameters["timeout"] = _default_timeout_seconds()
             # Pass model tuning knobs only when the backend supports the kwarg.
             if model_parameters and "model_settings" in run_parameters:
                 run_kwargs["model_settings"] = model_parameters

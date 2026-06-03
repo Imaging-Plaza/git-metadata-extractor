@@ -24,6 +24,10 @@ COPY src ./src
 # index provider fails `load_config()` and silently disables itself.
 # Deploy-specific values (Qdrant URL, tokens, scope) stay env-overridable.
 COPY config ./config
+# Ship operational scripts (e.g. scripts/v2/migrate_monolith_to_split.py) so
+# operators can run migrations/re-ingest inside the container without
+# bind-mounting them from a checkout.
+COPY scripts ./scripts
 COPY pyproject.toml .
 COPY tools/config/gunicorn_conf.py ./gunicorn_conf.py
 
