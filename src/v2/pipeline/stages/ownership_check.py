@@ -935,6 +935,76 @@ def _ror_match_has_nexus(
     )
 
 
+# --- web-domain evidence (Tier A1) -----------------------------------------
+# A web-domain match is the highest-precision, zero-cost owner→ROR signal and
+# resolves the residual token-coincidence cases name comparison can't
+# (cloud.google.com vs deepmind.google; opig.stats.ox.ac.uk vs
+# oxfordresearchgroup.org.uk). Comparison is on the *registrable label* (the
+# name immediately left of the public suffix), so single labels colliding
+# ("google" in both cloud.google.com and deepmind.google) don't false-match —
+# google.com vs deepmind.google differ.
+
+# Common two-label public suffixes, so the registrable label is the org name
+# (opig.stats.ox.ac.uk -> "ox") and not the suffix ("ac").
+_TWO_PART_SUFFIXES = frozenset(
+    """
+    co.uk ac.uk org.uk gov.uk me.uk net.uk sch.uk plc.uk ltd.uk
+    co.jp ac.jp or.jp ne.jp go.jp com.au org.au edu.au gov.au net.au asn.au
+    co.nz ac.nz org.nz govt.nz net.nz com.br org.br edu.br gov.br net.br
+    co.in ac.in org.in gov.in edu.in net.in com.cn edu.cn gov.cn org.cn net.cn
+    co.za ac.za org.za gov.za com.mx org.mx edu.mx gob.mx com.sg edu.sg gov.sg org.sg
+    com.hk edu.hk gov.hk org.hk co.kr or.kr ac.kr go.kr com.tw edu.tw gov.tw org.tw
+    co.il ac.il org.il gov.il
+    """.split(),
+)
+
+# Hosts that are not institutional domains — they carry no org-identity signal.
+_GENERIC_HOSTS = frozenset(
+    {
+        "github", "gitlab", "bitbucket", "readthedocs", "wikipedia", "sites",
+        "wordpress", "blogspot", "medium", "notion", "gitbook", "netlify",
+        "vercel", "herokuapp", "pages",
+    },
+)
+
+
+def _registrable_label(host: str) -> str | None:
+    """Registrable name label of a host (the label left of the public suffix)."""
+    host = host.strip().lower().rstrip(".")
+    labels = [part for part in host.split(".") if part]
+    if len(labels) < 2:
+        return None
+    if len(labels) >= 3 and ".".join(labels[-2:]) in _TWO_PART_SUFFIXES:
+        return labels[-3]
+    return labels[-2]
+
+
+def _registrable_label_from_url(url: Any) -> str | None:
+    if not isinstance(url, str) or not url.strip():
+        return None
+    netloc = urlparse(url if "//" in url else f"//{url}").netloc.lower()
+    netloc = netloc.split("@")[-1].split(":")[0]  # strip any auth / port
+    return _registrable_label(netloc)
+
+
+def _org_domain_label(org_context: dict[str, Any] | None) -> str | None:
+    """The org's own web-domain registrable label, or None when absent/generic."""
+    if not org_context:
+        return None
+    label = _registrable_label_from_url(org_context.get("homepage", ""))
+    return label if label and label not in _GENERIC_HOSTS else None
+
+
+def _ror_domain_labels(record: dict[str, Any]) -> set[str]:
+    """Registrable labels of a ROR record's website link(s), generic hosts dropped."""
+    labels: set[str] = set()
+    for url in record.get("links") or []:
+        label = _registrable_label_from_url(url)
+        if label and label not in _GENERIC_HOSTS:
+            labels.add(label)
+    return labels
+
+
 def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
     """Construct a minimal `org:Organization` entity from a ROR search hit.
 
@@ -1133,89 +1203,116 @@ async def _select_ror_parent(
     if not shortlist:
         return None
 
+    org_label = _org_domain_label(org_context)
+
+    # TIER A1 — web-domain match is decisive. Pick the shortlist candidate whose
+    # ROR website shares the org's registrable domain, ignoring name-token score
+    # (broadinstitute.org == www.broadinstitute.org). This is the cheapest, most
+    # precise signal and resolves the token-coincidence residual.
+    if org_label:
+        for _score, hit in shortlist:
+            if org_label in _ror_domain_labels(hit):
+                warnings.append(
+                    f"github_handle_parents: web-domain match ('{org_label}') "
+                    f"selected ROR '{hit.get('id')}' for handle '{handle}'.",
+                )
+                return hit
+
+    # --- candidate selection: rule-based unambiguous winner, or the LLM picker ---
     if parent_selector is None:
         ranked = sorted(shortlist, key=lambda item: -item[0])
         best_score, best_hit = ranked[0]
         second_score = ranked[1][0] if len(ranked) > 1 else -1
-        if best_score >= _RULE_BASED_ROR_MIN_SCORE and best_score > second_score:
-            return best_hit
-        return None
+        if not (best_score >= _RULE_BASED_ROR_MIN_SCORE and best_score > second_score):
+            return None
+        chosen_hit: dict[str, Any] | None = best_hit
+        chosen_ror_id = best_hit.get("id")
+        provenance = f"token-overlap winner (score={best_score})"
+    else:
+        # LLM-backed selection. Lazy import keeps this deterministic-by-default
+        # module free of the LLM runtime dependency unless a selector is wired in.
+        from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
+            RorCandidate,
+            RorParentSelectorInput,
+        )
 
-    # (LLM path continues below; nexus guard applied to its pick before return.)
-
-    # LLM-backed selection. Lazy import keeps this deterministic-by-default
-    # module free of the LLM runtime dependency unless a selector is wired in.
-    from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
-        RorCandidate,
-        RorParentSelectorInput,
-    )
-
-    by_ror_id: dict[str, dict[str, Any]] = {}
-    candidates: list[RorCandidate] = []
-    for score, hit in shortlist:
-        ror_id = hit.get("id")
-        if not isinstance(ror_id, str) or not ror_id:
-            continue
-        by_ror_id[ror_id] = hit
-        country = hit.get("country")
-        candidates.append(
-            RorCandidate(
-                ror_id=ror_id,
-                name=hit.get("name") if isinstance(hit.get("name"), str) else ror_id,
-                aliases=[a for a in (hit.get("aliases") or []) if isinstance(a, str)],
-                acronyms=[a for a in (hit.get("acronyms") or []) if isinstance(a, str)],
-                types=[t for t in (hit.get("types") or []) if isinstance(t, str)],
-                country=(
-                    country.get("country_name") if isinstance(country, dict) else None
+        by_ror_id: dict[str, dict[str, Any]] = {}
+        candidates: list[RorCandidate] = []
+        for score, hit in shortlist:
+            ror_id = hit.get("id")
+            if not isinstance(ror_id, str) or not ror_id:
+                continue
+            by_ror_id[ror_id] = hit
+            country = hit.get("country")
+            candidates.append(
+                RorCandidate(
+                    ror_id=ror_id,
+                    name=hit.get("name") if isinstance(hit.get("name"), str) else ror_id,
+                    aliases=[a for a in (hit.get("aliases") or []) if isinstance(a, str)],
+                    acronyms=[a for a in (hit.get("acronyms") or []) if isinstance(a, str)],
+                    types=[t for t in (hit.get("types") or []) if isinstance(t, str)],
+                    country=(
+                        country.get("country_name") if isinstance(country, dict) else None
+                    ),
+                    token_overlap_score=score,
                 ),
-                token_overlap_score=score,
-            ),
-        )
-    if not candidates:
+            )
+        if not candidates:
+            return None
+        try:
+            patch = await parent_selector.run(
+                refiner_input=RorParentSelectorInput(
+                    github_handle=handle,
+                    github_org_name=org_name,
+                    org_context=org_context,
+                    candidates=candidates,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"github_handle_parents: ROR parent selector failed for handle "
+                f"'{handle}': {exc}. Leaving the org standalone.",
+            )
+            return None
+        chosen_ror_id = patch.accepted_ror_id()
+        if chosen_ror_id is None:
+            warnings.append(
+                f"github_handle_parents: ROR parent selector declined for handle "
+                f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
+            )
+            return None
+        chosen_hit = by_ror_id.get(chosen_ror_id)
+        provenance = f"LLM selector (confidence={patch.confidence:.2f}): {patch.reason}"
+
+    if chosen_hit is None:
         return None
 
-    try:
-        patch = await parent_selector.run(
-            refiner_input=RorParentSelectorInput(
-                github_handle=handle,
-                github_org_name=org_name,
-                org_context=org_context,
-                candidates=candidates,
-            ),
-        )
-    except Exception as exc:  # noqa: BLE001
+    # TIER B — distinctive-token nexus guard (applies to both selection paths):
+    # reject a pick that shares no distinctive token/acronym/substring with the
+    # org (the generic-token coincidence: `foundry` -> Jøtul, `ai` -> Ai Corp).
+    if not _ror_match_has_nexus(handle=handle, name=org_name, ror_record=chosen_hit):
         warnings.append(
-            f"github_handle_parents: ROR parent selector failed for handle "
-            f"'{handle}': {exc}. Leaving the org standalone.",
+            f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
+            f"'{handle}' — no distinctive name nexus (coincidental match).",
         )
         return None
 
-    chosen_ror_id = patch.accepted_ror_id()
-    if chosen_ror_id is None:
-        warnings.append(
-            f"github_handle_parents: ROR parent selector declined for handle "
-            f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
-        )
-        return None
-    chosen_hit = by_ror_id.get(chosen_ror_id)
-    # Nexus guard: even when the selector picks a candidate, reject it if it
-    # shares NOTHING with the org (no token/alias/acronym overlap and no
-    # substring match). The shortlist is seeded by generic single-token ROR
-    # queries, so a confident-looking pick can still be a coincidental company
-    # (`foundry` -> Jøtul, `ai` -> Ai Corporation). Concatenated handles and
-    # acronyms still pass via `_ror_match_has_nexus`.
-    if chosen_hit is not None and not _ror_match_has_nexus(
-        handle=handle, name=org_name, ror_record=chosen_hit,
-    ):
-        warnings.append(
-            f"github_handle_parents: rejected ROR parent '{chosen_ror_id}' for "
-            f"handle '{handle}' — shares no token/substring with the org "
-            f"(coincidental match); leaving the org standalone.",
-        )
-        return None
+    # Decisive negative: both sides have a web domain and they differ -> they are
+    # different orgs (cloud.google.com vs deepmind.google; ox.ac.uk vs
+    # oxfordresearchgroup.org.uk). Only fires when the org has a usable domain.
+    if org_label:
+        ror_labels = _ror_domain_labels(chosen_hit)
+        if ror_labels and org_label not in ror_labels:
+            warnings.append(
+                f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
+                f"'{handle}' — web-domain mismatch (org '{org_label}' vs ROR "
+                f"{sorted(ror_labels)}).",
+            )
+            return None
+
     warnings.append(
-        f"github_handle_parents: ROR parent selector picked '{chosen_ror_id}' "
-        f"for handle '{handle}' (confidence={patch.confidence:.2f}): {patch.reason}",
+        f"github_handle_parents: selected ROR '{chosen_ror_id}' for handle "
+        f"'{handle}' — {provenance}.",
     )
     return chosen_hit
 
