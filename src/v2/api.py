@@ -939,6 +939,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             company_result = await run_resolve_company_to_ror_stage(
                 reconciled=reconciled,
                 provider=getattr(providers, "ror_rag", None),
+                github_provider=getattr(providers, "github", None),
             )
             logger.info(
                 "%s: persons_examined=%d persons_resolved=%d "

@@ -71,6 +71,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.v2.agents.models import generate_uuid
+from src.v2.canonicalization.github import github_org_iri
 from src.v2.ingest.providers.ror_rag import RorRagProvider, build_default_provider
 
 if TYPE_CHECKING:
@@ -123,6 +124,83 @@ def _read_company(person: dict[str, Any]) -> Any:
         if value:
             return value
     return None
+
+
+# `_company` / `_bio` are free text that often name an affiliation with a
+# GitHub `@handle` (e.g. company "@google-deepmind", bio "PhD @ucl, now @huggingface").
+# An @handle is far more reliably an *organization* via a GitHub lookup than via
+# free-text ROR search — and once linked as a github org it resolves to ROR
+# through the web-domain cascade. We mine both fields for @handles and check
+# each against GitHub.
+BIO_KEYS: tuple[str, ...] = ("_bio", "_orcid_biography", "_profile_readme")
+# GitHub handle grammar: alphanumeric + single hyphens, 1-39 chars.
+_AT_HANDLE_RE = re.compile(r"@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)")
+
+
+def _extract_at_handles(person: dict[str, Any]) -> list[str]:
+    """Collect distinct `@handle` mentions from the person's company + bio
+    free-text fields, preserving first-seen order (lowercased)."""
+    texts: list[str] = []
+    company = _read_company(person)
+    if isinstance(company, str):
+        texts.append(company)
+    elif isinstance(company, list):
+        texts.extend(c for c in company if isinstance(c, str))
+    for key in BIO_KEYS:
+        value = person.get(key)
+        if isinstance(value, str):
+            texts.append(value)
+    seen: set[str] = set()
+    handles: list[str] = []
+    for text in texts:
+        for match in _AT_HANDLE_RE.finditer(text):
+            handle = match.group(1).lower()
+            if handle not in seen:
+                seen.add(handle)
+                handles.append(handle)
+    return handles
+
+
+def _github_org_iri_and_name(
+    github_provider: Any,
+    handle: str,
+    cache: dict[str, tuple[str, str] | None],
+) -> tuple[str, str] | None:
+    """If `handle` is a GitHub *organization*, return its canonical handle IRI
+    and display name; otherwise None. Cached per handle. Mirrors the
+    `validate_org_github_handles` check (`get_user(...)['type'] == Organization`)."""
+    if handle in cache:
+        return cache[handle]
+    result: tuple[str, str] | None = None
+    try:
+        data = github_provider.get_user(handle)
+    except Exception:  # noqa: BLE001 — provider/network hiccup → treat as unknown
+        data = None
+    if isinstance(data, dict) and str(data.get("type", "")).lower() == "organization":
+        iri = github_org_iri(handle) or f"https://github.com/{handle}"
+        name = data.get("name") or data.get("login") or handle
+        result = (iri, str(name))
+    cache[handle] = result
+    return result
+
+
+def _build_github_org_stub(handle_iri: str, name: str, source: str) -> dict[str, Any]:
+    """A github-org `org:Organization` stub (idSource = github handle). The
+    web-domain cascade in `ownership_check` later anchors it to a ROR id."""
+    return {
+        "id": handle_iri,
+        "type": "org:Organization",
+        "shacl": "pulse:OrganizationShape",
+        "identifiers": {
+            "pulse:githubOrganizationHandle": handle_iri,
+            "pulse:ror": None,
+            "uuid": generate_uuid(),
+        },
+        "idSource": "pulse:githubOrganizationHandle",
+        "schema:name": name,
+        "pulse:githubOrganizationHandle": handle_iri,
+        "_source": source,
+    }
 
 
 _COUNTRY_SUFFIX_RE = re.compile(r"\s*\([^)]+\)\s*$")
@@ -348,9 +426,16 @@ async def run_resolve_company_to_ror_stage(
     *,
     reconciled: "ReconciledEntities",
     provider: RorRagProvider | None = None,
+    github_provider: Any = None,
 ) -> CompanyAffiliationResult:
     """Stage entry. Materialises one Membership + (when new) one
     Organization per accepted ROR hit, idempotently.
+
+    When ``github_provider`` is supplied, `@handle` mentions in the person's
+    ``_company`` / ``_bio`` that GitHub confirms are *organizations* are linked
+    as github-org affiliations (and excluded from the free-text ROR search,
+    which is far less reliable for a handle); the github org then resolves to
+    ROR via the web-domain cascade in ``ownership_check``.
 
     Re-running the stage on a graph that already contains its earlier
     output is a no-op — both the org set and the membership composite
@@ -367,8 +452,9 @@ async def run_resolve_company_to_ror_stage(
 
     persons = reconciled.entities.get("persons") or []
     cache: dict[str, dict[str, Any] | None] = {}
+    gh_cache: dict[str, tuple[str, str] | None] = {}
     reasons: dict[str, int] = {}
-    resolved = 0
+    resolved_persons: set[str] = set()
     memberships_added = 0
     organizations_added = 0
 
@@ -381,6 +467,36 @@ async def run_resolve_company_to_ror_stage(
         person_id = _person_canonical_id(person)
         if not person_id:
             continue
+
+        # --- GitHub @handle -> org affiliation (from _company + _bio) -------
+        # A handle GitHub confirms is an organization is linked directly; record
+        # it so the free-text ROR search below skips that chunk (an @handle is a
+        # much weaker free-text ROR query than a confirmed github org).
+        github_handles: set[str] = set()
+        if github_provider is not None:
+            for handle in _extract_at_handles(person):
+                meta = _github_org_iri_and_name(github_provider, handle, gh_cache)
+                if meta is None:
+                    continue
+                iri, name = meta
+                github_handles.add(handle)
+                if iri not in existing_org_ids:
+                    reconciled.entities.setdefault("organizations", []).append(
+                        _build_github_org_stub(iri, name, STAGE_SOURCE_TAG),
+                    )
+                    existing_org_ids.add(iri)
+                    organizations_added += 1
+                composite = f"{person_id}__{iri}"
+                if composite not in existing_membership_keys:
+                    reconciled.entities.setdefault("memberships", []).append(
+                        _build_membership(
+                            person_id=person_id, org_id=iri, source=STAGE_SOURCE_TAG,
+                        ),
+                    )
+                    existing_membership_keys.add(composite)
+                    memberships_added += 1
+                    resolved_persons.add(person_id)
+
         raw_companies = _read_company(person)
         if not raw_companies:
             continue
@@ -394,6 +510,9 @@ async def run_resolve_company_to_ror_stage(
         candidate_hits: list[dict[str, Any]] = []
         for raw in raw_list:
             for part in _split_joint(raw):
+                # Skip a chunk already linked as a github org above.
+                if part.startswith("@") and _clean_query(part).lower() in github_handles:
+                    continue
                 hit, reason = await _resolve_one(provider, cache, part)
                 if hit is not None:
                     ror_id = hit.get("ror_id")
@@ -416,13 +535,13 @@ async def run_resolve_company_to_ror_stage(
             existing_membership_keys=existing_membership_keys,
         )
         if m_added > 0:
-            resolved += 1
+            resolved_persons.add(person_id)
             memberships_added += m_added
             organizations_added += o_added
 
     result = CompanyAffiliationResult(
         persons_examined=len(persons),
-        persons_resolved=resolved,
+        persons_resolved=len(resolved_persons),
         memberships_created=memberships_added,
         organizations_created=organizations_added,
         queries_attempted=len(cache),
