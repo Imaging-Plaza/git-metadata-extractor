@@ -4,6 +4,7 @@ import inspect
 import json
 import logging
 import os
+from contextvars import ContextVar
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -182,6 +183,62 @@ def _coerce_output_payload(output: Any) -> dict[str, Any]:
     return output
 
 
+# --- per-request model override --------------------------------------------
+# Lets a single `/v2/extract` call target a different model/provider (e.g. an
+# RCP OpenAI-compatible chat model) without editing the global deploy config.
+# Carried in a ContextVar so it propagates through the async pipeline without
+# threading it down every agent signature. Honored ONLY when
+# `V2_ALLOW_REQUEST_MODEL_OVERRIDE` is truthy, because an override may carry a
+# `base_url`/`api_key_env` (a request pointing the LLM at an arbitrary host /
+# naming an arbitrary env var is a mild SSRF / secret-surface risk that stays
+# opt-in).
+_REQUEST_OVERRIDE_FLAG_ENV = "V2_ALLOW_REQUEST_MODEL_OVERRIDE"
+_OVERRIDABLE_CONFIG_KEYS = ("provider", "model", "base_url", "api_key_env")
+_request_model_override: ContextVar[dict[str, Any] | None] = ContextVar(
+    "v2_request_model_override", default=None,
+)
+
+
+def set_request_model_override(override: dict[str, Any] | None) -> object:
+    """Set the per-request model override; returns the ContextVar token.
+
+    Pass the token to ``reset_request_model_override`` to restore the previous
+    value when the request finishes. Keys outside ``_OVERRIDABLE_CONFIG_KEYS``
+    and empty values are dropped.
+    """
+    cleaned = (
+        {k: v for k, v in override.items() if k in _OVERRIDABLE_CONFIG_KEYS and v}
+        if override
+        else None
+    )
+    return _request_model_override.set(cleaned or None)
+
+
+def reset_request_model_override(token: object) -> None:
+    _request_model_override.reset(token)  # type: ignore[arg-type]
+
+
+def _request_override_enabled() -> bool:
+    raw = os.getenv(_REQUEST_OVERRIDE_FLAG_ENV)
+    return bool(raw) and raw.strip().lower() in _TRUE_ENV_VALUES
+
+
+_TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
+
+
+def _apply_request_override(config: dict[str, Any]) -> dict[str, Any]:
+    """Merge an active, enabled per-request override onto ``config``."""
+    override = _request_model_override.get()
+    if not override or not _request_override_enabled():
+        return config
+    merged = {**config, **override}
+    logger.info(
+        "LLM runtime: applying per-request model override (provider=%s, model=%s)",
+        merged.get("provider"), merged.get("model"),
+    )
+    return merged
+
+
 class V2LLMRuntime:
     def __init__(self, *, analysis_type: str = "run_llm_analysis") -> None:
         self._analysis_type = analysis_type
@@ -199,6 +256,9 @@ class V2LLMRuntime:
 
         for config in configs:
             if isinstance(config, dict) and validate_config(config):
+                # Apply any enabled per-request override before the credential
+                # check so the overridden api_key_env is what gets validated.
+                config = _apply_request_override(config)
                 # Surface missing credentials by env var name only.
                 missing_env_vars = [
                     env_name
