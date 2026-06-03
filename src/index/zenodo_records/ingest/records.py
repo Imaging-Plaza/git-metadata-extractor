@@ -181,33 +181,16 @@ def _project_creators(item: dict[str, Any]) -> list[tuple[dict[str, Any], int]]:
     return out
 
 
-# A real Zenodo community slug is a human-chosen, alphanumeric handle
-# (`epfl`, `iccm-19`, `eu`). Some records carry non-community identifiers in
-# `metadata.communities` — EU grant numbers (`101060684`) and journal ISSNs
-# (`1807-1260`) — which `community_iri()` would blindly wrap into
-# `…/communities/<id>` URLs that then 404 on `GET /api/communities/<id>`. Reject
-# those two shapes so they never pollute `community_ids` / `primary_community_id`.
-_ISSN_SLUG_RE = re.compile(r"^\d{4}-\d{3}[\dxX]$")
-_NUMERIC_SLUG_RE = re.compile(r"^\d{4,}$")
-
-
-def _is_plausible_community_slug(slug: str) -> bool:
-    s = slug.strip()
-    if not s:
-        return False
-    if _ISSN_SLUG_RE.match(s):  # journal ISSN, not a community
-        return False
-    if _NUMERIC_SLUG_RE.match(s):  # grant number, not a community
-        return False
-    return True
-
-
 def _project_communities(item: dict[str, Any]) -> list[str]:
     """Return canonical community IRIs, one per linked community.
 
-    Non-community identifiers that some records carry under
-    `metadata.communities` (grant numbers, ISSNs) are dropped — see
-    `_is_plausible_community_slug`.
+    Slugs that look like grant numbers (`101060684`) or ISSNs (`1807-1260`)
+    are kept, NOT dropped: those ARE real Zenodo communities (e.g. the
+    BIORECER project community has slug `101060684`). Zenodo's direct
+    `GET /api/communities/<slug>` returns an empty search envelope for numeric
+    slugs, which made them look dead — but `fetch_by_slug` recovers them via a
+    `?q=<slug>` search fallback. So the canonical community URL is correct here
+    and resolution is the fetcher's job, not a reason to discard the link.
     """
     from src.index.zenodo_records.iri import community_iri  # noqa: PLC0415
 
@@ -216,14 +199,8 @@ def _project_communities(item: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for b in blocks:
         slug = b.get("id") if isinstance(b, dict) else b
-        if not isinstance(slug, str) or not slug.strip():
-            continue
-        if not _is_plausible_community_slug(slug):
-            LOGGER.debug(
-                "zenodo_records: dropping non-community id %r from communities", slug,
-            )
-            continue
-        out.append(community_iri(slug))
+        if isinstance(slug, str) and slug.strip():
+            out.append(community_iri(slug))
     return out
 
 
@@ -272,11 +249,7 @@ def persist_record(
     row["community_ids"] = list(communities)
     from src.index.zenodo_records.iri import community_iri  # noqa: PLC0415
 
-    if (
-        crawling_community
-        and _is_plausible_community_slug(crawling_community)
-        and not row.get("primary_community_id")
-    ):
+    if crawling_community and not row.get("primary_community_id"):
         # Callers pass bare slugs ("epfl") for the community they were
         # iterating; promote to the canonical IRI to match the new PK form.
         row["primary_community_id"] = community_iri(crawling_community)
