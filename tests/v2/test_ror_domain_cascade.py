@@ -103,3 +103,53 @@ def test_no_domain_falls_back_to_nexus_guard() -> None:
         homepage="https://edinburgh-genome-foundry.github.io",
     )
     assert pick is None
+
+
+# --- A2 external-id / A3 exact-name / provenance (cascade tiers) -------------
+def _hit_ext(ror_id: str, name: str, *, links=None, external_ids=None, aliases=None, acronyms=None):
+    return {
+        "id": ror_id, "name": name, "aliases": aliases or [], "acronyms": acronyms or [],
+        "links": links or [], "external_ids": external_ids or {},
+    }
+
+
+def test_a3_exact_name_match_accepts_with_provenance() -> None:
+    # No domain; exact normalised name equality -> A3 accept, tier stamped.
+    shortlist = [(1, _hit_ext("ror:hf", "Hugging Face"))]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="huggingface", org_name="Hugging Face", shortlist=shortlist,
+            parent_selector=None, org_context=None, warnings=[],
+        ),
+    )
+    assert pick is not None and pick["id"] == "ror:hf"
+    assert pick["_ror_match_tier"] == "A3_exact_name"
+    assert pick["_ror_match_confidence"] == 0.95
+
+
+def test_a2_external_id_match_accepts() -> None:
+    shortlist = [(0, _hit_ext("ror:x", "Some Org", external_ids={"grid": "grid.42"}))]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="someorg", org_name="Some Org", shortlist=shortlist,
+            parent_selector=None,
+            org_context={"external_ids": ["grid:grid.42"]}, warnings=[],
+        ),
+    )
+    assert pick is not None and pick["_ror_match_tier"] == "A2_external_id"
+
+
+def test_a1_domain_wins_over_a3_exact_name() -> None:
+    # One candidate matches by exact name, another (the real one) by domain.
+    shortlist = [
+        (5, _hit_ext("ror:wrong", "Acme", links=["https://example.org"])),  # exact name only
+        (1, _hit_ext("ror:right", "Acme Labs", links=["https://acme.com"])),  # domain match
+    ]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="acme", org_name="Acme", shortlist=shortlist,
+            parent_selector=None, org_context={"homepage": "https://www.acme.com"}, warnings=[],
+        ),
+    )
+    assert pick is not None and pick["id"] == "ror:right"
+    assert pick["_ror_match_tier"] == "A1_domain"

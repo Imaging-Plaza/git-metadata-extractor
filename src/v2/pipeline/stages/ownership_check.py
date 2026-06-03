@@ -1005,6 +1005,62 @@ def _ror_domain_labels(record: dict[str, Any]) -> set[str]:
     return labels
 
 
+# --- A2 external-id + A3 exact-name evidence --------------------------------
+_PAREN_RE = re.compile(r"\([^)]*\)")
+
+
+def _ror_external_ids(record: dict[str, Any]) -> set[str]:
+    """`{type}:{value}` keys for a ROR record's external ids (grid/isni/…)."""
+    ext = record.get("external_ids")
+    if not isinstance(ext, dict):
+        return set()
+    return {
+        f"{k.lower()}:{v.strip().lower()}"
+        for k, v in ext.items()
+        if isinstance(k, str) and isinstance(v, str) and v.strip()
+    }
+
+
+def _name_key(value: Any) -> str | None:
+    """Despaced, country-qualifier-stripped, lowercased key for exact matching:
+    'Hugging Face' / 'huggingface' -> 'huggingface'. >=4 chars to avoid trivia."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    key = _despace(_PAREN_RE.sub("", value))
+    return key if len(key) >= 4 else None
+
+
+def _name_keys(*values: Any) -> set[str]:
+    return {k for k in (_name_key(v) for v in values) if k}
+
+
+def _ror_name_keys(record: dict[str, Any]) -> set[str]:
+    keys = _name_keys(record.get("name"))
+    for alias in record.get("aliases") or []:
+        keys |= _name_keys(alias)
+    return keys
+
+
+def _ror_acronyms(record: dict[str, Any]) -> set[str]:
+    return {
+        a.lower() for a in (record.get("acronyms") or []) if isinstance(a, str) and a.strip()
+    }
+
+
+def _stamp_match(
+    hit: dict[str, Any], tier: str, confidence: float, handle: str, warnings: list[str],
+) -> dict[str, Any]:
+    """Record which cascade tier accepted a ROR match (provenance), then return
+    it. The `_*` fields are internal — stripped from output by default."""
+    hit["_ror_match_tier"] = tier
+    hit["_ror_match_confidence"] = confidence
+    warnings.append(
+        f"github_handle_parents: selected ROR '{hit.get('id')}' for handle "
+        f"'{handle}' via {tier} (confidence={confidence:.2f}).",
+    )
+    return hit
+
+
 def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
     """Construct a minimal `org:Organization` entity from a ROR search hit.
 
@@ -1072,6 +1128,20 @@ def _org_context_for_selector(org: dict[str, Any]) -> dict[str, Any] | None:
         value = org.get(src_key)
         if isinstance(value, str) and value.strip():
             context[ctx_key] = value.strip()
+    # External ids the org already carries (rare for github-only orgs; present
+    # for ORCID-sourced / bio-mined affiliations) — `{type}:{value}` keys for
+    # the A2 external-id match against a ROR candidate's external_ids.
+    identifiers = org.get("identifiers")
+    if isinstance(identifiers, dict):
+        ext: set[str] = set()
+        for key, value in identifiers.items():
+            if not isinstance(key, str) or not isinstance(value, str) or not value.strip():
+                continue
+            for kind in ("wikidata", "grid", "isni", "fundref"):
+                if kind in key.lower():
+                    ext.add(f"{kind}:{value.strip().lower()}")
+        if ext:
+            context["external_ids"] = sorted(ext)
     return context or None
 
 
@@ -1204,19 +1274,26 @@ async def _select_ror_parent(
         return None
 
     org_label = _org_domain_label(org_context)
+    org_ext = set((org_context or {}).get("external_ids") or [])
+    org_name_keys = _name_keys(org_name, handle)
 
-    # TIER A1 — web-domain match is decisive. Pick the shortlist candidate whose
-    # ROR website shares the org's registrable domain, ignoring name-token score
-    # (broadinstitute.org == www.broadinstitute.org). This is the cheapest, most
-    # precise signal and resolves the token-coincidence residual.
+    # TIER A — deterministic, decisive accepts in descending precision. Each
+    # scans the whole shortlist so a higher tier always wins over a lower one.
+    #   A1 web-domain   (broadinstitute.org == www.broadinstitute.org)
+    #   A2 external id  (shared grid/isni/wikidata/fundref)
+    #   A3 exact name / acronym (normalised equality)
     if org_label:
         for _score, hit in shortlist:
             if org_label in _ror_domain_labels(hit):
-                warnings.append(
-                    f"github_handle_parents: web-domain match ('{org_label}') "
-                    f"selected ROR '{hit.get('id')}' for handle '{handle}'.",
-                )
-                return hit
+                return _stamp_match(hit, "A1_domain", 0.98, handle, warnings)
+    if org_ext:
+        for _score, hit in shortlist:
+            if org_ext & _ror_external_ids(hit):
+                return _stamp_match(hit, "A2_external_id", 0.99, handle, warnings)
+    if org_name_keys:
+        for _score, hit in shortlist:
+            if org_name_keys & (_ror_name_keys(hit) | _ror_acronyms(hit)):
+                return _stamp_match(hit, "A3_exact_name", 0.95, handle, warnings)
 
     # --- candidate selection: rule-based unambiguous winner, or the LLM picker ---
     if parent_selector is None:
@@ -1228,6 +1305,7 @@ async def _select_ror_parent(
         chosen_hit: dict[str, Any] | None = best_hit
         chosen_ror_id = best_hit.get("id")
         provenance = f"token-overlap winner (score={best_score})"
+        match_tier, match_conf = "B_rule", 0.70
     else:
         # LLM-backed selection. Lazy import keeps this deterministic-by-default
         # module free of the LLM runtime dependency unless a selector is wired in.
@@ -1283,6 +1361,7 @@ async def _select_ror_parent(
             return None
         chosen_hit = by_ror_id.get(chosen_ror_id)
         provenance = f"LLM selector (confidence={patch.confidence:.2f}): {patch.reason}"
+        match_tier, match_conf = "B_llm", float(patch.confidence)
 
     if chosen_hit is None:
         return None
@@ -1310,6 +1389,8 @@ async def _select_ror_parent(
             )
             return None
 
+    chosen_hit["_ror_match_tier"] = match_tier
+    chosen_hit["_ror_match_confidence"] = match_conf
     warnings.append(
         f"github_handle_parents: selected ROR '{chosen_ror_id}' for handle "
         f"'{handle}' — {provenance}.",
@@ -1450,6 +1531,11 @@ async def infer_github_handle_parents(
             inserted[chosen_ror_id] = parent_entity
             by_id[chosen_ror_id] = parent_entity
             by_ror[chosen_ror_id] = parent_entity
+        # Provenance: which cascade tier accepted this match + its confidence
+        # (internal `_*` fields, stripped from output unless include_internal).
+        if "_ror_match_tier" in chosen_hit:
+            parent_entity["_ror_match_tier"] = chosen_hit["_ror_match_tier"]
+            parent_entity["_ror_match_confidence"] = chosen_hit.get("_ror_match_confidence")
             warnings.append(
                 f"Inserted ROR organization '{chosen_ror_id}' "
                 f"({chosen_hit.get('name')}) as parent of github handle "

@@ -139,6 +139,24 @@ def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:  # noqa
         relationships if isinstance(relationships, list) else [],
     )
 
+    # ROR v2 `external_ids`: list of {type, all, preferred}. Flatten to
+    # {type: preferred_or_first} (grid / isni / fundref / wikidata) so the
+    # owner->ROR cascade can match an org's external id against the registry's.
+    external_ids: dict[str, str] = {}
+    raw_external = item.get("external_ids")
+    if isinstance(raw_external, list):
+        for entry in raw_external:
+            if not isinstance(entry, dict):
+                continue
+            id_type = entry.get("type")
+            value = entry.get("preferred")
+            if not value:
+                all_ids = entry.get("all")
+                if isinstance(all_ids, list) and all_ids:
+                    value = all_ids[0]
+            if isinstance(id_type, str) and isinstance(value, str) and value.strip():
+                external_ids[id_type.lower()] = value.strip()
+
     return {
         "id": item.get("id"),
         "name": _first_name(names_list),
@@ -148,6 +166,7 @@ def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:  # noqa
         "types": type_names,
         "country": country_payload,
         "links": links_list,
+        "external_ids": external_ids,
         "relationships": relationships_payload,
     }
 
