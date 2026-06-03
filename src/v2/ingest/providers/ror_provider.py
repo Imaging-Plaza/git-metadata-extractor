@@ -115,8 +115,25 @@ def _normalize_ror_organization(item: dict[str, Any]) -> dict[str, Any]:  # noqa
                     "country_code": country_code,
                 }
 
+    # ROR API v2 changed `links` from bare strings to `{type, value}` objects
+    # (same shape change as `name` -> `names`). Read both forms, and also fold
+    # in the v2 `domains` field, so the website/domain signal isn't silently
+    # lost (it powers the owner->ROR web-domain match).
     links = item.get("links")
-    links_list = [value for value in links if isinstance(value, str)] if isinstance(links, list) else []
+    links_list: list[str] = []
+    if isinstance(links, list):
+        for entry in links:
+            if isinstance(entry, str) and entry.strip():
+                links_list.append(entry)
+            elif isinstance(entry, dict):
+                value = entry.get("value")
+                if isinstance(value, str) and value.strip():
+                    links_list.append(value)
+    domains = item.get("domains")
+    if isinstance(domains, list):
+        for domain in domains:
+            if isinstance(domain, str) and domain.strip():
+                links_list.append(domain if "//" in domain else f"https://{domain}")
     relationships = item.get("relationships")
     relationships_payload = _normalize_relationships(
         relationships if isinstance(relationships, list) else [],
