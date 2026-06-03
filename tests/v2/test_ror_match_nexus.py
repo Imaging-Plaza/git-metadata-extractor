@@ -1,13 +1,16 @@
 """The ROR-parent nexus guard rejects coincidental matches (field report #7).
 
-The owner→ROR resolver seeds its candidate shortlist with generic
-single-token ROR queries (``foundry``, ``ai``, ``planet``), so the LLM
-selector can confidently pick a company that shares *nothing* with the org
-(``Edinburgh-Genome-Foundry`` → "Jøtul", ``unionai`` → "Ai Corporation").
-``_ror_match_has_nexus`` is the post-selection guard: it keeps a pick only
-when there is a real signal — a token/alias/acronym overlap OR a ROR-name
-token (≥4 chars) that is a substring of the de-separated handle/name (which
-recovers concatenated handles like ``broadinstitute`` → "Broad Institute").
+ROR's free-text ranking returns a token-coincident org at #1 even on an idle
+deploy with the full result list — e.g. "Edinburgh Genome Foundry" → "Jøtul
+(Norway)" (ror 042epp307), because Jøtul's aliases include "Kværner **Foundry**".
+The github→ROR resolver accepted ROR's #1 without verifying the name.
+
+``_ror_match_has_nexus`` keeps a match only when there is a *distinctive*
+(non-generic) shared token, an acronym match, or a distinctive substring — so a
+generic-word-only overlap ("foundry", "ai", "genomics") is rejected while
+concatenated handles ("broadinstitute" → "Broad Institute") and acronyms
+("ssi-dk" → SSI) survive. Records here mirror the LIVE ROR shapes (incl.
+aliases), which is what exposed the earlier, weaker guard.
 """
 
 from __future__ import annotations
@@ -21,43 +24,47 @@ def _rec(name: str, *, aliases: list[str] | None = None, acronyms: list[str] | N
     return {"name": name, "aliases": aliases or [], "acronyms": acronyms or []}
 
 
-# Coincidental matches from the field report — must be rejected (no nexus).
+# Coincidental matches — generic-word-only overlap — must be rejected. Records
+# carry the real aliases that made the naive guard fail.
 @pytest.mark.parametrize(
-    ("handle", "ror_name"),
+    ("handle", "name", "record"),
     [
-        ("Edinburgh-Genome-Foundry", "Jøtul (Norway)"),
-        ("unionai", "Ai Corporation (United Kingdom)"),
-        ("C-CoMP-STC", "Planet"),
-        ("AI-Ecology-Lab", "NAVER Cloud (South Korea)"),
-        ("AndersenLab", "Accenture (Italy)"),
-        ("AG-Walz", "Stealth BioTherapeutics (United States)"),
-        ("broadinstitute", "Microsoft"),  # right shape, wrong org
+        # Jøtul's "Kværner Foundry" alias shares only the generic "foundry".
+        (
+            "Edinburgh-Genome-Foundry",
+            "Edinburgh Genome Foundry",
+            _rec("Jøtul (Norway)", aliases=["Kværner Foundry", "Kværner Jernstøberi"]),
+        ),
+        ("unionai", "unionai", _rec("Ai Corporation (United Kingdom)")),  # only "ai"/"corporation"
+        ("C-CoMP-STC", "C-CoMP-STC", _rec("Planet")),
+        ("AI-Ecology-Lab", "AI Ecology Lab", _rec("NAVER Cloud (South Korea)")),  # "lab"/"cloud"
+        ("AndersenLab", "AndersenLab", _rec("Accenture (Italy)")),
+        ("broadinstitute", "Broad Institute", _rec("Microsoft")),  # right shape, wrong org
     ],
 )
-def test_coincidental_match_rejected(handle: str, ror_name: str) -> None:
-    assert _ror_match_has_nexus(handle=handle, name=None, ror_record=_rec(ror_name)) is False
+def test_coincidental_match_rejected(handle: str, name: str, record: dict) -> None:
+    assert _ror_match_has_nexus(handle=handle, name=name, ror_record=record) is False
 
 
-# Correct matches that tokenize to a single token or an acronym — must survive.
+# Correct matches (concatenated handles / acronyms / distinctive tokens) survive.
 @pytest.mark.parametrize(
-    ("handle", "ror_name", "acronyms"),
+    ("handle", "name", "record"),
     [
-        ("broadinstitute", "Broad Institute", []),
-        ("huggingface", "Hugging Face", []),
-        ("FrancisCrickInstitute", "The Francis Crick Institute", []),
-        ("opentargets", "Open Targets", []),
-        ("nanoporetech", "Oxford Nanopore Technologies (United Kingdom)", []),
-        ("ssi-dk", "Statens Serum Institut", ["SSI"]),
-        ("google-deepmind", "Google DeepMind (United Kingdom)", []),
+        ("broadinstitute", "Broad Institute", _rec("Broad Institute")),
+        ("huggingface", "Hugging Face", _rec("Hugging Face")),
+        ("FrancisCrickInstitute", "Francis Crick Institute", _rec("The Francis Crick Institute")),
+        ("opentargets", "Open Targets", _rec("Open Targets")),
+        ("nanoporetech", "Oxford Nanopore", _rec("Oxford Nanopore Technologies (United Kingdom)")),
+        ("ssi-dk", "ssi-dk", _rec("Statens Serum Institut", acronyms=["SSI"])),
+        ("google-deepmind", "google-deepmind", _rec("Google DeepMind (United Kingdom)")),
     ],
 )
-def test_real_match_kept(handle: str, ror_name: str, acronyms: list[str]) -> None:
-    rec = _rec(ror_name, acronyms=acronyms)
-    assert _ror_match_has_nexus(handle=handle, name=None, ror_record=rec) is True
+def test_real_match_kept(handle: str, name: str, record: dict) -> None:
+    assert _ror_match_has_nexus(handle=handle, name=name, ror_record=record) is True
 
 
-def test_short_token_does_not_match_coincidentally() -> None:
-    # "ai" (<4 chars) inside "unionai" must NOT count as a substring nexus.
-    assert _ror_match_has_nexus(
-        handle="unionai", name=None, ror_record=_rec("Ai Corporation"),
-    ) is False
+def test_generic_alias_token_is_not_a_nexus() -> None:
+    # The exact #102 regression: a generic token shared only via a ROR alias
+    # ("foundry" in "Kværner Foundry") must NOT count.
+    rec = _rec("Jøtul (Norway)", aliases=["Kværner Foundry"])
+    assert _ror_match_has_nexus(handle="Edinburgh-Genome-Foundry", name="Edinburgh Genome Foundry", ror_record=rec) is False

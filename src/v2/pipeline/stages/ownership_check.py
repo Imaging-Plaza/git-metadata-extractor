@@ -860,33 +860,79 @@ def _despace(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
+# Generic organisation words that collide across unrelated orgs and so must
+# NOT count as a name-match nexus on their own. ROR's relevance ranking puts a
+# token-coincident org at #1 for these (`Edinburgh Genome Foundry` -> "Jøtul",
+# whose alias is "Kværner Foundry"; `... Genomics` -> any genomics company),
+# and the github→ROR resolver accepts ROR's #1 without a similarity check. The
+# nexus must be a *distinctive* shared token, not one of these.
+_GENERIC_ORG_TOKENS = frozenset(
+    """
+    foundry research lab labs laboratory laboratories group institute institut
+    institutes university college center centre data hub science sciences scientific
+    bio biotech biosciences genomics genome genomic cloud platform tech technology
+    technologies systems system solutions computational national international
+    corporation corp company foundation association network project team engineering
+    medical medicine health information intelligence machine learning open source
+    global services consulting consultants digital software therapeutics pharma
+    pharmaceuticals biology biological dynamics analytics consortium initiative
+    of the and for de la el du des inc ltd gmbh llc co
+    """.split(),
+)
+
+
+def _distinctive(tokens: set[str]) -> set[str]:
+    """Tokens that distinguish one org from another — drops generic org words
+    and 1-2 char fragments that match coincidentally."""
+    return {t for t in tokens if len(t) >= 3 and t not in _GENERIC_ORG_TOKENS}
+
+
 def _ror_match_has_nexus(
     *, handle: str, name: str | None, ror_record: dict[str, Any],
 ) -> bool:
-    """True when the github org and the ROR record share *some* real signal.
+    """True when the github org and the ROR record share a *distinctive* signal.
 
-    Either a token / alias / acronym overlap (``_ror_record_score`` > 0), or a
-    ROR-name token of >=4 chars appearing as a substring of the de-separated
-    handle or org name — which recovers concatenated handles
-    (``broadinstitute`` -> "Broad Institute", ``huggingface`` -> "Hugging
-    Face") that tokenize to a single token and so score 0.
+    ROR's free-text ranking happily returns a coincidental top hit whose only
+    overlap with the org is a generic word (`Edinburgh Genome Foundry` -> Jøtul
+    via the alias "Kværner Foundry"; `unionai` -> "Ai Corporation" via "ai"),
+    and the resolver accepts ROR's #1 without verifying the name. This guard is
+    that verification: keep a match only when there is
 
-    When neither holds the match shares *nothing* with the org: it is a
-    coincidental hit from a generic single-token ROR query (``foundry`` ->
-    Jøtul, ``ai`` -> Ai Corporation, ``planet`` -> Planet) and must be rejected.
+      1. a shared *distinctive* (non-generic, >=3 char) name token, OR
+      2. an acronym match (acronyms are inherently distinctive), OR
+      3. a distinctive ROR-name token (>=4 chars) appearing as a substring of
+         the de-separated handle/name — recovering concatenated handles
+         (`broadinstitute` -> "Broad Institute", `huggingface` -> "Hugging Face").
+
+    Generic-word-only overlaps (the Jøtul / Ai Corporation failure mode) share
+    no distinctive token and are rejected. Validated against the reported
+    suspect pairs using the live ROR records (incl. Jøtul's aliases).
     """
-    if _ror_record_score(handle=handle, name=name, ror_record=ror_record) > 0:
-        return True
-    blobs = [_despace(handle)]
-    if isinstance(name, str) and name.strip():
-        blobs.append(_despace(name))
+    gh_tokens = _handle_aliases(handle)
+    if isinstance(name, str):
+        gh_tokens |= _name_aliases(name)
+    gh_distinctive = _distinctive(gh_tokens)
+
     ror_tokens: set[str] = set(_name_aliases(ror_record.get("name")))
     for alias in ror_record.get("aliases") or []:
         ror_tokens |= _name_aliases(alias)
-    for tok in ror_tokens:
-        if len(tok) >= _MIN_SUBSTRING_TOKEN_LEN and any(tok in blob for blob in blobs):
-            return True
-    return False
+    ror_distinctive = _distinctive(ror_tokens)
+
+    # 1) shared distinctive token
+    if gh_distinctive & ror_distinctive:
+        return True
+    # 2) acronym match
+    acronyms = {a.lower() for a in (ror_record.get("acronyms") or []) if isinstance(a, str)}
+    if gh_tokens & acronyms:
+        return True
+    # 3) distinctive ROR token as a substring of the de-separated handle/name
+    blobs = [_despace(handle)]
+    if isinstance(name, str) and name.strip():
+        blobs.append(_despace(name))
+    return any(
+        len(tok) >= _MIN_SUBSTRING_TOKEN_LEN and any(tok in blob for blob in blobs)
+        for tok in ror_distinctive
+    )
 
 
 def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
