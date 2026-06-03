@@ -76,26 +76,58 @@ def _normalize_record(payload: dict[str, Any], parent_org: str | None) -> dict[s
     }
 
 
+def _search_fallback(slug: str, parent_org: str | None) -> dict[str, Any] | None:
+    """Recover a community the direct endpoint can't return.
+
+    Zenodo's `GET /api/communities/<slug>` returns an empty search envelope
+    (HTTP 200, zero hits) for numeric slugs — e.g. `101060684`, the BIORECER
+    project community, or journal ISSNs — instead of the community object. Those
+    are real communities; find them by searching `?q=<slug>` and matching the
+    slug exactly. Bounded to 2 pages so a genuinely-dead slug fails fast.
+    """
+    try:
+        for record in discover_by_query(slug, parent_org=parent_org, max_pages=2):
+            if record.get("source_slug") == slug:
+                logger.info(
+                    "zenodo_communities.ingest.zenodo: recovered %r via ?q= fallback", slug,
+                )
+                return record
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "zenodo_communities.ingest.zenodo: search fallback failed (%s)", slug,
+        )
+    return None
+
+
 def fetch_by_slug(slug: str, parent_org: str | None = None) -> dict[str, Any] | None:
-    """Direct lookup; returns None on 404 / non-2xx."""
+    """Direct lookup with a search fallback.
+
+    The direct `/api/communities/<slug>` endpoint 200-but-empties for numeric
+    slugs (see `_search_fallback`), so when it doesn't yield a real community
+    object we retry via `?q=<slug>` rather than giving up.
+    """
     url = f"{_ZENODO_BASE}/{slug}"
     try:
         response = requests.get(url, timeout=_REQUEST_TIMEOUT)
     except Exception:  # noqa: BLE001
         logger.exception("zenodo_communities.ingest.zenodo: fetch_by_slug failed (%s)", slug)
-        return None
+        return _search_fallback(slug, parent_org)
     if response.status_code == 404:
-        return None
+        return _search_fallback(slug, parent_org)
     if response.status_code != 200:
         logger.info(
             "zenodo_communities.ingest.zenodo: %s returned %d", slug, response.status_code,
         )
-        return None
+        return _search_fallback(slug, parent_org)
     try:
         payload = response.json()
     except ValueError:
-        return None
-    return _normalize_record(payload, parent_org)
+        return _search_fallback(slug, parent_org)
+    record = _normalize_record(payload, parent_org)
+    if record:
+        return record
+    # 200 but not a real community object (numeric-slug empty envelope).
+    return _search_fallback(slug, parent_org)
 
 
 def discover_by_query(

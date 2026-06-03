@@ -848,6 +848,47 @@ def _ror_record_score(
     return len(gh_tokens & ror_tokens)
 
 
+# Minimum length for a ROR-name token to count as a substring match against a
+# de-separated handle. Guards against generic 2-3 char fragments ("ai", "bio")
+# matching coincidentally (e.g. "ai" inside "unionai").
+_MIN_SUBSTRING_TOKEN_LEN = 4
+
+
+def _despace(value: str) -> str:
+    """Lowercase and strip all non-alphanumerics — turns 'Broad Institute' and
+    'broad-institute' both into 'broadinstitute' for substring comparison."""
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _ror_match_has_nexus(
+    *, handle: str, name: str | None, ror_record: dict[str, Any],
+) -> bool:
+    """True when the github org and the ROR record share *some* real signal.
+
+    Either a token / alias / acronym overlap (``_ror_record_score`` > 0), or a
+    ROR-name token of >=4 chars appearing as a substring of the de-separated
+    handle or org name — which recovers concatenated handles
+    (``broadinstitute`` -> "Broad Institute", ``huggingface`` -> "Hugging
+    Face") that tokenize to a single token and so score 0.
+
+    When neither holds the match shares *nothing* with the org: it is a
+    coincidental hit from a generic single-token ROR query (``foundry`` ->
+    Jøtul, ``ai`` -> Ai Corporation, ``planet`` -> Planet) and must be rejected.
+    """
+    if _ror_record_score(handle=handle, name=name, ror_record=ror_record) > 0:
+        return True
+    blobs = [_despace(handle)]
+    if isinstance(name, str) and name.strip():
+        blobs.append(_despace(name))
+    ror_tokens: set[str] = set(_name_aliases(ror_record.get("name")))
+    for alias in ror_record.get("aliases") or []:
+        ror_tokens |= _name_aliases(alias)
+    for tok in ror_tokens:
+        if len(tok) >= _MIN_SUBSTRING_TOKEN_LEN and any(tok in blob for blob in blobs):
+            return True
+    return False
+
+
 def _build_minimal_ror_org(ror_record: dict[str, Any]) -> dict[str, Any] | None:
     """Construct a minimal `org:Organization` entity from a ROR search hit.
 
@@ -1054,6 +1095,8 @@ async def _select_ror_parent(
             return best_hit
         return None
 
+    # (LLM path continues below; nexus guard applied to its pick before return.)
+
     # LLM-backed selection. Lazy import keeps this deterministic-by-default
     # module free of the LLM runtime dependency unless a selector is wired in.
     from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
@@ -1108,11 +1151,27 @@ async def _select_ror_parent(
             f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
         )
         return None
+    chosen_hit = by_ror_id.get(chosen_ror_id)
+    # Nexus guard: even when the selector picks a candidate, reject it if it
+    # shares NOTHING with the org (no token/alias/acronym overlap and no
+    # substring match). The shortlist is seeded by generic single-token ROR
+    # queries, so a confident-looking pick can still be a coincidental company
+    # (`foundry` -> Jøtul, `ai` -> Ai Corporation). Concatenated handles and
+    # acronyms still pass via `_ror_match_has_nexus`.
+    if chosen_hit is not None and not _ror_match_has_nexus(
+        handle=handle, name=org_name, ror_record=chosen_hit,
+    ):
+        warnings.append(
+            f"github_handle_parents: rejected ROR parent '{chosen_ror_id}' for "
+            f"handle '{handle}' — shares no token/substring with the org "
+            f"(coincidental match); leaving the org standalone.",
+        )
+        return None
     warnings.append(
         f"github_handle_parents: ROR parent selector picked '{chosen_ror_id}' "
         f"for handle '{handle}' (confidence={patch.confidence:.2f}): {patch.reason}",
     )
-    return by_ror_id.get(chosen_ror_id)
+    return chosen_hit
 
 
 async def infer_github_handle_parents(
