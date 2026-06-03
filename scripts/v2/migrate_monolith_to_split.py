@@ -234,9 +234,30 @@ def _migrate_provider(plan: ProviderPlan, *, apply: bool) -> list[TableResult] |
         results = [
             _copy_table(conn, ot, nt, apply=apply) for ot, nt in plan.tables
         ]
+        if apply and any(r.inserted for r in results):
+            _publish_snapshot(conn, new_path)
     finally:
         conn.close()
     return results
+
+
+def _publish_snapshot(conn: duckdb.DuckDBPyConnection, live_path: Path) -> None:
+    """Refresh the store's ``.ro.duckdb`` snapshot the Hub reads from.
+
+    The split DuckDB is the live (writer) file; the Hub serves the RO
+    snapshot, so a migration that writes the live file but skips the
+    snapshot leaves the Hub on stale data. Forced (no debounce) because
+    this is a one-shot bulk mutation that must publish immediately.
+    """
+    from src.index._snapshot import publish_snapshot, snapshot_path_for  # noqa: PLC0415
+
+    result = publish_snapshot(conn, live_path, force=True)
+    if result.get("published"):
+        print(f"    snapshot republished: {snapshot_path_for(live_path).name}")
+    elif result.get("enabled") is False:
+        print("    snapshot skipped (INDEX_DUCKDB_SNAPSHOT disabled)")
+    else:
+        print(f"    snapshot: {result}")
 
 
 def _run_embed(plan: ProviderPlan, *, force: bool) -> str:
@@ -293,6 +314,11 @@ def _run_embed(plan: ProviderPlan, *, force: bool) -> str:
     store = store_cls.open(cfg.paths.duckdb_path)
     try:
         summary: Any = embed_fn(config=cfg, store=store)
+        # Embed wrote new `chunks` rows (skipped from the snapshot) but also
+        # confirms the store is current; republish so the Hub's RO snapshot
+        # reflects this store even when the copy phase ran under an older
+        # script that didn't snapshot.
+        _publish_snapshot(store.connect(), Path(cfg.paths.duckdb_path))
     finally:
         close = getattr(store, "close", None)
         if callable(close):

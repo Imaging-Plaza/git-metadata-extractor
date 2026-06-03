@@ -71,12 +71,17 @@ def publish_snapshot(
     live_path: Path,
     *,
     skip_tables: frozenset[str] = SNAPSHOT_SKIP_TABLES,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Publish a read-only snapshot of ``live_path``'s data tables.
 
     ``conn`` is the live (writer) connection to ``live_path``; the copy is
     made through it so it sees committed data. Best-effort: any failure is
     logged and returned, never raised. Returns a small status dict.
+
+    ``force`` bypasses the min-interval debounce — use it for one-shot bulk
+    mutations (e.g. a migration) that must publish immediately regardless of
+    how recently a snapshot was written.
     """
     if not _enabled():
         return {"enabled": False}
@@ -85,7 +90,7 @@ def publish_snapshot(
     snap = snapshot_path_for(live_path)
 
     interval = _min_interval_seconds()
-    if interval > 0 and snap.exists():
+    if not force and interval > 0 and snap.exists():
         try:
             if (time.time() - snap.stat().st_mtime) < interval:
                 return {"enabled": True, "published": False, "reason": "debounced"}
