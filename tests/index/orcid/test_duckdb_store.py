@@ -18,7 +18,8 @@ def test_upsert_seed_promotes_to_both(tmp_store) -> None:
     tmp_store.upsert_seed(orcid_id="0000-0002-1825-0097", discovered_via="orcid_search")
     cur = tmp_store.connect().execute(
         "SELECT discovered_via FROM seeds WHERE orcid_id = ?",
-        ["0000-0002-1825-0097"],
+        # v3.0.0: the store persists the canonical ORCID URL as the id.
+        ["https://orcid.org/0000-0002-1825-0097"],
     )
     assert cur.fetchone()[0] == "both"
 
@@ -91,7 +92,9 @@ def test_stream_rows_for_embedding_skips_already_chunked(tmp_store) -> None:
     tmp_store.upsert_chunk(
         chunk_id="x",
         entity_type="persons",
-        entity_id="0000-0002-1825-0097",
+        # the person is stored under the canonical URL id; the chunk's
+        # entity_id must match it (as the embed pipeline produces).
+        entity_id="https://orcid.org/0000-0002-1825-0097",
         chunk_index=0,
         text="Alice Example",
         token_count=2,

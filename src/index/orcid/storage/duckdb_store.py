@@ -12,6 +12,15 @@ from typing import TYPE_CHECKING, Any
 import duckdb
 
 from src.index.orcid.paths import get_orcid_paths
+from src.v2.canonicalization.orcid import orcid_iri
+
+
+def _canon_orcid(value: Any) -> Any:
+    """Canonical ORCID URL (https://orcid.org/<bare>) for storage, or the value
+    unchanged if it can't be canonicalised. v3.0.0: the stored id is the URL,
+    consistently across persons / employments / educations / seeds so their
+    joins still match. Ingest keeps the bare id for the ORCID API."""
+    return orcid_iri(value) or value
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -92,7 +101,7 @@ class OrcidStore:
             "    ELSE 'both' "
             "  END, "
             "  hint = COALESCE(excluded.hint, seeds.hint)",
-            [orcid_id, discovered_via, hint],
+            [_canon_orcid(orcid_id), discovered_via, hint],
         )
 
     def upsert_person(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
@@ -117,6 +126,7 @@ class OrcidStore:
             f"ON CONFLICT (orcid_id) DO UPDATE SET {update_cols}"
         )
         values: list[Any] = [row.get(c) for c in cols]
+        values[0] = _canon_orcid(values[0])  # orcid_id -> canonical URL
         values.append(json.dumps(raw, ensure_ascii=False))
         values.append(self._now())
         self.connect().execute(sql, values)
@@ -131,6 +141,7 @@ class OrcidStore:
             message = f"Unknown affiliation table: {table}"
             raise ValueError(message)
         conn = self.connect()
+        orcid_id = _canon_orcid(orcid_id)
         # Replace-all semantics keeps the table consistent when ORCID
         # entries are removed/renumbered upstream.
         conn.execute(
@@ -152,7 +163,9 @@ class OrcidStore:
         sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"  # noqa: S608
         count = 0
         for row in rows:
-            conn.execute(sql, [row.get(c) for c in cols])
+            row_values = [row.get(c) for c in cols]
+            row_values[0] = _canon_orcid(row_values[0])  # orcid_id -> canonical URL
+            conn.execute(sql, row_values)
             count += 1
         return count
 
@@ -188,7 +201,7 @@ class OrcidStore:
     def fetch_person(self, orcid_id: str) -> dict[str, Any] | None:
         cur = self.connect().execute(
             "SELECT * FROM persons WHERE orcid_id = ?",
-            [orcid_id],
+            [_canon_orcid(orcid_id)],  # accept bare or URL; rows are keyed by URL
         )
         row = cur.fetchone()
         if row is None:
@@ -283,7 +296,7 @@ class OrcidStore:
     def list_employments(self, orcid_id: str) -> list[dict[str, Any]]:
         cur = self.connect().execute(
             "SELECT * FROM employments WHERE orcid_id = ? ORDER BY seq",
-            [orcid_id],
+            [_canon_orcid(orcid_id)],  # accept bare or URL; rows keyed by URL
         )
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, r, strict=False)) for r in cur.fetchall()]

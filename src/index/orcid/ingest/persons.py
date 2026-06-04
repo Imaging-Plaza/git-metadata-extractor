@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from src.index.orcid.ingest.orcid_client import build_orcid_provider
 from src.index.orcid.ingest.scope import post_filter_record
+from src.v2.canonicalization.orcid import parse_orcid
 from src.v2.ingest.providers.base import (
     ProviderError,
     ProviderNotFoundError,
@@ -40,7 +41,7 @@ def ingest_single_orcid(
     if provider is None:
         provider = build_orcid_provider(config)
     try:
-        record = provider.get_person_by_orcid(orcid_id)  # type: ignore[attr-defined]
+        record = provider.get_person_by_orcid(parse_orcid(orcid_id) or orcid_id)  # type: ignore[attr-defined]
     except ProviderNotFoundError:
         LOGGER.info("orcid not found, skipping: %s", orcid_id)
         return "not_found"
@@ -96,7 +97,7 @@ def ingest_persons(
                 time.sleep(min_interval - elapsed)
         last_request_at = time.monotonic()
         try:
-            record = provider.get_person_by_orcid(orcid_id)
+            record = provider.get_person_by_orcid(parse_orcid(orcid_id) or orcid_id)
         except ProviderNotFoundError:
             LOGGER.info("orcid not found, skipping: %s", orcid_id)
             summary["errors"] += 1
