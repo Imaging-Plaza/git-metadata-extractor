@@ -1,6 +1,11 @@
 -- Canonical DuckDB schema for the infoscience index module.
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 -- Mirrors the openalex / huggingface sister-index pattern.
+--
+-- v3.0.0: the `*_uuid` id columns (and the junction FKs that reference
+-- them) hold the canonical Infoscience entity URL, not the bare DSpace
+-- UUID — `https://infoscience.epfl.ch/entities/{publication|person|orgunit}/<uuid>`.
+-- `InfoscienceStore.bootstrap()` migrates legacy bare-UUID rows in place.
 
 -- One-shot cleanup of the dead `chunks` table: chunks live exclusively
 -- in Qdrant (`infoscience_chunks` collection) and the DuckDB table

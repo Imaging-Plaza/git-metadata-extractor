@@ -19,6 +19,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 import duckdb
 
 from src.index.infoscience.paths import duckdb_path
+from src.v2.canonicalization.infoscience import (
+    infoscience_article_iri,
+    infoscience_iri_sql,
+    infoscience_org_iri,
+    infoscience_person_iri,
+)
 
 if TYPE_CHECKING:
     pass
@@ -66,6 +72,36 @@ class InfoscienceStore:
         )
 
         migrate_doi_column_to_url(conn, table="articles", column="doi")
+        self._migrate_ids_to_url(conn)
+
+    @staticmethod
+    def _migrate_ids_to_url(conn: duckdb.DuckDBPyConnection) -> None:
+        """v3.0.0: promote bare DSpace UUID ids (and the junction FKs that
+        reference them) to canonical Infoscience entity URLs. Idempotent —
+        the guarded CASE only rewrites bare UUID4s, so already-canonical
+        rows and re-runs are no-ops. Existing on-disk DBs converge on the
+        next ``bootstrap()``.
+        """
+
+        def col(name: str, kind: str) -> str:
+            return infoscience_iri_sql(name, kind)
+
+        updates = (
+            f"UPDATE articles SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"infoscience_url = {col('infoscience_url', 'publication')}",
+            f"UPDATE persons SET person_uuid = {col('person_uuid', 'person')}, "
+            f"primary_affiliation_uuid = {col('primary_affiliation_uuid', 'orgunit')}",
+            f"UPDATE organizations SET org_uuid = {col('org_uuid', 'orgunit')}, "
+            f"parent_org_uuid = {col('parent_org_uuid', 'orgunit')}, "
+            f"infoscience_url = {col('infoscience_url', 'orgunit')}",
+            f"UPDATE article_persons SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"person_uuid = {col('person_uuid', 'person')}",
+            f"UPDATE article_orgs SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"org_uuid = {col('org_uuid', 'orgunit')}",
+            f"UPDATE article_links SET article_uuid = {col('article_uuid', 'publication')}",
+        )
+        for stmt in updates:
+            conn.execute(stmt)
 
     def close(self) -> None:
         if self._conn is not None:
@@ -106,6 +142,11 @@ class InfoscienceStore:
 
         if row.get("doi"):
             row = {**row, "doi": doi_iri(row["doi"])}
+        # v3.0.0: the id is the canonical Infoscience publication URL.
+        uid = row.get("article_uuid")
+        row = {**row, "article_uuid": infoscience_article_iri(uid) or uid}
+        if row.get("infoscience_url") is None and row.get("article_uuid"):
+            row = {**row, "infoscience_url": row["article_uuid"]}
         self._upsert(
             table="articles",
             cols=(
@@ -124,6 +165,15 @@ class InfoscienceStore:
         )
 
     def upsert_person(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        # v3.0.0: person_uuid is the canonical person URL; the affiliation
+        # FK is the canonical orgunit URL.
+        pid = row.get("person_uuid")
+        aff = row.get("primary_affiliation_uuid")
+        row = {
+            **row,
+            "person_uuid": infoscience_person_iri(pid) or pid,
+            "primary_affiliation_uuid": infoscience_org_iri(aff) or aff,
+        }
         self._upsert(
             table="persons",
             cols=(
@@ -141,6 +191,16 @@ class InfoscienceStore:
         )
 
     def upsert_organization(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        # v3.0.0: org_uuid + parent_org_uuid are canonical orgunit URLs.
+        oid = row.get("org_uuid")
+        pid = row.get("parent_org_uuid")
+        row = {
+            **row,
+            "org_uuid": infoscience_org_iri(oid) or oid,
+            "parent_org_uuid": infoscience_org_iri(pid) or pid,
+        }
+        if row.get("infoscience_url") is None and row.get("org_uuid"):
+            row = {**row, "infoscience_url": row["org_uuid"]}
         self._upsert(
             table="organizations",
             cols=(
@@ -190,14 +250,16 @@ class InfoscienceStore:
         person_positions: Iterable[tuple[str, int | None]],
     ) -> None:
         conn = self.connect()
+        art_id = infoscience_article_iri(article_uuid) or article_uuid
         for person_uuid, position in person_positions:
+            person_id = infoscience_person_iri(person_uuid) or person_uuid
             conn.execute(
                 "INSERT INTO article_persons (article_uuid, person_uuid, position) "
                 "VALUES (?, ?, ?) "
                 "ON CONFLICT (article_uuid, person_uuid) DO UPDATE SET position = "
                 "COALESCE(LEAST(article_persons.position, excluded.position), "
                 "         excluded.position, article_persons.position)",
-                [article_uuid, person_uuid, position],
+                [art_id, person_id, position],
             )
 
     def upsert_article_orgs(
@@ -206,11 +268,13 @@ class InfoscienceStore:
         org_field_pairs: Iterable[tuple[str, str]],
     ) -> None:
         conn = self.connect()
+        art_id = infoscience_article_iri(article_uuid) or article_uuid
         for org_uuid, field in org_field_pairs:
+            org_id = infoscience_org_iri(org_uuid) or org_uuid
             conn.execute(
                 "INSERT INTO article_orgs (article_uuid, org_uuid, field) "
                 "VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-                [article_uuid, org_uuid, field],
+                [art_id, org_id, field],
             )
 
     def upsert_article_links(
@@ -220,9 +284,10 @@ class InfoscienceStore:
     ) -> None:
         """rows: iterable of (host_label, url, source)."""
         conn = self.connect()
+        art_id = infoscience_article_iri(article_uuid) or article_uuid
         for host_label, url, source in rows:
             conn.execute(
                 "INSERT INTO article_links (article_uuid, host_label, url, source) "
                 "VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
-                [article_uuid, host_label, url, source],
+                [art_id, host_label, url, source],
             )

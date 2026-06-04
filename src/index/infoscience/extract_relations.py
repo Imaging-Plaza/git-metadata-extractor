@@ -17,9 +17,26 @@ import re
 from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
+from src.v2.canonicalization.infoscience import (
+    infoscience_article_iri,
+    infoscience_org_iri,
+    infoscience_person_iri,
+)
+
 from .config import InfoscienceIndexConfig
 from .extract_matches import load_matches
 from .models import RelationRecord
+
+
+def _canon_relation(rec: RelationRecord) -> RelationRecord:
+    """v3.0.0: promote a RelationRecord's bare DSpace UUIDs to canonical
+    Infoscience URLs so the reverse-relation maps key on the same ids as
+    the Qdrant person/org records. Idempotent."""
+    return RelationRecord(
+        article_uuid=infoscience_article_iri(rec.article_uuid) or rec.article_uuid,
+        person_uuids=[infoscience_person_iri(p) or p for p in rec.person_uuids],
+        org_uuids=[infoscience_org_iri(o) or o for o in rec.org_uuids],
+    )
 from .paths import (
     organizations_set_path,
     persons_set_path,
@@ -111,13 +128,16 @@ def extract_relations(_cfg: InfoscienceIndexConfig) -> dict:
             org_uuids = _dedupe_preserve(_authorities(md, _ORG_ONLY_FIELDS))
             if not person_uuids and not org_uuids:
                 continue
-            record = RelationRecord(
+            record = _canon_relation(RelationRecord(
                 article_uuid=match.uuid,
                 person_uuids=person_uuids,
                 org_uuids=org_uuids,
-            )
+            ))
             out.write(record.model_dump_json() + "\n")
             written += 1
+            # The .txt sets are the fetch-by-UUID worklist for
+            # `fetch_related` — keep them as bare DSpace UUIDs. Only the
+            # relations.jsonl (above) carries the canonical URL ids.
             persons.update(person_uuids)
             orgs.update(org_uuids)
 
@@ -141,7 +161,9 @@ def load_relations() -> List[RelationRecord]:
     out: List[RelationRecord] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         if line.strip():
-            out.append(RelationRecord(**json.loads(line)))
+            # Canonicalize on load so legacy relations.jsonl files (bare
+            # UUIDs) still key the reverse maps by the URL ids.
+            out.append(_canon_relation(RelationRecord(**json.loads(line))))
     return out
 
 

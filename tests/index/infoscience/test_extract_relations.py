@@ -51,10 +51,21 @@ def test_extract_relations_pulls_authority_uuids(article_json: dict) -> None:
     assert summary["organizations"] >= 1
 
     relation = json.loads(relations_path().read_text(encoding="utf-8").strip())
-    assert relation["article_uuid"] == uuid
-    assert all(len(p) == 36 for p in relation["person_uuids"])
-    assert all(len(o) == 36 for o in relation["org_uuids"])
+    # v3.0.0: relations.jsonl carries the canonical entity URLs (so the
+    # reverse maps key on the same ids as the Qdrant records)...
+    assert relation["article_uuid"] == f"https://infoscience.epfl.ch/entities/publication/{uuid}"
+    assert all(
+        p.startswith("https://infoscience.epfl.ch/entities/person/")
+        for p in relation["person_uuids"]
+    )
+    assert all(
+        o.startswith("https://infoscience.epfl.ch/entities/orgunit/")
+        for o in relation["org_uuids"]
+    )
+    # ...but the .txt sets stay bare UUIDs (the fetch-by-UUID worklist).
     persons_listing = persons_set_path().read_text(encoding="utf-8").splitlines()
     orgs_listing = organizations_set_path().read_text(encoding="utf-8").splitlines()
-    assert relation["person_uuids"][0] in persons_listing
-    assert relation["org_uuids"][0] in orgs_listing
+    assert all(len(p) == 36 for p in persons_listing)
+    assert all(len(o) == 36 for o in orgs_listing)
+    assert relation["person_uuids"][0].rsplit("/", 1)[-1] in persons_listing
+    assert relation["org_uuids"][0].rsplit("/", 1)[-1] in orgs_listing
