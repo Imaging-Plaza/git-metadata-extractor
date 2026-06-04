@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS repos (
-    repo_id            TEXT PRIMARY KEY,             -- "<owner>/<name>"
+    repo_id            TEXT PRIMARY KEY,             -- canonical URL https://github.com/<owner>/<name>
     owner              TEXT NOT NULL,
     name               TEXT NOT NULL,
     default_branch     TEXT,

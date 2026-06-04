@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.index.github_repos.ingest.github_client import GitHubClient
 from src.index.github_repos.models import ContributorEntry, RepoRecord
+from src.v2.canonicalization.github import github_repo_iri
 
 if TYPE_CHECKING:
     from src.index.github_repos.config import GitHubIndexConfig
@@ -42,7 +43,10 @@ def _record_from_payload(
     owner = owner_block.get("login") or full_name.split("/", 1)[0]
     name = repo_payload.get("name") or full_name.split("/", 1)[1]
     return RepoRecord(
-        repo_id=full_name,
+        # v3.0.0: the id is the canonical GitHub URL (owner/name kept as their
+        # own bare fields). Consistent with zenodo/openalex/ror stores, the old
+        # HF monolith, and the extract pipeline's pulse:* github IRIs.
+        repo_id=github_repo_iri(full_name) or full_name,
         owner=str(owner),
         name=str(name),
         default_branch=repo_payload.get("default_branch"),

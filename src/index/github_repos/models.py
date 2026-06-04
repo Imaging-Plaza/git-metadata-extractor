@@ -19,7 +19,7 @@ class ContributorEntry(BaseModel):
 
 
 class RepoRecord(BaseModel):
-    repo_id: str  # "<owner>/<name>"
+    repo_id: str  # canonical URL: https://github.com/<owner>/<name>
     owner: str
     name: str
     default_branch: Optional[str] = None
