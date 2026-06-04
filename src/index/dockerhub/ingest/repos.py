@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.index.dockerhub.models import DockerhubRepoRecord
+from src.v2.canonicalization.dockerhub import dockerhub_iri
 
 if TYPE_CHECKING:
     from src.index.dockerhub.config import DockerhubIndexConfig
@@ -68,7 +69,8 @@ def _record_from_payload(
     *, namespace: str, name: str, payload: dict[str, Any], tags: list[str],
 ) -> DockerhubRepoRecord:
     return DockerhubRepoRecord(
-        repo_id=f"{namespace}/{name}",
+        # v3.0.0: id is the canonical Docker Hub URL (namespace/name kept bare).
+        repo_id=dockerhub_iri(namespace, name) or f"{namespace}/{name}",
         namespace=namespace,
         name=name,
         description=payload.get("description") or None,

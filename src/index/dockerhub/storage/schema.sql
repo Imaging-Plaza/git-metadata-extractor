@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS images (
-    repo_id           TEXT PRIMARY KEY,        -- "<namespace>/<name>"
+    repo_id           TEXT PRIMARY KEY,        -- canonical URL https://hub.docker.com/(r/<ns>/<name> | _/<name>)
     namespace         TEXT NOT NULL,
     name              TEXT NOT NULL,
     description       TEXT,                     -- short tagline

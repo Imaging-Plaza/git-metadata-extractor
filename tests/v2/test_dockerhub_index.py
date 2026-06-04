@@ -164,7 +164,8 @@ def test_ingest_single_image_persists(tmp_path: Path) -> None:
             config=cfg, store=store, client=client, image_ref="grafana/grafana",
         )
     assert outcome == "ingested"
-    row = store.fetch_image("grafana/grafana")
+    # v3.0.0: stored under the canonical Docker Hub URL id.
+    row = store.fetch_image("https://hub.docker.com/r/grafana/grafana")
     assert row["tags"] == '["latest", "11.0.0"]' or row["tags"] == ["latest", "11.0.0"]
     assert row["pull_count"] == 1_000_000_000
     store.close()
@@ -192,7 +193,8 @@ def test_ingest_official_bare_name_maps_to_library(tmp_path: Path) -> None:
         _FakeResponse(status_code=200, payload={"results": []}),
     ):
         ingest_single_image(config=cfg, store=store, client=client, image_ref="redis")
-    row = store.fetch_image("library/redis")
+    # official bare name -> library namespace -> canonical /_/ URL id.
+    row = store.fetch_image("https://hub.docker.com/_/redis")
     assert row is not None
     assert row["is_official"] is True
     store.close()
