@@ -73,6 +73,8 @@ class GitHubUsersStore:
     # ---- Upserts ---------------------------------------------------------
 
     def upsert_user(self, record: UserRecord) -> None:
+        from src.v2.canonicalization.github import github_user_iri  # noqa: PLC0415
+
         sql = (
             "INSERT INTO users "
             "(login, github_id, node_id, name, bio, company, blog, location, "
@@ -102,7 +104,7 @@ class GitHubUsersStore:
         self.connect().execute(
             sql,
             [
-                record.login,
+                github_user_iri(record.login) or record.login,  # v3.0.0: id is the URL
                 record.github_id,
                 record.node_id,
                 record.name,
@@ -155,11 +157,13 @@ class GitHubUsersStore:
         return count_table(self.connect(), table)
 
     def fetch_user(self, login: str) -> dict[str, Any] | None:
+        from src.v2.canonicalization.github import github_user_iri  # noqa: PLC0415
+
         return fetch_one(
             self.connect(),
             table="users",
             id_column=ID_COLUMN,
-            id_value=login,
+            id_value=github_user_iri(login) or login,  # accept bare or URL
         )
 
     def stream_rows_for_embedding(

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.index.github_organizations.models import OrgRecord
+from src.v2.canonicalization.github import github_org_iri
 
 if TYPE_CHECKING:
     from src.index.github_repos.ingest.github_client import GitHubClient
@@ -31,7 +32,7 @@ def _parse_iso(value: Any) -> datetime | None:
 
 def _record_from_payload(login: str, payload: dict[str, Any]) -> OrgRecord:
     return OrgRecord(
-        login=login,
+        login=github_org_iri(login) or login,
         github_id=int(payload["id"]) if isinstance(payload.get("id"), int) else None,
         node_id=payload.get("node_id"),
         name=payload.get("name"),

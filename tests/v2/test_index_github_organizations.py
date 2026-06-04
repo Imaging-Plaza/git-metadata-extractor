@@ -66,7 +66,7 @@ def test_record_from_payload_normalises_org_card() -> None:
 
     record = _record_from_payload("EPFL-ENAC", payload)
 
-    assert record.login == "EPFL-ENAC"
+    assert record.login == "https://github.com/EPFL-ENAC"
     assert record.github_id == 789
     assert record.description == "ENAC at EPFL"
     assert record.account_type == "Organization"
@@ -100,7 +100,7 @@ def test_ingest_single_organization_round_trips_through_duckdb(
     assert outcome == "ingested"
     row = orgs_store.fetch_organization("Imaging-Plaza")
     assert row is not None
-    assert row["login"] == "Imaging-Plaza"
+    assert row["login"] == "https://github.com/Imaging-Plaza"
     assert row["name"] == "Imaging Plaza"
     assert row["description"] == "Research imaging tools and pipelines"
     assert row["public_repos"] == 18
