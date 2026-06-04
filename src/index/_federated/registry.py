@@ -42,6 +42,22 @@ class IndexAdapter(Protocol):
     Adapters live under `src/index/_federated/adapters/<name>.py` and are
     expected to be cheap to import. Heavy imports (RCP clients, qdrant,
     duckdb) should happen inside the methods, not at module top-level.
+
+    Optional, declarative class attributes (read by the manifest export via
+    `getattr`, so they are NOT part of this Protocol's `isinstance` contract —
+    existing adapters need no change):
+
+      * ``backend``            : ``"vector"`` (default) or ``"duckdb"`` —
+                                 whether the store is semantically searchable
+                                 (its own Qdrant collection) or DuckDB-only.
+      * ``surface_as_source``  : ``bool`` (default ``False``) — the curated
+                                 allowlist knob. ``True`` ⇒ the Hub should show
+                                 this store as a "Sources" tile even when it is
+                                 DuckDB-only. Keeps dead/legacy stores off the
+                                 grid unless explicitly opted in.
+      * ``id_shape``           : ``"url"`` (default) — shape of the canonical
+                                 id the adapter emits (v3.0.0: every id is a
+                                 canonical URL).
     """
 
     name: str

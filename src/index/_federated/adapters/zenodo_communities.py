@@ -46,6 +46,11 @@ def _row_to_hit(row: dict[str, Any], score: float) -> Hit:
 class ZenodoCommunitiesAdapter:
     name = "zenodo_communities"
     entity_types = ["community"]
+    # Manifest hints (see IndexAdapter docstring). DuckDB-only store, but it
+    # should still show as a "Sources" tile — the curated allowlist opt-in.
+    backend = "duckdb"
+    surface_as_source = True
+    id_shape = "url"  # community_id is https://zenodo.org/communities/<slug>
 
     def search(
         self,
