@@ -2507,6 +2507,30 @@ def _index_job_status_path(job_id: str) -> str:
     return f"/v2/indices/jobs/{job_id}"
 
 
+@v2_router.get(
+    "/manifest",
+    tags=["Indices"],
+)
+async def get_manifest(
+    _token: Annotated[str, Depends(verify_token)],
+    sources: Annotated[
+        bool,
+        Query(description="Only stores that should appear as Hub 'Sources' tiles."),
+    ] = False,
+) -> list[dict[str, Any]]:
+    """Federated index-store manifest — the contract consumers build against.
+
+    One entry per registered store:
+    ``{name, duckdb, entity_types, backend, surface_as_source, id_shape}``.
+    Mirrors ``python -m src.index._federated.manifest``. ``?sources=true``
+    returns only the stores that should surface as Hub "Sources" tiles
+    (vector-backed plus allowlisted DuckDB-only).
+    """
+    from src.index._federated.manifest import build_manifest  # noqa: PLC0415
+
+    return build_manifest(sources_only=sources)
+
+
 @v2_router.post(
     "/indices/zenodo_records/ingest",
     response_model=IndexIngestJobAccepted,

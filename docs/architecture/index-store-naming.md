@@ -48,6 +48,10 @@ never parse names:
 }
 ```
 
+The same payload is served over HTTP at **`GET /v2/manifest`** (token-gated,
+`tags=["Indices"]`) — the Hub's preferred consumption path. `GET
+/v2/manifest?sources=true` applies the `--sources` filter below.
+
 `--sources` filters to the stores the Hub should tile: **vector-backed stores
 plus DuckDB-only stores explicitly allowlisted** via `surface_as_source`. This is
 the curated allowlist — DuckDB-only stores stay off the grid unless they opt in
