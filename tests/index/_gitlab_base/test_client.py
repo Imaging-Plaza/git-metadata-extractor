@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import httpx
 
+import src.index._gitlab_base.client as client_mod
 from src.index._gitlab_base.client import GitLabClient
 
 
@@ -32,3 +33,20 @@ def test_sends_token_header_when_present():
     client = GitLabClient(host="gitlab.epfl.ch", token="abc", transport=httpx.MockTransport(handler))  # noqa: S106
     list(client.iter_public_projects())
     assert seen["auth"] == "abc"
+
+
+_EXPECTED_RETRY_CALLS = 2
+
+
+def test_get_retries_on_429(monkeypatch):
+    monkeypatch.setattr(client_mod.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, json=[], headers={"Retry-After": "0", "X-Next-Page": ""})
+        return httpx.Response(200, json=[{"id": 1}], headers={"X-Next-Page": ""})
+    client = GitLabClient(host="gitlab.epfl.ch", token=None, transport=httpx.MockTransport(handler))
+    got = list(client.iter_public_projects())
+    assert [p["id"] for p in got] == [1]
+    assert calls["n"] == _EXPECTED_RETRY_CALLS

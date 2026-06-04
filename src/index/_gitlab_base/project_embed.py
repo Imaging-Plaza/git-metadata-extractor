@@ -83,6 +83,9 @@ def _row_to_payload(row: dict[str, Any]) -> dict[str, Any]:
         "visibility": row.get("visibility"),
         "star_count": row.get("star_count"),
         "is_fork": row.get("is_fork"),
+        "name": row.get("name"),
+        "description": row.get("description"),
+        "namespace": row.get("namespace"),
     }
 
 

@@ -3,10 +3,13 @@ from src.index._gitlab_base.project_embed import _row_to_chunks, _row_to_payload
 
 def test_payload_shape():
     row = {"project_id": "https://gitlab.epfl.ch/g/p", "host": "gitlab.epfl.ch",
-           "full_path": "g/p", "visibility": "public", "star_count": 2, "is_fork": False}
+           "full_path": "g/p", "visibility": "public", "star_count": 2, "is_fork": False,
+           "name": "p", "description": "d"}
     p = _row_to_payload(row)
     assert p["entity_type"] == "projects" and p["entity_id"] == row["project_id"]
     assert p["project_id"] == row["project_id"] and p["host"] == "gitlab.epfl.ch"
+    assert p["name"] == "p"
+    assert p["description"] == "d"
 
 
 def test_chunks_skip_when_too_short():

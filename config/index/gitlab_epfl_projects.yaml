@@ -10,7 +10,7 @@ rcp:
   base_url: https://inference-rcp.epfl.ch/v1
   embedding_model: Qwen/Qwen3-Embedding-8B
   embedding_dim: 4096
-  query_instruction: "Given a search query, retrieve relevant GitHub repositories"
+  query_instruction: "Given a search query, retrieve relevant GitLab projects"
   reranker_model: Qwen/Qwen3-Reranker-8B
   batch_size: 32
   max_concurrency: 4

@@ -63,7 +63,7 @@ class GitLabEpflProjectsAdapter:
         if parsed is None:
             return []
         host, _kind, _path = parsed
-        if "gitlab" not in host:
+        if host != "gitlab.epfl.ch":
             return []
         try:
             from src.index.gitlab_epfl_projects.store import open_store  # noqa: PLC0415
