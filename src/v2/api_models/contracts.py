@@ -99,6 +99,15 @@ class V2ExtractRequest(BaseModel):
             "ignored otherwise. Target a different chat model/endpoint for a single run."
         ),
     )
+    refresh: bool = Field(
+        default=False,
+        description=(
+            "Bypass caches for this extraction (targeted backfill): skip the "
+            "pipeline-cache read and re-fetch providers, then overwrite the stale "
+            "entries — so a single re-extract picks up current pipeline logic "
+            "without clearing the whole cache. The result is still written back."
+        ),
+    )
 
 
 class V2ExtractResponse(BaseModel):
