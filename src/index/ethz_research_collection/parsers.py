@@ -11,9 +11,25 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+from src.v2.canonicalization.ethz import (
+    ethz_article_iri,
+    ethz_org_iri,
+    ethz_person_iri,
+)
+
 from .models import ArticleRecord, OrganizationRecord, PersonRecord
 
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+
+
+def _person_id(value: str | None) -> str | None:
+    """Canonical person URL, falling back to the bare value when it is not
+    a UUID4."""
+    return ethz_person_iri(value) or value
+
+
+def _org_id(value: str | None) -> str | None:
+    return ethz_org_iri(value) or value
 
 
 def first_value(metadata: dict, field: str) -> Optional[str]:
@@ -64,12 +80,13 @@ def parse_article(item: Dict[str, Any], matched_urls: Optional[List[str]] = None
     # (see `extract_relations.py`); `dc.contributor.author.authority` is a
     # virtual slot id (`virtual::N`), not a UUID.
     author_uuids = [
-        entry.get("value")
+        _person_id(entry.get("value"))
         for entry in (md.get("relation.isAuthorOfPublication") or [])
         if isinstance(entry, dict) and entry.get("value")
     ]
     return ArticleRecord(
-        article_uuid=uuid,
+        # v3.0.0: id + UUID cross-refs are canonical Research Collection URLs.
+        article_uuid=ethz_article_iri(uuid) or uuid,
         title=first_value(md, "dc.title"),
         abstract=first_value(md, "dc.description.abstract"),
         keywords=all_values(md, "dc.subject"),
@@ -98,9 +115,9 @@ def parse_article(item: Dict[str, Any], matched_urls: Optional[List[str]] = None
         issn=first_value(md, "dc.identifier.issn"),
         handle_uri=first_value(md, "dc.identifier.uri"),
         lab=first_value(md, "cris.virtual.department"),
-        lab_uuid=first_authority(md, "cris.virtual.department"),
+        lab_uuid=_org_id(first_authority(md, "cris.virtual.department")),
         org_uuids=sorted({
-            entry.get("authority")
+            _org_id(entry.get("authority"))
             for field in ("cris.virtual.department",
                           "cris.virtual.parent-organization",
                           "oairecerif.author.affiliation")
@@ -135,7 +152,7 @@ def parse_person(item: Dict[str, Any]) -> PersonRecord:
 
     edu_affiliation = first_value(md, "person.edu.affiliation")  # e.g. "faculty"
     return PersonRecord(
-        person_uuid=uuid,
+        person_uuid=ethz_person_iri(uuid) or uuid,
         name=name,
         given_name=given,
         family_name=family,
@@ -143,9 +160,9 @@ def parse_person(item: Dict[str, Any]) -> PersonRecord:
         sciper_id=first_value(md, "epfl.sciperId") or first_value(md, "cris.virtual.sciperId"),
         scopus_id=first_value(md, "person.identifier.scopus-author-id"),
         primary_affiliation=primary_affiliation,
-        primary_affiliation_uuid=first_authority(md, "person.affiliation.name"),
+        primary_affiliation_uuid=_org_id(first_authority(md, "person.affiliation.name")),
         affiliation_uuids=sorted({
-            entry.get("authority")
+            _org_id(entry.get("authority"))
             for entry in (md.get("person.affiliation.name") or [])
             if isinstance(entry, dict) and entry.get("authority")
         }),
@@ -160,13 +177,13 @@ def parse_organization(item: Dict[str, Any]) -> OrganizationRecord:
     md = item.get("metadata", {}) or {}
     uuid = item.get("uuid") or ""
     parent_chain_authorities = [
-        entry.get("authority")
+        _org_id(entry.get("authority"))
         for entry in (md.get("cris.virtual.parent-organization") or [])
         if isinstance(entry, dict) and entry.get("authority")
     ]
     parent_chain_names = all_values(md, "cris.virtual.parent-organization")
     return OrganizationRecord(
-        org_uuid=uuid,
+        org_uuid=ethz_org_iri(uuid) or uuid,
         name=first_value(md, "dc.title") or first_value(md, "organization.legalName"),
         acronym=first_value(md, "organization.identifier.acronym"),
         aliases=all_values(md, "organization.alternateName"),
@@ -177,7 +194,7 @@ def parse_organization(item: Dict[str, Any]) -> OrganizationRecord:
         or first_value(md, "dc.description.abstract"),
         sciper_unit_id=first_value(md, "cris.virtual.unitId")
         or first_value(md, "epfl.unitId"),
-        unit_manager_uuid=first_authority(md, "cris.virtual.unitManager"),
+        unit_manager_uuid=_person_id(first_authority(md, "cris.virtual.unitManager")),
         unit_manager_name=first_value(md, "cris.virtual.unitManager"),
         research_collection_url=_research_collection_url(uuid, "orgunit"),
     )

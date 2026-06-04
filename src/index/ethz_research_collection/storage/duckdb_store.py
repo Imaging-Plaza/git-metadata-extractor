@@ -19,6 +19,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 import duckdb
 
 from src.index.ethz_research_collection.paths import duckdb_path
+from src.v2.canonicalization.ethz import (
+    ethz_article_iri,
+    ethz_iri_sql,
+    ethz_org_iri,
+    ethz_person_iri,
+)
 
 if TYPE_CHECKING:
     pass
@@ -60,6 +66,33 @@ class EthzResearchCollectionStore:
     def bootstrap(self) -> None:
         conn = self.connect()
         conn.execute(_load_schema_sql())
+        self._migrate_ids_to_url(conn)
+
+    @staticmethod
+    def _migrate_ids_to_url(conn: duckdb.DuckDBPyConnection) -> None:
+        """v3.0.0: promote bare DSpace UUID ids (and the junction FKs that
+        reference them) to canonical Research Collection entity URLs.
+        Idempotent — the guarded CASE only rewrites bare UUID4s, so
+        already-canonical rows and re-runs are no-ops."""
+
+        def col(name: str, kind: str) -> str:
+            return ethz_iri_sql(name, kind)
+
+        updates = (
+            f"UPDATE articles SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"research_collection_url = {col('research_collection_url', 'publication')}",
+            f"UPDATE persons SET person_uuid = {col('person_uuid', 'person')}, "
+            f"primary_affiliation_uuid = {col('primary_affiliation_uuid', 'orgunit')}",
+            f"UPDATE organizations SET org_uuid = {col('org_uuid', 'orgunit')}, "
+            f"parent_org_uuid = {col('parent_org_uuid', 'orgunit')}",
+            f"UPDATE article_persons SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"person_uuid = {col('person_uuid', 'person')}",
+            f"UPDATE article_orgs SET article_uuid = {col('article_uuid', 'publication')}, "
+            f"org_uuid = {col('org_uuid', 'orgunit')}",
+            f"UPDATE article_links SET article_uuid = {col('article_uuid', 'publication')}",
+        )
+        for stmt in updates:
+            conn.execute(stmt)
 
     def close(self) -> None:
         if self._conn is not None:
@@ -96,6 +129,11 @@ class EthzResearchCollectionStore:
     # ---- Upserts ---------------------------------------------------------
 
     def upsert_article(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        # v3.0.0: the id is the canonical Research Collection publication URL.
+        uid = row.get("article_uuid")
+        row = {**row, "article_uuid": ethz_article_iri(uid) or uid}
+        if row.get("research_collection_url") is None and row.get("article_uuid"):
+            row = {**row, "research_collection_url": row["article_uuid"]}
         self._upsert(
             table="articles",
             cols=(
@@ -114,6 +152,13 @@ class EthzResearchCollectionStore:
         )
 
     def upsert_person(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        pid = row.get("person_uuid")
+        aff = row.get("primary_affiliation_uuid")
+        row = {
+            **row,
+            "person_uuid": ethz_person_iri(pid) or pid,
+            "primary_affiliation_uuid": ethz_org_iri(aff) or aff,
+        }
         self._upsert(
             table="persons",
             cols=(
@@ -131,6 +176,13 @@ class EthzResearchCollectionStore:
         )
 
     def upsert_organization(self, row: dict[str, Any], raw: dict[str, Any]) -> None:
+        oid = row.get("org_uuid")
+        pid = row.get("parent_org_uuid")
+        row = {
+            **row,
+            "org_uuid": ethz_org_iri(oid) or oid,
+            "parent_org_uuid": ethz_org_iri(pid) or pid,
+        }
         self._upsert(
             table="organizations",
             cols=(
@@ -174,14 +226,16 @@ class EthzResearchCollectionStore:
         person_positions: Iterable[tuple[str, int | None]],
     ) -> None:
         conn = self.connect()
+        art_id = ethz_article_iri(article_uuid) or article_uuid
         for person_uuid, position in person_positions:
+            person_id = ethz_person_iri(person_uuid) or person_uuid
             conn.execute(
                 "INSERT INTO article_persons (article_uuid, person_uuid, position) "
                 "VALUES (?, ?, ?) "
                 "ON CONFLICT (article_uuid, person_uuid) DO UPDATE SET position = "
                 "COALESCE(LEAST(article_persons.position, excluded.position), "
                 "         excluded.position, article_persons.position)",
-                [article_uuid, person_uuid, position],
+                [art_id, person_id, position],
             )
 
     def upsert_article_orgs(
@@ -190,11 +244,13 @@ class EthzResearchCollectionStore:
         org_field_pairs: Iterable[tuple[str, str]],
     ) -> None:
         conn = self.connect()
+        art_id = ethz_article_iri(article_uuid) or article_uuid
         for org_uuid, field in org_field_pairs:
+            org_id = ethz_org_iri(org_uuid) or org_uuid
             conn.execute(
                 "INSERT INTO article_orgs (article_uuid, org_uuid, field) "
                 "VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-                [article_uuid, org_uuid, field],
+                [art_id, org_id, field],
             )
 
     def upsert_article_links(
@@ -204,9 +260,10 @@ class EthzResearchCollectionStore:
     ) -> None:
         """rows: iterable of (host_label, url, source)."""
         conn = self.connect()
+        art_id = ethz_article_iri(article_uuid) or article_uuid
         for host_label, url, source in rows:
             conn.execute(
                 "INSERT INTO article_links (article_uuid, host_label, url, source) "
                 "VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
-                [article_uuid, host_label, url, source],
+                [art_id, host_label, url, source],
             )
