@@ -118,7 +118,7 @@ def link_by_orcid(
                    g.main_discipline, g.start_date, g.amount_granted, g.state
             FROM persons p,
                  json_each(p.responsible_applicant_grants) AS j
-            JOIN grants g ON g.grant_number = CAST(j.value AS INTEGER)
+            JOIN grants g ON g.grant_number = json_extract_string(j.value, '$')
             {scope_join}
             WHERE p.orcid = ?
             ORDER BY g.start_date DESC NULLS LAST
@@ -180,7 +180,7 @@ def coverage_report(snsf_scope: Optional[str] = None) -> Dict[str, Any]:
     conn = open_joined(read_only=True)
     try:
         scope_join = (
-            "JOIN scope_records s ON s.grant_number = CAST(j.value AS INTEGER) "
+            "JOIN scope_records s ON s.grant_number = json_extract_string(j.value, '$') "
             "AND s.scope_mode = ?"
         ) if snsf_scope else ""
         params: List[Any] = [snsf_scope] if snsf_scope else []

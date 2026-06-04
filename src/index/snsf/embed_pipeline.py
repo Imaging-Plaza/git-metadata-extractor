@@ -120,7 +120,9 @@ async def run(
     else:
         qstore.ensure_collection(active)
 
-    grant_numbers = [int(r["grant_number"]) for r in rows]
+    # v3.0.0: grant_number is the canonical grant URL (str); the Qdrant
+    # store derives the uuid5 point id from it.
+    grant_numbers = [r["grant_number"] for r in rows]
     payloads = [_payload(r, t) for r, t in zip(rows, texts)]
     qstore.upsert_records(
         active,

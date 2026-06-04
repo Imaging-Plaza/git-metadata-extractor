@@ -1,9 +1,13 @@
 """Qdrant client wrapper for the SNSF P3 index.
 
 One collection per scope mode (`snsf_epfl`, `snsf_ethz`, `snsf_eth_domain`,
-`snsf_switzerland`). Mirrors `src/index/ror/qdrant_store.py` shape — the
-only difference is point IDs use the integer `grant_number` directly
-instead of a UUIDv5 (Qdrant accepts int64 IDs natively).
+`snsf_switzerland`).
+
+v3.0.0: the grant id is the canonical grant URL
+(`https://data.snf.ch/grants/grant/<n>`). Qdrant point ids must be uint64 or
+UUID, so points are keyed by a deterministic `uuid5` of the grant URL (the
+infoscience / ethz scheme); the URL itself rides in the payload as
+`grant_number` and is what search returns.
 """
 
 from __future__ import annotations
@@ -12,6 +16,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from qdrant_client import QdrantClient, models
+
+from src.v2.canonicalization.snsf import snsf_grant_point_id
 
 if TYPE_CHECKING:
     from src.index.snsf.config import SnsfIndexConfig
@@ -65,7 +71,7 @@ class QdrantSnsfStore:
         self,
         scope_mode: str,
         *,
-        grant_numbers: List[int],
+        grant_numbers: List[str],
         vectors: List[List[float]],
         payloads: List[Dict[str, Any]],
         batch_size: int = 256,
@@ -79,7 +85,7 @@ class QdrantSnsfStore:
         for start in range(0, len(grant_numbers), batch_size):
             end = start + batch_size
             points = [
-                models.PointStruct(id=int(gn), vector=vec, payload=p)
+                models.PointStruct(id=snsf_grant_point_id(gn), vector=vec, payload=p)
                 for gn, vec, p in zip(
                     grant_numbers[start:end], vectors[start:end], payloads[start:end],
                 )
@@ -129,7 +135,9 @@ class QdrantSnsfStore:
         return [
             {
                 "score": float(p.score),
-                "grant_number": int(p.id),
+                # The point id is a uuid5(url); the canonical grant URL id
+                # rides in the payload.
+                "grant_number": (p.payload or {}).get("grant_number"),
                 "title": (p.payload or {}).get("title", ""),
                 "research_institution": (p.payload or {}).get("research_institution"),
                 "main_discipline": (p.payload or {}).get("main_discipline"),

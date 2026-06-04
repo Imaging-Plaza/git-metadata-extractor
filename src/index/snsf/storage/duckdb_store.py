@@ -19,6 +19,7 @@ import duckdb
 
 from src.index.snsf.models import IngestManifest
 from src.index.snsf.paths import duckdb_path
+from src.v2.canonicalization.snsf import snsf_grant_iri, snsf_grant_iri_sql
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -26,6 +27,35 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+
+# v3.0.0: the grant id is the canonical SNSF grant URL. This SQL fragment
+# URL-ifies the bare integer `GrantNumber` from the CSV (and is reused by the
+# bootstrap migration) so every `grant_number` PK/FK holds the URL.
+_GRANT_URL_SQL = snsf_grant_iri_sql("GrantNumber")
+_GRANT_BASE = "https://data.snf.ch/grants/grant/"
+
+# Output tables whose `grant_number` FK must be migrated alongside `grants`.
+_GRANT_FK_TABLES = (
+    "output_publications",
+    "output_academic_events",
+    "output_collaborations",
+    "output_datasets",
+    "output_knowledge_transfers",
+    "output_public_communications",
+    "output_use_inspired",
+    "scope_records",
+)
+
+# Per-role grant-number JSON-array columns in `persons` (lists of grant ids).
+_PERSON_GRANT_COLS = (
+    "responsible_applicant_grants",
+    "co_applicant_grants",
+    "project_partner_grants",
+    "practice_partner_grants",
+    "employee_grants",
+    "contact_person_grants",
+    "applicant_abroad_grants",
+)
 
 
 def _load_schema_sql() -> str:
@@ -63,6 +93,62 @@ class SnsfStore:
         )
 
         migrate_doi_column_to_url(conn, table="output_publications", column="doi")
+        self._migrate_grant_ids_to_url(conn)
+
+    @staticmethod
+    def _migrate_grant_ids_to_url(conn: duckdb.DuckDBPyConnection) -> None:
+        """v3.0.0: promote the integer `grant_number` PK/FKs (and the per-role
+        grant-number JSON arrays in `persons`) to the canonical grant URL.
+
+        Gated on the pre-v3 schema (`grants.grant_number` still INTEGER) so the
+        whole migration runs exactly once: after it, every `grant_number` is
+        VARCHAR and re-runs are no-ops. Fresh DBs (TEXT from schema.sql) skip.
+
+        DuckDB can't ``ALTER COLUMN ... TYPE`` a PRIMARY KEY column (``grants``,
+        ``scope_records``), so each affected table is rebuilt: snapshot into a
+        TEMP with the URL-transformed ``grant_number``, drop the original
+        (releasing its index names), recreate the fresh TEXT schema, then
+        re-insert ``BY NAME``. ``persons`` keeps its columns — only its JSON
+        grant-arrays are rewritten in place.
+        """
+        row = conn.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name = 'grants' AND column_name = 'grant_number'",
+        ).fetchone()
+        if row is None or "INT" not in str(row[0]).upper():
+            return  # already migrated (TEXT/VARCHAR) or table absent
+
+        existing = {
+            r[0]
+            for r in conn.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'main'",
+            ).fetchall()
+        }
+        url_sql = snsf_grant_iri_sql("grant_number")
+        tables = [t for t in ("grants", *_GRANT_FK_TABLES) if t in existing]
+        for table in tables:
+            conn.execute(
+                f"CREATE TEMP TABLE _mig_{table} AS "  # noqa: S608
+                f"SELECT * REPLACE ({url_sql} AS grant_number) FROM {table}",
+            )
+            conn.execute(f"DROP TABLE {table}")  # noqa: S608 — also drops its indexes
+        conn.execute(_load_schema_sql())  # recreate fresh TEXT tables + indexes
+        for table in tables:
+            conn.execute(
+                f"INSERT INTO {table} BY NAME SELECT * FROM _mig_{table}",  # noqa: S608
+            )
+            conn.execute(f"DROP TABLE _mig_{table}")  # noqa: S608
+        # persons keeps its schema; only its JSON arrays of bare integers
+        # become arrays of grant URLs.
+        if "persons" not in existing:
+            return
+        for col in _PERSON_GRANT_COLS:
+            conn.execute(
+                f"UPDATE persons SET {col} = TO_JSON(LIST_TRANSFORM("  # noqa: S608
+                f"CAST({col} AS BIGINT[]), n -> '{_GRANT_BASE}' || n)) "
+                f"WHERE {col} IS NOT NULL",
+            )
 
     def close(self) -> None:
         if self._conn is not None:
@@ -123,7 +209,7 @@ class SnsfStore:
                     state, call_full_title, call_end_date, call_decision_year
                 )
                 SELECT
-                    GrantNumber, GrantNumberString, Title, TitleEnglish,
+                    """ + _GRANT_URL_SQL + """, GrantNumberString, Title, TitleEnglish,
                     ResponsibleApplicantName,
                     FundingInstrumentPublished, FundingInstrumentReporting, FundingInstrumentLevel1,
                     Institute, InstituteCity, InstituteCountry,
@@ -162,13 +248,16 @@ class SnsfStore:
         # Some columns in persons.csv only ever contain a single grant_number per row,
         # so DuckDB auto-detects them as BIGINT — explicit CAST(... AS VARCHAR) is needed
         # before TRIM/STRING_SPLIT to keep the SQL valid for both BIGINT and VARCHAR types.
+        # v3.0.0: the per-role grant lists hold canonical grant URLs, not bare
+        # integers. Non-numeric tokens map to NULL (as the old TRY_CAST did).
         def _split(col: str) -> str:
             return (
                 f"CASE WHEN {col} IS NULL "
                 f"OR LENGTH(TRIM(CAST({col} AS VARCHAR))) = 0 THEN NULL "
                 f"ELSE TO_JSON(LIST_TRANSFORM("
                 f"STRING_SPLIT(CAST({col} AS VARCHAR), ';'), "
-                f"x -> TRY_CAST(TRIM(x) AS INTEGER))) END"
+                f"x -> CASE WHEN regexp_full_match(TRIM(x), '\\d+') "
+                f"THEN '{_GRANT_BASE}' || TRIM(x) ELSE NULL END)) END"
             )
 
         conn = self.connect()
@@ -390,6 +479,9 @@ class SnsfStore:
         if not csv_path.exists():
             msg = f"output CSV not found: {csv_path}"
             raise FileNotFoundError(msg)
+        # v3.0.0: the `grant_number` FK is the canonical grant URL. The output
+        # CSVs all carry a bare-integer `GrantNumber` column; URL-ify it.
+        select = select.replace("GrantNumber", _GRANT_URL_SQL, 1)
         conn = self.connect()
         with self.transaction():
             conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table is a fixed string
@@ -473,9 +565,11 @@ class SnsfStore:
         ).fetchone()
         return int(result[0]) if result else 0
 
-    def fetch_grant(self, grant_number: int) -> Optional[dict[str, Any]]:
+    def fetch_grant(self, grant_number: object) -> Optional[dict[str, Any]]:
+        # Accept a bare int / numeric string or the canonical grant URL.
         cur = self.connect().execute(
-            "SELECT * FROM grants WHERE grant_number = ?", [int(grant_number)],
+            "SELECT * FROM grants WHERE grant_number = ?",
+            [snsf_grant_iri(grant_number) or grant_number],
         )
         row = cur.fetchone()
         if row is None:

@@ -5,7 +5,10 @@
 -- One row per SNSF P3 grant (Application). Loaded from the bulk CSV
 -- `grants_with_abstracts.csv`. 90,448 grants total, 1975-2027.
 CREATE TABLE IF NOT EXISTS grants (
-    grant_number             INTEGER PRIMARY KEY,
+    -- v3.0.0: the id is the canonical SNSF grant URL
+    -- (`https://data.snf.ch/grants/grant/<n>`), not the bare integer.
+    -- `SnsfStore.bootstrap()` migrates legacy INTEGER rows in place.
+    grant_number             TEXT PRIMARY KEY,
     grant_number_string      TEXT,
     title                    TEXT,
     title_english            TEXT,
@@ -107,7 +110,7 @@ CREATE TABLE IF NOT EXISTS discipline_taxonomy (
 -- Per-scope grant membership. (scope_mode, grant_number).
 CREATE TABLE IF NOT EXISTS scope_records (
     scope_mode   TEXT NOT NULL,
-    grant_number INTEGER NOT NULL,
+    grant_number TEXT NOT NULL,
     PRIMARY KEY (scope_mode, grant_number)
 );
 
@@ -133,7 +136,7 @@ CREATE TABLE IF NOT EXISTS manifests (
 -- output_data_scientific_publications.csv — 23 cols including DOI + Abstract.
 CREATE TABLE IF NOT EXISTS output_publications (
     publication_id           TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     peer_review_status       TEXT,
     type                     TEXT,
     title                    TEXT,
@@ -165,7 +168,7 @@ CREATE INDEX IF NOT EXISTS output_pubs_year_idx  ON output_publications(year);
 -- output_data_academicevents.csv — talks, posters, conferences.
 CREATE TABLE IF NOT EXISTS output_academic_events (
     event_id                 TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     type                     TEXT,
     event                    TEXT,
     contribution_title       TEXT,
@@ -182,7 +185,7 @@ CREATE INDEX IF NOT EXISTS output_events_date_idx  ON output_academic_events(dat
 -- output_data_collaborations.csv — partner research groups + country.
 CREATE TABLE IF NOT EXISTS output_collaborations (
     collaboration_id         TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     research_group           TEXT,
     type                     TEXT,
     country                  TEXT,
@@ -197,7 +200,7 @@ CREATE INDEX IF NOT EXISTS output_collab_country_idx ON output_collaborations(co
 -- output_data_datasets.csv — research data outputs (with PID like Zenodo DOI).
 CREATE TABLE IF NOT EXISTS output_datasets (
     dataset_id               TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     title                    TEXT,
     author                   TEXT,
     persistent_identifier    TEXT,                -- DOI / Handle / etc.
@@ -214,7 +217,7 @@ CREATE INDEX IF NOT EXISTS output_ds_pid_idx   ON output_datasets(persistent_ide
 -- output_data_knowledgetransfer.csv — tech transfer events.
 CREATE TABLE IF NOT EXISTS output_knowledge_transfers (
     event_id                 TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     type                     TEXT,
     event                    TEXT,
     date                     TIMESTAMP,
@@ -230,7 +233,7 @@ CREATE INDEX IF NOT EXISTS output_kt_grant_idx ON output_knowledge_transfers(gra
 -- output_data_publiccommunications.csv — outreach + lay press.
 CREATE TABLE IF NOT EXISTS output_public_communications (
     communication_id         TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     type                     TEXT,
     title                    TEXT,
     description              TEXT,
@@ -245,7 +248,7 @@ CREATE INDEX IF NOT EXISTS output_pc_grant_idx ON output_public_communications(g
 -- output_data_useinspired.csv — patents, startups, licenses.
 CREATE TABLE IF NOT EXISTS output_use_inspired (
     use_inspired_id          TEXT PRIMARY KEY,
-    grant_number             INTEGER,
+    grant_number             TEXT,
     type                     TEXT,
     title                    TEXT,
     url                      TEXT,
