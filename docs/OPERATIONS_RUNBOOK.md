@@ -91,3 +91,31 @@ A misconfigured / unreachable LLM provider (empty key, wrong `*_BASE_URL`, dead
 host) no longer hangs the worker forever — the chat call has a default
 per-request timeout (120 s) so a stuck provider fails bounded instead of
 occupying the single worker indefinitely. Tune with `V2_LLM_TIMEOUT_SECONDS`.
+
+## 6. Cross-store DuckDB maintenance
+
+One command walks every on-disk store under `$INDEX_DATA_DIR` and refreshes its
+compacted read-only snapshot (the `<store>.ro.duckdb` the Hub reads):
+
+```bash
+# Health report (read-only): tables, row counts, live + snapshot sizes
+python -m src.index._federated.maintenance --check
+
+# Optimize every store: CHECKPOINT (fold WAL) + republish the compacted .ro snapshot
+python -m src.index._federated.maintenance
+
+# One store only
+python -m src.index._federated.maintenance --store snsf
+```
+
+Enumeration is by disk, so it covers every store with a DuckDB file (including
+unregistered ones) and skips FAISS-only stores (`ror`). It needs **exclusive
+write access** per store — run it when the serving process isn't holding the
+live file open. It does **not** deep-compact the live file (DuckDB has no safe
+in-place VACUUM); the `.ro` snapshot is the compacted copy. Honours
+`INDEX_DUCKDB_SNAPSHOT` (set falsey to disable snapshotting).
+
+`--check` is also the quickest way to spot **legacy/stale stores** still on
+disk — e.g. pre-split monoliths `github.duckdb` / `huggingface.duckdb` /
+`communities.duckdb` sitting alongside the split stores — which are candidates
+for retirement once consumers point at the split ones.
