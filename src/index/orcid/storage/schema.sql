@@ -3,7 +3,7 @@
 -- One DuckDB file per scope (see src/index/orcid/paths.py).
 
 CREATE TABLE IF NOT EXISTS persons (
-    orcid_id        TEXT PRIMARY KEY,            -- canonical "0000-0000-0000-000X"
+    orcid_id        TEXT PRIMARY KEY,            -- canonical URL https://orcid.org/0000-0000-0000-000X
     given_name      TEXT,
     family_name     TEXT,
     display_name    TEXT,
