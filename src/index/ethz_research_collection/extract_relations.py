@@ -24,6 +24,12 @@ import re
 from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
+from src.v2.canonicalization.ethz import (
+    ethz_article_iri,
+    ethz_org_iri,
+    ethz_person_iri,
+)
+
 from .config import EthzResearchCollectionIndexConfig
 from .extract_matches import load_matches
 from .models import RelationRecord
@@ -35,6 +41,17 @@ from .paths import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _canon_relation(rec: RelationRecord) -> RelationRecord:
+    """v3.0.0: promote a RelationRecord's bare DSpace UUIDs to canonical
+    Research Collection URLs so the reverse-relation maps key on the same
+    ids as the Qdrant records. Idempotent."""
+    return RelationRecord(
+        article_uuid=ethz_article_iri(rec.article_uuid) or rec.article_uuid,
+        person_uuids=[ethz_person_iri(p) or p for p in rec.person_uuids],
+        org_uuids=[ethz_org_iri(o) or o for o in rec.org_uuids],
+    )
 
 # DSpace 7 ``relation.is*OfPublication`` fields carry the linked entity's
 # UUID in ``value`` (and a virtual slot id in ``authority``). For ETH RC
@@ -87,11 +104,11 @@ def extract_relations_single(uuid: str) -> Optional[RelationRecord]:
     org_uuids = _dedupe_preserve(_relation_values(metadata, _ORG_RELATION_FIELDS))
     if not person_uuids and not org_uuids:
         return None
-    return RelationRecord(
+    return _canon_relation(RelationRecord(
         article_uuid=uuid,
         person_uuids=person_uuids,
         org_uuids=org_uuids,
-    )
+    ))
 
 
 def _load_item(uuid: str) -> Optional[dict]:
@@ -138,13 +155,15 @@ def extract_relations(_cfg: EthzResearchCollectionIndexConfig) -> dict:
             )
             if not person_uuids and not org_uuids:
                 continue
-            record = RelationRecord(
+            record = _canon_relation(RelationRecord(
                 article_uuid=match.uuid,
                 person_uuids=person_uuids,
                 org_uuids=org_uuids,
-            )
+            ))
             out.write(record.model_dump_json() + "\n")
             written += 1
+            # The .txt sets stay bare UUIDs (the fetch-by-UUID worklist);
+            # only relations.jsonl carries the canonical URL ids.
             persons.update(person_uuids)
             orgs.update(org_uuids)
 
@@ -168,7 +187,9 @@ def load_relations() -> List[RelationRecord]:
     out: List[RelationRecord] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         if line.strip():
-            out.append(RelationRecord(**json.loads(line)))
+            # Canonicalize on load so legacy relations.jsonl files (bare
+            # UUIDs) still key the reverse maps by the URL ids.
+            out.append(_canon_relation(RelationRecord(**json.loads(line))))
     return out
 
 

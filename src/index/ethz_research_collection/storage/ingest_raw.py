@@ -28,10 +28,19 @@ from src.index.ethz_research_collection.paths import (
     raw_organizations_dir,
     raw_persons_dir,
 )
+from src.v2.canonicalization.ethz import ethz_article_iri, ethz_iri_sql
 
 from .duckdb_store import EthzResearchCollectionStore
 
 logger = logging.getLogger(__name__)
+
+# v3.0.0: ids are canonical Research Collection entity URLs. These SQL
+# fragments URL-ify a bare UUID4 extracted from the DSpace JSON, guarded so
+# non-UUID and already-canonical values pass through unchanged. They agree
+# with the per-row Python helpers and the bootstrap migration.
+_ART_UUID = ethz_iri_sql("json_extract_string(json, '$.uuid')", "publication")
+_PERSON_UUID = ethz_iri_sql("json_extract_string(json, '$.uuid')", "person")
+_ORG_UUID = ethz_iri_sql("json_extract_string(json, '$.uuid')", "orgunit")
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Note: DSpace metadata field names contain dots, so the JSON path needs them
 # quoted. Path templates are reused for both the article columns and the
 # child unnest queries.
-_ARTICLE_UPSERT_SQL = """
+_ARTICLE_UPSERT_SQL = f"""
 CREATE OR REPLACE TEMP TABLE _items AS
   SELECT json FROM read_json_objects(?);
 
@@ -49,7 +58,7 @@ INSERT INTO articles
   (article_uuid, title, abstract, doi, publication_year, publication_type,
    journal, language, research_collection_url, raw, ingested_at)
 SELECT
-  json_extract_string(json, '$.uuid') AS article_uuid,
+  {_ART_UUID} AS article_uuid,
   json_extract_string(json, '$.metadata."dc.title"[0].value') AS title,
   json_extract_string(json, '$.metadata."dc.description.abstract"[0].value') AS abstract,
   json_extract_string(json, '$.metadata."dc.identifier.doi"[0].value') AS doi,
@@ -60,7 +69,7 @@ SELECT
   json_extract_string(json, '$.metadata."dc.type"[0].value') AS publication_type,
   json_extract_string(json, '$.metadata."dc.relation.journal"[0].value') AS journal,
   json_extract_string(json, '$.metadata."dc.language.iso"[0].value') AS language,
-  'https://www.research-collection.ethz.ch/entities/publication/' || json_extract_string(json, '$.uuid') AS research_collection_url,
+  {_ART_UUID} AS research_collection_url,
   json AS raw,
   CURRENT_TIMESTAMP AS ingested_at
 FROM _items
@@ -85,11 +94,11 @@ ON CONFLICT (article_uuid) DO UPDATE SET
 # the Person UUID via the parallel `relation.isAuthorOfPublication` array.
 # We read from the relation array directly — its `place` matches the
 # corresponding `dc.contributor.author.place`.
-_ARTICLE_PERSONS_SQL = """
+_ARTICLE_PERSONS_SQL = f"""
 INSERT INTO article_persons (article_uuid, person_uuid, position)
 SELECT
-  json_extract_string(i.json, '$.uuid') AS article_uuid,
-  json_extract_string(t.rel, '$.value') AS person_uuid,
+  {ethz_iri_sql("json_extract_string(i.json, '$.uuid')", "publication")} AS article_uuid,
+  {ethz_iri_sql("json_extract_string(t.rel, '$.value')", "person")} AS person_uuid,
   TRY_CAST(json_extract_string(t.rel, '$.place') AS INTEGER) AS position
 FROM _items i,
      UNNEST(
@@ -131,8 +140,8 @@ def _orgs_union_sql() -> str:
         parts.append(
             f"""
             SELECT
-              json_extract_string(i.json, '$.uuid') AS article_uuid,
-              json_extract_string(t.org, '$.authority') AS org_uuid,
+              {ethz_iri_sql("json_extract_string(i.json, '$.uuid')", "publication")} AS article_uuid,
+              {ethz_iri_sql("json_extract_string(t.org, '$.authority')", "orgunit")} AS org_uuid,
               '{field}' AS field
             FROM _items i,
                  UNNEST(
@@ -149,7 +158,7 @@ def _orgs_union_sql() -> str:
 # Persons
 # ---------------------------------------------------------------------------
 
-_PERSON_UPSERT_SQL = """
+_PERSON_UPSERT_SQL = f"""
 CREATE OR REPLACE TEMP TABLE _persons AS
   SELECT json FROM read_json_objects(?);
 
@@ -157,7 +166,7 @@ INSERT INTO persons
   (person_uuid, display_name, given_name, family_name, orcid, sciper_id,
    primary_affiliation, primary_affiliation_uuid, raw, ingested_at)
 SELECT
-  json_extract_string(json, '$.uuid') AS person_uuid,
+  {_PERSON_UUID} AS person_uuid,
   COALESCE(
     json_extract_string(json, '$.metadata."dc.title"[0].value'),
     TRIM(
@@ -180,7 +189,7 @@ SELECT
     json_extract_string(json, '$.metadata."cris.virtual.sciperId"[0].value')
   ) AS sciper_id,
   json_extract_string(json, '$.metadata."person.affiliation.name"[0].value') AS primary_affiliation,
-  json_extract_string(json, '$.metadata."person.affiliation.name"[0].authority') AS primary_affiliation_uuid,
+  {ethz_iri_sql('''json_extract_string(json, '$.metadata."person.affiliation.name"[0].authority')''', "orgunit")} AS primary_affiliation_uuid,
   json AS raw,
   CURRENT_TIMESTAMP AS ingested_at
 FROM _persons
@@ -202,20 +211,20 @@ ON CONFLICT (person_uuid) DO UPDATE SET
 # Organizations
 # ---------------------------------------------------------------------------
 
-_ORG_UPSERT_SQL = """
+_ORG_UPSERT_SQL = f"""
 CREATE OR REPLACE TEMP TABLE _orgs AS
   SELECT json FROM read_json_objects(?);
 
 INSERT INTO organizations
   (org_uuid, name, acronym, parent_org_uuid, sciper_unit_id, ror_id, raw, ingested_at)
 SELECT
-  json_extract_string(json, '$.uuid') AS org_uuid,
+  {_ORG_UUID} AS org_uuid,
   COALESCE(
     json_extract_string(json, '$.metadata."dc.title"[0].value'),
     json_extract_string(json, '$.metadata."organization.legalName"[0].value')
   ) AS name,
   json_extract_string(json, '$.metadata."organization.identifier.acronym"[0].value') AS acronym,
-  json_extract_string(json, '$.metadata."cris.virtual.parent-organization"[0].authority') AS parent_org_uuid,
+  {ethz_iri_sql('''json_extract_string(json, '$.metadata."cris.virtual.parent-organization"[0].authority')''', "orgunit")} AS parent_org_uuid,
   COALESCE(
     json_extract_string(json, '$.metadata."cris.virtual.unitId"[0].value'),
     json_extract_string(json, '$.metadata."epfl.unitId"[0].value')
@@ -353,12 +362,14 @@ def ingest_links_dump(store: EthzResearchCollectionStore, dump_path: Path) -> in
         uuid = art.get("uuid")
         if not uuid:
             continue
+        # v3.0.0: article_links.article_uuid FK is the canonical URL id.
+        article_id = ethz_article_iri(uuid) or uuid
         for label in art.get("matched_phrases", []) or []:
             phrase = queries.get(label, "")
-            rows.append((uuid, label, phrase, "phrase_match"))
+            rows.append((article_id, label, phrase, "phrase_match"))
         for label, urls in (art.get("body_urls") or {}).items():
             for url in urls or []:
-                rows.append((uuid, label, url, "body_text"))
+                rows.append((article_id, label, url, "body_text"))
 
     if not rows:
         return 0

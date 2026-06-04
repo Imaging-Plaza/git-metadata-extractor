@@ -1,6 +1,12 @@
 -- Canonical DuckDB schema for the infoscience index module.
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 -- Mirrors the openalex / huggingface sister-index pattern.
+--
+-- v3.0.0: the `*_uuid` id columns (and the junction FKs that reference
+-- them) hold the canonical Research Collection entity URL, not the bare
+-- DSpace UUID —
+-- `https://www.research-collection.ethz.ch/entities/{publication|person|orgunit}/<uuid>`.
+-- `EthzResearchCollectionStore.bootstrap()` migrates legacy rows in place.
 
 -- One-shot cleanup of the dead `chunks` table: chunks live exclusively
 -- in Qdrant (`ethz_research_collection_chunks` collection) and the

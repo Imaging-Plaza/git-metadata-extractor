@@ -16,6 +16,8 @@ from typing import Iterable, Optional
 
 import httpx
 
+from src.v2.canonicalization.ethz import parse_ethz_iri
+
 from .config import EthzResearchCollectionIndexConfig
 from .dspace import DSpaceClient
 from .extract_relations import load_set
@@ -59,6 +61,11 @@ async def _fetch_one(
     *,
     refresh: bool = False,
 ) -> str:
+    # Accept either a bare DSpace UUID or a canonical entity URL — the
+    # DSpace API and raw-file layout are keyed by the bare UUID.
+    parsed = parse_ethz_iri(uuid)
+    if parsed is not None:
+        uuid = parsed[1]
     out_path = out_dir / f"{uuid}.json"
     if out_path.exists() and not refresh:
         return "skipped-existing"
