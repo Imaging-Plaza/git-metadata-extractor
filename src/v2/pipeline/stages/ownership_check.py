@@ -22,6 +22,7 @@ Run all three between `apply_link_pruning_to_assembled_output` and
 """
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from copy import deepcopy
@@ -1288,6 +1289,102 @@ def _ror_candidate_shortlist(
     ]
 
 
+# Tier C — LLM parent selector. Mode gates whether its pick is applied:
+#   apply  (default) — the agent decides (current behaviour).
+#   shadow           — the agent runs and its pick is LOGGED against the
+#                      deterministic outcome, but the deterministic pick is
+#                      used. Lets operators measure agreement on the hard
+#                      region/sub-entity tail before trusting the agent.
+#   off              — the agent never runs; deterministic only.
+_AGENT_MODE_ENV = "V2_ROR_PARENT_AGENT_MODE"
+
+
+def _ror_agent_mode() -> str:
+    raw = (os.getenv(_AGENT_MODE_ENV) or "apply").strip().lower()
+    return raw if raw in {"apply", "shadow", "off"} else "apply"
+
+
+def _rule_based_pick(
+    shortlist: list[tuple[int, dict[str, Any]]],
+) -> tuple[dict[str, Any] | None, int]:
+    """Deterministic Tier-B pick: the single unambiguous token-overlap winner
+    (score >= floor AND strictly beats the runner-up), or (None, best_score)."""
+    if not shortlist:
+        return None, -1
+    ranked = sorted(shortlist, key=lambda item: -item[0])
+    best_score, best_hit = ranked[0]
+    second_score = ranked[1][0] if len(ranked) > 1 else -1
+    if best_score >= _RULE_BASED_ROR_MIN_SCORE and best_score > second_score:
+        return best_hit, best_score
+    return None, best_score
+
+
+async def _run_parent_agent(
+    *,
+    parent_selector: Any,
+    handle: str,
+    org_name: str | None,
+    org_context: dict[str, Any] | None,
+    shortlist: list[tuple[int, dict[str, Any]]],
+    warnings: list[str],
+    log_decline: bool,
+) -> tuple[str | None, dict[str, Any] | None, float, str]:
+    """Run the LLM parent selector over the shortlist. Returns
+    (ror_id, hit, confidence, reason) or (None, None, 0.0, reason).
+    ``log_decline`` appends decline/failure warnings only in apply mode."""
+    from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
+        RorCandidate,
+        RorParentSelectorInput,
+    )
+
+    by_ror_id: dict[str, dict[str, Any]] = {}
+    candidates: list[RorCandidate] = []
+    for score, hit in shortlist:
+        ror_id = hit.get("id")
+        if not isinstance(ror_id, str) or not ror_id:
+            continue
+        by_ror_id[ror_id] = hit
+        country = hit.get("country")
+        candidates.append(
+            RorCandidate(
+                ror_id=ror_id,
+                name=hit.get("name") if isinstance(hit.get("name"), str) else ror_id,
+                aliases=[a for a in (hit.get("aliases") or []) if isinstance(a, str)],
+                acronyms=[a for a in (hit.get("acronyms") or []) if isinstance(a, str)],
+                types=[t for t in (hit.get("types") or []) if isinstance(t, str)],
+                country=(country.get("country_name") if isinstance(country, dict) else None),
+                token_overlap_score=score,
+            ),
+        )
+    if not candidates:
+        return None, None, 0.0, "no candidates"
+    try:
+        patch = await parent_selector.run(
+            refiner_input=RorParentSelectorInput(
+                github_handle=handle,
+                github_org_name=org_name,
+                org_context=org_context,
+                candidates=candidates,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        if log_decline:
+            warnings.append(
+                f"github_handle_parents: ROR parent selector failed for handle "
+                f"'{handle}': {exc}. Leaving the org standalone.",
+            )
+        return None, None, 0.0, f"error: {exc}"
+    chosen_ror_id = patch.accepted_ror_id()
+    if chosen_ror_id is None:
+        if log_decline:
+            warnings.append(
+                f"github_handle_parents: ROR parent selector declined for handle "
+                f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
+            )
+        return None, None, float(patch.confidence), patch.reason
+    return chosen_ror_id, by_ror_id.get(chosen_ror_id), float(patch.confidence), patch.reason
+
+
 async def _select_ror_parent(
     *,
     handle: str,
@@ -1341,72 +1438,42 @@ async def _select_ror_parent(
                 return _stamp_match(hit, "A3_exact_name", 0.95, handle, warnings)
 
     # --- candidate selection: rule-based unambiguous winner, or the LLM picker ---
-    if parent_selector is None:
-        ranked = sorted(shortlist, key=lambda item: -item[0])
-        best_score, best_hit = ranked[0]
-        second_score = ranked[1][0] if len(ranked) > 1 else -1
-        if not (best_score >= _RULE_BASED_ROR_MIN_SCORE and best_score > second_score):
-            return None
-        chosen_hit: dict[str, Any] | None = best_hit
-        chosen_ror_id = best_hit.get("id")
-        provenance = f"token-overlap winner (score={best_score})"
-        match_tier, match_conf = "B_rule", 0.70
-    else:
-        # LLM-backed selection. Lazy import keeps this deterministic-by-default
-        # module free of the LLM runtime dependency unless a selector is wired in.
-        from src.v2.agents.llm.refiners.ror_parent.agent import (  # noqa: PLC0415
-            RorCandidate,
-            RorParentSelectorInput,
-        )
+    mode = _ror_agent_mode()
+    agent_available = parent_selector is not None
 
-        by_ror_id: dict[str, dict[str, Any]] = {}
-        candidates: list[RorCandidate] = []
-        for score, hit in shortlist:
-            ror_id = hit.get("id")
-            if not isinstance(ror_id, str) or not ror_id:
-                continue
-            by_ror_id[ror_id] = hit
-            country = hit.get("country")
-            candidates.append(
-                RorCandidate(
-                    ror_id=ror_id,
-                    name=hit.get("name") if isinstance(hit.get("name"), str) else ror_id,
-                    aliases=[a for a in (hit.get("aliases") or []) if isinstance(a, str)],
-                    acronyms=[a for a in (hit.get("acronyms") or []) if isinstance(a, str)],
-                    types=[t for t in (hit.get("types") or []) if isinstance(t, str)],
-                    country=(
-                        country.get("country_name") if isinstance(country, dict) else None
-                    ),
-                    token_overlap_score=score,
-                ),
-            )
-        if not candidates:
+    chosen_hit: dict[str, Any] | None
+    if agent_available and mode == "apply":
+        # Tier C decides (current behaviour).
+        chosen_ror_id, chosen_hit, conf, reason = await _run_parent_agent(
+            parent_selector=parent_selector, handle=handle, org_name=org_name,
+            org_context=org_context, shortlist=shortlist, warnings=warnings,
+            log_decline=True,
+        )
+        if chosen_hit is None:
             return None
-        try:
-            patch = await parent_selector.run(
-                refiner_input=RorParentSelectorInput(
-                    github_handle=handle,
-                    github_org_name=org_name,
-                    org_context=org_context,
-                    candidates=candidates,
-                ),
+        provenance = f"LLM selector (confidence={conf:.2f}): {reason}"
+        match_tier, match_conf = "B_llm", conf
+    else:
+        det_hit, det_score = _rule_based_pick(shortlist)
+        if agent_available and mode == "shadow":
+            # Run Tier C for observability only; the deterministic pick is used.
+            a_id, _a_hit, a_conf, _a_reason = await _run_parent_agent(
+                parent_selector=parent_selector, handle=handle, org_name=org_name,
+                org_context=org_context, shortlist=shortlist, warnings=warnings,
+                log_decline=False,
             )
-        except Exception as exc:  # noqa: BLE001
+            det_id = det_hit.get("id") if det_hit else None
             warnings.append(
-                f"github_handle_parents: ROR parent selector failed for handle "
-                f"'{handle}': {exc}. Leaving the org standalone.",
+                f"github_handle_parents: [agent-shadow] handle '{handle}': agent "
+                f"would pick '{a_id}' (conf={a_conf:.2f}); deterministic picks "
+                f"'{det_id}'; agree={a_id == det_id}.",
             )
+        if det_hit is None:
             return None
-        chosen_ror_id = patch.accepted_ror_id()
-        if chosen_ror_id is None:
-            warnings.append(
-                f"github_handle_parents: ROR parent selector declined for handle "
-                f"'{handle}' ({len(candidates)} candidate(s)); no parent stamped.",
-            )
-            return None
-        chosen_hit = by_ror_id.get(chosen_ror_id)
-        provenance = f"LLM selector (confidence={patch.confidence:.2f}): {patch.reason}"
-        match_tier, match_conf = "B_llm", float(patch.confidence)
+        chosen_hit = det_hit
+        chosen_ror_id = det_hit.get("id")
+        provenance = f"token-overlap winner (score={det_score})"
+        match_tier, match_conf = "B_rule", 0.70
 
     if chosen_hit is None:
         return None
