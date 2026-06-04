@@ -81,6 +81,32 @@ def infoscience_article_iri(value: str | None) -> str | None:
     return _build("publication", value)
 
 
+def infoscience_iri_sql(expr: str, kind: str) -> str:
+    """Return a DuckDB scalar SQL expression that URL-ifies a bare UUID4
+    column ``expr`` to the canonical Infoscience ``kind`` URL.
+
+    ``kind`` is the URL path segment (``person`` / ``orgunit`` /
+    ``publication``). Mirrors :func:`_build` semantics exactly: NULL and
+    already-canonical values pass through unchanged, non-UUID4 strings are
+    left as-is, and a bare UUID4 is lowercased and prefixed. Used by the
+    bulk-SQL ingest path and the bootstrap migration so both agree with the
+    per-row Python helpers.
+    """
+    if kind not in ("person", "orgunit", "publication"):
+        msg = f"Unknown infoscience kind: {kind!r}"
+        raise ValueError(msg)
+    # UUID4 pattern matching `_UUID4_RE` (lowercased input).
+    uuid4 = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+    return (
+        f"CASE "
+        f"WHEN {expr} IS NULL THEN NULL "
+        f"WHEN starts_with(lower({expr}), '{_BASE}') THEN {expr} "
+        f"WHEN regexp_full_match(lower({expr}), '{uuid4}') "
+        f"THEN '{_BASE}{kind}/' || lower({expr}) "
+        f"ELSE {expr} END"
+    )
+
+
 def parse_infoscience_iri(iri: str | None) -> tuple[str, str] | None:
     """Inverse — return ``(kind, uuid)`` for a canonical Infoscience
     URL, or ``None`` on anything else. ``kind`` is one of
@@ -107,6 +133,7 @@ def parse_infoscience_iri(iri: str | None) -> tuple[str, str] | None:
 
 __all__ = [
     "infoscience_article_iri",
+    "infoscience_iri_sql",
     "infoscience_org_iri",
     "infoscience_person_iri",
     "parse_infoscience_iri",
