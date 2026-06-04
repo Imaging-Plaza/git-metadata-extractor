@@ -22,6 +22,8 @@ from src.index.huggingface_papers.paths import (
     get_huggingface_papers_paths,
 )
 
+from src.v2.canonicalization.huggingface import huggingface_iri
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -100,7 +102,7 @@ class HuggingFacePapersStore:
         self.connect().execute(
             sql,
             [
-                record.arxiv_id,
+                huggingface_iri(record.arxiv_id, "paper") or record.arxiv_id,
                 record.title,
                 record.summary,
                 record.doi,
@@ -155,7 +157,7 @@ class HuggingFacePapersStore:
             self.connect(),
             table="papers",
             id_column=ID_COLUMN,
-            id_value=arxiv_id,
+            id_value=huggingface_iri(arxiv_id, "paper") or arxiv_id,
         )
 
     def stream_rows_for_embedding(

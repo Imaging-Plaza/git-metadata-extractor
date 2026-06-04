@@ -22,6 +22,8 @@ from src.index.huggingface_users.paths import (
     get_huggingface_users_paths,
 )
 
+from src.v2.canonicalization.huggingface import huggingface_iri
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -90,7 +92,7 @@ class HuggingFaceUsersStore:
         self.connect().execute(
             sql,
             [
-                record.slug,
+                huggingface_iri(record.slug, "user") or record.slug,
                 record.fullname,
                 record.details,
                 record.avatar_url,
@@ -133,7 +135,7 @@ class HuggingFaceUsersStore:
             self.connect(),
             table="users",
             id_column=ID_COLUMN,
-            id_value=slug,
+            id_value=huggingface_iri(slug, "user") or slug,
         )
 
     def stream_rows_for_embedding(

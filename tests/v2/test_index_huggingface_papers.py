@@ -188,7 +188,8 @@ def test_ingest_single_paper_round_trips_through_duckdb(
     assert outcome == "ingested"
     row = papers_store.fetch_paper("2405.00001")
     assert row is not None
-    assert row["arxiv_id"] == "2405.00001"
+    # v3.0.0: stored under the canonical HF papers URL id.
+    assert row["arxiv_id"] == "https://huggingface.co/papers/2405.00001"
     assert row["title"].startswith("Graph Neural")
     assert row["upvotes"] == 23
     assert row["doi"] == "10.48550/arXiv.2405.00001"
