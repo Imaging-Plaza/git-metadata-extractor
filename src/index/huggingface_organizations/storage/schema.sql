@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS organizations (
-    slug             TEXT PRIMARY KEY,             -- HF namespace handle
+    slug             TEXT PRIMARY KEY,             -- canonical URL https://huggingface.co/<slug>
     fullname         TEXT,
     details          TEXT,
     avatar_url       TEXT,

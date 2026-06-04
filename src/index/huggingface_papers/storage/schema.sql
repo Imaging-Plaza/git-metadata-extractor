@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS papers (
-    arxiv_id                  TEXT PRIMARY KEY,         -- "YYMM.NNNNN" (no v-suffix)
+    arxiv_id                  TEXT PRIMARY KEY,         -- canonical URL https://huggingface.co/papers/<arxiv_id>
     title                     TEXT NOT NULL,
     summary                   TEXT,                     -- abstract
     doi                       TEXT,                     -- "10.48550/arXiv.<id>"
