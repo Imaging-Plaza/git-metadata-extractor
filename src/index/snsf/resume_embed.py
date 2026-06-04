@@ -30,14 +30,16 @@ from src.index.snsf.embed import embed_passages
 from src.index.snsf.embed_pipeline import _payload, _scope_grant_rows
 from src.index.snsf.qdrant_store import QdrantSnsfStore
 from src.index.snsf.storage.duckdb_store import SnsfStore
+from src.v2.canonicalization.snsf import snsf_grant_point_id
 
 LOGGER = logging.getLogger(__name__)
 
 
-def _existing_point_ids(qstore: QdrantSnsfStore, collection: str) -> set[int]:
-    """Scroll the entire collection, collecting integer point ids."""
+def _existing_point_ids(qstore: QdrantSnsfStore, collection: str) -> set[str]:
+    """Scroll the entire collection, collecting point ids (uuid5 of the
+    grant URL)."""
     client = qstore.client
-    seen: set[int] = set()
+    seen: set[str] = set()
     offset = None
     while True:
         points, offset = client.scroll(
@@ -48,10 +50,7 @@ def _existing_point_ids(qstore: QdrantSnsfStore, collection: str) -> set[int]:
             with_vectors=False,
         )
         for p in points:
-            try:
-                seen.add(int(p.id))
-            except (TypeError, ValueError):
-                continue
+            seen.add(str(p.id))
         if offset is None:
             break
     return seen
@@ -78,7 +77,8 @@ async def run(scope_mode: str) -> Dict[str, Any]:
     LOGGER.info("Scope %s has %d grants in DuckDB", scope_mode, len(all_rows))
 
     missing: List[Dict[str, Any]] = [
-        r for r in all_rows if int(r["grant_number"]) not in existing
+        r for r in all_rows
+        if snsf_grant_point_id(r["grant_number"]) not in existing
     ]
     LOGGER.info("Missing %d grants → embedding", len(missing))
 
@@ -94,7 +94,7 @@ async def run(scope_mode: str) -> Dict[str, Any]:
     matrix = await embed_passages(cfg.rcp, texts, normalize=True)
     LOGGER.info("Embedded matrix shape=%s", matrix.shape)
 
-    grant_numbers = [int(r["grant_number"]) for r in missing]
+    grant_numbers = [r["grant_number"] for r in missing]
     payloads = [_payload(r, t) for r, t in zip(missing, texts)]
     qstore.upsert_records(
         scope_mode,
