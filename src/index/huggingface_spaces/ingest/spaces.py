@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.index.huggingface_spaces.models import SpaceRecord
+from src.v2.canonicalization.huggingface import huggingface_iri
 
 if TYPE_CHECKING:
     from src.index._huggingface_base.client import HFClient
@@ -79,7 +80,7 @@ def _record_from_info(repo_id: str, info: Any) -> SpaceRecord:
     stage, hardware = _runtime_fields(info)
 
     return SpaceRecord(
-        repo_id=repo_id,
+        repo_id=huggingface_iri(repo_id, "space") or repo_id,
         author=getattr(info, "author", None),
         sha=getattr(info, "sha", None),
         sdk=getattr(info, "sdk", None),

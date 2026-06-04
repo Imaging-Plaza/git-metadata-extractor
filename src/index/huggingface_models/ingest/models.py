@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.index.huggingface_models.models import ModelRecord
+from src.v2.canonicalization.huggingface import huggingface_iri
 
 if TYPE_CHECKING:
     from src.index._huggingface_base.client import HFClient
@@ -85,7 +86,7 @@ def _record_from_info(repo_id: str, info: Any) -> ModelRecord:
     else:
         base_models = []
     return ModelRecord(
-        repo_id=repo_id,
+        repo_id=huggingface_iri(repo_id, "model") or repo_id,
         author=getattr(info, "author", None),
         sha=getattr(info, "sha", None),
         pipeline_tag=getattr(info, "pipeline_tag", None),

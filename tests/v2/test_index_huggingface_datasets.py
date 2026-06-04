@@ -98,7 +98,7 @@ def test_record_from_info_populates_dataset_specific_fields() -> None:
         paperswithcode_id="my-dataset",
     )
     record = _record_from_info("user/my-dataset", info)
-    assert record.repo_id == "user/my-dataset"
+    assert record.repo_id == "https://huggingface.co/datasets/user/my-dataset"
     assert record.license == "cc-by-4.0"
     assert record.downloads == 42
     assert record.likes == 10
@@ -126,7 +126,7 @@ def test_ingest_single_dataset_round_trips(
         config=object(), store=datasets_store, client=client, repo_id="alice/x",
     )
     assert outcome == "ingested"
-    row = datasets_store.fetch_dataset("alice/x")
+    row = datasets_store.fetch_dataset("https://huggingface.co/datasets/alice/x")
     assert row is not None
     assert row["license"] == "mit"
 

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from src.index.huggingface_datasets.models import DatasetRecord
+from src.v2.canonicalization.huggingface import huggingface_iri
 
 if TYPE_CHECKING:
     from src.index._huggingface_base.client import HFClient
@@ -106,7 +107,7 @@ def _record_from_info(repo_id: str, info: Any) -> DatasetRecord:
         dataset_info = {}
 
     return DatasetRecord(
-        repo_id=repo_id,
+        repo_id=huggingface_iri(repo_id, "dataset") or repo_id,
         author=getattr(info, "author", None),
         sha=getattr(info, "sha", None),
         license=card_data_dict.get("license") if isinstance(card_data_dict, dict) else None,
