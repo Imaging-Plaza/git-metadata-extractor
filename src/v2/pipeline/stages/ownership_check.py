@@ -1047,6 +1047,41 @@ def _ror_acronyms(record: dict[str, Any]) -> set[str]:
     }
 
 
+def _has_country_qualifier(name: Any) -> bool:
+    """A trailing `(...)` — ROR's per-country record suffix, e.g. 'Google (Canada)'."""
+    return isinstance(name, str) and bool(re.search(r"\([^)]*\)\s*$", name))
+
+
+def _disambiguate_domain_matches(
+    matches: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Pick the right ROR record among shortlist candidates that all share the
+    org's web domain, or None to abstain.
+
+    A shared institutional/parent domain spans many records: NIH (`nih.gov` ->
+    NLM / NHLBI / NCI), a university campus (`nyu.edu`), or a multinational's
+    per-country records (`google.com` -> 'Google (Canada)' / '(United States)').
+    The bare first-match would pick an arbitrary sub-entity/region (the residual
+    'parent-domain collision'). Instead:
+
+      * 1 match           -> accept it.
+      * N regional variants of ONE org (same country-stripped name) -> accept the
+        single unqualified 'global' record if present; else abstain.
+      * N distinct sub-entities (different names) -> abstain (the domain is an
+        umbrella; let name-token matching / the selector decide).
+    """
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    base_names = {_despace(_PAREN_RE.sub("", str(m.get("name") or ""))) for m in matches}
+    if len(base_names) == 1:
+        unqualified = [m for m in matches if not _has_country_qualifier(m.get("name"))]
+        if len(unqualified) == 1:
+            return unqualified[0]
+    return None
+
+
 def _stamp_match(
     hit: dict[str, Any], tier: str, confidence: float, handle: str, warnings: list[str],
 ) -> dict[str, Any]:
@@ -1283,9 +1318,19 @@ async def _select_ror_parent(
     #   A2 external id  (shared grid/isni/wikidata/fundref)
     #   A3 exact name / acronym (normalised equality)
     if org_label:
-        for _score, hit in shortlist:
-            if org_label in _ror_domain_labels(hit):
-                return _stamp_match(hit, "A1_domain", 0.98, handle, warnings)
+        domain_matches = [
+            hit for _score, hit in shortlist if org_label in _ror_domain_labels(hit)
+        ]
+        chosen = _disambiguate_domain_matches(domain_matches)
+        if chosen is not None:
+            return _stamp_match(chosen, "A1_domain", 0.98, handle, warnings)
+        if len(domain_matches) > 1:
+            warnings.append(
+                f"github_handle_parents: A1 web-domain ambiguous for handle "
+                f"'{handle}' ('{org_label}' shared by {len(domain_matches)} records: "
+                f"{[m.get('name') for m in domain_matches][:4]}) — deferring to "
+                f"name/selector.",
+            )
     if org_ext:
         for _score, hit in shortlist:
             if org_ext & _ror_external_ids(hit):
