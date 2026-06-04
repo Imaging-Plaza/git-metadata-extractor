@@ -145,7 +145,12 @@ from src.v2.indices.zenodo_records import (
     run_zenodo_records_ingest_job,
     run_zenodo_records_search,
 )
-from src.v2.ingest.cache import ProviderCache
+from src.v2.ingest.cache import (
+    ProviderCache,
+    cache_refresh_active,
+    reset_cache_refresh,
+    set_cache_refresh,
+)
 from src.v2.ingest.detection import UnsupportedGitHubURL, classify_github_url
 from src.v2.jobs import JobStore
 from src.v2.observation.github_rate_limit import (
@@ -511,6 +516,7 @@ async def _run_extract_job(
         if payload.model_override is not None
         else None,
     )
+    refresh_token = set_cache_refresh(payload.refresh)
     try:
         existing = job_store.get(job_id)
         if existing is None:
@@ -598,6 +604,7 @@ async def _run_extract_job(
         job_store.set(record)
     finally:
         reset_request_model_override(override_token)
+        reset_cache_refresh(refresh_token)
         if heartbeat_task is not None:
             heartbeat_task.cancel()
             with contextlib.suppress(Exception):
@@ -805,7 +812,9 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             include_context_summary=bool(include_context_summary),
             include_internal_fields=bool(include_internal_fields),
         )
-        cached_response = pipeline_cache.get(pipeline_cache_key)
+        # Backfill refresh: skip the read so the pipeline re-runs with current
+        # logic; the fresh result is still written back to `pipeline_cache_key`.
+        cached_response = None if cache_refresh_active() else pipeline_cache.get(pipeline_cache_key)
         if isinstance(cached_response, dict):
             try:
                 response_model = V2ExtractResponse.model_validate(cached_response)

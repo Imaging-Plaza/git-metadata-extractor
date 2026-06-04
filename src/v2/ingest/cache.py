@@ -11,6 +11,7 @@ import json
 import logging
 import sqlite3
 import time
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +19,26 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TTL_DAYS = 30
 SECONDS_PER_DAY = 86_400
+
+# Per-request cache-refresh ("backfill") toggle. When active, `get_or_set`
+# skips the read and always recomputes — so a single extraction re-fetches
+# providers and re-runs the pipeline with current code, then overwrites the
+# stale entries — WITHOUT clearing the whole cache. Carried in a ContextVar so
+# it scopes to one request's async task. Set it via `set_cache_refresh`.
+_refresh_active: ContextVar[bool] = ContextVar("v2_cache_refresh", default=False)
+
+
+def set_cache_refresh(enabled: bool) -> object:
+    """Enable/disable cache-refresh for the current task; returns a reset token."""
+    return _refresh_active.set(bool(enabled))
+
+
+def reset_cache_refresh(token: object) -> None:
+    _refresh_active.reset(token)  # type: ignore[arg-type]
+
+
+def cache_refresh_active() -> bool:
+    return _refresh_active.get()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS responses (
@@ -98,11 +119,14 @@ class ProviderCache:
         ttl_seconds: float | None = None,
         label: str | None = None,
     ) -> Any:
-        cached = self.get(key)
-        if cached is not None:
-            if label:
-                logger.info("provider cache hit: %s", label)
-            return cached
+        if not _refresh_active.get():
+            cached = self.get(key)
+            if cached is not None:
+                if label:
+                    logger.info("provider cache hit: %s", label)
+                return cached
+        elif label:
+            logger.info("provider cache refresh (bypass read): %s", label)
         value = factory()
         if value is not None:
             self.set(key, value, ttl_seconds=ttl_seconds)
@@ -126,4 +150,7 @@ __all__ = [
     "DEFAULT_CACHE_TTL_DAYS",
     "SECONDS_PER_DAY",
     "ProviderCache",
+    "cache_refresh_active",
+    "reset_cache_refresh",
+    "set_cache_refresh",
 ]
