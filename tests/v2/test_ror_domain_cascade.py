@@ -153,3 +153,58 @@ def test_a1_domain_wins_over_a3_exact_name() -> None:
     )
     assert pick is not None and pick["id"] == "ror:right"
     assert pick["_ror_match_tier"] == "A1_domain"
+
+
+# --- A1 parent-domain-collision disambiguation ------------------------------
+def _hd(ror_id: str, name: str, domain: str):
+    return _hit_ext(ror_id, name, links=[f"https://{domain}"])
+
+
+def test_a1_regional_variants_prefers_global_record() -> None:
+    shortlist = [
+        (1, _hd("g:ca", "Google (Canada)", "google.com")),
+        (1, _hd("g:global", "Google", "google.com")),
+        (1, _hd("g:us", "Google (United States)", "google.com")),
+    ]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="GoogleCloudPlatform", org_name="Google Cloud Platform",
+            shortlist=shortlist, parent_selector=None,
+            org_context={"homepage": "https://cloud.google.com"}, warnings=[],
+        ),
+    )
+    assert pick is not None and pick["id"] == "g:global"
+    assert pick["_ror_match_tier"] == "A1_domain"
+
+
+def test_a1_all_regional_no_global_abstains() -> None:
+    # No unqualified 'Google' record -> A1 abstains; rule-based token<2 -> None.
+    shortlist = [
+        (1, _hd("g:ca", "Google (Canada)", "google.com")),
+        (1, _hd("g:us", "Google (United States)", "google.com")),
+    ]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="GoogleCloudPlatform", org_name="Google Cloud Platform",
+            shortlist=shortlist, parent_selector=None,
+            org_context={"homepage": "https://cloud.google.com"}, warnings=[],
+        ),
+    )
+    assert pick is None  # no arbitrary region picked
+
+
+def test_a1_umbrella_domain_defers_to_name_match() -> None:
+    # NLM and NHLBI both nih.gov (distinct sub-entities) -> A1 abstains; the
+    # exact-name / token tier then picks the RIGHT one (NLM, not NHLBI).
+    shortlist = [
+        (2, _hd("nhlbi", "National Heart, Lung, and Blood Institute", "nih.gov")),
+        (2, _hd("nlm", "National Library of Medicine", "nih.gov")),
+    ]
+    pick = asyncio.run(
+        _select_ror_parent(
+            handle="NLM-DIR", org_name="National Library of Medicine",
+            shortlist=shortlist, parent_selector=None,
+            org_context={"homepage": "https://www.nlm.nih.gov"}, warnings=[],
+        ),
+    )
+    assert pick is not None and pick["id"] == "nlm"
