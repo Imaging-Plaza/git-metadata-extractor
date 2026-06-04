@@ -69,7 +69,7 @@ def test_record_from_payload_normalises_user_card() -> None:
 
     record = _record_from_payload("alice", payload)
 
-    assert record.login == "alice"
+    assert record.login == "https://github.com/alice"
     assert record.github_id == 123
     assert record.bio == "Imaging at EPFL"
     assert record.company == "EPFL"
@@ -108,7 +108,7 @@ def test_ingest_single_user_round_trips_through_duckdb(
     assert outcome == "ingested"
     row = users_store.fetch_user("bob")
     assert row is not None
-    assert row["login"] == "bob"
+    assert row["login"] == "https://github.com/bob"
     assert row["bio"] == "Open-source pipelines"
     assert row["company"] == "@SomeOrg"
     assert row["public_repos"] == 12

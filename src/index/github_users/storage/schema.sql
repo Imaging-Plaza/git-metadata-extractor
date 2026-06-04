@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS users (
-    login              TEXT PRIMARY KEY,             -- GitHub login (natural key)
+    login              TEXT PRIMARY KEY,             -- canonical URL https://github.com/<login>
     github_id          BIGINT,                       -- stable across renames
     node_id            TEXT,
     name               TEXT,

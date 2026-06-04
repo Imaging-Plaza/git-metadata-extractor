@@ -75,6 +75,8 @@ class GitHubOrganizationsStore:
     # ---- Upserts ---------------------------------------------------------
 
     def upsert_organization(self, record: OrgRecord) -> None:
+        from src.v2.canonicalization.github import github_org_iri  # noqa: PLC0415
+
         sql = (
             "INSERT INTO organizations "
             "(login, github_id, node_id, name, description, blog, location, "
@@ -108,7 +110,7 @@ class GitHubOrganizationsStore:
         self.connect().execute(
             sql,
             [
-                record.login,
+                github_org_iri(record.login) or record.login,  # v3.0.0: id is the URL
                 record.github_id,
                 record.node_id,
                 record.name,
@@ -163,11 +165,13 @@ class GitHubOrganizationsStore:
         return count_table(self.connect(), table)
 
     def fetch_organization(self, login: str) -> dict[str, Any] | None:
+        from src.v2.canonicalization.github import github_org_iri  # noqa: PLC0415
+
         return fetch_one(
             self.connect(),
             table="organizations",
             id_column=ID_COLUMN,
-            id_value=login,
+            id_value=github_org_iri(login) or login,  # accept bare or URL
         )
 
     def stream_rows_for_embedding(
