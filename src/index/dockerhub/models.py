@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 
 class DockerhubRepoRecord(BaseModel):
-    repo_id: str  # "<namespace>/<name>" (official images are "library/<name>")
+    repo_id: str  # canonical URL: https://hub.docker.com/(r/<ns>/<name> | _/<name>)
     namespace: str
     name: str
     description: Optional[str] = None       # short tagline
