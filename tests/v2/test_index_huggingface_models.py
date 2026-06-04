@@ -94,7 +94,8 @@ def test_record_from_info_populates_all_fields() -> None:
         card_data={"license": "mit", "base_model": "google/flan-t5-base"},
     )
     record = _record_from_info("hf-org/my-model", info)
-    assert record.repo_id == "hf-org/my-model"
+    # v3.0.0: repo_id is the canonical HuggingFace URL.
+    assert record.repo_id == "https://huggingface.co/hf-org/my-model"
     assert record.pipeline_tag == "text-classification"
     assert record.library_name == "transformers"
     assert record.license == "mit"
@@ -141,9 +142,10 @@ def test_ingest_single_model_round_trips(models_store: HuggingFaceModelsStore) -
         config=object(), store=models_store, client=client, repo_id="hf-org/my-model",
     )
     assert outcome == "ingested"
-    row = models_store.fetch_model("hf-org/my-model")
+    # stored under the canonical URL id (the ingest input handle stays bare).
+    row = models_store.fetch_model("https://huggingface.co/hf-org/my-model")
     assert row is not None
-    assert row["repo_id"] == "hf-org/my-model"
+    assert row["repo_id"] == "https://huggingface.co/hf-org/my-model"
     assert row["pipeline_tag"] == "text-classification"
     assert row["license"] == "mit"
 

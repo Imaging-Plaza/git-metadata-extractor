@@ -11,7 +11,7 @@ from pydantic import BaseModel
 class ModelRecord(BaseModel):
     """Structured view of an HF model persisted to DuckDB.
 
-    ``repo_id`` is the natural primary key (``<namespace>/<name>``).
+    ``repo_id`` is the canonical URL (https://huggingface.co/<repo_id>).
     Mirrors the schema columns in ``storage/schema.sql``.
     """
 

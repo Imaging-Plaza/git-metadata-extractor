@@ -75,7 +75,7 @@ def test_record_from_info_populates_space_specific_fields() -> None:
         runtime={"stage": "RUNNING", "hardware": "cpu-basic"},
     )
     record = _record_from_info("alice/audio-demo", info)
-    assert record.repo_id == "alice/audio-demo"
+    assert record.repo_id == "https://huggingface.co/spaces/alice/audio-demo"
     assert record.sdk == "gradio"
     assert record.runtime_stage == "RUNNING"
     assert record.hardware == "cpu-basic"
@@ -104,7 +104,7 @@ def test_ingest_single_space_round_trips(
         config=object(), store=spaces_store, client=client, repo_id="alice/x",
     )
     assert outcome == "ingested"
-    row = spaces_store.fetch_space("alice/x")
+    row = spaces_store.fetch_space("https://huggingface.co/spaces/alice/x")
     assert row is not None
     assert row["sdk"] == "streamlit"
     assert row["hardware"] == "t4-small"

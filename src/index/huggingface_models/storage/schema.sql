@@ -2,7 +2,7 @@
 -- Idempotent: every statement uses IF NOT EXISTS so re-runs are safe.
 
 CREATE TABLE IF NOT EXISTS models (
-    repo_id              TEXT PRIMARY KEY,             -- "<namespace>/<name>"
+    repo_id              TEXT PRIMARY KEY,             -- canonical URL https://huggingface.co/<repo_id>
     author               TEXT,
     sha                  TEXT,
     pipeline_tag         TEXT,

@@ -258,10 +258,11 @@ def test_full_lifecycle_ingest_reset_reingest(tmp_path, monkeypatch) -> None:
     store_2 = HuggingFaceModelsStore.open(db_path)
     store_2.upsert_model(_record_from_info("org/m2", info_2))
     rows = store_2.count("models")
-    row = store_2.fetch_model("org/m2")
+    # v3.0.0: stored under the canonical URL id (projector canonicalises).
+    row = store_2.fetch_model("https://huggingface.co/org/m2")
     # Critically, the old org/m1 row from round 1 is GONE — the reset
     # truly wiped the file, not just the rows.
-    old_row = store_2.fetch_model("org/m1")
+    old_row = store_2.fetch_model("https://huggingface.co/org/m1")
     store_2.close()
 
     assert rows == 1
