@@ -178,3 +178,47 @@ def parse_docker_hub_url(readme: str | None, aux_files: dict[str, Any] | None) -
     if isinstance(aux_files, dict):
         return _docker_hub_url_from_aux_files(aux_files)
     return None
+
+
+# ---------------------------------------------------------------------------
+# extract_doc_candidate_urls
+# ---------------------------------------------------------------------------
+
+# Patterns for documentation-hosting URLs:
+#   1. *.readthedocs.io  (any sub-path)
+#   2. *.github.io / *.gitlab.io  (GitHub/GitLab Pages)
+#   3. *.gitbook.io
+#   4. docs.<domain>  (e.g. docs.myproject.io)
+#   5. <any-host>/docs/<path>  (project site with /docs/ path)
+_DOC_URL_RE = re.compile(
+    r"https?://"
+    r"(?:"
+    r"[\w.-]+\.readthedocs\.io"         # readthedocs.io
+    r"|[\w.-]+\.(?:github|gitlab)\.io"  # GitHub/GitLab Pages
+    r"|[\w.-]+\.gitbook\.io"            # GitBook
+    r"|docs\.[\w.-]+"                   # docs.* subdomain
+    r"|[\w.-]+/docs/[\w./?#=&%-]*"      # /docs/ path (project site)
+    r")"
+    r"[^\s\"'<>]*",                     # rest of URL until whitespace/quote/tag
+    re.IGNORECASE,
+)
+
+
+def extract_doc_candidate_urls(readme: str | None) -> list[str]:
+    """Extract documentation-hosting URLs from *readme*.
+
+    Matches readthedocs.io, GitHub/GitLab Pages (*.github.io / *.gitlab.io),
+    GitBook (*.gitbook.io), docs.<domain> subdomains, and /docs/ paths on
+    project sites.  Returns a de-duped, order-preserving list (may be empty).
+    """
+    if not isinstance(readme, str) or not readme:
+        return []
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for match in _DOC_URL_RE.finditer(readme):
+        url = match.group(0).rstrip(".,;:)")  # strip common trailing punctuation
+        if url not in seen:
+            seen.add(url)
+            result.append(url)
+    return result

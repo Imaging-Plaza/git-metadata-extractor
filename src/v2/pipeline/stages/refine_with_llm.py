@@ -18,14 +18,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import requests
+import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
-import re
+import requests
 
 from src.v2.agents.llm.agent_tools.graph_neighbors import make_get_entity_neighbors_tool
 from src.v2.agents.llm.refiners import (
@@ -45,18 +45,23 @@ from src.v2.agents.llm.refiners.discovery import (
     DiscoveryRefinerAgent,
     DiscoveryRefinerInput,
 )
-from src.v2.agents.llm.refiners.rescue import (
-    RescueCandidate,
-    RescueRefinerAgent,
-    RescueRefinerInput,
-)
 from src.v2.agents.llm.refiners.org_resolver import (
     OrgResolverAgent,
     OrgResolverInput,
     OrgResolverPatch,
     UnresolvedOrg,
 )
+from src.v2.agents.llm.refiners.repo_signals.agent import (
+    RepoSignalsInput,
+    run_repo_signals,
+)
+from src.v2.agents.llm.refiners.rescue import (
+    RescueCandidate,
+    RescueRefinerAgent,
+    RescueRefinerInput,
+)
 from src.v2.agents.llm.runtime import LLMRuntimeError
+from src.v2.agents.rule_based._repo_signals import extract_doc_candidate_urls
 from src.v2.api_models.enums import OrganizationTypeV2
 from src.v2.ingest.providers.epfl_graph_rag import EpflGraphRagProvider
 from src.v2.parsers.citation_cff import parse_citation_cff
@@ -1089,6 +1094,7 @@ def _query_communities_index(query: str) -> list[dict[str, Any]]:
         return []
     try:
         import duckdb  # noqa: PLC0415
+
         from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return []
@@ -1230,6 +1236,7 @@ async def _gather_federated_evidence(
         """
         try:
             import duckdb  # noqa: PLC0415 — local import keeps the cold-path cost out of the hot path
+
             from src.index.infoscience.paths import duckdb_path  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             return
@@ -1591,17 +1598,17 @@ async def _run_org_resolver_pass(
 
     # Build the resolver toolset. Each guard mirrors the per-entity
     # refiner pattern: a missing index degrades silently.
-    from src.v2.agents.llm.agent_tools.ror_rag import (  # noqa: PLC0415
-        make_ror_rag_search_tool,
-    )
-    from src.v2.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
-        make_infoscience_rag_search_tool,
-    )
     from src.v2.agents.llm.agent_tools.epfl_graph_rag import (  # noqa: PLC0415
         make_epfl_graph_rag_search_tool,
     )
     from src.v2.agents.llm.agent_tools.github_organization import (  # noqa: PLC0415
         make_github_organization_metadata_tool,
+    )
+    from src.v2.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
+        make_infoscience_rag_search_tool,
+    )
+    from src.v2.agents.llm.agent_tools.ror_rag import (  # noqa: PLC0415
+        make_ror_rag_search_tool,
     )
     from src.v2.agents.llm.agent_tools.snsf_grants import (  # noqa: PLC0415
         make_search_snsf_grants_tool,
@@ -2166,6 +2173,124 @@ async def _run_discovery_pass(
     return (warnings, stats)
 
 
+# ---------------------------------------------------------------------------
+# Repo-signals LLM pass (Phase 2 README enrichment)
+# ---------------------------------------------------------------------------
+
+_REPO_SIGNALS_AGENT_MODE_ENV = "V2_REPO_SIGNALS_AGENT_MODE"
+
+
+def _repo_signals_agent_mode() -> str:
+    """Return the gated mode for the repo-signals LLM pass.
+
+    Values: ``apply`` (default), ``shadow``, ``off``.  Unknown values fall
+    back to ``apply``.
+    """
+    raw = (os.getenv(_REPO_SIGNALS_AGENT_MODE_ENV) or "apply").strip().lower()
+    return raw if raw in {"apply", "shadow", "off"} else "apply"
+
+
+async def _run_repo_signals_pass(  # noqa: C901, PLR0912
+    *,
+    repositories: list[dict[str, Any]],
+    gathered_context: dict[str, Any] | None,
+) -> list[str]:
+    """Run the LLM repo-signals refiner over every repository entity.
+
+    Mutates each repository entity **in place** when mode is ``apply``:
+    - Sets ``_documentation_urls`` to the de-duped list the LLM confirmed.
+    - Sets ``_test_coverage`` **only** when the entity's current value is
+      ``None`` (the deterministic Phase-1 regex result wins; LLM is a
+      fallback only).
+
+    In ``shadow`` mode the agent runs but the entity is left unchanged;
+    its proposed values are logged.
+
+    In ``off`` mode the agent is never called.
+
+    Returns a list of human-readable warning/log strings.
+    """
+    mode = _repo_signals_agent_mode()
+    if mode == "off" or not repositories:
+        return []
+
+    # Extract the README from gathered_context (same path as _build_repo_context_summary).
+    readme: str | None = None
+    if isinstance(gathered_context, dict):
+        repo_ctx = gathered_context.get("repository")
+        if isinstance(repo_ctx, dict):
+            readme_raw = repo_ctx.get("readme_content")
+            if isinstance(readme_raw, str) and readme_raw.strip():
+                readme = readme_raw
+
+    if not readme:
+        return []
+
+    readme_excerpt = readme[:README_CONTEXT_MAX_CHARS]
+    candidate_urls = extract_doc_candidate_urls(readme)
+
+    warnings: list[str] = []
+
+    for repo in repositories:
+        if not isinstance(repo, dict):
+            continue
+        handle = (
+            repo.get("pulse:githubRepositoryHandle")
+            or repo.get("schema:name")
+            or repo.get("id", "?")
+        )
+
+        refiner_input = RepoSignalsInput(
+            repository_handle=str(handle),
+            readme_excerpt=readme_excerpt,
+            candidate_documentation_urls=candidate_urls,
+        )
+
+        try:
+            patch = await run_repo_signals(refiner_input)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"repo_signals: unexpected error for {handle!r} — {exc}; skipping",
+            )
+            continue
+
+        if patch is None:
+            warnings.append(f"repo_signals: no patch returned for {handle!r}")
+            continue
+
+        if mode == "shadow":
+            warnings.append(
+                f"repo_signals [shadow] {handle!r}: would set "
+                f"_documentation_urls={patch.documentation_urls!r} "
+                f"_test_coverage={patch.test_coverage!r}",
+            )
+            continue
+
+        # apply mode — mutate the entity
+        if patch.documentation_urls:
+            # De-duped union: the agent's list is authoritative (it may have
+            # confirmed a subset of candidates + added new ones).
+            seen: set[str] = set()
+            deduped: list[str] = []
+            for url in patch.documentation_urls:
+                if url not in seen:
+                    seen.add(url)
+                    deduped.append(url)
+            repo["_documentation_urls"] = deduped
+            warnings.append(
+                f"repo_signals: set _documentation_urls={deduped!r} for {handle!r}",
+            )
+
+        if patch.test_coverage is not None and repo.get("_test_coverage") is None:
+            repo["_test_coverage"] = patch.test_coverage
+            warnings.append(
+                f"repo_signals: set _test_coverage={patch.test_coverage!r} "
+                f"(LLM fallback) for {handle!r}",
+            )
+
+    return warnings
+
+
 async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
     *,
     reconciled: ReconciledEntities,
@@ -2356,6 +2481,16 @@ async def run_refine_with_llm_stage(  # noqa: PLR0913, PLR0915
     )
     warnings.extend(discovery_warnings)
     by_type["discovery"] = discovery_stats
+
+    # Repo-signals pass (Phase 2): LLM confirms/extends documentation URLs
+    # and provides a test-coverage fallback when the deterministic regex
+    # found nothing.  Env-gated by V2_REPO_SIGNALS_AGENT_MODE
+    # (apply / shadow / off); default is apply.
+    repo_signals_warnings = await _run_repo_signals_pass(
+        repositories=repositories,
+        gathered_context=gathered_context,
+    )
+    warnings.extend(repo_signals_warnings)
 
     refined_count = sum(stats.get("refined", 0) for stats in by_type.values())
     skipped_count = sum(stats.get("skipped", 0) for stats in by_type.values())
