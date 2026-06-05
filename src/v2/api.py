@@ -66,6 +66,18 @@ from src.v2.api_models import (
 from src.v2.auth import verify_token
 from src.v2.config import V2Config
 from src.v2.dependencies import _resolve_provider_cache, get_provider_set
+from src.v2.indices.cli_catalogs import (
+    run_communities_search,
+    run_epfl_graph_search,
+    run_infoscience_search,
+    run_ror_search,
+    run_snsf_search,
+)
+from src.v2.indices.compact import (
+    CompactResult,
+    close_cached_resources_for,
+    compact_duckdb,
+)
 from src.v2.indices.dockerhub import (
     run_dockerhub_ingest_job,
     run_dockerhub_search,
@@ -74,21 +86,17 @@ from src.v2.indices.ethz_research_collection import (
     run_ethz_research_collection_ingest_job,
     run_ethz_research_collection_search,
 )
-from src.v2.indices.github_repos import (
-    run_github_repos_ingest_job,
-    run_github_repos_search,
-)
 from src.v2.indices.github_organizations import (
     run_github_orgs_ingest_job,
     run_github_orgs_search,
 )
+from src.v2.indices.github_repos import (
+    run_github_repos_ingest_job,
+    run_github_repos_search,
+)
 from src.v2.indices.github_users import (
     run_github_users_ingest_job,
     run_github_users_search,
-)
-from src.v2.indices.huggingface_papers import (
-    run_huggingface_papers_ingest_job,
-    run_huggingface_papers_search,
 )
 from src.v2.indices.huggingface_datasets import (
     run_huggingface_datasets_ingest_job,
@@ -101,6 +109,10 @@ from src.v2.indices.huggingface_models import (
 from src.v2.indices.huggingface_organizations import (
     run_huggingface_organizations_ingest_job,
     run_huggingface_organizations_search,
+)
+from src.v2.indices.huggingface_papers import (
+    run_huggingface_papers_ingest_job,
+    run_huggingface_papers_search,
 )
 from src.v2.indices.huggingface_spaces import (
     run_huggingface_spaces_ingest_job,
@@ -117,18 +129,6 @@ from src.v2.indices.oamonitor import (
 )
 from src.v2.indices.openalex import run_openalex_ingest_job, run_openalex_search
 from src.v2.indices.orcid import run_orcid_ingest_job, run_orcid_search
-from src.v2.indices.cli_catalogs import (
-    run_communities_search,
-    run_epfl_graph_search,
-    run_infoscience_search,
-    run_ror_search,
-    run_snsf_search,
-)
-from src.v2.indices.compact import (
-    CompactResult,
-    close_cached_resources_for,
-    compact_duckdb,
-)
 from src.v2.indices.renkulab import run_renkulab_ingest_job, run_renkulab_search
 from src.v2.indices.stats import (
     INDEX_STATS_SUPPORTED_PROVIDERS,
@@ -167,13 +167,12 @@ from src.v2.pipeline.stages import (
     build_json_output,
     build_jsonld_output,
     compute_stats,
-    guarantee_repo_author,
-    infer_github_handle_parents,
     demote_github_props_to_units,
     emit_fork_parent_stubs,
+    guarantee_repo_author,
     infer_article_source_organization,
+    infer_github_handle_parents,
     infer_org_units,
-    tag_rule_based_disciplines,
     infer_owners,
     promote_failed_id_entities,
     prune_dangling_refs,
@@ -188,15 +187,10 @@ from src.v2.pipeline.stages import (
     run_resolve_bio_to_ror_stage,
     run_resolve_company_to_ror_stage,
     run_resolve_placeholder_orgs_to_ror_stage,
+    tag_rule_based_disciplines,
     validate_articles,
     validate_author_classes,
     validate_ownership,
-)
-from src.v2.pipeline.stages.validate_org_github_handles import (
-    validate_org_github_handles,
-)
-from src.v2.pipeline.stages.refine_with_llm import (
-    is_enabled as _hybrid_refiner_is_enabled,
 )
 from src.v2.pipeline.stages.concept_tagging import (
     is_enabled as _concept_tagging_is_enabled,
@@ -211,6 +205,12 @@ from src.v2.pipeline.stages.concept_tagging import (
     resolve_related_enrichment as _resolve_concept_tagging_related_enrichment,
 )
 from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
+from src.v2.pipeline.stages.refine_with_llm import (
+    is_enabled as _hybrid_refiner_is_enabled,
+)
+from src.v2.pipeline.stages.validate_org_github_handles import (
+    validate_org_github_handles,
+)
 from src.v2.schema import load_jsonld_context
 from src.v2.validation import (
     SHACLValidator,
@@ -543,7 +543,7 @@ async def _run_extract_job(
                         return
                     current.last_heartbeat_at = datetime.now(timezone.utc)
                     job_store.set(current)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("heartbeat write failed for job %s", job_id)
 
         heartbeat_task = asyncio.create_task(_heartbeat())
@@ -963,7 +963,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 company_result.queries_accepted,
                 perf_counter() - stage_started_at,
             )
-        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_RESOLVE_COMPANY_TO_ROR)
             _append_unique_warning(
                 warnings,
@@ -999,7 +999,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 bio_result.queries_accepted,
                 perf_counter() - stage_started_at,
             )
-        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR)
             _append_unique_warning(
                 warnings,
@@ -1038,7 +1038,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
             for warning in bio_llm_result.warnings:
                 _append_unique_warning(warnings, warning)
-        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+        except Exception as exc:
             logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR_LLM)
             _append_unique_warning(
                 warnings,
@@ -1072,7 +1072,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 placeholder_result.queries_accepted,
                 perf_counter() - stage_started_at,
             )
-        except Exception as exc:  # noqa: BLE001 — never fail the run on this stage
+        except Exception as exc:
             logger.exception(
                 "%s stage failed", STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
             )
@@ -1887,12 +1887,22 @@ def _maybe_schedule_github_repos_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github_repos.config import load_config as load_github_config  # noqa: PLC0415
-            from src.index.github_repos.embed.pipeline import embed_repos  # noqa: PLC0415
-            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
-            from src.index.github_repos.ingest.repos import ingest_single_repo  # noqa: PLC0415
-            from src.index.github_repos.storage.duckdb_store import GitHubReposStore  # noqa: PLC0415
-        except Exception:  # noqa: BLE001
+            from src.index.github_repos.config import (
+                load_config as load_github_config,
+            )
+            from src.index.github_repos.embed.pipeline import (
+                embed_repos,
+            )
+            from src.index.github_repos.ingest.github_client import (
+                GitHubClient,
+            )
+            from src.index.github_repos.ingest.repos import (
+                ingest_single_repo,
+            )
+            from src.index.github_repos.storage.duckdb_store import (
+                GitHubReposStore,
+            )
+        except Exception:
             logger.exception(
                 "github auto-ingest (run_id=%s, repo=%s): module import failed",
                 run_id, full_name,
@@ -1925,7 +1935,7 @@ def _maybe_schedule_github_repos_auto_ingest(
 
         try:
             outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "github auto-ingest (run_id=%s, repo=%s): failed",
                 run_id, full_name,
@@ -1971,14 +1981,20 @@ def _maybe_schedule_github_users_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
+            from src.index.github_repos.ingest.github_client import (
+                GitHubClient,
+            )
             from src.index.github_users.config import load_config  # noqa: PLC0415
-            from src.index.github_users.embed.pipeline import embed_users  # noqa: PLC0415
-            from src.index.github_users.ingest.users import ingest_single_user  # noqa: PLC0415
+            from src.index.github_users.embed.pipeline import (
+                embed_users,
+            )
+            from src.index.github_users.ingest.users import (
+                ingest_single_user,
+            )
             from src.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
                 GitHubUsersStore,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "github_users auto-ingest (run_id=%s, login=%s): module import failed",
                 run_id, login,
@@ -2011,7 +2027,7 @@ def _maybe_schedule_github_users_auto_ingest(
 
         try:
             outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "github_users auto-ingest (run_id=%s, login=%s): failed",
                 run_id, login,
@@ -2053,8 +2069,9 @@ def _maybe_schedule_github_orgs_auto_ingest(
 
     async def _run() -> None:
         try:
-            from src.index.github_repos.ingest.github_client import GitHubClient  # noqa: PLC0415
-            from src.index.github_organizations.config import load_config  # noqa: PLC0415
+            from src.index.github_organizations.config import (
+                load_config,
+            )
             from src.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
                 embed_organizations,
             )
@@ -2064,7 +2081,10 @@ def _maybe_schedule_github_orgs_auto_ingest(
             from src.index.github_organizations.storage.duckdb_store import (  # noqa: PLC0415
                 GitHubOrganizationsStore,
             )
-        except Exception:  # noqa: BLE001
+            from src.index.github_repos.ingest.github_client import (
+                GitHubClient,
+            )
+        except Exception:
             logger.exception(
                 "github_organizations auto-ingest (run_id=%s, login=%s): module import failed",
                 run_id, login,
@@ -2099,7 +2119,7 @@ def _maybe_schedule_github_orgs_auto_ingest(
 
         try:
             outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "github_organizations auto-ingest (run_id=%s, login=%s): failed",
                 run_id, login,
@@ -2146,7 +2166,9 @@ def _maybe_schedule_huggingface_papers_auto_ingest(
     async def _run() -> None:
         try:
             from src.index.huggingface_papers.config import load_config  # noqa: PLC0415
-            from src.index.huggingface_papers.embed.pipeline import embed_papers  # noqa: PLC0415
+            from src.index.huggingface_papers.embed.pipeline import (
+                embed_papers,
+            )
             from src.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
                 HFPapersClient,
             )
@@ -2156,7 +2178,7 @@ def _maybe_schedule_huggingface_papers_auto_ingest(
             from src.index.huggingface_papers.storage.duckdb_store import (  # noqa: PLC0415
                 HuggingFacePapersStore,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): module import failed",
                 run_id, arxiv_id,
@@ -2188,7 +2210,7 @@ def _maybe_schedule_huggingface_papers_auto_ingest(
 
         try:
             outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): failed",
                 run_id, arxiv_id,
@@ -3676,6 +3698,140 @@ async def snsf_search_post(
     )
 
 
+@v2_router.get(
+    "/indices/snsf/grants",
+    tags=["Indices"],
+)
+async def snsf_grants_get(  # noqa: PLR0913
+    _token: Annotated[str, Depends(verify_token)],
+    funding_instrument: Annotated[list[str] | None, Query(alias="scheme")] = None,
+    research_institution: Annotated[list[str] | None, Query(alias="institution")] = None,
+    state: Annotated[list[str] | None, Query(alias="status")] = None,
+    main_discipline: Annotated[list[str] | None, Query(alias="discipline")] = None,
+    main_field_of_research: Annotated[list[str] | None, Query(alias="field")] = None,
+    call_decision_year: Annotated[list[int] | None, Query(alias="call_year")] = None,
+    country: Annotated[list[str] | None, Query()] = None,
+    person_number: Annotated[int | None, Query(alias="person")] = None,
+    person_role: Annotated[str | None, Query(alias="role")] = None,
+    has_output: Annotated[list[str] | None, Query()] = None,
+    start_from: Annotated[str | None, Query()] = None,
+    start_to: Annotated[str | None, Query()] = None,
+    end_from: Annotated[str | None, Query()] = None,
+    end_to: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
+    sort: Annotated[str, Query()] = "start_date_desc",
+    limit: Annotated[int, Query()] = 50,
+    offset: Annotated[int, Query()] = 0,
+) -> dict[str, Any]:
+    """Faceted SQL search over SNSF grants.
+
+    Returns ``{"total": int, "results": [...]}`` where each result is a
+    flat grant row.  All query parameters map 1-to-1 to ``GrantFilters``
+    fields.  A missing or inaccessible store returns ``{"total":0,"results":[]}``.
+    """
+    try:
+        from src.index.snsf.facet_query import (  # noqa: PLC0415
+            GrantFilters,
+            query_grants,
+        )
+        from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return {"total": 0, "results": []}
+
+    try:
+        filters = GrantFilters(
+            funding_instrument=funding_instrument,
+            research_institution=research_institution,
+            state=state,
+            main_discipline=main_discipline,
+            main_field_of_research=main_field_of_research,
+            call_decision_year=call_decision_year,
+            country=country,
+            person_number=person_number,
+            person_role=person_role,
+            has_output=has_output,
+            start_from=start_from,
+            start_to=start_to,
+            end_from=end_from,
+            end_to=end_to,
+        )
+        store = SnsfStore.open()
+        try:
+            return query_grants(
+                store, filters,
+                text=q,
+                sort=sort,
+                limit=limit,
+                offset=offset,
+            )
+        finally:
+            store.close()
+    except Exception:  # noqa: BLE001
+        return {"total": 0, "results": []}
+
+
+@v2_router.get(
+    "/indices/snsf/grants/facets",
+    tags=["Indices"],
+)
+async def snsf_grants_facets_get(  # noqa: PLR0913
+    _token: Annotated[str, Depends(verify_token)],
+    funding_instrument: Annotated[list[str] | None, Query(alias="scheme")] = None,
+    research_institution: Annotated[list[str] | None, Query(alias="institution")] = None,
+    state: Annotated[list[str] | None, Query(alias="status")] = None,
+    main_discipline: Annotated[list[str] | None, Query(alias="discipline")] = None,
+    main_field_of_research: Annotated[list[str] | None, Query(alias="field")] = None,
+    call_decision_year: Annotated[list[int] | None, Query(alias="call_year")] = None,
+    country: Annotated[list[str] | None, Query()] = None,
+    person_number: Annotated[int | None, Query(alias="person")] = None,
+    person_role: Annotated[str | None, Query(alias="role")] = None,
+    has_output: Annotated[list[str] | None, Query()] = None,
+    start_from: Annotated[str | None, Query()] = None,
+    start_to: Annotated[str | None, Query()] = None,
+    end_from: Annotated[str | None, Query()] = None,
+    end_to: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    """Per-facet value→count with excluded-self semantics.
+
+    Returns ``{facet_name: [{"value": ..., "count": ...}, ...], ...}``.
+    A missing or inaccessible store returns ``{}``.
+    """
+    try:
+        from src.index.snsf.facet_query import (  # noqa: PLC0415
+            GrantFilters,
+            facet_counts,
+        )
+        from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return {}
+
+    try:
+        filters = GrantFilters(
+            funding_instrument=funding_instrument,
+            research_institution=research_institution,
+            state=state,
+            main_discipline=main_discipline,
+            main_field_of_research=main_field_of_research,
+            call_decision_year=call_decision_year,
+            country=country,
+            person_number=person_number,
+            person_role=person_role,
+            has_output=has_output,
+            start_from=start_from,
+            start_to=start_to,
+            end_from=end_from,
+            end_to=end_to,
+        )
+        store = SnsfStore.open()
+        try:
+            return facet_counts(store, filters, text=q)
+        finally:
+            store.close()
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 @v2_router.post(
     "/indices/epfl_graph/search",
     response_model=IndexSearchResponse,
@@ -3772,7 +3928,7 @@ async def index_freshness_get(
             return _CatalogFreshness(provider=provider, count=0)
         try:
             stats = collect_index_stats(provider, store.connect())
-        except Exception:  # noqa: BLE001 — keep the roll-up resilient
+        except Exception:
             logger.exception("index freshness: %s collect failed", provider)
             return _CatalogFreshness(provider=provider, count=0)
         if stats.last_updated is None:
@@ -3858,7 +4014,7 @@ async def index_compact_post(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": str(exc)},
         )
-    except Exception as exc:  # noqa: BLE001 — surface as 500 with the message
+    except Exception as exc:
         logger.exception("index compact failed: provider=%s", provider)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -3907,7 +4063,7 @@ async def index_stats_get(
         stats = await asyncio.to_thread(
             collect_index_stats, provider, store.connect(),
         )
-    except Exception as exc:  # noqa: BLE001 — surface as 503 + log
+    except Exception as exc:
         logger.exception("index stats query failed: provider=%s", provider)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -4074,7 +4230,7 @@ async def health() -> V2HealthResponse:
     if config and config.GME_GITHUB_TOKEN:
         try:
             rate_limit_summary = probe_github_rate_limit()
-        except Exception:  # noqa: BLE001 — probe must never crash health
+        except Exception:
             logger.exception("github rate-limit probe failed")
             rate_limit_summary = None
         component_statuses["github_token"] = (

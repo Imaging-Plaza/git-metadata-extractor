@@ -49,6 +49,7 @@ def manifest_entry(adapter: IndexAdapter) -> dict[str, Any]:
             getattr(adapter, "surface_as_source", _DEFAULT_SURFACE),
         ),
         "id_shape": getattr(adapter, "id_shape", _DEFAULT_ID_SHAPE),
+        "structured_query": bool(getattr(adapter, "structured_query", False)),
     }
 
 

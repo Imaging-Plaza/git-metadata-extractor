@@ -32,6 +32,7 @@ def test_entry_defaults_for_bare_adapter() -> None:
         "backend": "vector",          # default
         "surface_as_source": False,   # default
         "id_shape": "url",            # default
+        "structured_query": False,    # default (Phase C added the hint)
     }
 
 

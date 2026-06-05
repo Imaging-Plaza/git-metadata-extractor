@@ -24,6 +24,7 @@ _RE_SNSF_ID = re.compile(r"\b(\d{6,7})\b")
 class SnsfAdapter:
     name = "snsf"
     entity_types = ["grants"]
+    structured_query = True
 
     def search(
         self,
@@ -114,6 +115,63 @@ class SnsfAdapter:
             data=_compact_grant(row),
             url=f"https://data.snf.ch/grants/grant/{row.get('grant_number') or grant_id}",
         )]
+
+    def facet_query(
+        self,
+        filters: Any,
+        *,
+        text: str | None = None,
+        sort: str = "start_date_desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Faceted SQL query over the SNSF grants store.
+
+        Lazily opens the store read-only and delegates to ``query_grants``.
+        Returns ``{"total": int, "results": [...]}`` on success or
+        ``{"total": 0, "results": []}`` when the store is unavailable.
+        """
+        try:
+            from src.index.snsf.facet_query import query_grants  # noqa: PLC0415
+            from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            return {"total": 0, "results": []}
+        try:
+            store = SnsfStore.open()
+        except Exception:  # noqa: BLE001
+            return {"total": 0, "results": []}
+        try:
+            return query_grants(store, filters, text=text, sort=sort, limit=limit, offset=offset)
+        except Exception:  # noqa: BLE001
+            return {"total": 0, "results": []}
+        finally:
+            store.close()
+
+    def facet_counts_query(
+        self,
+        filters: Any,
+        *,
+        text: str | None = None,
+    ) -> dict[str, Any]:
+        """Per-facet value→count passthrough.
+
+        Returns an empty dict when the store is unavailable.
+        """
+        try:
+            from src.index.snsf.facet_query import facet_counts  # noqa: PLC0415
+            from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            return {}
+        try:
+            store = SnsfStore.open()
+        except Exception:  # noqa: BLE001
+            return {}
+        try:
+            return facet_counts(store, filters, text=text)
+        except Exception:  # noqa: BLE001
+            return {}
+        finally:
+            store.close()
 
     def _fallback_record(self, grant_id_str: str) -> list[EntityRecord]:
         """Thin ack when DuckDB is unreachable (e.g. concurrent writer lock)."""
