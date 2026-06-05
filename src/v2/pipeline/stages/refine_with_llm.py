@@ -1603,6 +1603,10 @@ async def _run_org_resolver_pass(
     from src.v2.agents.llm.agent_tools.github_organization import (  # noqa: PLC0415
         make_github_organization_metadata_tool,
     )
+    from src.v2.agents.llm.agent_tools.snsf_grants import (  # noqa: PLC0415
+        make_search_snsf_grants_tool,
+    )
+    from src.v2.ingest.providers.snsf_grants import SnsfGrantsProvider  # noqa: PLC0415
 
     tools: list[Any] = []
     if getattr(providers, "ror_rag", None) is not None:
@@ -1613,6 +1617,7 @@ async def _run_org_resolver_pass(
         tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
     if getattr(providers, "github", None) is not None:
         tools.append(make_github_organization_metadata_tool(providers.github))
+    tools.append(make_search_snsf_grants_tool(SnsfGrantsProvider()))
 
     if not tools:
         return (
