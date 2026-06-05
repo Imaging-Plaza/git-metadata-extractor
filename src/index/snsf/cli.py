@@ -125,6 +125,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_cov.add_argument("--snsf-scope", default=None,
                        help="SNSF scope to count over (default: all)")
 
+    sub.add_parser(
+        "build-facets",
+        help="(Re)build the derived facet tables (grant_persons, grant_output_counts, grant_countries).",
+    )
+
     return parser
 
 
@@ -132,7 +137,7 @@ def _print_json(obj) -> None:
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
-def main(argv=None) -> int:
+def main(argv=None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
     parser = _build_parser()
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -216,6 +221,16 @@ def main(argv=None) -> int:
     if args.cmd == "orcid-coverage":
         from src.index.snsf.orcid_link import coverage_report
         _print_json(coverage_report(args.snsf_scope))
+        return 0
+
+    if args.cmd == "build-facets":
+        from src.index.snsf.facets import build_facets  # noqa: PLC0415
+        store = SnsfStore.open()
+        try:
+            counts = build_facets(store)
+        finally:
+            store.close()
+        _print_json(counts)
         return 0
 
     if args.cmd == "query":

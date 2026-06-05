@@ -267,3 +267,35 @@ CREATE TABLE IF NOT EXISTS output_use_inspired (
 );
 
 CREATE INDEX IF NOT EXISTS output_ui_grant_idx ON output_use_inspired(grant_number);
+
+-- ---------------------------------------------------------------------------
+-- Derived facet tables (built by src/index/snsf/facets.py :: build_facets)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS grant_persons (
+    grant_number   TEXT NOT NULL,
+    person_number  INTEGER NOT NULL,
+    role           TEXT NOT NULL,
+    PRIMARY KEY (grant_number, person_number, role)
+);
+
+CREATE TABLE IF NOT EXISTS grant_output_counts (
+    grant_number              TEXT PRIMARY KEY,
+    n_publications            INTEGER NOT NULL DEFAULT 0,
+    n_datasets                INTEGER NOT NULL DEFAULT 0,
+    n_collaborations          INTEGER NOT NULL DEFAULT 0,
+    n_academic_events         INTEGER NOT NULL DEFAULT 0,
+    n_knowledge_transfers     INTEGER NOT NULL DEFAULT 0,
+    n_public_communications   INTEGER NOT NULL DEFAULT 0,
+    n_use_inspired            INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS grant_countries (
+    grant_number  TEXT NOT NULL,
+    country       TEXT NOT NULL,
+    PRIMARY KEY (grant_number, country)
+);
+
+CREATE INDEX IF NOT EXISTS grant_persons_person_idx    ON grant_persons(person_number);
+CREATE INDEX IF NOT EXISTS grant_persons_role_idx      ON grant_persons(role);
+CREATE INDEX IF NOT EXISTS grant_countries_country_idx ON grant_countries(country);
