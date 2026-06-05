@@ -6,6 +6,18 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class GitLabGroupRecord(BaseModel):
+    group_id: str               # canonical web_url (https://<host>/groups/<full_path>)
+    host: str
+    full_path: str
+    name: str | None = None
+    description: str | None = None
+    visibility: str | None = None
+    parent: str | None = None   # parent group canonical URL or None
+    web_url: str | None = None
+    raw: dict[str, Any] = {}
+
+
 class GitLabProjectRecord(BaseModel):
     project_id: str            # canonical web_url
     host: str
