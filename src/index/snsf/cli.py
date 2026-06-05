@@ -22,7 +22,7 @@ from src.index.snsf.storage.duckdb_store import SnsfStore
 LOGGER = logging.getLogger(__name__)
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     parser = argparse.ArgumentParser(prog="src.index.snsf")
     parser.add_argument(
         "--config", type=Path, default=DEFAULT_CONFIG_PATH,
@@ -130,6 +130,96 @@ def _build_parser() -> argparse.ArgumentParser:
         help="(Re)build the derived facet tables (grant_persons, grant_output_counts, grant_countries).",
     )
 
+    p_fsearch = sub.add_parser(
+        "facet-search",
+        help="Faceted SQL search over the SNSF grants (Phase C).",
+    )
+    p_fsearch.add_argument(
+        "--scheme", dest="funding_instrument", action="append", default=None,
+        metavar="SCHEME",
+        help="Filter by funding_instrument (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--institution", dest="research_institution", action="append", default=None,
+        metavar="INSTITUTION",
+        help="Filter by research_institution (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--status", dest="state", action="append", default=None,
+        metavar="STATUS",
+        help="Filter by state (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--discipline", dest="main_discipline", action="append", default=None,
+        metavar="DISCIPLINE",
+        help="Filter by main_discipline (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--field", dest="main_field_of_research", action="append", default=None,
+        metavar="FIELD",
+        help="Filter by main_field_of_research (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--call-year", dest="call_decision_year", action="append", default=None,
+        type=int, metavar="YEAR",
+        help="Filter by call_decision_year (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--country", dest="country", action="append", default=None,
+        metavar="COUNTRY",
+        help="Filter by country (repeatable, via grant_countries).",
+    )
+    p_fsearch.add_argument(
+        "--person", dest="person_number", type=int, default=None,
+        metavar="PERSON_NUMBER",
+        help="Filter by person_number.",
+    )
+    p_fsearch.add_argument(
+        "--role", dest="person_role", default=None,
+        help="Person role filter (use with --person).",
+    )
+    p_fsearch.add_argument(
+        "--has-output", dest="has_output", action="append", default=None,
+        metavar="OUTPUT_TYPE",
+        help="Filter to grants with at least one of this output type (repeatable).",
+    )
+    p_fsearch.add_argument(
+        "--start-from", dest="start_from", default=None,
+        help="start_date >= YYYY-MM-DD.",
+    )
+    p_fsearch.add_argument(
+        "--start-to", dest="start_to", default=None,
+        help="start_date <= YYYY-MM-DD.",
+    )
+    p_fsearch.add_argument(
+        "--end-from", dest="end_from", default=None,
+        help="end_date >= YYYY-MM-DD.",
+    )
+    p_fsearch.add_argument(
+        "--end-to", dest="end_to", default=None,
+        help="end_date <= YYYY-MM-DD.",
+    )
+    p_fsearch.add_argument(
+        "--q", dest="text", default=None,
+        help="Free-text search (ILIKE across title / abstract / keywords).",
+    )
+    p_fsearch.add_argument(
+        "--sort", default="start_date_desc",
+        help="Sort key (default: start_date_desc).",
+    )
+    p_fsearch.add_argument(
+        "--limit", type=int, default=50,
+        help="Max results to return (default: 50).",
+    )
+    p_fsearch.add_argument(
+        "--offset", type=int, default=0,
+        help="Pagination offset (default: 0).",
+    )
+    p_fsearch.add_argument(
+        "--facets", action="store_true", default=False,
+        help="Also compute and include facet counts in the output.",
+    )
+
     return parser
 
 
@@ -231,6 +321,44 @@ def main(argv=None) -> int:  # noqa: C901, PLR0911, PLR0912, PLR0915
         finally:
             store.close()
         _print_json(counts)
+        return 0
+
+    if args.cmd == "facet-search":
+        from src.index.snsf.facet_query import (  # noqa: PLC0415
+            GrantFilters,
+            facet_counts,
+            query_grants,
+        )
+        filters = GrantFilters(
+            funding_instrument=args.funding_instrument,
+            research_institution=args.research_institution,
+            state=args.state,
+            main_discipline=args.main_discipline,
+            main_field_of_research=args.main_field_of_research,
+            call_decision_year=args.call_decision_year,
+            country=args.country,
+            person_number=args.person_number,
+            person_role=args.person_role,
+            has_output=args.has_output,
+            start_from=args.start_from,
+            start_to=args.start_to,
+            end_from=args.end_from,
+            end_to=args.end_to,
+        )
+        store = SnsfStore.open()
+        try:
+            result = query_grants(
+                store, filters,
+                text=args.text,
+                sort=args.sort,
+                limit=args.limit,
+                offset=args.offset,
+            )
+            if args.facets:
+                result["facets"] = facet_counts(store, filters, text=args.text)
+        finally:
+            store.close()
+        _print_json(result)
         return 0
 
     if args.cmd == "query":
