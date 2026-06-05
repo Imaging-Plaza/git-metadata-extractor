@@ -19,6 +19,24 @@ import inspect
 import json
 import os
 from pathlib import Path
+from typing import Any, Callable
+
+# ---------------------------------------------------------------------------
+# Post-bootstrap hooks
+# ---------------------------------------------------------------------------
+
+
+def _snsf_post_bootstrap(store: Any) -> None:
+    """Run build_facets after the snsf store is opened."""
+    from src.index.snsf.facets import build_facets  # noqa: PLC0415
+
+    build_facets(store)
+
+
+POST_BOOTSTRAP: dict[str, Callable[[Any], None]] = {
+    "snsf": _snsf_post_bootstrap,
+}
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -87,6 +105,10 @@ def bootstrap_store(name: str) -> str:
         store = _open_store(name)
         if store is None:
             return "skipped: no duckdb store"
+
+        # Run any registered post-bootstrap hook for this store.
+        if name in POST_BOOTSTRAP:
+            POST_BOOTSTRAP[name](store)
 
         if hasattr(store, "close"):
             store.close()
