@@ -38,6 +38,13 @@ def test_sends_token_header_when_present():
 _EXPECTED_RETRY_CALLS = 2
 
 
+def test_iter_public_groups_paginates():
+    pages = {1: [{"id": 10, "web_url": "https://gl/groups/a"}], 2: [{"id": 20, "web_url": "https://gl/groups/b"}]}
+    client = GitLabClient(host="gitlab.epfl.ch", token=None, transport=_transport(pages))
+    got = list(client.iter_public_groups())
+    assert [p["id"] for p in got] == [10, 20]
+
+
 def test_get_retries_on_429(monkeypatch):
     monkeypatch.setattr(client_mod.time, "sleep", lambda *_: None)
     calls = {"n": 0}

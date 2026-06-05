@@ -64,5 +64,8 @@ class GitLabClient:
     def iter_public_projects(self) -> Iterator[dict[str, Any]]:
         yield from self._paginate("/projects", {"visibility": "public", "archived": "false"})
 
+    def iter_public_groups(self) -> Iterator[dict[str, Any]]:
+        yield from self._paginate("/groups", {"all_available": "true"})
+
     def close(self) -> None:
         self._client.close()
