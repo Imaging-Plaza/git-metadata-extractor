@@ -242,11 +242,13 @@ def test_repository_agent_emits_releases_and_latest_version() -> None:
     releases = raw["_releases"]
     assert isinstance(releases, list)
     assert len(releases) == len(_STUB_RELEASES)
+    # _releases is the raw GitHub releases payload (unchanged contract);
+    # _latest_version is the derived addition.
     first = releases[0]
-    assert first["version"] == "v2.1.0"
+    assert first["tag_name"] == "v2.1.0"
     assert first["name"] == "Version 2.1.0"
     assert first["published_at"] == "2024-03-01T12:00:00Z"
-    assert first["url"] == "https://github.com/acme/tool/releases/tag/v2.1.0"
+    assert first["html_url"] == "https://github.com/acme/tool/releases/tag/v2.1.0"
 
 
 def test_repository_agent_releases_none_when_absent() -> None:

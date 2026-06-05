@@ -246,34 +246,6 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-_RELEASES_CAP = 100
-
-
-def _thin_releases(releases: Any) -> list[dict[str, Any]] | None:
-    """Return a capped, thinned list of release dicts from the raw GitHub
-    payload, or ``None`` when the input is absent/empty.
-
-    Each output dict carries only the four fields useful for downstream
-    release-frequency analytics: ``version`` (tag_name), ``name``,
-    ``published_at``, and ``url`` (html_url). The list is kept
-    newest-first (as returned by GitHub) and capped at
-    ``_RELEASES_CAP`` entries.
-    """
-    if not isinstance(releases, list) or not releases:
-        return None
-    out: list[dict[str, Any]] = []
-    for rel in releases[:_RELEASES_CAP]:
-        if not isinstance(rel, dict):
-            continue
-        out.append(
-            {
-                "version": rel.get("tag_name"),
-                "name": rel.get("name"),
-                "published_at": rel.get("published_at"),
-                "url": rel.get("html_url"),
-            },
-        )
-    return out or None
 
 
 # Keyword sets for `pulse:repositoryType` classification. Order matters: the
@@ -548,11 +520,11 @@ class RepositoryAgentV2:
             "_citation_cff": _resolve_citation_cff_payload(
                 compiled_context.get("aux_files"),
             ),
-            # Published releases (thinned, newest-first, capped at
-            # _RELEASES_CAP) + GHCR container (Docker) images. Layer-1
-            # internal fields until a v3.0.0 enrichment stage promotes
-            # them to canonical `schema:`/`pulse:` terms.
-            "_releases": _thin_releases(repository.get("releases")),
+            # Published releases (raw, newest-first) + GHCR container
+            # (Docker) images. Layer-1 internal fields until a v3.0.0
+            # enrichment stage promotes them to canonical `schema:`/`pulse:`
+            # terms. `_latest_version` is the newest release's tag.
+            "_releases": (repository.get("releases") or None),
             "_latest_version": (
                 (repository.get("releases") or [{}])[0].get("tag_name")
                 if isinstance(repository.get("releases"), list) and repository["releases"]
