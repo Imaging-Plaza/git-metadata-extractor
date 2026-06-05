@@ -5,6 +5,7 @@ import os
 import re
 from typing import TYPE_CHECKING, Any
 
+from src.v2.agents.rule_based._repo_signals import detect_has_ci
 from src.v2.pipeline.stages.models import ContextBundle
 
 
@@ -356,6 +357,17 @@ def _optional_repository_context(
             f"Repository container-images lookup failed for {full_name}: {exc}",
         )
 
+    # CI detection — list the repo root once and check for known CI
+    # indicator files / directories. Best-effort: None on failure so the
+    # pipeline never breaks over a missing listing.
+    try:
+        root_entries = providers.github.get_repository_root_entries(full_name)
+        repository_metadata["has_ci"] = detect_has_ci(root_entries)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
+        )
+
     return {
         "full_name": full_name,
         "metadata": repository_metadata,
@@ -455,6 +467,34 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository aux-files lookup failed for {full_name}: {exc}",
             )
             aux_files = {}
+
+        # Releases + container images (best-effort; same as
+        # _optional_repository_context above).
+        try:
+            releases = providers.github.get_repository_releases(full_name)
+            if isinstance(releases, list) and releases:
+                repository_metadata["releases"] = releases
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository releases lookup failed for {full_name}: {exc}",
+            )
+        try:
+            container_images = providers.github.get_repository_container_images(full_name)
+            if isinstance(container_images, list) and container_images:
+                repository_metadata["container_images"] = container_images
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository container-images lookup failed for {full_name}: {exc}",
+            )
+
+        # CI detection (best-effort; None on provider failure).
+        try:
+            root_entries = providers.github.get_repository_root_entries(full_name)
+            repository_metadata["has_ci"] = detect_has_ci(root_entries)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
+            )
 
         context["repository"] = {
             "full_name": full_name,

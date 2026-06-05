@@ -12,6 +12,10 @@ from src.v2.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from src.v2.agents.rule_based._repo_signals import (
+    parse_docker_hub_url,
+    parse_test_coverage,
+)
 from src.v2.canonicalization.github import github_repo_iri, github_user_iri
 from src.v2.parsers.citation_cff import parse_citation_cff
 from src.v2.parsers.publiccode import parse_publiccode
@@ -242,6 +246,36 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+_RELEASES_CAP = 100
+
+
+def _thin_releases(releases: Any) -> list[dict[str, Any]] | None:
+    """Return a capped, thinned list of release dicts from the raw GitHub
+    payload, or ``None`` when the input is absent/empty.
+
+    Each output dict carries only the four fields useful for downstream
+    release-frequency analytics: ``version`` (tag_name), ``name``,
+    ``published_at``, and ``url`` (html_url). The list is kept
+    newest-first (as returned by GitHub) and capped at
+    ``_RELEASES_CAP`` entries.
+    """
+    if not isinstance(releases, list) or not releases:
+        return None
+    out: list[dict[str, Any]] = []
+    for rel in releases[:_RELEASES_CAP]:
+        if not isinstance(rel, dict):
+            continue
+        out.append(
+            {
+                "version": rel.get("tag_name"),
+                "name": rel.get("name"),
+                "published_at": rel.get("published_at"),
+                "url": rel.get("html_url"),
+            },
+        )
+    return out or None
+
+
 # Keyword sets for `pulse:repositoryType` classification. Order matters: the
 # first matching set wins, so the more-specific categories come first.
 _REPO_TYPE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -328,6 +362,7 @@ class RepositoryAgentV2:
         languages: dict[str, Any]
 
         aux_files: dict[str, str]
+        readme_content: str = ""
         if reuse_gathered_context and isinstance(repository_context, dict):
             metadata_candidate = repository_context.get("metadata")
             repository = metadata_candidate if isinstance(metadata_candidate, dict) else {}
@@ -344,6 +379,10 @@ class RepositoryAgentV2:
 
             aux_files_candidate = repository_context.get("aux_files")
             aux_files = aux_files_candidate if isinstance(aux_files_candidate, dict) else {}
+
+            readme_candidate = repository_context.get("readme_content")
+            if isinstance(readme_candidate, str):
+                readme_content = readme_candidate
         else:
             repository = providers.github.get_repository(full_name)
             contributors = providers.github.get_contributors(full_name)
@@ -356,6 +395,7 @@ class RepositoryAgentV2:
             "contributors": contributors,
             "languages": languages,
             "aux_files": aux_files,
+            "readme_content": readme_content,
         }
 
     async def _default_structured_output(  # noqa: C901
@@ -366,6 +406,7 @@ class RepositoryAgentV2:
     ) -> dict[str, Any]:
         repository = compiled_context["repository"]
         full_name = str(repository.get("full_name") or compiled_context["full_name"])
+        readme_content: str = compiled_context.get("readme_content") or ""
         contributors = compiled_context.get("contributors", [])
         languages = compiled_context.get("languages", {})
 
@@ -507,15 +548,30 @@ class RepositoryAgentV2:
             "_citation_cff": _resolve_citation_cff_payload(
                 compiled_context.get("aux_files"),
             ),
-            # Published releases + GHCR container (Docker) images, fetched
-            # by the context_gather stage and carried on the repository
-            # metadata. Layer-1 internal fields: the Pulse v2.1.2 ontology
-            # has no predicate for software releases or container images
-            # (v1 had a commented-out `hasSoftwareImage`), so they ride
-            # under the `_` convention until a v3.0.0 enrichment stage
-            # promotes them to canonical `schema:`/`pulse:` terms.
-            "_releases": (repository.get("releases") or None),
+            # Published releases (thinned, newest-first, capped at
+            # _RELEASES_CAP) + GHCR container (Docker) images. Layer-1
+            # internal fields until a v3.0.0 enrichment stage promotes
+            # them to canonical `schema:`/`pulse:` terms.
+            "_releases": _thin_releases(repository.get("releases")),
+            "_latest_version": (
+                (repository.get("releases") or [{}])[0].get("tag_name")
+                if isinstance(repository.get("releases"), list) and repository["releases"]
+                else None
+            ),
             "_container_images": (repository.get("container_images") or None),
+            # CI presence — detected from the repo root listing by
+            # context_gather and stored in repository_metadata["has_ci"].
+            # None when the listing was unavailable.
+            "_has_ci": repository.get("has_ci"),
+            # Test-coverage percentage parsed from the README (regex only;
+            # LLM fallback is a separate later phase). None when not found.
+            "_test_coverage": parse_test_coverage(readme_content),
+            # Docker Hub URL parsed from README + aux-files. None when
+            # no confident match is found.
+            "_docker_hub_url": parse_docker_hub_url(
+                readme_content,
+                compiled_context.get("aux_files"),
+            ),
         }
 
     async def _default_repository_classifier(

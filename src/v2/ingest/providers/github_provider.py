@@ -1418,6 +1418,56 @@ class RealGitHubProvider(GitHubProvider):
             label=f"github.get_repository_aux_files({full_name})",
         )
 
+    def get_repository_root_entries(self, full_name: str) -> list[str] | None:
+        """Return the names of ALL entries (files and directories) at the
+        repository root, or ``None`` on failure.
+
+        Uses the same ``GET /repos/{owner}/{repo}/contents/`` endpoint as
+        ``get_repository_aux_files`` but returns the raw name list instead
+        of fetching file contents.  The result is cached with the same TTL
+        as other per-repo calls.
+        """
+
+        def _fetch() -> list[str] | None:
+            url = f"https://api.github.com/repos/{full_name}/contents/"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github root-listing failed for %s", full_name)
+                return None
+            if response.status_code != 200:
+                logger.info(
+                    "github root-listing returned %d for %s",
+                    response.status_code,
+                    full_name,
+                )
+                return None
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github root-listing not JSON for %s", full_name)
+                return None
+            if not isinstance(payload, list):
+                return None
+            return [
+                item["name"]
+                for item in payload
+                if isinstance(item, dict) and isinstance(item.get("name"), str)
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github", "get_repository_root_entries", full_name=full_name
+        )
+        return self._cache.get_or_set(
+            key,
+            _fetch,
+            label=f"github.get_repository_root_entries({full_name})",
+        )
+
     def get_commit_bookends(
         self,
         full_name: str,

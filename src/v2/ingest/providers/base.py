@@ -154,6 +154,18 @@ class GitHubProvider(BaseProvider, ABC):
         del full_name
         return {}
 
+    def get_repository_root_entries(self, full_name: str) -> list[str] | None:
+        """Return the names of all entries at the repository root, or None on failure.
+
+        Used to detect CI configuration files (.github, .travis.yml, etc.)
+        without fetching their contents. Default returns None so providers
+        that don't expose directory listings (test fakes, partial mocks) need
+        not stub this. Must not raise on absence — only transport-level
+        failures are exceptional; return None instead.
+        """
+        del full_name
+        return None
+
     def get_repository_releases(self, full_name: str) -> list[dict[str, Any]]:
         """Return published releases for ``owner/repo``, newest first.
 
