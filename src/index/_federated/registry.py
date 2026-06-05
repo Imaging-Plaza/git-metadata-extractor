@@ -109,6 +109,8 @@ def load_adapters(only: list[str] | None = None) -> list[IndexAdapter]:
         "zenodo_communities", "dockerhub", "gitlab_epfl_projects",
         "gitlab_ethz_projects", "gitlab_datascience_projects",
         "gitlab_epfl_groups",
+        "gitlab_ethz_groups",
+        "gitlab_datascience_groups",
     ]
     targets = [c for c in candidates if (only is None or c in only)]
     for name in targets:
