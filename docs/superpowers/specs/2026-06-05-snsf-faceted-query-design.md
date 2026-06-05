@@ -134,17 +134,64 @@ def facet_counts(store, filters: GrantFilters, *, text: str | None = None
    - Token-gated, `tags=["Indices"]`, mirroring the existing snsf endpoints.
    - Reads the snsf store read-only (the `.ro` snapshot in serving).
 
+## Integration: bootstrap, federated layer, and agent tool
+
+Beyond the standalone CLI/HTTP surfaces, the faceted query is wired into three
+shared seams so it's a first-class, ready-on-first-run capability:
+
+1. **Bootstrap hook.** The first-run `make bootstrap-index` /
+   `src.index._federated.bootstrap` (which opens every store's DuckDB) gains a
+   per-store optional **post-bootstrap hook**: for `snsf`, after `open()` it
+   runs `build_facets(store)` so the 3 facet tables exist (empty until ingest,
+   but present + schema-correct) on a fresh checkout. The hook is generic
+   (`POST_BOOTSTRAP: dict[str, Callable]`), so other stores can register one
+   later; only snsf uses it now. Re-running stays idempotent.
+
+2. **Federated query surface.** Expose the faceted query through the federated
+   layer so consumers reach it the same way they reach `federated_search`:
+   - The `snsf` federated adapter gains an optional **`facet_query(filters,
+     *, text, sort, limit, offset)`** method (read via `getattr`, like the
+     manifest hints — not added to the base `IndexAdapter` Protocol, so other
+     adapters are unaffected) delegating to `facet_query.query_grants`.
+   - A thin `src/index/_federated/structured_query.py` discovers adapters that
+     expose `facet_query` (and their facet schema) and routes a faceted query
+     to the right one — the structured-query analog of `federated_search`. The
+     manifest gains a `structured_query: true` hint on the snsf entry so the
+     capability is discoverable.
+
+3. **LLM agent tool.** A new `src/v2/agents/llm/agent_tools/snsf_grants.py`
+   following the per-index RAG-tool pattern (pydantic-ai `Tool`s backed by a
+   provider), giving the agent:
+   - **`search_snsf_grants`** — faceted + free-text search (the `GrantFilters`
+     fields + `text`, `sort`, `limit`), returning thin hits (grant URL id,
+     title, applicant, institution, scheme, discipline, status, dates, amount,
+     output counts). Description tells the LLM to use it when README / CITATION
+     / metadata mentions an SNSF grant, a Swiss-funded project, a PI + Swiss
+     institution, or to enrich an entity with its grants.
+   - **`snsf_grant_facets`** — facet counts for a filter set (so the agent can
+     discover available values, e.g. funding schemes for an institution).
+   - **`fetch_snsf_grant`** — full grant record (incl. abstract / lay
+     summaries) by grant URL id, split from search to keep prompts small.
+   Backed by a small `SnsfGrantsProvider` in `src/v2/ingest/providers/` (opens
+   the snsf `.ro` store read-only, calls `facet_query`), `record_query`-logged
+   like the other RAG tools, and added to the agent runtime's tool list.
+
 ## Delivery (PR per phase, full `tests/v2/` gate each)
 
 - **Phase A** — `facets.sql` + `build_facets()` + the 3 tables; CLI
-  `build-facets`; tests asserting the flattening/rollups against a small
-  fixture store.
+  `build-facets`; the **bootstrap post-hook** for snsf; tests asserting the
+  flattening/rollups against a small fixture store + that bootstrap builds the
+  facet tables.
 - **Phase B** — `facet_query.py` (`GrantFilters`, `query_grants`,
   `facet_counts`) + FTS; tests for each facet filter, free-text, sort,
   pagination, and facet-count semantics.
-- **Phase C** — the CLI `facet-search` + the two HTTP endpoints + endpoint
-  tests.
-- **Phase D (optional)** — hybrid: intersect facet filters with the existing
+- **Phase C** — the CLI `facet-search`; the two HTTP endpoints; the
+  **federated** `facet_query` adapter method + `structured_query.py` +
+  manifest hint; endpoint + federated tests.
+- **Phase D** — the **agent tool** (`SnsfGrantsProvider` +
+  `agent_tools/snsf_grants.py`, registered in the runtime) + tool tests
+  (stubbed store, assert the tool returns the documented thin-hit shape).
+- **Phase E (optional)** — hybrid: intersect facet filters with the existing
   Qdrant semantic search for conceptual queries.
 
 ## Testing
