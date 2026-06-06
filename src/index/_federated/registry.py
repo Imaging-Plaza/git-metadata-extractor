@@ -111,6 +111,9 @@ def load_adapters(only: list[str] | None = None) -> list[IndexAdapter]:
         "gitlab_epfl_groups",
         "gitlab_ethz_groups",
         "gitlab_datascience_groups",
+        "gitlab_epfl_users",
+        "gitlab_ethz_users",
+        "gitlab_datascience_users",
     ]
     targets = [c for c in candidates if (only is None or c in only)]
     for name in targets:

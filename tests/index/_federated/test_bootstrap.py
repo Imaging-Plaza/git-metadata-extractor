@@ -70,6 +70,38 @@ def test_bootstrap_creates_duckdb(monkeypatch: pytest.MonkeyPatch, tmp_path: pyt
         assert "projects" in tables, f"gitlab_epfl_projects tables: {tables}"
 
 
+_GITLAB_GROUPS_AND_USERS_LEAVES = [
+    "gitlab_epfl_groups", "gitlab_ethz_groups", "gitlab_datascience_groups",
+    "gitlab_epfl_users", "gitlab_ethz_users", "gitlab_datascience_users",
+]
+
+
+def test_gitlab_groups_and_users_leaves_bootstrap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory,
+) -> None:
+    """The gitlab groups + users leaves use the leaf opener convention and must
+    bootstrap (not 'skipped: no duckdb store')."""
+    monkeypatch.setenv("INDEX_DATA_DIR", str(tmp_path))
+
+    result = bootstrap_all(only=_GITLAB_GROUPS_AND_USERS_LEAVES)
+
+    for name in _GITLAB_GROUPS_AND_USERS_LEAVES:
+        assert result[name] in {"created", "exists"}, f"{name} status: {result[name]}"
+        assert result[name] != "skipped: no duckdb store"
+
+    # The users stores expose a `users` table; groups expose a `groups` table.
+    users_db = tmp_path / "gitlab_epfl_users" / "duckdb" / "gitlab_epfl_users.duckdb"
+    assert users_db.exists(), f"Missing: {users_db}"
+    with duckdb.connect(str(users_db), read_only=True) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'",
+            ).fetchall()
+        }
+        assert "users" in tables, f"gitlab_epfl_users tables: {tables}"
+
+
 def test_bootstrap_is_idempotent(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory) -> None:
     """Running bootstrap_all() twice: first run → 'created', second run → 'exists'."""
     monkeypatch.setenv("INDEX_DATA_DIR", str(tmp_path))

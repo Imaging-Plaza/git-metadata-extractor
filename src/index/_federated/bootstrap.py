@@ -45,7 +45,11 @@ POST_BOOTSTRAP: dict[str, Callable[[Any], None]] = {
 _INDEX_SRC = Path(__file__).resolve().parents[1]  # src/index/
 _SKIP_STORES: frozenset[str] = frozenset({"huggingface"})
 _LEAF_STORES: frozenset[str] = frozenset(
-    {"gitlab_epfl_projects", "gitlab_ethz_projects", "gitlab_datascience_projects"},
+    {
+        "gitlab_epfl_projects", "gitlab_ethz_projects", "gitlab_datascience_projects",
+        "gitlab_epfl_groups", "gitlab_ethz_groups", "gitlab_datascience_groups",
+        "gitlab_epfl_users", "gitlab_ethz_users", "gitlab_datascience_users",
+    },
 )
 _DEFAULT_INDEX_DATA_DIR = Path("data/index")
 

@@ -45,6 +45,13 @@ def test_iter_public_groups_paginates():
     assert [p["id"] for p in got] == [10, 20]
 
 
+def test_iter_public_users_paginates():
+    pages = {1: [{"id": 100, "username": "a"}], 2: [{"id": 200, "username": "b"}]}
+    client = GitLabClient(host="gitlab.epfl.ch", token=None, transport=_transport(pages))
+    got = list(client.iter_public_users())
+    assert [p["id"] for p in got] == [100, 200]
+
+
 def test_get_retries_on_429(monkeypatch):
     monkeypatch.setattr(client_mod.time, "sleep", lambda *_: None)
     calls = {"n": 0}
