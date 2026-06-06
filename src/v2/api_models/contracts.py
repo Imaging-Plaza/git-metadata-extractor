@@ -359,6 +359,26 @@ class RenkulabIngestRequest(BaseModel):
     )
 
 
+class GitLabIngestRequest(BaseModel):
+    """Body for `POST /v2/indices/gitlab_*/ingest`.
+
+    Full public-instance crawl; ``limit`` optionally caps how many records are
+    ingested (smoke tests / first run).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int | None = Field(
+        default=None,
+        ge=1,
+        le=1_000_000,
+        description=(
+            "Optional cap on records ingested this run; "
+            "omit to crawl the whole instance."
+        ),
+    )
+
+
 class SwissubaseIngestRequest(BaseModel):
     """Body for `POST /v2/indices/swissubase/ingest`."""
 
@@ -515,6 +535,16 @@ IndexName = Literal[
     "snsf",
     "epfl_graph",
     "zenodo_communities",
+    # GitLab index family — full ingest + semantic search routes.
+    "gitlab_epfl_projects",
+    "gitlab_epfl_groups",
+    "gitlab_epfl_users",
+    "gitlab_ethz_projects",
+    "gitlab_ethz_groups",
+    "gitlab_ethz_users",
+    "gitlab_datascience_projects",
+    "gitlab_datascience_groups",
+    "gitlab_datascience_users",
 ]
 
 

@@ -33,6 +33,7 @@ from src.v2.api_models import (
     GitHubIngestRequest,
     GitHubOrgsIngestRequest,
     GitHubUsersIngestRequest,
+    GitLabIngestRequest,
     HuggingFaceDatasetsIngestRequest,
     HuggingFaceModelsIngestRequest,
     HuggingFaceOrganizationsIngestRequest,
@@ -97,6 +98,11 @@ from src.v2.indices.github_repos import (
 from src.v2.indices.github_users import (
     run_github_users_ingest_job,
     run_github_users_search,
+)
+from src.v2.indices.gitlab import (
+    GITLAB_INDEX_NAMES,
+    run_gitlab_ingest_job,
+    run_gitlab_search,
 )
 from src.v2.indices.huggingface_datasets import (
     run_huggingface_datasets_ingest_job,
@@ -3872,6 +3878,98 @@ async def zenodo_communities_search_post(
     return await _search_response_or_unavailable(
         await run_communities_search(payload, request.app.state),
         index_name="zenodo_communities",
+    )
+
+
+# --- /v2/indices/gitlab_* -------------------------------------------------
+# All nine gitlab stores share uniform leaf entrypoints, so their ingest +
+# search endpoints are registered by a loop + factory over GITLAB_INDEX_NAMES
+# rather than 18 hand-written handlers. `index_name` is bound per-iteration via
+# a default arg inside each factory to avoid the late-binding closure bug.
+
+
+def _make_gitlab_ingest_handler(index_name: str):
+    async def gitlab_ingest_post(
+        payload: GitLabIngestRequest,
+        request: Request,
+        _token: Annotated[str, Depends(verify_token)],
+    ) -> IndexIngestJobAccepted | JSONResponse:
+        """Enqueue a full-instance crawl + embed for this gitlab store."""
+        job_store = _resolve_index_ingest_job_store(request)
+        if job_store is None:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "detail": (
+                        "index ingest job store unavailable: "
+                        "provider cache is disabled"
+                    ),
+                },
+            )
+        job_id = str(uuid4())
+        submitted_at = datetime.now(timezone.utc)
+        job = IndexIngestJob(
+            job_id=job_id, index_name=index_name,
+            status=IndexIngestJobStatus.PENDING,
+            request=payload.model_dump(mode="json"), submitted_at=submitted_at,
+        )
+        job_store.set(job)
+        task = asyncio.create_task(
+            run_gitlab_ingest_job(
+                index_name=index_name, payload=payload,
+                app_state=request.app.state, job_store=job_store, job_id=job_id,
+            ),
+        )
+        _track_background_task(request, task)
+        logger.info(
+            "%s ingest job submitted: job_id=%s limit=%s",
+            index_name, job_id, payload.limit,
+        )
+        return IndexIngestJobAccepted(
+            job_id=job_id, index_name=index_name,
+            status=IndexIngestJobStatus.PENDING,
+            status_url=_index_job_status_path(job_id), submitted_at=submitted_at,
+        )
+
+    return gitlab_ingest_post
+
+
+def _make_gitlab_search_handler(index_name: str):
+    async def gitlab_search_post(
+        payload: IndexSearchRequest,
+        request: Request,
+        _token: Annotated[str, Depends(verify_token)],
+    ) -> IndexSearchResponse | JSONResponse:
+        """Semantic search against this gitlab store."""
+        return await _search_response_or_unavailable(
+            await run_gitlab_search(index_name, payload, request.app.state),
+            index_name=index_name,
+        )
+
+    return gitlab_search_post
+
+
+for _gitlab_name in GITLAB_INDEX_NAMES:
+    v2_router.add_api_route(
+        f"/indices/{_gitlab_name}/ingest",
+        _make_gitlab_ingest_handler(_gitlab_name),
+        methods=["POST"],
+        response_model=IndexIngestJobAccepted,
+        response_model_exclude_none=True,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["Indices"],
+        name=f"{_gitlab_name}_ingest_post",
+        summary=f"Ingest the {_gitlab_name} store (full-instance crawl + embed)",
+    )
+    v2_router.add_api_route(
+        f"/indices/{_gitlab_name}/search",
+        _make_gitlab_search_handler(_gitlab_name),
+        methods=["POST"],
+        response_model=IndexSearchResponse,
+        response_model_exclude_none=True,
+        tags=["Indices"],
+        name=f"{_gitlab_name}_search_post",
+        summary=f"Semantic search against the {_gitlab_name} store",
     )
 
 
