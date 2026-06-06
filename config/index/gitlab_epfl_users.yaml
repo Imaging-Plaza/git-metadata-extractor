@@ -1,0 +1,28 @@
+gitlab:
+  host: gitlab.epfl.ch
+  per_page: 100
+  min_card_chars: 24
+  collection: gitlab_epfl_users
+
+rcp:
+  # Same RCP deployment as the openalex / zenodo / huggingface / infoscience
+  # indexers — single Qwen3-Embedding-8B / Qwen3-Reranker-8B pair.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant GitLab users"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+qdrant:
+  # Compose service `gme-qdrant` on the `dev` network. See
+  # `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 512               # User cards are short; bigger chunks than openalex's 256
+  overlap_tokens: 64
+  tokenizer: cl100k_base

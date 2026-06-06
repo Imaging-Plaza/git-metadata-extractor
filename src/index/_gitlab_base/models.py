@@ -18,6 +18,24 @@ class GitLabGroupRecord(BaseModel):
     raw: dict[str, Any] = {}
 
 
+class GitLabUserRecord(BaseModel):
+    user_id: str                # canonical web_url (https://<host>/<username>)
+    host: str
+    username: str
+    name: str | None = None
+    bio: str | None = None
+    location: str | None = None
+    organization: str | None = None
+    job_title: str | None = None
+    public_email: str | None = None
+    website_url: str | None = None
+    linkedin: str | None = None
+    twitter: str | None = None
+    avatar_url: str | None = None
+    web_url: str | None = None
+    raw: dict[str, Any] = {}
+
+
 class GitLabProjectRecord(BaseModel):
     project_id: str            # canonical web_url
     host: str
