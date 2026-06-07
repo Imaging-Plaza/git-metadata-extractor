@@ -55,6 +55,22 @@ services:
     restart: unless-stopped
     networks:
       - dev
+  # gimie-api sidecar (Phase 1 spike): runs gimie out-of-process so the v2
+  # provider can call it over HTTP instead of importing gimie. OPT-IN — the app
+  # uses it only when `GIMIE_API_URL=http://gme-gimie-api:15400` is set (left
+  # unset by default, so in-process gimie stays the default). Pin a digest for
+  # reproducibility before relying on it in CI/prod.
+  gme-gimie-api:
+    image: ghcr.io/sdsc-ordes/gimie-api:latest
+    container_name: gme-gimie-api
+    environment:
+      # gimie-api reads the GitHub token from ACCESS_TOKEN.
+      ACCESS_TOKEN: ${GME_GITHUB_TOKEN:-}
+    ports:
+      - "${GIMIE_API_PORT:-7000}:15400"
+    restart: unless-stopped
+    networks:
+      - dev
 
 networks:
   dev:
