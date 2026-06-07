@@ -25,6 +25,7 @@ from typing import Any
 from urllib.parse import unquote
 
 import tomllib
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -654,6 +655,68 @@ def parse_maven_coords(aux_files: Any) -> tuple[str, str] | None:
     if not group:
         return None
     return (group, artifact)
+
+
+# GitHub FUNDING.yml platform → URL template ({} = the declared handle). Each
+# value may be a scalar handle or a list of handles; `custom` carries raw URLs.
+_FUNDING_PLATFORMS: dict[str, str] = {
+    "github": "https://github.com/sponsors/{}",
+    "patreon": "https://www.patreon.com/{}",
+    "open_collective": "https://opencollective.com/{}",
+    "ko_fi": "https://ko-fi.com/{}",
+    "tidelift": "https://tidelift.com/funding/github/{}",
+    "community_bridge": "https://crowdfunding.lfx.linuxfoundation.org/projects/{}",
+    "liberapay": "https://liberapay.com/{}",
+    "issuehunt": "https://issuehunt.io/r/{}",
+    "lfx_crowdfunding": "https://crowdfunding.lfx.linuxfoundation.org/projects/{}",
+    "polar": "https://polar.sh/{}",
+    "buy_me_a_coffee": "https://www.buymeacoffee.com/{}",
+    "thanks_dev": "https://thanks.dev/{}",
+}
+
+
+def _funding_handles(value: Any) -> list[str]:
+    """Normalise a FUNDING.yml value (scalar or list) to a list of handles."""
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if isinstance(value, list):
+        return [v.strip() for v in value if isinstance(v, str) and v.strip()]
+    return []
+
+
+def parse_funding_urls(aux_files: Any) -> list[str]:
+    """Resolve a repo's ``.github/FUNDING.yml`` to canonical funding URLs.
+
+    Maps each sponsorship platform (``github``, ``patreon``, ``open_collective``,
+    ``ko_fi``, ``liberapay``, ``tidelift``, ``buy_me_a_coffee``, …) to its URL,
+    and passes ``custom`` entries through as raw URLs. Values may be a single
+    handle or a list. Returns a de-duped, order-preserving list (empty when no
+    FUNDING file / unparseable / no recognised platform).
+    """
+    content = _aux_file_lookup(aux_files, "funding.yml", "funding.yaml")
+    if content is None:
+        return []
+    try:
+        data = yaml.safe_load(content)
+    except yaml.YAMLError:
+        return []
+    if not isinstance(data, dict):
+        return []
+
+    candidates: list[str] = []
+    for platform, template in _FUNDING_PLATFORMS.items():
+        candidates.extend(template.format(h) for h in _funding_handles(data.get(platform)))
+    candidates.extend(
+        u for u in _funding_handles(data.get("custom"))
+        if u.startswith(("http://", "https://"))
+    )
+    seen: set[str] = set()
+    out: list[str] = []
+    for url in candidates:
+        if url and url not in seen:
+            seen.add(url)
+            out.append(url)
+    return out
 
 
 # ---------------------------------------------------------------------------
