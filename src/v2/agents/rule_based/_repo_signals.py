@@ -9,11 +9,19 @@ Public surface
 parse_test_coverage(readme)  →  "87%" | None
 parse_docker_hub_url(readme, aux_files)  →  URL | None
 detect_has_ci(root_entries)  →  True | False | None
+parse_npm_name(aux_files)  →  "pkg" | "@scope/pkg" | None
+parse_pypi_name(aux_files)  →  "project-name" | None
+repo_url_matches(candidate_url, full_name)  →  True | False
+summarize_registry_package(pkg)  →  flat scalar dict (always-present keys)
 """
 from __future__ import annotations
 
+import configparser
+import json
 import re
 from typing import Any
+
+import tomllib
 
 # ---------------------------------------------------------------------------
 # _has_ci detection
@@ -318,4 +326,227 @@ def summarize_packages(container_images: Any) -> dict[str, Any]:
     )
     if updated:
         out["latest_package_updated_at"] = updated[-1]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# npm / PyPI registry package discovery — manifest name parsing + back-ref
+# ---------------------------------------------------------------------------
+
+# A normalised GitHub repo path needs at least owner + repo segments.
+_OWNER_REPO_SEGMENTS = 2
+
+
+def _aux_file_lookup(aux_files: Any, *names: str) -> str | None:
+    """Return the content of the first of *names* present in *aux_files*
+    (case-insensitive on the filename), else None.
+
+    ``aux_files`` keys may include a path prefix (e.g. ``.github/foo``); we
+    match on the basename so root manifests are found regardless of casing.
+    """
+    if not isinstance(aux_files, dict):
+        return None
+    wanted = {n.lower() for n in names}
+    for filename, content in aux_files.items():
+        if not isinstance(filename, str) or not isinstance(content, str):
+            continue
+        base = filename.rsplit("/", maxsplit=1)[-1].lower()
+        if base in wanted:
+            return content
+    return None
+
+
+def parse_npm_name(aux_files: Any) -> str | None:
+    """Extract the published npm package name from a repo's ``package.json``.
+
+    Returns the ``name`` field verbatim (scoped names ``@scope/pkg`` are kept
+    intact). Returns None when ``package.json`` is missing, malformed, has no
+    ``name``, or declares ``"private": true`` (private packages are never
+    published to the public registry).
+    """
+    content = _aux_file_lookup(aux_files, "package.json")
+    if content is None:
+        return None
+    try:
+        data = json.loads(content)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if data.get("private") is True:
+        return None
+    name = data.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
+def _name_from_table(table: Any) -> str | None:
+    """Return a non-empty ``name`` string from a TOML table-like dict."""
+    if isinstance(table, dict):
+        name = table.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return None
+
+
+def _pypi_name_from_pyproject(content: str) -> str | None:
+    """Extract the project name from ``pyproject.toml`` content.
+
+    Tries ``[project].name`` (PEP 621) then ``[tool.poetry].name``.
+    """
+    try:
+        data = tomllib.loads(content)
+    except (tomllib.TOMLDecodeError, ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    name = _name_from_table(data.get("project"))
+    if name:
+        return name
+    tool = data.get("tool")
+    poetry = tool.get("poetry") if isinstance(tool, dict) else None
+    return _name_from_table(poetry)
+
+
+def _pypi_name_from_setup_cfg(content: str) -> str | None:
+    """Extract ``[metadata] name`` from ``setup.cfg`` content."""
+    parser = configparser.ConfigParser()
+    try:
+        parser.read_string(content)
+    except configparser.Error:
+        return None
+    if parser.has_option("metadata", "name"):
+        name = parser.get("metadata", "name").strip()
+        if name:
+            return name
+    return None
+
+
+def parse_pypi_name(aux_files: Any) -> str | None:
+    """Extract the published PyPI project name from a repo's manifests.
+
+    Order of precedence:
+      1. ``pyproject.toml`` → ``[project].name`` (PEP 621)
+      2. ``pyproject.toml`` → ``[tool.poetry].name``
+      3. ``setup.cfg`` → ``[metadata] name``
+
+    ``setup.py`` is intentionally skipped — executing it is unsafe. The name
+    is returned as-declared (no PEP 503 normalisation; PyPI accepts the
+    project name as-is). Returns None when no name can be found.
+    """
+    pyproject = _aux_file_lookup(aux_files, "pyproject.toml")
+    if pyproject is not None:
+        name = _pypi_name_from_pyproject(pyproject)
+        if name:
+            return name
+
+    setup_cfg = _aux_file_lookup(aux_files, "setup.cfg")
+    if setup_cfg is not None:
+        return _pypi_name_from_setup_cfg(setup_cfg)
+    return None
+
+
+def repo_url_matches(candidate_url: Any, full_name: str) -> bool:
+    """Return True iff *candidate_url* resolves to ``github.com/<full_name>``.
+
+    Normalises the many shapes a registry's ``repository.url`` can take:
+    ``git+https://github.com/o/r.git``, ``ssh://git@github.com/o/r``,
+    ``git@github.com:o/r.git`` (scp-like), ``git://github.com/o/r``,
+    trailing ``.git`` / ``/``, and arbitrary host casing. Comparison on
+    owner/repo is case-insensitive. Returns False for None/empty, non-GitHub
+    hosts, or any owner/repo mismatch.
+    """
+    if not isinstance(candidate_url, str) or not candidate_url.strip():
+        return False
+    if not isinstance(full_name, str) or "/" not in full_name:
+        return False
+
+    url = candidate_url.strip()
+    # Strip a leading `git+` VCS-prefix (git+https://…, git+ssh://…).
+    if url.lower().startswith("git+"):
+        url = url[4:]
+
+    # scp-like syntax: git@github.com:owner/repo(.git)
+    scp_match = re.match(
+        r"^(?:ssh://)?git@([^/:]+):(.+)$", url, flags=re.IGNORECASE,
+    )
+    if scp_match:
+        host = scp_match.group(1).lower()
+        path = scp_match.group(2)
+    else:
+        # Strip known scheme prefixes, leaving host/path.
+        stripped = re.sub(
+            r"^(?:https?|ssh|git)://", "", url, flags=re.IGNORECASE,
+        )
+        # ssh://git@github.com/... — drop a leading userinfo (git@).
+        stripped = re.sub(r"^[^/@]+@", "", stripped)
+        if "/" not in stripped:
+            return False
+        host, path = stripped.split("/", maxsplit=1)
+        host = host.lower()
+
+    if host not in ("github.com", "www.github.com"):
+        # Only github.com (and its www. alias) count — reject lookalike
+        # subdomains like evil.github.com that would otherwise false-match.
+        return False
+
+    path = path.strip("/")
+    if path.lower().endswith(".git"):
+        path = path[: -len(".git")]
+    path = path.strip("/")
+    segments = [seg for seg in path.split("/") if seg]
+    if len(segments) < _OWNER_REPO_SEGMENTS:
+        return False
+    candidate_owner_repo = f"{segments[0]}/{segments[1]}"
+    return candidate_owner_repo.lower() == full_name.strip().strip("/").lower()
+
+
+def summarize_registry_package(pkg: Any) -> dict[str, Any]:
+    """Reduce a thin registry-package dict to flat, RDF-friendly scalars.
+
+    Mirrors ``summarize_releases`` / ``summarize_packages``: the keys are
+    *always* present (all None when *pkg* is None or not a dict) so the
+    splatted ``_npm_*`` / ``_pypi_*`` internal fields are stable. The thin
+    dict comes from ``PackageRegistryProvider`` and carries the published
+    package's name, latest version, full version list, latest release date,
+    registry (human) URL, and the back-reference link policy
+    (``verified`` / ``name_only``).
+
+    Emitted keys:
+      * ``package``              — published package/project name
+      * ``latest_version``       — newest published version string
+      * ``versions``             — list of all version strings (or None)
+      * ``latest_release_date``  — ISO 8601 date of the latest version
+      * ``registry_url``         — human-facing registry page URL
+      * ``link``                 — ``"verified"`` | ``"name_only"`` | None
+    """
+    out: dict[str, Any] = {
+        "package": None,
+        "latest_version": None,
+        "versions": None,
+        "latest_release_date": None,
+        "registry_url": None,
+        "link": None,
+    }
+    if not isinstance(pkg, dict):
+        return out
+    name = pkg.get("name")
+    if isinstance(name, str) and name:
+        out["package"] = name
+    latest = pkg.get("latest_version")
+    if isinstance(latest, str) and latest:
+        out["latest_version"] = latest
+    versions = pkg.get("versions")
+    if isinstance(versions, list) and versions:
+        out["versions"] = [v for v in versions if isinstance(v, str) and v] or None
+    date = pkg.get("latest_release_date")
+    if isinstance(date, str) and date:
+        out["latest_release_date"] = date
+    registry_url = pkg.get("registry_url")
+    if isinstance(registry_url, str) and registry_url:
+        out["registry_url"] = registry_url
+    link = pkg.get("link")
+    if isinstance(link, str) and link:
+        out["link"] = link
     return out
