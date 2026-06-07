@@ -13,6 +13,7 @@ from src.v2.agents.models import (
     validate_permissive,
 )
 from src.v2.agents.rule_based._repo_signals import (
+    parse_compose_images,
     parse_docker_hub_url,
     parse_funding_urls,
     parse_test_coverage,
@@ -679,6 +680,23 @@ class RepositoryAgentV2:
                 len(repository["git_tags"])
                 if isinstance(repository.get("git_tags"), list)
                 else None
+            ),
+            # Docker Compose files found anywhere in the repo (root,
+            # .devcontainer/, docker/ …): URL pointers + the image references
+            # (name:tag / name@digest) parsed from their `services.*.image`.
+            "_compose_files": (
+                [c["html_url"] for c in repository["compose_files"]
+                 if isinstance(c, dict) and isinstance(c.get("html_url"), str)]
+                if isinstance(repository.get("compose_files"), list)
+                else None
+            ),
+            "_compose_file_count": (
+                len(repository["compose_files"])
+                if isinstance(repository.get("compose_files"), list)
+                else None
+            ),
+            "_compose_images": (
+                parse_compose_images(repository.get("compose_files")) or None
             ),
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
