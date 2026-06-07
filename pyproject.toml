@@ -28,9 +28,8 @@ classifiers = [
 dependencies = [
     "fastapi>=0.122.0",
     "uvicorn[standard]==0.34.3",
-    "gimie==0.7.2",
     "pydantic==2.11.7",
-    "python-dotenv==0.21.1",
+    "python-dotenv>=1.2.2",
     "requests>=2.33.0",
     "openai==2.1.0",
     "tiktoken==0.9.0",
