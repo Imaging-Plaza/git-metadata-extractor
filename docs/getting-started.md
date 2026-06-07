@@ -61,6 +61,12 @@ and `.env.example`):
   `ZENODO`, `ORCID`, `ROR`).
 - `INDEX_QDRANT_URL` — Qdrant endpoint. **Inside the devcontainer use
   `http://gme-qdrant:6333`**, not `localhost:6333`.
+- `GIMIE_API_URL` — **required for repository extraction.** GIMIE runs as the
+  `gme-gimie-api` sidecar (the `gimie` package was removed from the image); the
+  devcontainer compose sets this to `http://gme-gimie-api:15400` for you. Outside
+  the devcontainer, either point it at a running sidecar or `pip install
+  gimie==0.7.2` for in-process extraction. See
+  [operations runbook §8](OPERATIONS_RUNBOOK.md#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required).
 
 ## 3. Run the API locally
 

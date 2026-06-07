@@ -2,7 +2,7 @@
 
 The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with [Open Pulse Ontology v2.1.2](https://open-pulse.epfl.ch/ontology). This doc is the operator-facing tour: what each stage does, what assumptions hold across the pipeline, and where to dig deeper.
 
-**Deep reference:** [`.internal/v2-pipeline-reference.md`](../.internal/v2-pipeline-reference.md) — every stage, every gate, every cache layer.
+**Deep reference:** `.internal/v2-pipeline-reference.md` (repo-internal) — every stage, every gate, every cache layer.
 
 ---
 
@@ -174,13 +174,13 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | `V2_LINK_VERACITY_ENABLED` | `false` | Stage 14 (Selenium + LLM URL verification). |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
 
-Full list: [`.env.example`](../.env.example).
+Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
 
 ---
 
 ## Where to go next
 
-- **Per-stage detail** → [`.internal/v2-pipeline-reference.md`](../.internal/v2-pipeline-reference.md)
+- **Per-stage detail** → `.internal/v2-pipeline-reference.md` (repo-internal)
 - **Schema source-of-truth** → `src/v2/schema/json/` (agent + strict) and `src/v2/schema/ontology/open-pulse-ontology.ttl`
 - **Pipeline entry** → `src/v2/api.py` (the `_run_pipeline` function ties every stage together)
 - **Orchestrator** → `src/v2/pipeline/orchestrator.py` (phases 1–5)

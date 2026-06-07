@@ -77,7 +77,7 @@ python -m src.index.epfl_graph search "<query>" --top-k 10 --candidate-k 50 --mi
 
 ## Configuration
 
-Static settings live in [`config/index/epfl_graph.yaml`](../config/index/epfl_graph.yaml).
+Static settings live in [`config/index/epfl_graph.yaml`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/config/index/epfl_graph.yaml).
 The ones worth tuning per deployment:
 
 | Path | Default | Purpose |
