@@ -577,6 +577,42 @@ class RepositoryAgentV2:
                     repository.get("pypi_package"),
                 ).items()
             },
+            # README badges — parsed from the raw README by context_gather
+            # into a list of {label, image_url, link_url} records, stored as
+            # repository_metadata["badges"]. `_badges` is the raw list (or
+            # None); `_badge_count` is the count (or None when no badges).
+            "_badges": (repository.get("badges") or None),
+            "_badge_count": (
+                len(repository["badges"])
+                if isinstance(repository.get("badges"), list)
+                else None
+            ),
+            # Published conda / crates.io / RubyGems packages — discovered by
+            # context_gather from README badge coordinates (+ cargo.toml for
+            # crates) and the public-registry back-reference, stored as
+            # `conda_package` / `crates_package` / `rubygems_package`. Same
+            # flat `gme-internal:*` scalars as `_npm_*` / `_pypi_*`. conda
+            # also emits `_conda_channel` (the Anaconda channel). Always
+            # present (all None when no badge / provider disabled / drop).
+            **{
+                f"_conda_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("conda_package"),
+                ).items()
+            },
+            "_conda_channel": (repository.get("conda_package") or {}).get("channel"),
+            **{
+                f"_crates_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("crates_package"),
+                ).items()
+            },
+            **{
+                f"_rubygems_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("rubygems_package"),
+                ).items()
+            },
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.

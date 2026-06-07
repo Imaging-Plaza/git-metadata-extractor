@@ -56,7 +56,12 @@ class FakeSession:
         self._routes = routes
         self.requested: list[str] = []
 
-    def get(self, url: str, timeout: float | None = None) -> _FakeResponse:  # noqa: ARG002
+    def get(  # noqa: ARG002
+        self,
+        url: str,
+        timeout: float | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> _FakeResponse:
         self.requested.append(url)
         return self._routes.get(url, _FakeResponse(404, None))
 
@@ -351,7 +356,12 @@ def test_provider_get_pypi_home_page_fallback() -> None:
 
 def test_provider_transport_error_returns_none() -> None:
     class _BoomSession:
-        def get(self, url: str, timeout: float | None = None) -> Any:  # noqa: ARG002
+        def get(  # noqa: ARG002
+            self,
+            url: str,
+            timeout: float | None = None,
+            headers: dict[str, str] | None = None,
+        ) -> Any:
             message = "boom"
             raise ConnectionError(message)
 

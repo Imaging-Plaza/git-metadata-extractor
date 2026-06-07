@@ -33,6 +33,13 @@ _REQUEST_TIMEOUT_SECONDS = 15
 _HTTP_OK = 200
 _HTTP_NOT_FOUND = 404
 
+# Descriptive User-Agent — crates.io REQUIRES one (rejects requests without
+# it) and it is polite for every registry. Sent on all outbound requests.
+_USER_AGENT = (
+    "open-pulse-metadata-enricher "
+    "(+https://github.com/Imaging-Plaza; package discovery)"
+)
+
 
 class PackageRegistryProvider:
     """Fetch thin published-package metadata from npmjs.com / PyPI.
@@ -178,13 +185,234 @@ class PackageRegistryProvider:
         }
 
     # ------------------------------------------------------------------
+    # conda / Anaconda
+    # ------------------------------------------------------------------
+
+    def get_conda_package(
+        self, channel: str, name: str,
+    ) -> dict[str, Any] | None:
+        """Fetch thin metadata for conda package *channel*/*name*.
+
+        GETs ``https://api.anaconda.org/package/<channel>/<name>``. Returns
+        None on any failure. Adds a ``channel`` key to the thin dict.
+        """
+        if not isinstance(channel, str) or not channel.strip():
+            return None
+        if not isinstance(name, str) or not name.strip():
+            return None
+        channel = channel.strip()
+        name = name.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            ch = quote(channel, safe="")
+            pkg = quote(name, safe="")
+            url = f"https://api.anaconda.org/package/{ch}/{pkg}"
+            payload = self._get_json(url, subject=f"conda:{channel}/{name}")
+            if not isinstance(payload, dict):
+                return None
+            return self._thin_conda(payload, channel, name)
+
+        return self._cached(
+            _fetch, method="get_conda_package", name=f"{channel}/{name}",
+        )
+
+    @staticmethod
+    def _thin_conda(
+        payload: dict[str, Any], channel: str, name: str,
+    ) -> dict[str, Any] | None:
+        pkg_name = payload.get("name")
+        pkg_name = pkg_name if isinstance(pkg_name, str) and pkg_name else name
+
+        latest_version = payload.get("latest_version")
+        latest_version = latest_version if isinstance(latest_version, str) else None
+
+        versions_obj = payload.get("versions")
+        versions: list[str] = []
+        if isinstance(versions_obj, list):
+            versions = [v for v in versions_obj if isinstance(v, str) and v]
+        if len(versions) > _MAX_VERSIONS:
+            logger.info(
+                "conda package %s/%s has %d versions; truncating to %d",
+                channel, name, len(versions), _MAX_VERSIONS,
+            )
+            versions = versions[:_MAX_VERSIONS]
+
+        repository_url = _first_str(
+            payload.get("dev_url"),
+            payload.get("source_git_url"),
+            payload.get("html_url"),
+        )
+
+        latest_release_date = _max_str(
+            f.get("upload_time")
+            for f in payload.get("files", [])
+            if isinstance(f, dict)
+        )
+
+        return {
+            "name": pkg_name,
+            "latest_version": latest_version,
+            "versions": versions or None,
+            "latest_release_date": latest_release_date,
+            "repository_url": repository_url,
+            "registry_url": f"https://anaconda.org/{channel}/{pkg_name}",
+            "channel": channel,
+        }
+
+    # ------------------------------------------------------------------
+    # crates.io
+    # ------------------------------------------------------------------
+
+    def get_crates_package(self, name: str) -> dict[str, Any] | None:
+        """Fetch thin metadata for crates.io crate *name*.
+
+        GETs ``https://crates.io/api/v1/crates/<name>``. Returns None on
+        failure. crates.io REQUIRES a User-Agent header (sent by _get_json).
+        """
+        if not isinstance(name, str) or not name.strip():
+            return None
+        name = name.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            encoded = quote(name, safe="")
+            url = f"https://crates.io/api/v1/crates/{encoded}"
+            payload = self._get_json(url, subject=f"crates:{name}")
+            if not isinstance(payload, dict):
+                return None
+            return self._thin_crates(payload, name)
+
+        return self._cached(_fetch, method="get_crates_package", name=name)
+
+    @staticmethod
+    def _thin_crates(payload: dict[str, Any], name: str) -> dict[str, Any] | None:
+        crate = payload.get("crate") if isinstance(payload.get("crate"), dict) else {}
+
+        pkg_name = crate.get("name")
+        pkg_name = pkg_name if isinstance(pkg_name, str) and pkg_name else name
+
+        latest_version = _first_str(
+            crate.get("max_stable_version"), crate.get("newest_version"),
+        )
+
+        versions_obj = payload.get("versions")
+        versions: list[str] = []
+        if isinstance(versions_obj, list):
+            versions = [
+                v["num"]
+                for v in versions_obj
+                if isinstance(v, dict) and isinstance(v.get("num"), str) and v["num"]
+            ]
+        if len(versions) > _MAX_VERSIONS:
+            logger.info(
+                "crate %s has %d versions; truncating to %d",
+                name, len(versions), _MAX_VERSIONS,
+            )
+            versions = versions[:_MAX_VERSIONS]
+
+        repository_url = _first_str(crate.get("repository"))
+        latest_release_date = _first_str(crate.get("updated_at"))
+
+        return {
+            "name": pkg_name,
+            "latest_version": latest_version,
+            "versions": versions or None,
+            "latest_release_date": latest_release_date,
+            "repository_url": repository_url,
+            "registry_url": f"https://crates.io/crates/{pkg_name}",
+        }
+
+    # ------------------------------------------------------------------
+    # RubyGems
+    # ------------------------------------------------------------------
+
+    def get_rubygems_package(self, name: str) -> dict[str, Any] | None:
+        """Fetch thin metadata for RubyGems gem *name*.
+
+        GETs ``https://rubygems.org/api/v1/gems/<name>.json`` and, best-effort,
+        ``https://rubygems.org/api/v1/versions/<name>.json`` for the version
+        list. Returns None on failure of the primary request.
+        """
+        if not isinstance(name, str) or not name.strip():
+            return None
+        name = name.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            encoded = quote(name, safe="")
+            url = f"https://rubygems.org/api/v1/gems/{encoded}.json"
+            payload = self._get_json(url, subject=f"rubygems:{name}")
+            if not isinstance(payload, dict):
+                return None
+            versions_url = (
+                f"https://rubygems.org/api/v1/versions/{encoded}.json"
+            )
+            versions_payload = self._get_json(
+                versions_url, subject=f"rubygems-versions:{name}",
+            )
+            return self._thin_rubygems(payload, versions_payload, name)
+
+        return self._cached(_fetch, method="get_rubygems_package", name=name)
+
+    @staticmethod
+    def _thin_rubygems(
+        payload: dict[str, Any], versions_payload: Any, name: str,
+    ) -> dict[str, Any] | None:
+        pkg_name = payload.get("name")
+        pkg_name = pkg_name if isinstance(pkg_name, str) and pkg_name else name
+
+        latest_version = payload.get("version")
+        latest_version = latest_version if isinstance(latest_version, str) else None
+
+        repository_url = _first_str(
+            payload.get("source_code_uri"), payload.get("homepage_uri"),
+        )
+
+        versions: list[str] = []
+        latest_release_date: str | None = None
+        if isinstance(versions_payload, list):
+            versions = [
+                v["number"]
+                for v in versions_payload
+                if isinstance(v, dict)
+                and isinstance(v.get("number"), str)
+                and v["number"]
+            ]
+            if len(versions) > _MAX_VERSIONS:
+                logger.info(
+                    "gem %s has %d versions; truncating to %d",
+                    name, len(versions), _MAX_VERSIONS,
+                )
+                versions = versions[:_MAX_VERSIONS]
+            latest_release_date = _max_str(
+                v.get("created_at")
+                for v in versions_payload
+                if isinstance(v, dict)
+            )
+
+        return {
+            "name": pkg_name,
+            "latest_version": latest_version,
+            "versions": versions or None,
+            "latest_release_date": latest_release_date,
+            "repository_url": repository_url,
+            "registry_url": f"https://rubygems.org/gems/{pkg_name}",
+        }
+
+    # ------------------------------------------------------------------
     # shared helpers
     # ------------------------------------------------------------------
 
     def _get_json(self, url: str, *, subject: str) -> Any:
-        """GET *url* and return parsed JSON, or None on any failure."""
+        """GET *url* and return parsed JSON, or None on any failure.
+
+        Sends a descriptive ``User-Agent`` header on every request (crates.io
+        rejects requests without one).
+        """
         try:
-            response = self._session.get(url, timeout=_REQUEST_TIMEOUT_SECONDS)
+            response = self._session.get(
+                url,
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+                headers={"User-Agent": _USER_AGENT},
+            )
         except Exception:  # noqa: BLE001 — best-effort; never raise on transport error.
             logger.info("package registry fetch failed: %s", subject)
             return None
@@ -215,6 +443,23 @@ class PackageRegistryProvider:
         return self._cache.get_or_set(
             key, factory, label=f"package_registry.{method}({name})",
         )
+
+
+def _first_str(*candidates: Any) -> str | None:
+    """Return the first non-empty stripped string in *candidates*, else None."""
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _max_str(values: Any) -> str | None:
+    """Return the lexically-max non-empty string in *values*, else None.
+
+    Used for ISO 8601 timestamps where lexical order == chronological order.
+    """
+    strings = sorted(v for v in values if isinstance(v, str) and v)
+    return strings[-1] if strings else None
 
 
 def _extract_npm_repo_url(

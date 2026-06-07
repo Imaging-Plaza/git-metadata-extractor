@@ -18,10 +18,14 @@ from __future__ import annotations
 
 import configparser
 import json
+import logging
 import re
 from typing import Any
+from urllib.parse import unquote
 
 import tomllib
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # _has_ci detection
@@ -327,6 +331,224 @@ def summarize_packages(container_images: Any) -> dict[str, Any]:
     if updated:
         out["latest_package_updated_at"] = updated[-1]
     return out
+
+
+# ---------------------------------------------------------------------------
+# Badge parsing + registry coordinate extraction (pure, no I/O)
+# ---------------------------------------------------------------------------
+
+# Maximum number of badges carried in `gme-internal:badges`. A handful of
+# READMEs embed dozens of status badges; the cap keeps the list bounded.
+_MAX_BADGES = 100
+
+# Linked badge: `[![alt](image_url)](link_url)`
+_BADGE_LINKED_RE = re.compile(
+    r"\[!\[(?P<alt>[^\]]*)\]\((?P<img>[^)\s]+)(?:\s+[^)]*)?\)\]"
+    r"\((?P<link>[^)\s]+)(?:\s+[^)]*)?\)",
+)
+# Plain image badge: `![alt](image_url)`
+_BADGE_IMAGE_RE = re.compile(
+    r"!\[(?P<alt>[^\]]*)\]\((?P<img>[^)\s]+)(?:\s+[^)]*)?\)",
+)
+
+
+def parse_badges(readme: str | None) -> list[dict[str, Any]]:
+    """Extract Markdown badges from *readme* as structured records.
+
+    Recognises linked badges ``[![alt](image_url)](link_url)`` and plain
+    image badges ``![alt](image_url)`` (``link_url`` None). Returns a
+    de-duped, order-preserving list of
+    ``{"label": alt, "image_url": img, "link_url": link_or_None}``.
+
+    Empty list on None/empty input. Capped at ~100 entries (a warning is
+    logged when truncated). Linked badges take precedence over the plain
+    image inside them: the linked form is matched first and its span is
+    masked so the inner ``![alt](img)`` is not double-counted.
+    """
+    if not isinstance(readme, str) or not readme:
+        return []
+
+    seen: set[tuple[str, str, str | None]] = set()
+    result: list[dict[str, Any]] = []
+
+    def _add(alt: str, img: str, link: str | None) -> None:
+        key = (alt, img, link)
+        if key in seen:
+            return
+        seen.add(key)
+        result.append({"label": alt, "image_url": img, "link_url": link})
+
+    # Match linked badges first, masking their spans so the inner plain
+    # image isn't matched again by the plain-image pass below.
+    masked = list(readme)
+    for m in _BADGE_LINKED_RE.finditer(readme):
+        _add(m.group("alt"), m.group("img"), m.group("link"))
+        for i in range(m.start(), m.end()):
+            masked[i] = "\0"
+    masked_text = "".join(masked)
+    for m in _BADGE_IMAGE_RE.finditer(masked_text):
+        _add(m.group("alt"), m.group("img"), None)
+
+    if len(result) > _MAX_BADGES:
+        logger.info(
+            "README has %d badges; truncating to %d", len(result), _MAX_BADGES,
+        )
+        result = result[:_MAX_BADGES]
+    return result
+
+
+# Registry-coordinate matchers. Each returns a value for the ecosystem when
+# the URL matches, else None. URLs are URL-decoded first so `%2F` etc. work.
+_PYPI_LINK_RE = re.compile(
+    r"(?:pypi\.org/project|pypi\.python\.org/pypi)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_PYPI_IMAGE_RE = re.compile(
+    r"(?:badge\.fury\.io/py|img\.shields\.io/pypi/v)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_NPM_LINK_RE = re.compile(
+    r"npmjs\.com/package/(?P<name>(?:@[^/\s)?#]+/)?[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_NPM_IMAGE_RE = re.compile(
+    r"(?:badge\.fury\.io/js|img\.shields\.io/npm/v)/"
+    r"(?P<name>(?:@[^/\s)?#]+/)?[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_CONDA_LINK_RE = re.compile(
+    r"anaconda\.org/(?P<channel>[^/\s)?#]+)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_CONDA_SHIELDS_RE = re.compile(
+    r"img\.shields\.io/conda/v/(?P<channel>[^/\s)?#]+)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_CRATES_LINK_RE = re.compile(
+    r"crates\.io/crates/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_CRATES_IMAGE_RE = re.compile(
+    r"img\.shields\.io/crates/v/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_RUBYGEMS_LINK_RE = re.compile(
+    r"rubygems\.org/gems/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_RUBYGEMS_IMAGE_RE = re.compile(
+    r"(?:img\.shields\.io/gem/v|badge\.fury\.io/rb)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+
+
+# Badge image URLs (badge.fury.io, img.shields.io) often end in an image
+# extension (`csbdeep.svg`); no real package name does, so strip it.
+_BADGE_EXT_RE = re.compile(r"\.(?:svg|png|json|gif)$", re.IGNORECASE)
+
+
+def _strip_badge_ext(name: str) -> str:
+    return _BADGE_EXT_RE.sub("", name)
+
+
+def _match_pypi(url: str) -> str | None:
+    m = _PYPI_LINK_RE.search(url) or _PYPI_IMAGE_RE.search(url)
+    return _strip_badge_ext(m.group("name")) if m else None
+
+
+def _match_npm(url: str) -> str | None:
+    m = _NPM_LINK_RE.search(url) or _NPM_IMAGE_RE.search(url)
+    return _strip_badge_ext(m.group("name")) if m else None
+
+
+def _match_conda(url: str) -> tuple[str, str] | None:
+    m = _CONDA_SHIELDS_RE.search(url)
+    if m:
+        return (m.group("channel"), _strip_badge_ext(m.group("name")))
+    m = _CONDA_LINK_RE.search(url)
+    if m:
+        # `anaconda.org/<channel>/<name>` — the `/badges/...` suffix on
+        # image badges is ignored because the regex stops at `<name>`.
+        return (m.group("channel"), _strip_badge_ext(m.group("name")))
+    return None
+
+
+def _match_crates(url: str) -> str | None:
+    m = _CRATES_LINK_RE.search(url) or _CRATES_IMAGE_RE.search(url)
+    return _strip_badge_ext(m.group("name")) if m else None
+
+
+def _match_rubygems(url: str) -> str | None:
+    m = _RUBYGEMS_LINK_RE.search(url) or _RUBYGEMS_IMAGE_RE.search(url)
+    return _strip_badge_ext(m.group("name")) if m else None
+
+
+# (ecosystem-key, matcher) pairs consulted for each badge URL.
+_COORD_MATCHERS: tuple[tuple[str, Any], ...] = (
+    ("pypi", _match_pypi),
+    ("npm", _match_npm),
+    ("conda", _match_conda),
+    ("crates", _match_crates),
+    ("rubygems", _match_rubygems),
+)
+
+
+def _coords_from_url(url: str, out: dict[str, Any]) -> None:
+    """Fill the first match per ecosystem into *out* from a single URL."""
+    for key, matcher in _COORD_MATCHERS:
+        if key in out:
+            continue
+        value = matcher(url)
+        if value:
+            out[key] = value
+
+
+def extract_registry_coords(badges: Any) -> dict[str, Any]:
+    """Recognise package-registry coordinates in a parsed *badges* list.
+
+    For each badge, prefer the ``link_url`` (a click-through to the actual
+    registry page) and fall back to the ``image_url`` (a shields.io /
+    badge.fury.io status image). Returns the FIRST match per ecosystem:
+
+    * ``pypi``     → ``"<name>"``
+    * ``npm``      → ``"<name>"`` (scoped ``@scope/pkg`` kept intact)
+    * ``conda``    → ``("<channel>", "<name>")``
+    * ``crates``   → ``"<name>"``
+    * ``rubygems`` → ``"<name>"``
+
+    CI / workflow badges (github.com/.../workflows/...) are ignored since
+    they match none of the registry patterns. Returns ``{}`` when nothing
+    is recognised.
+    """
+    out: dict[str, Any] = {}
+    if not isinstance(badges, list):
+        return out
+    for badge in badges:
+        if not isinstance(badge, dict):
+            continue
+        for raw in (badge.get("link_url"), badge.get("image_url")):
+            if not isinstance(raw, str) or not raw:
+                continue
+            _coords_from_url(unquote(raw), out)
+    return out
+
+
+def parse_crates_name(aux_files: Any) -> str | None:
+    """Extract the crate name from a repo's ``cargo.toml`` ``[package].name``.
+
+    Returns the name as-declared, or None when ``cargo.toml`` is missing,
+    malformed, or has no ``[package].name``.
+    """
+    content = _aux_file_lookup(aux_files, "cargo.toml")
+    if content is None:
+        return None
+    try:
+        data = tomllib.loads(content)
+    except (tomllib.TOMLDecodeError, ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return _name_from_table(data.get("package"))
 
 
 # ---------------------------------------------------------------------------
