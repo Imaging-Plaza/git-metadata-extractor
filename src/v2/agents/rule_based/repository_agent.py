@@ -548,7 +548,7 @@ class RepositoryAgentV2:
             # The raw `_container_images` list-of-objects collapses to empty
             # blank nodes on JSON-LD expansion (inner keys unmapped in
             # @context), so these single-value `gme-internal:package_count /
-            # package_names / package_image_refs / package_versions /
+            # package_names / package_image_refs / package_tags /
             # latest_package_updated_at` triples are what consumers query.
             # Always present (None when no package data). GHCR scope only —
             # needs the `read:packages` token scope, else reads None.

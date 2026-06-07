@@ -380,7 +380,7 @@ def test_summarize_packages_counts_names_refs_versions_dates() -> None:
         "ghcr.io/sdsc-ordes/open-pulse-worker",
     ]
     # Distinct tags across all packages, sorted.
-    assert out["package_versions"] == ["latest", "v1.1.0", "v1.2.0"]
+    assert out["package_tags"] == ["latest", "v1.1.0", "v1.2.0"]
     # Latest updated_at across packages.
     assert out["latest_package_updated_at"] == "2024-04-01T10:00:00Z"
 
@@ -391,7 +391,7 @@ def test_summarize_packages_none_input_all_none() -> None:
         "package_count": None,
         "package_names": None,
         "package_image_refs": None,
-        "package_versions": None,
+        "package_tags": None,
         "latest_package_updated_at": None,
     }
 
@@ -400,7 +400,7 @@ def test_summarize_packages_empty_list_counts_zero() -> None:
     out = summarize_packages([])
     assert out["package_count"] == 0
     assert out["package_names"] is None
-    assert out["package_versions"] is None
+    assert out["package_tags"] is None
     assert out["latest_package_updated_at"] is None
 
 
@@ -426,7 +426,7 @@ def test_repository_agent_emits_flat_package_scalars() -> None:
         "ghcr.io/sdsc-ordes/open-pulse",
         "ghcr.io/sdsc-ordes/open-pulse-worker",
     ]
-    assert raw["_package_versions"] == ["latest", "v1.1.0", "v1.2.0"]
+    assert raw["_package_tags"] == ["latest", "v1.1.0", "v1.2.0"]
     assert raw["_latest_package_updated_at"] == "2024-04-01T10:00:00Z"
 
 
@@ -449,7 +449,7 @@ def test_repository_agent_package_scalars_none_when_absent() -> None:
     assert raw["_package_count"] is None
     assert raw["_package_names"] is None
     assert raw["_package_image_refs"] is None
-    assert raw["_package_versions"] is None
+    assert raw["_package_tags"] is None
     assert raw["_latest_package_updated_at"] is None
 
 
