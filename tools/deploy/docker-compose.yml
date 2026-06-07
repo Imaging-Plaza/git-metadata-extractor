@@ -1,0 +1,85 @@
+# Production-oriented deployment stack for git-metadata-extractor.
+#
+#   docker compose -f tools/deploy/docker-compose.yml --env-file .env up -d
+#
+# Services:
+#   gme-api          the extraction API (gunicorn on :1234; bootstraps index
+#                    stores at startup via the on_starting hook)
+#   gme-gimie-api    REQUIRED sidecar — the `gimie` Python dep was removed, so
+#                    repository extraction calls this over HTTP. See
+#                    docs/OPERATIONS_RUNBOOK.md §8.
+#   gme-qdrant       vector store for the RAG indices
+#   gme-selenium     headless Firefox for link-veracity + Selenium-backed RAG
+#                    ingest (SWISSUbase, ORCID scraping). Optional — drop it and
+#                    unset SELENIUM_REMOTE_URL if you don't need those.
+#
+# Secrets/config come from `.env` (see .env.example): API_TOKEN,
+# GME_GITHUB_TOKEN, RCP_TOKEN (or an LLM key), etc. The inter-service URLs below
+# are set explicitly so they don't need to live in .env.
+services:
+  gme-api:
+    image: ${GME_IMAGE:-ghcr.io/imaging-plaza/git-metadata-extractor:latest}
+    # To build locally instead of pulling, comment `image:` and uncomment:
+    # build:
+    #   context: ../..
+    #   dockerfile: tools/image/Dockerfile
+    container_name: gme-api
+    env_file:
+      - ../../.env
+    environment:
+      # GIMIE is served by the sidecar (gimie is no longer in the image).
+      GIMIE_API_URL: http://gme-gimie-api:15400
+      INDEX_QDRANT_URL: http://gme-qdrant:6333
+      SELENIUM_REMOTE_URL: http://gme-selenium:4444
+      WORKERS: ${WORKERS:-2}
+    ports:
+      - "${APP_PORT:-1234}:1234"
+    volumes:
+      # Persist index DuckDB stores + provider cache across restarts.
+      - gme-data:/app/data
+    depends_on:
+      - gme-gimie-api
+      - gme-qdrant
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-gimie-api:
+    # Pinned by digest for reproducibility (== :latest resolved 2026-06-07,
+    # gimie 0.7.2). Re-resolve + re-validate (scripts/v2/gimie_api_parity.py)
+    # when bumping; or set GIMIE_API_IMAGE to follow the moving tag.
+    image: ${GIMIE_API_IMAGE:-ghcr.io/sdsc-ordes/gimie-api@sha256:7a8a59b70d0787e1d265ff08f24328dd2d518f25dcc504b0420f8648ce99ecdb}
+    container_name: gme-gimie-api
+    environment:
+      # gimie-api reads the GitHub token from ACCESS_TOKEN.
+      ACCESS_TOKEN: ${GME_GITHUB_TOKEN:-}
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: gme-qdrant
+    volumes:
+      - gme-qdrant-storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-selenium:
+    image: selenium/standalone-firefox
+    container_name: gme-selenium
+    shm_size: "2g"
+    environment:
+      SE_NODE_MAX_SESSIONS: "5"
+      SE_NODE_SESSION_TIMEOUT: "300"
+    restart: unless-stopped
+    networks:
+      - gme
+
+volumes:
+  gme-data:
+  gme-qdrant-storage:
+
+networks:
+  gme:
