@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed (breaking — deployment)
+
+- **GIMIE moved to a sidecar; `gimie` dependency removed.** The `gimie` package
+  (and its `calamus`/`marshmallow` chain, which hard-pinned vulnerable
+  `python-dotenv<0.22` + `marshmallow<3.24`) is gone from the image. Repository
+  GIMIE metadata is now fetched from the **`gimie-api` sidecar**
+  (`ghcr.io/sdsc-ordes/gimie-api`) via HTTP. **Every deployment must run the
+  sidecar and set `GIMIE_API_URL`** (e.g. `http://gme-gimie-api:15400`) — see
+  the [operations runbook](docs/OPERATIONS_RUNBOOK.md). `extract_gimie` is now a
+  single intermediate (sidecar when `GIMIE_API_URL` is set, else in-process gimie
+  if separately installed). This frees `python-dotenv` (→1.2.2) and removes
+  `marshmallow`, clearing the last 3 Dependabot alerts.
+
 ### Added
 
 - **GitLab index family** — nine new RAG stores

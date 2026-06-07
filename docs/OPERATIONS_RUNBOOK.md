@@ -151,3 +151,33 @@ python -m src.index._federated.bootstrap --only gitlab_epfl_users
 Bootstrap only **creates empty schema'd stores** — it does not ingest or embed.
 Populate a store with its ingest/embed CLI or the
 `POST /v2/indices/<name>/ingest` endpoint.
+
+## 8. GIMIE now runs as a sidecar — `GIMIE_API_URL` is required
+
+The heavy `gimie` Python dependency (and its `calamus`/`marshmallow` chain,
+which hard-pinned vulnerable `python-dotenv`/`marshmallow`) was **removed from
+the image**. GIMIE metadata is now fetched from the **`gimie-api` sidecar**
+(`ghcr.io/sdsc-ordes/gimie-api`) over HTTP.
+
+**Required for every deployment that extracts repositories:**
+
+1. Run the sidecar alongside the API (same network). It listens on `:15400` and
+   reads the GitHub token from `ACCESS_TOKEN`. In the dev stack it's the
+   `gme-gimie-api` service in `.devcontainer/docker-compose.yml`; **add an
+   equivalent service to the production compose / k8s manifest** (which lives
+   outside this repo).
+2. Set **`GIMIE_API_URL`** on the API process, e.g.
+   `GIMIE_API_URL=http://gme-gimie-api:15400`.
+
+Behaviour:
+
+- `GIMIE_API_URL` **set** → all GIMIE extraction goes to the sidecar; on sidecar
+  failure the call returns `None` and the pipeline degrades to non-GIMIE
+  providers (it already tolerates an empty GIMIE graph).
+- `GIMIE_API_URL` **unset** → falls back to in-process gimie, which is **no
+  longer installed** in the image → a clear `RuntimeError` is raised when
+  extraction is attempted. (For local in-process use: `pip install gimie==0.7.2`.)
+- Tunables: `GIMIE_API_TIMEOUT_SECONDS` (default 180).
+
+Pin the sidecar image by digest for reproducibility. Validate a new image with
+`scripts/v2/gimie_api_parity.py` (diffs sidecar vs in-process output).
