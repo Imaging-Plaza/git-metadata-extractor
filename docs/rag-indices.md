@@ -30,6 +30,7 @@ The federated layer never shares state — it just orchestrates.
 | **RenkuLab** | renkulab.io/api/data | [`src/index/renkulab/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/renkulab) | `renku-*` | ✅ | ✅ | Projects, groups, users, data connectors hosted by SDSC RenkuLab |
 | **EPFL Graph (disciplines)** | graphai.epfl.ch /ontology/* | [`src/index/epfl_graph/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/epfl_graph) | `epfl-graph-*` | ✅ | ✅ (`search_epfl_graph_disciplines`) | Curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5) backed by anchor Wikipedia articles |
 | **SWISSUbase** | swissubase.ch | [`src/index/swissubase/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/swissubase) | `swissubase-*` | ✅ | ✅ (`search_swissubase_rag`) | Swiss social-science research-data platform: studies, datasets, persons, institutions. Ingest is Selenium-driven (no public REST API; per-`studyVersionId` enumeration to dodge the search-window cap). Default scope embeds only EPFL / ETHZ / SDSC-affiliated studies. |
+| **GitLab** (EPFL / ETHZ / Datascience) | gitlab.epfl.ch · gitlab.ethz.ch · gitlab.datascience.ch | [`src/index/_gitlab_base/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/_gitlab_base) + `gitlab_<instance>_<type>/` leaves | (per-CLI) | ✅ | (via federated) | 9 stores — **projects**, **groups**, **users** per instance. People records carry no ORCID (GitLab has no verified-ORCID field). See [GitLab Index](gitlab-index.md). |
 | **Federated** | wraps all above | [`src/index/_federated/`](https://github.com/Imaging-Plaza/git-metadata-extractor/tree/main/src/index/_federated) | `gme-*` | — | ✅ (`search_federated_rag`, `lookup_entity_federated`) | one query → all indices in parallel |
 
 > **Support index (no RAG layer).** The [Communities index](communities-index.md)
@@ -50,6 +51,34 @@ Every index built on the post-2026-05-01 pattern uses:
 - **Auth**: `RCP_TOKEN` (required for embed + rerank); per-index source tokens (`HF_TOKEN`, `GME_GITHUB_TOKEN`, `INFOSCIENCE_TOKEN`, etc.) where the upstream API requires them.
 
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of orgs in Qdrant + a JSONL dump for lexical lookup). The `infoscience` legacy chunks live alongside the new schema.
+
+### Bootstrap on deploy
+
+Stores are created and schema-applied by the **federated bootstrap**
+(`src/index/_federated/bootstrap.py`), which auto-discovers every store under
+`src/index/*` — so a newly added index needs no wiring to be bootstrapped.
+
+On a deployed microservice this runs **automatically at startup**: the Gunicorn
+`on_starting` hook (`tools/config/gunicorn_conf.py`) calls `bootstrap_all()`
+once in the master process **before any worker forks**, so every DuckDB store
+exists with its schema applied before the first request — and N workers never
+race to create the same file. The bootstrap is **idempotent** (existing stores
+are left untouched) and **best-effort** (a failure is logged but never blocks
+the server from coming up).
+
+| Env | Default | Purpose |
+|---|---|---|
+| `INDEX_BOOTSTRAP_ON_START` | `true` | Set `false`/`0`/`no`/`off` to skip the startup bootstrap — e.g. when an init-container or a separate job provisions the data dir. |
+
+Manual equivalents (local dev, CI, or re-runs):
+
+```bash
+make bootstrap-index                                    # all stores, idempotent
+python -m src.index._federated.bootstrap --only gitlab_epfl_users
+```
+
+See the [operations runbook](OPERATIONS_RUNBOOK.md#7-deploy-time-index-bootstrap)
+for the operational view.
 
 ## Per-index quickstart
 

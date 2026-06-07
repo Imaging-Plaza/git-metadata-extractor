@@ -119,3 +119,35 @@ in-place VACUUM); the `.ro` snapshot is the compacted copy. Honours
 disk — e.g. pre-split monoliths `github.duckdb` / `huggingface.duckdb` /
 `communities.duckdb` sitting alongside the split stores — which are candidates
 for retirement once consumers point at the split ones.
+
+## 7. Deploy-time index bootstrap
+
+The serving image bootstraps every index DuckDB store **at startup** so the
+stores exist (with their schema) before the first request. The Gunicorn
+`on_starting` hook (`tools/config/gunicorn_conf.py`) calls
+`src.index._federated.bootstrap.bootstrap_all()` **once in the master process,
+before any worker forks** — so no two workers race to create the same file.
+
+- **Idempotent** — existing stores are left untouched; only missing ones are
+  created. Safe to run on every restart.
+- **Best-effort** — a bootstrap failure is logged (`index bootstrap on start
+  failed: …`) but never blocks the server from coming up. Per-store failures
+  are reported as `… store(s) not ready: {…}`.
+- **Auto-discovery** — every store under `src/index/*` is picked up, so newly
+  added indices (e.g. the GitLab family) are bootstrapped with no extra wiring.
+
+| Env | Default | Purpose |
+|---|---|---|
+| `INDEX_BOOTSTRAP_ON_START` | `true` | Set `false`/`0`/`no`/`off` to skip the startup bootstrap — e.g. when an init-container or a separate job provisions `$INDEX_DATA_DIR`. |
+
+Run the same thing by hand (local dev, CI, or to re-create a deleted store):
+
+```bash
+make bootstrap-index                          # all stores, idempotent
+python -m src.index._federated.bootstrap      # same thing
+python -m src.index._federated.bootstrap --only gitlab_epfl_users
+```
+
+Bootstrap only **creates empty schema'd stores** — it does not ingest or embed.
+Populate a store with its ingest/embed CLI or the
+`POST /v2/indices/<name>/ingest` endpoint.
