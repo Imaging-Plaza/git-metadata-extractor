@@ -444,8 +444,10 @@ _RUBYGEMS_IMAGE_RE = re.compile(
 
 
 # Badge image URLs (badge.fury.io, img.shields.io) often end in an image
-# extension (`csbdeep.svg`); no real package name does, so strip it.
-_BADGE_EXT_RE = re.compile(r"\.(?:svg|png|json|gif)$", re.IGNORECASE)
+# extension (`csbdeep.svg`); no real package name does, so strip it. NOTE:
+# only true image extensions — NOT `.json` (collides with legit package names
+# like `Newtonsoft.Json`; shields/fury badges are `.svg`/`.png`, never `.json`).
+_BADGE_EXT_RE = re.compile(r"\.(?:svg|png|gif)$", re.IGNORECASE)
 
 
 def _strip_badge_ext(name: str) -> str:
@@ -501,6 +503,21 @@ def _match_maven(url: str) -> tuple[str, str] | None:
     return None
 
 
+_NUGET_LINK_RE = re.compile(
+    r"nuget\.org/packages/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_NUGET_IMAGE_RE = re.compile(
+    r"img\.shields\.io/nuget/(?:v|vpre)/(?P<name>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+
+
+def _match_nuget(url: str) -> str | None:
+    m = _NUGET_LINK_RE.search(url) or _NUGET_IMAGE_RE.search(url)
+    return _strip_badge_ext(m.group("name")) if m else None
+
+
 # (ecosystem-key, matcher) pairs consulted for each badge URL.
 _COORD_MATCHERS: tuple[tuple[str, Any], ...] = (
     ("pypi", _match_pypi),
@@ -509,6 +526,7 @@ _COORD_MATCHERS: tuple[tuple[str, Any], ...] = (
     ("crates", _match_crates),
     ("rubygems", _match_rubygems),
     ("maven", _match_maven),
+    ("nuget", _match_nuget),
 )
 
 
