@@ -215,6 +215,18 @@ class GitHubProvider(BaseProvider, ABC):
         del full_name
         return []
 
+    def get_repository_compose_files(self, full_name: str) -> list[dict[str, Any]]:
+        """Return the repo's Docker Compose files, as
+        ``[{"path", "html_url", "content"}]`` (newest-tree first), or ``[]``.
+
+        Finds ``docker-compose*.y(a)ml`` / ``compose*.y(a)ml`` anywhere in the
+        tree (root, ``.devcontainer/``, ``docker/`` …) and fetches each file's
+        content so callers can extract the ``image:`` references. Default
+        returns ``[]``; implementations must not raise.
+        """
+        del full_name
+        return []
+
 
 class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""

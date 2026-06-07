@@ -37,6 +37,16 @@ GITHUB_NOREPLY_PATTERN = re.compile(
 )
 logger = logging.getLogger(__name__)
 
+# Docker Compose filenames (basename), e.g. docker-compose.yml,
+# docker-compose.prod.yaml, compose.yml — anywhere in the tree.
+_COMPOSE_NAME_RE = re.compile(
+    r"^(?:docker-)?compose(?:\.[\w.-]+)?\.ya?ml$", re.IGNORECASE,
+)
+
+
+def _is_compose_path(path: str) -> bool:
+    return bool(_COMPOSE_NAME_RE.match(path.rsplit("/", maxsplit=1)[-1]))
+
 
 def _resolve_max_github_repo_retries() -> int:
     """Read V2_GITHUB_REPO_MAX_RETRIES (default 3).
@@ -1003,6 +1013,76 @@ class RealGitHubProvider(GitHubProvider):
         key = ProviderCache.make_key("github", "get_tags_v1", full_name=full_name)
         return self._cache.get_or_set(
             key, _fetch, label=f"github.get_tags({full_name})",
+        )
+
+    def _fetch_file_text(self, full_name: str, path: str) -> str | None:
+        """Fetch a single repo file's text via the contents API (base64), capped
+        at 100 KB. None on any failure."""
+        url = f"https://api.github.com/repos/{full_name}/contents/{quote(path)}"
+        try:
+            resp = self._run_with_rate_limit(
+                lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("github file fetch failed: %s/%s", full_name, path)
+            return None
+        if resp.status_code != 200:
+            return None
+        try:
+            encoded = resp.json().get("content")
+        except (ValueError, AttributeError):
+            return None
+        if not isinstance(encoded, str):
+            return None
+        try:
+            return base64.b64decode(encoded)[:100_000].decode("utf-8", errors="replace")
+        except (ValueError, UnicodeDecodeError):
+            return None
+
+    def get_repository_compose_files(self, full_name: str) -> list[dict[str, Any]]:
+        """Fetch Docker Compose files anywhere in ``owner/repo`` (public,
+        cached). One recursive-tree call finds the files, then each is fetched
+        (base64 contents, capped). Returns ``[{path, html_url, content}]``;
+        empty on any failure. Capped at the first 20 matches."""
+
+        max_files = 20
+
+        def _fetch() -> list[dict[str, Any]]:
+            url = f"https://api.github.com/repos/{full_name}/git/trees/HEAD?recursive=1"
+            try:
+                resp = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=20),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github tree fetch failed: %s", full_name)
+                return []
+            if resp.status_code != 200:
+                return []
+            try:
+                tree = resp.json().get("tree")
+            except (ValueError, AttributeError):
+                return []
+            paths = [
+                t["path"] for t in tree
+                if isinstance(t, dict) and t.get("type") == "blob"
+                and isinstance(t.get("path"), str) and _is_compose_path(t["path"])
+            ][:max_files] if isinstance(tree, list) else []
+            out: list[dict[str, Any]] = []
+            for path in paths:
+                content = self._fetch_file_text(full_name, path)
+                if content is not None:
+                    out.append({
+                        "path": path,
+                        "html_url": f"https://github.com/{full_name}/blob/HEAD/{path}",
+                        "content": content,
+                    })
+            return out
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_compose_files_v1", full_name=full_name)
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.get_compose_files({full_name})",
         )
 
     def _list_owner_container_packages(self, owner: str) -> dict[str, Any]:

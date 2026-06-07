@@ -720,6 +720,62 @@ def parse_funding_urls(aux_files: Any) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Docker Compose images
+# ---------------------------------------------------------------------------
+
+# `${VAR:-default}` compose interpolation → take the default value.
+_COMPOSE_VAR_DEFAULT_RE = re.compile(r"^\$\{[^:}]+:-(?P<default>.+)\}$")
+
+
+def _resolve_compose_image(value: Any) -> str | None:
+    """Normalise a compose ``image:`` value to a concrete ``name[:tag|@digest]``
+    ref, resolving ``${VAR:-default}`` to its default. Returns None for an
+    unresolvable interpolation (``${VAR}`` with no default) or non-string."""
+    if not isinstance(value, str):
+        return None
+    ref = value.strip()
+    m = _COMPOSE_VAR_DEFAULT_RE.match(ref)
+    if m:
+        ref = m.group("default").strip()
+    if not ref or "${" in ref:  # unresolvable remaining interpolation
+        return None
+    return ref
+
+
+def parse_compose_images(compose_files: Any) -> list[str]:
+    """Extract image references (``name:tag`` / ``name@digest``) from the
+    ``services.*.image`` fields of a repo's Docker Compose files.
+
+    *compose_files* is the list of ``{"content": <yaml>, …}`` dicts from the
+    provider. Returns a de-duped, order-preserving list (empty when none /
+    unparseable). Each ref carries both the image and its tag/digest.
+    """
+    if not isinstance(compose_files, list):
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for entry in compose_files:
+        content = entry.get("content") if isinstance(entry, dict) else None
+        if not isinstance(content, str) or not content:
+            continue
+        try:
+            data = yaml.safe_load(content)
+        except yaml.YAMLError:
+            continue
+        services = data.get("services") if isinstance(data, dict) else None
+        if not isinstance(services, dict):
+            continue
+        for service in services.values():
+            if not isinstance(service, dict):
+                continue
+            ref = _resolve_compose_image(service.get("image"))
+            if ref and ref not in seen:
+                seen.add(ref)
+                out.append(ref)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # npm / PyPI registry package discovery — manifest name parsing + back-ref
 # ---------------------------------------------------------------------------
 

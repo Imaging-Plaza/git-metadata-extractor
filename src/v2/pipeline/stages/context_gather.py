@@ -529,6 +529,14 @@ def _optional_repository_context(
         warnings.append(
             f"Repository tags lookup failed for {full_name}: {exc}",
         )
+    try:
+        compose_files = providers.github.get_repository_compose_files(full_name)
+        if isinstance(compose_files, list) and compose_files:
+            repository_metadata["compose_files"] = compose_files
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository compose-files lookup failed for {full_name}: {exc}",
+        )
 
     # CI detection — list the repo root once and check for known CI
     # indicator files / directories. Best-effort: None on failure so the
@@ -687,6 +695,14 @@ async def gather_context(  # noqa: C901, PLR0915
         except Exception as exc:  # noqa: BLE001
             warnings.append(
                 f"Repository tags lookup failed for {full_name}: {exc}",
+            )
+        try:
+            compose_files = providers.github.get_repository_compose_files(full_name)
+            if isinstance(compose_files, list) and compose_files:
+                repository_metadata["compose_files"] = compose_files
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository compose-files lookup failed for {full_name}: {exc}",
             )
 
         # CI detection (best-effort; None on provider failure).
