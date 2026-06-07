@@ -613,6 +613,17 @@ class RepositoryAgentV2:
                     repository.get("rubygems_package"),
                 ).items()
             },
+            # Go module — discovered by context_gather from `go.mod`'s
+            # `module` directive, queried against the Go module proxy, and
+            # verified by the module path back-referencing this repo. Same
+            # flat scalars as the others; `_go_package` carries the module
+            # path (e.g. github.com/owner/repo[/v2]).
+            **{
+                f"_go_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("go_module"),
+                ).items()
+            },
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.

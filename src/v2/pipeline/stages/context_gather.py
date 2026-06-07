@@ -10,6 +10,7 @@ from src.v2.agents.rule_based._repo_signals import (
     extract_registry_coords,
     parse_badges,
     parse_crates_name,
+    parse_go_module,
     parse_npm_name,
     parse_pypi_name,
     repo_url_matches,
@@ -253,7 +254,7 @@ def _normalize_owned_repo_full_name(owner: str, repo: str) -> str:
     return f"{owner}/{repo}"
 
 
-def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0913
+def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0912, PLR0913, PLR0915
     *,
     full_name: str,
     aux_files: dict[str, Any] | None,
@@ -361,6 +362,16 @@ def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0913
     except Exception as exc:  # noqa: BLE001
         warnings.append(
             f"RubyGems package lookup failed for {full_name}: {exc}",
+        )
+    try:
+        go_module = parse_go_module(aux_files)
+        if go_module and hasattr(registry, "get_go_module"):
+            _link_and_store(
+                registry.get_go_module(go_module), key="go_module",
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Go module lookup failed for {full_name}: {exc}",
         )
 
 

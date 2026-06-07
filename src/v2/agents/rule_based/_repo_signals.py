@@ -551,6 +551,28 @@ def parse_crates_name(aux_files: Any) -> str | None:
     return _name_from_table(data.get("package"))
 
 
+# The `module` directive in a go.mod: `module github.com/owner/repo` (an
+# inline `// comment` may follow). We take the first such directive.
+_GO_MODULE_RE = re.compile(r"^\s*module\s+(?P<path>\S+)", re.MULTILINE)
+
+
+def parse_go_module(aux_files: Any) -> str | None:
+    """Extract the module path from a repo's ``go.mod`` ``module`` directive.
+
+    Returns the module path (e.g. ``github.com/owner/repo`` or
+    ``github.com/owner/repo/v2``), or None when ``go.mod`` is missing or has
+    no ``module`` line. A trailing inline ``// comment`` is stripped.
+    """
+    content = _aux_file_lookup(aux_files, "go.mod")
+    if content is None:
+        return None
+    m = _GO_MODULE_RE.search(content)
+    if not m:
+        return None
+    path = m.group("path").strip().strip('"')
+    return path or None
+
+
 # ---------------------------------------------------------------------------
 # npm / PyPI registry package discovery — manifest name parsing + back-ref
 # ---------------------------------------------------------------------------
