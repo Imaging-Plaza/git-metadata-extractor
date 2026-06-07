@@ -28,6 +28,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   populate `gme-internal:hasDocumentation` (documentation URLs) and fill the
   test-coverage signal when the deterministic badge parse found none. Gated by
   `V2_REPO_SIGNALS_AGENT_MODE` (`apply`/`shadow`/`off`).
+- **Repository enrichment fields (`gme-internal:*`)** — a broad deterministic
+  layer surfaced under `?include_internal_fields=true`. See
+  [`docs/repository-enrichment-fields.md`](docs/repository-enrichment-fields.md):
+    - **Releases** — `release_count`, `first_release_date`, `latest_release_date`
+      (+ raw `releases`, `latest_version`); **git tags** (`git_tags`,
+      `git_tag_count`).
+    - **Container distribution** — `docker_hub_url`; GHCR `package_count`,
+      `package_names`, `package_image_refs`, `package_tags`,
+      `latest_package_updated_at` (+ raw `container_images`).
+    - **Published packages** for **npm, PyPI, conda, crates.io, RubyGems, Maven,
+      Go, NuGet** — each with `_package`, `_latest_version`, `_versions`,
+      `_latest_release_date`, `_registry_url`, and a `_link`
+      (`verified`/`name_only`) back-reference (+ `conda_channel`,
+      `maven_group_id`/`maven_artifact_id`). Discovered from manifests
+      (`package.json`, `pyproject.toml`, `cargo.toml`, `pom.xml`, `go.mod`) and
+      README badges; name-collision results are dropped.
+    - **README badges** — `badges` (label/image/link) + `badge_count`.
+    - **Funding** — `funding_urls` from `.github/FUNDING.yml`.
+    - **Community health** — `community_health_percentage`,
+      `has_code_of_conduct`, `has_issue_template`, `has_pull_request_template`.
+    - **CI / coverage** — `has_ci`, `test_coverage`; governance-file URL
+      pointers (`code_of_conduct_url`, `security_url`, …).
+  - Public-registry queries gated by `V2_PACKAGE_REGISTRY_ENABLED` (default on).
 
 ### Fixed
 
