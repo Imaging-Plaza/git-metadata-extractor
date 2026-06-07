@@ -742,44 +742,51 @@ def _resolve_compose_image(value: Any) -> str | None:
     return ref
 
 
-def _strip_image_tag(repo_path: str) -> str:
-    """Drop the ``:tag`` from an image repo path (tag lives in the LAST path
-    segment, so a registry ``host:port`` earlier in the path is preserved)."""
+def _split_repo_tag(repo_path: str) -> tuple[str, str | None]:
+    """Split ``name[:tag]`` (registry already removed) into ``(name, tag|None)``.
+    The tag lives in the LAST path segment, so a ``host:port`` earlier in the
+    path is never mistaken for a tag."""
     if "/" in repo_path:
         head, tail = repo_path.rsplit("/", maxsplit=1)
-        return f"{head}/{tail.split(':', 1)[0]}"
-    return repo_path.split(":", 1)[0]
+        name, _, tag = tail.partition(":")
+        return (f"{head}/{name}", tag or None)
+    name, _, tag = repo_path.partition(":")
+    return (name, tag or None)
 
 
-def _docker_hub_url(repo: str) -> str:
-    """Docker Hub web URL: namespaced ``ns/name`` → ``/r/ns/name``; an official
-    single-component ``name`` → ``/_/name``."""
-    return (
+def _docker_hub_url(repo: str, tag: str | None) -> str:
+    """Docker Hub web URL: namespaced ``ns/name`` → ``/r/ns/name``; official
+    single-component ``name`` → ``/_/name``. When *tag* is set, link to that tag
+    (``/tags?name=<tag>``)."""
+    base = (
         f"https://hub.docker.com/r/{repo}" if "/" in repo
         else f"https://hub.docker.com/_/{repo}"
     )
+    return f"{base}/tags?name={tag}" if tag else base
 
 
 def _image_ref_to_url(ref: Any) -> str | None:  # noqa: PLR0911 — one branch per registry; flat returns read clearer
     """Map a Docker image reference to its registry web URL, or None.
 
     Covers Docker Hub (the implicit registry — "the docker ones"), plus GHCR and
-    Quay. Other/unknown registries (no clean web page) return None.
+    Quay. The ``:tag`` is appended where the registry supports a per-tag page
+    (Docker Hub, Quay). Digest-pinned refs (``@sha256:…``) carry no tag.
+    Other/unknown registries (no clean web page) return None.
     """
     if not isinstance(ref, str) or not ref.strip():
         return None
-    spec = ref.strip().split("@", 1)[0]  # drop any @sha256 digest
+    spec = ref.strip().split("@", 1)[0]  # drop any @sha256 digest (not a tag)
     first, slash, rest = spec.partition("/")
     # The first component is a registry host only when something follows it
     # (`host/path`) AND it looks host-like — a dot/port, or `localhost`.
     # A bare `name:tag` (no slash) is always a Docker Hub image, not a host:port.
     if slash and ("." in first or ":" in first or first == "localhost"):
         host = first.lower()
-        repo = _strip_image_tag(rest)
+        repo, tag = _split_repo_tag(rest)
         if not repo:
             return None
         if host in ("docker.io", "index.docker.io", "registry-1.docker.io"):
-            return _docker_hub_url(repo)
+            return _docker_hub_url(repo, tag)
         if host == "ghcr.io":
             parts = repo.split("/")
             if len(parts) >= _OWNER_REPO_SEGMENTS:
@@ -787,9 +794,11 @@ def _image_ref_to_url(ref: Any) -> str | None:  # noqa: PLR0911 — one branch p
                 return f"https://github.com/{owner}/{name}/pkgs/container/{name}"
             return None
         if host == "quay.io":
-            return f"https://quay.io/repository/{repo}"
+            base = f"https://quay.io/repository/{repo}"
+            return f"{base}?tab=tags&tag={tag}" if tag else base
         return None
-    return _docker_hub_url(_strip_image_tag(spec))
+    repo, tag = _split_repo_tag(spec)
+    return _docker_hub_url(repo, tag)
 
 
 def compose_image_urls(compose_files: Any) -> list[str]:

@@ -110,14 +110,24 @@ def test_parse_compose_images_dedupes_and_handles_bad_input() -> None:
 
 
 def test_image_ref_to_url() -> None:
-    assert _image_ref_to_url("qdrant/qdrant:latest") == "https://hub.docker.com/r/qdrant/qdrant"
-    assert _image_ref_to_url("postgres:15") == "https://hub.docker.com/_/postgres"   # official
-    assert _image_ref_to_url("python") == "https://hub.docker.com/_/python"
-    assert _image_ref_to_url("docker.io/acme/api:1") == "https://hub.docker.com/r/acme/api"
+    # tag appended where the registry supports a per-tag page
+    assert _image_ref_to_url("qdrant/qdrant:latest") == (
+        "https://hub.docker.com/r/qdrant/qdrant/tags?name=latest"
+    )
+    assert _image_ref_to_url("postgres:15") == (
+        "https://hub.docker.com/_/postgres/tags?name=15"  # official + tag
+    )
+    assert _image_ref_to_url("python") == "https://hub.docker.com/_/python"  # no tag
+    assert _image_ref_to_url("docker.io/acme/api:1") == (
+        "https://hub.docker.com/r/acme/api/tags?name=1"
+    )
+    assert _image_ref_to_url("quay.io/org/name:2") == (
+        "https://quay.io/repository/org/name?tab=tags&tag=2"
+    )
+    # GHCR has no clean per-tag page → base package page (digest carries no tag)
     assert _image_ref_to_url("ghcr.io/acme/api@sha256:x") == (
         "https://github.com/acme/api/pkgs/container/api"
     )
-    assert _image_ref_to_url("quay.io/org/name:2") == "https://quay.io/repository/org/name"
     # unknown registry / localhost → no clean web URL
     assert _image_ref_to_url("registry.gitlab.com/x/y:1") is None
     assert _image_ref_to_url("localhost:5000/foo:dev") is None
@@ -132,7 +142,7 @@ def test_compose_image_urls() -> None:
         "  c:\n    image: registry.gitlab.com/x/y:1\n"   # dropped (unknown)
     )
     assert compose_image_urls([{"content": compose}]) == [
-        "https://hub.docker.com/r/qdrant/qdrant",
+        "https://hub.docker.com/r/qdrant/qdrant/tags?name=latest",
         "https://github.com/acme/api/pkgs/container/api",
     ]
     assert compose_image_urls(None) == []
@@ -220,7 +230,7 @@ def test_agent_emits_compose_fields() -> None:
     assert raw["_compose_file_count"] == 1
     assert raw["_compose_images"] == ["qdrant/qdrant:latest", "ghcr.io/acme/api@sha256:abc"]
     assert raw["_compose_image_urls"] == [
-        "https://hub.docker.com/r/qdrant/qdrant",
+        "https://hub.docker.com/r/qdrant/qdrant/tags?name=latest",
         "https://github.com/acme/api/pkgs/container/api",
     ]
 
