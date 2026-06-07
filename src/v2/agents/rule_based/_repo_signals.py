@@ -265,3 +265,56 @@ def summarize_releases(releases: Any) -> dict[str, Any]:
         out["first_release_date"] = dates[0]
         out["latest_release_date"] = dates[-1]
     return out
+
+
+def summarize_packages(container_images: Any) -> dict[str, Any]:
+    """Reduce the raw GHCR container-package list to flat, RDF-friendly scalars.
+
+    Like ``_releases``, the raw ``_container_images`` list-of-objects
+    (``{name, image, tags, updated_at, …}``) collapses to empty blank nodes on
+    JSON-LD expansion (inner keys unmapped in the ``@context``), so it is
+    unusable as triples. This derives the flat values a "Container
+    distribution" / package consumer needs, each emitting clean
+    ``gme-internal:`` triples:
+
+    * ``package_count``            — number of linked container packages (int)
+    * ``package_names``            — package names (list → repeated triples)
+    * ``package_image_refs``       — pullable ``ghcr.io/owner/name`` refs (list)
+    * ``package_versions``         — distinct version tags across all packages
+                                     (list → repeated triples)
+    * ``latest_package_updated_at`` — most recent ``updated_at`` (ISO 8601)
+
+    Per-package version detail stays in the raw ``_container_images`` payload.
+    The five keys are *always* present (``None`` when there is no package data).
+    """
+    out: dict[str, Any] = {
+        "package_count": None,
+        "package_names": None,
+        "package_image_refs": None,
+        "package_versions": None,
+        "latest_package_updated_at": None,
+    }
+    if not isinstance(container_images, list):
+        return out
+    images = [c for c in container_images if isinstance(c, dict)]
+    out["package_count"] = len(images)
+    names = [c["name"] for c in images if isinstance(c.get("name"), str) and c["name"]]
+    refs = [c["image"] for c in images if isinstance(c.get("image"), str) and c["image"]]
+    out["package_names"] = names or None
+    out["package_image_refs"] = refs or None
+    versions = sorted({
+        tag
+        for c in images
+        if isinstance(c.get("tags"), list)
+        for tag in c["tags"]
+        if isinstance(tag, str) and tag
+    })
+    out["package_versions"] = versions or None
+    updated = sorted(
+        c["updated_at"]
+        for c in images
+        if isinstance(c.get("updated_at"), str) and c["updated_at"]
+    )
+    if updated:
+        out["latest_package_updated_at"] = updated[-1]
+    return out
