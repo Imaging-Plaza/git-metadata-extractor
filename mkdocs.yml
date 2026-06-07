@@ -42,6 +42,7 @@ nav:
       - V2 API Reference: v2-api-reference.md
       - API and CLI Quick Reference: api-and-cli.md
       - Repository Enrichment Fields: repository-enrichment-fields.md
+      - Operations Runbook: OPERATIONS_RUNBOOK.md
       - Migration V1 to V2: migration-v1-to-v2.md
   - RAG Indices:
       - Overview: rag-indices.md

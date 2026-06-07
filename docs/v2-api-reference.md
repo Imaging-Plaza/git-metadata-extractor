@@ -329,3 +329,5 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 | `GME_GITHUB_TOKEN` | unset | Required for healthy provider preflight |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | unset | At least one required in LLM mode |
 | `SELENIUM_REMOTE_URL` | unset | Enables link-veracity + the `fetch_link_content_via_selenium` tool |
+| `GIMIE_API_URL` | unset | **Required for repository extraction.** Points at the `gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); the `gimie` package was removed from the image. Unset → in-process gimie, which is no longer installed → `RuntimeError`. See [operations runbook §8](OPERATIONS_RUNBOOK.md#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required). |
+| `GIMIE_API_TIMEOUT_SECONDS` | `180` | Per-request timeout for the gimie-api sidecar call. |
