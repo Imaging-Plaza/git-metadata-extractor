@@ -624,6 +624,20 @@ class RepositoryAgentV2:
                     repository.get("go_module"),
                 ).items()
             },
+            # Maven Central artifact — discovered from `pom.xml`
+            # (`groupId:artifactId`) or a maven-central badge. `_maven_package`
+            # is the `group:artifact` coordinate; `_maven_group_id` /
+            # `_maven_artifact_id` carry the split coordinates.
+            **{
+                f"_maven_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("maven_package"),
+                ).items()
+            },
+            "_maven_group_id": (repository.get("maven_package") or {}).get("group_id"),
+            "_maven_artifact_id": (
+                (repository.get("maven_package") or {}).get("artifact_id")
+            ),
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.

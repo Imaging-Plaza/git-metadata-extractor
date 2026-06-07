@@ -20,6 +20,7 @@ import configparser
 import json
 import logging
 import re
+import xml.etree.ElementTree as ET
 from typing import Any
 from urllib.parse import unquote
 
@@ -483,6 +484,23 @@ def _match_rubygems(url: str) -> str | None:
     return _strip_badge_ext(m.group("name")) if m else None
 
 
+_MAVEN_SHIELDS_RE = re.compile(
+    r"img\.shields\.io/maven-central/v/(?P<group>[^/\s)?#]+)/(?P<artifact>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+_MAVEN_LINK_RE = re.compile(
+    r"central\.sonatype\.com/artifact/(?P<group>[^/\s)?#]+)/(?P<artifact>[^/\s)?#]+)",
+    re.IGNORECASE,
+)
+
+
+def _match_maven(url: str) -> tuple[str, str] | None:
+    m = _MAVEN_SHIELDS_RE.search(url) or _MAVEN_LINK_RE.search(url)
+    if m:
+        return (m.group("group"), _strip_badge_ext(m.group("artifact")))
+    return None
+
+
 # (ecosystem-key, matcher) pairs consulted for each badge URL.
 _COORD_MATCHERS: tuple[tuple[str, Any], ...] = (
     ("pypi", _match_pypi),
@@ -490,6 +508,7 @@ _COORD_MATCHERS: tuple[tuple[str, Any], ...] = (
     ("conda", _match_conda),
     ("crates", _match_crates),
     ("rubygems", _match_rubygems),
+    ("maven", _match_maven),
 )
 
 
@@ -571,6 +590,52 @@ def parse_go_module(aux_files: Any) -> str | None:
         return None
     path = m.group("path").strip().strip('"')
     return path or None
+
+
+def _pom_child_text(parent: ET.Element, local: str) -> str | None:
+    """Return the text of *parent*'s direct child with local name *local*
+    (namespace-agnostic — Maven POMs use a default namespace)."""
+    for el in parent:
+        if isinstance(el.tag, str) and el.tag.rsplit("}", maxsplit=1)[-1] == local:
+            text = (el.text or "").strip()
+            return text or None
+    return None
+
+
+def _pom_child(parent: ET.Element, local: str) -> ET.Element | None:
+    for el in parent:
+        if isinstance(el.tag, str) and el.tag.rsplit("}", maxsplit=1)[-1] == local:
+            return el
+    return None
+
+
+def parse_maven_coords(aux_files: Any) -> tuple[str, str] | None:
+    """Extract ``(groupId, artifactId)`` from a repo's ``pom.xml``.
+
+    ``artifactId`` is required; ``groupId`` falls back to the ``<parent>``
+    ``groupId`` when not declared on the project directly (Maven inheritance).
+    Returns None when ``pom.xml`` is missing, malformed, or lacks an
+    ``artifactId``. (Gradle projects rarely carry coordinates in-repo → use a
+    Maven-Central badge instead.)
+    """
+    content = _aux_file_lookup(aux_files, "pom.xml")
+    if content is None:
+        return None
+    try:
+        root = ET.fromstring(content)  # noqa: S314 — local manifest, not untrusted XML feed
+    except ET.ParseError:
+        return None
+    artifact = _pom_child_text(root, "artifactId")
+    if not artifact:
+        return None
+    group = _pom_child_text(root, "groupId")
+    if not group:
+        parent = _pom_child(root, "parent")
+        if parent is not None:
+            group = _pom_child_text(parent, "groupId")
+    if not group:
+        return None
+    return (group, artifact)
 
 
 # ---------------------------------------------------------------------------
