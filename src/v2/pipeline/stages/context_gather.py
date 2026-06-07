@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from src.v2.agents.rule_based._repo_signals import (
     detect_has_ci,
+    extract_registry_coords,
+    parse_badges,
+    parse_crates_name,
     parse_npm_name,
     parse_pypi_name,
     repo_url_matches,
@@ -250,16 +253,28 @@ def _normalize_owned_repo_full_name(owner: str, repo: str) -> str:
     return f"{owner}/{repo}"
 
 
-def _enrich_repository_metadata_with_registry_packages(
+def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0913
     *,
     full_name: str,
     aux_files: dict[str, Any] | None,
     repository_metadata: dict[str, Any],
     providers: ProviderSet,
     warnings: list[str],
+    readme: str | None = None,
 ) -> None:
-    """Discover the repo's published npm / PyPI packages and store them on
-    *repository_metadata* (``npm_package`` / ``pypi_package``) in place.
+    """Discover the repo's published packages and store them on
+    *repository_metadata* in place.
+
+    Parses README badges into ``repository_metadata["badges"]`` (when any),
+    then discovers packages across npm / PyPI / conda / crates.io / RubyGems:
+
+    * npm / PyPI: manifest name (``package.json`` / ``pyproject.toml`` /
+      ``setup.cfg``), falling back to badge coordinates when no manifest name.
+    * conda: badge coordinates only (no repo manifest).
+    * crates.io: ``cargo.toml`` ``[package].name``, else badge coordinates.
+    * RubyGems: badge coordinates only (no gemspec is fetched).
+
+    Stored as ``{npm,pypi,conda,crates,rubygems}_package``.
 
     Gated on ``providers.package_registry`` being available; best-effort
     (failures append a warning and never break the pipeline). Link policy
@@ -271,7 +286,15 @@ def _enrich_repository_metadata_with_registry_packages(
       (almost certainly a name collision with a different project's package).
     * registry's ``repository_url`` absent → store with ``link="name_only"``
       (name match only; weaker but still useful signal).
+
+    Badge parsing runs even when ``package_registry`` is None (badges are a
+    README-derived signal, not a registry call).
     """
+    badges = parse_badges(readme)
+    if badges:
+        repository_metadata["badges"] = badges
+    coords = extract_registry_coords(badges)
+
     registry = getattr(providers, "package_registry", None)
     if registry is None:
         return
@@ -291,7 +314,7 @@ def _enrich_repository_metadata_with_registry_packages(
         repository_metadata[key] = pkg
 
     try:
-        npm_name = parse_npm_name(aux_files)
+        npm_name = parse_npm_name(aux_files) or coords.get("npm")
         if npm_name:
             _link_and_store(registry.get_npm_package(npm_name), key="npm_package")
     except Exception as exc:  # noqa: BLE001
@@ -299,12 +322,45 @@ def _enrich_repository_metadata_with_registry_packages(
             f"npm package lookup failed for {full_name}: {exc}",
         )
     try:
-        pypi_name = parse_pypi_name(aux_files)
+        pypi_name = parse_pypi_name(aux_files) or coords.get("pypi")
         if pypi_name:
             _link_and_store(registry.get_pypi_package(pypi_name), key="pypi_package")
     except Exception as exc:  # noqa: BLE001
         warnings.append(
             f"PyPI package lookup failed for {full_name}: {exc}",
+        )
+    try:
+        conda_coord = coords.get("conda")
+        if conda_coord:
+            channel, conda_name = conda_coord
+            _link_and_store(
+                registry.get_conda_package(channel, conda_name),
+                key="conda_package",
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"conda package lookup failed for {full_name}: {exc}",
+        )
+    try:
+        crates_name = parse_crates_name(aux_files) or coords.get("crates")
+        if crates_name:
+            _link_and_store(
+                registry.get_crates_package(crates_name), key="crates_package",
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"crates package lookup failed for {full_name}: {exc}",
+        )
+    try:
+        rubygems_name = coords.get("rubygems")
+        if rubygems_name:
+            _link_and_store(
+                registry.get_rubygems_package(rubygems_name),
+                key="rubygems_package",
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"RubyGems package lookup failed for {full_name}: {exc}",
         )
 
 
@@ -431,15 +487,17 @@ def _optional_repository_context(
             f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
         )
 
-    # Published npm / PyPI packages — discovered from the manifest name +
-    # public-registry back-reference. Best-effort; gated on the
-    # package_registry provider being available.
+    # Published packages (npm / PyPI / conda / crates / RubyGems) + README
+    # badges — discovered from the manifest name / badge coordinates +
+    # public-registry back-reference. Best-effort. Badge parsing needs the
+    # RAW README (the cleaned `readme_content` has had badges stripped).
     _enrich_repository_metadata_with_registry_packages(
         full_name=full_name,
         aux_files=aux_files,
         repository_metadata=repository_metadata,
         providers=providers,
         warnings=warnings,
+        readme=readme_from_provider,
     )
 
     return {
@@ -570,14 +628,16 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
             )
 
-        # Published npm / PyPI packages (best-effort; same as
-        # _optional_repository_context above).
+        # Published packages + README badges (best-effort; same as
+        # _optional_repository_context above). Pass the RAW README so badge
+        # parsing sees the un-stripped `![..](..)` constructs.
         _enrich_repository_metadata_with_registry_packages(
             full_name=full_name,
             aux_files=aux_files,
             repository_metadata=repository_metadata,
             providers=providers,
             warnings=warnings,
+            readme=readme_from_provider,
         )
 
         context["repository"] = {
