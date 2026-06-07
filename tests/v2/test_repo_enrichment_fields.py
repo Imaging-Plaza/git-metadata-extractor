@@ -17,6 +17,7 @@ from src.v2.agents.rule_based._repo_signals import (
     detect_has_ci,
     parse_docker_hub_url,
     parse_test_coverage,
+    summarize_packages,
     summarize_releases,
 )
 from src.v2.ingest.providers.mock_github import MockGitHubProvider
@@ -184,6 +185,32 @@ _STUB_RELEASES = [
     },
 ]
 
+_STUB_CONTAINER_IMAGES = [
+    {
+        "name": "open-pulse",
+        "image": "ghcr.io/sdsc-ordes/open-pulse",
+        "visibility": "public",
+        "linked_repository": "sdsc-ordes/open-pulse",
+        "match": "repository",
+        "tags": ["latest", "v1.2.0", "v1.1.0"],
+        "updated_at": "2024-04-01T10:00:00Z",
+        "created_at": "2024-01-01T10:00:00Z",
+        "html_url": "https://github.com/sdsc-ordes/open-pulse/pkgs/container/open-pulse",
+    },
+    {
+        "name": "open-pulse-worker",
+        "image": "ghcr.io/sdsc-ordes/open-pulse-worker",
+        "visibility": "public",
+        "linked_repository": "sdsc-ordes/open-pulse",
+        "match": "repository",
+        "tags": ["v1.2.0"],
+        "updated_at": "2024-02-15T10:00:00Z",
+        "created_at": "2024-02-01T10:00:00Z",
+        "html_url": "https://github.com/sdsc-ordes/open-pulse/pkgs/container/open-pulse-worker",
+    },
+]
+
+
 _README_WITH_SIGNALS = (
     "# My Tool\n"
     "![coverage](https://img.shields.io/badge/coverage-87%25-green)\n"
@@ -195,6 +222,7 @@ _README_WITH_SIGNALS = (
 def _make_stub_context(
     *,
     releases: list[dict[str, Any]] | None = None,
+    container_images: list[dict[str, Any]] | None = None,
     readme_content: str = "",
     has_ci: bool | None = None,
     aux_files: dict[str, str] | None = None,
@@ -211,6 +239,8 @@ def _make_stub_context(
     }
     if releases is not None:
         metadata["releases"] = releases
+    if container_images is not None:
+        metadata["container_images"] = container_images
     if has_ci is not None:
         metadata["has_ci"] = has_ci
 
@@ -334,6 +364,93 @@ def test_repository_agent_emits_flat_release_scalars() -> None:
     assert raw["_release_count"] == len(_STUB_RELEASES)
     assert raw["_first_release_date"] == "2024-01-15T08:00:00Z"
     assert raw["_latest_release_date"] == "2024-03-01T12:00:00Z"
+
+
+# ---------------------------------------------------------------------------
+# summarize_packages — flat package scalars for "Container distribution"
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_packages_counts_names_refs_versions_dates() -> None:
+    out = summarize_packages(_STUB_CONTAINER_IMAGES)
+    assert out["package_count"] == len(_STUB_CONTAINER_IMAGES)
+    assert out["package_names"] == ["open-pulse", "open-pulse-worker"]
+    assert out["package_image_refs"] == [
+        "ghcr.io/sdsc-ordes/open-pulse",
+        "ghcr.io/sdsc-ordes/open-pulse-worker",
+    ]
+    # Distinct tags across all packages, sorted.
+    assert out["package_versions"] == ["latest", "v1.1.0", "v1.2.0"]
+    # Latest updated_at across packages.
+    assert out["latest_package_updated_at"] == "2024-04-01T10:00:00Z"
+
+
+def test_summarize_packages_none_input_all_none() -> None:
+    out = summarize_packages(None)
+    assert out == {
+        "package_count": None,
+        "package_names": None,
+        "package_image_refs": None,
+        "package_versions": None,
+        "latest_package_updated_at": None,
+    }
+
+
+def test_summarize_packages_empty_list_counts_zero() -> None:
+    out = summarize_packages([])
+    assert out["package_count"] == 0
+    assert out["package_names"] is None
+    assert out["package_versions"] is None
+    assert out["latest_package_updated_at"] is None
+
+
+def test_repository_agent_emits_flat_package_scalars() -> None:
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "acme/tool",
+                "repository_context": _make_stub_context(
+                    container_images=_STUB_CONTAINER_IMAGES,
+                ),
+            },
+            providers,
+        ),
+    )
+
+    raw = result.raw_output
+    assert raw["_package_count"] == len(_STUB_CONTAINER_IMAGES)
+    assert raw["_package_image_refs"] == [
+        "ghcr.io/sdsc-ordes/open-pulse",
+        "ghcr.io/sdsc-ordes/open-pulse-worker",
+    ]
+    assert raw["_package_versions"] == ["latest", "v1.1.0", "v1.2.0"]
+    assert raw["_latest_package_updated_at"] == "2024-04-01T10:00:00Z"
+
+
+def test_repository_agent_package_scalars_none_when_absent() -> None:
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "acme/tool",
+                "repository_context": _make_stub_context(container_images=None),
+            },
+            providers,
+        ),
+    )
+
+    raw = result.raw_output
+    assert raw["_container_images"] is None
+    assert raw["_package_count"] is None
+    assert raw["_package_names"] is None
+    assert raw["_package_image_refs"] is None
+    assert raw["_package_versions"] is None
+    assert raw["_latest_package_updated_at"] is None
 
 
 def test_repository_agent_emits_test_coverage_from_readme() -> None:

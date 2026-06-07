@@ -15,6 +15,7 @@ from src.v2.agents.models import (
 from src.v2.agents.rule_based._repo_signals import (
     parse_docker_hub_url,
     parse_test_coverage,
+    summarize_packages,
     summarize_releases,
 )
 from src.v2.canonicalization.github import github_repo_iri, github_user_iri
@@ -543,6 +544,20 @@ class RepositoryAgentV2:
                 for k, v in summarize_releases(repository.get("releases")).items()
             },
             "_container_images": (repository.get("container_images") or None),
+            # Flat, RDF-friendly package scalars for "Container distribution".
+            # The raw `_container_images` list-of-objects collapses to empty
+            # blank nodes on JSON-LD expansion (inner keys unmapped in
+            # @context), so these single-value `gme-internal:package_count /
+            # package_names / package_image_refs / package_versions /
+            # latest_package_updated_at` triples are what consumers query.
+            # Always present (None when no package data). GHCR scope only —
+            # needs the `read:packages` token scope, else reads None.
+            **{
+                f"_{k}": v
+                for k, v in summarize_packages(
+                    repository.get("container_images"),
+                ).items()
+            },
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.
