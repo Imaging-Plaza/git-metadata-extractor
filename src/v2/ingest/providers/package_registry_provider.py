@@ -14,6 +14,7 @@ mirroring the github provider's release / container-image fetchers.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -455,6 +456,72 @@ class PackageRegistryProvider:
             "registry_url": f"https://pkg.go.dev/{module}",
         }
 
+    def get_maven_package(
+        self, group_id: str, artifact_id: str,
+    ) -> dict[str, Any] | None:
+        """Fetch thin metadata for a Maven Central artifact ``group:artifact``.
+
+        Uses the Maven Central Solr API: one query for ``latestVersion`` +
+        latest ``timestamp``, one ``core=gav`` query for the version list.
+        ``repository_url`` is left None — the Solr index does not expose the
+        POM ``<scm>``; the back-reference is established by ``context_gather``
+        from the repo's own ``pom.xml`` (see the link policy there).
+        """
+        if not (isinstance(group_id, str) and group_id.strip()):
+            return None
+        if not (isinstance(artifact_id, str) and artifact_id.strip()):
+            return None
+        group_id, artifact_id = group_id.strip(), artifact_id.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            base = "https://search.maven.org/solrsearch/select"
+            q = quote(f'g:"{group_id}" AND a:"{artifact_id}"', safe="")
+            subject = f"maven:{group_id}:{artifact_id}"
+            latest = self._get_json(
+                f"{base}?q={q}&rows=1&wt=json", subject=subject,
+            )
+            docs = _solr_docs(latest)
+            if not docs:
+                return None
+            head = docs[0]
+            versions_payload = self._get_json(
+                f"{base}?q={q}&core=gav&rows={_MAX_VERSIONS}&wt=json",
+                subject=f"{subject}:gav",
+            )
+            return self._thin_maven(
+                group_id, artifact_id, head, _solr_docs(versions_payload),
+            )
+
+        return self._cached(
+            _fetch, method="get_maven_package", name=f"{group_id}:{artifact_id}",
+        )
+
+    @staticmethod
+    def _thin_maven(
+        group_id: str,
+        artifact_id: str,
+        head: dict[str, Any],
+        version_docs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        latest_version = _first_str(head.get("latestVersion"))
+        latest_release_date = _ms_to_iso(head.get("timestamp"))
+        versions = [
+            d["v"] for d in version_docs
+            if isinstance(d, dict) and isinstance(d.get("v"), str) and d["v"]
+        ]
+        return {
+            "name": f"{group_id}:{artifact_id}",
+            "group_id": group_id,
+            "artifact_id": artifact_id,
+            "latest_version": latest_version,
+            "versions": versions or None,
+            "latest_release_date": latest_release_date,
+            "repository_url": None,
+            "registry_url": (
+                f"https://central.sonatype.com/artifact/{group_id}/{artifact_id}"
+            ),
+        }
+
     # ------------------------------------------------------------------
     # shared helpers
     # ------------------------------------------------------------------
@@ -529,6 +596,28 @@ def _first_str(*candidates: Any) -> str | None:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     return None
+
+
+def _solr_docs(payload: Any) -> list[dict[str, Any]]:
+    """Return the ``response.docs`` list from a Maven Central Solr payload."""
+    if not isinstance(payload, dict):
+        return []
+    response = payload.get("response")
+    if not isinstance(response, dict):
+        return []
+    docs = response.get("docs")
+    return [d for d in docs if isinstance(d, dict)] if isinstance(docs, list) else []
+
+
+def _ms_to_iso(value: Any) -> str | None:
+    """Convert a millisecond epoch (Maven ``timestamp``) to an ISO 8601 UTC
+    string, or None when the value isn't a usable number."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    try:
+        return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 def _go_escape(module: str) -> str:

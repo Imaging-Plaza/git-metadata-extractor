@@ -11,6 +11,7 @@ from src.v2.agents.rule_based._repo_signals import (
     parse_badges,
     parse_crates_name,
     parse_go_module,
+    parse_maven_coords,
     parse_npm_name,
     parse_pypi_name,
     repo_url_matches,
@@ -372,6 +373,22 @@ def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0912, 
     except Exception as exc:  # noqa: BLE001
         warnings.append(
             f"Go module lookup failed for {full_name}: {exc}",
+        )
+    try:
+        # Maven Central exposes no repo URL via Solr, so the link is decided by
+        # the discovery source: coords from the repo's own pom.xml are a strong
+        # self-reference (verified); coords from a badge are name_only.
+        from_manifest = parse_maven_coords(aux_files)
+        maven_coord = from_manifest or coords.get("maven")
+        if maven_coord and hasattr(registry, "get_maven_package"):
+            group_id, artifact_id = maven_coord
+            maven_pkg = registry.get_maven_package(group_id, artifact_id)
+            if isinstance(maven_pkg, dict):
+                maven_pkg["link"] = "verified" if from_manifest else "name_only"
+                repository_metadata["maven_package"] = maven_pkg
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Maven package lookup failed for {full_name}: {exc}",
         )
 
 
