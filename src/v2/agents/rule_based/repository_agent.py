@@ -13,6 +13,7 @@ from src.v2.agents.models import (
     validate_permissive,
 )
 from src.v2.agents.rule_based._repo_signals import (
+    compose_image_urls,
     parse_compose_images,
     parse_docker_hub_url,
     parse_funding_urls,
@@ -697,6 +698,11 @@ class RepositoryAgentV2:
             ),
             "_compose_images": (
                 parse_compose_images(repository.get("compose_files")) or None
+            ),
+            # Full registry web URLs for the compose images — Docker Hub (the
+            # "docker" images), plus GHCR / Quay where resolvable.
+            "_compose_image_urls": (
+                compose_image_urls(repository.get("compose_files")) or None
             ),
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
