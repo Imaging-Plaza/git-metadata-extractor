@@ -17,6 +17,7 @@ from src.v2.agents.rule_based._repo_signals import (
     detect_has_ci,
     parse_docker_hub_url,
     parse_test_coverage,
+    summarize_releases,
 )
 from src.v2.ingest.providers.mock_github import MockGitHubProvider
 
@@ -268,6 +269,71 @@ def test_repository_agent_releases_none_when_absent() -> None:
     raw = result.raw_output
     assert raw["_latest_version"] is None
     assert raw["_releases"] is None
+    # Flat release scalars are always present, None when no releases.
+    assert raw["_release_count"] is None
+    assert raw["_first_release_date"] is None
+    assert raw["_latest_release_date"] is None
+
+
+# ---------------------------------------------------------------------------
+# summarize_releases — flat release scalars for "Release Frequency"
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_releases_counts_and_date_bounds() -> None:
+    out = summarize_releases(_STUB_RELEASES)
+    assert out["release_count"] == len(_STUB_RELEASES)
+    # Bounds are min/max over published_at (independent of list order).
+    assert out["first_release_date"] == "2024-01-15T08:00:00Z"
+    assert out["latest_release_date"] == "2024-03-01T12:00:00Z"
+
+
+def test_summarize_releases_none_input_all_none() -> None:
+    out = summarize_releases(None)
+    assert out == {
+        "release_count": None,
+        "first_release_date": None,
+        "latest_release_date": None,
+    }
+
+
+def test_summarize_releases_empty_list_counts_zero_no_dates() -> None:
+    out = summarize_releases([])
+    assert out["release_count"] == 0
+    assert out["first_release_date"] is None
+    assert out["latest_release_date"] is None
+
+
+def test_summarize_releases_ignores_missing_published_at_for_bounds() -> None:
+    releases = [
+        {"tag_name": "v3", "published_at": "2024-05-01T00:00:00Z"},
+        {"tag_name": "draft"},  # no published_at → counted, ignored for bounds
+        {"tag_name": "v1", "published_at": "2024-02-01T00:00:00Z"},
+    ]
+    out = summarize_releases(releases)
+    assert out["release_count"] == len(releases)
+    assert out["first_release_date"] == "2024-02-01T00:00:00Z"
+    assert out["latest_release_date"] == "2024-05-01T00:00:00Z"
+
+
+def test_repository_agent_emits_flat_release_scalars() -> None:
+    agent = RepositoryAgentV2()
+    providers = ProviderSet(github=MockGitHubProvider())
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "acme/tool",
+                "repository_context": _make_stub_context(releases=_STUB_RELEASES),
+            },
+            providers,
+        ),
+    )
+
+    raw = result.raw_output
+    assert raw["_release_count"] == len(_STUB_RELEASES)
+    assert raw["_first_release_date"] == "2024-01-15T08:00:00Z"
+    assert raw["_latest_release_date"] == "2024-03-01T12:00:00Z"
 
 
 def test_repository_agent_emits_test_coverage_from_readme() -> None:

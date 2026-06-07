@@ -15,6 +15,7 @@ from src.v2.agents.models import (
 from src.v2.agents.rule_based._repo_signals import (
     parse_docker_hub_url,
     parse_test_coverage,
+    summarize_releases,
 )
 from src.v2.canonicalization.github import github_repo_iri, github_user_iri
 from src.v2.parsers.citation_cff import parse_citation_cff
@@ -530,6 +531,17 @@ class RepositoryAgentV2:
                 if isinstance(repository.get("releases"), list) and repository["releases"]
                 else None
             ),
+            # Flat, RDF-friendly release scalars for "Release Frequency".
+            # The raw `_releases` list-of-objects collapses to empty blank
+            # nodes on JSON-LD expansion (inner keys unmapped in @context),
+            # so these single-value `gme-internal:release_count /
+            # first_release_date / latest_release_date` triples are what
+            # downstream consumers actually query. Always present (None when
+            # no release data), like `_latest_version`.
+            **{
+                f"_{k}": v
+                for k, v in summarize_releases(repository.get("releases")).items()
+            },
             "_container_images": (repository.get("container_images") or None),
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].

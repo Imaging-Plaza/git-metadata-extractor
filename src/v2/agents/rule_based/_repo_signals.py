@@ -222,3 +222,46 @@ def extract_doc_candidate_urls(readme: str | None) -> list[str]:
             seen.add(url)
             result.append(url)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Release frequency — flat scalars for `gme-internal:*`
+# ---------------------------------------------------------------------------
+
+
+def summarize_releases(releases: Any) -> dict[str, Any]:
+    """Reduce a raw release list to flat, RDF-friendly scalars.
+
+    The raw ``_releases`` list-of-objects (``{tag_name, published_at, …}``)
+    collapses to empty blank nodes on JSON-LD expansion (its inner keys are
+    not mapped in the ``@context``), so it is unusable as triples. This
+    derives the three flat values a "Release Frequency" consumer actually
+    needs — each emits as a single ``gme-internal:`` literal triple:
+
+    * ``release_count``       — number of releases
+    * ``first_release_date``  — earliest ``published_at`` (ISO 8601 string)
+    * ``latest_release_date`` — latest ``published_at`` (ISO 8601 string)
+
+    ``published_at`` is an ISO 8601 timestamp, so min/max is a plain string
+    compare (lexical == chronological). Releases missing ``published_at``
+    (e.g. drafts) are ignored for the date bounds but still counted. The
+    three keys are *always* present (``None`` when there is no release data),
+    mirroring the always-present ``_latest_version`` sibling.
+    """
+    out: dict[str, Any] = {
+        "release_count": None,
+        "first_release_date": None,
+        "latest_release_date": None,
+    }
+    if not isinstance(releases, list):
+        return out
+    out["release_count"] = len(releases)
+    dates = sorted(
+        r.get("published_at")
+        for r in releases
+        if isinstance(r, dict) and isinstance(r.get("published_at"), str) and r.get("published_at")
+    )
+    if dates:
+        out["first_release_date"] = dates[0]
+        out["latest_release_date"] = dates[-1]
+    return out
