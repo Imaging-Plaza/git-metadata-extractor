@@ -28,13 +28,11 @@ import json
 import logging
 import os
 import re
+from functools import cache
 from http import HTTPStatus
 from typing import Any
 
-import gimie.extractors.github as gimie_github
 import requests
-from gimie.extractors.github import GithubExtractor
-from gimie.parsers.cff import CffParser
 
 logger = logging.getLogger(__name__)
 
@@ -131,51 +129,75 @@ def _normalize_cff_calendar_dates(data: bytes) -> bytes:
     return new_text.encode("utf-8")
 
 
-_original_cff_parse = CffParser.parse
+# gimie is imported LAZILY (below) so this module loads even when the `gimie`
+# package isn't installed — the in-process path is only one of two backends
+# (the other is the gimie-api sidecar, selected by GIMIE_API_URL). Our gimie
+# monkeypatches (CFF-date normalisation + GitHub 204/empty-repo resilience) are
+# applied once on first in-process use (the @cache on `_ensure_gimie_project`
+# guarantees once-only).
 
 
-def _patched_cff_parse(self: CffParser, data: bytes) -> Any:
-    return _original_cff_parse(self, _normalize_cff_calendar_dates(data))
+def _apply_gimie_patches() -> None:
+    """Apply our CFF-date + GitHub-resilience monkeypatches to gimie."""
+    import gimie.extractors.github as gimie_github  # noqa: PLC0415
+    from gimie.extractors.github import GithubExtractor  # noqa: PLC0415
+    from gimie.parsers.cff import CffParser  # noqa: PLC0415
+
+    _original_cff_parse = CffParser.parse
+
+    def _patched_cff_parse(self: Any, data: bytes) -> Any:
+        return _original_cff_parse(self, _normalize_cff_calendar_dates(data))
+
+    CffParser.parse = _patched_cff_parse  # type: ignore[method-assign]
+
+    _original_send_rest_query = gimie_github.send_rest_query
+
+    def _patched_send_rest_query(
+        api: str, query: str, headers: dict[str, str],
+    ) -> list[dict[str, Any]] | dict[str, Any]:
+        """Treat GitHub 204 (empty body) as an empty JSON list (no contributors)."""
+        resp = requests.get(url=f"{api}/{query}", headers=headers, timeout=30)
+        if resp.status_code == HTTPStatus.NO_CONTENT:
+            return []
+        return _original_send_rest_query(api, query, headers)
+
+    _original_list_files = GithubExtractor.list_files
+
+    def _patched_list_files(self: Any) -> Any:
+        """Skip file listing when the repo has no ``HEAD`` tree (empty repo)."""
+        repo = self._repo_data
+        obj = repo.get("object") if isinstance(repo, dict) else None
+        if obj is None:
+            logger.info(
+                "GIMIE: repository has no HEAD tree (empty repo); skipping file parsers",
+            )
+            return []
+        return _original_list_files(self)
+
+    gimie_github.send_rest_query = _patched_send_rest_query
+    GithubExtractor.list_files = _patched_list_files  # type: ignore[method-assign]
 
 
-CffParser.parse = _patched_cff_parse  # type: ignore[method-assign]
+@cache
+def _ensure_gimie_project() -> Any:
+    """Lazily import gimie (applying our patches once) and return ``Project``.
 
-_original_send_rest_query = gimie_github.send_rest_query
-_original_list_files = GithubExtractor.list_files
-
-
-def _patched_send_rest_query(
-    api: str,
-    query: str,
-    headers: dict[str, str],
-) -> list[dict[str, Any]] | dict[str, Any]:
-    """Treat GitHub 204 (empty body) as an empty JSON list (e.g. no contributors)."""
-    resp = requests.get(
-        url=f"{api}/{query}",
-        headers=headers,
-        timeout=30,
-    )
-    if resp.status_code == HTTPStatus.NO_CONTENT:
-        return []
-    return _original_send_rest_query(api, query, headers)
-
-
-def _patched_list_files(self: GithubExtractor):
-    """Skip file listing when the repo has no ``HEAD`` tree (empty GitHub repo)."""
-    repo = self._repo_data
-    obj = repo.get("object") if isinstance(repo, dict) else None
-    if obj is None:
-        logger.info(
-            "GIMIE: repository has no HEAD tree (empty repo); skipping file parsers",
+    Raises ``RuntimeError`` with actionable guidance when ``gimie`` isn't
+    installed — the deployment is expected to set ``GIMIE_API_URL`` (sidecar)
+    instead of running gimie in-process. ``@cache`` makes the import + patches
+    run exactly once.
+    """
+    try:
+        _apply_gimie_patches()
+        from gimie.project import Project  # noqa: PLC0415
+    except ImportError as exc:
+        message = (
+            "in-process gimie extraction requires the `gimie` package, which is "
+            "not installed. Set GIMIE_API_URL to use the gimie-api sidecar, or "
+            "`pip install gimie==0.7.2` for in-process extraction."
         )
-        return []
-    return _original_list_files(self)
-
-
-gimie_github.send_rest_query = _patched_send_rest_query
-GithubExtractor.list_files = _patched_list_files
-
-from gimie.project import Project  # noqa: E402  # import after monkeypatches
+        raise RuntimeError(message) from exc
+    return Project
 
 
 def _first_non_empty_token(raw: str) -> str | None:
@@ -214,20 +236,33 @@ def _gimie_legacy_github_token_env():
 
 
 def extract_gimie(full_path: str, serialization_format: str = "json-ld"):
-    """
-    Extracts the GIMIE project from the given URL.
+    """Extract a repo's GIMIE metadata — via the gimie-api sidecar when
+    ``GIMIE_API_URL`` is set, otherwise in-process gimie.
+
+    This is the single **intermediate** every caller (v1 + v2) goes through, so
+    the in-process gimie dependency can be swapped for the sidecar in one place.
+    When the sidecar is configured it is authoritative (returns ``None`` on its
+    own failure, matching the in-process degrade path); there is no silent
+    in-process fallback (the sidecar exists precisely so gimie can leave the
+    Python tree).
 
     Args:
-        full_path (str): The full path to the URL.
-        serialization_format (str): Serialize graph as ``json-ld`` (default) or ``ttl``.
-
-    Returns:
-        Project: The GIMIE project object.
+        full_path (str): The repository URL.
+        serialization_format (str): ``json-ld`` (default) or ``ttl``.
     """
-    logger.info(f"Extracting GIMIE metadata for: {full_path}")
+    # Prefer the sidecar when configured (no gimie import needed on this path).
+    from src.v2.ingest.providers.gimie_api_client import (  # noqa: PLC0415
+        extract_gimie_via_api,
+        gimie_api_base,
+    )
 
+    if gimie_api_base() is not None:
+        return extract_gimie_via_api(full_path, serialization_format)
+
+    logger.info("Extracting GIMIE metadata (in-process) for: %s", full_path)
+    project_cls = _ensure_gimie_project()
     with _gimie_legacy_github_token_env():
-        proj = Project(full_path)
+        proj = project_cls(full_path)
         g = proj.extract()
 
     if serialization_format == "json-ld":

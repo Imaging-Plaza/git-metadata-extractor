@@ -497,18 +497,9 @@ class RealGitHubProvider(GitHubProvider):
     def _resolve_gimie_extractor(self) -> GimieExtractor:
         if self._gimie_extractor is not None:
             return self._gimie_extractor
-        # When GIMIE_API_URL is set, call the gimie-api sidecar over HTTP
-        # instead of running gimie in-process (lets the `gimie` dependency
-        # eventually leave our tree). Unset → in-process gimie (default).
-        from src.v2.ingest.providers.gimie_api_client import (  # noqa: PLC0415
-            extract_gimie_via_api,
-            gimie_api_base,
-        )
-
-        if gimie_api_base() is not None:
-            self._gimie_extractor = extract_gimie_via_api
-            return extract_gimie_via_api
-
+        # `extract_gimie` is the single intermediate: it calls the gimie-api
+        # sidecar when GIMIE_API_URL is set, else in-process gimie. Routing lives
+        # there so v1 and v2 share one path (and gimie can leave our tree).
         from src.v1.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
 
         self._gimie_extractor = extract_gimie

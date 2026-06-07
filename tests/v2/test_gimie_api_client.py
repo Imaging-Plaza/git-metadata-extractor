@@ -118,20 +118,29 @@ def test_extract_ttl_returns_string(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# provider seam — GIMIE_API_URL flips the resolved extractor
+# provider seam + the extract_gimie intermediate
 # ---------------------------------------------------------------------------
 
 
-def test_seam_uses_api_client_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    _enable(monkeypatch)
-    provider = RealGitHubProvider()
-    assert provider._resolve_gimie_extractor() is extract_gimie_via_api  # noqa: SLF001
-
-
-def test_seam_uses_in_process_when_url_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_seam_returns_intermediate(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The seam always resolves to the single `extract_gimie` intermediate;
+    # API-vs-in-process routing happens inside it (next test).
     monkeypatch.delenv("GIMIE_API_URL", raising=False)
-    provider = RealGitHubProvider()
-    assert provider._resolve_gimie_extractor() is extract_gimie  # noqa: SLF001
+    assert RealGitHubProvider()._resolve_gimie_extractor() is extract_gimie  # noqa: SLF001
+    _enable(monkeypatch)
+    assert RealGitHubProvider()._resolve_gimie_extractor() is extract_gimie  # noqa: SLF001
+
+
+def test_intermediate_routes_to_api_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    # With GIMIE_API_URL set, extract_gimie delegates to the sidecar client and
+    # never touches in-process gimie.
+    _enable(monkeypatch)
+    sentinel = {"@graph": []}
+    monkeypatch.setattr(
+        "src.v2.ingest.providers.gimie_api_client.extract_gimie_via_api",
+        lambda full_path, fmt="json-ld": sentinel,  # noqa: ARG005
+    )
+    assert extract_gimie("https://github.com/acme/tool") is sentinel
 
 
 def test_seam_explicit_extractor_wins(monkeypatch: pytest.MonkeyPatch) -> None:
