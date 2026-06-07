@@ -6,7 +6,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- **GitLab index family** — nine new RAG stores
+  (`gitlab_{epfl,ethz,datascience}_{projects,groups,users}`) over the EPFL,
+  ETHZ, and Datascience self-hosted GitLab instances, built on a shared
+  `src/index/_gitlab_base/` engine (one REST v4 client + parallel
+  project/group/user pipelines). All nine are vector-backed, registered in the
+  federated layer, and appear in `GET /v2/manifest`. GitLab user records carry
+  no ORCID (GitLab exposes no verified-ORCID field). See
+  [`docs/gitlab-index.md`](docs/gitlab-index.md).
+- **HTTP ingest + search endpoints for the GitLab family** —
+  `POST /v2/indices/<name>/ingest` (full-instance crawl + embed, async job;
+  optional `limit`) and `POST /v2/indices/<name>/search` for all nine gitlab
+  stores, at parity with the other indices.
+- **Deploy-time index bootstrap** — the Gunicorn `on_starting` hook runs the
+  federated bootstrap once in the master process before workers fork, so every
+  index store exists with its schema before the first request. Idempotent and
+  best-effort; toggle with `INDEX_BOOTSTRAP_ON_START` (default `true`).
+- **LLM README enrichment** — a `repo_signals` refiner that reads the README to
+  populate `gme-internal:hasDocumentation` (documentation URLs) and fill the
+  test-coverage signal when the deterministic badge parse found none. Gated by
+  `V2_REPO_SIGNALS_AGENT_MODE` (`apply`/`shadow`/`off`).
+
+### Fixed
+
+- **Federated bootstrap `_LEAF_STORES`** — the gitlab `groups` (and now `users`)
+  leaf stores were missing from the leaf-opener allowlist and silently
+  bootstrapped as "skipped: no duckdb store"; all nine gitlab leaves now
+  bootstrap correctly.
 
 ## [3.0.0rc1] — Proposed — Identifier URL canonicalisation + per-entity RAG indices (breaking)
 
