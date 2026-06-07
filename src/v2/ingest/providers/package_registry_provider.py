@@ -522,6 +522,100 @@ class PackageRegistryProvider:
             ),
         }
 
+    def get_nuget_package(self, package_id: str) -> dict[str, Any] | None:
+        """Fetch thin metadata for a NuGet package *package_id*.
+
+        Search endpoint → canonical id + latest stable version; flat-container
+        → the full version list; registration → ``repository`` URL + latest
+        ``published`` date. ``repository_url`` is taken ONLY from the package's
+        Source-Link ``repository`` (NOT ``projectUrl``, which is usually a
+        homepage) so the back-reference check never false-drops on a homepage.
+        """
+        if not (isinstance(package_id, str) and package_id.strip()):
+            return None
+        package_id = package_id.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            subject = f"nuget:{package_id}"
+            search = self._get_json(
+                "https://azuresearch-usnc.nuget.org/query"
+                f"?q=packageid:{quote(package_id, safe='')}&take=1",
+                subject=subject,
+            )
+            data = search.get("data") if isinstance(search, dict) else None
+            if not (isinstance(data, list) and data and isinstance(data[0], dict)):
+                return None
+            head = data[0]
+            name = _first_str(head.get("id")) or package_id
+            latest_version = _first_str(head.get("version"))
+
+            id_lower = name.lower()
+            flat = self._get_json(
+                f"https://api.nuget.org/v3-flatcontainer/{quote(id_lower, safe='')}"
+                "/index.json",
+                subject=f"{subject}:versions",
+            )
+            versions: list[str] = []
+            if isinstance(flat, dict) and isinstance(flat.get("versions"), list):
+                versions = [v for v in flat["versions"] if isinstance(v, str) and v]
+                if len(versions) > _MAX_VERSIONS:
+                    logger.info(
+                        "nuget package %s has %d versions; truncating to %d",
+                        name, len(versions), _MAX_VERSIONS,
+                    )
+                    versions = versions[:_MAX_VERSIONS]
+
+            repository_url, published = self._nuget_repo_and_date(
+                id_lower, latest_version, subject=subject,
+            )
+
+            return {
+                "name": name,
+                "latest_version": latest_version,
+                "versions": versions or None,
+                "latest_release_date": published,
+                "repository_url": repository_url,
+                "registry_url": f"https://www.nuget.org/packages/{name}",
+            }
+
+        return self._cached(_fetch, method="get_nuget_package", name=package_id)
+
+    def _nuget_repo_and_date(
+        self, id_lower: str, target_version: str | None, *, subject: str,
+    ) -> tuple[str | None, str | None]:
+        """Best-effort (repository_url, published) for *target_version* from the
+        NuGet registration index. Handles inline leaves and one paged sub-page;
+        returns (None, None) when neither is available."""
+        idx = self._get_json(
+            "https://api.nuget.org/v3/registration5-gz-semver2/"
+            f"{quote(id_lower, safe='')}/index.json",
+            subject=f"{subject}:registration",
+        )
+        pages = idx.get("items") if isinstance(idx, dict) else None
+        if not (isinstance(pages, list) and pages):
+            return (None, None)
+        last = pages[-1]
+        leaves = last.get("items") if isinstance(last, dict) else None
+        if not isinstance(leaves, list):
+            page_url = last.get("@id") if isinstance(last, dict) else None
+            if isinstance(page_url, str):
+                sub = self._get_json(page_url, subject=f"{subject}:registration-page")
+                leaves = sub.get("items") if isinstance(sub, dict) else None
+        if not isinstance(leaves, list):
+            return (None, None)
+
+        entry = _nuget_catalog_entry(leaves, target_version)
+        if entry is None:
+            return (None, None)
+        repo = entry.get("repository")
+        repo_url = None
+        if isinstance(repo, dict):
+            repo_url = _first_str(repo.get("url"))
+        elif isinstance(repo, str):
+            repo_url = _first_str(repo)
+        published = _first_str(entry.get("published"))
+        return (repo_url, published)
+
     # ------------------------------------------------------------------
     # shared helpers
     # ------------------------------------------------------------------
@@ -607,6 +701,22 @@ def _solr_docs(payload: Any) -> list[dict[str, Any]]:
         return []
     docs = response.get("docs")
     return [d for d in docs if isinstance(d, dict)] if isinstance(docs, list) else []
+
+
+def _nuget_catalog_entry(
+    leaves: list[Any], target_version: str | None,
+) -> dict[str, Any] | None:
+    """Return the ``catalogEntry`` for *target_version* among registration
+    *leaves* (else the last leaf's entry)."""
+    last_entry: dict[str, Any] | None = None
+    for leaf in leaves:
+        entry = leaf.get("catalogEntry") if isinstance(leaf, dict) else None
+        if not isinstance(entry, dict):
+            continue
+        last_entry = entry
+        if target_version and entry.get("version") == target_version:
+            return entry
+    return last_entry
 
 
 def _ms_to_iso(value: Any) -> str | None:

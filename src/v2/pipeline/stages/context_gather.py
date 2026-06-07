@@ -390,6 +390,16 @@ def _enrich_repository_metadata_with_registry_packages(  # noqa: C901, PLR0912, 
         warnings.append(
             f"Maven package lookup failed for {full_name}: {exc}",
         )
+    try:
+        nuget_name = coords.get("nuget")
+        if nuget_name and hasattr(registry, "get_nuget_package"):
+            _link_and_store(
+                registry.get_nuget_package(nuget_name), key="nuget_package",
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"NuGet package lookup failed for {full_name}: {exc}",
+        )
 
 
 def _optional_repository_context(

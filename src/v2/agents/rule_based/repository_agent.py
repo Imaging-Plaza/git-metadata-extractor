@@ -638,6 +638,15 @@ class RepositoryAgentV2:
             "_maven_artifact_id": (
                 (repository.get("maven_package") or {}).get("artifact_id")
             ),
+            # NuGet (.NET) package — discovered from a nuget.org / shields
+            # badge; back-reference verified via the package's Source-Link
+            # `repository` URL (homepage `projectUrl` is intentionally not used).
+            **{
+                f"_nuget_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("nuget_package"),
+                ).items()
+            },
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.
