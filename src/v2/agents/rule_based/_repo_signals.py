@@ -280,18 +280,19 @@ def summarize_packages(container_images: Any) -> dict[str, Any]:
     * ``package_count``            — number of linked container packages (int)
     * ``package_names``            — package names (list → repeated triples)
     * ``package_image_refs``       — pullable ``ghcr.io/owner/name`` refs (list)
-    * ``package_versions``         — distinct version tags across all packages
-                                     (list → repeated triples)
+    * ``package_tags``             — distinct image tags across all packages
+                                     (list → repeated triples). GHCR calls
+                                     these *tags* (``metadata.container.tags``).
     * ``latest_package_updated_at`` — most recent ``updated_at`` (ISO 8601)
 
-    Per-package version detail stays in the raw ``_container_images`` payload.
+    Per-package tag detail stays in the raw ``_container_images`` payload.
     The five keys are *always* present (``None`` when there is no package data).
     """
     out: dict[str, Any] = {
         "package_count": None,
         "package_names": None,
         "package_image_refs": None,
-        "package_versions": None,
+        "package_tags": None,
         "latest_package_updated_at": None,
     }
     if not isinstance(container_images, list):
@@ -302,14 +303,14 @@ def summarize_packages(container_images: Any) -> dict[str, Any]:
     refs = [c["image"] for c in images if isinstance(c.get("image"), str) and c["image"]]
     out["package_names"] = names or None
     out["package_image_refs"] = refs or None
-    versions = sorted({
+    tags = sorted({
         tag
         for c in images
         if isinstance(c.get("tags"), list)
         for tag in c["tags"]
         if isinstance(tag, str) and tag
     })
-    out["package_versions"] = versions or None
+    out["package_tags"] = tags or None
     updated = sorted(
         c["updated_at"]
         for c in images
