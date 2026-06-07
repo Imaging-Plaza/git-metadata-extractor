@@ -21,6 +21,10 @@ services:
       # Avoid ~/.cache/uv (often root-owned after sshd/common-utils); workspace is bind-mounted as vscode.
       UV_CACHE_DIR: /workspaces/project/.uv-cache
       SELENIUM_REMOTE_URL: ${SELENIUM_REMOTE_URL:-http://gme-selenium-firefox:4444}
+      # GIMIE runs as the gme-gimie-api sidecar (the `gimie` Python dep was
+      # removed). Required for repository extraction — unset → in-process gimie,
+      # which is no longer installed (RuntimeError). Mirror this in prod.
+      GIMIE_API_URL: ${GIMIE_API_URL:-http://gme-gimie-api:15400}
     ports:
       - "${SSH_PORT:-2222}:2222"
       - "${APP_PORT:-1234}:1234"
@@ -55,13 +59,16 @@ services:
     restart: unless-stopped
     networks:
       - dev
-  # gimie-api sidecar (Phase 1 spike): runs gimie out-of-process so the v2
-  # provider can call it over HTTP instead of importing gimie. OPT-IN — the app
-  # uses it only when `GIMIE_API_URL=http://gme-gimie-api:15400` is set (left
-  # unset by default, so in-process gimie stays the default). Pin a digest for
-  # reproducibility before relying on it in CI/prod.
+  # gimie-api sidecar: runs gimie out-of-process so the app calls it over HTTP
+  # (the `gimie` Python dependency was removed — see OPERATIONS_RUNBOOK §8). The
+  # app reaches it via GIMIE_API_URL (set on the devcontainer above). REQUIRED
+  # for repository extraction; mirror this service in the production deploy.
+  #
+  # Image pinned by digest for reproducibility (== :latest resolved 2026-06-07,
+  # gimie 0.7.2). Re-resolve + re-validate with scripts/v2/gimie_api_parity.py
+  # when bumping. To follow the moving tag instead, set GIMIE_API_IMAGE=:latest.
   gme-gimie-api:
-    image: ghcr.io/sdsc-ordes/gimie-api:latest
+    image: ${GIMIE_API_IMAGE:-ghcr.io/sdsc-ordes/gimie-api@sha256:7a8a59b70d0787e1d265ff08f24328dd2d518f25dcc504b0420f8648ce99ecdb}
     container_name: gme-gimie-api
     environment:
       # gimie-api reads the GitHub token from ACCESS_TOKEN.
