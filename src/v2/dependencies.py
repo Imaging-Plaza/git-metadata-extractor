@@ -57,6 +57,12 @@ from src.v2.ingest.providers.mock_github import MockGitHubProvider
 from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
 from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
 from src.v2.ingest.providers.mock_ror import MockRORProvider
+from src.v2.ingest.providers.oamonitor_rag import (
+    OamonitorRagProvider,
+)
+from src.v2.ingest.providers.oamonitor_rag import (
+    build_default_provider as build_default_oamonitor_rag_provider,
+)
 from src.v2.ingest.providers.openalex_rag import (
     OpenAlexRagProvider,
 )
@@ -71,6 +77,7 @@ from src.v2.ingest.providers.orcid_rag import (
 from src.v2.ingest.providers.orcid_rag import (
     build_default_provider as build_default_orcid_rag_provider,
 )
+from src.v2.ingest.providers.package_registry_provider import PackageRegistryProvider
 from src.v2.ingest.providers.renkulab_rag import (
     RenkulabRagProvider,
 )
@@ -95,12 +102,6 @@ from src.v2.ingest.providers.swissubase_rag import (
 )
 from src.v2.ingest.providers.swissubase_rag import (
     build_default_provider as build_default_swissubase_rag_provider,
-)
-from src.v2.ingest.providers.oamonitor_rag import (
-    OamonitorRagProvider,
-)
-from src.v2.ingest.providers.oamonitor_rag import (
-    build_default_provider as build_default_oamonitor_rag_provider,
 )
 from src.v2.ingest.providers.zenodo_rag import (
     ZenodoRagProvider,
@@ -310,6 +311,20 @@ def _resolve_provider_cache(app_state: Any) -> ProviderCache | None:
     return cache
 
 
+def _resolve_package_registry_provider(
+    cache: ProviderCache | None,
+) -> PackageRegistryProvider | None:
+    """Build the npm/PyPI registry provider for the real ProviderSet path.
+
+    Gated by ``V2_PACKAGE_REGISTRY_ENABLED`` (default ``true``); the usual
+    falsey spellings (``false`` / ``0`` / ``no`` / ``off``) disable it and
+    return None so registry discovery is skipped entirely.
+    """
+    if not _is_truthy_env(os.getenv("V2_PACKAGE_REGISTRY_ENABLED", "true")):
+        return None
+    return PackageRegistryProvider(cache=cache)
+
+
 def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
     *,
     use_mock_providers: bool,
@@ -364,6 +379,7 @@ def _default_provider_set(  # noqa: PLR0913 — bundle-builder for ProviderSet
         orcid=RealORCIDProvider(cache=cache, session=_optional_orcid_oauth_session()),
         infoscience=RealInfoscienceProvider(cache=cache),
         ror=RealRORProvider(cache=cache),
+        package_registry=_resolve_package_registry_provider(cache),
         **rag_kwargs,
     )
 
@@ -451,6 +467,7 @@ async def get_provider_set(request: Request) -> ProviderSet:
             else default_provider_set.infoscience
         ),
         ror=ror_provider if isinstance(ror_provider, RORProvider) else default_provider_set.ror,
+        package_registry=default_provider_set.package_registry,
         infoscience_rag=default_provider_set.infoscience_rag,
         ethz_research_collection_rag=default_provider_set.ethz_research_collection_rag,
         huggingface_rag=default_provider_set.huggingface_rag,

@@ -172,6 +172,7 @@ class ProviderSet:
     orcid: ORCIDProvider | None = None
     infoscience: InfoscienceProvider | None = None
     ror: RORProvider | None = None
+    package_registry: Any | None = None
     infoscience_rag: Any | None = None
     ethz_research_collection_rag: Any | None = None
     huggingface_rag: Any | None = None

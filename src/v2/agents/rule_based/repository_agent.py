@@ -16,6 +16,7 @@ from src.v2.agents.rule_based._repo_signals import (
     parse_docker_hub_url,
     parse_test_coverage,
     summarize_packages,
+    summarize_registry_package,
     summarize_releases,
 )
 from src.v2.canonicalization.github import github_repo_iri, github_user_iri
@@ -556,6 +557,24 @@ class RepositoryAgentV2:
                 f"_{k}": v
                 for k, v in summarize_packages(
                     repository.get("container_images"),
+                ).items()
+            },
+            # Published npm / PyPI packages — discovered by context_gather
+            # from the manifest name + public-registry back-reference, stored
+            # as `npm_package` / `pypi_package`. Flat, RDF-friendly scalars
+            # (`gme-internal:npm_* / pypi_*`): package / latest_version /
+            # versions / latest_release_date / registry_url / link. Always
+            # present (all None when no manifest / provider disabled / drop).
+            **{
+                f"_npm_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("npm_package"),
+                ).items()
+            },
+            **{
+                f"_pypi_{k}": v
+                for k, v in summarize_registry_package(
+                    repository.get("pypi_package"),
                 ).items()
             },
             # CI presence — detected from the repo root listing by

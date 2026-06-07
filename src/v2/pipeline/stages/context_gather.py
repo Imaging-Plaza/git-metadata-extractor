@@ -5,7 +5,12 @@ import os
 import re
 from typing import TYPE_CHECKING, Any
 
-from src.v2.agents.rule_based._repo_signals import detect_has_ci
+from src.v2.agents.rule_based._repo_signals import (
+    detect_has_ci,
+    parse_npm_name,
+    parse_pypi_name,
+    repo_url_matches,
+)
 from src.v2.pipeline.stages.models import ContextBundle
 
 
@@ -245,6 +250,64 @@ def _normalize_owned_repo_full_name(owner: str, repo: str) -> str:
     return f"{owner}/{repo}"
 
 
+def _enrich_repository_metadata_with_registry_packages(
+    *,
+    full_name: str,
+    aux_files: dict[str, Any] | None,
+    repository_metadata: dict[str, Any],
+    providers: ProviderSet,
+    warnings: list[str],
+) -> None:
+    """Discover the repo's published npm / PyPI packages and store them on
+    *repository_metadata* (``npm_package`` / ``pypi_package``) in place.
+
+    Gated on ``providers.package_registry`` being available; best-effort
+    (failures append a warning and never break the pipeline). Link policy
+    per package:
+
+    * registry's ``repository_url`` present AND back-references this repo →
+      store with ``link="verified"``.
+    * registry's ``repository_url`` present but points elsewhere → DROP
+      (almost certainly a name collision with a different project's package).
+    * registry's ``repository_url`` absent → store with ``link="name_only"``
+      (name match only; weaker but still useful signal).
+    """
+    registry = getattr(providers, "package_registry", None)
+    if registry is None:
+        return
+
+    def _link_and_store(pkg: dict[str, Any] | None, *, key: str) -> None:
+        if not isinstance(pkg, dict):
+            return
+        repository_url = pkg.get("repository_url")
+        if isinstance(repository_url, str) and repository_url.strip():
+            if repo_url_matches(repository_url, full_name):
+                pkg["link"] = "verified"
+            else:
+                # Back-reference points at a different repo — name collision.
+                return
+        else:
+            pkg["link"] = "name_only"
+        repository_metadata[key] = pkg
+
+    try:
+        npm_name = parse_npm_name(aux_files)
+        if npm_name:
+            _link_and_store(registry.get_npm_package(npm_name), key="npm_package")
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"npm package lookup failed for {full_name}: {exc}",
+        )
+    try:
+        pypi_name = parse_pypi_name(aux_files)
+        if pypi_name:
+            _link_and_store(registry.get_pypi_package(pypi_name), key="pypi_package")
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"PyPI package lookup failed for {full_name}: {exc}",
+        )
+
+
 def _optional_repository_context(
     *,
     full_name: str,
@@ -367,6 +430,17 @@ def _optional_repository_context(
         warnings.append(
             f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
         )
+
+    # Published npm / PyPI packages — discovered from the manifest name +
+    # public-registry back-reference. Best-effort; gated on the
+    # package_registry provider being available.
+    _enrich_repository_metadata_with_registry_packages(
+        full_name=full_name,
+        aux_files=aux_files,
+        repository_metadata=repository_metadata,
+        providers=providers,
+        warnings=warnings,
+    )
 
     return {
         "full_name": full_name,
@@ -495,6 +569,16 @@ async def gather_context(  # noqa: C901, PLR0915
             warnings.append(
                 f"Repository root-listing (has_ci) failed for {full_name}: {exc}",
             )
+
+        # Published npm / PyPI packages (best-effort; same as
+        # _optional_repository_context above).
+        _enrich_repository_metadata_with_registry_packages(
+            full_name=full_name,
+            aux_files=aux_files,
+            repository_metadata=repository_metadata,
+            providers=providers,
+            warnings=warnings,
+        )
 
         context["repository"] = {
             "full_name": full_name,
