@@ -31,6 +31,17 @@ from src.v2.ingest.providers.gimie_api_client import (
 _DEFAULT_REPOS = ["sdsc-ordes/gimie", "CSBDeep/CSBDeep", "psf/requests"]
 
 
+def _canon(x: Any) -> Any:
+    """Canonicalise for order-insensitive comparison — gimie does not stably
+    order list values (e.g. the author/contributor list), and those are sets of
+    `@id` references where order carries no meaning."""
+    if isinstance(x, dict):
+        return {k: _canon(v) for k, v in sorted(x.items())}
+    if isinstance(x, list):
+        return sorted((_canon(i) for i in x), key=lambda v: json.dumps(v, sort_keys=True))
+    return x
+
+
 def _nodes_by_id(payload: Any) -> dict[str, Any]:
     graph = payload.get("@graph") if isinstance(payload, dict) else payload
     if not isinstance(graph, list):
@@ -38,7 +49,7 @@ def _nodes_by_id(payload: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for node in graph:
         if isinstance(node, dict):
-            out[str(node.get("@id", f"_blank_{len(out)}"))] = node
+            out[str(node.get("@id", f"_blank_{len(out)}"))] = _canon(node)
     return out
 
 
@@ -67,7 +78,14 @@ def main(repos: list[str]) -> int:
     for repo in repos:
         url = repo if repo.startswith("http") else f"https://github.com/{repo}"
         print(f"\n=== {url} ===")
-        in_proc = extract_gimie(url)
+        # `extract_gimie` now routes to the sidecar when GIMIE_API_URL is set, so
+        # force the in-process side by clearing it just for that call.
+        saved = os.environ.pop("GIMIE_API_URL", None)
+        try:
+            in_proc = extract_gimie(url)
+        finally:
+            if saved is not None:
+                os.environ["GIMIE_API_URL"] = saved
         via_api = extract_gimie_via_api(url)
         if via_api is None:
             print("  API returned None (sidecar error/timeout) — investigate")
