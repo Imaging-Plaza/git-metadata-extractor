@@ -14,6 +14,7 @@ from src.v2.agents.models import (
 )
 from src.v2.agents.rule_based._repo_signals import (
     parse_docker_hub_url,
+    parse_funding_urls,
     parse_test_coverage,
     summarize_packages,
     summarize_registry_package,
@@ -57,6 +58,9 @@ _REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # reporting guidance separately from undocumented ones, and gives
     # LLM agents a place to read for embargo / disclosure timelines.
     ("_security_url",      ("security.md",)),
+    # CODE_OF_CONDUCT — already fetched into aux_files; surface its URL like
+    # the other governance files.
+    ("_code_of_conduct_url", ("code_of_conduct.md", "code_of_conduct")),
 )
 
 
@@ -647,6 +651,35 @@ class RepositoryAgentV2:
                     repository.get("nuget_package"),
                 ).items()
             },
+            # Funding / sponsorship URLs parsed from .github/FUNDING.yml
+            # (GitHub Sponsors, Patreon, Open Collective, Ko-fi, …). List of
+            # canonical URLs, or None when no FUNDING file / no platforms.
+            "_funding_urls": (parse_funding_urls(compiled_context.get("aux_files")) or None),
+            # GitHub community health profile (GET /community/profile): overall
+            # health %, plus presence of code-of-conduct / issue / PR templates.
+            # None when the profile was unavailable.
+            "_community_health_percentage": (
+                (repository.get("community_profile") or {}).get("health_percentage")
+            ),
+            "_has_code_of_conduct": (
+                (repository.get("community_profile") or {}).get("has_code_of_conduct")
+            ),
+            "_has_issue_template": (
+                (repository.get("community_profile") or {}).get("has_issue_template")
+            ),
+            "_has_pull_request_template": (
+                (repository.get("community_profile") or {}).get(
+                    "has_pull_request_template",
+                )
+            ),
+            # Git tags (newest first) — versioning for repos that tag without
+            # cutting GitHub Releases. Raw list + count; None when no tags.
+            "_git_tags": (repository.get("git_tags") or None),
+            "_git_tag_count": (
+                len(repository["git_tags"])
+                if isinstance(repository.get("git_tags"), list)
+                else None
+            ),
             # CI presence — detected from the repo root listing by
             # context_gather and stored in repository_metadata["has_ci"].
             # None when the listing was unavailable.

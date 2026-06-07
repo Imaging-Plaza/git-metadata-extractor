@@ -917,6 +917,91 @@ class RealGitHubProvider(GitHubProvider):
             key, _fetch, label=f"github.get_releases({full_name})",
         )
 
+    def get_repository_community_profile(self, full_name: str) -> dict[str, Any] | None:
+        """Fetch GitHub's community health profile for ``owner/repo`` via
+        `/repos/{owner}/{repo}/community/profile` (public, cached). Returns a
+        thinned dict (health %, documentation URL, file-presence booleans), or
+        None on 404 / non-200 / transport error."""
+
+        def _fetch() -> dict[str, Any] | None:
+            url = f"https://api.github.com/repos/{full_name}/community/profile"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github community profile fetch failed: %s", full_name)
+                return None
+            if response.status_code == 404:
+                return None
+            if response.status_code != 200:
+                logger.info(
+                    "github community profile returned %d for %s",
+                    response.status_code, full_name,
+                )
+                return None
+            try:
+                payload = response.json()
+            except ValueError:
+                logger.exception("github community profile not JSON: %s", full_name)
+                return None
+            if not isinstance(payload, dict):
+                return None
+            files = payload.get("files") if isinstance(payload.get("files"), dict) else {}
+            return {
+                "health_percentage": payload.get("health_percentage"),
+                "documentation": payload.get("documentation"),
+                "has_code_of_conduct": files.get("code_of_conduct") is not None,
+                "has_contributing": files.get("contributing") is not None,
+                "has_issue_template": files.get("issue_template") is not None,
+                "has_pull_request_template": (
+                    files.get("pull_request_template") is not None
+                ),
+            }
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key(
+            "github", "get_community_profile_v1", full_name=full_name,
+        )
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.get_community_profile({full_name})",
+        )
+
+    def get_repository_tags(self, full_name: str) -> list[str]:
+        """Fetch git tag names for ``owner/repo`` via `/repos/.../tags`
+        (public, cached, first page of 100, newest first). Empty on
+        404 / non-200 / transport error."""
+
+        def _fetch() -> list[str]:
+            url = f"https://api.github.com/repos/{full_name}/tags?per_page=100"
+            try:
+                response = self._run_with_rate_limit(
+                    lambda: requests.get(url, headers=_github_auth_headers(), timeout=15),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("github tags fetch failed: %s", full_name)
+                return []
+            if response.status_code != 200:
+                return []
+            try:
+                payload = response.json()
+            except ValueError:
+                return []
+            if not isinstance(payload, list):
+                return []
+            return [
+                t["name"] for t in payload
+                if isinstance(t, dict) and isinstance(t.get("name"), str) and t["name"]
+            ]
+
+        if self._cache is None:
+            return _fetch()
+        key = ProviderCache.make_key("github", "get_tags_v1", full_name=full_name)
+        return self._cache.get_or_set(
+            key, _fetch, label=f"github.get_tags({full_name})",
+        )
+
     def _list_owner_container_packages(self, owner: str) -> dict[str, Any]:
         """List an owner's GHCR container packages, cached by owner.
 

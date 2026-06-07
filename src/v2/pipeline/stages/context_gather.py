@@ -513,6 +513,22 @@ def _optional_repository_context(
         warnings.append(
             f"Repository container-images lookup failed for {full_name}: {exc}",
         )
+    try:
+        profile = providers.github.get_repository_community_profile(full_name)
+        if isinstance(profile, dict):
+            repository_metadata["community_profile"] = profile
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository community-profile lookup failed for {full_name}: {exc}",
+        )
+    try:
+        tags = providers.github.get_repository_tags(full_name)
+        if isinstance(tags, list) and tags:
+            repository_metadata["git_tags"] = tags
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(
+            f"Repository tags lookup failed for {full_name}: {exc}",
+        )
 
     # CI detection — list the repo root once and check for known CI
     # indicator files / directories. Best-effort: None on failure so the
@@ -655,6 +671,22 @@ async def gather_context(  # noqa: C901, PLR0915
         except Exception as exc:  # noqa: BLE001
             warnings.append(
                 f"Repository container-images lookup failed for {full_name}: {exc}",
+            )
+        try:
+            profile = providers.github.get_repository_community_profile(full_name)
+            if isinstance(profile, dict):
+                repository_metadata["community_profile"] = profile
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository community-profile lookup failed for {full_name}: {exc}",
+            )
+        try:
+            tags = providers.github.get_repository_tags(full_name)
+            if isinstance(tags, list) and tags:
+                repository_metadata["git_tags"] = tags
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                f"Repository tags lookup failed for {full_name}: {exc}",
             )
 
         # CI detection (best-effort; None on provider failure).

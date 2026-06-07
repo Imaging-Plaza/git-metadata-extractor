@@ -193,6 +193,28 @@ class GitHubProvider(BaseProvider, ABC):
         del full_name
         return []
 
+    def get_repository_community_profile(self, full_name: str) -> dict[str, Any] | None:
+        """Return GitHub's community health profile for ``owner/repo``.
+
+        From ``GET /repos/{owner}/{repo}/community/profile``:
+        ``health_percentage``, a ``documentation`` URL, and ``files`` presence
+        (code_of_conduct / contributing / issue_template / pull_request_template
+        / license / readme). Default returns None so partial mocks need not
+        stub it; implementations must not raise (None on failure).
+        """
+        del full_name
+        return None
+
+    def get_repository_tags(self, full_name: str) -> list[str]:
+        """Return the repository's git tag names (newest first), or ``[]``.
+
+        From ``GET /repos/{owner}/{repo}/tags`` — captures versioning for repos
+        that tag without cutting GitHub Releases. Default returns ``[]``;
+        implementations must not raise.
+        """
+        del full_name
+        return []
+
 
 class InfoscienceProvider(BaseProvider, ABC):
     """Adapter interface for Infoscience metadata retrieval."""
