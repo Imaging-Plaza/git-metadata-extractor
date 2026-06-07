@@ -182,31 +182,21 @@ Behaviour:
 Pin the sidecar image by digest for reproducibility. Validate a new image with
 `scripts/v2/gimie_api_parity.py` (diffs sidecar vs in-process output).
 
-The dev stack (`.devcontainer/docker-compose.yml`) wires this already (the
-`gme-gimie-api` service + `GIMIE_API_URL` on the devcontainer, image pinned by
-digest). **Production compose/k8s — outside this repo — needs the equivalent.**
-Ready-to-copy compose service + app wiring:
+Both stacks in this repo wire it already:
 
-```yaml
-services:
-  gme-api:
-    image: ghcr.io/imaging-plaza/git-metadata-extractor:<tag>
-    environment:
-      GIMIE_API_URL: http://gme-gimie-api:15400
-    depends_on: [gme-gimie-api]
-    networks: [gme]
+- **Dev:** `.devcontainer/docker-compose.yml` (the `gme-gimie-api` service +
+  `GIMIE_API_URL` on the devcontainer).
+- **Production:** **`tools/deploy/docker-compose.yml`** — a ready-to-run stack
+  (gme-api + gme-gimie-api + qdrant + selenium, image digest-pinned, persistent
+  volumes):
 
-  gme-gimie-api:
-    # pin by digest; == :latest resolved 2026-06-07 (gimie 0.7.2)
-    image: ghcr.io/sdsc-ordes/gimie-api@sha256:7a8a59b70d0787e1d265ff08f24328dd2d518f25dcc504b0420f8648ce99ecdb
-    environment:
-      ACCESS_TOKEN: ${GME_GITHUB_TOKEN}   # gimie-api reads the GitHub token here
-    restart: unless-stopped
-    networks: [gme]
+  ```bash
+  docker compose -f tools/deploy/docker-compose.yml --env-file .env up -d
+  ```
 
-networks:
-  gme:
-```
+  Override the app image with `GME_IMAGE` (defaults to
+  `ghcr.io/imaging-plaza/git-metadata-extractor:latest`) or uncomment its
+  `build:` block to build locally.
 
 (For k8s: a `gimie-api` Deployment + Service on `:15400` with `ACCESS_TOKEN`
 from the GitHub-token secret, and `GIMIE_API_URL=http://gimie-api:15400` on the
