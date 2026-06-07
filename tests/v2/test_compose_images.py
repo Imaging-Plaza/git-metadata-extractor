@@ -15,7 +15,9 @@ from unittest.mock import patch
 
 from src.v2.agents import ProviderSet, RepositoryAgentV2
 from src.v2.agents.rule_based._repo_signals import (
+    _image_ref_to_url,
     _resolve_compose_image,
+    compose_image_urls,
     parse_compose_images,
 )
 from src.v2.ingest.providers.github_provider import (
@@ -23,7 +25,6 @@ from src.v2.ingest.providers.github_provider import (
     _is_compose_path,
 )
 from src.v2.ingest.providers.mock_github import MockGitHubProvider
-
 
 _EXPECTED_IMAGES = 2
 
@@ -101,6 +102,40 @@ def test_parse_compose_images_dedupes_and_handles_bad_input() -> None:
     ]
     assert parse_compose_images(files) == ["x:1"]
     assert parse_compose_images(None) == []
+
+
+# ---------------------------------------------------------------------------
+# _image_ref_to_url / compose_image_urls
+# ---------------------------------------------------------------------------
+
+
+def test_image_ref_to_url() -> None:
+    assert _image_ref_to_url("qdrant/qdrant:latest") == "https://hub.docker.com/r/qdrant/qdrant"
+    assert _image_ref_to_url("postgres:15") == "https://hub.docker.com/_/postgres"   # official
+    assert _image_ref_to_url("python") == "https://hub.docker.com/_/python"
+    assert _image_ref_to_url("docker.io/acme/api:1") == "https://hub.docker.com/r/acme/api"
+    assert _image_ref_to_url("ghcr.io/acme/api@sha256:x") == (
+        "https://github.com/acme/api/pkgs/container/api"
+    )
+    assert _image_ref_to_url("quay.io/org/name:2") == "https://quay.io/repository/org/name"
+    # unknown registry / localhost → no clean web URL
+    assert _image_ref_to_url("registry.gitlab.com/x/y:1") is None
+    assert _image_ref_to_url("localhost:5000/foo:dev") is None
+    assert _image_ref_to_url(None) is None
+
+
+def test_compose_image_urls() -> None:
+    compose = (
+        "services:\n"
+        "  a:\n    image: qdrant/qdrant:latest\n"
+        "  b:\n    image: ghcr.io/acme/api@sha256:x\n"
+        "  c:\n    image: registry.gitlab.com/x/y:1\n"   # dropped (unknown)
+    )
+    assert compose_image_urls([{"content": compose}]) == [
+        "https://hub.docker.com/r/qdrant/qdrant",
+        "https://github.com/acme/api/pkgs/container/api",
+    ]
+    assert compose_image_urls(None) == []
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +219,10 @@ def test_agent_emits_compose_fields() -> None:
     ]
     assert raw["_compose_file_count"] == 1
     assert raw["_compose_images"] == ["qdrant/qdrant:latest", "ghcr.io/acme/api@sha256:abc"]
+    assert raw["_compose_image_urls"] == [
+        "https://hub.docker.com/r/qdrant/qdrant",
+        "https://github.com/acme/api/pkgs/container/api",
+    ]
 
 
 def test_agent_compose_fields_none_when_absent() -> None:
@@ -191,3 +230,4 @@ def test_agent_compose_fields_none_when_absent() -> None:
     assert raw["_compose_files"] is None
     assert raw["_compose_file_count"] is None
     assert raw["_compose_images"] is None
+    assert raw["_compose_image_urls"] is None

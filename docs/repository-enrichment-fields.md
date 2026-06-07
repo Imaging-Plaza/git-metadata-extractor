@@ -66,6 +66,7 @@ From the GitHub repository object.
 | `package_count`, `package_names`, `package_image_refs`, `package_tags`, `latest_package_updated_at` | Flat GHCR scalars |
 | `compose_files`, `compose_file_count` | Docker Compose files found anywhere in the repo (root, `.devcontainer/`, `docker/` …) — URL pointers into the default branch |
 | `compose_images` | Image references (`name:tag` / `name@digest`) parsed from the Compose files' `services.*.image` (`${VAR:-default}` resolved) |
+| `compose_image_urls` | Full registry **web URLs** for those images — Docker Hub (`hub.docker.com/r/ns/name` or `/_/official`), GHCR (GitHub package page), Quay; images on unknown registries are dropped |
 
 ## Published packages (per registry)
 
