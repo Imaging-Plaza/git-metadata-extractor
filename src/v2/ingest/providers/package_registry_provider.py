@@ -397,6 +397,64 @@ class PackageRegistryProvider:
             "registry_url": f"https://rubygems.org/gems/{pkg_name}",
         }
 
+    def get_go_module(self, module: str) -> dict[str, Any] | None:
+        """Fetch thin metadata for Go *module* from the module proxy.
+
+        GETs ``https://proxy.golang.org/<esc>/@latest`` (JSON ``{Version,Time}``)
+        and ``/@v/list`` (newline-separated versions). ``<esc>`` lowercases
+        capitals via ``!`` escaping (proxy requirement). ``repository_url`` is
+        derived from the module path for github-hosted modules so the
+        back-reference check works; non-github (vanity) paths yield None →
+        ``name_only``. Returns None when the proxy knows nothing about it.
+        """
+        if not isinstance(module, str) or not module.strip():
+            return None
+        module = module.strip()
+
+        def _fetch() -> dict[str, Any] | None:
+            return self._thin_go(module)
+
+        return self._cached(_fetch, method="get_go_module", name=module)
+
+    def _thin_go(self, module: str) -> dict[str, Any] | None:
+        escaped = _go_escape(module)
+        latest = self._get_json(
+            f"https://proxy.golang.org/{escaped}/@latest", subject=f"go:{module}",
+        )
+        latest_version = None
+        latest_release_date = None
+        if isinstance(latest, dict):
+            latest_version = _first_str(latest.get("Version"))
+            latest_release_date = _first_str(latest.get("Time"))
+
+        list_text = self._get_text(
+            f"https://proxy.golang.org/{escaped}/@v/list", subject=f"go-list:{module}",
+        )
+        versions: list[str] = []
+        if isinstance(list_text, str):
+            versions = sorted(
+                line.strip() for line in list_text.splitlines() if line.strip()
+            )
+            if len(versions) > _MAX_VERSIONS:
+                logger.info(
+                    "go module %s has %d versions; truncating to %d",
+                    module, len(versions), _MAX_VERSIONS,
+                )
+                versions = versions[:_MAX_VERSIONS]
+
+        if latest_version is None and not versions:
+            # Proxy has no record of this module.
+            return None
+
+        return {
+            "name": module,
+            "latest_version": latest_version,
+            "versions": versions or None,
+            "latest_release_date": latest_release_date,
+            "repository_url": _go_repository_url(module),
+            "registry_url": f"https://pkg.go.dev/{module}",
+        }
+
     # ------------------------------------------------------------------
     # shared helpers
     # ------------------------------------------------------------------
@@ -430,6 +488,26 @@ class PackageRegistryProvider:
             logger.info("package registry response not JSON: %s", subject)
             return None
 
+    def _get_text(self, url: str, *, subject: str) -> str | None:
+        """GET *url* and return the body as text, or None on failure.
+
+        For endpoints that return plain text rather than JSON (the Go module
+        proxy's ``@v/list``). Same best-effort contract as ``_get_json``.
+        """
+        try:
+            response = self._session.get(
+                url,
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+                headers={"User-Agent": _USER_AGENT},
+            )
+        except Exception:  # noqa: BLE001 — best-effort; never raise on transport error.
+            logger.info("package registry fetch failed: %s", subject)
+            return None
+        if getattr(response, "status_code", None) != _HTTP_OK:
+            return None
+        text = getattr(response, "text", None)
+        return text if isinstance(text, str) else None
+
     def _cached(
         self,
         factory: Any,
@@ -451,6 +529,36 @@ def _first_str(*candidates: Any) -> str | None:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     return None
+
+
+def _go_escape(module: str) -> str:
+    """Escape a Go module path for the proxy: each uppercase letter X → !x.
+
+    The Go module proxy lowercases capitals via ``!`` escaping to keep paths
+    case-insensitive on case-insensitive filesystems
+    (``github.com/BurntSushi/toml`` → ``github.com/!burnt!sushi/toml``).
+    """
+    return "".join(f"!{c.lower()}" if c.isupper() else c for c in module)
+
+
+def _go_repository_url(module: str) -> str | None:
+    """Derive the source repo URL from a github-hosted module path.
+
+    ``github.com/owner/repo[/v2][/sub]`` → ``https://github.com/owner/repo``.
+    Non-github (vanity-import) paths return None (no reliable repo mapping
+    without resolving go-import meta tags), so they fall back to ``name_only``.
+    """
+    lower = module.lower()
+    if not (lower == "github.com" or lower.startswith("github.com/")):
+        return None
+    segments = [s for s in module.split("/") if s]
+    if len(segments) < _GO_GITHUB_MIN_SEGMENTS:
+        return None
+    return f"https://{segments[0]}/{segments[1]}/{segments[2]}"
+
+
+# github.com + owner + repo
+_GO_GITHUB_MIN_SEGMENTS = 3
 
 
 def _max_str(values: Any) -> str | None:
