@@ -1,6 +1,24 @@
 # Bug 02 — Extraction server destabilizes under concurrent hybrid jobs
 
-**Severity:** medium · **Status:** Investigated — plan ready (no code changed) · **Area:** HTTP / async job layer
+**Severity:** medium · **Status:** ◐ Partial — one event-loop-blocking call offloaded (2026-06-12); the gather_context offload remains probe-gated · **Area:** HTTP / async job layer
+
+> **Partial fix (2026-06-12):** offloaded the hybrid discovery pass's blocking
+> OpenAlex DOI lookup off the event loop. `_run_discovery_pass` (async) called
+> `_materialize_article` (sync) → `_openalex_lookup_doi` → `requests.get` (15s)
+> **directly on the loop**, freezing it during hybrid extraction. The call site
+> (`refine_with_llm.py:2131`) now uses `await asyncio.to_thread(_materialize_article, …)`
+> — sequential await, so the shared dedup dicts stay race-free. Verified by the
+> 52 refine/discovery regression tests (a dedicated offload unit test would need
+> to mock the LLM agent + OpenAlex and would be brittle).
+>
+> **Still open (the dominant, but riskier, blocking site):** `gather_context`
+> (async) makes ~10 blocking `providers.github.*` calls directly on the loop,
+> including the gimie sidecar fetch (180s timeout). Wrapping each in
+> `asyncio.to_thread` is mechanically safe but it's a sizable sweep of a complex
+> hot-path function, and this plan recommends running the cheap
+> `/healthz`-during-extract probe first to confirm the loop-block mechanism
+> before investing. Left as the gated follow-up. The job/queue structural work
+> (decoupled runner, semaphore backpressure) also remains.
 
 > Confidence note: the *mechanism* below (blocking sync I/O on the event loop) is
 > grounded in the code with file:line citations and is high-confidence. The exact

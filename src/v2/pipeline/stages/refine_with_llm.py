@@ -2128,7 +2128,12 @@ async def _run_discovery_pass(
         e, w = _materialize_org(o, existing_org_ids)
         _accept(e, w, org_bucket, existing_org_ids)
     for a in proposal.new_articles[:DISCOVERY_REPLY_MAX_PER_TYPE]:
-        article, new_persons, warning = _materialize_article(
+        # _materialize_article does a blocking OpenAlex DOI lookup
+        # (_openalex_lookup_doi → requests.get, 15s) — offload it so it doesn't
+        # freeze the event loop during a hybrid extraction (Bug 02). Sequential
+        # await keeps the shared dedup dicts race-free.
+        article, new_persons, warning = await asyncio.to_thread(
+            _materialize_article,
             a, existing_article_ids, existing_person_ids, person_dedup_index,
         )
         _accept(article, warning, article_bucket, existing_article_ids)
