@@ -69,6 +69,26 @@ get `[Errno 104] Connection reset by peer`, and throughput does not improve
 serial). Run client concurrency ≈ `WORKERS`; serial is both cleaner and, at
 `WORKERS=1`, faster.
 
+### Bulk ingest vs. extraction isolation (Bug 04)
+
+Bulk `/v2/indices/<p>/ingest` and interactive `/v2/extract` share one process.
+The heavy ingest steps (embed pass, WAL checkpoint, `.ro` snapshot, gitlab
+ingest/embed) now run on a **bounded, ingest-only thread pool**
+(`V2_INGEST_MAX_THREADS`, default 2) so they can no longer saturate the default
+thread pool that extraction offloads onto. This kills the dominant
+ingest-starves-extraction axis.
+
+It does **not** fully isolate the event loop or the single SQLite cache writer
+lock, so on a 1–2 worker deployment you should still **avoid running large bulk
+ingests concurrently with latency-sensitive extraction** — schedule ingest in a
+maintenance window or against a separate API replica. (The durable fix is a
+separate `gme-ingest-worker` process — see `dev/bug-plans/04`.)
+
+Note: the lighter per-entity ingest *fetch* loops (`_ingest_one_*`) still use the
+default pool; they are sequential per job and far lighter than the embed pass,
+so they were left as a follow-up — route them through `run_in_ingest_pool` too
+if profiling shows residual fetch-side contention.
+
 ## 4. Field coverage: `rule_based` vs `llm` runtime (finding #7)
 
 `agent_runtime` selects which agent fills the entity. Some fields are only
