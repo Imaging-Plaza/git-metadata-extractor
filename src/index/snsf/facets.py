@@ -64,6 +64,7 @@ def build_facets(store: SnsfStore) -> dict[str, int]:
                 FROM   persons p,
                        json_each(p.{col}) AS j
                 WHERE  p.{col} IS NOT NULL
+                  AND  json_extract_string(j.value, '$') IS NOT NULL
                 ON CONFLICT DO NOTHING
                 """,  # noqa: S608 — role and col are fixed strings from _ROLE_COL_PAIRS
             )

@@ -144,9 +144,17 @@ class SnsfStore:
         if "persons" not in existing:
             return
         for col in _PERSON_GRANT_COLS:
+            # Idempotent + type-safe (Bug 12): cast to VARCHAR[] (never BIGINT[],
+            # which throws on already-URL or non-numeric elements), pass through
+            # existing grant URLs, promote bare numeric ids, and drop null /
+            # non-numeric tokens. Safe to re-run on a partially-migrated DB.
             conn.execute(
-                f"UPDATE persons SET {col} = TO_JSON(LIST_TRANSFORM("  # noqa: S608
-                f"CAST({col} AS BIGINT[]), n -> '{_GRANT_BASE}' || n)) "
+                f"UPDATE persons SET {col} = TO_JSON(LIST_FILTER("  # noqa: S608
+                f"LIST_TRANSFORM(CAST({col} AS VARCHAR[]), x -> CASE "
+                f"WHEN x IS NULL THEN NULL "
+                f"WHEN starts_with(lower(x), '{_GRANT_BASE}') THEN x "
+                f"WHEN regexp_full_match(x, '\\d+') THEN '{_GRANT_BASE}' || x "
+                f"ELSE NULL END), e -> e IS NOT NULL)) "
                 f"WHERE {col} IS NOT NULL",
             )
 
