@@ -511,6 +511,9 @@ def infer_owners(
                 "idSource": "pulse:githubUsername",
                 "schema:name": handle,
                 "pulse:githubUsername": handle,
+                # Reference-only placeholder for an inferred owner, not an
+                # independently-extracted Person (Bug 07: complete `_stub`).
+                "_stub": True,
             },
         )
         seen_stubs.add(target_id)
@@ -1731,6 +1734,10 @@ def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
         "org:hasMembership": [],
         "pulse:hasContribution": [],
         "pulse:owns": [],
+        # Reference-only placeholder (synthesized from a handle), not an
+        # independently-extracted Person — complete the `_stub` signal so its
+        # absence reliably means "fully extracted" (Bug 07).
+        "_stub": True,
     }
 
 
