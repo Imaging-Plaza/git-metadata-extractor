@@ -427,7 +427,13 @@ def _merge_into(target: dict[str, Any], source: Any) -> None:
 
     if not isinstance(source, dict):
         return
+    # `_stub` marks a reference-only placeholder. A merged entity is a stub only
+    # if BOTH sides were stubs — never let a placeholder's `_stub` bleed onto a
+    # fuller same-id entity (Bug 07: stub appearing on fully-populated entities).
+    source_stub = bool(source.get("_stub"))
     for key, value in source.items():
+        if key == "_stub":
+            continue
         if key not in target or target[key] is None or target[key] == [] or target[key] == {}:
             target[key] = deepcopy(value)
             continue
@@ -444,3 +450,5 @@ def _merge_into(target: dict[str, Any], source: Any) -> None:
             target[key] = combined
         elif isinstance(existing, dict) and isinstance(value, dict):
             _merge_into(existing, value)
+    if target.get("_stub") and not source_stub:
+        target.pop("_stub", None)

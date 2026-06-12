@@ -18,6 +18,7 @@ from src.v2.agents.rule_based._repo_signals import (
     parse_docker_hub_url,
     parse_funding_urls,
     parse_test_coverage,
+    summarize_badges,
     summarize_packages,
     summarize_registry_package,
     summarize_releases,
@@ -593,6 +594,16 @@ class RepositoryAgentV2:
                 if isinstance(repository.get("badges"), list)
                 else None
             ),
+            # Flat, RDF-friendly badge scalars. The raw `_badges`
+            # list-of-objects collapses to content-free blank nodes on JSON-LD
+            # expansion (inner keys unmapped in @context), so these index-aligned
+            # `gme-internal:badge_labels / badge_image_urls / badge_links` literal
+            # lists are what downstream consumers actually query to tell badges
+            # apart. Always present (None when no badges).
+            **{
+                f"_{k}": v
+                for k, v in summarize_badges(repository.get("badges")).items()
+            },
             # Published conda / crates.io / RubyGems packages — discovered by
             # context_gather from README badge coordinates (+ cargo.toml for
             # crates) and the public-registry back-reference, stored as
