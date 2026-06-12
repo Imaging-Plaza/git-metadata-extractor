@@ -1,6 +1,20 @@
 # Bug 02 — Extraction server destabilizes under concurrent hybrid jobs
 
-**Severity:** medium · **Status:** ◐ Partial — one event-loop-blocking call offloaded (2026-06-12); the gather_context offload remains probe-gated · **Area:** HTTP / async job layer
+**Severity:** medium · **Status:** ◐ Mostly fixed (2026-06-12) — all gather_context + discovery blocking I/O offloaded; only the job/queue structural work remains · **Area:** HTTP / async job layer
+
+> **Update (2026-06-12, follow-up):** offloaded **every** blocking provider call
+> in the async `gather_context` (`context_gather.py`) — the 12 inline
+> `providers.github.*` calls (incl. the 180s gimie `get_repository_jsonld`),
+> `get_user`/`get_organization`/`orcid.get_person_by_orcid`, the
+> `_optional_repository_context` owned-repo helper (both call sites), and
+> `_enrich_contributors_with_commit_bookends` — each now runs via
+> `asyncio.to_thread`, so the event loop is no longer frozen by synchronous
+> GitHub/gimie/ORCID I/O during extraction. Sequential awaits keep the in-place
+> `warnings`/`contributors` mutations race-free, and the sync provider's internal
+> `time.sleep` retry now runs on a worker thread, not the loop. 10 context-gather
+> tests pass; no new lint. **Still open:** the job/queue structural work
+> (decoupled runner / semaphore backpressure) and a profiled confirmation that
+> loop-blocking was the dominant cause of the client resets.
 
 > **Partial fix (2026-06-12):** offloaded the hybrid discovery pass's blocking
 > OpenAlex DOI lookup off the event loop. `_run_discovery_pass` (async) called

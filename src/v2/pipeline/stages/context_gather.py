@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -600,7 +601,7 @@ async def gather_context(  # noqa: C901, PLR0915
         languages: dict[str, int] = {}
 
         try:
-            repository_metadata = providers.github.get_repository(full_name)
+            repository_metadata = await asyncio.to_thread(providers.github.get_repository, full_name)
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -609,7 +610,7 @@ async def gather_context(  # noqa: C901, PLR0915
             ) from exc
 
         try:
-            contributors = providers.github.get_contributors(full_name)
+            contributors = await asyncio.to_thread(providers.github.get_contributors, full_name)
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -617,14 +618,15 @@ async def gather_context(  # noqa: C901, PLR0915
                 cause=exc,
             ) from exc
 
-        cap_warning = _enrich_contributors_with_commit_bookends(
+        cap_warning = await asyncio.to_thread(
+            _enrich_contributors_with_commit_bookends,
             full_name, contributors, providers,
         )
         if cap_warning:
             warnings.append(cap_warning)
 
         try:
-            languages = providers.github.get_languages(full_name)
+            languages = await asyncio.to_thread(providers.github.get_languages, full_name)
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -634,7 +636,7 @@ async def gather_context(  # noqa: C901, PLR0915
 
         readme_from_provider = ""
         try:
-            readme_from_provider = providers.github.get_repository_readme(full_name)
+            readme_from_provider = await asyncio.to_thread(providers.github.get_repository_readme, full_name)
         except Exception as exc:  # noqa: BLE001
             warnings.append(
                 f"Repository README fetch failed for {full_name}: {exc}",
@@ -652,10 +654,10 @@ async def gather_context(  # noqa: C901, PLR0915
         else:
             readme_content = _clean_readme_for_llm(readme_content)
 
-        gimie_jsonld = providers.github.get_repository_jsonld(full_name)
+        gimie_jsonld = await asyncio.to_thread(providers.github.get_repository_jsonld, full_name)
 
         try:
-            aux_files = providers.github.get_repository_aux_files(full_name)
+            aux_files = await asyncio.to_thread(providers.github.get_repository_aux_files, full_name)
         except Exception as exc:  # noqa: BLE001
             warnings.append(
                 f"Repository aux-files lookup failed for {full_name}: {exc}",
@@ -665,7 +667,7 @@ async def gather_context(  # noqa: C901, PLR0915
         # Releases + container images (best-effort; same as
         # _optional_repository_context above).
         try:
-            releases = providers.github.get_repository_releases(full_name)
+            releases = await asyncio.to_thread(providers.github.get_repository_releases, full_name)
             if isinstance(releases, list) and releases:
                 repository_metadata["releases"] = releases
         except Exception as exc:  # noqa: BLE001
@@ -673,7 +675,7 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository releases lookup failed for {full_name}: {exc}",
             )
         try:
-            container_images = providers.github.get_repository_container_images(full_name)
+            container_images = await asyncio.to_thread(providers.github.get_repository_container_images, full_name)
             if isinstance(container_images, list) and container_images:
                 repository_metadata["container_images"] = container_images
         except Exception as exc:  # noqa: BLE001
@@ -681,7 +683,7 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository container-images lookup failed for {full_name}: {exc}",
             )
         try:
-            profile = providers.github.get_repository_community_profile(full_name)
+            profile = await asyncio.to_thread(providers.github.get_repository_community_profile, full_name)
             if isinstance(profile, dict):
                 repository_metadata["community_profile"] = profile
         except Exception as exc:  # noqa: BLE001
@@ -689,7 +691,7 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository community-profile lookup failed for {full_name}: {exc}",
             )
         try:
-            tags = providers.github.get_repository_tags(full_name)
+            tags = await asyncio.to_thread(providers.github.get_repository_tags, full_name)
             if isinstance(tags, list) and tags:
                 repository_metadata["git_tags"] = tags
         except Exception as exc:  # noqa: BLE001
@@ -697,7 +699,7 @@ async def gather_context(  # noqa: C901, PLR0915
                 f"Repository tags lookup failed for {full_name}: {exc}",
             )
         try:
-            compose_files = providers.github.get_repository_compose_files(full_name)
+            compose_files = await asyncio.to_thread(providers.github.get_repository_compose_files, full_name)
             if isinstance(compose_files, list) and compose_files:
                 repository_metadata["compose_files"] = compose_files
         except Exception as exc:  # noqa: BLE001
@@ -707,7 +709,7 @@ async def gather_context(  # noqa: C901, PLR0915
 
         # CI detection (best-effort; None on provider failure).
         try:
-            root_entries = providers.github.get_repository_root_entries(full_name)
+            root_entries = await asyncio.to_thread(providers.github.get_repository_root_entries, full_name)
             repository_metadata["has_ci"] = detect_has_ci(root_entries)
         except Exception as exc:  # noqa: BLE001
             warnings.append(
@@ -749,7 +751,7 @@ async def gather_context(  # noqa: C901, PLR0915
         user_profile: dict[str, Any] = {}
 
         try:
-            user_profile = providers.github.get_user(username)
+            user_profile = await asyncio.to_thread(providers.github.get_user, username)
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -770,7 +772,8 @@ async def gather_context(  # noqa: C901, PLR0915
         if should_expand_owned_repos():
             for repo in owned_repos:
                 full_name = _normalize_owned_repo_full_name(username, repo)
-                repository_context = _optional_repository_context(
+                repository_context = await asyncio.to_thread(
+                    _optional_repository_context,
                     full_name=full_name,
                     providers=providers,
                     warnings=warnings,
@@ -786,7 +789,9 @@ async def gather_context(  # noqa: C901, PLR0915
         orcid_data: dict[str, Any] | None = None
         if providers.orcid and orcid_id:
             try:
-                orcid_data = providers.orcid.get_person_by_orcid(orcid_id)
+                orcid_data = await asyncio.to_thread(
+                    providers.orcid.get_person_by_orcid, orcid_id,
+                )
             except Exception as exc:  # noqa: BLE001
                 warnings.append(f"ORCID lookup failed: {exc}")
         else:
@@ -810,7 +815,9 @@ async def gather_context(  # noqa: C901, PLR0915
         organization_profile: dict[str, Any] = {}
 
         try:
-            organization_profile = providers.github.get_organization(organization_name)
+            organization_profile = await asyncio.to_thread(
+                providers.github.get_organization, organization_name,
+            )
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -828,7 +835,8 @@ async def gather_context(  # noqa: C901, PLR0915
         if should_expand_owned_repos():
             for repo in owned_repos:
                 full_name = _normalize_owned_repo_full_name(organization_name, repo)
-                repository_context = _optional_repository_context(
+                repository_context = await asyncio.to_thread(
+                    _optional_repository_context,
                     full_name=full_name,
                     providers=providers,
                     warnings=warnings,
