@@ -127,36 +127,46 @@ class SnsfStore:
         }
         url_sql = snsf_grant_iri_sql("grant_number")
         tables = [t for t in ("grants", *_GRANT_FK_TABLES) if t in existing]
-        for table in tables:
-            conn.execute(
-                f"CREATE TEMP TABLE _mig_{table} AS "  # noqa: S608
-                f"SELECT * REPLACE ({url_sql} AS grant_number) FROM {table}",
-            )
-            conn.execute(f"DROP TABLE {table}")  # noqa: S608 — also drops its indexes
-        conn.execute(_load_schema_sql())  # recreate fresh TEXT tables + indexes
-        for table in tables:
-            conn.execute(
-                f"INSERT INTO {table} BY NAME SELECT * FROM _mig_{table}",  # noqa: S608
-            )
-            conn.execute(f"DROP TABLE _mig_{table}")  # noqa: S608
-        # persons keeps its schema; only its JSON arrays of bare integers
-        # become arrays of grant URLs.
-        if "persons" not in existing:
-            return
-        for col in _PERSON_GRANT_COLS:
-            # Idempotent + type-safe (Bug 12): cast to VARCHAR[] (never BIGINT[],
-            # which throws on already-URL or non-numeric elements), pass through
-            # existing grant URLs, promote bare numeric ids, and drop null /
-            # non-numeric tokens. Safe to re-run on a partially-migrated DB.
-            conn.execute(
-                f"UPDATE persons SET {col} = TO_JSON(LIST_FILTER("  # noqa: S608
-                f"LIST_TRANSFORM(CAST({col} AS VARCHAR[]), x -> CASE "
-                f"WHEN x IS NULL THEN NULL "
-                f"WHEN starts_with(lower(x), '{_GRANT_BASE}') THEN x "
-                f"WHEN regexp_full_match(x, '\\d+') THEN '{_GRANT_BASE}' || x "
-                f"ELSE NULL END), e -> e IS NOT NULL)) "
-                f"WHERE {col} IS NOT NULL",
-            )
+        # Atomic (Bug 12): the migration drops + recreates grants and its FK
+        # tables in place, so a mid-way failure must not leave a half-migrated
+        # DB whose gate (grants.grant_number type) disagrees with the data.
+        # Wrap the whole thing so an error rolls back to the clean pre-v3 state
+        # and the next bootstrap can retry.
+        conn.execute("BEGIN TRANSACTION")
+        try:
+            for table in tables:
+                conn.execute(
+                    f"CREATE TEMP TABLE _mig_{table} AS "  # noqa: S608
+                    f"SELECT * REPLACE ({url_sql} AS grant_number) FROM {table}",
+                )
+                conn.execute(f"DROP TABLE {table}")  # noqa: S608 — also drops its indexes
+            conn.execute(_load_schema_sql())  # recreate fresh TEXT tables + indexes
+            for table in tables:
+                conn.execute(
+                    f"INSERT INTO {table} BY NAME SELECT * FROM _mig_{table}",  # noqa: S608
+                )
+                conn.execute(f"DROP TABLE _mig_{table}")  # noqa: S608
+            # persons keeps its schema; only its JSON arrays of bare integers
+            # become arrays of grant URLs.
+            if "persons" in existing:
+                for col in _PERSON_GRANT_COLS:
+                    # Idempotent + type-safe: cast to VARCHAR[] (never BIGINT[],
+                    # which throws on already-URL or non-numeric elements), pass
+                    # through existing grant URLs, promote bare numeric ids, and
+                    # drop null / non-numeric tokens. Safe to re-run.
+                    conn.execute(
+                        f"UPDATE persons SET {col} = TO_JSON(LIST_FILTER("  # noqa: S608
+                        f"LIST_TRANSFORM(CAST({col} AS VARCHAR[]), x -> CASE "
+                        f"WHEN x IS NULL THEN NULL "
+                        f"WHEN starts_with(lower(x), '{_GRANT_BASE}') THEN x "
+                        f"WHEN regexp_full_match(x, '\\d+') THEN '{_GRANT_BASE}' || x "
+                        f"ELSE NULL END), e -> e IS NOT NULL)) "
+                        f"WHERE {col} IS NOT NULL",
+                    )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
 
     def close(self) -> None:
         if self._conn is not None:

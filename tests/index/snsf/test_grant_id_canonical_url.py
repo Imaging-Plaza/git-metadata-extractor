@@ -162,3 +162,31 @@ def test_migration_persons_array_tolerates_url_null_and_nonnumeric(tmp_path: Pat
         "https://data.snf.ch/grants/grant/999",     # bare int → promoted
     ]  # 'abc' and null dropped
     conn.close()
+
+
+def test_migration_rolls_back_on_failure(tmp_path: Path) -> None:
+    """Bug 12: the migration is atomic — a mid-way failure must leave the DB in
+    its clean pre-v3 (INTEGER) state, not half-migrated. Force a failure by
+    omitting a `_PERSON_GRANT_COLS` column so the persons UPDATE raises after
+    grants has already been rebuilt; assert grants is rolled back to INTEGER."""
+    conn = duckdb.connect(str(tmp_path / "rollback.duckdb"))
+    conn.execute("CREATE TABLE grants (grant_number INTEGER PRIMARY KEY, title TEXT)")
+    conn.execute("INSERT INTO grants VALUES (241892, 'A')")
+    # persons is missing the other six grant columns → the per-col UPDATE loop
+    # raises a Binder error partway through the (already-started) migration.
+    conn.execute(
+        "CREATE TABLE persons (person_number INTEGER, "
+        "responsible_applicant_grants JSON)",
+    )
+    conn.execute("INSERT INTO persons VALUES (1, TO_JSON([241892]))")
+
+    with pytest.raises(Exception):  # noqa: B017, PT011 — any failure must roll back
+        SnsfStore._migrate_grant_ids_to_url(conn)
+
+    dtype = conn.execute(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = 'grants' AND column_name = 'grant_number'",
+    ).fetchone()[0]
+    assert "INT" in str(dtype).upper()  # rolled back to pre-v3 INTEGER
+    assert conn.execute("SELECT grant_number FROM grants").fetchone()[0] == 241892
+    conn.close()
