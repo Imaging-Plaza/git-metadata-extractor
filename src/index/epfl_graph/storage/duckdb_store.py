@@ -24,6 +24,13 @@ LOGGER = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
+# Every connection to the epfl_graph DB must pass an identical `config` dict and
+# a consistent `read_only` mode per process, otherwise DuckDB raises "Can't open
+# a connection to same database file with a different configuration than existing
+# connections". During extraction/serving the file is only ever opened read-only
+# (see `open_readonly`); read-write is reserved for ingest. (Bug 01)
+_DUCKDB_CONFIG: dict[str, str] = {}
+
 
 def _load_schema_sql() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
@@ -35,22 +42,51 @@ class EpflGraphStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._conn: duckdb.DuckDBPyConnection | None = None
+        self._read_only = False
 
     @classmethod
     def open(cls, db_path: Path | None = None) -> EpflGraphStore:
+        """Open read-write and bootstrap the schema. Ingest-time only."""
         if db_path is None:
             db_path = get_epfl_graph_paths().duckdb_path
         store = cls(db_path)
         store.bootstrap()
         return store
 
+    @classmethod
+    def open_readonly(cls, db_path: Path | None = None) -> EpflGraphStore:
+        """Open the store read-only for inference/serving paths.
+
+        No DDL/bootstrap runs (a read-only connection cannot create or alter the
+        file). DuckDB allows many read-only connections to one file in a process,
+        so every extraction-time consumer (disciplines lookup, stats, federated
+        search) must use this — a single resident read-write handle anywhere in
+        the process trips "different configuration than existing connections"
+        for the concurrent read-only openers (Bug 01).
+        """
+        if db_path is None:
+            db_path = get_epfl_graph_paths().duckdb_path
+        store = cls(db_path)
+        store._read_only = True
+        return store
+
+    def _require_writable(self) -> None:
+        if self._read_only:
+            msg = "EpflGraphStore opened read-only; writes/DDL are ingest-only"
+            raise RuntimeError(msg)
+
     def connect(self) -> duckdb.DuckDBPyConnection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = duckdb.connect(str(self.db_path))
+            self._conn = duckdb.connect(
+                str(self.db_path),
+                read_only=self._read_only,
+                config=_DUCKDB_CONFIG,
+            )
         return self._conn
 
     def bootstrap(self) -> None:
+        self._require_writable()
         self.connect().execute(_load_schema_sql())
 
     def close(self) -> None:
@@ -60,7 +96,9 @@ class EpflGraphStore:
 
     @contextmanager
     def read_only(self) -> Iterator[duckdb.DuckDBPyConnection]:
-        ro = duckdb.connect(str(self.db_path), read_only=True)
+        ro = duckdb.connect(
+            str(self.db_path), read_only=True, config=_DUCKDB_CONFIG,
+        )
         try:
             yield ro
         finally:
@@ -74,6 +112,7 @@ class EpflGraphStore:
         raw: dict[str, Any],
         concepts: list[dict[str, Any]] | None = None,
     ) -> None:
+        self._require_writable()
         sql = (
             "INSERT INTO categories "
             "(category_id, name, depth, parent_id, wikipedia_page_id, "
@@ -113,6 +152,7 @@ class EpflGraphStore:
     def upsert_concepts(
         self, category_id: str, concepts: list[dict[str, Any]],
     ) -> None:
+        self._require_writable()
         sql = (
             "INSERT INTO category_concepts "
             "(category_id, concept_id, concept_name, rank) "

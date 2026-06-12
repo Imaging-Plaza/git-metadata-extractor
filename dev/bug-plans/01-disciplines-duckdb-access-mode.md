@@ -1,5 +1,23 @@
 # Bug 01 — rule_based_disciplines DuckDB access-mode conflict (workers>1)
-**Severity:** medium · **Status:** Investigated — plan ready (no code changed) · **Area:** concurrency / epfl_graph index / disciplines stage
+**Severity:** medium · **Status:** ✅ Fixed (2026-06-12) — Option #1 implemented · **Area:** concurrency / epfl_graph index / disciplines stage
+
+## Resolution (2026-06-12)
+
+Implemented Option #1 — every extraction-time open of the epfl_graph DB is now read-only
+with an identical `config`, ingest keeps read-write:
+- `EpflGraphStore`: added `open_readonly()` (no bootstrap), module `_DUCKDB_CONFIG`,
+  `connect()` passes `read_only`+`config`, and `bootstrap`/`upsert_*` are guarded by
+  `_require_writable()`.
+- Read-only consumers switched: `_fetch_category_chain_qids` (routes through the store),
+  the stats resident handle (`_open_epfl_graph_store_readonly`, skipped when the file is
+  absent), federated `semantic_search`, and the federated adapter `lookup`.
+- Tests: `tests/index/epfl_graph/test_readonly_store.py` (RO refuses writes/DDL, many RO
+  connections coexist, reads still work) and `tests/v2/test_disciplines_duckdb_concurrency.py`
+  (4-thread lookup alongside a held RO handle → no "duckdb open failed", correct chain).
+  Full `tests/v2 + tests/index` green (2036 passed, 1 skipped).
+
+Follow-up (not done here): audit `v2_infoscience_store` / `v2_snsf_store` / `v2_ror_store`
+for the same latent stats-RW-vs-extraction pattern (Open question #1).
 
 ## Symptom
 Per-entity WARNING, emitted roughly once per concurrent worker, only when extraction

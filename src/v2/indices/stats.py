@@ -268,13 +268,40 @@ def fetch_store_for_stats(provider: str, app_state: Any) -> Any | None:
             "src.index.snsf.storage.duckdb_store", "SnsfStore",
         )
     if provider == "epfl_graph":
-        return _cli_store(
-            app_state, "v2_epfl_graph_store",
-            "src.index.epfl_graph.storage.duckdb_store", "EpflGraphStore",
-        )
+        return _open_epfl_graph_store_readonly(app_state)
     if provider == "zenodo_communities":
         return _open_communities_store(app_state)
     return None
+
+
+def _open_epfl_graph_store_readonly(app_state: Any) -> Any | None:
+    """Open the epfl_graph stats store READ-ONLY and cache it on app_state.
+
+    Stats runs only ``COUNT(*)`` selects, so it never needs write access. A
+    read-write handle cached here is long-lived and collides with the read-only
+    disciplines lookup during concurrent extraction (Bug 01), so the resident
+    handle must be read-only. Skipped when the DB file is absent — a read-only
+    open cannot create it (and there would be nothing to count anyway)."""
+    cached = getattr(app_state, "v2_epfl_graph_store", None)
+    if cached is not None:
+        return cached
+    try:
+        from src.index.epfl_graph.paths import get_epfl_graph_paths  # noqa: PLC0415
+        from src.index.epfl_graph.storage.duckdb_store import (  # noqa: PLC0415
+            EpflGraphStore,
+        )
+
+        db_path = get_epfl_graph_paths().duckdb_path
+        if not db_path.exists():
+            return None
+        store = EpflGraphStore.open_readonly(db_path)
+    except Exception:  # noqa: BLE001 — optional dependency / config / disk error
+        return None
+    try:
+        app_state.v2_epfl_graph_store = store
+    except Exception:  # noqa: BLE001 — app_state may be frozen in tests
+        return store
+    return store
 
 
 def _cli_store(

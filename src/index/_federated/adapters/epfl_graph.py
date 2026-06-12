@@ -97,7 +97,9 @@ class EpflGraphAdapter:
             return []
         try:
             config = load_config()
-            store = EpflGraphStore.open(config.paths.duckdb_path)
+            # Read-only: lookup only does fetch_category() SELECTs; a read-write
+            # handle collides with the disciplines read-only lookup (Bug 01).
+            store = EpflGraphStore.open_readonly(config.paths.duckdb_path)
         except Exception:  # noqa: BLE001
             return []
         try:
