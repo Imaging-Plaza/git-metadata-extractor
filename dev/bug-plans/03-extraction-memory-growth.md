@@ -1,5 +1,21 @@
 # Bug 03 — Memory growth / per-extraction leak in extraction service
-**Severity:** medium-high (forces restarts) · **Status:** Investigated — plan ready (no code changed) · **Area:** lifecycle / caching / connections
+**Severity:** medium-high (forces restarts) · **Status:** ◐ Partial — unbounded infoscience cache bounded (2026-06-12); larger suspects need profiling · **Area:** lifecycle / caching / connections
+
+> **Partial fix (2026-06-12):** bounded the clearly-unbounded suspect S2 — the
+> infoscience `_search_cache` (module-global dict written at 4+ sites; its
+> `clear_infoscience_cache()` is never called during serving) is now a
+> size-bounded FIFO cache (`_BoundedStrCache`, `V2_INFOSCIENCE_CACHE_MAXSIZE`,
+> default 512). An unbounded process-lifetime cache is a latent leak regardless
+> of whether it is the dominant one, so this is safe without a profiler.
+> Tests: `tests/v2/test_infoscience_cache_bound.py`.
+>
+> **Still open (confirm with a profiler before fixing — see Diagnosis plan):**
+> S1 (per-agent-run LLM clients never `aclose()`d) and S3 (provider
+> `requests.Session`s never closed) are the larger suspects. The worker-recycling
+> stopgap (gunicorn `--max-requests`) is **not** drop-in safe here: extract/ingest
+> run as fire-and-forget `asyncio.create_task` background jobs, so recycling a
+> worker mid-job would kill in-flight extractions — use a checkpointed self-restart
+> or an OOM-guard container restart policy instead.
 
 ## Symptom
 Over ~4,700 sequential extractions, `git-metadata-extractor` RSS climbed from ~0.5 GiB to ~5.1 GiB / 6 GiB and throughput degraded roughly linearly (1.2 s → ~6.7 s per entity). A process restart cleared RSS back to ~0.5 GiB and restored throughput. This is the signature of a **per-extraction leak** (objects retained on the process / module globals across requests, plus connection/client objects that are created per request and never closed). The slowdown that tracks RSS growth points at one or more **per-process containers that are scanned/iterated and grow without bound** (each extraction does more work as the container grows), compounded by GC pressure and connection-pool churn.

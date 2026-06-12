@@ -1,5 +1,30 @@
 # Bug 12 — snsf DuckDB bootstrap "Vector::Reference used on vector of different type"
-**Severity:** medium (blocks snsf index) · **Status:** Investigated — plan ready (no code changed) · **Area:** snsf index / DuckDB schema
+**Severity:** medium (blocks snsf index) · **Status:** ◐ Partial — the two empirically-fragile statements hardened (2026-06-12); exact-error diagnosis still host-gated · **Area:** snsf index / DuckDB schema
+
+## Resolution (2026-06-12) — fixes #1 + #4 (the reproduced-fragile statements)
+
+Implemented the two statement-level fixes that were empirically reproduced as
+failing (Conversion / NOT NULL) and are independently correct regardless of the
+unreproduced internal vector error:
+- **#1 persons-array migration** (`duckdb_store.py`): replaced the non-idempotent
+  `CAST(<col> AS BIGINT[])` + concat with a VARCHAR-keyed transform that passes
+  through existing grant URLs, promotes bare numeric ids, and drops null /
+  non-numeric tokens (`LIST_FILTER(LIST_TRANSFORM(CAST(... AS VARCHAR[]), CASE …))`).
+  Safe to re-run on a partially-migrated/mixed DB.
+- **#4 grant_persons null-safety** (`facets.py`): added
+  `AND json_extract_string(j.value,'$') IS NOT NULL` so a json-null array element
+  can't violate the `NOT NULL` PK.
+- Tests: new adversarial case in `test_grant_id_canonical_url.py` (mixed array:
+  already-URL + bare int + non-numeric + null migrates without raising). Full
+  `tests/index/snsf/` green (72 passed; was 71).
+
+**Still open (host-gated):** the exact `Vector::Reference …` error did **not**
+reproduce on the pinned DuckDB 1.5.3, so the remaining hardening (#2 wrap the
+migration in a transaction; #3 cast at the `INSERT … BY NAME` snapshot) and the
+definitive root-cause confirmation need the **statement-bisection diagnosis on the
+actual failing host/DuckDB version** (see Diagnosis plan). The two fixes above
+remove the two reproduced failure modes; run the host diagnosis to confirm they
+cover the reported error or to localize a remaining off-type column.
 
 ## Symptom
 Bootstrapping the `snsf` index DuckDB store raises the DuckDB internal error

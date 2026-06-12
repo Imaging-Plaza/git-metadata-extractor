@@ -7,6 +7,7 @@ for publications, authors, labs, and organizational units.
 
 import logging
 import os
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -28,8 +29,37 @@ REQUEST_TIMEOUT = 30
 # Authentication token (optional, for protected endpoints)
 INFOSCIENCE_TOKEN = os.getenv("INFOSCIENCE_TOKEN")
 
-# Simple in-memory cache to prevent duplicate searches in same session
-_search_cache: Dict[str, str] = {}
+class _BoundedStrCache(OrderedDict):
+    """Size-bounded FIFO string cache. Evicts the oldest entries once it grows
+    past ``maxsize`` so this process-lifetime search cache can't grow without
+    bound (Bug 03 — ``clear_infoscience_cache()`` is never called during
+    serving, so an unbounded dict would leak for the whole process lifetime)."""
+
+    def __init__(self, maxsize: int) -> None:
+        super().__init__()
+        self._maxsize = max(1, maxsize)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        if key in self:
+            super().__delitem__(key)  # refresh recency on re-insert
+        super().__setitem__(key, value)
+        while len(self) > self._maxsize:
+            super().__delitem__(next(iter(self)))  # drop oldest
+
+
+def _cache_maxsize() -> int:
+    raw = os.getenv("V2_INFOSCIENCE_CACHE_MAXSIZE")
+    if raw and raw.strip():
+        try:
+            return max(1, int(raw.strip()))
+        except ValueError:
+            logger.warning("invalid V2_INFOSCIENCE_CACHE_MAXSIZE=%r; using 512", raw)
+    return 512
+
+
+# In-memory cache to dedupe searches within a session, bounded so it can't
+# grow unboundedly over the process lifetime.
+_search_cache: "OrderedDict[str, str]" = _BoundedStrCache(_cache_maxsize())
 
 
 def clear_infoscience_cache():

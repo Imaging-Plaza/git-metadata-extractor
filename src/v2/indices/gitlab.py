@@ -22,6 +22,7 @@ from src.v2.api_models import (
     IndexSearchRequest,
     IndexSearchResponse,
 )
+from src.v2.indices._ingest_pool import run_in_ingest_pool
 from src.v2.indices._search_common import hit_from_raw
 
 if TYPE_CHECKING:
@@ -74,8 +75,8 @@ async def run_gitlab_ingest_job(
             job_store.set(existing)
             return
 
-        ingested = await asyncio.to_thread(ingest_mod.run_ingest, limit=payload.limit)
-        embedded = await asyncio.to_thread(embed_mod.run_embed)
+        ingested = await run_in_ingest_pool(ingest_mod.run_ingest, limit=payload.limit)
+        embedded = await run_in_ingest_pool(embed_mod.run_embed)
 
         finished = job_store.get(job_id) or existing
         finished.status = IndexIngestJobStatus.COMPLETED
