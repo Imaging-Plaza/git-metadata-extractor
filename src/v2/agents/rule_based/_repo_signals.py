@@ -281,6 +281,47 @@ def summarize_releases(releases: Any) -> dict[str, Any]:
     return out
 
 
+def summarize_badges(badges: Any) -> dict[str, Any]:
+    """Reduce the raw README badge list to flat, RDF-friendly scalar lists.
+
+    The raw ``_badges`` list-of-objects (``{label, image_url, link_url}``)
+    collapses to content-free blank nodes on JSON-LD expansion (its inner keys
+    are unmapped in the ``@context``), so a consumer querying
+    ``gme-internal:badges`` sees an opaque node and cannot tell what each badge
+    is. These three index-aligned scalar lists emit as literal ``gme-internal:``
+    triples the consumer can read directly:
+
+    * ``badge_labels``     — Markdown alt text per badge (human-readable type)
+    * ``badge_image_urls`` — badge image / shields.io URL per badge
+    * ``badge_links``      — click-through target per badge (``""`` when none)
+
+    Lists stay index-aligned (same order and length; ``""`` placeholders keep
+    alignment when a field is missing). All three keys are *always* present
+    (``None`` when there is no badge data), mirroring ``summarize_releases``.
+    """
+    out: dict[str, Any] = {
+        "badge_labels": None,
+        "badge_image_urls": None,
+        "badge_links": None,
+    }
+    if not isinstance(badges, list) or not badges:
+        return out
+    labels: list[str] = []
+    images: list[str] = []
+    links: list[str] = []
+    for badge in badges:
+        if not isinstance(badge, dict):
+            continue
+        labels.append(str(badge.get("label") or ""))
+        images.append(str(badge.get("image_url") or ""))
+        links.append(str(badge.get("link_url") or ""))
+    if labels:
+        out["badge_labels"] = labels
+        out["badge_image_urls"] = images
+        out["badge_links"] = links
+    return out
+
+
 def summarize_packages(container_images: Any) -> dict[str, Any]:
     """Reduce the raw GHCR container-package list to flat, RDF-friendly scalars.
 

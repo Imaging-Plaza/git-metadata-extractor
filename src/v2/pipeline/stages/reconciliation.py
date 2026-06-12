@@ -1737,12 +1737,25 @@ def _normalize_membership_entities(
             "no role / no dates / no ORCID+ROR anchor — no confirmable connection).",
         )
         if isinstance(person_id, str):
+            # Preserve the original affiliation *text* (an unanchored-but-real
+            # affiliation), not just the opaque org id. Prefer the placeholder
+            # org's `_original_name`, fall back to its `schema:name`, then the
+            # computed display name — so `text` survives even when `org_name`
+            # would have been filtered to None.
+            aff_text = None
+            if isinstance(org_entity, dict):
+                aff_text = org_entity.get("_original_name") or org_entity.get("schema:name")
+            if not aff_text and org_name != "<unknown org>":
+                aff_text = org_name
             dropped_affiliations_by_person.setdefault(person_id, []).append(
                 {
+                    "text": aff_text,
                     "org_id": org_id,
                     "org_name": org_name if org_name != "<unknown org>" else None,
                     "membership_id": membership.get("id"),
+                    "source": "membership_evidence_floor",
                     "reason": "no role / no dates / no ORCID+ROR anchor",
+                    "unresolved": True,
                 },
             )
 

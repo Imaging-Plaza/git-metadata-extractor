@@ -192,12 +192,21 @@ def _fetch_category_chain_qids(
     """
     if not category_ids:
         return {}
-    import duckdb  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from src.index.epfl_graph.storage.duckdb_store import (
+        EpflGraphStore,  # noqa: PLC0415
+    )
 
     seen: dict[str, tuple[str | None, str | None]] = {}
     frontier: set[str] = set(category_ids)
+    # Read-only through the store so the connection config (read_only=True,
+    # identical `config` dict) matches every other epfl_graph opener. Many
+    # read-only connections to one file coexist; a stray read-write handle
+    # would trip "different configuration than existing connections" (Bug 01).
     try:
-        con = duckdb.connect(db_path, read_only=True)
+        store = EpflGraphStore.open_readonly(Path(db_path))
+        con = store.connect()
     except Exception as exc:  # noqa: BLE001
         logger.warning("rule_based_disciplines: duckdb open failed — %s", exc)
         return {}
@@ -217,7 +226,7 @@ def _fetch_category_chain_qids(
                     new_parents.add(parent)
             frontier = new_parents
     finally:
-        con.close()
+        store.close()
     return seen
 
 

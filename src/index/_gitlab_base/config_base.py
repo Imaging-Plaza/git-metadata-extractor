@@ -18,6 +18,8 @@ from pydantic import BaseModel
 
 from src.index._gitlab_base.paths_base import GitLabIndexPathsBase, resolve_gitlab_paths
 
+MISSING_RCP_TOKEN_ERROR = "Missing required environment variable: RCP_TOKEN"
+
 
 class RcpConfig(BaseModel):
     base_url: str
@@ -61,6 +63,16 @@ class GitLabIndexConfig(BaseModel):
     paths: GitLabIndexPathsBase
 
     model_config = {"arbitrary_types_allowed": True}
+
+    def require_rcp(self) -> None:
+        """Mirror the sibling index-config contract enforced by
+        ``RCPEmbeddingClient.__init__`` (src/index/_rcp/embed_client.py).
+
+        Raises a clear ``ValueError`` when ``RCP_TOKEN`` is unset instead of
+        the previous ``AttributeError`` that blocked every GitLab embed run.
+        """
+        if not self.rcp.token:
+            raise ValueError(MISSING_RCP_TOKEN_ERROR)
 
 
 def _env_bool(name: str) -> Optional[bool]:

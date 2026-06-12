@@ -145,7 +145,9 @@ def semantic_search(  # noqa: PLR0913
     to keep only leaf-level disciplines, or leave it None to mirror the
     config's ``filter.min_depth`` (which already gated the embed pass).
     """
-    store = EpflGraphStore.open(config.paths.duckdb_path)
+    # Read-only: search only SELECTs, and a read-write handle here collides with
+    # the concurrent read-only disciplines lookup during extraction (Bug 01).
+    store = EpflGraphStore.open_readonly(config.paths.duckdb_path)
     try:
         return asyncio.run(
             _async_search(

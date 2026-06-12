@@ -62,6 +62,10 @@ def _row_to_chunks(
     min_card_chars: int,
 ) -> list[Chunk]:
     parts: list[str] = [str(row["project_id"])]
+    if row.get("name"):
+        parts.append(str(row["name"]))
+    if row.get("full_path"):
+        parts.append(str(row["full_path"]))
     if row.get("description"):
         parts.append(str(row["description"]))
     topics = _row_topics(row)

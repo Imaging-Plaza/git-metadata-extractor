@@ -242,6 +242,31 @@ JSONLD_CONTEXT_FALLBACK = {
 
 logger = logging.getLogger(__name__)
 
+
+def _auto_ingest_enabled(canonical: str, *aliases: str) -> bool:
+    """Return True if the canonical auto-ingest env flag — or a deprecated
+    alias — is set to "true".
+
+    The canonical name takes precedence; when a request is enabled via an alias
+    we log a deprecation warning so operators can migrate. This exists because
+    the only historically-documented flag (`V2_GITHUB_RAG_AUTO_INGEST`) never
+    matched the name the code reads (`V2_GITHUB_REPOS_RAG_AUTO_INGEST`), so
+    operators who followed the docs silently got no auto-ingest.
+    """
+    for name in (canonical, *aliases):
+        raw = os.getenv(name)
+        if raw is not None and raw.strip().lower() == "true":
+            if name != canonical:
+                logger.warning(
+                    "auto-ingest enabled via deprecated env var %s; rename it to "
+                    "%s (the alias may be removed in a future release)",
+                    name,
+                    canonical,
+                )
+            return True
+    return False
+
+
 STAGE_CLASSIFY_URL = "classify_url"
 STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
 STAGE_STRICT_VALIDATION = "strict_validation"
@@ -1876,7 +1901,9 @@ def _maybe_schedule_github_repos_auto_ingest(
     writes across uvicorn worker tasks. The single-repo ingest is
     fast (~1-3s) so contention is negligible.
     """
-    if os.getenv("V2_GITHUB_REPOS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
+    if not _auto_ingest_enabled(
+        "V2_GITHUB_REPOS_RAG_AUTO_INGEST", "V2_GITHUB_RAG_AUTO_INGEST",
+    ):
         return
     if not hasattr(classification, "detected_type"):
         return

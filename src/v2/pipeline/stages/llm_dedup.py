@@ -287,8 +287,13 @@ def _merge_entity_payload(canonical: dict[str, Any], candidate: dict[str, Any]) 
                 canonical_identifiers[key] = deepcopy(value)
     canonical["identifiers"] = canonical_identifiers
 
+    # `_stub` marks a reference-only placeholder; a merged entity is a stub only
+    # if BOTH sides were stubs — never copy a placeholder's `_stub` onto a fuller
+    # same-id entity (Bug 07 merge contamination).
+    candidate_stub = bool(candidate.get("_stub"))
+
     for key, value in candidate.items():
-        if key in {"id", "idSource", "identifiers"}:
+        if key in {"id", "idSource", "identifiers", "_stub"}:
             continue
         if not _is_non_empty(value):
             continue
@@ -315,6 +320,9 @@ def _merge_entity_payload(canonical: dict[str, Any], candidate: dict[str, Any]) 
 
         if not _is_non_empty(existing):
             canonical[key] = deepcopy(value)
+
+    if canonical.get("_stub") and not candidate_stub:
+        canonical.pop("_stub", None)
 
 
 def _resolve_entity_identity(bucket: str, entity: dict[str, Any]) -> tuple[str, str]:
