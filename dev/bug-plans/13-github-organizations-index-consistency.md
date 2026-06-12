@@ -1,6 +1,25 @@
 # Bug 13 — github_organizations index representational inconsistency
 
-**Severity:** low (observability/consistency) · **Status:** Investigated — plan ready (no code changed) · **Area:** index storage consistency
+**Severity:** low (observability/consistency) · **Status:** ✅ Verified & closed — already consistent; regression guard added · **Area:** index storage consistency
+
+## Resolution (2026-06-12)
+
+Verified against the current tree: the premise does **not** hold. `github_organizations`
+already keeps a DuckDB `chunks` table (`storage/schema.sql:31-40`) and persists into it via
+the shared `embed_accounts_async` → `upsert_chunk` path (`_github_accounts_base/embed_base.py:135-145`),
+identical to `github_users`. No source change needed.
+
+Added a no-network regression guard so this can't silently regress:
+`tests/index/github_organizations/test_chunks_persistence.py` (chunks table exists, persists,
+and `upsert_chunk` is idempotent). The optional `rebuild_qdrant_from_chunks` parity for
+orgs/users (the one genuine asymmetry vs repos) is left as a separate low-priority enhancement.
+
+**Prod-drift check (only real-world risk):** if an org store was embedded under a
+pre-shared-base revision it could have Qdrant points but empty `chunks`. Detect with
+`SELECT count(*) FROM chunks WHERE entity_type='organizations'` on the live `*.duckdb`
+(not the `.ro.duckdb` snapshot, which intentionally drops `chunks`) vs the Qdrant point
+count; remediate by re-running embed (idempotent via deterministic `chunk_id`). Do not
+schedule a blanket backfill.
 
 ## Symptom
 
