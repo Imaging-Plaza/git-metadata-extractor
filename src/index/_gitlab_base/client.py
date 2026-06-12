@@ -67,8 +67,34 @@ class GitLabClient:
     def iter_public_groups(self) -> Iterator[dict[str, Any]]:
         yield from self._paginate("/groups", {"all_available": "true"})
 
+    def iter_project_members(self, project_id: int | str) -> Iterator[dict[str, Any]]:
+        """Members (direct + inherited) of a project. Readable for public
+        projects without admin scope, unlike the global ``/users`` listing."""
+        yield from self._paginate(f"/projects/{project_id}/members/all", {})
+
     def iter_public_users(self) -> Iterator[dict[str, Any]]:
-        yield from self._paginate("/users", {})
+        """Derive users from public projects' owners and members.
+
+        The global ``GET /users`` directory is admin-only (403 for anonymous /
+        non-admin tokens), so it silently seeded zero users. Public projects and
+        their members are anonymous-safe, so we fan out over them and
+        de-duplicate by id (falling back to username)."""
+        seen: set[str] = set()
+        for project in self.iter_public_projects():
+            owner = project.get("owner")
+            if owner:
+                key = str(owner.get("id") or owner.get("username") or "")
+                if key and key not in seen:
+                    seen.add(key)
+                    yield owner
+            pid = project.get("id")
+            if pid is None:
+                continue
+            for member in self.iter_project_members(pid):
+                key = str(member.get("id") or member.get("username") or "")
+                if key and key not in seen:
+                    seen.add(key)
+                    yield member
 
     def close(self) -> None:
         self._client.close()
