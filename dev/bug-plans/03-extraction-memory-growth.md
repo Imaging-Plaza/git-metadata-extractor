@@ -1,5 +1,18 @@
 # Bug 03 — Memory growth / per-extraction leak in extraction service
-**Severity:** medium-high (forces restarts) · **Status:** ◐ Partial — unbounded infoscience cache bounded (2026-06-12); larger suspects need profiling · **Area:** lifecycle / caching / connections
+**Severity:** medium-high (forces restarts) · **Status:** ◐ Partial — infoscience cache bounded (S2) + provider sessions closed (S3) (2026-06-12); S1 + worker-recycling still profiler/decision-gated · **Area:** lifecycle / caching / connections
+
+> **S3 fix (2026-06-12):** the ORCID/ROR providers lazily created a
+> `requests.Session` that was never closed (one leaked urllib3 pool per
+> extraction). Added `close()` to `RealORCIDProvider`/`RealRORProvider` and a
+> `ProviderSet.close()` that releases any closeable provider, and call it
+> best-effort in `_run_extract_job`'s `finally` — the background job owns the
+> ProviderSet for its lifetime and the post-extract auto-ingest hooks build their
+> own providers, so nothing uses these after the job. Covers the dominant
+> (background) extract path; the GET path is request-scoped/GC'd. Tests in
+> `tests/v2/test_provider_session_close.py`. **Still open:** S1 (per-agent-run LLM
+> clients never `aclose()`d) — the top suspect, but reusing/closing them trades
+> off the token round-robin, so it needs a profiler run + a careful design before
+> committing.
 
 > **Partial fix (2026-06-12):** bounded the clearly-unbounded suspect S2 — the
 > infoscience `_search_cache` (module-global dict written at 4+ sites; its

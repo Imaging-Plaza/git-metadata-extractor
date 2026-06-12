@@ -640,6 +640,12 @@ async def _run_extract_job(
             heartbeat_task.cancel()
             with contextlib.suppress(Exception):
                 await heartbeat_task
+        # Release pooled provider HTTP sessions at end of job (Bug 03). The
+        # background job owns this ProviderSet for its whole lifetime, and the
+        # post-extract auto-ingest hooks build their own providers, so nothing
+        # uses these after the job completes.
+        with contextlib.suppress(Exception):
+            providers.close()
 
 
 def _append_unique_warning(warnings: list[str], warning: str) -> None:
