@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
+import socket
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -28,6 +30,46 @@ MAX_ALLOWED_CHARS = 20000
 def _is_http_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Reject internal/special-use addresses (incl. the cloud metadata
+    endpoint 169.254.169.254, loopback, RFC1918, link-local, reserved)."""
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _is_safe_public_url(value: str) -> bool:
+    """SSRF guard: the host must resolve only to public IPs.
+
+    The Selenium tool fetches links the LLM extracted from user-supplied
+    repo/profile content, so without this an attacker could point it at
+    internal services or the cloud metadata endpoint. Fails closed: an
+    unresolvable host or any internal-resolving IP is rejected. (DNS
+    rebinding between this check and the fetch is a residual risk; binding
+    the resolved IP would be the stronger mitigation.)
+    """
+    host = urlparse(value).hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if _is_blocked_ip(ip):
+            return False
+    return bool(infos)
 
 
 def _load_html_via_selenium(
@@ -82,6 +124,17 @@ def fetch_link_content_via_selenium(
             "text_excerpt": None,
             "content_length": 0,
             "error": "Invalid http(s) URL",
+        }
+    if not _is_safe_public_url(normalized_url):
+        # SSRF protection: refuse internal / metadata / unresolvable hosts.
+        return {
+            "url": normalized_url,
+            "fetched": False,
+            "final_url": None,
+            "title": None,
+            "text_excerpt": None,
+            "content_length": 0,
+            "error": "URL host is not allowed (SSRF protection)",
         }
 
     bounded_max_chars = max(1, min(int(max_chars), MAX_ALLOWED_CHARS))

@@ -65,7 +65,9 @@ from .v1.data_models import (
     APIOutput,
     ResourceType,
 )
+from .v2.auth import verify_token
 from .v2.log_context import AsyncRequestContext, setup_logging
+from .v2.rate_limit import rate_limit_middleware
 from .v1.utils.github_dependency import validate_github_token
 
 # Setup enhanced logging with colors
@@ -363,6 +365,11 @@ def custom_swagger_ui_html() -> HTMLResponse:
     return HTMLResponse(html)
 
 app.include_router(v2_router)
+
+# Opt-in per-client rate limiting on the compute-heavy routes (extraction +
+# index ingest). Disabled unless V2_RATE_LIMIT_PER_MINUTE is set. Registered
+# before the context middleware so it short-circuits abusive requests early.
+app.middleware("http")(rate_limit_middleware)
 
 
 # Add middleware to automatically set request context for all endpoints
@@ -781,7 +788,7 @@ def index():
 #     return {"link": full_path, "output": merged_results, "cached": not force_refresh}
 
 
-@app.get("/v1/org/llm/json/{full_path:path}", tags=["Organization"])
+@app.get("/v1/org/llm/json/{full_path:path}", tags=["Organization"], dependencies=[Depends(verify_token)])
 async def get_org_json(
     response: Response,
     full_path: str = Path(
@@ -898,7 +905,7 @@ async def get_org_json(
     return api_response
 
 
-@app.get("/v1/user/llm/json/{full_path:path}", tags=["User"])
+@app.get("/v1/user/llm/json/{full_path:path}", tags=["User"], dependencies=[Depends(verify_token)])
 async def get_user_json(
     response: Response,
     full_path: str = Path(
@@ -1422,7 +1429,7 @@ async def llm_jsonld(
     return api_response
 
 
-@app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"])
+@app.get("/v1/repository/llm/json/{full_path:path}", tags=["Repository"], dependencies=[Depends(verify_token)])
 async def llm_json(
     response: Response,
     full_path: str = Path(
@@ -1539,7 +1546,7 @@ async def llm_json(
 ###########################################################
 
 
-@app.get("/v1/cache/stats", tags=["Cache Management"])
+@app.get("/v1/cache/stats", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def get_cache_stats():
     """
     Get comprehensive cache statistics.
@@ -1559,7 +1566,7 @@ async def get_cache_stats():
     return cache_manager.get_cache_stats()
 
 
-@app.get("/v1/cache/entries", tags=["Cache Management"])
+@app.get("/v1/cache/entries", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def list_cache_entries(
     api_type: Optional[str] = Query(
         None,
@@ -1612,7 +1619,7 @@ async def list_cache_entries(
     return cache_manager.list_cache_entries(api_type, limit, offset, include_expired)
 
 
-@app.post("/v1/cache/cleanup", tags=["Cache Management"])
+@app.post("/v1/cache/cleanup", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def cleanup_cache():
     """
     Clean up expired cache entries.
@@ -1630,7 +1637,7 @@ async def cleanup_cache():
     return {"message": f"Cleaned up {removed_count} expired cache entries"}
 
 
-@app.post("/v1/cache/clear", tags=["Cache Management"])
+@app.post("/v1/cache/clear", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def clear_all_cache():
     """
     Clear all cache entries.
@@ -1648,7 +1655,7 @@ async def clear_all_cache():
     return {"message": f"Cleared {removed_count} cache entries"}
 
 
-@app.post("/v1/cache/enable", tags=["Cache Management"])
+@app.post("/v1/cache/enable", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def enable_cache():
     """
     Enable the caching system.
@@ -1664,7 +1671,7 @@ async def enable_cache():
     return {"message": "Cache enabled"}
 
 
-@app.post("/v1/cache/disable", tags=["Cache Management"])
+@app.post("/v1/cache/disable", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def disable_cache():
     """
     Disable the caching system.
@@ -1682,7 +1689,7 @@ async def disable_cache():
     return {"message": "Cache disabled"}
 
 
-@app.delete("/v1/cache/invalidate/{api_type}", tags=["Cache Management"])
+@app.delete("/v1/cache/invalidate/{api_type}", tags=["Cache Management"], dependencies=[Depends(verify_token)])
 async def invalidate_cache(api_type: str, params: dict = None):
     """
     Invalidate specific cache entries.
