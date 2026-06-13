@@ -58,6 +58,9 @@ nav:
       - Roadmap: ROADMAP.md
   - Architecture:
       - Design Notes: architecture/design-notes.md
+  - Ontology:
+      - v3.0.0 Reference (proposed): releases/ontology-v3.0.0.md
+      - JSON Schema Graphs: releases/json-schemas.md
   - Legacy / Historical:
       - V1 Repository Analysis Strategy: AGENT_STRATEGY.md
       - Infoscience Integration: INFOSCIENCE_INTEGRATION.md
