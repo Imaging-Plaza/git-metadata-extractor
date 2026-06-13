@@ -33,7 +33,7 @@ A single GitHub URL → a typed graph you can SPARQL. The pipeline combines dete
 git clone https://github.com/Imaging-Plaza/git-metadata-extractor.git
 cd git-metadata-extractor
 just install-dev
-cp .env.example .env   # fill in GME_GITHUB_TOKEN + one LLM credential
+cp .env.example .env   # fill in API_TOKEN, GME_GITHUB_TOKEN + one LLM credential
 
 # 2. Run
 just serve-dev         # starts on http://localhost:1234
@@ -154,7 +154,9 @@ docs/                    # MkDocs site source
 
 Everything is in `.env` — copy `.env.example` and fill in what you need. Required minimum:
 
+- `API_TOKEN` — bearer token guarding `/v1/*`, `/v2/extract`, and `/v2/jobs/{id}`. **Fails closed** (unset → `503` on every protected route). Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - `GME_GITHUB_TOKEN` — required for any real GitHub call.
+- `GIMIE_API_URL` — points at the `gme-gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); **required for repository extraction** (the `gimie` package was removed from the image).
 - **One LLM credential** — `RCP_TOKEN` (EPFL), `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`.
 
 Optional (only when you use the feature): `INFOSCIENCE_TOKEN`, `SELENIUM_REMOTE_URL`, `HF_TOKEN`, `ZENODO_TOKEN`, `OPENALEX_MAILTO`, `EPFL_GRAPH_USERNAME` / `EPFL_GRAPH_PASSWORD`.
