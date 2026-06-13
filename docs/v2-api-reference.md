@@ -26,6 +26,20 @@ The check uses `hmac.compare_digest` for constant-time comparison.
 `/v1/*` routes share the same `API_TOKEN` and behave the same way.
 Implementation lives in `src/v2/auth.py` (`verify_token` dependency).
 
+## Rate limiting
+
+Disabled by default. Set `V2_RATE_LIMIT_PER_MINUTE` to a positive integer to
+cap requests per client on the compute-/cost-heavy routes:
+
+- `POST /v2/extract` and `POST /v2/indices/{provider}/ingest`
+- `GET /v2/extract/{full_path}` and the `/v1/{org,user,repository}/*` routes
+
+Clients are keyed by bearer token (falling back to client IP). Exceeding the
+limit returns `429 Too Many Requests` with a `Retry-After` header. The window
+is a fixed 60 s. State is in-memory and **per worker**, so under gunicorn with
+N workers the effective limit is ~N × the configured value — use a shared store
+(e.g. Redis) for a true global cap. Implementation: `src/v2/rate_limit.py`.
+
 ## Endpoints
 
 ### `GET /v2/health`
@@ -313,6 +327,7 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `API_TOKEN` | unset | Bearer token guarding `/v1/*` and protected `/v2/*` routes. Missing → 503 (no dev bypass). See [Authentication](#authentication). |
+| `V2_RATE_LIMIT_PER_MINUTE` | unset (off) | Opt-in per-client request cap on the compute-heavy routes (`POST /v2/extract`, `/v2/indices/*/ingest`, the `GET` extract + `/v1/{org,user,repository}/*` routes). Keyed by bearer token (else IP); in-memory & per-worker. Over limit → `429` + `Retry-After`. See [Rate limiting](#rate-limiting). |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | Swap in mock GitHub/ORCID/Infoscience/ROR providers |
 | `V2_LINK_VERACITY_ENABLED` | `true` | Skip the link-veracity stage in LLM mode (rule-based skips unconditionally) |
