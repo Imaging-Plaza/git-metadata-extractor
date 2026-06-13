@@ -38,6 +38,12 @@ extra_javascript:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Using the API:
+      - Quickstart for API consumers: quickstart-api.md
+      - Extracting Metadata: extracting-metadata.md
+      - Understanding Extraction Output: extraction-output.md
+      - Searching the RAG Indices: searching-indices.md
+      - Errors & Troubleshooting: troubleshooting.md
   - V2 Extraction Service:
       - V2 API Reference: v2-api-reference.md
       - API and CLI Quick Reference: api-and-cli.md

@@ -52,7 +52,7 @@ Repository-mode traversal contract:
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`
-- `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
+- `agent_runtime`: `rule_based|llm|hybrid` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
   - `agent_runtime=llm` runs LLM agents for repository/user/organization roots and fanout stages.
   - In LLM runtime, two global fail-open stages are always enabled:
     - `llm_dedup` (post-permissive, pre-reconciliation): LLM duplicate-cluster suggestions + deterministic constrained merge/remap.
@@ -92,7 +92,7 @@ Request body:
 
 - `source_url` (required): GitHub path or URL (for example `github.com/octocat/Hello-World`)
 - `output_format`: `jsonld|json` (default `jsonld`)
-- `agent_runtime`: `rule_based|llm` (optional)
+- `agent_runtime`: `rule_based|llm|hybrid` (optional)
 - `include_context_summary`: `true|false` (default `false`)
 
 Response (`202 Accepted`):
@@ -137,7 +137,7 @@ Companion retrieval endpoint for jobs submitted via `POST /v2/extract`. Returns 
 Response fields:
 
 - `job_id`
-- `status`: `pending|running|completed|failed`
+- `status`: `pending|running|completed|failed|cancelled`
 - `request`: the original `V2ExtractRequest` payload (with `source_url` normalized)
 - `submitted_at`, `started_at`, `completed_at`
 - `result`: present only when `status == "completed"`. Same `V2ExtractResponse` contract as `GET /v2/extract/{full_path}` (`source_url`, `detected_type`, `output_format`, `output`, `warnings`, `stats`, optional `context_summary_markdown`).
