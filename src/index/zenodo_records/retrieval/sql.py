@@ -20,8 +20,12 @@ _ALLOWED_PREFIXES = ("select", "with")
 _FORBIDDEN_KEYWORDS = (
     "attach", "copy", "pragma", "install", "load", "export", "import",
     "create", "drop", "alter", "insert", "update", "delete", "truncate",
+    "recursive",
 )
 _KEYWORD_RE = re.compile(r"\b(" + "|".join(_FORBIDDEN_KEYWORDS) + r")\b", re.IGNORECASE)
+
+# Hard cap on rows returned by an ad-hoc query — bounds result-set DoS.
+_ADHOC_MAX_ROWS = 1000
 
 
 def _validate_adhoc(sql: str) -> None:
@@ -111,7 +115,30 @@ def run_adhoc(
     store: ZenodoRecordsStore | None = None,
 ) -> list[dict[str, Any]]:
     _validate_adhoc(sql)
-    return _execute(sql, params, store)
+    # Sandbox the ad-hoc query: `enable_external_access=false` makes DuckDB
+    # built-ins like read_csv_auto/read_parquet/glob/read_text raise
+    # PermissionException, closing the arbitrary-local-file-read (LFI) hole,
+    # and `memory_limit` plus the _ADHOC_MAX_ROWS fetch cap bound a result/CPU
+    # DoS. We deliberately reuse the EXISTING store.connect() handle rather
+    # than opening a sandboxed second connection: DuckDB forbids a second
+    # handle to the same file with a different config in one process, so a
+    # second connection would trip the access-mode conflict. SET on the live
+    # connection avoids that entirely.
+    owned = False
+    if store is None:
+        store = ZenodoRecordsStore.open()
+        owned = True
+    try:
+        con = store.connect()
+        con.execute("SET enable_external_access=false")
+        con.execute("SET memory_limit='512MB'")
+        cur = con.execute(sql, params or {})
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = cur.fetchmany(_ADHOC_MAX_ROWS)
+        return [dict(zip(cols, r, strict=False)) for r in rows]
+    finally:
+        if owned:
+            store.close()
 
 
 def run_predefined(

@@ -9,6 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.v2.api_models.errors import V2ErrorResponse
 from src.v2.observation.github_rate_limit import GitHubRateLimitSummary
 
+# Upper bound on per-request ingest batch size — caps resource use on the
+# (token-gated) /v2/indices/*/ingest endpoints (audit: ingest-list-no-maxlen).
+_MAX_INGEST_BATCH = 1000
+# Upper bound on a free-text search query (audit: search-query-unbounded-string).
+_MAX_QUERY_CHARS = 4000
+
 
 class V2Stats(BaseModel):
     entities_count: int
@@ -202,6 +208,7 @@ class ZenodoIngestRequest(BaseModel):
 
     ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description=(
             "One or more Zenodo record identifiers. Bare numeric ids, "
             "DOIs (`10.5281/zenodo.…`), or full Zenodo URLs are accepted."
@@ -220,6 +227,7 @@ class GitHubIngestRequest(BaseModel):
 
     repos: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more GitHub repo handles in the form `owner/name`.",
     )
 
@@ -231,6 +239,7 @@ class GitHubUsersIngestRequest(BaseModel):
 
     logins: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more GitHub user logins (bare handles, not URLs).",
     )
 
@@ -242,6 +251,7 @@ class GitHubOrgsIngestRequest(BaseModel):
 
     orgs: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more GitHub organization handles (bare, not URLs).",
     )
 
@@ -253,6 +263,7 @@ class HuggingFacePapersIngestRequest(BaseModel):
 
     arxiv_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description=(
             "One or more arXiv identifiers. Accepts any wire shape: bare id "
             "(`2310.01234`), versioned (`2310.01234v2`), arXiv URL "
@@ -270,6 +281,7 @@ class HuggingFaceModelsIngestRequest(BaseModel):
 
     repo_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more HF model repo_ids in the form `namespace/name`.",
     )
 
@@ -281,6 +293,7 @@ class HuggingFaceDatasetsIngestRequest(BaseModel):
 
     repo_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more HF dataset repo_ids in the form `namespace/name`.",
     )
 
@@ -292,6 +305,7 @@ class HuggingFaceSpacesIngestRequest(BaseModel):
 
     repo_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more HF space repo_ids in the form `namespace/name`.",
     )
 
@@ -303,6 +317,7 @@ class HuggingFaceUsersIngestRequest(BaseModel):
 
     slugs: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more HF user namespace slugs (bare handles).",
     )
 
@@ -314,6 +329,7 @@ class HuggingFaceOrganizationsIngestRequest(BaseModel):
 
     slugs: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more HF organization namespace slugs (bare handles).",
     )
 
@@ -329,6 +345,7 @@ class OpenAlexIngestRequest(BaseModel):
 
     ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more OpenAlex work IDs (`W…`), URLs, or DOIs.",
     )
 
@@ -340,6 +357,7 @@ class OrcidIngestRequest(BaseModel):
 
     orcid_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more ORCID identifiers (`XXXX-XXXX-XXXX-XXXX`).",
     )
 
@@ -355,6 +373,7 @@ class RenkulabIngestRequest(BaseModel):
 
     project_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more Renku v2 project ids (slug or UUID).",
     )
 
@@ -386,6 +405,7 @@ class SwissubaseIngestRequest(BaseModel):
 
     study_ids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more SWISSUbase numeric study ids.",
     )
 
@@ -397,6 +417,7 @@ class EthzResearchCollectionIngestRequest(BaseModel):
 
     uuids: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description=(
             "One or more ETH Research Collection item UUIDs "
             "(DSpace `/core/items/{uuid}`)."
@@ -430,6 +451,7 @@ class OamonitorIngestRequest(BaseModel):
 
     items: list[OamonitorIngestItem] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description="One or more {entity, id} pairs to ingest from OAM-CH.",
     )
 
@@ -441,6 +463,7 @@ class DockerhubIngestRequest(BaseModel):
 
     images: list[str] = Field(
         min_length=1,
+        max_length=_MAX_INGEST_BATCH,
         description=(
             "One or more Docker Hub image references. Accepts `namespace/name`, "
             "a bare official-image name (`python` -> `library/python`), a "
@@ -464,6 +487,7 @@ class IndexSearchRequest(BaseModel):
 
     query: str = Field(
         min_length=1,
+        max_length=_MAX_QUERY_CHARS,
         description="Free-text query to match against the index.",
     )
     top_k: int = Field(
