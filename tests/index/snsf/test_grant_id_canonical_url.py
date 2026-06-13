@@ -119,3 +119,74 @@ def test_migration_promotes_legacy_integer_ids(tmp_path: Path) -> None:
     SnsfStore._migrate_grant_ids_to_url(conn)
     assert conn.execute("SELECT grant_number FROM grants WHERE title = 'A'").fetchone()[0] == _URL
     conn.close()
+
+
+def test_migration_persons_array_tolerates_url_null_and_nonnumeric(tmp_path: Path) -> None:
+    """Bug 12: a partially-migrated / mixed persons array (already-URL element,
+    bare int, non-numeric token, null) must migrate without raising. The old
+    `CAST(<col> AS BIGINT[])` threw a Conversion Error here; the VARCHAR-keyed
+    transform passes URLs through, promotes ints, and drops null/non-numeric."""
+    import json
+
+    conn = duckdb.connect(str(tmp_path / "mixed.duckdb"))
+    conn.execute("CREATE TABLE grants (grant_number INTEGER PRIMARY KEY, title TEXT)")
+    conn.execute("INSERT INTO grants VALUES (241892, 'A')")
+    conn.execute("CREATE TABLE output_publications (publication_id TEXT, grant_number INTEGER)")
+    conn.execute("INSERT INTO output_publications VALUES ('p1', 241892)")
+    conn.execute("CREATE TABLE scope_records (scope_mode TEXT, grant_number INTEGER)")
+    conn.execute("INSERT INTO scope_records VALUES ('epfl', 241892)")
+    conn.execute(
+        "CREATE TABLE persons (person_number INTEGER, orcid TEXT, "
+        "research_institution TEXT, "
+        "responsible_applicant_grants JSON, co_applicant_grants JSON, "
+        "project_partner_grants JSON, practice_partner_grants JSON, "
+        "employee_grants JSON, contact_person_grants JSON, "
+        "applicant_abroad_grants JSON)",
+    )
+    # Raw JSON literal so the array can legitimately hold mixed types (string
+    # URL, number, non-numeric token, json null) the way a partially-migrated
+    # DB would. A DuckDB list literal can't mix those types.
+    conn.execute(
+        "INSERT INTO persons VALUES (1, NULL, NULL, "
+        "'[\"https://data.snf.ch/grants/grant/241892\", 999, \"abc\", null]'::JSON, "
+        "NULL, NULL, NULL, NULL, NULL, NULL)",
+    )
+
+    SnsfStore._migrate_grant_ids_to_url(conn)  # must not raise
+
+    arr = json.loads(
+        conn.execute("SELECT responsible_applicant_grants FROM persons").fetchone()[0],
+    )
+    assert arr == [
+        "https://data.snf.ch/grants/grant/241892",  # already-URL → passed through
+        "https://data.snf.ch/grants/grant/999",     # bare int → promoted
+    ]  # 'abc' and null dropped
+    conn.close()
+
+
+def test_migration_rolls_back_on_failure(tmp_path: Path) -> None:
+    """Bug 12: the migration is atomic — a mid-way failure must leave the DB in
+    its clean pre-v3 (INTEGER) state, not half-migrated. Force a failure by
+    omitting a `_PERSON_GRANT_COLS` column so the persons UPDATE raises after
+    grants has already been rebuilt; assert grants is rolled back to INTEGER."""
+    conn = duckdb.connect(str(tmp_path / "rollback.duckdb"))
+    conn.execute("CREATE TABLE grants (grant_number INTEGER PRIMARY KEY, title TEXT)")
+    conn.execute("INSERT INTO grants VALUES (241892, 'A')")
+    # persons is missing the other six grant columns → the per-col UPDATE loop
+    # raises a Binder error partway through the (already-started) migration.
+    conn.execute(
+        "CREATE TABLE persons (person_number INTEGER, "
+        "responsible_applicant_grants JSON)",
+    )
+    conn.execute("INSERT INTO persons VALUES (1, TO_JSON([241892]))")
+
+    with pytest.raises(Exception):  # noqa: B017, PT011 — any failure must roll back
+        SnsfStore._migrate_grant_ids_to_url(conn)
+
+    dtype = conn.execute(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = 'grants' AND column_name = 'grant_number'",
+    ).fetchone()[0]
+    assert "INT" in str(dtype).upper()  # rolled back to pre-v3 INTEGER
+    assert conn.execute("SELECT grant_number FROM grants").fetchone()[0] == 241892
+    conn.close()

@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
 from src.v2.pipeline.stages.ownership_check import (
+    _synthesize_owner_person_stub,
     guarantee_repo_author,
     infer_owners,
     validate_ownership,
 )
+
+
+def test_synthesized_owner_person_is_marked_reference_stub():
+    # Bug 07: genuine placeholders must carry `_stub` so its absence reliably
+    # means "independently extracted".
+    person = _synthesize_owner_person_stub("octocat")
+    assert person["_stub"] is True
+    assert person["id"] == "https://github.com/octocat"
+    assert person["type"] == "schema:Person"
 
 
 def _person(*, github_username: str, owns: list) -> dict:

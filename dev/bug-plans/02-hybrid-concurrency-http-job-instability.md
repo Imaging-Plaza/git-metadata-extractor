@@ -1,6 +1,38 @@
 # Bug 02 — Extraction server destabilizes under concurrent hybrid jobs
 
-**Severity:** medium · **Status:** Investigated — plan ready (no code changed) · **Area:** HTTP / async job layer
+**Severity:** medium · **Status:** ◐ Mostly fixed (2026-06-12) — all gather_context + discovery blocking I/O offloaded; only the job/queue structural work remains · **Area:** HTTP / async job layer
+
+> **Update (2026-06-12, follow-up):** offloaded **every** blocking provider call
+> in the async `gather_context` (`context_gather.py`) — the 12 inline
+> `providers.github.*` calls (incl. the 180s gimie `get_repository_jsonld`),
+> `get_user`/`get_organization`/`orcid.get_person_by_orcid`, the
+> `_optional_repository_context` owned-repo helper (both call sites), and
+> `_enrich_contributors_with_commit_bookends` — each now runs via
+> `asyncio.to_thread`, so the event loop is no longer frozen by synchronous
+> GitHub/gimie/ORCID I/O during extraction. Sequential awaits keep the in-place
+> `warnings`/`contributors` mutations race-free, and the sync provider's internal
+> `time.sleep` retry now runs on a worker thread, not the loop. 10 context-gather
+> tests pass; no new lint. **Still open:** the job/queue structural work
+> (decoupled runner / semaphore backpressure) and a profiled confirmation that
+> loop-blocking was the dominant cause of the client resets.
+
+> **Partial fix (2026-06-12):** offloaded the hybrid discovery pass's blocking
+> OpenAlex DOI lookup off the event loop. `_run_discovery_pass` (async) called
+> `_materialize_article` (sync) → `_openalex_lookup_doi` → `requests.get` (15s)
+> **directly on the loop**, freezing it during hybrid extraction. The call site
+> (`refine_with_llm.py:2131`) now uses `await asyncio.to_thread(_materialize_article, …)`
+> — sequential await, so the shared dedup dicts stay race-free. Verified by the
+> 52 refine/discovery regression tests (a dedicated offload unit test would need
+> to mock the LLM agent + OpenAlex and would be brittle).
+>
+> **Still open (the dominant, but riskier, blocking site):** `gather_context`
+> (async) makes ~10 blocking `providers.github.*` calls directly on the loop,
+> including the gimie sidecar fetch (180s timeout). Wrapping each in
+> `asyncio.to_thread` is mechanically safe but it's a sizable sweep of a complex
+> hot-path function, and this plan recommends running the cheap
+> `/healthz`-during-extract probe first to confirm the loop-block mechanism
+> before investing. Left as the gated follow-up. The job/queue structural work
+> (decoupled runner, semaphore backpressure) also remains.
 
 > Confidence note: the *mechanism* below (blocking sync I/O on the event loop) is
 > grounded in the code with file:line citations and is high-confidence. The exact

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
 from copy import deepcopy
@@ -187,6 +188,16 @@ class ProviderSet:
     github_rag: Any | None = None
     epfl_graph_rag: Any | None = None
     federated_rag: Any | None = None
+
+    def close(self) -> None:
+        """Best-effort release of any provider that holds a closeable resource
+        (e.g. a pooled `requests.Session`), so it isn't leaked once per
+        extraction (Bug 03). Providers without a `close()` are skipped."""
+        for provider in (self.github, self.orcid, self.infoscience, self.ror):
+            close = getattr(provider, "close", None)
+            if callable(close):
+                with contextlib.suppress(Exception):  # best-effort cleanup
+                    close()
 
 
 @dataclass(slots=True)

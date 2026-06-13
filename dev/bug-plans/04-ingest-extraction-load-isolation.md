@@ -1,5 +1,29 @@
 # Bug 04 — Index-ingest endpoints starve extraction (no load isolation)
-**Severity:** medium · **Status:** Investigated — plan ready (no code changed) · **Area:** API / scheduling / load isolation
+**Severity:** medium · **Status:** ◐ Partially fixed (2026-06-12) — Option B core + D shipped · **Area:** API / scheduling / load isolation
+
+## Resolution (2026-06-12) — Option B (core) + Option D
+
+Shipped the bounded ingest pool for the dominant thread-pool-starvation axis:
+- New `src/v2/indices/_ingest_pool.py`: a bounded, ingest-only `ThreadPoolExecutor`
+  (`V2_INGEST_MAX_THREADS`, default 2) + `run_in_ingest_pool()` (drop-in for
+  `asyncio.to_thread`) + `reset_ingest_pool()` for tests.
+- Routed the **shared heavy ingest steps** through it: `_embed_step.py` (embed pass,
+  WAL checkpoint, `.ro` snapshot — used by every provider) and `gitlab.py` (ingest +
+  embed). These are where bulk ingest holds threads for sustained periods, so the
+  default pool now stays free for extraction.
+- Option D: documented the residual constraint in `docs/OPERATIONS_RUNBOOK.md`
+  (don't run large bulk ingests concurrently with latency-sensitive extraction on a
+  1–2 worker box).
+- Tests: `tests/v2/test_ingest_pool.py` — named dedicated thread, arg/kwarg forwarding,
+  bounded concurrency (≤ cap), and the isolation property (a saturated ingest pool does
+  not delay a default-pool `asyncio.to_thread`). 51 ingest/embed/gitlab regression tests pass.
+
+**Deliberately deferred** (still on the default pool):
+- The lighter per-entity ingest *fetch* loops (`result = await asyncio.to_thread(_ingest_one_*)`)
+  in the ~14 provider modules — sequential per job and far lighter than the embed pass.
+  Route them through `run_in_ingest_pool` too if profiling shows fetch-side contention.
+- Option A (separate `gme-ingest-worker` process) — the durable fix; also the SQLite
+  cache writer-lock axis (Consequence #3) is untouched.
 
 ## Symptom
 Running `POST /v2/indices/<name>/ingest` concurrently with `POST /v2/extract` on the

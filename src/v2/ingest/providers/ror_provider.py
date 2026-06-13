@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 import requests
@@ -193,6 +194,14 @@ class RealRORProvider(RORProvider):
         if self._session is None:
             self._session = requests.Session()
         return self._session
+
+    def close(self) -> None:
+        """Close the pooled HTTP session if one was lazily created, so its
+        urllib3 connection pool isn't leaked once per extraction (Bug 03)."""
+        if self._session is not None:
+            with contextlib.suppress(Exception):  # best-effort cleanup
+                self._session.close()
+            self._session = None
 
     def _request(
         self,

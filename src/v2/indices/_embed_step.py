@@ -35,11 +35,12 @@ embed round-trips it follows.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+from src.v2.indices._ingest_pool import run_in_ingest_pool
 
 LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ async def _maybe_checkpoint(
     if store is None or not hasattr(store, "connect"):
         return {"enabled": True, "ran": False, "reason": "no store connection"}
     try:
-        await asyncio.to_thread(_checkpoint_sync, store)
+        await run_in_ingest_pool(_checkpoint_sync, store)
         return {"enabled": True, "ran": True, "ok": True}
     except Exception as exc:  # noqa: BLE001 — checkpoint is best-effort
         LOGGER.warning(
@@ -113,7 +114,7 @@ async def _maybe_snapshot(
     from src.index._snapshot import publish_snapshot  # noqa: PLC0415
 
     try:
-        return await asyncio.to_thread(
+        return await run_in_ingest_pool(
             lambda: publish_snapshot(store.connect(), store.db_path),
         )
     except Exception as exc:  # noqa: BLE001 — snapshot is best-effort
@@ -130,10 +131,12 @@ async def run_embed_step(
 ) -> dict[str, Any]:
     """Run a sync embed callable in a worker thread; return a summary block.
 
-    The closure is dispatched via ``asyncio.to_thread`` so blocking I/O
-    (HTTP to RCP, Qdrant upserts, DuckDB reads) doesn't block the
-    event loop. Exceptions are caught, logged, and surfaced in the
-    returned dict — never re-raised, since the ingest half has
+    The closure is dispatched on the bounded ingest pool
+    (``run_in_ingest_pool``) so blocking I/O (HTTP to RCP, Qdrant
+    upserts, DuckDB reads) doesn't block the event loop and a bulk
+    ingest can't saturate the default thread pool that extraction
+    relies on (Bug 04). Exceptions are caught, logged, and surfaced in
+    the returned dict — never re-raised, since the ingest half has
     already committed and the operator just needs to know the embed
     half did not.
 
@@ -147,7 +150,7 @@ async def run_embed_step(
     started = datetime.now(timezone.utc)
     out: dict[str, Any] = {"started_at": started.isoformat()}
     try:
-        result = await asyncio.to_thread(embed_call)
+        result = await run_in_ingest_pool(embed_call)
         out["ok"] = True
         out["result"] = result
     except Exception as exc:  # noqa: BLE001 — embed failures must not crash ingest job
