@@ -67,6 +67,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
+#### Bug-report batch (2026-06)
+
+- **Disciplines silently dropped under `workers>1` (Bug 01).** A long-lived
+  read-write epfl_graph DuckDB handle (stats endpoint, federated search) collided
+  with the read-only `rule_based_disciplines` lookup → "Can't open a connection …
+  different configuration", and `pulse:discipline` was silently dropped. Every
+  extraction-time open is now read-only with an identical config
+  (`EpflGraphStore.open_readonly`); read-write stays ingest-only.
+- **`V2_GITHUB_RAG_AUTO_INGEST` never fired (Bug 06).** The code read
+  `V2_GITHUB_REPOS_RAG_AUTO_INGEST` but only the former was documented, so
+  operators who followed `.env.example` got no auto-ingest. The documented name
+  is now accepted as a deprecated alias (with a warning); `.env.example` is fixed
+  and the three sibling flags documented.
+- **GitLab index unblocked (Bugs 09–11).** Added `GitLabIndexConfig.require_rcp()`
+  (was an `AttributeError` on every embed), added `name` + `full_path` to the
+  project embed card (description-less projects were silently skipped under
+  `min_card_chars`), and `iter_public_users()` now derives users from public
+  project owners/members instead of the admin-only `/users` (403 anon).
+- **Bulk ingest no longer starves extraction (Bug 04).** The heavy ingest steps
+  (per-provider embed pass, WAL checkpoint, `.ro` snapshot, gitlab ingest/embed)
+  run on a bounded, ingest-only thread pool (`V2_INGEST_MAX_THREADS`, default 2)
+  instead of the shared default pool.
+- **Event loop no longer frozen by sync provider I/O during extraction (Bug 02).**
+  Every blocking provider call in async `gather_context` — incl. the 180s gimie
+  `get_repository_jsonld` — plus the hybrid discovery OpenAlex DOI lookup now run
+  via `asyncio.to_thread`.
+- **Per-extraction memory leaks reduced (Bug 03).** The unbounded module-global
+  infoscience `_search_cache` is now a size-bounded FIFO cache
+  (`V2_INFOSCIENCE_CACHE_MAXSIZE`, default 512), and pooled ORCID/ROR
+  `requests.Session`s are closed per extraction (`ProviderSet.close()`).
+- **snsf grant-id migration hardened (Bug 12).** The persons-array migration no
+  longer force-casts to `BIGINT[]` (threw on already-URL / non-numeric elements);
+  it is now a VARCHAR-keyed, idempotent, null-safe transform wrapped in a
+  transaction so a mid-way failure rolls back to the clean pre-v3 state.
+- **`dropped_affiliations` keep their text (Bug 05).** Affiliations dropped by the
+  membership evidence floor now carry the original `text` + an explicit
+  `unresolved` flag + `source`, not just an opaque org id.
+- **README badges are queryable in RDF (Bug 08).** Emit flat
+  `gme-internal:badge_labels` / `badge_image_urls` / `badge_links` lists; the raw
+  `_badges` list-of-objects previously collapsed to content-free blank nodes on
+  JSON-LD expansion.
+- **`gme-internal:stub` no longer bleeds onto full entities (Bug 07).** The merge
+  helpers keep `_stub` only when both merged sides were stubs, and the marker is
+  now stamped at all placeholder sites so its absence reliably means "extracted".
+
 - **Federated bootstrap `_LEAF_STORES`** — the gitlab `groups` (and now `users`)
   leaf stores were missing from the leaf-opener allowlist and silently
   bootstrapped as "skipped: no duckdb store"; all nine gitlab leaves now

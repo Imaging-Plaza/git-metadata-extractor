@@ -69,6 +69,13 @@ get `[Errno 104] Connection reset by peer`, and throughput does not improve
 serial). Run client concurrency ≈ `WORKERS`; serial is both cleaner and, at
 `WORKERS=1`, faster.
 
+> **Multi-worker is now safe for discipline tagging (Bug 01).** Previously, at
+> `WORKERS>1` the `rule_based_disciplines` stage hit a DuckDB access-mode
+> conflict ("Can't open a connection … different configuration") and **silently
+> dropped `pulse:discipline`** on the affected repos. Every extraction-time open
+> of the epfl_graph store is now read-only, so concurrent workers coexist and
+> disciplines are populated. (Read-write is reserved for ingest.)
+
 ### Bulk ingest vs. extraction isolation (Bug 04)
 
 Bulk `/v2/indices/<p>/ingest` and interactive `/v2/extract` share one process.
