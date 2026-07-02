@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed (breaking — repo split)
+
+- **The RAG index layer moved to its own repo/service:
+  [open-pulse-sources](https://github.com/caviri/open-pulse-sources).**
+  `src/index/`, `src/module/`, `src/v2/indices/` and the `/v2/manifest` +
+  `/v2/indices/*` API surface were removed from this repo; the same routes are
+  now served by the `gme-sources` compose service (same paths, same auth).
+  The v2 read-side RAG providers import the split-out code as the
+  `open_pulse_sources` library (installed by `just install-dev`; baked into
+  the Docker image from git). Extract-side auto-ingest is unchanged — it
+  writes through the library into the same `data/index` + Qdrant stores.
+  Index ops (ingest/embed/reset recipes, seeds, reingest/migration scripts,
+  per-index docs) live in the new repo. `config/index/*.yaml` intentionally
+  remains here: the library resolves config/data paths CWD-relative.
+
 ### Changed (breaking — deployment)
 
 - **GIMIE moved to a sidecar; `gimie` dependency removed.** The `gimie` package

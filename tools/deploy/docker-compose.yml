@@ -5,6 +5,10 @@
 # Services:
 #   gme-api          the extraction API (gunicorn on :1234; bootstraps index
 #                    stores at startup via the on_starting hook)
+#   gme-sources      the RAG index management API (open-pulse-sources repo):
+#                    /v2/manifest + /v2/indices/* ingest/search/stats/reset
+#                    moved here from gme-api in the repo split. Shares the
+#                    gme-data volume (DuckDB stores) and gme-qdrant.
 #   gme-gimie-api    REQUIRED sidecar — the `gimie` Python dep was removed, so
 #                    repository extraction calls this over HTTP. See
 #                    docs/OPERATIONS_RUNBOOK.md §8.
@@ -39,6 +43,35 @@ services:
       - gme-data:/app/data
     depends_on:
       - gme-gimie-api
+      - gme-qdrant
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-sources:
+    # Index management API — the write side of the RAG indices (ingest /
+    # embed / reset / stats), same /v2/indices/* paths gme-api used to serve.
+    image: ${SOURCES_IMAGE:-ghcr.io/caviri/open-pulse-sources:latest}
+    # To build from a local sibling clone instead, comment `image:` and use:
+    # build:
+    #   context: ../../open-pulse-sources
+    #   dockerfile: tools/image/Dockerfile
+    container_name: gme-sources
+    env_file:
+      - ../../.env
+    environment:
+      INDEX_QDRANT_URL: http://gme-qdrant:6333
+      SELENIUM_REMOTE_URL: http://gme-selenium:4444
+      WORKERS: ${SOURCES_WORKERS:-1}
+    ports:
+      - "${SOURCES_PORT:-8080}:8080"
+    volumes:
+      # SHARED with gme-api: the per-index DuckDB stores live here. DuckDB's
+      # file lock is per-process — keep heavy ingest on this service and
+      # consider V2_*_RAG_AUTO_INGEST=false on gme-api to avoid two writers
+      # contending for the same store file.
+      - gme-data:/app/data
+    depends_on:
       - gme-qdrant
     restart: unless-stopped
     networks:
