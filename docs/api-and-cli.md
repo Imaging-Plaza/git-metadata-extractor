@@ -2,7 +2,7 @@
 
 Quick reference for both the extraction service and the per-index CLIs.
 For the full v2 contract see [V2 API Reference](v2-api-reference.md); for
-RAG indices see [RAG Indices Overview](rag-indices.md).
+RAG indices see [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md).
 
 ## Main entrypoints
 

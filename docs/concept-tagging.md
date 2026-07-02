@@ -123,7 +123,7 @@ discipline counts) so it warrants its own review. For now the two
 systems coexist:
 
 - `concept_tagging` stage → graphai per-concept (this doc).
-- `search_epfl_graph_disciplines` agent tool → Qdrant semantic search ([epfl-graph-disciplines.md](epfl-graph-disciplines.md)).
+- `search_epfl_graph_disciplines` agent tool → Qdrant semantic search ([epfl-graph-disciplines.md](https://github.com/caviri/open-pulse-sources/blob/main/docs/epfl-graph-disciplines.md)).
 
 ## File map
 

@@ -66,18 +66,14 @@ src/v2/
   validation/                    # strict-schema + SHACL validators
   canonicalization/              # ID resolution, string normalisation
 
-src/index/                       # 11 sibling RAG indices (DuckDB + Qdrant per index) +
-                                 # _federated/ adapter layer.
-                                 #   epfl_graph/  — disciplines ontology RAG
-                                 #                  (see docs/epfl-graph-disciplines.md)
-                                 # See docs/rag-indices.md for the full inventory.
-
-src/module/                      # Standalone analytical modules complementing v2.
-                                 #   dependents/  — GitHub `/network/dependents` scraper
-                                 #   epfl_graph/  — graphai-client wrapper + ontology
-                                 #                  endpoints + OpenAlex bridge.
-                                 #                  Used by concept_tagging and the
-                                 #                  src/index/epfl_graph/ ingest pass.
+# NOTE: the RAG index layer (formerly src/index/ + src/module/ + the
+# /v2/indices/* + /v2/manifest API) lives in a separate repo/service:
+#   https://github.com/caviri/open-pulse-sources
+# The v2 read-side providers import it as the `open_pulse_sources`
+# library (installed by `just install-dev`). This service only READS
+# the indices (Qdrant + DuckDB under data/index/); ingest/embed/reset
+# happen in the open-pulse-sources service. config/index/*.yaml stays
+# here because the library resolves config/data paths CWD-relative.
 
 tests/v2/                        # default test target
 ```
@@ -225,7 +221,7 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
 | `V2_SWISSUBASE_RAG_ENABLED` | `true` | enables the SWISSUbase RAG search tool (collection: `swissubase_entities`; entities: `studies`, `datasets`, `persons`, `institutions`). Ingest is Selenium-driven; default scope embeds only EPFL/ETHZ/SDSC-affiliated studies. |
 | `V2_RENKULAB_RAG_ENABLED` | `true` | enables the RenkuLab RAG search tool (renkulab.io). One Qdrant collection per entity type: `renkulab_projects`, `renkulab_groups`, `renkulab_users`, `renkulab_data_connectors`. The single tool searches across all four by default; the `entity_types` argument scopes to a subset. |
 | `RENKULAB_TOKEN` | unset | optional; without it the indexer can still ingest public projects/groups/data_connectors and harvest users via `/search/query?q=type:User`. With it, set on `https://renkulab.io/api/data` for richer user records. |
-| `V2_EPFL_GRAPH_RAG_ENABLED` | `true` | enables the EPFL Graph disciplines RAG search tool (`search_epfl_graph_disciplines`). Single Qdrant collection `epfl_graph_disciplines` over the curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5, embeddings built from `name + canonical Wikipedia lead-section + top anchor concept names`). Wired into the repository, person, organization, and article LLM agents. Refresh with `just epfl-graph-{ingest,enrich-wikipedia,embed}`. See [`docs/epfl-graph-disciplines.md`](docs/epfl-graph-disciplines.md). |
+| `V2_EPFL_GRAPH_RAG_ENABLED` | `true` | enables the EPFL Graph disciplines RAG search tool (`search_epfl_graph_disciplines`). Single Qdrant collection `epfl_graph_disciplines` over the curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5, embeddings built from `name + canonical Wikipedia lead-section + top anchor concept names`). Wired into the repository, person, organization, and article LLM agents. Refresh with `just epfl-graph-{ingest,enrich-wikipedia,embed}`. See [`docs/epfl-graph-disciplines.md`](https://github.com/caviri/open-pulse-sources/blob/main/docs/epfl-graph-disciplines.md). |
 | `EPFL_GRAPH_USERNAME`, `EPFL_GRAPH_PASSWORD` | unset | required by the `epfl-graph-ingest` recipe (the auth handshake against `graphai.epfl.ch`). Not needed at runtime once the index is hydrated — `search_epfl_graph_disciplines` only hits Qdrant + RCP. |
 | `INDEX_QDRANT_URL` | `http://qdrant:6333` (yaml default) | Qdrant endpoint for every RAG index. Inside the devcontainer use `http://gme-qdrant:6333`. |
 | `V2_APPLY_CRITIC_PRUNING` | `false` | turn on to enable critic drop suggestions |

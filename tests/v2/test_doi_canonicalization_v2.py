@@ -9,7 +9,7 @@ without reaching across the package boundary.
 
 from __future__ import annotations
 
-from src.index._shared import doi as _shared_doi
+from open_pulse_sources.index._shared import doi as _shared_doi
 from src.v2.canonicalization import doi_iri, parse_doi
 
 

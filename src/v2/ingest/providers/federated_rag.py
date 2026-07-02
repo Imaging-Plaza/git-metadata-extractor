@@ -1,6 +1,6 @@
 """Async RAG provider over the federated cross-index layer.
 
-Wraps :mod:`src.index._federated` so the v2 LLM agents can call into one
+Wraps :mod:`open_pulse_sources.index._federated` so the v2 LLM agents can call into one
 tool that searches all six RAG indices in parallel.
 
 Two methods:
@@ -29,7 +29,7 @@ _DEFAULT_TOP_K_PER_INDEX = 3
 
 
 class FederatedRagProvider:
-    """Async wrapper around `src.index._federated.search` / `entity`.
+    """Async wrapper around `open_pulse_sources.index._federated.search` / `entity`.
 
     Stateless — no Qdrant / RCP handles to manage. Each call lazily loads
     the registered adapters (the federated module already caches imports
@@ -49,7 +49,7 @@ class FederatedRagProvider:
         if not isinstance(query, str) or not query.strip():
             return {"hits": [], "by_index": {}, "errors": {}}
 
-        from src.index._federated.search import federated_search
+        from open_pulse_sources.index._federated.search import federated_search
 
         try:
             return await asyncio.to_thread(
@@ -74,7 +74,7 @@ class FederatedRagProvider:
         if not isinstance(identifier, str) or not identifier.strip():
             return {"identifier": identifier, "records": [], "by_index": {}, "errors": {}}
 
-        from src.index._federated.entity import cross_index_lookup
+        from open_pulse_sources.index._federated.entity import cross_index_lookup
 
         try:
             return await asyncio.to_thread(

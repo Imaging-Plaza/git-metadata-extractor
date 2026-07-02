@@ -1,8 +1,8 @@
 """Async RAG provider over the Infoscience Qdrant index.
 
-Wraps :class:`src.index.infoscience.store.QdrantStore` with embedding (via
-:class:`src.index.infoscience.embed.RCPEmbedder`) and optional reranking
-(via :class:`src.index.infoscience.rerank.RCPReranker`).
+Wraps :class:`open_pulse_sources.index.infoscience.store.QdrantStore` with embedding (via
+:class:`open_pulse_sources.index.infoscience.embed.RCPEmbedder`) and optional reranking
+(via :class:`open_pulse_sources.index.infoscience.rerank.RCPReranker`).
 
 Exposes three methods used by v2 agent tools:
 
@@ -23,9 +23,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index.infoscience.embed import EmbedError, RCPEmbedder
-from src.index.infoscience.rerank import RCPReranker, RerankError
-from src.index.infoscience.store import (
+from open_pulse_sources.index.infoscience.embed import EmbedError, RCPEmbedder
+from open_pulse_sources.index.infoscience.rerank import RCPReranker, RerankError
+from open_pulse_sources.index.infoscience.store import (
     ARTICLES_COLLECTION,
     CHUNKS_COLLECTION,
     ORGANIZATIONS_COLLECTION,
@@ -37,7 +37,7 @@ from src.index.infoscience.store import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from src.index.infoscience.config import InfoscienceIndexConfig
+    from open_pulse_sources.index.infoscience.config import InfoscienceIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -431,7 +431,7 @@ def build_default_provider(
     # Inline import: lazy load avoids hard-failing v2 init when the
     # infoscience yaml or its env vars are missing in non-RAG deployments.
     try:
-        from src.index.infoscience.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.infoscience.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001 — config errors must not 500 the API

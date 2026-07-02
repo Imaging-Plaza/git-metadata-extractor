@@ -43,7 +43,7 @@ from typing import Any
 
 import yaml
 
-from src.index._shared.doi import doi_iri
+from open_pulse_sources.index._shared.doi import doi_iri
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def _parse_identifiers(value: Any) -> list[dict[str, Any]] | None:
     where ``type`` is one of doi / url / swh / other.
 
     DOI entries are canonicalised to `https://doi.org/<bare>` via the
-    shared `src.index._shared.doi.doi_iri` helper so they match the
+    shared `open_pulse_sources.index._shared.doi.doi_iri` helper so they match the
     URL form every other catalog uses.
     """
     if not isinstance(value, list):

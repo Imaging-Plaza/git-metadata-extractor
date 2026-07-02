@@ -187,7 +187,7 @@ Shared infrastructure (post-2026-05-01 pattern):
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of
 orgs in Qdrant + a JSONL dump for lexical lookup).
 
-See [RAG Indices Overview](../rag-indices.md) for the full inventory and
+See [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) for the full inventory and
 per-index quickstarts.
 
 ## Notes

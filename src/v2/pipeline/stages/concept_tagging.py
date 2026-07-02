@@ -23,7 +23,7 @@ output by adding the corresponding ontology terms to the strict schema.
 Backends are pluggable via ``V2_CONCEPT_TAGGING_BACKEND``:
 
 - ``epfl_graph`` (default) — calls the EPFL Graph (graphai) API via
-  ``src.module.epfl_graph``. Requires ``EPFL_GRAPH_USERNAME`` /
+  ``open_pulse_sources.module.epfl_graph``. Requires ``EPFL_GRAPH_USERNAME`` /
   ``EPFL_GRAPH_PASSWORD``.
 - ``wikipedia`` — deterministic, credential-free. Extracts candidate
   phrases from the README with a simple heuristic and resolves each to a
@@ -188,7 +188,7 @@ def _extract_via_epfl_graph(  # noqa: PLR0913, C901, PLR0912, PLR0915
 ) -> ConceptTaggingResult:
     result = ConceptTaggingResult(backend=BACKEND_EPFL_GRAPH)
     try:
-        from src.module.epfl_graph import (  # noqa: PLC0415
+        from open_pulse_sources.module.epfl_graph import (  # noqa: PLC0415
             category_chain,
             category_graphsearch_url,
             category_wikipedia,
@@ -565,7 +565,7 @@ def _enrich_disciplines_with_related(
         return
 
     try:
-        from src.module.epfl_graph import (  # noqa: PLC0415
+        from open_pulse_sources.module.epfl_graph import (  # noqa: PLC0415
             category_nearest_openalex_topics,
             people_for_topics,
             publications_for_topics,

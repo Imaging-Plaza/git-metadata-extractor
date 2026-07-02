@@ -1095,7 +1095,7 @@ def _query_communities_index(query: str) -> list[dict[str, Any]]:
     try:
         import duckdb  # noqa: PLC0415
 
-        from src.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
+        from open_pulse_sources.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return []
     db_path = duckdb_path()
@@ -1237,7 +1237,7 @@ async def _gather_federated_evidence(
         try:
             import duckdb  # noqa: PLC0415 — local import keeps the cold-path cost out of the hot path
 
-            from src.index.infoscience.paths import duckdb_path  # noqa: PLC0415
+            from open_pulse_sources.index.infoscience.paths import duckdb_path  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             return
         db_path = duckdb_path()

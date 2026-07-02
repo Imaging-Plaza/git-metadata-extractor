@@ -194,7 +194,7 @@ def _fetch_category_chain_qids(
         return {}
     from pathlib import Path  # noqa: PLC0415
 
-    from src.index.epfl_graph.storage.duckdb_store import (
+    from open_pulse_sources.index.epfl_graph.storage.duckdb_store import (
         EpflGraphStore,  # noqa: PLC0415
     )
 
@@ -252,7 +252,7 @@ async def tag_disciplines(
         return assembled, warnings
 
     try:
-        from src.index.epfl_graph.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.epfl_graph.config import load_config  # noqa: PLC0415
         from src.v2.ingest.providers.epfl_graph_rag import (  # noqa: PLC0415
             build_default_provider,
         )

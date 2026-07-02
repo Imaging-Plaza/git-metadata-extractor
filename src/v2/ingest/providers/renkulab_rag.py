@@ -13,13 +13,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index._rcp.embed_client import (
+from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index._rcp.reranker_client import RCPRerankerClient
-from src.index.openalex.vector.qdrant_store import QdrantStore
-from src.index.renkulab.embed.pipeline import COLLECTION_BY_ENTITY
+from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
+from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
+from open_pulse_sources.index.renkulab.embed.pipeline import COLLECTION_BY_ENTITY
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -31,7 +31,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.renkulab.config import RenkulabIndexConfig
+    from open_pulse_sources.index.renkulab.config import RenkulabIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +254,7 @@ def build_default_provider(
     if not env_enabled("V2_RENKULAB_RAG_ENABLED"):
         return None
     try:
-        from src.index.renkulab.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.renkulab.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

@@ -1,8 +1,8 @@
 """Async RAG provider over the HuggingFace Qdrant index.
 
-Wraps :class:`src.index.huggingface.vector.qdrant_store.QdrantStore` with
-:class:`src.index.huggingface.embed.rcp_client.RCPEmbeddingClient` and
-:class:`src.index.huggingface.rerank.rcp_client.RCPRerankerClient`.
+Wraps :class:`open_pulse_sources.index.huggingface.vector.qdrant_store.QdrantStore` with
+:class:`open_pulse_sources.index.huggingface.embed.rcp_client.RCPEmbeddingClient` and
+:class:`open_pulse_sources.index.huggingface.rerank.rcp_client.RCPRerankerClient`.
 
 Exposes one method:
 
@@ -24,12 +24,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index._rcp.embed_client import (
+from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index._rcp.reranker_client import RCPRerankerClient
-from src.index.openalex.vector.qdrant_store import QdrantStore
+from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
+from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -41,7 +41,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index._huggingface_base.config_base import (
+    from open_pulse_sources.index._huggingface_base.config_base import (
         HFEntityIndexConfigBase as HuggingFaceIndexConfig,
     )
 
@@ -75,10 +75,10 @@ async def lineage(
             "depth": depth,
         }
     try:
-        from src.index.huggingface_models.retrieval.lineage import (
+        from open_pulse_sources.index.huggingface_models.retrieval.lineage import (
             compute_lineage as _compute,
         )
-        from src.index.huggingface_models.storage.duckdb_store import (
+        from open_pulse_sources.index.huggingface_models.storage.duckdb_store import (
             HuggingFaceModelsStore as _Store,
         )
         return await asyncio.to_thread(_walk_lineage, repo_id, depth, _compute, _Store)
@@ -312,7 +312,7 @@ def build_default_provider(
         return None
     try:
         # Lazy load: missing yaml / env should not break v2 init.
-        from src.index.huggingface.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.huggingface.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

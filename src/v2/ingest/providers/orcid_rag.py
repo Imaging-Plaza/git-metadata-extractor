@@ -11,10 +11,10 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index._rcp.embed_client import RCPEmbeddingError
-from src.index.orcid.embed.rcp_client import RCPEmbeddingClient
-from src.index.orcid.rerank.rcp_client import RCPRerankerClient
-from src.index.orcid.vector.qdrant_store import ENTITY_TYPES, OrcidQdrantStore
+from open_pulse_sources.index._rcp.embed_client import RCPEmbeddingError
+from open_pulse_sources.index.orcid.embed.rcp_client import RCPEmbeddingClient
+from open_pulse_sources.index.orcid.rerank.rcp_client import RCPRerankerClient
+from open_pulse_sources.index.orcid.vector.qdrant_store import ENTITY_TYPES, OrcidQdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -27,7 +27,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.orcid.config import OrcidIndexConfig
+    from open_pulse_sources.index.orcid.config import OrcidIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ def build_default_provider(
     if not env_enabled("V2_ORCID_RAG_ENABLED"):
         return None
     try:
-        from src.index.orcid.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.orcid.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

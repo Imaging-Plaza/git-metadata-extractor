@@ -1,5 +1,10 @@
 # GME operations runbook
 
+> **Repo split (2026-07-02):** the RAG index layer now lives in
+> [open-pulse-sources](https://github.com/caviri/open-pulse-sources).
+> Index ops commands below run from that repo (same `data/index/` volume);
+> the `open_pulse_sources.*` modules come from its installed library.
+
 Operational notes for running the v3.0.0 (`develop`) build of the
 git-metadata-extractor against the Open Pulse index/RAG stores. Captures the
 gotchas surfaced by real index/RAG enrichment runs.
@@ -20,10 +25,10 @@ opens the split stores read-write):
 
 ```bash
 # dry run — reports per-table source/target row counts, no writes
-python scripts/v2/migrate_monolith_to_split.py
+python scripts/migrate_monolith_to_split.py  # (now in the open-pulse-sources repo)
 
 # copy rows + rebuild Qdrant + republish the .ro.duckdb snapshot
-python scripts/v2/migrate_monolith_to_split.py --apply --reembed
+python scripts/migrate_monolith_to_split.py  # (now in the open-pulse-sources repo) --apply --reembed
 ```
 
 - The orphan monolithic files are opened **read-only** and never modified — they
@@ -34,7 +39,7 @@ python scripts/v2/migrate_monolith_to_split.py --apply --reembed
 - The migration now republishes the `<store>.ro.duckdb` snapshot the Hub reads
   from. **If you mutate a store by any other path, republish the snapshot** or
   the Hub keeps serving stale data:
-  `python -c "from src.index._snapshot import publish_snapshot; ..."`.
+  `python -c "from open_pulse_sources.index._snapshot import publish_snapshot; ..."`.
 
 ### Entities with no monolith source
 
@@ -119,13 +124,13 @@ compacted read-only snapshot (the `<store>.ro.duckdb` the Hub reads):
 
 ```bash
 # Health report (read-only): tables, row counts, live + snapshot sizes
-python -m src.index._federated.maintenance --check
+python -m open_pulse_sources.index._federated.maintenance --check
 
 # Optimize every store: CHECKPOINT (fold WAL) + republish the compacted .ro snapshot
-python -m src.index._federated.maintenance
+python -m open_pulse_sources.index._federated.maintenance
 
 # One store only
-python -m src.index._federated.maintenance --store snsf
+python -m open_pulse_sources.index._federated.maintenance --store snsf
 ```
 
 Enumeration is by disk, so it covers every store with a DuckDB file (including
@@ -145,7 +150,7 @@ for retirement once consumers point at the split ones.
 The serving image bootstraps every index DuckDB store **at startup** so the
 stores exist (with their schema) before the first request. The Gunicorn
 `on_starting` hook (`tools/config/gunicorn_conf.py`) calls
-`src.index._federated.bootstrap.bootstrap_all()` **once in the master process,
+`open_pulse_sources.index._federated.bootstrap.bootstrap_all()` **once in the master process,
 before any worker forks** — so no two workers race to create the same file.
 
 - **Idempotent** — existing stores are left untouched; only missing ones are
@@ -153,7 +158,7 @@ before any worker forks** — so no two workers race to create the same file.
 - **Best-effort** — a bootstrap failure is logged (`index bootstrap on start
   failed: …`) but never blocks the server from coming up. Per-store failures
   are reported as `… store(s) not ready: {…}`.
-- **Auto-discovery** — every store under `src/index/*` is picked up, so newly
+- **Auto-discovery** — every store under `open_pulse_sources/index/* (open-pulse-sources repo)` is picked up, so newly
   added indices (e.g. the GitLab family) are bootstrapped with no extra wiring.
 
 | Env | Default | Purpose |
@@ -164,8 +169,8 @@ Run the same thing by hand (local dev, CI, or to re-create a deleted store):
 
 ```bash
 make bootstrap-index                          # all stores, idempotent
-python -m src.index._federated.bootstrap      # same thing
-python -m src.index._federated.bootstrap --only gitlab_epfl_users
+python -m open_pulse_sources.index._federated.bootstrap      # same thing
+python -m open_pulse_sources.index._federated.bootstrap --only gitlab_epfl_users
 ```
 
 Bootstrap only **creates empty schema'd stores** — it does not ingest or embed.

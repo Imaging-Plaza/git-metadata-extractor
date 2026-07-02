@@ -153,7 +153,7 @@ just gme-search "Swiss German LLM" --top-k 10
 just gme-entity 0000-0001-9534-3870              # by ORCID, ROR, DOI, HF slug, …
 ```
 
-See [RAG Indices Overview](rag-indices.md) for the full per-index
+See [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) for the full per-index
 inventory, scopes, and storage layout.
 
 ## 6. Build and preview docs

@@ -9,6 +9,6 @@ import doi_iri, parse_doi` is the canonical import for any v2 site.
 
 from __future__ import annotations
 
-from src.index._shared.doi import doi_iri, parse_doi
+from open_pulse_sources.index._shared.doi import doi_iri, parse_doi
 
 __all__ = ["doi_iri", "parse_doi"]

@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from src.index.ror.rerank import RerankResult
+from open_pulse_sources.index.ror.rerank import RerankResult
 from src.v2.agents.llm.agent_tools.openalex_rag import make_openalex_rag_search_tool
 from src.v2.agents.llm.agent_tools.orcid_rag import make_orcid_rag_search_tool
 from src.v2.agents.llm.agent_tools.ror_rag import make_ror_rag_search_tool

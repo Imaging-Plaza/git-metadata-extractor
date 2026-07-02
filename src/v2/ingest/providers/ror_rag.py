@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from src.index.ror.embed import EmbeddingError, embed_query
-from src.index.ror.qdrant_store import QdrantRorStore
-from src.index.ror.rerank import RerankError, rerank
+from open_pulse_sources.index.ror.embed import EmbeddingError, embed_query
+from open_pulse_sources.index.ror.qdrant_store import QdrantRorStore
+from open_pulse_sources.index.ror.rerank import RerankError, rerank
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -31,7 +31,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.ror.config import RcpConfig, RorIndexConfig
+    from open_pulse_sources.index.ror.config import RcpConfig, RorIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ def build_default_provider(
     if not env_enabled("V2_ROR_RAG_ENABLED"):
         return None
     try:
-        from src.index.ror.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.ror.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

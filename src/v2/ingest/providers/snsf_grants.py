@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from src.index.snsf.facet_query import GrantFilters
+    from open_pulse_sources.index.snsf.facet_query import GrantFilters
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +41,13 @@ class SnsfGrantsProvider:
     ----------
     store_path:
         Path to the ``snsf.duckdb`` file.  Defaults to the canonical path
-        returned by :func:`src.index.snsf.paths.duckdb_path`.  The file is
+        returned by :func:`open_pulse_sources.index.snsf.paths.duckdb_path`.  The file is
         **not** opened at construction time.
     """
 
     def __init__(self, store_path: Path | None = None) -> None:
         if store_path is None:
-            from src.index.snsf.paths import duckdb_path  # noqa: PLC0415
+            from open_pulse_sources.index.snsf.paths import duckdb_path  # noqa: PLC0415
 
             store_path = duckdb_path()
         self._store_path = store_path
@@ -75,7 +75,7 @@ class SnsfGrantsProvider:
         try:
             import duckdb  # noqa: PLC0415
 
-            from src.index.snsf.facet_query import query_grants  # noqa: PLC0415
+            from open_pulse_sources.index.snsf.facet_query import query_grants  # noqa: PLC0415
 
             with duckdb.connect(str(self._store_path), read_only=True) as conn:
                 store = _ROStore(conn)
@@ -100,7 +100,7 @@ class SnsfGrantsProvider:
         try:
             import duckdb  # noqa: PLC0415
 
-            from src.index.snsf.facet_query import facet_counts  # noqa: PLC0415
+            from open_pulse_sources.index.snsf.facet_query import facet_counts  # noqa: PLC0415
 
             with duckdb.connect(str(self._store_path), read_only=True) as conn:
                 store = _ROStore(conn)

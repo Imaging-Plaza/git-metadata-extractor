@@ -17,13 +17,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.github_repos.embed.pipeline import GITHUB_REPOS_COLLECTION
-from src.index._rcp.embed_client import (
+from open_pulse_sources.index.github_repos.embed.pipeline import GITHUB_REPOS_COLLECTION
+from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index._rcp.reranker_client import RCPRerankerClient
-from src.index.openalex.vector.qdrant_store import QdrantStore
+from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
+from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -35,7 +35,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.github_repos.config import GitHubIndexConfig
+    from open_pulse_sources.index.github_repos.config import GitHubIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ def build_default_provider(
     if not env_enabled("V2_GITHUB_RAG_ENABLED"):
         return None
     try:
-        from src.index.github_repos.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.github_repos.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

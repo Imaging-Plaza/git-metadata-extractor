@@ -119,7 +119,7 @@ Swagger UI: <http://localhost:1234/docs>
 | **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Pipeline overview, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
 | [docs/getting-started.md](docs/getting-started.md) | Install + first run, the long version |
 | [docs/v2-api-reference.md](docs/v2-api-reference.md) | `/v2/extract`, `/v2/jobs`, `/v2/graph` endpoints |
-| [docs/rag-indices.md](docs/rag-indices.md) | Nine RAG indices + federated layer |
+| [docs/rag-indices.md](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) | Nine RAG indices + federated layer |
 | [docs/v2-rag-tools.md](docs/v2-rag-tools.md) | Agent-side RAG tools wired into the pipeline |
 | [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) | `/v1` → `/v2` endpoint mapping |
 | [.env.example](.env.example) | Every env var with defaults and notes |

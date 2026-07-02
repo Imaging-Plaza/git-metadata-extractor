@@ -94,7 +94,7 @@ def make_search_snsf_grants_tool(provider: SnsfGrantsProvider) -> Tool:
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         """Faceted + free-text search over SNSF P3 grants. See tool description."""
-        from src.index.snsf.facet_query import GrantFilters  # noqa: PLC0415
+        from open_pulse_sources.index.snsf.facet_query import GrantFilters  # noqa: PLC0415
 
         logger.info(
             "tool call: search_snsf_grants — state=%r institution=%r text=%r limit=%d",
@@ -142,7 +142,7 @@ def make_snsf_grant_facets_tool(provider: SnsfGrantsProvider) -> Tool:
         text: str | None = None,
     ) -> dict[str, Any]:
         """Return facet counts for the SNSF grants database. See tool description."""
-        from src.index.snsf.facet_query import GrantFilters  # noqa: PLC0415
+        from open_pulse_sources.index.snsf.facet_query import GrantFilters  # noqa: PLC0415
 
         logger.info("tool call: snsf_grant_facets — state=%r text=%r", state, text)
         record_query(

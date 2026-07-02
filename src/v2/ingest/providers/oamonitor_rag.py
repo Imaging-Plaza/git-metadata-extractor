@@ -14,13 +14,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.oamonitor.embed.pipeline import OAM_COLLECTIONS, qdrant_collection_for
-from src.index._rcp.embed_client import (
+from open_pulse_sources.index.oamonitor.embed.pipeline import OAM_COLLECTIONS, qdrant_collection_for
+from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index._rcp.reranker_client import RCPRerankerClient
-from src.index.openalex.vector.qdrant_store import QdrantStore
+from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
+from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -34,7 +34,7 @@ from src.v2.ingest.providers._rag_helpers import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from src.index.oamonitor.config import OamonitorIndexConfig
+    from open_pulse_sources.index.oamonitor.config import OamonitorIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ class OamonitorRagProvider:
     def _fetch_records_sync(
         ids: list[str], entity_type: str,
     ) -> list[dict[str, Any]]:
-        from src.index.oamonitor.storage.duckdb_store import (  # noqa: PLC0415
+        from open_pulse_sources.index.oamonitor.storage.duckdb_store import (  # noqa: PLC0415
             ENTITY_TABLES,
             OamonitorStore,
         )
@@ -233,7 +233,7 @@ def build_default_provider(
     if not env_enabled("V2_OAMONITOR_RAG_ENABLED"):
         return None
     try:
-        from src.index.oamonitor.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.oamonitor.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

@@ -20,9 +20,9 @@ The repository ships **two cooperating subsystems**:
 - [V2 API Reference](v2-api-reference.md) — `/v2/extract`, `/v2/jobs`, `/v2/graph`
 - [Migration: V1 → V2](migration-v1-to-v2.md) — endpoint mapping
 - [API and CLI](api-and-cli.md) — quick reference
-- [RAG Indices Overview](rag-indices.md) — the nine indices + federated layer
-- [Federated Search](federated-search.md) — cross-index design
-- [HuggingFace Index](huggingface-index.md) — most-used index, deep-dive
+- [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) — the nine indices + federated layer
+- [Federated Search](https://github.com/caviri/open-pulse-sources/blob/main/docs/federated-search.md) — cross-index design
+- [HuggingFace Index](https://github.com/caviri/open-pulse-sources/blob/main/docs/huggingface-index.md) — most-used index, deep-dive
 - [V2 Agent RAG Tools](v2-rag-tools.md) — agent-side tools wired into the v2 pipeline
 - [Roadmap](ROADMAP.md) — what's left to build
 - [Design Notes](architecture/design-notes.md) — runtime architecture

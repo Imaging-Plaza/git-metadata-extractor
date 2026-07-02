@@ -1,2 +1,0 @@
-# HuggingFace space repo_ids — one per line, in the form namespace/name.
-gradio/hello_world

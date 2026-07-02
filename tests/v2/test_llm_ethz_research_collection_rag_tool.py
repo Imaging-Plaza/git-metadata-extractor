@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from src.index.ethz_research_collection.rerank import RerankHit
-from src.index.ethz_research_collection.store import (
+from open_pulse_sources.index.ethz_research_collection.rerank import RerankHit
+from open_pulse_sources.index.ethz_research_collection.store import (
     ARTICLES_COLLECTION,
     CHUNKS_COLLECTION,
     ORGANIZATIONS_COLLECTION,
@@ -83,7 +83,7 @@ class _FakeEmbedder:
     async def embed_query(self, query: str, instruction: str | None = None):
         self.embed_calls.append(query)
         if self.fail:
-            from src.index.ethz_research_collection.embed import EmbedError
+            from open_pulse_sources.index.ethz_research_collection.embed import EmbedError
             raise EmbedError("forced failure")
         return list(self.vector)
 
@@ -109,7 +109,7 @@ class _FakeReranker:
             "top_n": top_n,
         })
         if self.fail:
-            from src.index.ethz_research_collection.rerank import RerankError
+            from open_pulse_sources.index.ethz_research_collection.rerank import RerankError
             raise RerankError("forced failure")
         return list(self._hits)
 

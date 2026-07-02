@@ -28,7 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   project/group/user pipelines). All nine are vector-backed, registered in the
   federated layer, and appear in `GET /v2/manifest`. GitLab user records carry
   no ORCID (GitLab exposes no verified-ORCID field). See
-  [`docs/gitlab-index.md`](docs/gitlab-index.md).
+  [`docs/gitlab-index.md`](https://github.com/caviri/open-pulse-sources/blob/main/docs/gitlab-index.md).
 - **HTTP ingest + search endpoints for the GitLab family** —
   `POST /v2/indices/<name>/ingest` (full-instance crawl + embed, async job;
   optional `limit`) and `POST /v2/indices/<name>/search` for all nine gitlab

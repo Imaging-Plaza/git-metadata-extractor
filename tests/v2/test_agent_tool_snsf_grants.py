@@ -21,9 +21,9 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from src.index.snsf.facet_query import GrantFilters
-from src.index.snsf.facets import build_facets
-from src.index.snsf.storage.duckdb_store import SnsfStore
+from open_pulse_sources.index.snsf.facet_query import GrantFilters
+from open_pulse_sources.index.snsf.facets import build_facets
+from open_pulse_sources.index.snsf.storage.duckdb_store import SnsfStore
 from src.v2.agents.llm.agent_tools.snsf_grants import (
     make_fetch_snsf_grant_tool,
     make_search_snsf_grants_tool,

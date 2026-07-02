@@ -11,13 +11,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from src.index.epfl_graph.embed.pipeline import EPFL_GRAPH_COLLECTION
-from src.index._rcp.embed_client import (
+from open_pulse_sources.index.epfl_graph.embed.pipeline import EPFL_GRAPH_COLLECTION
+from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
     RCPEmbeddingError,
 )
-from src.index._rcp.reranker_client import RCPRerankerClient
-from src.index.openalex.vector.qdrant_store import QdrantStore
+from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
+from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -29,7 +29,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.epfl_graph.config import EpflGraphIndexConfig
+    from open_pulse_sources.index.epfl_graph.config import EpflGraphIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ def build_default_provider(
     if not env_enabled("V2_EPFL_GRAPH_RAG_ENABLED"):
         return None
     try:
-        from src.index.epfl_graph.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.epfl_graph.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

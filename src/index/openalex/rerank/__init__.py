@@ -1,1 +1,0 @@
-"""RCP-hosted reranker integration."""

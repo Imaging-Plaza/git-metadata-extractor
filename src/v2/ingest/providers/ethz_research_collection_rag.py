@@ -1,8 +1,8 @@
 """Async RAG provider over the ETH Research Collection Qdrant index.
 
-Wraps :class:`src.index.ethz_research_collection.store.QdrantStore` with embedding (via
-:class:`src.index.ethz_research_collection.embed.RCPEmbedder`) and optional reranking
-(via :class:`src.index.ethz_research_collection.rerank.RCPReranker`).
+Wraps :class:`open_pulse_sources.index.ethz_research_collection.store.QdrantStore` with embedding (via
+:class:`open_pulse_sources.index.ethz_research_collection.embed.RCPEmbedder`) and optional reranking
+(via :class:`open_pulse_sources.index.ethz_research_collection.rerank.RCPReranker`).
 
 Exposes three methods used by v2 agent tools:
 
@@ -23,9 +23,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.index.ethz_research_collection.embed import EmbedError, RCPEmbedder
-from src.index.ethz_research_collection.rerank import RCPReranker, RerankError
-from src.index.ethz_research_collection.store import (
+from open_pulse_sources.index.ethz_research_collection.embed import EmbedError, RCPEmbedder
+from open_pulse_sources.index.ethz_research_collection.rerank import RCPReranker, RerankError
+from open_pulse_sources.index.ethz_research_collection.store import (
     ARTICLES_COLLECTION,
     CHUNKS_COLLECTION,
     ORGANIZATIONS_COLLECTION,
@@ -37,7 +37,7 @@ from src.index.ethz_research_collection.store import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from src.index.ethz_research_collection.config import (
+    from open_pulse_sources.index.ethz_research_collection.config import (
         EthzResearchCollectionIndexConfig,
     )
 
@@ -454,7 +454,7 @@ def build_default_provider(
     # Inline import: lazy load avoids hard-failing v2 init when the
     # ETH Research Collection yaml or env vars are missing in non-RAG deployments.
     try:
-        from src.index.ethz_research_collection.config import (  # noqa: PLC0415
+        from open_pulse_sources.index.ethz_research_collection.config import (  # noqa: PLC0415
             load_config,
         )
 

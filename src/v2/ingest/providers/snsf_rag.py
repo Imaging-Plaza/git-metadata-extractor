@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 
-from src.index.snsf.embed import EmbeddingError, embed_query
-from src.index.snsf.qdrant_store import QdrantSnsfStore
-from src.index.snsf.rerank import RerankError, rerank
+from open_pulse_sources.index.snsf.embed import EmbeddingError, embed_query
+from open_pulse_sources.index.snsf.qdrant_store import QdrantSnsfStore
+from open_pulse_sources.index.snsf.rerank import RerankError, rerank
 from src.v2.ingest.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -34,7 +34,7 @@ from src.v2.ingest.providers._rag_helpers import (
 )
 
 if TYPE_CHECKING:
-    from src.index.snsf.config import RcpConfig, SnsfIndexConfig
+    from open_pulse_sources.index.snsf.config import RcpConfig, SnsfIndexConfig
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ def _post_filter_by_institute(
 ) -> list[dict[str, Any]]:
     """Resolve the ``institute`` (lab/centre) for candidate grants from DuckDB.
 
-    Same logic as `src.index.snsf.query._post_filter_by_institute` — kept
+    Same logic as `open_pulse_sources.index.snsf.query._post_filter_by_institute` — kept
     separate here so this provider doesn't import from the CLI surface.
     """
     if not candidates:
@@ -124,7 +124,7 @@ def _post_filter_by_institute(
     grant_ids = [c["grant_number"] for c in candidates if c.get("grant_number") is not None]
     if not grant_ids:
         return []
-    from src.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
+    from open_pulse_sources.index.snsf.storage.duckdb_store import SnsfStore  # noqa: PLC0415
 
     store = SnsfStore.open()
     try:
@@ -259,7 +259,7 @@ def build_default_provider(
     if not env_enabled("V2_SNSF_RAG_ENABLED"):
         return None
     try:
-        from src.index.snsf.config import load_config  # noqa: PLC0415
+        from open_pulse_sources.index.snsf.config import load_config  # noqa: PLC0415
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001

@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.module.dependents.scraper import build_dependents_url
-from src.module.dependents.tool import make_query_dependents_tool
+from open_pulse_sources.module.dependents.scraper import build_dependents_url
+from open_pulse_sources.module.dependents.tool import make_query_dependents_tool
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "github" / "dependents"
 
@@ -34,15 +34,15 @@ def test_query_dependents_tool_returns_dict_with_expected_keys(
     # `iterate_dependents` → `fetch_dependents_html`.
     #
     # `service.py` imports `fetch_dependents_html` by name from `scraper`,
-    # so the local binding `src.module.dependents.service.fetch_dependents_html`
+    # so the local binding `open_pulse_sources.module.dependents.service.fetch_dependents_html`
     # must be patched — patching the scraper attribute only affects the
     # scraper module's own binding and leaves the service's copy untouched.
     fake_fetcher = lambda url, **_kwargs: fixture_html if url == expected_url else ""  # noqa: E731
     monkeypatch.setattr(
-        "src.module.dependents.scraper.fetch_dependents_html", fake_fetcher,
+        "open_pulse_sources.module.dependents.scraper.fetch_dependents_html", fake_fetcher,
     )
     monkeypatch.setattr(
-        "src.module.dependents.service.fetch_dependents_html", fake_fetcher,
+        "open_pulse_sources.module.dependents.service.fetch_dependents_html", fake_fetcher,
     )
     # Some env paths short-circuit if SELENIUM_REMOTE_URL is missing — keep
     # the service from refusing the lookup.
