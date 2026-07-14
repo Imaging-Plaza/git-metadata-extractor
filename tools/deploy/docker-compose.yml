@@ -34,6 +34,10 @@ services:
       # GIMIE is served by the sidecar (gimie is no longer in the image).
       GIMIE_API_URL: http://gme-gimie-api:15400
       INDEX_QDRANT_URL: http://gme-qdrant:6333
+      # Explicit store root on the shared volume — REQUIRED: without it the
+      # wheel-installed open_pulse_sources library resolves its fallback
+      # relative to site-packages.
+      INDEX_DATA_DIR: /app/data/index
       SELENIUM_REMOTE_URL: http://gme-selenium:4444
       WORKERS: ${WORKERS:-2}
     ports:
@@ -51,16 +55,17 @@ services:
   gme-sources:
     # Index management API — the write side of the RAG indices (ingest /
     # embed / reset / stats), same /v2/indices/* paths gme-api used to serve.
-    image: ${SOURCES_IMAGE:-ghcr.io/caviri/open-pulse-sources:latest}
-    # To build from a local sibling clone instead, comment `image:` and use:
-    # build:
-    #   context: ../../open-pulse-sources
-    #   dockerfile: tools/image/Dockerfile
+    # Pulled from GHCR (published by open-pulse-sources CI). Pinned to the
+    # v0.1.1 release for reproducibility — bump deliberately, or override
+    # with SOURCES_IMAGE (e.g. ...:latest, ...:sha-<short> for a exact rev).
+    image: ${SOURCES_IMAGE:-ghcr.io/sdsc-ordes/open-pulse-sources:0.1.1}
     container_name: gme-sources
     env_file:
       - ../../.env
     environment:
       INDEX_QDRANT_URL: http://gme-qdrant:6333
+      # Explicit store root on the shared volume (same rationale as gme-api).
+      INDEX_DATA_DIR: /app/data/index
       SELENIUM_REMOTE_URL: http://gme-selenium:4444
       WORKERS: ${SOURCES_WORKERS:-1}
     ports:
@@ -78,14 +83,23 @@ services:
       - gme
 
   gme-gimie-api:
-    # Pinned by digest for reproducibility (== :latest resolved 2026-06-07,
-    # gimie 0.7.2). Re-resolve + re-validate (scripts/v2/gimie_api_parity.py)
-    # when bumping; or set GIMIE_API_IMAGE to follow the moving tag.
-    image: ${GIMIE_API_IMAGE:-ghcr.io/sdsc-ordes/gimie-api@sha256:7a8a59b70d0787e1d265ff08f24328dd2d518f25dcc504b0420f8648ce99ecdb}
+    # GME-maintained sidecar image (tools/gimie-api) — the upstream
+    # ghcr.io/sdsc-ordes/gimie-api images (pinned digest AND :latest) ship
+    # gimie 0.6.1 with an app written for the 0.7.x API: every extraction
+    # request fails and the error contract collapses to an empty payload.
+    # See dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md.
+    build:
+      context: ../gimie-api
+    image: ${GIMIE_API_IMAGE:-gme-gimie-api:0.7.2}
     container_name: gme-gimie-api
     environment:
-      # gimie-api reads the GitHub token from ACCESS_TOKEN.
-      ACCESS_TOKEN: ${GME_GITHUB_TOKEN:-}
+      # The gimie LIBRARY inside the sidecar reads GITHUB_TOKEN (the app's
+      # ACCESS_TOKEN is consumed by nothing but a debug print — kept for
+      # forward-compat). Must be a SINGLE PAT: GME_GITHUB_TOKEN may be a
+      # comma-separated pool (the extractor round-robins it), which gimie
+      # cannot parse — set GIMIE_ACCESS_TOKEN to one PAT in that case.
+      GITHUB_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+      ACCESS_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
     restart: unless-stopped
     networks:
       - gme

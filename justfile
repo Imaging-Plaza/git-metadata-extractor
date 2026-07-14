@@ -24,13 +24,14 @@ install:
 # Install in development mode with all dependencies.
 # The RAG-index layer lives in the open-pulse-sources repo; the v2 read-side
 # providers import it as a library. Installed editable from a sibling clone
-# when present, else from GitHub.
+# when present (for cross-repo development), else pinned from GitHub —
+# keep the tag in sync with tools/image/Dockerfile's OPEN_PULSE_SOURCES_REF.
 install-dev:
     uv pip install -e ".[dev]"
     @if [ -d open-pulse-sources ]; then \
         uv pip install -e ./open-pulse-sources; \
     else \
-        uv pip install "open-pulse-sources @ git+https://github.com/caviri/open-pulse-sources"; \
+        uv pip install "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.1"; \
     fi
 
 # Set up development environment (install + create .env if needed)
@@ -396,6 +397,6 @@ pre-commit-clean:
 # ============================================================================
 # All index build/refresh tooling (ingest / embed / search / serve / reset,
 # the federated CLI, and the /v2/indices/* management API) lives in
-# https://github.com/caviri/open-pulse-sources — see its justfile.
+# https://github.com/sdsc-ordes/open-pulse-sources — see its justfile.
 # The extraction service only *reads* the indices (Qdrant + DuckDB via the
 # open_pulse_sources library).

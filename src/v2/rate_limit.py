@@ -46,11 +46,12 @@ def _configured_limit() -> int:
 
 
 def _is_rate_limited_route(method: str, path: str) -> bool:
-    """The expensive, cost-amplifying routes worth protecting."""
-    if method == "POST" and (
-        path == "/v2/extract"
-        or (path.startswith("/v2/indices/") and path.endswith("/ingest"))
-    ):
+    """The expensive, cost-amplifying routes worth protecting.
+
+    The /v2/indices/*/ingest routes moved to the open-pulse-sources service
+    (repo split) and are no longer served by this app.
+    """
+    if method == "POST" and path == "/v2/extract":
         return True
     return method == "GET" and path.startswith(
         ("/v2/extract/", "/v1/org/", "/v1/user/", "/v1/repository/"),

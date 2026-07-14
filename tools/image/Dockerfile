@@ -34,11 +34,12 @@ COPY tools/config/gunicorn_conf.py ./gunicorn_conf.py
 RUN uv pip install --system .
 
 # The RAG index layer (open_pulse_sources library) — split out of this repo.
-# The v2 read-side providers and the index-store bootstrap import it; pin a
-# ref via --build-arg OPEN_PULSE_SOURCES_REF=<tag|sha> for reproducibility.
-ARG OPEN_PULSE_SOURCES_REF=main
+# The v2 read-side providers and the index-store bootstrap import it. Pinned
+# to the v0.1.1 release; bump deliberately or override with
+# --build-arg OPEN_PULSE_SOURCES_REF=<tag|sha>.
+ARG OPEN_PULSE_SOURCES_REF=v0.1.1
 RUN uv pip install --system \
-    "open-pulse-sources @ git+https://github.com/caviri/open-pulse-sources@${OPEN_PULSE_SOURCES_REF}"
+    "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@${OPEN_PULSE_SOURCES_REF}"
 
 # Create data directory for cache and ensure proper permissions
 RUN mkdir -p /app/data && chown -R non-root-user:non-root-user /app
