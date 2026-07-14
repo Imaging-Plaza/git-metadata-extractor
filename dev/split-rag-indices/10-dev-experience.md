@@ -1,7 +1,14 @@
 # Task 10 — Developer-experience modernization
 
-**Severity:** P2 · **Status:** Ready — parallel; best after Task 09 shrinks
-the surface · **Repositories:** both
+**Severity:** P2 · **Status: parent-side structure work DONE 2026-07-15**
+(remaining: child env-var rename, CI parity, one-command bootstrap) ·
+**Repositories:** both
+
+**Done on `feat/split-rag-indices`:** the package was renamed
+`src/v2` → `git_metadata_extractor` (ingest → providers, flattened), the
+2.5k-line api module split into an `api/` package (extract / jobs /
+auto_ingest / system / _helpers), and the pi terminal-agent PoC
+quarantined under `experimental/`. Suite 1502 green throughout.
 
 ## Objective
 

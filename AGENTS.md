@@ -21,41 +21,45 @@ endpoints for old consumers.
 ## Code map
 
 ```
-git_metadata_extractor/app.py                       # FastAPI app: mounts the /v2 router + /docs UI
 git_metadata_extractor/
-  api.py                         # /v2/extract endpoint + pipeline driver
+  app.py                         # FastAPI app: mounts the /v2 router + /docs UI
+  api/                           # the /v2 HTTP surface (URL prefix is /v2 — public contract)
+    _router.py                   # the single APIRouter
+    _helpers.py                  # env gates, stage constants, app-state resolution
+    extract.py                   # GET/POST /extract + _run_extract_job + assembly
+    auto_ingest.py               # post-extract index write-through (opt-in flags)
+    jobs.py                      # /jobs/{id}, cancel, /crawl
+    system.py                    # /cache/clear, /health
   jobs.py                        # async job store backing POST /v2/extract
   config.py                      # config knobs
   dependencies.py                # provider wiring, cache resolver
   log_context.py                 # request-id logging context
   observation/query_log.py       # per-request external-query log
 
-  agents/
+  agents/                        # production runtimes only
     models.py                    # AgentResult, ProviderSet, TypedEntityBuckets
     registry.py                  # runtime → runner table
     llm/                         # LLM-backed agents
       _payload_helpers.py        # force_server_uuid + shared post-LLM stamps
       _verdict_cache.py          # per-agent result cache
+      model_config.py            # LLM provider/model profiles + credentials
       <kind>/agent.py            # per-entity LLM agents (one Pydantic AI run each)
       agent_tools/               # Tool factories (selenium, ROR, ORCID, etc.)
                                   #   *_rag.py: per-index Qdrant search tools
-                                  #   (infoscience, huggingface, openalex,
-                                  #    zenodo, orcid, ror, renkulab,
-                                  #    epfl_graph_rag) — see
-                                  #    docs/v2-rag-tools.md
+                                  #   — see docs/v2-rag-tools.md
     rule_based/
       <kind>_agent.py            # deterministic counterparts (no LLM)
     refiners/                    # hybrid-runtime LLM refiners — propose targeted
       <kind>/agent.py            # patches over rule-based output, whitelisted fields only
-                                 #   organization/agent.py — pulse:OrganizationType
-                                 #   repository/agent.py   — pulse:discipline, pulse:repositoryType
-                                 #   person/agent.py       — schema:name (handle→canonical)
 
-  ingest/
+  providers/                     # the provider/READ layer (was "ingest" pre-split)
     cache.py                     # ProviderCache (SQLite, WAL)
-    providers/                   # github / ror / orcid / infoscience clients
+    github_provider.py etc.      # github / ror / orcid / infoscience clients
                                   # *_rag.py: async Qdrant-backed RAG providers
-                                  # _rag_helpers.py: shared filter/rerank utils
+    gimie_api_client.py          # gimie sidecar client (TTL → JSON-LD bridge)
+    gimie_extract.py             # extract_gimie intermediate (sidecar/in-process seam)
+    github_accounts/             # GitHub user/org GraphQL parsers + models
+    detection/                   # GitHub URL classifier
 
   pipeline/
     orchestrator.py              # stage runner, fan-out concurrency, retries
@@ -64,6 +68,9 @@ git_metadata_extractor/
   schema/                        # JSON Schemas (agent + strict) + JSON-LD context
   validation/                    # strict-schema + SHACL validators
   canonicalization/              # ID resolution, string normalisation
+
+  experimental/                  # not production: pi terminal-agent PoC
+    terminal/ terminal_subagent/ skills/
 
 # NOTE: the RAG index layer (formerly src/index/ + src/module/ + the
 # /v2/indices/* + /v2/manifest API) lives in a separate repo/service:

@@ -131,14 +131,16 @@ Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
 ## Repository layout
 
 ```
-git_metadata_extractor/                  # v2 extraction pipeline (new work here)
-  api.py                 # /v2/extract endpoint
+git_metadata_extractor/
+  app.py                 # FastAPI app
+  api/                   # /v2 routes (extract, jobs, auto-ingest, system)
   pipeline/stages/       # 25 sequential pipeline stages
   agents/llm/            # LLM-backed entity agents + RAG tools
   agents/rule_based/     # deterministic counterparts
-  ingest/providers/      # GitHub, ROR, ORCID, Infoscience clients
+  providers/             # GitHub, gimie, ROR, ORCID, Infoscience clients + RAG readers
   schema/                # JSON Schema + JSON-LD context + Pydantic models
   validation/            # strict-schema + SHACL validators
+  experimental/          # pi terminal-agent PoC (not production)
 
 # RAG indices moved to https://github.com/sdsc-ordes/open-pulse-sources —
 # the read-side providers import it as the `open_pulse_sources` library;
