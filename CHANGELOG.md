@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Removed (breaking — v1 API retired)
+
+- **The legacy v1 API is gone.** All `/v1/*` routes (`/v1/repository/*`,
+  `/v1/org/*`, `/v1/user/*`, `/v1/cache/*`) now return 404 — `src/v1/`,
+  `tests/v1/`, the v1 justfile recipes, and the v1-only env knobs
+  (`CACHE_DB_PATH`, `MAX_CACHE_ENTRIES`, `MAX_SELENIUM_SESSIONS`) were
+  removed. Consumers: see `docs/migration-v1-to-v2.md` for the `/v1` → `/v2`
+  endpoint mapping. Modules v2 shared with v1 moved into v2 homes:
+  the LLM model config (`src/v2/agents/llm/model_config.py`), the gimie
+  extraction intermediate (`src/v2/ingest/providers/gimie_extract.py`),
+  the GitHub user/org parsers + models
+  (`src/v2/ingest/github_accounts/`), and the Infoscience data models
+  (`src/v2/ingest/infoscience_models.py`).
+
 ### Fixed
 
 - **GIMIE extraction was silently dead in every sidecar deployment.** Two

@@ -53,9 +53,7 @@ def _is_rate_limited_route(method: str, path: str) -> bool:
     """
     if method == "POST" and path == "/v2/extract":
         return True
-    return method == "GET" and path.startswith(
-        ("/v2/extract/", "/v1/org/", "/v1/user/", "/v1/repository/"),
-    )
+    return method == "GET" and path.startswith("/v2/extract/")
 
 
 def _client_key(request: Request) -> str:

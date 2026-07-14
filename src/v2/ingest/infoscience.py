@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from src.v1.data_models.infoscience import (
+from src.v2.ingest.infoscience_models import (
     InfoscienceAuthor,
     InfoscienceOrgUnit,
     InfosciencePublication,

@@ -358,7 +358,7 @@ class TerminalRunner:
         # The helper also normalises the legacy `GITHUB_TOKEN` env that
         # gimie reads (gimie 401s on a comma-separated pool), so the
         # call site doesn't need to wrap it any further.
-        from src.v1.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
+        from src.v2.ingest.providers.gimie_extract import extract_gimie  # noqa: PLC0415
 
         try:
             gimie_payload = extract_gimie(source_url, serialization_format="json-ld")

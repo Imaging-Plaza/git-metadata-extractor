@@ -22,7 +22,7 @@ import os
 import sys
 from typing import Any
 
-from src.v1.gimie_utils.gimie_methods import extract_gimie
+from src.v2.ingest.providers.gimie_extract import extract_gimie
 from src.v2.ingest.providers.gimie_api_client import (
     extract_gimie_via_api,
     gimie_api_base,

@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from src.v1.data_models.infoscience import InfoscienceAuthor, InfoscienceSearchResult
-from src.v1.parsers.orgs_parser import GitHubOrganizationsParser
-from src.v1.parsers.users_parser import GitHubUsersParser
+from src.v2.ingest.infoscience_models import InfoscienceAuthor, InfoscienceSearchResult
+from src.v2.ingest.github_accounts.orgs_parser import GitHubOrganizationsParser
+from src.v2.ingest.github_accounts.users_parser import GitHubUsersParser
 from src.v2.ingest.providers import (
     BaseProvider,
     GitHubProvider,

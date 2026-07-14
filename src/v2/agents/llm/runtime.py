@@ -12,7 +12,7 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai.usage import UsageLimits
 
-from src.v1.llm.model_config import (
+from src.v2.agents.llm.model_config import (
     create_pydantic_ai_model,
     get_model_parameters,
     load_model_config,

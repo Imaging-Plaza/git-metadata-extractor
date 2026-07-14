@@ -14,15 +14,14 @@ agents to produce a graph of `schema:SoftwareSourceCode`,
 `schema:Person`, `org:Organization`, `org:Membership`,
 `pulse:Contribution`, and `schema:ScholarlyArticle` entities.
 
-V1 (under `src/v1/`) is a **frozen** legacy pipeline kept around for
-backwards-compatible endpoints. **All new work targets V2** under
-`src/v2/`.
+The legacy v1 API was **removed in 3.0.0** (repo-split release). All work
+targets V2 under `src/v2/`; `docs/migration-v1-to-v2.md` maps the removed
+endpoints for old consumers.
 
 ## Code map
 
 ```
-src/api.py                       # FastAPI app, mounts /v1 and /v2 routers, /docs UI
-src/v1/                          # frozen legacy pipeline (no new work)
+src/api.py                       # FastAPI app: mounts the /v2 router + /docs UI
 src/v2/
   api.py                         # /v2/extract endpoint + pipeline driver
   jobs.py                        # async job store backing POST /v2/extract
@@ -190,20 +189,17 @@ addressed deterministically:
 - `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
 - `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
 
-**Auth:** every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}` requires
+**Auth:** `/v2/extract` and `/v2/jobs/{id}` require
 `Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
 `/docs`, and `/v2/health` are open. The dependency lives in
 `src/v2/auth.py::verify_token`.
-
-V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
-(and now also bearer-protected).
 
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
 |---|---|---|
 | `GME_GITHUB_TOKEN` | — | required for live GitHub provider |
-| `API_TOKEN` | — | bearer token guarding every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
+| `API_TOKEN` | — | bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | — | one is required for LLM mode |
 | `INFOSCIENCE_TOKEN` | unset | only for protected Infoscience routes |
 | `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |

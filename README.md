@@ -144,7 +144,6 @@ src/v2/                  # v2 extraction pipeline (new work here)
 # the read-side providers import it as the `open_pulse_sources` library;
 # ingest/embed and the /v2/indices management API live in that repo/service.
 
-src/v1/                  # frozen legacy pipeline — no new work
 tests/v2/                # default test target
 docs/                    # MkDocs site source
 ```
@@ -155,7 +154,7 @@ docs/                    # MkDocs site source
 
 Everything is in `.env` — copy `.env.example` and fill in what you need. Required minimum:
 
-- `API_TOKEN` — bearer token guarding `/v1/*`, `/v2/extract`, and `/v2/jobs/{id}`. **Fails closed** (unset → `503` on every protected route). Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+- `API_TOKEN` — bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. **Fails closed** (unset → `503` on every protected route). Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - `GME_GITHUB_TOKEN` — required for any real GitHub call.
 - `GIMIE_API_URL` — points at the `gme-gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); **required for repository extraction** (the `gimie` package was removed from the image).
 - **One LLM credential** — `RCP_TOKEN` (EPFL), `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`.

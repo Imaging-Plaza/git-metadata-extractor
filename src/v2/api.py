@@ -2396,7 +2396,7 @@ async def crawl_status(
 ) -> V2JobStatus | JSONResponse:
     """Lightweight status of an extract job, without the result graph.
 
-    Parity with the v1 crawl-status surface and a cheap polling target:
+    Parity with the retired v1 crawl-status surface and a cheap polling target:
     returns just the lifecycle fields (status + timestamps + error). The
     full extracted graph lives at ``result_url`` (`GET /v2/jobs/{job_id}`).
     503 if the async job store is unavailable, 404 if no job matches.
@@ -2429,8 +2429,7 @@ async def clear_v2_cache(
 
     Targets the `ProviderCache` SQLite at `V2_PROVIDER_CACHE_PATH` — the
     same store that backs the `/extract` short-circuit and the per-provider
-    sub-caches (RAG, Selenium, link veracity, etc.). The v1 cache at
-    `/v1/cache/clear` is a separate store and is not touched here.
+    sub-caches (RAG, Selenium, link veracity, etc.).
     """
 
     cache = getattr(request.app.state, "v2_provider_cache", None)

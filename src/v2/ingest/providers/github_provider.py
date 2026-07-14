@@ -510,7 +510,7 @@ class RealGitHubProvider(GitHubProvider):
         # `extract_gimie` is the single intermediate: it calls the gimie-api
         # sidecar when GIMIE_API_URL is set, else in-process gimie. Routing lives
         # there so v1 and v2 share one path (and gimie can leave our tree).
-        from src.v1.gimie_utils.gimie_methods import extract_gimie  # noqa: PLC0415
+        from src.v2.ingest.providers.gimie_extract import extract_gimie  # noqa: PLC0415
 
         self._gimie_extractor = extract_gimie
         return extract_gimie
@@ -608,7 +608,7 @@ class RealGitHubProvider(GitHubProvider):
             return self._user_lookup
 
         if self._users_parser is None:
-            from src.v1.parsers.users_parser import GitHubUsersParser  # noqa: PLC0415
+            from src.v2.ingest.github_accounts.users_parser import GitHubUsersParser  # noqa: PLC0415
 
             self._users_parser = GitHubUsersParser()
         parser = self._users_parser
@@ -628,7 +628,7 @@ class RealGitHubProvider(GitHubProvider):
             return self._organization_lookup
 
         if self._orgs_parser is None:
-            from src.v1.parsers.orgs_parser import (  # noqa: PLC0415
+            from src.v2.ingest.github_accounts.orgs_parser import (  # noqa: PLC0415
                 GitHubOrganizationsParser,
             )
 

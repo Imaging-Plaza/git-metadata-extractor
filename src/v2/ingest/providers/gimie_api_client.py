@@ -13,7 +13,7 @@ is **no JSON-LD route** (task brief 11: the previously-assumed
 ``serialization_format="json-ld"`` this client fetches the TTL and converts it
 with rdflib — exactly mirroring the in-process reference
 (``json.loads(graph.serialize(format="json-ld"))`` in
-``src/v1/gimie_utils/gimie_methods.py``), which keeps the payload shape
+`the retired v1 gimie module (now `gimie_extract.py`)`), which keeps the payload shape
 byte-compatible with what every downstream consumer was built against.
 
 Responses come as ``{"link": <url>, "output": "<ttl string>"}``. NOTE the
@@ -61,7 +61,7 @@ def extract_gimie_via_api(  # noqa: PLR0911 — guard-heavy network fetch; flat 
 ) -> Any:
     """Fetch a repo's gimie metadata from the gimie-api sidecar.
 
-    Signature-compatible with ``src.v1.gimie_utils.gimie_methods.extract_gimie``:
+    Signature-compatible with ``src.v2.ingest.providers.gimie_extract.extract_gimie``:
     returns the parsed JSON-LD (rdflib expanded form — a list of node dicts)
     for ``serialization_format="json-ld"``, the TTL string for ``"ttl"``, or
     ``None`` on any failure (sidecar down, non-200, the HTTP-200 error

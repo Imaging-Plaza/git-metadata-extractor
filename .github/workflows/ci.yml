@@ -56,13 +56,6 @@ jobs:
       - name: Run scoped v2 test suite
         run: python -m pytest tests/v2/ -n 4 --dist=loadfile -m "not live_provider and not llm_integration"
 
-      - name: Run v1 parity regression tests
-        env:
-          GME_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p .tmp
-          CACHE_DB_PATH=.tmp/cache.db python -m pytest tests/v1/test_cache.py tests/v1/test_orcid_validation_pipeline.py tests/v1/test_v1_parity.py
-
   llm-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20

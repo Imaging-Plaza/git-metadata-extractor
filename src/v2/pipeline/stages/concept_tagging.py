@@ -490,7 +490,7 @@ async def _extract_via_llm(
     try:
         from pydantic_ai import Agent  # noqa: PLC0415
 
-        from src.v1.llm.model_config import (  # noqa: PLC0415
+        from src.v2.agents.llm.model_config import (  # noqa: PLC0415
             create_pydantic_ai_model,
             get_model_parameters,
             load_model_config,

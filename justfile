@@ -38,7 +38,7 @@ install-dev:
 setup:
     @echo "Setting up Git Metadata Extractor development environment..."
     pip install -e .
-    @if [ ! -f .env ]; then echo "Creating .env file from template..."; echo "OPENAI_API_KEY=\nOPENROUTER_API_KEY=\nGME_GITHUB_TOKEN=\nGITLAB_TOKEN=\nMODEL=gpt-4\nPROVIDER=openai\nCACHE_ENABLED=true" > .env; echo ".env file created. Please edit with your API keys."; else echo ".env file already exists."; fi
+    @if [ ! -f .env ]; then cp .env.example .env; echo ".env created from .env.example — fill in API_TOKEN, GME_GITHUB_TOKEN and one LLM credential."; else echo ".env file already exists."; fi
     @echo "Setup complete!"
 
 # ============================================================================
@@ -203,30 +203,6 @@ v2-run-repo-full-llm REPO:
     PYTHONPATH=. .venv/bin/python scripts/v2/run_llm_repo_persons_and_orgs.py {{REPO}} --verify-links
 
 # ============================================================================
-# Cache Management (via API)
-# ============================================================================
-
-# Get cache statistics
-cache-stats:
-    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/stats | python -m json.tool
-
-# Clean up expired cache entries
-cache-cleanup:
-    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/cleanup | python -m json.tool
-
-# Clear all cache entries
-cache-clear:
-    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/clear | python -m json.tool
-
-# Enable caching
-cache-enable:
-    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/enable | python -m json.tool
-
-# Disable caching
-cache-disable:
-    curl -X POST -H "Authorization: Bearer ${API_TOKEN}" http://localhost:{{PORT}}/v1/cache/disable | python -m json.tool
-
-# ============================================================================
 # Development Utilities
 # ============================================================================
 
@@ -290,22 +266,6 @@ docs-deploy-release VERSION:
 # Set the default docs version/alias
 docs-set-default VERSION:
     mike set-default --push --branch gh-pages {{VERSION}}
-
-# Test the main extract endpoint (was /v1/extract/json — that route is commented out;
-# this hits the active /v1/repository/llm/json equivalent).
-api-test-extract:
-    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
-        "http://localhost:{{PORT}}/v1/repository/llm/json/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
-
-# Test the extract endpoint with force refresh
-api-test-extract-refresh:
-    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
-        "http://localhost:{{PORT}}/v1/repository/llm/json/https://github.com/qchapp/lungs-segmentation?force_refresh=true" | python -m json.tool
-
-# Test the GIMIE endpoint
-api-test-gimie:
-    curl -X GET -H "Authorization: Bearer ${API_TOKEN}" \
-        "http://localhost:{{PORT}}/v1/repository/gimie/json-ld/https://github.com/qchapp/lungs-segmentation" | python -m json.tool
 
 # ============================================================================
 # Cleanup

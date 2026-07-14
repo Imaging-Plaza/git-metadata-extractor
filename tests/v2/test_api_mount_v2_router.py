@@ -47,7 +47,7 @@ def test_main_app_serves_v2_extract_route() -> None:
     assert payload["detected_type"] == "repository"
 
 
-def test_main_app_v1_welcome_still_available() -> None:
+def test_main_app_welcome_available() -> None:
     route_paths = {route.path for route in main_app.routes}
     payload = index()
 
@@ -55,7 +55,8 @@ def test_main_app_v1_welcome_still_available() -> None:
     assert "title" in payload
 
 
-def test_main_app_keeps_v1_repository_jsonld_route_registered() -> None:
+def test_main_app_serves_no_v1_routes() -> None:
+    # The v1 API was retired in 3.0.0 — nothing may mount /v1 again.
     route_paths = {route.path for route in main_app.routes}
 
-    assert "/v1/repository/llm/json-ld/{full_path:path}" in route_paths
+    assert not any(path.startswith("/v1") for path in route_paths)

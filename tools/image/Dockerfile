@@ -49,12 +49,6 @@ USER non-root-user
 # Set PYTHONPATH to include /app so src module can be found
 ENV PYTHONPATH=/app
 
-# Set cache database path to writable directory
-ENV CACHE_DB_PATH=/app/data/api_cache.db
-
-# Memory optimization environment variables
-ENV MAX_CACHE_ENTRIES=5000
-ENV MAX_SELENIUM_SESSIONS=1
 ENV WORKERS=2
 
 # Use gunicorn config file with memory optimizations

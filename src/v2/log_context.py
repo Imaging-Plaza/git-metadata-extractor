@@ -2,7 +2,7 @@
 
 Adds a `[repo-<pid>-<rand>]`-style request-id prefix to every log record
 emitted while inside an async request handler. Implementation mirrors the
-behaviour of the v1 helper (`src.v1.utils.enhanced_logging`) so logs from
+behaviour of the v1 helper (the retired v1 `enhanced_logging` helper) so logs from
 both v1 and v2 modules share the same prefix when they run inside the same
 request context.
 

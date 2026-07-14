@@ -13,7 +13,6 @@ flowchart TB
     subgraph API[FastAPI app — src/api.py]
         A1[v2_router<br/>src/v2/api.py]
         A2[Request logging<br/>AsyncRequestContext]
-        A3[v1 frozen<br/>src/v1/]
     end
 
     subgraph Pipeline[V2 pipeline — src/v2/pipeline/]
@@ -61,7 +60,6 @@ flowchart TB
 
     C1 --> A2 --> A1
     A1 --> P0
-    A1 --> A3
     P0 --> P1
     P1 --> P2
     P2 --> Providers
@@ -196,8 +194,7 @@ per-index quickstarts.
 
 ## Notes
 
-- The frozen v1 pipeline (`src/v1/`) shares the FastAPI app but has its
-  own cache (`src/v1/cache/`) and code paths. No new work targets v1.
+- The legacy v1 pipeline was removed in 3.0.0 (`/v1/*` routes return 404).
 - Internal pipeline metadata fields whose names start with `_` are
   stripped before strict validation, JSON-LD output, and any external
   artefact. Never expose `_`-prefixed fields in API responses.

@@ -4,7 +4,7 @@ Two consumers share this helper:
 
 - `src/v2/ingest/providers/github_provider.py` — REST calls in the v2
   pipeline, via `github_auth_headers()`.
-- `src/v1/parsers/{users,orgs}_parser.py` — GraphQL + REST calls in the
+- `src/v2/ingest/github_accounts/{users,orgs}_parser.py` — GraphQL + REST calls in the
   legacy parsers still invoked by the v2 hybrid runtime.
 
 `src/api.py` startup splits a comma-separated `GME_GITHUB_TOKEN` into a
