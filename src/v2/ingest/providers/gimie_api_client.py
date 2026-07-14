@@ -6,12 +6,20 @@ dependency can eventually leave this project's Python tree. Enabled by setting
 ``GIMIE_API_URL`` (e.g. ``http://gme-gimie-api:15400``); when unset, callers fall
 back to in-process gimie.
 
-The sidecar's ``GET /gimie/jsonld/{full_path}`` returns
-``{"link": <url>, "output": "<json-ld string>"}``. NOTE its error contract:
-failures come back as **HTTP 200** with ``output`` set to the error *message*
-(not valid JSON), so we validate that ``output`` parses to JSON-LD and return
-``None`` otherwise — matching the in-process extractor's degrade-to-None
-behaviour.
+The sidecar's only data routes are ``GET /gimie/ttl/{full_path}`` (Turtle) and
+``GET /gimie/project/{full_path}`` (a Python repr — not machine-usable). There
+is **no JSON-LD route** (task brief 11: the previously-assumed
+``/gimie/jsonld/`` never existed upstream), so for
+``serialization_format="json-ld"`` this client fetches the TTL and converts it
+with rdflib — exactly mirroring the in-process reference
+(``json.loads(graph.serialize(format="json-ld"))`` in
+``src/v1/gimie_utils/gimie_methods.py``), which keeps the payload shape
+byte-compatible with what every downstream consumer was built against.
+
+Responses come as ``{"link": <url>, "output": "<ttl string>"}``. NOTE the
+sidecar's error contract: failures come back as **HTTP 200** with ``output``
+set to the error *message*, which won't parse as Turtle → we degrade to
+``None``, matching the in-process extractor's behaviour.
 """
 from __future__ import annotations
 
@@ -21,6 +29,7 @@ import os
 from typing import Any
 
 import requests
+from rdflib import Graph as RDFGraph
 
 logger = logging.getLogger(__name__)
 
@@ -50,20 +59,21 @@ def extract_gimie_via_api(  # noqa: PLR0911 — guard-heavy network fetch; flat 
     *,
     session: Any = None,
 ) -> Any:
-    """Fetch a repo's gimie JSON-LD from the gimie-api sidecar.
+    """Fetch a repo's gimie metadata from the gimie-api sidecar.
 
     Signature-compatible with ``src.v1.gimie_utils.gimie_methods.extract_gimie``:
-    returns the parsed JSON-LD (``dict`` with ``@graph`` / ``@context``) for
-    ``serialization_format="json-ld"``, the TTL string for ``"ttl"``, or ``None``
-    on any failure (sidecar down, non-200, the HTTP-200 error contract, or a
-    response that doesn't parse to JSON-LD).
+    returns the parsed JSON-LD (rdflib expanded form — a list of node dicts)
+    for ``serialization_format="json-ld"``, the TTL string for ``"ttl"``, or
+    ``None`` on any failure (sidecar down, non-200, the HTTP-200 error
+    contract, or a response that doesn't parse as Turtle).
     """
     base = gimie_api_base()
     if base is None:
         return None
     http = session if session is not None else requests
-    kind = "ttl" if serialization_format == "ttl" else "jsonld"
-    url = f"{base}/gimie/{kind}/{full_path}"
+    # The sidecar's only machine-readable route is /gimie/ttl/ — JSON-LD is
+    # produced client-side from it (see module docstring).
+    url = f"{base}/gimie/ttl/{full_path}"
 
     try:
         resp = http.get(url, timeout=_timeout())
@@ -86,32 +96,36 @@ def extract_gimie_via_api(  # noqa: PLR0911 — guard-heavy network fetch; flat 
     if not isinstance(payload, dict):
         return None
     output = payload.get("output")
-
-    if serialization_format == "ttl":
-        return output if isinstance(output, str) and output.strip() else None
-    return _parse_jsonld_output(output, full_path)
-
-
-def _parse_jsonld_output(output: Any, full_path: str) -> Any:
-    """Coerce the sidecar's ``output`` into parsed JSON-LD, or None.
-
-    ``output`` is normally the serialized JSON-LD *string*; we defensively accept
-    an already-parsed dict/list too. The sidecar's error path puts a plain error
-    message here, which won't parse → None.
-    """
-    if isinstance(output, (dict, list)):
-        return output
     if not isinstance(output, str) or not output.strip():
         return None
+
+    if serialization_format == "ttl":
+        return output
+    return _ttl_to_jsonld(output, full_path)
+
+
+def _ttl_to_jsonld(ttl: str, full_path: str) -> Any:
+    """Convert the sidecar's Turtle output to expanded JSON-LD, or None.
+
+    Mirrors the in-process reference serialization
+    (``json.loads(graph.serialize(format="json-ld"))``) so consumers see the
+    exact shape the pipeline was built against. The sidecar's error path puts
+    a plain error message in ``output``, which won't parse as Turtle → None.
+    """
+    graph = RDFGraph()
     try:
-        parsed = json.loads(output)
-    except ValueError:
+        graph.parse(data=ttl, format="turtle")
+    except Exception:  # noqa: BLE001 — error-contract strings land here.
         logger.warning(
-            "gimie-api returned a non-JSON output for %s (likely an error): %.*s",
-            full_path, _ERROR_OUTPUT_PREVIEW, output,
+            "gimie-api output for %s did not parse as Turtle (likely an error): %.*s",
+            full_path, _ERROR_OUTPUT_PREVIEW, ttl,
         )
         return None
-    return parsed if isinstance(parsed, (dict, list)) else None
+    try:
+        return json.loads(graph.serialize(format="json-ld"))
+    except Exception:  # noqa: BLE001 — defensive: serializer failures degrade to None.
+        logger.warning("gimie TTL→JSON-LD serialization failed for %s", full_path)
+        return None
 
 
 __all__ = ["extract_gimie_via_api", "gimie_api_base"]

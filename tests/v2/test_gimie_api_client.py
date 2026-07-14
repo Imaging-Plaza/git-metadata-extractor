@@ -17,10 +17,15 @@ from src.v2.ingest.providers.github_provider import RealGitHubProvider
 if TYPE_CHECKING:
     import pytest
 
-_JSONLD = {
-    "@context": {"schema": "https://schema.org/"},
-    "@graph": [{"@id": "https://github.com/acme/tool", "@type": "schema:SoftwareSourceCode"}],
-}
+# The sidecar has no JSON-LD route (task brief 11) — the client fetches TTL
+# and converts with rdflib, mirroring the in-process reference serialization.
+_TTL = """\
+@prefix schema: <http://schema.org/> .
+
+<https://github.com/acme/tool> a schema:SoftwareSourceCode ;
+    schema:name "tool" ;
+    schema:description "A fine tool." .
+"""
 _BASE = "http://gme-gimie-api:15400"
 
 
@@ -76,22 +81,42 @@ def test_extract_unset_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     assert extract_gimie_via_api("https://github.com/acme/tool", session=object()) is None
 
 
-def test_extract_success_parses_output_string(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_jsonld_converts_ttl_via_the_ttl_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    # json-ld requests go to /gimie/ttl/ (the sidecar's only machine route)
+    # and are converted to rdflib's expanded JSON-LD — the same shape the
+    # in-process extractor produced.
     _enable(monkeypatch)
-    session = _FakeSession(_FakeResp(200, {"link": "x", "output": json.dumps(_JSONLD)}))
+    session = _FakeSession(_FakeResp(200, {"link": "x", "output": _TTL}))
     out = extract_gimie_via_api("https://github.com/acme/tool", session=session)
-    assert out == _JSONLD
-    assert session.urls == [f"{_BASE}/gimie/jsonld/https://github.com/acme/tool"]
+    assert session.urls == [f"{_BASE}/gimie/ttl/https://github.com/acme/tool"]
+    assert isinstance(out, list)
+    node = next(n for n in out if n.get("@id") == "https://github.com/acme/tool")
+    assert any("SoftwareSourceCode" in t for t in node["@type"])
+    assert node["http://schema.org/description"] == [{"@value": "A fine tool."}]
 
 
-def test_extract_accepts_already_parsed_output(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_jsonld_node_survives_repository_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The expanded list must be consumable by the provider's node finder.
+    from src.v2.ingest.providers.github_provider import _extract_repository_node
+
     _enable(monkeypatch)
-    session = _FakeSession(_FakeResp(200, {"output": _JSONLD}))
-    assert extract_gimie_via_api("https://github.com/acme/tool", session=session) == _JSONLD
+    session = _FakeSession(_FakeResp(200, {"output": _TTL}))
+    out = extract_gimie_via_api("https://github.com/acme/tool", session=session)
+    node = _extract_repository_node(out)
+    assert node.get("@id") == "https://github.com/acme/tool"
+
+
+def test_extract_non_string_output_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable(monkeypatch)
+    session = _FakeSession(_FakeResp(200, {"output": {"unexpected": "dict"}}))
+    assert extract_gimie_via_api("https://github.com/acme/tool", session=session) is None
 
 
 def test_extract_error_string_as_http_200_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    # gimie-api's error contract: HTTP 200 with `output` = an error message.
+    # gimie-api's error contract: HTTP 200 with `output` = an error message,
+    # which does not parse as Turtle.
     _enable(monkeypatch)
     session = _FakeSession(_FakeResp(200, {"output": "Exception: repo not found"}))
     assert extract_gimie_via_api("https://github.com/acme/missing", session=session) is None
