@@ -18,7 +18,7 @@ from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
     MAX_ALLOWED_CHARS,
     fetch_link_content_via_selenium,
 )
-from git_metadata_extractor.skills._runtime import SkillError, emit_error, emit_success
+from git_metadata_extractor.experimental.skills._runtime import SkillError, emit_error, emit_success
 
 logger = logging.getLogger(__name__)
 

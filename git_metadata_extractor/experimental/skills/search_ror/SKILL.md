@@ -34,7 +34,7 @@ supports:
 gme-search-ror "<query>" [--scope <scope>] [--top-k <n>] [--country <CC>] [--rerank]
 
 # Module path (always works as long as the project root is on PYTHONPATH):
-python -m git_metadata_extractor.skills.search_ror "<query>" [--scope <scope>] [--top-k <n>] [--country <CC>] [--rerank]
+python -m git_metadata_extractor.experimental.skills.search_ror "<query>" [--scope <scope>] [--top-k <n>] [--country <CC>] [--rerank]
 ```
 
 | Arg | Default | Notes |

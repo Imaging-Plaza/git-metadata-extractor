@@ -23,7 +23,7 @@ Do NOT use for:
 
 ```
 gme-search-infoscience "<query>" [--collection chunks|articles|persons|organizations] [--top-k N] [--filter K=V] [--rerank]
-python -m git_metadata_extractor.skills.search_infoscience "<query>" [...same flags]
+python -m git_metadata_extractor.experimental.skills.search_infoscience "<query>" [...same flags]
 ```
 
 Collections:

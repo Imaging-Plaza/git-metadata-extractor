@@ -1,6 +1,6 @@
 """V2 terminal-agent subagent variant.
 
-Sister module to ``git_metadata_extractor/agents/terminal/`` that adds a fan-out
+Sister module to ``git_metadata_extractor/experimental/terminal/`` that adds a fan-out
 architecture on top of the same runtime. Where the plain terminal
 runner asks one pi process to build the entire JSON-LD graph, this
 variant runs an *orchestrator* pi process that delegates each entity
@@ -19,6 +19,6 @@ needs: monolith for small repos, subagents when fan-out parallelism
 or per-entity context isolation matters.
 """
 
-from git_metadata_extractor.agents.terminal_subagent.runner import build_subagent_runner
+from git_metadata_extractor.experimental.terminal_subagent.runner import build_subagent_runner
 
 __all__ = ["build_subagent_runner"]

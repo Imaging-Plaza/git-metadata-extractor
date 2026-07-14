@@ -2,7 +2,7 @@
 
 Third runtime alongside `llm` and `rule_based`. Spawns an external terminal
 agent (pi.dev by default) per repo, hands it a per-run tempdir with the
-gimie context and a clone, lets it call CLI skills from `git_metadata_extractor/skills/`,
+gimie context and a clone, lets it call CLI skills from `git_metadata_extractor/experimental/skills/`,
 and reads back a JSON-LD result that gets validated and judged by a
 cross-vendor LLM.
 

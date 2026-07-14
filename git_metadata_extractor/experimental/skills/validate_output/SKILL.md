@@ -28,7 +28,7 @@ expensive (full executor re-run).
 
 ```
 gme-validate-output [--path output.jsonld] [--max-violations N]
-python -m git_metadata_extractor.skills.validate_output [--path output.jsonld] [--max-violations N]
+python -m git_metadata_extractor.experimental.skills.validate_output [--path output.jsonld] [--max-violations N]
 ```
 
 | Arg | Default | Notes |

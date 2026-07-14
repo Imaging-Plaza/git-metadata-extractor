@@ -4,7 +4,7 @@
  * Loaded by the runner via `pi -e <this file>`. Intercepts every `bash`
  * tool call and blocks commands matching the install / privilege-escalate
  * / host-modify denylist below. Read-only navigation (`ls`, `find`,
- * `grep`, `cat`, …) and our skill invocations (`python -m git_metadata_extractor.skills.*`,
+ * `grep`, `cat`, …) and our skill invocations (`python -m git_metadata_extractor.experimental.skills.*`,
  * `gme-*`) pass through untouched.
  *
  * Defense-in-depth alongside the `--tools` allowlist passed by the

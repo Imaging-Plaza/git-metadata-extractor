@@ -29,7 +29,7 @@ Do NOT use for:
 
 ```
 gme-selenium-fetch "<url>" [--max-chars N]
-python -m git_metadata_extractor.skills.selenium_fetch "<url>" [--max-chars N]
+python -m git_metadata_extractor.experimental.skills.selenium_fetch "<url>" [--max-chars N]
 ```
 
 | Arg | Default | Notes |

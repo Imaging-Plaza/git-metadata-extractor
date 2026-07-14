@@ -312,7 +312,7 @@ def _safe_cheatsheet() -> str:
     judge will be slightly less calibrated but still functional.
     """
     try:
-        from git_metadata_extractor.agents.terminal.schema_cheatsheet import build_cheatsheet  # noqa: PLC0415
+        from git_metadata_extractor.experimental.terminal.schema_cheatsheet import build_cheatsheet  # noqa: PLC0415
 
         return build_cheatsheet()
     except Exception as err:  # noqa: BLE001

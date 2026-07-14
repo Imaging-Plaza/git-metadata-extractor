@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Any
 
 from git_metadata_extractor.agents.models import generate_uuid
-from git_metadata_extractor.agents.terminal.pi_config import PiProviderSpec, write_pi_config
-from git_metadata_extractor.agents.terminal.schema_cheatsheet import build_cheatsheet, get_shape_constraints
+from git_metadata_extractor.experimental.terminal.pi_config import PiProviderSpec, write_pi_config
+from git_metadata_extractor.experimental.terminal.schema_cheatsheet import build_cheatsheet, get_shape_constraints
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +327,7 @@ class TerminalRunner:
           - `PI_CODING_AGENT_DIR` — points pi at the run-local config
           - `PI_OFFLINE=1`        — no update checks, no telemetry pings
           - `PYTHONPATH`          — prepend the project root so the agent
-                                    can `python -m git_metadata_extractor.skills.<X>`
+                                    can `python -m git_metadata_extractor.experimental.skills.<X>`
                                     even when console scripts aren't
                                     installed yet.
         """
@@ -438,7 +438,7 @@ class TerminalRunner:
         # Always load the bash-blacklist extension. Append any extras
         # the runtime configured (e.g. terminal_subagent loads pi-mono's
         # subagent extension on top so the orchestrator can fan out).
-        bash_ext = project_root / "git_metadata_extractor" / "agents" / "terminal" / "pi_extension" / "index.ts"
+        bash_ext = project_root / "git_metadata_extractor" / "experimental" / "terminal" / "pi_extension" / "index.ts"
         ext_paths: list[Path] = [bash_ext, *(self.extra_extensions or [])]
         skill_args: list[str] = []
         for skill_name in self.skills:

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from git_metadata_extractor.skills._runtime import SkillError, emit_error, emit_success
+from git_metadata_extractor.experimental.skills._runtime import SkillError, emit_error, emit_success
 
 logger = logging.getLogger(__name__)
 

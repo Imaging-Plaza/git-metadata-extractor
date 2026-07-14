@@ -134,12 +134,12 @@ behind; a partial output is better than no output.
 {{ skills_block }}
 
 Read each skill's `SKILL.md` once before its first use. Skills are
-invoked through the bash tool; e.g. `python -m git_metadata_extractor.skills.search_ror "EPFL"`.
+invoked through the bash tool; e.g. `python -m git_metadata_extractor.experimental.skills.search_ror "EPFL"`.
 
 ## Mandatory self-validation before declaring done
 
 You MUST call `validate-output` (`gme-validate-output` or
-`python -m git_metadata_extractor.skills.validate_output`) at least once before you
+`python -m git_metadata_extractor.experimental.skills.validate_output`) at least once before you
 stop, after you believe the graph is complete. The skill returns:
 
 ```json

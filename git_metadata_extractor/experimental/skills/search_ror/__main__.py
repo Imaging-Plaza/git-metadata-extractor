@@ -13,7 +13,7 @@ import sys
 from typing import Any
 
 from git_metadata_extractor.providers.ror_rag import build_default_provider
-from git_metadata_extractor.skills._runtime import SkillError, run_async_skill
+from git_metadata_extractor.experimental.skills._runtime import SkillError, run_async_skill
 
 
 def _build_parser() -> argparse.ArgumentParser:

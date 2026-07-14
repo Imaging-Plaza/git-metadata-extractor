@@ -23,7 +23,7 @@ Do NOT use for:
 
 ```
 gme-search-openalex "<query>" [--collection works|authors|institutions|sources|topics|concepts] [--top-k N] [--filter K=V] [--rerank]
-python -m git_metadata_extractor.skills.search_openalex "<query>" [...same flags]
+python -m git_metadata_extractor.experimental.skills.search_openalex "<query>" [...same flags]
 ```
 
 Collections:

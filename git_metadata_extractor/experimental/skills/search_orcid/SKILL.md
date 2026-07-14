@@ -22,7 +22,7 @@ Do NOT use for:
 
 ```
 gme-search-orcid "<query>" [--entity-type <type>] [--top-k <n>] [--filter K=V] [--rerank]
-python -m git_metadata_extractor.skills.search_orcid "<query>" [...same flags]
+python -m git_metadata_extractor.experimental.skills.search_orcid "<query>" [...same flags]
 ```
 
 | Arg | Default | Notes |

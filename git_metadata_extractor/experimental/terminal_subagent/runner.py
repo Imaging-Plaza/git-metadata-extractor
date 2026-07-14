@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from git_metadata_extractor.agents.terminal.runner import TerminalRunCaps, TerminalRunner
+from git_metadata_extractor.experimental.terminal.runner import TerminalRunCaps, TerminalRunner
 
 _HERE = Path(__file__).parent
 _SUBAGENT_EXTENSION = _HERE / "pi_extension" / "subagent" / "index.ts"
