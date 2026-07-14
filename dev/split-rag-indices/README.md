@@ -77,7 +77,7 @@ Important follow-ups:
 | 6 | [06 — Snapshot and read-path completion](06-snapshot-read-path-completion.md) | P1 | Coordinate with 05 |
 | 7 | [07 — Migration utility hardening](07-migration-utility-hardening.md) | P1 | Parallel |
 | 8 | [08 — Config ownership and docs cleanup](08-config-and-docs-cleanup.md) | P2 | Parallel |
-| 9 | [09 — Retire the v1 API](09-retire-v1-api.md) | P1 | Parallel; **blocks the 3.0.0 publish step of 02** |
+| 9 | [09 — Retire the v1 API](09-retire-v1-api.md) | ~~P1~~ **DONE 2026-07-15** | was gating the 3.0.0 publish — unblocked |
 | 10 | [10 — Developer-experience modernization](10-dev-experience.md) | P2 | Parallel; best after 09 |
 | 11 | [11 — GIMIE sidecar JSON-LD broken](11-gimie-sidecar-jsonld-broken.md) | **P0 (prod data quality)** | Independent — pre-existing, found in live e2e tests 2026-07-14 |
 

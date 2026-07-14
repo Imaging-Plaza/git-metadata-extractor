@@ -1,7 +1,9 @@
 # Task 09 — Retire the v1 API and legacy pipeline
 
-**Severity:** P1 · **Status:** Ready — must land before the parent `3.0.0`
-publish (see Task 02 sequencing note) · **Repository:** parent
+**Severity:** P1 · **Status: DONE 2026-07-15** (commit `a8d465a` on
+`feat/split-rag-indices` — suite 1502 green, live smoke: `/v1/*` 404,
+extraction works; shared modules moved into v2 homes, see the commit
+message) · **Repository:** parent
 
 ## Objective
 
