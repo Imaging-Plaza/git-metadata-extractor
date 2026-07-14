@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.ethz import (
+from git_metadata_extractor.canonicalization.ethz import (
     ethz_article_iri,
     ethz_org_iri,
     ethz_person_iri,

@@ -5,7 +5,7 @@ an opaque org id.
 """
 from __future__ import annotations
 
-from src.v2.pipeline.stages.reconciliation import _normalize_membership_entities
+from git_metadata_extractor.pipeline.stages.reconciliation import _normalize_membership_entities
 
 
 def _run(org_entity: dict) -> dict:

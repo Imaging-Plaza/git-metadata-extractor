@@ -105,7 +105,7 @@ def _github_org_meta(handle: str, token: str | None) -> tuple[str | None, str | 
 async def _resolve(
     handle: str, homepage: str | None, org_name: str | None, provider: Any,
 ) -> dict[str, Any] | None:
-    from src.v2.pipeline.stages.ownership_check import (  # noqa: PLC0415
+    from git_metadata_extractor.pipeline.stages.ownership_check import (  # noqa: PLC0415
         _github_handle_query_terms,
         _ror_candidate_shortlist,
         _select_ror_parent,
@@ -127,7 +127,7 @@ async def _resolve(
 
 
 async def run(rows: list[GoldRow], token: str | None) -> None:
-    from src.v2.ingest.providers.ror_provider import RealRORProvider  # noqa: PLC0415
+    from git_metadata_extractor.providers.ror_provider import RealRORProvider  # noqa: PLC0415
 
     provider = RealRORProvider()
     suspect_total = suspect_resolved_away = 0

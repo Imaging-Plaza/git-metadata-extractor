@@ -122,7 +122,7 @@ For production resilience, this repository may apply **local monkeypatches** (no
 - Patch **`send_rest_query`** so **204** → **`[]`**.
 - Patch **`GithubExtractor.list_files`** so **`object is None`** → **`[]`**.
 - Wrap **`CffParser.parse`**: normalize fixable reversed day/month dates; **quote** remaining invalid `YYYY-M-D` tokens on known keys (`date-released`, `date-published`, `date-last-released`) so PyYAML returns strings.
-- **GIMIE route** (`src/api.py`): explicit **`ConnectionError`** handling → **429** / **503** with GitHub’s message in **`detail`**.
+- **GIMIE route** (`git_metadata_extractor/app.py`): explicit **`ConnectionError`** handling → **429** / **503** with GitHub’s message in **`detail`**.
 
 ---
 

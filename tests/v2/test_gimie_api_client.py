@@ -7,12 +7,12 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from src.v2.ingest.providers.gimie_extract import extract_gimie
-from src.v2.ingest.providers.gimie_api_client import (
+from git_metadata_extractor.providers.gimie_extract import extract_gimie
+from git_metadata_extractor.providers.gimie_api_client import (
     extract_gimie_via_api,
     gimie_api_base,
 )
-from src.v2.ingest.providers.github_provider import RealGitHubProvider
+from git_metadata_extractor.providers.github_provider import RealGitHubProvider
 
 if TYPE_CHECKING:
     import pytest
@@ -99,7 +99,7 @@ def test_extract_jsonld_node_survives_repository_extraction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The expanded list must be consumable by the provider's node finder.
-    from src.v2.ingest.providers.github_provider import _extract_repository_node
+    from git_metadata_extractor.providers.github_provider import _extract_repository_node
 
     _enable(monkeypatch)
     session = _FakeSession(_FakeResp(200, {"output": _TTL}))
@@ -162,7 +162,7 @@ def test_intermediate_routes_to_api_when_url_set(monkeypatch: pytest.MonkeyPatch
     _enable(monkeypatch)
     sentinel = {"@graph": []}
     monkeypatch.setattr(
-        "src.v2.ingest.providers.gimie_api_client.extract_gimie_via_api",
+        "git_metadata_extractor.providers.gimie_api_client.extract_gimie_via_api",
         lambda full_path, fmt="json-ld": sentinel,  # noqa: ARG005
     )
     assert extract_gimie("https://github.com/acme/tool") is sentinel

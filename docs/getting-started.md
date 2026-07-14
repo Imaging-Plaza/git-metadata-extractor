@@ -19,13 +19,12 @@ cp .env.example .env
 Required to serve `/v2/extract`:
 
 - `GME_GITHUB_TOKEN` — `/v2/health` flips to `degraded` without it.
-- `API_TOKEN` — bearer token guarding every `/v1/*` route plus
-  `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
+- `API_TOKEN` — bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
   every protected request returns `503` (no dev bypass). Generate with
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`. See
   [Authentication](v2-api-reference.md#authentication).
 - One LLM credential (validated at startup against the active model
-  profile in `src/v2/agents/llm/model_config.py`):
+  profile in `git_metadata_extractor/agents/llm/model_config.py`):
   - `RCP_TOKEN` (EPFL RCP), or
   - `OPENAI_API_KEY`, or
   - `OPENROUTER_API_KEY`.
@@ -71,7 +70,7 @@ and `.env.example`):
 ## 3. Run the API locally
 
 ```bash
-just serve-dev            # uvicorn + auto-reload on src/**/*.py
+just serve-dev            # uvicorn + auto-reload on package *.py changes
 ```
 
 Default port is `1234`. Override with `HOST=0.0.0.0 PORT=8080 just serve-dev`.
@@ -180,9 +179,9 @@ flowchart LR
 
 ## CLI status
 
-- The primary production interface is the FastAPI service (`src/api.py`).
+- The primary production interface is the FastAPI service (`git_metadata_extractor/app.py`).
 - For batch extractions: `scripts/v2/batch_extract.sh` reads a hardcoded
   URL list and drives `/v2/extract` with configurable parallelism
   (resumable — skips already-completed result files).
-- Each RAG index ships its own CLI (`python -m src.index.<name>`) wired
-  up via `just <prefix>-*` recipes.
+- The RAG index CLIs live in the
+  [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) repo.

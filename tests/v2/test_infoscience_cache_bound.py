@@ -5,7 +5,7 @@ size-bounded FIFO cache.
 """
 from __future__ import annotations
 
-from src.v2.ingest.infoscience import _BoundedStrCache
+from git_metadata_extractor.providers.infoscience import _BoundedStrCache
 
 
 def test_evicts_oldest_past_maxsize():

@@ -8,9 +8,9 @@ from typing import Any
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.v2.api import v2_router
-from src.v2.api_models.contracts import V2HealthResponse
-from src.v2.observation.github_rate_limit import GitHubRateLimitSummary
+from git_metadata_extractor.api import v2_router
+from git_metadata_extractor.api_models.contracts import V2HealthResponse
+from git_metadata_extractor.observation.github_rate_limit import GitHubRateLimitSummary
 
 HTTP_OK = 200
 PACKAGE_NAME = "git-metadata-extractor"
@@ -61,7 +61,7 @@ def test_health_returns_healthy_when_all_checks_pass(
 ) -> None:
     monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
     monkeypatch.setattr(
-        "src.v2.api.probe_github_rate_limit",
+        "git_metadata_extractor.api.probe_github_rate_limit",
         lambda: _healthy_rate_limit_summary(),
     )
 

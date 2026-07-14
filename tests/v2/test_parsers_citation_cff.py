@@ -1,4 +1,4 @@
-"""Tests for `src.v2.parsers.citation_cff.parse_citation_cff`.
+"""Tests for `git_metadata_extractor.parsers.citation_cff.parse_citation_cff`.
 
 Layer 1 contract: pure parser, no enrichment. We pin every section
 of the v1.2.0 schema we surface, plus failure modes (malformed
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import textwrap
 
-from src.v2.parsers.citation_cff import parse_citation_cff
+from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
 
 
 # ---------------------------------------------------------------------------

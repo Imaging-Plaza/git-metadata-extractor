@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 from jsonschema import validate
 
-from src.v2.agents.llm.contribution import LLMContributionAgentV2
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents.llm.contribution import LLMContributionAgentV2
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29
@@ -66,7 +66,7 @@ def _person_and_repo_context() -> dict[str, Any]:
 
     `target_person` / `target_repository` are required by
     `LLMContributionAgentV2.run()` (see the orphan-Contribution guard in
-    `src/v2/agents/llm/contribution/agent.py`): when missing, the agent
+    `git_metadata_extractor/agents/llm/contribution/agent.py`): when missing, the agent
     fail-closes and emits `{}` so no Contribution can leak into the graph
     without both `schema:author` and `pulse:contributionTo`.
     """

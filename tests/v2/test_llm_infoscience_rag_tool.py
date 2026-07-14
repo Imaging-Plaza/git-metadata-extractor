@@ -13,12 +13,12 @@ from open_pulse_sources.index.infoscience.store import (
     ORGANIZATIONS_COLLECTION,
     PERSONS_COLLECTION,
 )
-from src.v2.agents.llm.agent_tools.infoscience_rag import (
+from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (
     make_infoscience_rag_fetch_chunks_tool,
     make_infoscience_rag_fetch_records_tool,
     make_infoscience_rag_search_tool,
 )
-from src.v2.ingest.providers.infoscience_rag import InfoscienceRagProvider
+from git_metadata_extractor.providers.infoscience_rag import InfoscienceRagProvider
 
 
 class _FakeStore:

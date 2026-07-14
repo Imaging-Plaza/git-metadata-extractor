@@ -72,7 +72,7 @@ it. Typical shapes:
 - group:   `https://<host>/groups/<full_path>`
 - user:    `https://<host>/<username>`
 
-New module `src/v2/canonicalization/gitlab.py`:
+New module `git_metadata_extractor/canonicalization/gitlab.py`:
 `gitlab_iri(host, kind, path)` (builder used only when we have a bare path and
 no `web_url`; idempotent) + `parse_gitlab_iri(url)` (inverse →
 `(host, kind, path)`). Mirrors the infoscience/ethz canonicalizers. The DuckDB
@@ -139,7 +139,7 @@ them by disk and they appear in `GET /v2/manifest` automatically.
 
 ## Incremental delivery (PR per phase, full `tests/v2/` gate each)
 
-- **Phase 1 — template**: `src/v2/canonicalization/gitlab.py`, `_gitlab_base`
+- **Phase 1 — template**: `git_metadata_extractor/canonicalization/gitlab.py`, `_gitlab_base`
   (client + bases), and **one** store end-to-end: `gitlab_epfl_projects`
   (high-value, bounded). Proves the pattern.
 - **Phase 2 — fan out self-hosted**: the remaining epfl/ethz/datascience types

@@ -7,8 +7,8 @@ query during extraction.
 
 The system is **two cooperating services in two repositories**:
 
-1. **Extraction service** (this repo: `src/v1/`, `src/v2/`) — the FastAPI
-   app. V1 is frozen; all new work targets V2 under `src/v2/`.
+1. **Extraction service** (this repo: `git_metadata_extractor/`) — the
+   FastAPI app serving `/v2/extract` (the legacy v1 API was removed in 3.0.0).
 2. **RAG indices** —
    [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources):
    independent Qdrant + DuckDB indices over HuggingFace, OpenAlex,
@@ -39,11 +39,10 @@ deterministic rule-based). Other stages run unconditionally.
 
 ```mermaid
 flowchart TB
-    A[Client / batch script] --> B[FastAPI app<br/>src/api.py]
-    B --> V2[/v2/extract /v2/jobs /v2/graph<br/>src/v2/api.py/]
-    B --> V1[/v1/* legacy frozen/]
+    A[Client / batch script] --> B[FastAPI app<br/>git_metadata_extractor/app.py]
+    B --> V2[/v2/extract /v2/jobs /v2/graph<br/>git_metadata_extractor/api.py/]
 
-    V2 --> P[Pipeline orchestrator<br/>src/v2/pipeline/orchestrator.py]
+    V2 --> P[Pipeline orchestrator<br/>git_metadata_extractor/pipeline/orchestrator.py]
     P --> CTX[context_summary]
     CTX --> AG[per-entity agents<br/>repo / person / org / article / membership / contribution]
     AG --> DEDUP[llm_dedup → reconcile → llm_critic]
@@ -52,7 +51,7 @@ flowchart TB
     LV --> OWN[ownership + org-hierarchy inference]
     OWN --> OUT[build_jsonld_output]
 
-    AG -. RAG tools .-> RAG[src/v2/ingest/providers/*_rag.py]
+    AG -. RAG tools .-> RAG[git_metadata_extractor/providers/*_rag.py]
     RAG --> Q[(Qdrant<br/>gme-qdrant:6333)]
     RAG --> RCP[EPFL RCP<br/>embed + rerank]
 ```

@@ -90,10 +90,13 @@ docs = [
     "pymdown-extensions>=10.14.0"
 ]
 
+[tool.setuptools.packages.find]
+include = ["git_metadata_extractor*"]
+
 [tool.setuptools.package-data]
 # Ship the open-pulse ontology TTL (and any other in-package data) inside
-# the wheel — the SHACL gate loads it at runtime from src/v2/validation/.
-# The Docker image also gets it via `COPY src ./src`; this covers pip installs.
+# the wheel — the SHACL gate loads it at runtime from git_metadata_extractor/validation/.
+# The Docker image also gets it via the package COPY; this covers pip installs.
 "*" = ["*.ttl"]
 
 [tool.ruff]
@@ -107,7 +110,6 @@ ignore = ["S101","T201", "G004", "E501", "FA100"]
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
-"src/test/*.py" = ["E402"]
 
 [tool.pytest.ini_options]
 markers = [

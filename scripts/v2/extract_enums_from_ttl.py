@@ -24,9 +24,9 @@ def _compact_identifier(uri: str) -> str:
 def default_ttl_path() -> Path:
     # Single source of truth: resolve via the runtime helper so this dev
     # script and the SHACL validator always read the same packaged TTL
-    # (the file moved from `dev/` into `src/v2/validation/` so it ships in
-    # the image — see src.v2.validation.ontology).
-    from src.v2.validation.ontology import ontology_ttl_path
+    # (the file moved from `dev/` into `git_metadata_extractor/validation/` so it ships in
+    # the image — see git_metadata_extractor.validation.ontology).
+    from git_metadata_extractor.validation.ontology import ontology_ttl_path
 
     return ontology_ttl_path()
 

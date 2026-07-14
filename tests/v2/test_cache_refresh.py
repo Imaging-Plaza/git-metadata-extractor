@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.v2.ingest.cache import (
+from git_metadata_extractor.providers.cache import (
     ProviderCache,
     cache_refresh_active,
     reset_cache_refresh,
@@ -63,7 +63,7 @@ def test_refresh_default_is_off() -> None:
 
 
 def test_extract_request_has_refresh_field() -> None:
-    from src.v2.api_models.contracts import V2ExtractRequest
+    from git_metadata_extractor.api_models.contracts import V2ExtractRequest
 
     req = V2ExtractRequest(source_url="https://github.com/x/y", refresh=True)
     assert req.refresh is True

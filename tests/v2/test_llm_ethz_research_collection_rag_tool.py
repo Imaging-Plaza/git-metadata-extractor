@@ -13,12 +13,12 @@ from open_pulse_sources.index.ethz_research_collection.store import (
     ORGANIZATIONS_COLLECTION,
     PERSONS_COLLECTION,
 )
-from src.v2.agents.llm.agent_tools.ethz_research_collection_rag import (
+from git_metadata_extractor.agents.llm.agent_tools.ethz_research_collection_rag import (
     make_ethz_research_collection_rag_fetch_chunks_tool,
     make_ethz_research_collection_rag_fetch_records_tool,
     make_ethz_research_collection_rag_search_tool,
 )
-from src.v2.ingest.providers.ethz_research_collection_rag import EthzResearchCollectionRagProvider
+from git_metadata_extractor.providers.ethz_research_collection_rag import EthzResearchCollectionRagProvider
 
 
 class _FakeStore:

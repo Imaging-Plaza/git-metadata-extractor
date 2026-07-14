@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from src.v2.api import _auto_ingest_enabled
+from git_metadata_extractor.api import _auto_ingest_enabled
 
 CANON = "V2_GITHUB_REPOS_RAG_AUTO_INGEST"
 ALIAS = "V2_GITHUB_RAG_AUTO_INGEST"

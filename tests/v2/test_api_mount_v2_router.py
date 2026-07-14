@@ -5,13 +5,13 @@ from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 
-from src.api import app as main_app
-from src.api import index
-from src.v2.agents import ProviderSet
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
-from src.v2.ingest.providers.mock_ror import MockRORProvider
+from git_metadata_extractor.app import app as main_app
+from git_metadata_extractor.app import index
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
+from git_metadata_extractor.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 # The v2 conftest `_isolate_v2_runtime_env` autouse fixture sets

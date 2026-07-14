@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.agents.models import ProviderSet
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.validate_org_github_handles import (
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.validate_org_github_handles import (
     validate_org_github_handles,
 )
 

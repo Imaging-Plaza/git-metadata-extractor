@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.v2.pipeline.stages.link_veracity import promote_failed_id_entities
-from src.v2.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.pipeline.stages.link_veracity import promote_failed_id_entities
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput
 
 
 def _person_with_orcid_and_github() -> dict:

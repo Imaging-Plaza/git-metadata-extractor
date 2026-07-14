@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.agents.runtime import AgentRuntime
-from src.v2.config import V2Config
+from git_metadata_extractor.agents.runtime import AgentRuntime
+from git_metadata_extractor.config import V2Config
 
 V2_CONFIG_ENV_KEYS = {
     "GME_GITHUB_TOKEN",

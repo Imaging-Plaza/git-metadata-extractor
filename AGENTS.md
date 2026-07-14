@@ -15,14 +15,14 @@ agents to produce a graph of `schema:SoftwareSourceCode`,
 `pulse:Contribution`, and `schema:ScholarlyArticle` entities.
 
 The legacy v1 API was **removed in 3.0.0** (repo-split release). All work
-targets V2 under `src/v2/`; `docs/migration-v1-to-v2.md` maps the removed
+targets V2 under `git_metadata_extractor/`; `docs/migration-v1-to-v2.md` maps the removed
 endpoints for old consumers.
 
 ## Code map
 
 ```
-src/api.py                       # FastAPI app: mounts the /v2 router + /docs UI
-src/v2/
+git_metadata_extractor/app.py                       # FastAPI app: mounts the /v2 router + /docs UI
+git_metadata_extractor/
   api.py                         # /v2/extract endpoint + pipeline driver
   jobs.py                        # async job store backing POST /v2/extract
   config.py                      # config knobs
@@ -192,7 +192,7 @@ addressed deterministically:
 **Auth:** `/v2/extract` and `/v2/jobs/{id}` require
 `Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
 `/docs`, and `/v2/health` are open. The dependency lives in
-`src/v2/auth.py::verify_token`.
+`git_metadata_extractor/auth.py::verify_token`.
 
 ## Configuration (env vars)
 
@@ -285,12 +285,12 @@ isolated and independently invalidatable.
 
 JSON Schemas live in **three byte-identical copies** that must stay in sync:
 
-1. `src/v2/schema/json/{type}/{entity}.schema.json` (source)
+1. `git_metadata_extractor/schema/json/{type}/{entity}.schema.json` (source)
 2. `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted)
 3. `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture)
 
 After any schema edit: copy to all three and run `just v2-models-generate`
-to regenerate Pydantic models in `src/v2/schema/models/`. `just v2-models-check`
+to regenerate Pydantic models in `git_metadata_extractor/schema/models/`. `just v2-models-check`
 in CI catches drift.
 
 ## Identifier conventions
@@ -303,7 +303,7 @@ in CI catches drift.
 - **Contribution**: `{person_id}_{repo_id}` composite
 
 `identifiers.uuid` is always a server-generated UUIDv4 (via
-`src/v2/agents/models.py::generate_uuid()`); the LLM never controls it.
+`git_metadata_extractor/agents/models.py::generate_uuid()`); the LLM never controls it.
 
 ## Internal pipeline metadata
 

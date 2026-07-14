@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from src.v2 import api as v2_api
+from git_metadata_extractor import api as v2_api
 
 
 @pytest.fixture
@@ -133,7 +133,7 @@ def test_auto_ingest_constructs_github_client_with_keyword_args(
         monkeypatch, config=fake_config, client_cls=_GitHubClientSpy,
     ):
         async def _drive() -> None:
-            with caplog.at_level(logging.INFO, logger="src.v2.api"):
+            with caplog.at_level(logging.INFO, logger="git_metadata_extractor.api"):
                 v2_api._maybe_schedule_github_repos_auto_ingest(
                     classification=fake_classification, run_id="test-run",
                 )

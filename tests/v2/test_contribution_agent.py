@@ -7,8 +7,8 @@ from uuid import UUID
 
 from jsonschema import validate
 
-from src.v2.agents import ContributionAgentV2, ProviderSet
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ContributionAgentV2, ProviderSet
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_CONTRIBUTION_COUNT = 1  # alice only — bob's count=0+null-dates edge dropped
 EXPECTED_ALICE_CONTRIBUTION_COUNT = 7

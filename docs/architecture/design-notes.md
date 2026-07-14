@@ -10,15 +10,15 @@ flowchart TB
         C1[HTTP client / batch script]
     end
 
-    subgraph API[FastAPI app — src/api.py]
-        A1[v2_router<br/>src/v2/api.py]
+    subgraph API[FastAPI app — git_metadata_extractor/app.py]
+        A1[v2_router<br/>git_metadata_extractor/api.py]
         A2[Request logging<br/>AsyncRequestContext]
     end
 
-    subgraph Pipeline[V2 pipeline — src/v2/pipeline/]
+    subgraph Pipeline[V2 pipeline — git_metadata_extractor/pipeline/]
         P0[orchestrator]
         P1[stages/* — 23 stages]
-        P2[per-entity agents<br/>src/v2/agents/llm/* + rule_based/*]
+        P2[per-entity agents<br/>git_metadata_extractor/agents/llm/* + rule_based/*]
     end
 
     subgraph Caches[Shared SQLite — V2_PROVIDER_CACHE_PATH]
@@ -28,7 +28,7 @@ flowchart TB
         K4[Async-job store]
     end
 
-    subgraph Providers[src/v2/ingest/providers/]
+    subgraph Providers[git_metadata_extractor/providers/]
         PG[GitHub REST + GIMIE]
         PR[ROR / ORCID / Infoscience]
         PRAG[*_rag — Qdrant-backed]
@@ -199,6 +199,6 @@ per-index quickstarts.
   stripped before strict validation, JSON-LD output, and any external
   artefact. Never expose `_`-prefixed fields in API responses.
 - `identifiers.uuid` on every entity is server-generated
-  (`src/v2/agents/models.py::generate_uuid()`); the LLM never controls it.
+  (`git_metadata_extractor/agents/models.py::generate_uuid()`); the LLM never controls it.
 - See [V2 API Reference](../v2-api-reference.md) for the full 23-stage
   pipeline and gating rules.

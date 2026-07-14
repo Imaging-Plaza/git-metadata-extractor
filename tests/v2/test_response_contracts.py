@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.v2.api_models.contracts import (
+from git_metadata_extractor.api_models.contracts import (
     V2ExtractResponse,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,

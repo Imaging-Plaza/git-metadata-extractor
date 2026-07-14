@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.agents.llm.agent_tools.github_organization import (
+from git_metadata_extractor.agents.llm.agent_tools.github_organization import (
     make_github_organization_metadata_tool,
 )
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.v2.ingest.github_accounts.models import Person
-from src.v2.pipeline.stages.privacy import anonymize_email
-from src.v2.pipeline.stages.reconciliation import reconcile_entities
+from git_metadata_extractor.providers.github_accounts.models import Person
+from git_metadata_extractor.pipeline.stages.privacy import anonymize_email
+from git_metadata_extractor.pipeline.stages.reconciliation import reconcile_entities
 
 
 def _v1_anonymized_email(email: str) -> str:

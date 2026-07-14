@@ -14,8 +14,8 @@ import asyncio
 
 import pytest
 
-from src.v2.ingest.providers.ror_provider import _normalize_ror_organization
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.providers.ror_provider import _normalize_ror_organization
+from git_metadata_extractor.pipeline.stages.ownership_check import (
     _org_domain_label,
     _registrable_label,
     _ror_domain_labels,

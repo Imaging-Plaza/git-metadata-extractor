@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 # Module-level env defaults — must land BEFORE pytest discovers tests, since
-# the `_isolate_main_app_state` autouse fixture imports `src.api`, which
+# the `_isolate_main_app_state` autouse fixture imports `git_metadata_extractor.app`, which
 # pulls in `src/v1/parsers/orgs_parser.py` whose top-level reads
 # `os.environ["GME_GITHUB_TOKEN"]` unconditionally and raises KeyError when the
 # var is missing (observed in CI where `setup-python` does not provide one).
@@ -88,8 +88,8 @@ def _isolate_v2_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
 @pytest.fixture(autouse=True)
 def _isolate_main_app_state() -> Iterator[None]:
-    """Prevent tests mutating src.api.app.state from leaking across tests."""
-    from src.api import app as main_app  # noqa: PLC0415
+    """Prevent tests mutating git_metadata_extractor.app.app.state from leaking across tests."""
+    from git_metadata_extractor.app import app as main_app  # noqa: PLC0415
 
     sentinel = object()
     original_values: dict[str, object] = {}

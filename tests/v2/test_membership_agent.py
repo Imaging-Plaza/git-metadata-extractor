@@ -7,8 +7,8 @@ from uuid import UUID
 
 from jsonschema import validate
 
-from src.v2.agents import MembershipAgentV2, ProviderSet
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import MembershipAgentV2, ProviderSet
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_MEMBERSHIP_COUNT = 2
 UUID_VERSION_4 = 4

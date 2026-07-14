@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.v2.ingest.providers import gimie_extract as gimie_methods
+from git_metadata_extractor.providers import gimie_extract as gimie_methods
 
 
 class _StubGraph:

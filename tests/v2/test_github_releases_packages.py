@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.ingest.providers.github_provider import RealGitHubProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.providers.github_provider import RealGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 class _FakeResponse:
@@ -41,7 +41,7 @@ def _build_provider() -> RealGitHubProvider:
 
 
 def _patch_get(*responses_or_side_effect: Any, side_effect: Any = None):
-    target = "src.v2.ingest.providers.github_provider.requests.get"
+    target = "git_metadata_extractor.providers.github_provider.requests.get"
     if side_effect is not None:
         return patch(target, side_effect=side_effect)
     if len(responses_or_side_effect) == 1:

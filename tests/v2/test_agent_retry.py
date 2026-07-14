@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents.models import AgentResult
-from src.v2.agents.retry import with_retry
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.agents.retry import with_retry
 
 INITIAL_RETRY_COUNT = 0
 ONE_RETRY = 1

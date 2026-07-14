@@ -8,7 +8,7 @@ import pytest
 from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, XSD
 
-from src.v2.validation.ontology import ontology_ttl_path
+from git_metadata_extractor.validation.ontology import ontology_ttl_path
 
 SH = Namespace("http://www.w3.org/ns/shacl#")
 SCHEMA = Namespace("http://schema.org/")
@@ -18,7 +18,7 @@ PULSE = Namespace("https://open-pulse.epfl.ch/ontology#")
 WD = Namespace("http://www.wikidata.org/entity/")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STRICT_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schema" / "json" / "strict"
+STRICT_SCHEMA_DIR = REPO_ROOT / "git_metadata_extractor" / "schema" / "json" / "strict"
 
 SHAPE_SCHEMA_MAP = {
     "PersonShape": "person.schema.json",

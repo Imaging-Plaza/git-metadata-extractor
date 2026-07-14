@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from src.v2.ingest.infoscience_models import InfoscienceAuthor, InfoscienceSearchResult
-from src.v2.ingest.github_accounts.orgs_parser import GitHubOrganizationsParser
-from src.v2.ingest.github_accounts.users_parser import GitHubUsersParser
-from src.v2.ingest.providers import (
+from git_metadata_extractor.providers.infoscience_models import InfoscienceAuthor, InfoscienceSearchResult
+from git_metadata_extractor.providers.github_accounts.orgs_parser import GitHubOrganizationsParser
+from git_metadata_extractor.providers.github_accounts.users_parser import GitHubUsersParser
+from git_metadata_extractor.providers import (
     BaseProvider,
     GitHubProvider,
     InfoscienceProvider,
@@ -20,14 +20,14 @@ from src.v2.ingest.providers import (
     RORProvider,
     get_provider,
 )
-from src.v2.ingest.providers.base import (
+from git_metadata_extractor.providers.base import (
     INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
     INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
 )
-from src.v2.ingest.providers.github_provider import RealGitHubProvider
-from src.v2.ingest.providers.infoscience_provider import RealInfoscienceProvider
-from src.v2.ingest.providers.orcid_provider import RealORCIDProvider
-from src.v2.ingest.providers.ror_provider import RealRORProvider
+from git_metadata_extractor.providers.github_provider import RealGitHubProvider
+from git_metadata_extractor.providers.infoscience_provider import RealInfoscienceProvider
+from git_metadata_extractor.providers.orcid_provider import RealORCIDProvider
+from git_metadata_extractor.providers.ror_provider import RealRORProvider
 
 STATUS_ERROR_THRESHOLD = 400
 

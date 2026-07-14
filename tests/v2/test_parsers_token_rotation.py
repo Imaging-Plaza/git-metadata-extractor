@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.utils import github_token_pool
-from src.v2.ingest.github_accounts.orgs_parser import GitHubOrganizationsParser
-from src.v2.ingest.github_accounts.users_parser import GitHubUsersParser
+from git_metadata_extractor.providers import github_token_pool
+from git_metadata_extractor.providers.github_accounts.orgs_parser import GitHubOrganizationsParser
+from git_metadata_extractor.providers.github_accounts.users_parser import GitHubUsersParser
 
 
 class _StubResponse:
@@ -48,7 +48,7 @@ def _capture_auth_headers(monkeypatch, module) -> list[str]:
 def test_users_parser_rotates_across_pool(monkeypatch):
     monkeypatch.setenv("GME_GITHUB_TOKEN_POOL", "ghp_a,ghp_b,ghp_c")
 
-    from src.v2.ingest.github_accounts import users_parser
+    from git_metadata_extractor.providers.github_accounts import users_parser
 
     captured = _capture_auth_headers(monkeypatch, users_parser)
 
@@ -70,7 +70,7 @@ def test_users_parser_rotates_across_pool(monkeypatch):
 def test_orgs_parser_rotates_across_pool(monkeypatch):
     monkeypatch.setenv("GME_GITHUB_TOKEN_POOL", "ghp_x,ghp_y")
 
-    from src.v2.ingest.github_accounts import orgs_parser
+    from git_metadata_extractor.providers.github_accounts import orgs_parser
 
     captured = _capture_auth_headers(monkeypatch, orgs_parser)
 
@@ -89,7 +89,7 @@ def test_orgs_parser_rotates_across_pool(monkeypatch):
 def test_users_parser_graphql_uses_rotated_token(monkeypatch):
     monkeypatch.setenv("GME_GITHUB_TOKEN_POOL", "ghp_g1,ghp_g2")
 
-    from src.v2.ingest.github_accounts import users_parser
+    from git_metadata_extractor.providers.github_accounts import users_parser
 
     captured: list[str] = []
 

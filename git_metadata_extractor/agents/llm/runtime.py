@@ -1,0 +1,389 @@
+from __future__ import annotations
+
+import inspect
+import json
+import logging
+import os
+from contextvars import ContextVar
+from dataclasses import dataclass
+from time import perf_counter
+from typing import Any
+
+from pydantic_ai import Agent
+from pydantic_ai.usage import UsageLimits
+
+from git_metadata_extractor.agents.llm.model_config import (
+    create_pydantic_ai_model,
+    get_model_parameters,
+    load_model_config,
+    validate_config,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class LLMRuntimeResult:
+    payload: dict[str, Any]
+    model: str
+    provider: str
+    tokens_prompt: int | None = None
+    tokens_completion: int | None = None
+    requests: int | None = None
+    tool_calls: int | None = None
+
+
+class LLMRuntimeError(RuntimeError):
+    """Base error for v2 LLM runtime failures."""
+
+
+class LLMRuntimeConfigError(LLMRuntimeError):
+    """Raised when runtime model configuration is invalid or incomplete."""
+
+
+class LLMRuntimeResponseError(LLMRuntimeError):
+    """Raised when model output is not a valid JSON object payload."""
+
+
+def _required_env_vars_for_config(config: dict[str, Any]) -> list[str]:
+    """Return env var names required by a provider config."""
+
+    provider = str(config.get("provider", "")).strip().lower()
+    if provider == "openai":
+        return ["OPENAI_API_KEY"]
+    if provider == "openrouter":
+        return ["OPENROUTER_API_KEY"]
+    if provider == "openai-compatible":
+        api_key_env = config.get("api_key_env")
+        if isinstance(api_key_env, str) and api_key_env.strip():
+            return [api_key_env.strip()]
+        return ["OPENAI_API_KEY"]
+    return []
+
+
+def _extract_usage_tokens(usage: Any) -> tuple[int | None, int | None]:
+    """Extract prompt/completion token counts from provider usage payloads."""
+
+    prompt_tokens = getattr(usage, "input_tokens", None)
+    completion_tokens = getattr(usage, "output_tokens", None)
+
+    if (prompt_tokens in (None, 0)) and (completion_tokens in (None, 0)):
+        details = getattr(usage, "details", None)
+        if isinstance(details, dict):
+            prompt_tokens = details.get("input_tokens")
+            completion_tokens = details.get("output_tokens")
+
+    normalized_prompt = (
+        int(prompt_tokens) if isinstance(prompt_tokens, int) and prompt_tokens >= 0 else None
+    )
+    normalized_completion = (
+        int(completion_tokens)
+        if isinstance(completion_tokens, int) and completion_tokens >= 0
+        else None
+    )
+    return normalized_prompt, normalized_completion
+
+
+def _extract_usage_counts(usage: Any) -> tuple[int | None, int | None]:
+    """Extract request/tool-call counts from usage payloads."""
+
+    requests = getattr(usage, "requests", None)
+    tool_calls = getattr(usage, "tool_calls", None)
+    normalized_requests = int(requests) if isinstance(requests, int) and requests >= 0 else None
+    normalized_tool_calls = (
+        int(tool_calls) if isinstance(tool_calls, int) and tool_calls >= 0 else None
+    )
+    return normalized_requests, normalized_tool_calls
+
+
+_DEFAULT_REQUEST_LIMIT_ENV = "V2_LLM_REQUEST_LIMIT"
+_DEFAULT_TOOL_CALLS_LIMIT_ENV = "V2_LLM_TOOL_CALLS_LIMIT"
+_DEFAULT_REQUEST_LIMIT = 25
+_DEFAULT_TOOL_CALLS_LIMIT = 50
+
+
+def _coerce_positive_int_env(name: str, fallback: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return fallback
+    return max(1, value)
+
+
+_DEFAULT_LLM_TIMEOUT_SECONDS = 120.0
+_LLM_TIMEOUT_ENV = "V2_LLM_TIMEOUT_SECONDS"
+
+
+def _default_timeout_seconds() -> float:
+    """Per-request timeout floor for the LLM chat call.
+
+    Without it, a chat request to an unreachable/misconfigured provider
+    (empty key, wrong base_url, dead host) blocks the agent — and the single
+    extract worker — *forever*: the job never returns and can't be cancelled.
+    Applying a default per-request timeout turns that into a bounded failure
+    (the call raises, surfaced as an LLM runtime error) so the worker frees.
+    Tunable via ``V2_LLM_TIMEOUT_SECONDS``.
+    """
+    raw = os.getenv(_LLM_TIMEOUT_ENV)
+    if raw is None:
+        return _DEFAULT_LLM_TIMEOUT_SECONDS
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        return _DEFAULT_LLM_TIMEOUT_SECONDS
+    return value if value > 0 else _DEFAULT_LLM_TIMEOUT_SECONDS
+
+
+def _default_usage_limits() -> UsageLimits:
+    """Per-agent caps on LLM roundtrips and tool calls.
+
+    Without an explicit cap, observed: the article agent looped >100 tool
+    calls (12 min wall) on a paper-heavy repo, exploring every tool every
+    time. The cap turns runaway loops into clean ``UsageLimitExceeded``
+    errors that the per-stage runner surfaces as a single warning instead
+    of consuming the whole job budget.
+
+    Tunable per deployment via ``V2_LLM_REQUEST_LIMIT`` /
+    ``V2_LLM_TOOL_CALLS_LIMIT``.
+    """
+    return UsageLimits(
+        request_limit=_coerce_positive_int_env(
+            _DEFAULT_REQUEST_LIMIT_ENV, _DEFAULT_REQUEST_LIMIT,
+        ),
+        tool_calls_limit=_coerce_positive_int_env(
+            _DEFAULT_TOOL_CALLS_LIMIT_ENV, _DEFAULT_TOOL_CALLS_LIMIT,
+        ),
+    )
+
+
+def _coerce_output_payload(output: Any) -> dict[str, Any]:
+    """Convert model output into a JSON-object dictionary.
+
+    Pydantic model instances are serialised with ``by_alias=True`` so that
+    ontology field names (e.g. ``schema:name``) are preserved in the result.
+    """
+
+    if hasattr(output, "model_dump"):
+        output = output.model_dump(by_alias=True, mode="json")
+
+    if isinstance(output, str):
+        try:
+            output = json.loads(output)
+        except json.JSONDecodeError as exc:
+            message = "LLM output is not valid JSON"
+            raise LLMRuntimeResponseError(message) from exc
+
+    if not isinstance(output, dict):
+        message = f"LLM output must be a JSON object, got {type(output).__name__}"
+        raise LLMRuntimeResponseError(message)
+
+    return output
+
+
+# --- per-request model override --------------------------------------------
+# Lets a single `/v2/extract` call target a different model/provider (e.g. an
+# RCP OpenAI-compatible chat model) without editing the global deploy config.
+# Carried in a ContextVar so it propagates through the async pipeline without
+# threading it down every agent signature. Honored ONLY when
+# `V2_ALLOW_REQUEST_MODEL_OVERRIDE` is truthy, because an override may carry a
+# `base_url`/`api_key_env` (a request pointing the LLM at an arbitrary host /
+# naming an arbitrary env var is a mild SSRF / secret-surface risk that stays
+# opt-in).
+_REQUEST_OVERRIDE_FLAG_ENV = "V2_ALLOW_REQUEST_MODEL_OVERRIDE"
+_OVERRIDABLE_CONFIG_KEYS = ("provider", "model", "base_url", "api_key_env")
+_request_model_override: ContextVar[dict[str, Any] | None] = ContextVar(
+    "v2_request_model_override", default=None,
+)
+
+
+def set_request_model_override(override: dict[str, Any] | None) -> object:
+    """Set the per-request model override; returns the ContextVar token.
+
+    Pass the token to ``reset_request_model_override`` to restore the previous
+    value when the request finishes. Keys outside ``_OVERRIDABLE_CONFIG_KEYS``
+    and empty values are dropped.
+    """
+    cleaned = (
+        {k: v for k, v in override.items() if k in _OVERRIDABLE_CONFIG_KEYS and v}
+        if override
+        else None
+    )
+    return _request_model_override.set(cleaned or None)
+
+
+def reset_request_model_override(token: object) -> None:
+    _request_model_override.reset(token)  # type: ignore[arg-type]
+
+
+def _request_override_enabled() -> bool:
+    raw = os.getenv(_REQUEST_OVERRIDE_FLAG_ENV)
+    return bool(raw) and raw.strip().lower() in _TRUE_ENV_VALUES
+
+
+_TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
+
+
+def _apply_request_override(config: dict[str, Any]) -> dict[str, Any]:
+    """Merge an active, enabled per-request override onto ``config``."""
+    override = _request_model_override.get()
+    if not override or not _request_override_enabled():
+        return config
+    merged = {**config, **override}
+    logger.info(
+        "LLM runtime: applying per-request model override (provider=%s, model=%s)",
+        merged.get("provider"), merged.get("model"),
+    )
+    return merged
+
+
+class V2LLMRuntime:
+    def __init__(self, *, analysis_type: str = "run_llm_analysis") -> None:
+        self._analysis_type = analysis_type
+
+    def _resolve_model_config(self) -> dict[str, Any]:
+        """Pick the first valid config profile for the runtime analysis type."""
+
+        configs = load_model_config(self._analysis_type)
+        if not isinstance(configs, list) or not configs:
+            message = (
+                "No model configuration available for analysis type "
+                f"'{self._analysis_type}'"
+            )
+            raise LLMRuntimeConfigError(message)
+
+        for config in configs:
+            if isinstance(config, dict) and validate_config(config):
+                # Apply any enabled per-request override before the credential
+                # check so the overridden api_key_env is what gets validated.
+                config = _apply_request_override(config)
+                # Surface missing credentials by env var name only.
+                missing_env_vars = [
+                    env_name
+                    for env_name in _required_env_vars_for_config(config)
+                    if not os.getenv(env_name)
+                ]
+                if missing_env_vars:
+                    env_list = ", ".join(sorted(set(missing_env_vars)))
+                    message = (
+                        "Missing required environment variable(s) for LLM runtime: "
+                        f"{env_list}"
+                    )
+                    raise LLMRuntimeConfigError(message)
+                return dict(config)
+
+        message = f"No valid model configuration found for analysis type '{self._analysis_type}'"
+        raise LLMRuntimeConfigError(message)
+
+    async def run_json_prompt(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        output_type: Any = None,
+        tools: list[Any] | None = None,
+        usage_limits: UsageLimits | None = None,
+    ) -> LLMRuntimeResult:
+        """Execute a prompt and return a structured JSON payload plus metadata.
+
+        Args:
+            system_prompt: System-level instruction for the LLM.
+            user_prompt: User-level prompt containing the context to process.
+            output_type: Pydantic model class to use as the structured output
+                schema. Defaults to ``dict[str, Any]`` when not provided.
+                Passing a Pydantic model class constrains the LLM to produce
+                output that conforms to its schema (first validation pass).
+            usage_limits: Optional pydantic-ai ``UsageLimits``. Defaults to
+                ``_default_usage_limits()``: 25 model requests + 50 tool
+                calls per agent invocation. Observed in profiling: the
+                article agent would loop 100+ tool calls without a cap and
+                spend 12 minutes on a single repo; the default keeps any
+                agent's wall time bounded.
+        """
+
+        resolved_output_type: Any = output_type if output_type is not None else dict[str, Any]
+        config = self._resolve_model_config()
+        model_name = str(config.get("model", "unknown"))
+        provider_name = str(config.get("provider", "unknown"))
+        run_started_at = perf_counter()
+
+        try:
+            model = create_pydantic_ai_model(config)
+            retries = config.get("max_retries")
+            retry_count = retries if isinstance(retries, int) and retries > 0 else 1
+            agent = Agent(
+                model=model,
+                output_type=resolved_output_type,
+                system_prompt=system_prompt,
+                retries=retry_count,
+                tools=tools or [],
+            )
+            run_kwargs: dict[str, Any] = {}
+            run_parameters = inspect.signature(agent.run).parameters
+            model_parameters = dict(get_model_parameters(config))
+            timeout = config.get("timeout")
+            if isinstance(timeout, (int, float)) and timeout > 0:
+                model_parameters["timeout"] = float(timeout)
+            else:
+                # No explicit per-config timeout → apply a default so a stuck
+                # provider call can't hang the worker forever (see #1).
+                model_parameters["timeout"] = _default_timeout_seconds()
+            # Pass model tuning knobs only when the backend supports the kwarg.
+            if model_parameters and "model_settings" in run_parameters:
+                run_kwargs["model_settings"] = model_parameters
+
+            effective_limits = usage_limits or _default_usage_limits()
+            if "usage_limits" in run_parameters:
+                run_kwargs["usage_limits"] = effective_limits
+
+            logger.info(
+                "LLM runtime start (provider=%s, model=%s, tools=%d, "
+                "request_limit=%s, tool_calls_limit=%s)",
+                provider_name,
+                model_name,
+                len(tools or []),
+                effective_limits.request_limit,
+                effective_limits.tool_calls_limit,
+            )
+            result = await agent.run(user_prompt, **run_kwargs)
+        except LLMRuntimeError:
+            raise
+        except Exception as exc:
+            raise LLMRuntimeError(str(exc)) from exc
+
+        output = result.output if hasattr(result, "output") else result
+        payload = _coerce_output_payload(output)
+
+        usage = getattr(result, "usage", None)
+        if callable(usage):
+            usage = usage()
+        tokens_prompt: int | None = None
+        tokens_completion: int | None = None
+        requests: int | None = None
+        tool_calls: int | None = None
+        if usage is not None:
+            tokens_prompt, tokens_completion = _extract_usage_tokens(usage)
+            requests, tool_calls = _extract_usage_counts(usage)
+
+        logger.info(
+            "LLM runtime done in %.1fs (provider=%s, model=%s, prompt_tokens=%s, completion_tokens=%s, requests=%s, tool_calls=%s)",
+            perf_counter() - run_started_at,
+            provider_name,
+            model_name,
+            tokens_prompt,
+            tokens_completion,
+            requests,
+            tool_calls,
+        )
+
+        return LLMRuntimeResult(
+            payload=payload,
+            model=model_name,
+            provider=provider_name,
+            tokens_prompt=tokens_prompt,
+            tokens_completion=tokens_completion,
+            requests=requests,
+            tool_calls=tool_calls,
+        )

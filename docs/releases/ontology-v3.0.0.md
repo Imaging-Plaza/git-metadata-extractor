@@ -17,7 +17,7 @@ provider fields. It merges three sources:
 
 | Source | Contents |
 |---|---|
-| `src/v2/validation/open-pulse-ontology-v2.1.2.ttl` | All current (v2.1.2) terms, carried forward |
+| `git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl` | All current (v2.1.2) terms, carried forward |
 | `.internal/ontology-v3/07-ttl-draft.md` | The proposed v3 additions |
 | `docs/gme-internal.ttl` | The internal (`gme-internal:`) provider vocabulary |
 

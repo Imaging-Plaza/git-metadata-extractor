@@ -3,14 +3,14 @@
 The real implementation lives in `src/index/_shared/doi.py` (used by
 every catalog backend and the citation_cff parser). This test just
 verifies the v2 import alias resolves to the same callable, so v2
-code can `from src.v2.canonicalization import doi_iri, parse_doi`
+code can `from git_metadata_extractor.canonicalization import doi_iri, parse_doi`
 without reaching across the package boundary.
 """
 
 from __future__ import annotations
 
 from open_pulse_sources.index._shared import doi as _shared_doi
-from src.v2.canonicalization import doi_iri, parse_doi
+from git_metadata_extractor.canonicalization import doi_iri, parse_doi
 
 
 def test_v2_re_exports_match_shared_implementation():

@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from src.v2.ingest.providers.gimie_extract import extract_gimie
+from git_metadata_extractor.providers.gimie_extract import extract_gimie
 
 # In-process gimie is optional (deployments use the gimie-api sidecar).
 pytest.importorskip("gimie")

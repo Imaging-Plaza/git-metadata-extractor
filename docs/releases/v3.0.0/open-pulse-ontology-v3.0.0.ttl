@@ -4,7 +4,7 @@
 # Reproduce with:  python3 scripts/build_ontology_v3_docs.py
 #
 # Merge of:
-#   * src/v2/validation/open-pulse-ontology-v2.1.2.ttl  (current release)
+#   * git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl  (current release)
 #   * .internal/ontology-v3/07-ttl-draft.md             (proposed v3 additions)
 #   * docs/gme-internal.ttl                             (internal vocabulary)
 #

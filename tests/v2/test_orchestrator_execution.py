@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents import ProviderSet
-from src.v2.agents.models import AgentResult
-from src.v2.ingest.detection.models import GitHubURLClassification, GitHubURLType
-from src.v2.pipeline import PipelineOrchestrator
-from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.providers.detection.models import GitHubURLClassification, GitHubURLType
+from git_metadata_extractor.pipeline import PipelineOrchestrator
+from git_metadata_extractor.pipeline.stages.models import ContextBundle
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_PARALLEL_AGENT_COUNT = 2
 MAX_PARALLEL_START_DELTA_SECONDS = 0.04

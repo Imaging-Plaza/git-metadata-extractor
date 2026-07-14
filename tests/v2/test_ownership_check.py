@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
+from git_metadata_extractor.pipeline.stages.ownership_check import (
     _synthesize_owner_person_stub,
     guarantee_repo_author,
     infer_owners,
@@ -333,7 +333,7 @@ def test_guarantee_repo_author_person_owner_uses_person_id() -> None:
 def test_entity_github_org_handle_returns_bare_handle_from_canonical_url() -> None:
     """v3.0.0: handles are stored as canonical URLs, but ROR queries +
     handle comparisons need the bare handle (the URL 500s the ROR API)."""
-    from src.v2.pipeline.stages.ownership_check import _entity_github_org_handle
+    from git_metadata_extractor.pipeline.stages.ownership_check import _entity_github_org_handle
 
     assert _entity_github_org_handle(
         {"pulse:githubOrganizationHandle": "https://github.com/epfl-lts2"},

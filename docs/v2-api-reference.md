@@ -24,7 +24,7 @@ The check uses `hmac.compare_digest` for constant-time comparison.
 | Valid token | route's normal response | |
 
 (The legacy `/v1/*` routes were removed in 3.0.0.)
-Implementation lives in `src/v2/auth.py` (`verify_token` dependency).
+Implementation lives in `git_metadata_extractor/auth.py` (`verify_token` dependency).
 
 ## Rate limiting
 
@@ -38,7 +38,7 @@ Clients are keyed by bearer token (falling back to client IP). Exceeding the
 limit returns `429 Too Many Requests` with a `Retry-After` header. The window
 is a fixed 60 s. State is in-memory and **per worker**, so under gunicorn with
 N workers the effective limit is ~N × the configured value — use a shared store
-(e.g. Redis) for a true global cap. Implementation: `src/v2/rate_limit.py`.
+(e.g. Redis) for a true global cap. Implementation: `git_metadata_extractor/rate_limit.py`.
 
 ## Endpoints
 
@@ -255,7 +255,7 @@ deterministic rule-based agents). Other stages run unconditionally.
 
 ## LLM Agent Architecture
 
-Each entity bucket has a dedicated agent under `src/v2/agents/llm/<kind>/agent.py`
+Each entity bucket has a dedicated agent under `git_metadata_extractor/agents/llm/<kind>/agent.py`
 (repository, person, organization, article, membership, contribution).
 Each is a **single pydantic-ai `Agent` call** that produces all output
 fields in one prompt/response round-trip. Hallucination guards baked into
@@ -282,7 +282,7 @@ a `callable` guard).
 LLM agents can call server-side tools during generation. Tools are
 registered per-agent by passing a `tools=[...]` list to
 `V2LLMRuntime.run_json_prompt`, which forwards them to the pydantic-ai
-`Agent`. Shared tools live in `src/v2/agents/llm/agent_tools/` — add a new
+`Agent`. Shared tools live in `git_metadata_extractor/agents/llm/agent_tools/` — add a new
 module there to make a tool available to multiple agents.
 
 Two main families:
@@ -300,14 +300,14 @@ Two main families:
   hashing, UUID generation, DuckDuckGo search.
 
 The full registered set lives in
-`src/v2/agents/llm/agent_tools/__init__.py`.
+`git_metadata_extractor/agents/llm/agent_tools/__init__.py`.
 
 ### Observability
 
-Tool calls emit an INFO log line from `src.v2.agents.llm.agent_tools.<module>`:
+Tool calls emit an INFO log line from `git_metadata_extractor.agents.llm.agent_tools.<module>`:
 
 ```
-INFO src.v2.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
+INFO git_metadata_extractor.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
 ```
 
 If this line is absent after an LLM repository run with

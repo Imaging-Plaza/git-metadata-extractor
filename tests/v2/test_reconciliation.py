@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from src.v2.pipeline.stages.reconciliation import reconcile_entities
+from git_metadata_extractor.pipeline.stages.reconciliation import reconcile_entities
 
 
 def _person(github_username: str, *, affiliations: list[str] | None = None) -> dict:
@@ -83,7 +83,7 @@ def _article(
 
 def _membership(person_ref: str, org_ref: str) -> dict:
     # `__` separator matches the canonical composite ID convention
-    # (see `src/v2/pipeline/stages/reconciliation.py:_extract_composite_pair`).
+    # (see `git_metadata_extractor/pipeline/stages/reconciliation.py:_extract_composite_pair`).
     membership_id = f"{person_ref}__{org_ref}"
     return {
         "id": membership_id,

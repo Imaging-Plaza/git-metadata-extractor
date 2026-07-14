@@ -1,6 +1,6 @@
 # JSON Schemas — interactive graph
 
-The project's JSON-Schema entity contracts (`src/v2/schema/json`) rendered with
+The project's JSON-Schema entity contracts (`git_metadata_extractor/schema/json`) rendered with
 the same interactive graph viewer as the ontology reference: pan, zoom, select a
 node for details, switch layouts, and open full screen.
 
@@ -21,4 +21,4 @@ node for details, switch layouts, and open full screen.
 
 The viewer is generated from the schema files by
 `scripts/build_ontology_v3_docs.py`; edit the schemas under
-`src/v2/schema/json/` and re-run it to refresh.
+`git_metadata_extractor/schema/json/` and re-run it to refresh.

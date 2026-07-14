@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.v2.agents.llm.agent_tools.repository_corpus_grep import (
+from git_metadata_extractor.agents.llm.agent_tools.repository_corpus_grep import (
     make_repository_corpus_grep_tool,
 )
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents import ProviderSet
-from src.v2.agents.models import AgentResult
-from src.v2.pipeline.stages.llm_critic import run_llm_critic_stage
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.pipeline.stages.llm_critic import run_llm_critic_stage
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:

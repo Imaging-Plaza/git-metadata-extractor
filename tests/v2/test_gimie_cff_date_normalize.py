@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import yaml
 
-from src.v2.ingest.providers import gimie_extract as gm
+from git_metadata_extractor.providers import gimie_extract as gm
 
 
 def test_normalize_cff_swaps_day_month_when_middle_gt_12():

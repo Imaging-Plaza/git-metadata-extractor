@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.v2.ingest.cache import ProviderCache
-from src.v2.ingest.providers.orcid_provider import (
+from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.providers.orcid_provider import (
     EXPANDED_SEARCH_EDISMAX,
     RealORCIDProvider,
 )

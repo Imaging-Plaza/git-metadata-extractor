@@ -6,9 +6,9 @@ RAG indices see [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-
 
 ## Main entrypoints
 
-- API app: `src/api.py` — mounts the `/v2/*` router (v1 was removed in 3.0.0).
-- V2 router: `src/v2/api.py`.
-- V2 pipeline driver: `src/v2/pipeline/orchestrator.py`.
+- API app: `git_metadata_extractor/app.py` — mounts the `/v2/*` router (v1 was removed in 3.0.0).
+- V2 router: `git_metadata_extractor/api.py`.
+- V2 pipeline driver: `git_metadata_extractor/pipeline/orchestrator.py`.
 
 ## Authentication
 

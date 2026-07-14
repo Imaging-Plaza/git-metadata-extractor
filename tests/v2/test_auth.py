@@ -7,12 +7,12 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.v2.agents import ProviderSet
-from src.v2.api import v2_router
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
-from src.v2.ingest.providers.mock_ror import MockRORProvider
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.api import v2_router
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
+from git_metadata_extractor.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 HTTP_UNAUTHORIZED = 401

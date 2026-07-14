@@ -19,7 +19,7 @@ RUN useradd -ms /bin/bash -u 1000 non-root-user \
     && echo "non-root-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 WORKDIR /app
-COPY src ./src
+COPY git_metadata_extractor ./git_metadata_extractor
 # Ship the RAG index configs (config/index/*.yaml) — without them every
 # index provider fails `load_config()` and silently disables itself.
 # Deploy-specific values (Qdrant URL, tokens, scope) stay env-overridable.
@@ -46,10 +46,10 @@ RUN mkdir -p /app/data && chown -R non-root-user:non-root-user /app
 
 USER non-root-user
 
-# Set PYTHONPATH to include /app so src module can be found
+# Set PYTHONPATH to include /app so the package resolves from the copied tree
 ENV PYTHONPATH=/app
 
 ENV WORKERS=2
 
 # Use gunicorn config file with memory optimizations
-ENTRYPOINT ["gunicorn", "src.api:app", "--config", "gunicorn_conf.py"]
+ENTRYPOINT ["gunicorn", "git_metadata_extractor.app:app", "--config", "gunicorn_conf.py"]

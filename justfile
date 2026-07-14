@@ -47,25 +47,25 @@ setup:
 
 # Serve the FastAPI app in production mode
 serve:
-    uvicorn src.api:app --host {{HOST}} --port {{PORT}} --workers {{WORKERS}}
+    uvicorn git_metadata_extractor.app:app --host {{HOST}} --port {{PORT}} --workers {{WORKERS}}
 
 # Serve the FastAPI app in development mode with auto-reload
-# Watches only `src/` for `.py` changes — keeps in-flight requests alive
+# Watches only the package for `.py` changes — keeps in-flight requests alive
 # when extraction outputs, logs, or test files change.
 serve-dev:
-    uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --reload-dir src --reload-include '*.py'
+    uvicorn git_metadata_extractor.app:app --host {{HOST}} --port {{PORT}} --reload --reload-dir git_metadata_extractor --reload-include '*.py'
 
 # Serve in development mode with debug logging
 serve-dev-debug:
-    LOG_LEVEL=DEBUG uvicorn src.api:app --host {{HOST}} --port {{PORT}} --reload --reload-dir src --reload-include '*.py' --log-level debug
+    LOG_LEVEL=DEBUG uvicorn git_metadata_extractor.app:app --host {{HOST}} --port {{PORT}} --reload --reload-dir git_metadata_extractor --reload-include '*.py' --log-level debug
 
 # Serve with single worker (useful for debugging)
 serve-single:
-    uvicorn src.api:app --host {{HOST}} --port {{PORT}} --workers 1
+    uvicorn git_metadata_extractor.app:app --host {{HOST}} --port {{PORT}} --workers 1
 
 # Serve using gunicorn (production-ready)
 serve-gunicorn:
-    gunicorn src.api:app --workers {{WORKERS}} --worker-class uvicorn.workers.UvicornWorker --bind {{HOST}}:{{PORT}}
+    gunicorn git_metadata_extractor.app:app --workers {{WORKERS}} --worker-class uvicorn.workers.UvicornWorker --bind {{HOST}}:{{PORT}}
 
 # Stop any uvicorn/gunicorn process listening on PORT.
 # SIGTERM first; falls back to SIGKILL if anything is still bound after 2s.
@@ -139,7 +139,7 @@ test-full:
 
 # Run tests with coverage
 test-coverage:
-    .venv/bin/python -m pytest tests/v2/ --cov=src/v2 --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'
+    .venv/bin/python -m pytest tests/v2/ --cov=git_metadata_extractor --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'
 
 # Run specific test file
 test-file FILE:
@@ -151,7 +151,7 @@ test-llm-integration:
 
 # Run tests in watch mode (requires pytest-watch)
 test-watch:
-    PYTHONPATH=src ptw tests/v2/
+    ptw tests/v2/
 
 # Run Phase 8 preflight connectivity checks against live providers
 preflight-live:
@@ -208,23 +208,23 @@ v2-run-repo-full-llm REPO:
 
 # Format code using black
 format:
-    black src/
+    black git_metadata_extractor/
 
 # Format code using ruff
 format-ruff:
-    ruff format src/
+    ruff format git_metadata_extractor/
 
 # Lint code using ruff
 lint:
-    uv run ruff check src/
+    uv run ruff check git_metadata_extractor/
 
 # Lint and fix issues automatically
 lint-fix:
-    uv run ruff check --fix src/
+    uv run ruff check --fix git_metadata_extractor/
 
 # Type check using mypy
 type-check:
-    uv run mypy src/
+    uv run mypy git_metadata_extractor/
 
 # Run all code quality checks
 check: lint type-check

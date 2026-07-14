@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from src.v2.ingest.providers._rag_helpers import (
+from git_metadata_extractor.providers._rag_helpers import (
     apply_rerank_indices,
     expand_candidate_k,
     filter_allowlist,

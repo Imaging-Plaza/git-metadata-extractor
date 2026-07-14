@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 from jsonschema import validate
 
-from src.v2.agents.llm.organization import LLMOrganizationAgentV2
-from src.v2.agents.llm.organization import agent as organization_agent_module
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_ror import MockRORProvider
+from git_metadata_extractor.agents.llm.organization import LLMOrganizationAgentV2
+from git_metadata_extractor.agents.llm.organization import agent as organization_agent_module
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_ror import MockRORProvider
 
 _HAS_LLM_CREDENTIALS = bool(
     os.getenv("RCP_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")

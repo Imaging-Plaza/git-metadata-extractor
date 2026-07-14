@@ -159,7 +159,7 @@ shared seams so it's a first-class, ready-on-first-run capability:
      manifest gains a `structured_query: true` hint on the snsf entry so the
      capability is discoverable.
 
-3. **LLM agent tool.** A new `src/v2/agents/llm/agent_tools/snsf_grants.py`
+3. **LLM agent tool.** A new `git_metadata_extractor/agents/llm/agent_tools/snsf_grants.py`
    following the per-index RAG-tool pattern (pydantic-ai `Tool`s backed by a
    provider), giving the agent:
    - **`search_snsf_grants`** — faceted + free-text search (the `GrantFilters`
@@ -172,7 +172,7 @@ shared seams so it's a first-class, ready-on-first-run capability:
      discover available values, e.g. funding schemes for an institution).
    - **`fetch_snsf_grant`** — full grant record (incl. abstract / lay
      summaries) by grant URL id, split from search to keep prompts small.
-   Backed by a small `SnsfGrantsProvider` in `src/v2/ingest/providers/` (opens
+   Backed by a small `SnsfGrantsProvider` in `git_metadata_extractor/providers/` (opens
    the snsf `.ro` store read-only, calls `facet_query`), `record_query`-logged
    like the other RAG tools, and added to the agent runtime's tool list.
 

@@ -131,7 +131,7 @@ Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
 ## Repository layout
 
 ```
-src/v2/                  # v2 extraction pipeline (new work here)
+git_metadata_extractor/                  # v2 extraction pipeline (new work here)
   api.py                 # /v2/extract endpoint
   pipeline/stages/       # 25 sequential pipeline stages
   agents/llm/            # LLM-backed entity agents + RAG tools

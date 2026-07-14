@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.v2.ingest.cache import ProviderCache
+from git_metadata_extractor.providers.cache import ProviderCache
 
 
 def test_cache_miss_returns_none(tmp_path: Path) -> None:

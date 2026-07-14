@@ -42,7 +42,7 @@ Goal: prove the API path returns byte-for-parity JSON-LD vs in-process gimie.
    `networks: [dev]`, `environment: { ACCESS_TOKEN: ${GME_GITHUB_TOKEN} }`,
    no host port needed (internal `http://gme-gimie-api:15400`).
 2. Add a thin client `extract_gimie_via_api(full_path, fmt="json-ld")` (new module,
-   e.g. `src/v2/ingest/providers/gimie_api_client.py`):
+   e.g. `git_metadata_extractor/providers/gimie_api_client.py`):
    - `GET {GIMIE_API_URL}/gimie/jsonld/{full_path}` (full_path is the repo URL with
      scheme — the `:path` converter handles `https://…`). Generous timeout
      (gimie extraction is slow: 30–120s) + bounded retry, mirroring the existing
@@ -76,7 +76,7 @@ Once the API path is proven in prod:
 1. Replace the remaining **direct gimie imports** in
    `src/v1/gimie_utils/gimie_methods.py` (`GithubExtractor`, `CffParser`) — either
    route them through the API too, or move that CFF parsing to our own
-   `src/v2/parsers/citation_cff.py` (which already exists). Audit every
+   `git_metadata_extractor/parsers/citation_cff.py` (which already exists). Audit every
    `import gimie` / `from gimie` site (Phase-0 grep found them in v1 only).
 2. Remove `"gimie==0.7.2"` from `pyproject.toml` `dependencies`. Make the
    in-process `extract_gimie` import gimie lazily and raise a clear error if

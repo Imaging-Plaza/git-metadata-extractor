@@ -7,12 +7,12 @@
 them to parity with the other indices. They are currently only in `/v2/manifest`.
 
 ## Pattern to mirror
-- Search runner + ingest-job runner per index live in `src/v2/indices/<name>.py`.
-  Closest analog: `src/v2/indices/renkulab.py` (instance-crawl ingest + entity search).
-- Endpoints in `src/v2/api.py`: ingest returns `IndexIngestJobAccepted` (202) and dispatches
+- Search runner + ingest-job runner per index live in `git_metadata_extractor/indices/<name>.py`.
+  Closest analog: `git_metadata_extractor/indices/renkulab.py` (instance-crawl ingest + entity search).
+- Endpoints in `git_metadata_extractor/api.py`: ingest returns `IndexIngestJobAccepted` (202) and dispatches
   a background task that updates `IndexIngestJobStore`; search returns `IndexSearchResponse`
   via `_search_response_or_unavailable(await run_<name>_search(payload, app_state), index_name=...)`.
-- `hit_from_raw` (`src/v2/indices/_search_common.py`) normalises the leaf retrieval raw shape
+- `hit_from_raw` (`git_metadata_extractor/indices/_search_common.py`) normalises the leaf retrieval raw shape
   (`{id, vector_score, rerank_score, payload, entity}`) — the gitlab leaves already return this.
 - Search request model `IndexSearchRequest` (query/top_k/candidate_k/filter_payload/target)
   already exists. Ingest request model is new (below).
@@ -25,7 +25,7 @@ All synchronous → wrap in `asyncio.to_thread`. Single-entity stores (ignore `t
 
 ## Work
 
-### 1. `src/v2/api_models/contracts.py` — new ingest request
+### 1. `git_metadata_extractor/api_models/contracts.py` — new ingest request
 ```python
 class GitLabIngestRequest(BaseModel):
     """Body for POST /v2/indices/gitlab_*/ingest. Full public-instance crawl;
@@ -36,7 +36,7 @@ class GitLabIngestRequest(BaseModel):
 ```
 Export it from the `api_models` package the same way the other `*IngestRequest` models are.
 
-### 2. `src/v2/indices/gitlab.py` — generic runners (NEW)
+### 2. `git_metadata_extractor/indices/gitlab.py` — generic runners (NEW)
 - `GITLAB_INDEX_NAMES: list[str]` = the 9 store names.
 - `async def run_gitlab_ingest_job(*, index_name, payload: GitLabIngestRequest, app_state, job_store, job_id) -> None`
   - Mirror `run_renkulab_ingest_job`: set RUNNING; import `src.index.<index_name>.ingest`
@@ -54,7 +54,7 @@ Export it from the `api_models` package the same way the other `*IngestRequest` 
 - Validate `index_name in GITLAB_INDEX_NAMES` (defensive) — raise/return None otherwise.
 - `__all__` exports.
 
-### 3. `src/v2/api.py` — register 18 routes
+### 3. `git_metadata_extractor/api.py` — register 18 routes
 Register via a **loop + factory** over `GITLAB_INDEX_NAMES` (18 explicit handlers would be
 excessive boilerplate). For each name build two async endpoint handlers with proper
 annotations and register with `v2_router.add_api_route(...)`:

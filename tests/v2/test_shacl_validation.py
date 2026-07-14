@@ -6,9 +6,9 @@ from urllib.parse import quote
 import pytest
 from rdflib import RDF, XSD, Graph, Literal, Namespace, URIRef
 
-from src.v2.validation import shacl_validation as shacl_validation_module
-from src.v2.validation.ontology import load_ontology_shapes_graph
-from src.v2.validation.shacl_validation import (
+from git_metadata_extractor.validation import shacl_validation as shacl_validation_module
+from git_metadata_extractor.validation.ontology import load_ontology_shapes_graph
+from git_metadata_extractor.validation.shacl_validation import (
     SHACLRuntimeUnavailableError,
     SHACLValidationResult,
     SHACLValidator,
