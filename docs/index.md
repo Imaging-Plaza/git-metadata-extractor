@@ -5,14 +5,17 @@ JSON-LD aligned with **Open Pulse Ontology v2.1.2**, plus nine sibling RAG
 indices over EPFL/Swiss research catalogues that the v2 LLM agents can
 query during extraction.
 
-The repository ships **two cooperating subsystems**:
+The system is **two cooperating services in two repositories**:
 
-1. **Extraction service** (`src/v1/`, `src/v2/`) — the FastAPI app. V1 is
-   frozen; all new work targets V2 under `src/v2/`.
-2. **RAG indices** (`src/index/*`) — independent Qdrant + DuckDB indices
-   over HuggingFace, OpenAlex, Infoscience, ETH Research Collection,
-   ORCID, ROR, Zenodo, GitHub, SNSF, plus a federated layer that fans out
-   across all of them.
+1. **Extraction service** (this repo: `src/v1/`, `src/v2/`) — the FastAPI
+   app. V1 is frozen; all new work targets V2 under `src/v2/`.
+2. **RAG indices** —
+   [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources):
+   independent Qdrant + DuckDB indices over HuggingFace, OpenAlex,
+   Infoscience, ETH Research Collection, ORCID, ROR, Zenodo, GitHub, SNSF
+   and more, plus a federated layer and the `/v2/indices/*` management
+   API. This service imports its read side as the `open_pulse_sources`
+   library and shares the Qdrant/DuckDB stores with it.
 
 ## Documentation map
 
@@ -20,9 +23,9 @@ The repository ships **two cooperating subsystems**:
 - [V2 API Reference](v2-api-reference.md) — `/v2/extract`, `/v2/jobs`, `/v2/graph`
 - [Migration: V1 → V2](migration-v1-to-v2.md) — endpoint mapping
 - [API and CLI](api-and-cli.md) — quick reference
-- [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) — the nine indices + federated layer
-- [Federated Search](https://github.com/caviri/open-pulse-sources/blob/main/docs/federated-search.md) — cross-index design
-- [HuggingFace Index](https://github.com/caviri/open-pulse-sources/blob/main/docs/huggingface-index.md) — most-used index, deep-dive
+- [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) — the nine indices + federated layer
+- [Federated Search](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/federated-search.md) — cross-index design
+- [HuggingFace Index](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/huggingface-index.md) — most-used index, deep-dive
 - [V2 Agent RAG Tools](v2-rag-tools.md) — agent-side tools wired into the v2 pipeline
 - [Roadmap](ROADMAP.md) — what's left to build
 - [Design Notes](architecture/design-notes.md) — runtime architecture

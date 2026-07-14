@@ -1,7 +1,7 @@
 # GME operations runbook
 
 > **Repo split (2026-07-02):** the RAG index layer now lives in
-> [open-pulse-sources](https://github.com/caviri/open-pulse-sources).
+> [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).
 > Index ops commands below run from that repo (same `data/index/` volume);
 > the `open_pulse_sources.*` modules come from its installed library.
 
@@ -182,15 +182,24 @@ Populate a store with its ingest/embed CLI or the
 The heavy `gimie` Python dependency (and its `calamus`/`marshmallow` chain,
 which hard-pinned vulnerable `python-dotenv`/`marshmallow`) was **removed from
 the image**. GIMIE metadata is now fetched from the **`gimie-api` sidecar**
-(`ghcr.io/sdsc-ordes/gimie-api`) over HTTP.
+over HTTP.
+
+> **2026-07-14 — the sidecar image is now GME-maintained** (`tools/gimie-api/`,
+> built by both compose files as `gme-gimie-api:0.7.2`). The upstream
+> `ghcr.io/sdsc-ordes/gimie-api` images (pinned digest AND `:latest`) ship
+> gimie 0.6.1 with an app written for the 0.7.x API — every extraction
+> request fails and the error contract collapses to an empty payload, i.e.
+> **silent** loss of all gimie metadata (descriptions, contributors → no
+> Person/Membership/Contribution entities). Full analysis:
+> `dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md`.
 
 **Required for every deployment that extracts repositories:**
 
-1. Run the sidecar alongside the API (same network). It listens on `:15400` and
-   reads the GitHub token from `ACCESS_TOKEN`. In the dev stack it's the
-   `gme-gimie-api` service in `.devcontainer/docker-compose.yml`; **add an
-   equivalent service to the production compose / k8s manifest** (which lives
-   outside this repo).
+1. Run the sidecar alongside the API (same network). It listens on `:15400`.
+   The gimie library reads **`GITHUB_TOKEN`** — a **single PAT**; if your
+   `GME_GITHUB_TOKEN` is a comma-separated pool, set `GIMIE_ACCESS_TOKEN`
+   to one PAT from it (the compose files wire this; the GME-maintained app
+   also normalizes pools itself, first token wins).
 2. Set **`GIMIE_API_URL`** on the API process, e.g.
    `GIMIE_API_URL=http://gme-gimie-api:15400`.
 
@@ -202,10 +211,14 @@ Behaviour:
 - `GIMIE_API_URL` **unset** → falls back to in-process gimie, which is **no
   longer installed** in the image → a clear `RuntimeError` is raised when
   extraction is attempted. (For local in-process use: `pip install gimie==0.7.2`.)
+- The client requests the sidecar's `/gimie/ttl/` route and converts to
+  JSON-LD with rdflib (byte-compatible with the historical in-process
+  serialization).
 - Tunables: `GIMIE_API_TIMEOUT_SECONDS` (default 180).
 
-Pin the sidecar image by digest for reproducibility. Validate a new image with
-`scripts/v2/gimie_api_parity.py` (diffs sidecar vs in-process output).
+Validate a new sidecar image with `scripts/v2/gimie_api_parity.py` — and be
+aware it previously passed while the live route 404'd; extending it to fail
+on degrade-to-None is tracked in task brief 11.
 
 Both stacks in this repo wire it already:
 

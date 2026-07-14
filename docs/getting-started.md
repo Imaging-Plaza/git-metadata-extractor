@@ -118,14 +118,6 @@ just check               # lint + type-check
 just ci                  # lint + type-check + coverage
 ```
 
-Per-index test suites:
-
-```bash
-just hf-test
-just openalex-test
-just orcid-test
-```
-
 Opt-in real-provider tests (require credentials and live network):
 
 ```bash
@@ -137,15 +129,16 @@ If testmon selection looks stale: `rm -f .testmondata` then `just test-full`.
 
 ## 5. Try the RAG indices
 
-Each index is independent; common shape:
+The index layer (ingest / embed / search CLIs, federated search, and the
+`/v2/indices/*` management API) lives in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo — clone it and run its recipes there; common shape:
 
 ```bash
-# HuggingFace
-just hf-status
-just hf-ingest --scope switzerland     # idempotent — skips already-ingested
-just hf-embed                           # only embeds new chunks
-just hf-search "swiss german LLM" --top-k 5
-just hf-lineage epfl-llm/meditron-7b    # walk base_models DAG
+# in an open-pulse-sources checkout
+just openalex-ingest --scope epfl      # idempotent — skips already-ingested
+just openalex-embed                    # only embeds new chunks
+just openalex-search "swiss german LLM" --top-k 5
 
 # Federated (cross-index)
 just gme-indices                                 # list registered adapters
@@ -153,7 +146,10 @@ just gme-search "Swiss German LLM" --top-k 10
 just gme-entity 0000-0001-9534-3870              # by ORCID, ROR, DOI, HF slug, …
 ```
 
-See [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) for the full per-index
+This service only *reads* the resulting stores (Qdrant + DuckDB under
+`INDEX_DATA_DIR`) through the `open_pulse_sources` library.
+
+See [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) for the full per-index
 inventory, scopes, and storage layout.
 
 ## 6. Build and preview docs

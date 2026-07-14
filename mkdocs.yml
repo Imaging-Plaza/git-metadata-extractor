@@ -45,7 +45,7 @@ nav:
       - Operations Runbook: OPERATIONS_RUNBOOK.md
       - Migration V1 to V2: migration-v1-to-v2.md
   # Index build/refresh docs moved to the open-pulse-sources repo:
-  # https://github.com/caviri/open-pulse-sources — only the read-side
+  # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
   # (RAG tools the extraction pipeline consumes) is documented here.
   - RAG (read side):
       - V2 Agent RAG Tools: v2-rag-tools.md

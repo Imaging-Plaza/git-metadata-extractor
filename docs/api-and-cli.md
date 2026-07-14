@@ -2,7 +2,7 @@
 
 Quick reference for both the extraction service and the per-index CLIs.
 For the full v2 contract see [V2 API Reference](v2-api-reference.md); for
-RAG indices see [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md).
+RAG indices see [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md).
 
 ## Main entrypoints
 
@@ -119,33 +119,14 @@ For mapping V1 calls to V2 see
 - `@graph: list[object]`
 - optional `excluded_entities`
 
-## Per-index CLIs
+## Per-index CLIs (moved)
 
-Every RAG index ships its own CLI (`python -m src.index.<name>`) plus
-`just <prefix>-*` recipes. Common shape:
-
-```bash
-just <prefix>-status                  # counts + paths
-just <prefix>-ingest --scope <scope>  # populate DuckDB
-just <prefix>-embed                   # push vectors to Qdrant
-just <prefix>-search "<query>"        # semantic retrieval
-just <prefix>-query --predefined ...  # SQL over DuckDB
-```
-
-Recipes registered in the justfile:
-
-| Index | Prefix | Notes |
-|---|---|---|
-| HuggingFace | `hf-*` | adds `hf-discover-orgs`, `hf-lineage` |
-| OpenAlex | `openalex-*` | adds `openalex-find-github`, `openalex-rebuild-qdrant`, `openalex-serve` |
-| ORCID | `orcid-*` | adds `orcid-discover`, `orcid-serve` |
-| Zenodo | `zenodo-*` | adds `zenodo-serve` |
-| GitHub | `gh-*` | adds `gh-rebuild-qdrant`, `gh-serve` |
-| Infoscience | `index-infoscience-*` | full lifecycle + `ingest-duckdb` + `query` |
-| ROR | (per-CLI) | `python -m src.index.ror …` |
-| ETH Research Collection | (per-CLI) | `python -m src.index.ethz_research_collection …` |
-| SNSF | (per-CLI) | `python -m src.index.snsf …` |
-| Federated | `gme-*` | `gme-search`, `gme-entity`, `gme-indices` |
+The per-index CLIs (`python -m open_pulse_sources.index.<name>`), their
+`just <prefix>-*` recipes, the federated `gme-search`/`gme-entity` CLI,
+and the `/v2/indices/*` management API all live in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo — see its README and `just --list` there. This service only reads
+the resulting stores.
 
 ## Smoke tests
 

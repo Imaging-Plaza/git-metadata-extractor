@@ -6,10 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- **GIMIE extraction was silently dead in every sidecar deployment.** Two
+  independent defects: (1) the client requested `/gimie/jsonld/…`, a route
+  that never existed on gimie-api — it now fetches `/gimie/ttl/…` and
+  converts with rdflib, byte-compatible with the historical in-process
+  serialization; (2) the upstream `ghcr.io/sdsc-ordes/gimie-api` images
+  (pinned digest and `:latest`) ship gimie 0.6.1 with an app written for
+  the 0.7.x API, failing every request and JSON-encoding the error to an
+  empty payload — replaced by a **GME-maintained sidecar**
+  (`tools/gimie-api/`, gimie 0.7.2 pinned) that both compose stacks build.
+  Also: the sidecar needs a **single** GitHub PAT (`GIMIE_ACCESS_TOKEN`)
+  when `GME_GITHUB_TOKEN` is a comma-separated pool. Effect: repository
+  descriptions, contributors, and the derived Person/Membership/
+  Contribution entities are extracted again (verified live: 3 → 66
+  entities on `sdsc-ordes/gimie`). See
+  `dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md`.
+
 ### Changed (breaking — repo split)
 
 - **The RAG index layer moved to its own repo/service:
-  [open-pulse-sources](https://github.com/caviri/open-pulse-sources).**
+  [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).**
   `src/index/`, `src/module/`, `src/v2/indices/` and the `/v2/manifest` +
   `/v2/indices/*` API surface were removed from this repo; the same routes are
   now served by the `gme-sources` compose service (same paths, same auth).
@@ -43,7 +61,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   project/group/user pipelines). All nine are vector-backed, registered in the
   federated layer, and appear in `GET /v2/manifest`. GitLab user records carry
   no ORCID (GitLab exposes no verified-ORCID field). See
-  [`docs/gitlab-index.md`](https://github.com/caviri/open-pulse-sources/blob/main/docs/gitlab-index.md).
+  [`docs/gitlab-index.md`](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/gitlab-index.md).
 - **HTTP ingest + search endpoints for the GitLab family** —
   `POST /v2/indices/<name>/ingest` (full-instance crawl + embed, async job;
   optional `limit`) and `POST /v2/indices/<name>/search` for all nine gitlab

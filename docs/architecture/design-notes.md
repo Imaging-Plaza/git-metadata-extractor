@@ -35,7 +35,7 @@ flowchart TB
         PRAG[*_rag — Qdrant-backed]
     end
 
-    subgraph RAG[RAG indices — src/index/*]
+    subgraph RAG[RAG indices — open_pulse_sources library / service]
         RH[HuggingFace]
         ROA[OpenAlex]
         RI[Infoscience]
@@ -144,10 +144,14 @@ them isolated and independently invalidatable.
 
 ## RAG index architecture
 
-Each index under `src/index/<name>/` is independent: its own DuckDB, its
-own Qdrant collections, its own CLI, its own FastAPI app, its own refresh
-cadence. The federated layer (`src/index/_federated/`) never shares
-state — it just orchestrates fan-out across registered adapters in a
+The index layer lives in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo (this service imports its read side as the `open_pulse_sources`
+library). Each index under `open_pulse_sources/index/<name>/` is
+independent: its own DuckDB, its own Qdrant collections, its own CLI, its
+own refresh cadence. The federated layer
+(`open_pulse_sources/index/_federated/`) never shares state — it just
+orchestrates fan-out across registered adapters in a
 `ThreadPoolExecutor`.
 
 ```mermaid
@@ -167,7 +171,7 @@ flowchart LR
     end
     DB -.-> ADAP
     QD -.-> ADAP
-    ADAP --> GME[just gme-search / gme-entity]
+    ADAP --> GME[gme-search / gme-entity CLI<br/>open-pulse-sources repo]
     ADAP --> RAGTOOL[v2 LLM RAG tools]
 ```
 
@@ -187,7 +191,7 @@ Shared infrastructure (post-2026-05-01 pattern):
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of
 orgs in Qdrant + a JSONL dump for lexical lookup).
 
-See [RAG Indices Overview](https://github.com/caviri/open-pulse-sources/blob/main/docs/rag-indices.md) for the full inventory and
+See [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) for the full inventory and
 per-index quickstarts.
 
 ## Notes

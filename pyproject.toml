@@ -28,7 +28,7 @@ classifiers = [
 # NOTE: the v2 read-side RAG providers import the `open_pulse_sources`
 # library (the RAG index layer split out of this repo). It is not on PyPI;
 # `just install-dev` installs it editable from a sibling clone or from
-# git+https://github.com/caviri/open-pulse-sources. The Docker image
+# git+https://github.com/sdsc-ordes/open-pulse-sources. The Docker image
 # installs it explicitly (see tools/image/Dockerfile).
 dependencies = [
     "fastapi>=0.122.0",
@@ -114,7 +114,7 @@ markers = [
     "v2: tests for the v2 extraction pipeline and schema validation track",
     "live_provider: opt-in tests that hit live external provider APIs",
     "llm_integration: opt-in tests that call real LLM providers",
-    "openalex: tests for the src/index/openalex module",
+    "openalex: legacy marker for OpenAlex-scoped tests (index code lives in open-pulse-sources now)",
 ]
 
 [tool.datamodel-codegen]
