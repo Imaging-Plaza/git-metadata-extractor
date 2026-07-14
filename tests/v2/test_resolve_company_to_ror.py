@@ -326,7 +326,7 @@ def test_stage_returns_zero_when_provider_missing():
 
 
 def test_api_env_flag_defaults_on(monkeypatch):
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.delenv("V2_RESOLVE_COMPANY_TO_ROR", raising=False)
     assert v2_api._resolve_company_to_ror_enabled() is True
@@ -334,7 +334,7 @@ def test_api_env_flag_defaults_on(monkeypatch):
 
 @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off", "n", "f"])
 def test_api_env_flag_recognises_off_values(value, monkeypatch):
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_COMPANY_TO_ROR", value)
     assert v2_api._resolve_company_to_ror_enabled() is False
@@ -343,14 +343,14 @@ def test_api_env_flag_recognises_off_values(value, monkeypatch):
 @pytest.mark.parametrize("value", ["true", "1", "yes", "on", "anything-else"])
 def test_api_env_flag_treats_other_values_as_on(value, monkeypatch):
     """Anything that isn't an explicit off-value keeps the stage on."""
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_COMPANY_TO_ROR", value)
     assert v2_api._resolve_company_to_ror_enabled() is True
 
 
 def test_api_constant_and_export_are_in_place():
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
     from git_metadata_extractor.pipeline import stages
 
     assert v2_api.STAGE_RESOLVE_COMPANY_TO_ROR == "resolve_company_to_ror"

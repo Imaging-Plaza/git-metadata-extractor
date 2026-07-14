@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from git_metadata_extractor import api as v2_api
+from git_metadata_extractor.api import auto_ingest as v2_api
 
 
 @pytest.fixture

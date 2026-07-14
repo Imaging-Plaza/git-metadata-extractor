@@ -4,21 +4,16 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
-import sys
-import threading
 from copy import deepcopy
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from time import perf_counter
 from typing import Annotated, Any, Literal
-from urllib.parse import urlparse
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import Depends, Path, Query, Request, status
 from fastapi.responses import JSONResponse
-from rdflib import Graph as RDFGraph
 
 from git_metadata_extractor.agents import AgentRuntime, ProviderSet, parse_agent_runtime
 from git_metadata_extractor.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
@@ -35,14 +30,12 @@ from git_metadata_extractor.api_models import (
     V2ExtractRequest,
     V2ExtractResponse,
     V2FieldError,
-    V2HealthResponse,
-    V2JobStatus,
     V2JSONLDOutput,
     V2JSONOutputEnvelope,
 )
 from git_metadata_extractor.auth import verify_token
 from git_metadata_extractor.config import V2Config
-from git_metadata_extractor.dependencies import _resolve_provider_cache, get_provider_set
+from git_metadata_extractor.dependencies import get_provider_set
 from git_metadata_extractor.providers.cache import (
     ProviderCache,
     cache_refresh_active,
@@ -51,12 +44,7 @@ from git_metadata_extractor.providers.cache import (
 )
 from git_metadata_extractor.providers.detection import UnsupportedGitHubURL, classify_github_url
 from git_metadata_extractor.jobs import JobStore
-from git_metadata_extractor.observation.github_rate_limit import (
-    GitHubRateLimitSummary,
-    probe_github_rate_limit,
-)
 from git_metadata_extractor.observation.query_log import QueryLog, query_log_var
-from git_metadata_extractor.pipeline import PipelineOrchestrator
 from git_metadata_extractor.pipeline.stages import (
     AssembledOutput,
     RootEntityValidationError,
@@ -135,290 +123,8 @@ JSONLD_CONTEXT_FALLBACK = {
 logger = logging.getLogger(__name__)
 
 
-def _auto_ingest_enabled(canonical: str, *aliases: str) -> bool:
-    """Return True if the canonical auto-ingest env flag — or a deprecated
-    alias — is set to "true".
-
-    The canonical name takes precedence; when a request is enabled via an alias
-    we log a deprecation warning so operators can migrate. This exists because
-    the only historically-documented flag (`V2_GITHUB_RAG_AUTO_INGEST`) never
-    matched the name the code reads (`V2_GITHUB_REPOS_RAG_AUTO_INGEST`), so
-    operators who followed the docs silently got no auto-ingest.
-    """
-    for name in (canonical, *aliases):
-        raw = os.getenv(name)
-        if raw is not None and raw.strip().lower() == "true":
-            if name != canonical:
-                logger.warning(
-                    "auto-ingest enabled via deprecated env var %s; rename it to "
-                    "%s (the alias may be removed in a future release)",
-                    name,
-                    canonical,
-                )
-            return True
-    return False
-
-
-STAGE_CLASSIFY_URL = "classify_url"
-STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
-STAGE_STRICT_VALIDATION = "strict_validation"
-STAGE_RECONCILIATION = "reconciliation"
-STAGE_LLM_DEDUP = "llm_dedup"
-STAGE_LLM_CRITIC = "llm_critic"
-STAGE_SHACL_GATE = "shacl_gate"
-
-# Async-job heartbeat tuning. The worker writes `last_heartbeat_at` to
-# the JobStore every `_JOB_HEARTBEAT_INTERVAL_SECONDS`. When a GET
-# arrives for a "running" job whose latest heartbeat is older than
-# `_JOB_STALE_THRESHOLD_SECONDS`, we treat the job as orphaned (worker
-# died, OS killed it, deploy restarted, etc.) and flip it to FAILED so
-# the client doesn't poll forever. Threshold is generous (10 minutes
-# = 20 missed beats) so we don't false-positive on a slow LLM stage.
-_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
-_JOB_STALE_THRESHOLD_SECONDS = 600.0
-STAGE_OUTPUT_ASSEMBLY = "output_assembly"
-STAGE_JSONLD_BUILD = "jsonld_build"
-STAGE_LINK_VERACITY = "link_veracity"
-STAGE_REFINE_WITH_LLM = "refine_with_llm"
-STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
-STAGE_RESOLVE_BIO_TO_ROR = "resolve_bio_to_ror"
-STAGE_RESOLVE_BIO_TO_ROR_LLM = "resolve_bio_to_ror_llm"
-STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR = "resolve_placeholder_orgs_to_ror"
-
-v2_router = APIRouter(prefix="/v2")
-
-
-_TRUTHY_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
-
-
-def _is_pipeline_cache_enabled() -> bool:
-    """Read `V2_PIPELINE_CACHE_ENABLED` env var (default true).
-
-    When false, `extract()` neither reads nor writes the pipeline-level cache,
-    so every request runs the full pipeline. Sub-level caches (provider
-    responses, agent verdicts, Selenium fetches, link-veracity) are unaffected.
-    """
-    raw = os.getenv("V2_PIPELINE_CACHE_ENABLED")
-    if raw is None:
-        return True
-    return raw.strip().lower() in _TRUTHY_ENV_VALUES
-
-
-def _is_link_veracity_enabled() -> bool:
-    """Read `V2_LINK_VERACITY_ENABLED` env var (default true).
-
-    When false, the link-veracity LLM stage is skipped entirely. Useful for
-    broad batch runs where you want fast extraction and don't need every
-    URL re-verified against fetched page content. Saves ~1–3 minutes per
-    repo and a chunk of LLM calls.
-    """
-    raw = os.getenv("V2_LINK_VERACITY_ENABLED")
-    if raw is None:
-        return True
-    return raw.strip().lower() in _TRUTHY_ENV_VALUES
-
-
-def _should_apply_critic_pruning() -> bool:
-    """Read `V2_APPLY_CRITIC_PRUNING` env var (default false).
-
-    When false (the default), the LLM critic stage is skipped entirely so no
-    entities get dropped from the output. Set to true to re-enable the critic
-    stage's drop suggestions.
-    """
-    raw = os.getenv("V2_APPLY_CRITIC_PRUNING")
-    if raw is None:
-        return False
-    return raw.strip().lower() in _TRUTHY_ENV_VALUES
-
-
-def _resolve_company_to_ror_enabled() -> bool:
-    """Read `V2_RESOLVE_COMPANY_TO_ROR` env var (default true).
-
-    When true (the default), the company → ROR resolver runs right after
-    `reconcile_entities` and stamps `schema:affiliation` on persons whose
-    `gme-internal:company` string resolves confidently against ROR.
-    Set to `false` (or `0`/`no`/`off`) to skip the stage; useful for
-    catalog backfills that should preserve the raw company strings
-    unchanged.
-    """
-    raw = os.getenv("V2_RESOLVE_COMPANY_TO_ROR")
-    if raw is None:
-        return True
-    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
-
-
-def _resolve_bio_to_ror_enabled() -> bool:
-    """Read `V2_RESOLVE_BIO_TO_ROR` env var (default true).
-
-    When true (the default), the bio → ROR resolver runs right after
-    `resolve_company_to_ror` and stamps `schema:affiliation` on persons
-    whose `_company` was empty but whose `_bio` / `_orcid_biography` /
-    `_blog` carry an institution signal that the strict ROR gate accepts.
-    Set to `false` (or `0`/`no`/`off`) to skip; useful when a catalog
-    backfill wants the structured-field-only behaviour.
-    """
-    raw = os.getenv("V2_RESOLVE_BIO_TO_ROR")
-    if raw is None:
-        return True
-    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
-
-
-def _resolve_bio_to_ror_llm_enabled() -> bool:
-    """Read `V2_RESOLVE_BIO_TO_ROR_LLM` env var (default true).
-
-    When true (the default) AND the request runs under the LLM / hybrid
-    runtime, the LLM bio resolver runs after `resolve_bio_to_ror` and
-    spends one LLM call per still-unaffiliated person to resolve
-    affiliations that only surface in prose (long profile READMEs,
-    bios without a clean `at X` shape). Gated by runtime as well as
-    this flag — under the rule-based runtime it never runs even when
-    true.
-    """
-    raw = os.getenv("V2_RESOLVE_BIO_TO_ROR_LLM")
-    if raw is None:
-        return True
-    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
-
-
-def _resolve_placeholder_orgs_to_ror_enabled() -> bool:
-    """Read `V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR` env var (default true).
-
-    When true (the default), the placeholder-resolver stage runs after
-    the three Person-side resolver stages and rewrites Organization
-    entities whose `idSource = "uuid"` (and which carry a `schema:name`
-    breadcrumb) into ROR-anchored Orgs, patching every referring
-    Membership composite in the same pass. Set to `false` to leave the
-    `urn:pulse:<uuid>` Org bucket untouched.
-    """
-    raw = os.getenv("V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR")
-    if raw is None:
-        return True
-    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
-
-
-def _format_duration(seconds: float) -> str:
-    """Render a duration in compact human form, e.g. '7.3s' or '4m 12s'."""
-    if seconds < 60.0:
-        return f"{seconds:.1f}s"
-    minutes = int(seconds // 60)
-    remainder = seconds - minutes * 60
-    return f"{minutes}m {remainder:.0f}s"
-
-
-def _jsonld_to_graph(payload: dict[str, Any]) -> RDFGraph | None:
-    try:
-        graph = RDFGraph()
-        graph.parse(data=json.dumps(payload), format="json-ld")
-    except Exception:  # noqa: BLE001
-        return None
-    else:
-        return graph
-
-
-def _extract_path_kind(source_url: str) -> str | None:
-    candidate_url = source_url.strip()
-    if "://" not in candidate_url:
-        candidate_url = f"https://{candidate_url}"
-
-    parsed_url = urlparse(candidate_url)
-    path_segments = [segment for segment in parsed_url.path.split("/") if segment]
-    if len(path_segments) >= MIN_SUBRESOURCE_PATH_SEGMENTS:
-        return path_segments[SUBRESOURCE_SEGMENT_INDEX].lower()
-    return None
-
-
-def _resolve_max_concurrent_agents() -> int:
-    """Read `V2_MAX_CONCURRENT_AGENTS` env var (default 8).
-
-    Caps how many work items per stage (person agents, contribution agents,
-    link-veracity calls, etc.) run in parallel within a single /extract
-    request. Higher values speed up wide-fanout repos at the cost of more
-    concurrent LLM calls — keep within the LLM provider's rate limit.
-
-    Default raised from 6 to 8 after profiling a 50-person repo
-    (deeplabcut/deeplabcut): person+membership stages were spending ~12
-    minutes waiting on the semaphore. The RCP/LLM stack absorbed 8
-    in-flight calls without thermal throttling in that test.
-    """
-    raw = os.getenv("V2_MAX_CONCURRENT_AGENTS")
-    if raw is None:
-        return 8
-    try:
-        value = int(raw.strip())
-    except ValueError:
-        return 8
-    return max(1, value)
-
-
-def _get_orchestrator(request: Request) -> PipelineOrchestrator:
-    existing = getattr(request.app.state, "v2_orchestrator", None)
-    if isinstance(existing, PipelineOrchestrator):
-        return existing
-
-    cache = getattr(request.app.state, "v2_provider_cache", None)
-    if not isinstance(cache, ProviderCache):
-        cache = None
-    orchestrator = PipelineOrchestrator(
-        cache=cache,
-        max_concurrent_agents=_resolve_max_concurrent_agents(),
-    )
-    request.app.state.v2_orchestrator = orchestrator
-    return orchestrator
-
-
-def _resolve_job_store(request: Request) -> JobStore | None:
-    """Resolve a JobStore backed by the shared ProviderCache, if available."""
-    cache = _resolve_provider_cache(request.app.state)
-    if not isinstance(cache, ProviderCache):
-        return None
-    return JobStore(cache)
-
-
-_TERMINAL_JOB_STATUSES = frozenset(
-    {
-        V2ExtractJobStatus.COMPLETED,
-        V2ExtractJobStatus.FAILED,
-        V2ExtractJobStatus.CANCELLED,
-    },
-)
-
-
-def _track_background_task(request: Request, task: asyncio.Task[Any]) -> None:
-    """Hold a strong reference to a background task so it isn't GC'd mid-flight."""
-    tasks: set[asyncio.Task[Any]] | None = getattr(
-        request.app.state,
-        "_v2_job_tasks",
-        None,
-    )
-    if tasks is None:
-        tasks = set()
-        request.app.state._v2_job_tasks = tasks  # noqa: SLF001
-    tasks.add(task)
-    task.add_done_callback(tasks.discard)
-
-
-def _register_job_task(request: Request, job_id: str, task: asyncio.Task[Any]) -> None:
-    """Index a running extract job's task by job id so it can be cancelled."""
-    registry: dict[str, asyncio.Task[Any]] | None = getattr(
-        request.app.state, "_v2_job_task_by_id", None,
-    )
-    if registry is None:
-        registry = {}
-        request.app.state._v2_job_task_by_id = registry  # noqa: SLF001
-    registry[job_id] = task
-    task.add_done_callback(lambda _t: registry.pop(job_id, None))
-
-
-def _get_job_task(request: Request, job_id: str) -> asyncio.Task[Any] | None:
-    registry = getattr(request.app.state, "_v2_job_task_by_id", None)
-    if not isinstance(registry, dict):
-        return None
-    return registry.get(job_id)
-
-
-def _job_status_path(job_id: str) -> str:
-    return f"/v2/jobs/{job_id}"
-
+from . import _helpers, auto_ingest
+from ._router import v2_router
 
 async def _run_extract_job(
     *,
@@ -457,7 +163,7 @@ async def _run_extract_job(
         async def _heartbeat() -> None:
             while True:
                 try:
-                    await asyncio.sleep(_JOB_HEARTBEAT_INTERVAL_SECONDS)
+                    await asyncio.sleep(_helpers._JOB_HEARTBEAT_INTERVAL_SECONDS)
                 except asyncio.CancelledError:
                     raise
                 try:
@@ -505,7 +211,7 @@ async def _run_extract_job(
         # Mark the record cancelled, then re-raise so the task ends cleanly.
         logger.info("extract job %s cancelled", job_id)
         record = job_store.get(job_id)
-        if record is not None and record.status not in _TERMINAL_JOB_STATUSES:
+        if record is not None and record.status not in _helpers._TERMINAL_JOB_STATUSES:
             record.status = V2ExtractJobStatus.CANCELLED
             record.completed_at = datetime.now(timezone.utc)
             record.last_heartbeat_at = record.completed_at
@@ -619,6 +325,8 @@ def _build_rootless_assembled_output(
     )
 
 
+
+
 @v2_router.get(
     "/extract/{full_path:path}",
     response_model=V2ExtractResponse,
@@ -678,7 +386,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=exc.reason,
             source_url=exc.normalized_url,
-            detected_path_kind=_extract_path_kind(full_path),
+            detected_path_kind=_helpers._extract_path_kind(full_path),
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -690,7 +398,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=str(exc),
             source_url=full_path,
-            detected_path_kind=_extract_path_kind(full_path),
+            detected_path_kind=_helpers._extract_path_kind(full_path),
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -729,7 +437,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     pipeline_cache = getattr(request.app.state, "v2_provider_cache", None)
     if not isinstance(pipeline_cache, ProviderCache):
         pipeline_cache = None
-    pipeline_cache_enabled = pipeline_cache is not None and _is_pipeline_cache_enabled()
+    pipeline_cache_enabled = pipeline_cache is not None and _helpers._is_pipeline_cache_enabled()
     pipeline_cache_key: str | None = None
     if pipeline_cache_enabled:
         pipeline_cache_key = ProviderCache.make_key(
@@ -759,12 +467,12 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                     "pipeline cache hit: url=%s run_id=%s elapsed=%s",
                     classification.normalized_url,
                     run_id,
-                    _format_duration(cached_seconds),
+                    _helpers._format_duration(cached_seconds),
                 )
                 return response_model
 
     try:
-        orchestrator = _get_orchestrator(request)
+        orchestrator = _helpers._get_orchestrator(request)
         execution_plan = orchestrator.get_execution_plan(classification.detected_type)
         pipeline_result = await orchestrator.execute(
             plan=execution_plan,
@@ -814,7 +522,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
 
     typed_entity_buckets = pipeline_result.resolved_typed_entity_buckets().to_dict()
     permissive_entity_count = sum(len(bucket) for bucket in typed_entity_buckets.values())
-    logger.info("%s: entity_count=%d", STAGE_PERMISSIVE_VALIDATION, permissive_entity_count)
+    logger.info("%s: entity_count=%d", _helpers.STAGE_PERMISSIVE_VALIDATION, permissive_entity_count)
 
     llm_dedup_executed = False
     if resolved_runtime == AgentRuntime.LLM:
@@ -831,13 +539,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 max_concurrency=orchestrator.max_concurrent_agents,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_LLM_DEDUP)
+            logger.exception("%s stage failed", _helpers.STAGE_LLM_DEDUP)
             _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
         else:
             typed_entity_buckets = dedup_result.typed_entity_buckets
             logger.info(
                 "%s: accepted=%d rejected=%d remap=%d in %.2fs",
-                STAGE_LLM_DEDUP,
+                _helpers.STAGE_LLM_DEDUP,
                 dedup_result.accepted_cluster_count,
                 dedup_result.rejected_cluster_count,
                 dedup_result.remap_count,
@@ -852,7 +560,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     reconciled = reconcile_entities(typed_entity_buckets)
     logger.info(
         "%s: persons=%d orgs=%d repos=%d articles=%d memberships=%d contributions=%d in %.2fs",
-        STAGE_RECONCILIATION,
+        _helpers.STAGE_RECONCILIATION,
         len(reconciled.entities.get("persons", [])),
         len(reconciled.entities.get("organizations", [])),
         len(reconciled.entities.get("repositories", [])),
@@ -871,7 +579,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # drop, but before the LLM critic / refiner — that way the critic
     # sees the resolved affiliations and refine_with_llm doesn't waste
     # cycles re-resolving the same companies via its rescue path.
-    if _resolve_company_to_ror_enabled():
+    if _helpers._resolve_company_to_ror_enabled():
         stage_started_at = perf_counter()
         try:
             company_result = await run_resolve_company_to_ror_stage(
@@ -883,7 +591,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 "%s: persons_examined=%d persons_resolved=%d "
                 "memberships=%d organizations=%d "
                 "queries=%d accepted=%d in %.2fs",
-                STAGE_RESOLVE_COMPANY_TO_ROR,
+                _helpers.STAGE_RESOLVE_COMPANY_TO_ROR,
                 company_result.persons_examined,
                 company_result.persons_resolved,
                 company_result.memberships_created,
@@ -893,7 +601,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 perf_counter() - stage_started_at,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_RESOLVE_COMPANY_TO_ROR)
+            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_COMPANY_TO_ROR)
             _append_unique_warning(
                 warnings,
                 f"resolve_company_to_ror stage failed: {exc}",
@@ -907,7 +615,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # output looks identical to the critic / refiner — they see the same
     # `schema:affiliation` triples regardless of which extractor stamped
     # them.
-    if _resolve_bio_to_ror_enabled():
+    if _helpers._resolve_bio_to_ror_enabled():
         stage_started_at = perf_counter()
         try:
             bio_result = await run_resolve_bio_to_ror_stage(
@@ -918,7 +626,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 "%s: persons_examined=%d persons_resolved=%d "
                 "memberships=%d organizations=%d "
                 "candidates=%d queries=%d accepted=%d in %.2fs",
-                STAGE_RESOLVE_BIO_TO_ROR,
+                _helpers.STAGE_RESOLVE_BIO_TO_ROR,
                 bio_result.persons_examined,
                 bio_result.persons_resolved,
                 bio_result.memberships_created,
@@ -929,7 +637,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 perf_counter() - stage_started_at,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR)
+            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_BIO_TO_ROR)
             _append_unique_warning(
                 warnings,
                 f"resolve_bio_to_ror stage failed: {exc}",
@@ -945,7 +653,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # reaches this stage.
     if (
         resolved_runtime in (AgentRuntime.LLM, AgentRuntime.HYBRID)
-        and _resolve_bio_to_ror_llm_enabled()
+        and _helpers._resolve_bio_to_ror_llm_enabled()
     ):
         stage_started_at = perf_counter()
         try:
@@ -956,7 +664,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             logger.info(
                 "%s: persons_examined=%d called=%d resolved=%d failed=%d "
                 "memberships=%d organizations=%d in %.2fs",
-                STAGE_RESOLVE_BIO_TO_ROR_LLM,
+                _helpers.STAGE_RESOLVE_BIO_TO_ROR_LLM,
                 bio_llm_result.persons_examined,
                 bio_llm_result.persons_called,
                 bio_llm_result.persons_resolved,
@@ -968,7 +676,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             for warning in bio_llm_result.warnings:
                 _append_unique_warning(warnings, warning)
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_RESOLVE_BIO_TO_ROR_LLM)
+            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_BIO_TO_ROR_LLM)
             _append_unique_warning(
                 warnings,
                 f"resolve_bio_to_ror_llm stage failed: {exc}",
@@ -983,7 +691,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # the three Person-side resolvers because it's strictly weaker —
     # those stages have richer signal (`_company`, `_bio`, etc.) and
     # should win first.
-    if _resolve_placeholder_orgs_to_ror_enabled():
+    if _helpers._resolve_placeholder_orgs_to_ror_enabled():
         stage_started_at = perf_counter()
         try:
             placeholder_result = await run_resolve_placeholder_orgs_to_ror_stage(
@@ -993,7 +701,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             logger.info(
                 "%s: examined=%d resolved=%d memberships_rewritten=%d "
                 "queries=%d accepted=%d in %.2fs",
-                STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
+                _helpers.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
                 placeholder_result.placeholders_examined,
                 placeholder_result.placeholders_resolved,
                 placeholder_result.memberships_rewritten,
@@ -1003,18 +711,18 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             )
         except Exception as exc:
             logger.exception(
-                "%s stage failed", STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
+                "%s stage failed", _helpers.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
             )
             _append_unique_warning(
                 warnings,
                 f"resolve_placeholder_orgs_to_ror stage failed: {exc}",
             )
 
-    apply_critic_pruning = _should_apply_critic_pruning()
+    apply_critic_pruning = _helpers._should_apply_critic_pruning()
     if resolved_runtime == AgentRuntime.LLM and not apply_critic_pruning:
         logger.info(
             "%s: skipped (V2_APPLY_CRITIC_PRUNING=false — entities preserved)",
-            STAGE_LLM_CRITIC,
+            _helpers.STAGE_LLM_CRITIC,
         )
     if resolved_runtime == AgentRuntime.LLM and apply_critic_pruning:
         llm_critic_executed = True
@@ -1031,14 +739,14 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 cache=pipeline_cache,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_LLM_CRITIC)
+            logger.exception("%s stage failed", _helpers.STAGE_LLM_CRITIC)
             _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
         else:
             reconciled = critic_result.reconciled
             critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
             logger.info(
                 "%s: proposed_drop=%d applied_drop=%d protected_roots=%d in %.2fs",
-                STAGE_LLM_CRITIC,
+                _helpers.STAGE_LLM_CRITIC,
                 critic_result.applied.get("proposed_drop_count", 0),
                 critic_result.applied.get("applied_drop_count", 0),
                 len(critic_result.applied.get("protected_root_ids", [])),
@@ -1058,7 +766,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 max_concurrency=orchestrator.max_concurrent_agents,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_REFINE_WITH_LLM)
+            logger.exception("%s stage failed", _helpers.STAGE_REFINE_WITH_LLM)
             _append_unique_warning(
                 warnings,
                 f"refine_with_llm stage failed: {exc}",
@@ -1067,7 +775,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             reconciled = refine_result.reconciled
             logger.info(
                 "%s: refined=%d skipped=%d failed=%d in %.2fs",
-                STAGE_REFINE_WITH_LLM,
+                _helpers.STAGE_REFINE_WITH_LLM,
                 refine_result.refined_count,
                 refine_result.skipped_count,
                 refine_result.failed_count,
@@ -1112,7 +820,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     strict_batch = StrictSchemaValidator().validate_batch(strict_validation_entities)
     logger.info(
         "%s: valid=%d invalid=%d in %.2fs",
-        STAGE_STRICT_VALIDATION,
+        _helpers.STAGE_STRICT_VALIDATION,
         len(strict_batch.valid_entities),
         len(strict_batch.invalid_entities),
         perf_counter() - stage_started_at,
@@ -1134,7 +842,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         failure_message = (
             f"Root {exc.entity_type} entity '{exc.entity_id}' failed strict validation"
         )
-        logger.warning("%s: %s", STAGE_OUTPUT_ASSEMBLY, failure_message)
+        logger.warning("%s: %s", _helpers.STAGE_OUTPUT_ASSEMBLY, failure_message)
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.VALIDATION_ERROR,
             detail=failure_message,
@@ -1153,7 +861,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
     except ValueError as exc:
-        logger.warning("%s: rootless output — %s", STAGE_OUTPUT_ASSEMBLY, exc)
+        logger.warning("%s: rootless output — %s", _helpers.STAGE_OUTPUT_ASSEMBLY, exc)
         assembled_output = _build_rootless_assembled_output(
             reconciled=reconciled,
             strict_batch=strict_batch,
@@ -1161,7 +869,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         )
     logger.info(
         "%s: related=%d excluded=%d warnings=%d in %.2fs",
-        STAGE_OUTPUT_ASSEMBLY,
+        _helpers.STAGE_OUTPUT_ASSEMBLY,
         len(assembled_output.related_entities),
         len(assembled_output.excluded_entities),
         len(assembled_output.warnings),
@@ -1208,13 +916,13 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         # extracts without per-link verification.
         logger.info(
             "%s: skipped (agent_runtime=%s — link veracity is LLM-only)",
-            STAGE_LINK_VERACITY,
+            _helpers.STAGE_LINK_VERACITY,
             resolved_runtime.value,
         )
-    elif not _is_link_veracity_enabled():
+    elif not _helpers._is_link_veracity_enabled():
         logger.info(
             "%s: skipped (V2_LINK_VERACITY_ENABLED=false)",
-            STAGE_LINK_VERACITY,
+            _helpers.STAGE_LINK_VERACITY,
         )
     else:
         try:
@@ -1226,12 +934,12 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 cache=provider_cache,
             )
         except Exception as exc:
-            logger.exception("%s stage failed", STAGE_LINK_VERACITY)
+            logger.exception("%s stage failed", _helpers.STAGE_LINK_VERACITY)
             _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
         else:
             logger.info(
                 "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d in %.2fs",
-                STAGE_LINK_VERACITY,
+                _helpers.STAGE_LINK_VERACITY,
                 link_veracity_result.checked_count,
                 link_veracity_result.supported_count,
                 link_veracity_result.unsupported_count,
@@ -1263,7 +971,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 if id_rewrites:
                     logger.info(
                         "%s: promoted %d entity id(s) past failed url(s)",
-                        STAGE_LINK_VERACITY,
+                        _helpers.STAGE_LINK_VERACITY,
                         len(id_rewrites),
                     )
                     # The rewritten entities now expose their new id; remove the
@@ -1553,15 +1261,15 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     graph_nodes = shacl_graph_payload.get("@graph")
     logger.info(
         "%s: entities=%d context_terms=%d in %.2fs",
-        STAGE_JSONLD_BUILD,
+        _helpers.STAGE_JSONLD_BUILD,
         len(graph_nodes) if isinstance(graph_nodes, list) else 0,
         len(jsonld_context),
         perf_counter() - stage_started_at,
     )
 
-    shacl_data_graph = _jsonld_to_graph(shacl_graph_payload)
+    shacl_data_graph = _helpers._jsonld_to_graph(shacl_graph_payload)
     if shacl_data_graph is None:
-        logger.warning("%s: skipped — unable to parse assembled graph payload", STAGE_SHACL_GATE)
+        logger.warning("%s: skipped — unable to parse assembled graph payload", _helpers.STAGE_SHACL_GATE)
         _append_unique_warning(
             warnings,
             "SHACL validation skipped: unable to parse assembled graph payload",
@@ -1573,10 +1281,10 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 load_ontology_shapes_graph(),
             )
         except SHACLRuntimeUnavailableError as exc:
-            logger.warning("%s: skipped — %s", STAGE_SHACL_GATE, exc)
+            logger.warning("%s: skipped — %s", _helpers.STAGE_SHACL_GATE, exc)
             _append_unique_warning(warnings, str(exc))
         except Exception as exc:
-            logger.exception("%s failed", STAGE_SHACL_GATE)
+            logger.exception("%s failed", _helpers.STAGE_SHACL_GATE)
             _append_unique_warning(warnings, f"SHACL validation failed: {exc}")
         else:
             for violation in shacl_result.violations:
@@ -1601,7 +1309,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 )
             logger.info(
                 "%s: conforms=%s violations=%d warnings=%d",
-                STAGE_SHACL_GATE,
+                _helpers.STAGE_SHACL_GATE,
                 shacl_result.conforms,
                 len(shacl_result.violations),
                 len(shacl_result.warnings),
@@ -1623,7 +1331,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
                 context_summary_markdown = summary_value
 
     output_payload = response_output.model_dump(mode="json", by_alias=True)
-    extract_graph = _jsonld_to_graph(output_payload) if output_format == "jsonld" else None
+    extract_graph = _helpers._jsonld_to_graph(output_payload) if output_format == "jsonld" else None
     final_entities = []
     if isinstance(assembled_output.root_entity, dict):
         final_entities.append(assembled_output.root_entity)
@@ -1631,19 +1339,19 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     final_entity_count = len(final_entities)
 
     completed_stages = list(pipeline_result.stages_completed)
-    stage_sequence = [STAGE_PERMISSIVE_VALIDATION]
+    stage_sequence = [_helpers.STAGE_PERMISSIVE_VALIDATION]
     if llm_dedup_executed:
-        stage_sequence.append(STAGE_LLM_DEDUP)
-    stage_sequence.append(STAGE_RECONCILIATION)
+        stage_sequence.append(_helpers.STAGE_LLM_DEDUP)
+    stage_sequence.append(_helpers.STAGE_RECONCILIATION)
     if llm_critic_executed:
-        stage_sequence.append(STAGE_LLM_CRITIC)
+        stage_sequence.append(_helpers.STAGE_LLM_CRITIC)
     stage_sequence.extend(
         [
-            STAGE_STRICT_VALIDATION,
-            STAGE_OUTPUT_ASSEMBLY,
-            STAGE_LINK_VERACITY,
-            STAGE_JSONLD_BUILD,
-            STAGE_SHACL_GATE,
+            _helpers.STAGE_STRICT_VALIDATION,
+            _helpers.STAGE_OUTPUT_ASSEMBLY,
+            _helpers.STAGE_LINK_VERACITY,
+            _helpers.STAGE_JSONLD_BUILD,
+            _helpers.STAGE_SHACL_GATE,
         ],
     )
     for stage_name in stage_sequence:
@@ -1667,10 +1375,10 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         classification.normalized_url,
         final_entity_count,
         len(warnings),
-        _format_duration(total_seconds),
-        _format_duration(orchestrator_seconds),
-        _format_duration(link_veracity_seconds),
-        _format_duration(other_seconds),
+        _helpers._format_duration(total_seconds),
+        _helpers._format_duration(orchestrator_seconds),
+        _helpers._format_duration(link_veracity_seconds),
+        _helpers._format_duration(other_seconds),
     )
 
     response_model = V2ExtractResponse(
@@ -1706,19 +1414,19 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     # organically as new repos are seen, so subsequent extractions find
     # them via `search_github_rag`. Fire-and-forget — the caller's
     # response is already built, the ingest is best-effort.
-    _maybe_schedule_github_repos_auto_ingest(
+    auto_ingest._maybe_schedule_github_repos_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
-    _maybe_schedule_github_users_auto_ingest(
+    auto_ingest._maybe_schedule_github_users_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
-    _maybe_schedule_github_orgs_auto_ingest(
+    auto_ingest._maybe_schedule_github_orgs_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
-    _maybe_schedule_huggingface_papers_auto_ingest(
+    auto_ingest._maybe_schedule_huggingface_papers_auto_ingest(
         classification=classification,
         run_id=run_id,
     )
@@ -1726,436 +1434,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     return response_model
 
 
-_GITHUB_REPOS_AUTO_INGEST_LOCK = threading.Lock()
-_GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
-_GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
-_HF_PAPERS_AUTO_INGEST_LOCK = threading.Lock()
-
-
-def _hf_papers_arxiv_id_from_url(normalized_url: Any) -> str | None:
-    """Extract an arXiv id from a `huggingface.co/papers/<arxiv_id>` URL.
-
-    Only fires for HF Papers URLs — does NOT fire for raw `arxiv.org`
-    URLs or arXiv DOIs, by design (the user opted in for HF Papers
-    URLs specifically). Uses the canonical arXiv id normaliser so
-    version suffixes are stripped.
-    """
-    if not isinstance(normalized_url, str) or "huggingface.co/papers/" not in normalized_url:
-        return None
-    try:
-        from open_pulse_sources.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
-            normalize_arxiv_id,
-        )
-    except Exception:  # noqa: BLE001
-        return None
-    return normalize_arxiv_id(normalized_url)
-
-
-def _github_account_login_from_url(normalized_url: Any) -> str | None:
-    """Extract a bare GitHub login from a normalised user/org URL, or None.
-
-    Accepts the same URL shapes the classifier emits for user/org
-    targets: `https://github.com/<login>` or `https://github.com/orgs/<login>`.
-    Returns the bare handle on success, or None if the URL has the
-    wrong host, an extra path segment (which would indicate a repo),
-    or is malformed.
-    """
-    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
-        return None
-    rest = (
-        normalized_url.removeprefix("https://github.com/")
-        .removeprefix("http://github.com/")
-        .strip("/")
-    )
-    if not rest:
-        return None
-    # `/orgs/<login>` is GitHub's web UI URL for an org; strip the prefix.
-    if rest.startswith("orgs/"):
-        rest = rest[len("orgs/"):]
-    # User/org URLs are a single path segment — anything with a `/`
-    # left is a repo and shouldn't reach this helper.
-    if "/" in rest:
-        return None
-    return rest or None
-
-
-def _maybe_schedule_github_repos_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
-) -> None:
-    """Schedule a background GitHub RAG ingest when the operator opts in.
-
-    Gates:
-    - `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true` env var (off by default — every
-      existing deployment keeps its current behaviour).
-    - The extract target must be a repository (we have no index for
-      user/org/article cards yet).
-    - `classification.normalized_url` must be a public github.com repo.
-      Private/unreachable repos surface as `skipped_404` inside
-      `ingest_single_repo` and emit one warning; no crash.
-
-    Concurrency: a module-level `threading.Lock` serialises DuckDB
-    writes across uvicorn worker tasks. The single-repo ingest is
-    fast (~1-3s) so contention is negligible.
-    """
-    if not _auto_ingest_enabled(
-        "V2_GITHUB_REPOS_RAG_AUTO_INGEST", "V2_GITHUB_RAG_AUTO_INGEST",
-    ):
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "repository":
-        return
-    normalized_url = getattr(classification, "normalized_url", None)
-    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
-        return
-    full_name = normalized_url.removeprefix("https://github.com/").removeprefix(
-        "http://github.com/",
-    ).strip("/")
-    if not full_name or full_name.count("/") != 1:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_repos.config import (
-                load_config as load_github_config,
-            )
-            from open_pulse_sources.index.github_repos.embed.pipeline import (
-                embed_repos,
-            )
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-            from open_pulse_sources.index.github_repos.ingest.repos import (
-                ingest_single_repo,
-            )
-            from open_pulse_sources.index.github_repos.storage.duckdb_store import (
-                GitHubReposStore,
-            )
-        except Exception:
-            logger.exception(
-                "github auto-ingest (run_id=%s, repo=%s): module import failed",
-                run_id, full_name,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_github_config()
-            cfg.require_github()
-            with _GITHUB_REPOS_AUTO_INGEST_LOCK:
-                store = GitHubReposStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_repo(full_name)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_repo(
-                        config=cfg, store=store, client=client, full_name=full_name,
-                    )
-                    if outcome == "skipped_404":
-                        return ("skipped_404", 0)
-                    embed_summary = embed_repos(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("repos", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github auto-ingest (run_id=%s, repo=%s): failed",
-                run_id, full_name,
-            )
-            return
-        logger.info(
-            "github auto-ingest (run_id=%s, repo=%s): %s (chunks_embedded=%d)",
-            run_id, full_name, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        # No running event loop (e.g. unit tests that call extract
-        # synchronously). Skip silently — the auto-ingest is a
-        # non-essential background enrichment.
-        return
-
-
-def _maybe_schedule_github_users_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
-) -> None:
-    """Schedule a background ingest into the github_users index when
-    the operator opts in via `V2_GITHUB_USERS_RAG_AUTO_INGEST=true`.
-
-    Same gating shape as `_maybe_schedule_github_repos_auto_ingest` but
-    fires only for `detected_type == "user"` targets. Org-typed
-    extracts are handled by the sibling helper below.
-    """
-    if os.getenv("V2_GITHUB_USERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "user":
-        return
-    login = _github_account_login_from_url(
-        getattr(classification, "normalized_url", None),
-    )
-    if login is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-            from open_pulse_sources.index.github_users.config import load_config  # noqa: PLC0415
-            from open_pulse_sources.index.github_users.embed.pipeline import (
-                embed_users,
-            )
-            from open_pulse_sources.index.github_users.ingest.users import (
-                ingest_single_user,
-            )
-            from open_pulse_sources.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
-                GitHubUsersStore,
-            )
-        except Exception:
-            logger.exception(
-                "github_users auto-ingest (run_id=%s, login=%s): module import failed",
-                run_id, login,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            cfg.require_github()
-            with _GITHUB_USERS_AUTO_INGEST_LOCK:
-                store = GitHubUsersStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_user(login)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_user(
-                        config=cfg, store=store, client=client, login=login,
-                    )
-                    if outcome in {"skipped_404", "skipped_org"}:
-                        return (outcome, 0)
-                    embed_summary = embed_users(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("users", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github_users auto-ingest (run_id=%s, login=%s): failed",
-                run_id, login,
-            )
-            return
-        logger.info(
-            "github_users auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
-            run_id, login, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
-
-
-def _maybe_schedule_github_orgs_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
-) -> None:
-    """Schedule a background ingest into the github_organizations index
-    when `V2_GITHUB_ORGS_RAG_AUTO_INGEST=true`.
-
-    Fires only for `detected_type == "organization"` targets — uses
-    the v2 detected-type enum (`organization`, not `org`).
-    """
-    if os.getenv("V2_GITHUB_ORGS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "organization":
-        return
-    login = _github_account_login_from_url(
-        getattr(classification, "normalized_url", None),
-    )
-    if login is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_organizations.config import (
-                load_config,
-            )
-            from open_pulse_sources.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
-                embed_organizations,
-            )
-            from open_pulse_sources.index.github_organizations.ingest.organizations import (  # noqa: PLC0415
-                ingest_single_organization,
-            )
-            from open_pulse_sources.index.github_organizations.storage.duckdb_store import (  # noqa: PLC0415
-                GitHubOrganizationsStore,
-            )
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-        except Exception:
-            logger.exception(
-                "github_organizations auto-ingest (run_id=%s, login=%s): module import failed",
-                run_id, login,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            cfg.require_github()
-            with _GITHUB_ORGS_AUTO_INGEST_LOCK:
-                store = GitHubOrganizationsStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_organization(login)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_organization(
-                        config=cfg, store=store, client=client, login=login,
-                    )
-                    if outcome in {"skipped_404", "skipped_user"}:
-                        return (outcome, 0)
-                    embed_summary = embed_organizations(
-                        config=cfg, store=store, limit=None,
-                    )
-                    return (outcome, int(embed_summary.get("organizations", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github_organizations auto-ingest (run_id=%s, login=%s): failed",
-                run_id, login,
-            )
-            return
-        logger.info(
-            "github_organizations auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
-            run_id, login, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
-
-
-def _maybe_schedule_huggingface_papers_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
-) -> None:
-    """Schedule a background ingest into the huggingface_papers index
-    when `V2_HF_PAPERS_RAG_AUTO_INGEST=true` AND the extract target
-    is a `huggingface.co/papers/<arxiv_id>` URL.
-
-    Unlike the github_users / github_organizations helpers, this one
-    does NOT check `classification.detected_type` — HF Papers URLs
-    don't necessarily have a dedicated detected_type, so we gate
-    purely on the URL pattern. The narrow URL match is the safety
-    net: only true HF Papers URLs trigger; raw arXiv URLs and DOIs
-    are skipped (per the operator's choice when this feature was
-    designed).
-    """
-    if os.getenv("V2_HF_PAPERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "normalized_url"):
-        return
-    arxiv_id = _hf_papers_arxiv_id_from_url(
-        getattr(classification, "normalized_url", None),
-    )
-    if arxiv_id is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.huggingface_papers.config import load_config  # noqa: PLC0415
-            from open_pulse_sources.index.huggingface_papers.embed.pipeline import (
-                embed_papers,
-            )
-            from open_pulse_sources.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
-                HFPapersClient,
-            )
-            from open_pulse_sources.index.huggingface_papers.ingest.papers import (  # noqa: PLC0415
-                ingest_single_paper,
-            )
-            from open_pulse_sources.index.huggingface_papers.storage.duckdb_store import (  # noqa: PLC0415
-                HuggingFacePapersStore,
-            )
-        except Exception:
-            logger.exception(
-                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): module import failed",
-                run_id, arxiv_id,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            with _HF_PAPERS_AUTO_INGEST_LOCK:
-                store = HuggingFacePapersStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_paper(arxiv_id)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = HFPapersClient(
-                        api_base=cfg.huggingface.api_base,
-                        token=cfg.huggingface.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_paper(
-                        config=cfg, store=store, client=client, arxiv_id=arxiv_id,
-                    )
-                    if outcome == "skipped_404":
-                        return (outcome, 0)
-                    embed_summary = embed_papers(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("papers", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): failed",
-                run_id, arxiv_id,
-            )
-            return
-        logger.info(
-            "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): %s (chunks_embedded=%d)",
-            run_id, arxiv_id, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
 
 
 @v2_router.post(
@@ -2180,7 +1458,7 @@ async def extract_post(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=exc.reason,
             source_url=exc.normalized_url,
-            detected_path_kind=_extract_path_kind(payload.source_url),
+            detected_path_kind=_helpers._extract_path_kind(payload.source_url),
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2191,14 +1469,14 @@ async def extract_post(
             error_type=V2ErrorType.UNSUPPORTED_URL,
             detail=str(exc),
             source_url=payload.source_url,
-            detected_path_kind=_extract_path_kind(payload.source_url),
+            detected_path_kind=_helpers._extract_path_kind(payload.source_url),
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=error_payload.model_dump(mode="json", exclude_none=True),
         )
 
-    job_store = _resolve_job_store(request)
+    job_store = _helpers._resolve_job_store(request)
     if job_store is None:
         error_payload = V2ErrorResponse(
             error_type=V2ErrorType.PIPELINE_ERROR,
@@ -2232,8 +1510,8 @@ async def extract_post(
             job_id=job_id,
         ),
     )
-    _track_background_task(request, task)
-    _register_job_task(request, job_id, task)
+    _helpers._track_background_task(request, task)
+    _helpers._register_job_task(request, job_id, task)
 
     logger.info(
         "extract job submitted: job_id=%s url=%s detected_type=%s",
@@ -2244,249 +1522,7 @@ async def extract_post(
     return V2ExtractJobAccepted(
         job_id=job_id,
         status=V2ExtractJobStatus.PENDING,
-        status_url=_job_status_path(job_id),
+        status_url=_helpers._job_status_path(job_id),
         submitted_at=submitted_at,
     )
 
-
-def _maybe_mark_extract_job_stale(
-    record: V2ExtractJob, job_store: Any,
-) -> V2ExtractJob:
-    """Flip an orphaned RUNNING job to FAILED in place.
-
-    The worker executing this job may have died (OS kill, deploy, OOM, …)
-    without flipping the status, leaving the stored record stuck in
-    RUNNING. We detect that when no heartbeat has landed in over
-    ``_JOB_STALE_THRESHOLD_SECONDS``, flip to FAILED, persist, and return
-    the updated record so the client stops polling. New `POST /v2/extract`
-    calls start a fresh job. No-op for non-RUNNING or still-fresh jobs.
-
-    Shared by `GET /v2/jobs/{job_id}` (full record) and
-    `GET /v2/crawl/{job_id}` (compact status) so both agree on liveness.
-    """
-    if record.status != V2ExtractJobStatus.RUNNING:
-        return record
-    now = datetime.now(timezone.utc)
-    beat = record.last_heartbeat_at or record.started_at or record.submitted_at
-    if beat is not None and (now - beat).total_seconds() > _JOB_STALE_THRESHOLD_SECONDS:
-        stale_seconds = (now - beat).total_seconds()
-        logger.warning(
-            "marking job %s as FAILED: no heartbeat for %.0fs "
-            "(threshold=%.0fs) — worker likely died mid-flight",
-            record.job_id,
-            stale_seconds,
-            _JOB_STALE_THRESHOLD_SECONDS,
-        )
-        record.status = V2ExtractJobStatus.FAILED
-        record.completed_at = now
-        record.error = V2ErrorResponse(
-            error_type=V2ErrorType.PIPELINE_ERROR,
-            detail=(
-                "extract job orphaned: worker process died mid-extraction "
-                f"(no heartbeat for {int(stale_seconds)}s)"
-            ),
-            source_url=record.request.source_url,
-        )
-        job_store.set(record)
-    return record
-
-
-def _resolve_extract_record(
-    request: Request, job_id: str,
-) -> V2ExtractJob | JSONResponse:
-    """Resolve an extract job by id, with liveness check.
-
-    Returns the (stale-checked) :class:`V2ExtractJob`, or a `JSONResponse`
-    error: 503 when the async job store is unavailable, 404 when no job
-    matches. Shared by `GET /v2/jobs/{job_id}` and `GET /v2/crawl/{job_id}`.
-    """
-    job_store = _resolve_job_store(request)
-    if job_store is None:
-        error_payload = V2ErrorResponse(
-            error_type=V2ErrorType.PIPELINE_ERROR,
-            detail="async job store unavailable: provider cache is disabled",
-        )
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=error_payload.model_dump(mode="json", exclude_none=True),
-        )
-    record = job_store.get(job_id)
-    if record is None:
-        error_payload = V2ErrorResponse(
-            error_type=V2ErrorType.NOT_FOUND,
-            detail=f"no extract job found with id '{job_id}'",
-        )
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content=error_payload.model_dump(mode="json", exclude_none=True),
-        )
-    return _maybe_mark_extract_job_stale(record, job_store)
-
-
-@v2_router.get(
-    "/jobs/{job_id}",
-    response_model=V2ExtractJob,
-    response_model_exclude_none=True,
-)
-async def extract_job(
-    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> V2ExtractJob | JSONResponse:
-    """Retrieve a previously submitted extraction job (full record + graph)."""
-
-    return _resolve_extract_record(request, job_id)
-
-
-@v2_router.post(
-    "/jobs/{job_id}/cancel",
-    response_model=V2ExtractJob,
-    response_model_exclude_none=True,
-    tags=["Extraction"],
-)
-async def cancel_extract_job(
-    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> V2ExtractJob | JSONResponse:
-    """Cancel a pending/running extract job and free its worker.
-
-    Cooperative async cancellation: cancels the job's asyncio task (which
-    interrupts the pipeline at its next ``await`` — e.g. an in-flight LLM or
-    HTTP call) and marks the record ``cancelled``. Idempotent: a job already in
-    a terminal state is returned unchanged. 404 if no job matches, 503 if the
-    async job store is unavailable.
-    """
-    resolved = _resolve_extract_record(request, job_id)
-    if isinstance(resolved, JSONResponse):
-        return resolved
-    if resolved.status in _TERMINAL_JOB_STATUSES:
-        return resolved
-
-    task = _get_job_task(request, job_id)
-    if task is not None and not task.done():
-        task.cancel()
-
-    # Mark cancelled immediately for an authoritative response even if the task
-    # is wedged on a blocking call; the task's own CancelledError handler is a
-    # no-op then (status already terminal).
-    job_store = _resolve_job_store(request)
-    if job_store is not None:
-        record = job_store.get(job_id)
-        if record is not None and record.status not in _TERMINAL_JOB_STATUSES:
-            record.status = V2ExtractJobStatus.CANCELLED
-            record.completed_at = datetime.now(timezone.utc)
-            record.last_heartbeat_at = record.completed_at
-            job_store.set(record)
-            resolved = record
-    return resolved
-
-
-@v2_router.get(
-    "/crawl/{job_id}",
-    response_model=V2JobStatus,
-    response_model_exclude_none=True,
-    tags=["Extraction"],
-)
-async def crawl_status(
-    job_id: Annotated[str, Path(description="Job id returned by POST /v2/extract.")],
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> V2JobStatus | JSONResponse:
-    """Lightweight status of an extract job, without the result graph.
-
-    Parity with the retired v1 crawl-status surface and a cheap polling target:
-    returns just the lifecycle fields (status + timestamps + error). The
-    full extracted graph lives at ``result_url`` (`GET /v2/jobs/{job_id}`).
-    503 if the async job store is unavailable, 404 if no job matches.
-    """
-    resolved = _resolve_extract_record(request, job_id)
-    if isinstance(resolved, JSONResponse):
-        return resolved
-    return V2JobStatus(
-        job_id=resolved.job_id,
-        status=resolved.status,
-        source_url=resolved.request.source_url,
-        submitted_at=resolved.submitted_at,
-        started_at=resolved.started_at,
-        completed_at=resolved.completed_at,
-        last_heartbeat_at=resolved.last_heartbeat_at,
-        error=resolved.error,
-        result_url=f"/v2/jobs/{resolved.job_id}",
-    )
-
-
-@v2_router.post(
-    "/cache/clear",
-    tags=["Cache Management"],
-)
-async def clear_v2_cache(
-    request: Request,
-    _token: Annotated[str, Depends(verify_token)],
-) -> dict[str, Any]:
-    """Wipe every entry from the v2 pipeline cache.
-
-    Targets the `ProviderCache` SQLite at `V2_PROVIDER_CACHE_PATH` — the
-    same store that backs the `/extract` short-circuit and the per-provider
-    sub-caches (RAG, Selenium, link veracity, etc.).
-    """
-
-    cache = getattr(request.app.state, "v2_provider_cache", None)
-    if not isinstance(cache, ProviderCache):
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"detail": "v2 provider cache is not configured"},
-        )
-    removed = cache.clear()
-    logger.info("v2 cache cleared: removed=%d entries", removed)
-    return {"message": f"Cleared {removed} v2 cache entries", "removed": removed}
-
-
-
-@v2_router.get(
-    "/health",
-    response_model=V2HealthResponse,
-)
-async def health() -> V2HealthResponse:
-    component_statuses: dict[str, Literal["healthy", "degraded", "unhealthy"]] = {
-        "python": (
-            "healthy"
-            if sys.version_info[:2] >= MIN_SUPPORTED_PYTHON
-            else "unhealthy"
-        ),
-    }
-
-    config: V2Config | None = None
-    try:
-        config = V2Config()
-        component_statuses["config"] = "healthy"
-    except ValueError:
-        component_statuses["config"] = "unhealthy"
-
-    rate_limit_summary: GitHubRateLimitSummary | None = None
-    if config and config.GME_GITHUB_TOKEN:
-        try:
-            rate_limit_summary = probe_github_rate_limit()
-        except Exception:
-            logger.exception("github rate-limit probe failed")
-            rate_limit_summary = None
-        component_statuses["github_token"] = (
-            rate_limit_summary.status if rate_limit_summary is not None else "degraded"
-        )
-    else:
-        component_statuses["github_token"] = "degraded"
-
-    overall_status: Literal["healthy", "degraded", "unhealthy"]
-    if "unhealthy" in component_statuses.values():
-        overall_status = "unhealthy"
-    elif "degraded" in component_statuses.values():
-        overall_status = "degraded"
-    else:
-        overall_status = "healthy"
-
-    return V2HealthResponse(
-        status=overall_status,
-        components=component_statuses,
-        version=PACKAGE_VERSION,
-        github_rate_limit=rate_limit_summary,
-    )

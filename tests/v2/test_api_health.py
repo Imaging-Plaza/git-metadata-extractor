@@ -61,7 +61,7 @@ def test_health_returns_healthy_when_all_checks_pass(
 ) -> None:
     monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
     monkeypatch.setattr(
-        "git_metadata_extractor.api.probe_github_rate_limit",
+        "git_metadata_extractor.api.system.probe_github_rate_limit",
         lambda: _healthy_rate_limit_summary(),
     )
 

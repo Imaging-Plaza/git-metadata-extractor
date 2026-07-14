@@ -368,7 +368,7 @@ def test_concurrency_env_garbage_falls_back(monkeypatch):
 
 
 def test_api_env_flag_defaults_on(monkeypatch):
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.delenv("V2_RESOLVE_BIO_TO_ROR_LLM", raising=False)
     assert v2_api._resolve_bio_to_ror_llm_enabled() is True
@@ -376,14 +376,14 @@ def test_api_env_flag_defaults_on(monkeypatch):
 
 @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off", "n", "f"])
 def test_api_env_flag_recognises_off_values(value, monkeypatch):
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_BIO_TO_ROR_LLM", value)
     assert v2_api._resolve_bio_to_ror_llm_enabled() is False
 
 
 def test_api_constant_and_export_in_place():
-    from git_metadata_extractor import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
     from git_metadata_extractor.pipeline import stages
 
     assert v2_api.STAGE_RESOLVE_BIO_TO_ROR_LLM == "resolve_bio_to_ror_llm"
