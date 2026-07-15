@@ -1,6 +1,11 @@
 # Task 03 — Child CI and quality gates
 
-**Severity:** P1 · **Status:** Ready · **Repository:** `open-pulse-sources/`
+**Severity:** P1 · **Status: DONE 2026-07-15 except MyPy + branch
+protection** (ruff gate green in CI against a documented baseline after a
+1.6k-finding auto-fix burn-down; justfile paths fixed; wheel/package-data
++ import-closure + image-smoke gates were already in). Branch protection
+is a GitHub-settings action for the maintainer; MyPy remains future work.
+· **Repository:** `open-pulse-sources/`
 
 ## Objective
 

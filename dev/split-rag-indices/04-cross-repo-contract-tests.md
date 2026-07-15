@@ -1,6 +1,9 @@
 # Task 04 — Cross-repository compatibility contract
 
-**Severity:** P1 · **Status:** After Tasks 01–03 · **Repositories:** both
+**Severity:** P1 · **Status: core items DONE 2026-07-15** (import-contract
+test + HF provider fix in the parent; 503 error mapping in the child;
+remaining: store-compat fixtures, cross-repo CI matrix, full route-contract
+suite) · **Repositories:** both
 
 ## Objective
 

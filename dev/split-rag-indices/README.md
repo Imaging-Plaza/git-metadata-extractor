@@ -71,8 +71,8 @@ Important follow-ups:
 |---|---|---|---|
 | 1 | [01 — Package runtime assets](01-package-runtime-assets.md) | P0 | Do first |
 | 2 | [02 — Cross-repo dependency and release](02-cross-repo-dependency-release.md) | P0 | After 01; final publish also gated on 09 |
-| 3 | [03 — Child CI and quality gates](03-child-ci-quality-gates.md) | P1 | Parallel after 01 |
-| 4 | [04 — Cross-repo contract tests](04-cross-repo-contract-tests.md) | P1 | After 01–03 |
+| 3 | [03 — Child CI and quality gates](03-child-ci-quality-gates.md) | ~~P1~~ **DONE 2026-07-15** (MyPy + branch protection remain) | — |
+| 4 | [04 — Cross-repo contract tests](04-cross-repo-contract-tests.md) | **core DONE 2026-07-15** (import-contract test, HF fix, 503 mapping; fixtures/CI-matrix remain) | — |
 | 5 | [05 — Single-writer operation boundary](05-single-writer-operation-boundary.md) | P1 | Parallel design task |
 | 6 | [06 — Snapshot and read-path completion](06-snapshot-read-path-completion.md) | P1 | Coordinate with 05 |
 | 7 | [07 — Migration utility hardening](07-migration-utility-hardening.md) | P1 | Parallel |

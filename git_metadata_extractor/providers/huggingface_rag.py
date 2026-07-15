@@ -312,7 +312,15 @@ def build_default_provider(
         return None
     try:
         # Lazy load: missing yaml / env should not break v2 init.
-        from open_pulse_sources.index.huggingface.config import load_config  # noqa: PLC0415
+        # NOTE: the search collections are hardcoded in _HF_COLLECTION_MAP;
+        # this config only supplies the shared Qdrant/RCP connection
+        # settings, so the models-family config is the canonical donor.
+        # (The old `index.huggingface.config` catch-all was retired upstream
+        # in 9a5aa2b — importing it silently disabled this provider for
+        # every deployment since; guarded by the import-contract test.)
+        from open_pulse_sources.index.huggingface_models.config import (  # noqa: PLC0415
+            load_config,
+        )
 
         resolved = cfg or load_config()
     except Exception as exc:  # noqa: BLE001
