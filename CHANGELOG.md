@@ -34,6 +34,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   reads UTF-8 explicitly, and the codegen executable lookup no longer tries to
   run a POSIX `.venv/bin/` script on Windows.
 
+- **A fresh dependency resolve broke every pydantic-ai import.**
+  `opentelemetry-api` removed the deprecated `opentelemetry._events` module in
+  `1.44.0`, but logfire (transitive: pydantic-ai → logfire) still imports it
+  and its own metadata allows `opentelemetry-sdk<1.45.0` — so a clean install
+  picked `1.44.0` and any test touching pydantic-ai died at collection with
+  `ModuleNotFoundError`. Capped `opentelemetry-api` / `opentelemetry-sdk` to
+  `<1.44` until logfire stops importing the removed module. Only surfaced now
+  because CI had never run on this branch (`ci.yml` triggers on `main` /
+  `develop` only) — existing environments resolved before the release.
+
 - **GIMIE extraction was silently dead in every sidecar deployment.** Two
   independent defects: (1) the client requested `/gimie/jsonld/…`, a route
   that never existed on gimie-api — it now fetches `/gimie/ttl/…` and

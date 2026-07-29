@@ -58,6 +58,16 @@ dependencies = [
     "uvicorn-worker==0.3.0",
     "pydantic-ai>=1.0.15",
     "griffe<2",
+    # logfire (transitive: pydantic-ai -> logfire) imports the deprecated
+    # `opentelemetry._events` module, which opentelemetry-api DROPPED in
+    # 1.44.0 — while logfire 4.39.0 (latest) still declares
+    # `opentelemetry-sdk<1.45.0`, so its own range does not exclude the
+    # break. A fresh resolve therefore installs 1.44.0 and every test that
+    # touches pydantic-ai dies at import with
+    # `ModuleNotFoundError: No module named 'opentelemetry._events'`.
+    # Drop these caps once logfire stops importing the removed module.
+    "opentelemetry-api<1.44",
+    "opentelemetry-sdk<1.44",
     "httpx",
     "markdownify==1.2.0",
     "pyshacl==0.28.1",
