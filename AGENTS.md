@@ -322,6 +322,12 @@ After any schema edit: copy to all three and run `just v2-models-generate`
 to regenerate Pydantic models in `git_metadata_extractor/schema/models/`. `just v2-models-check`
 in CI catches drift.
 
+The check regenerates and compares **byte-for-byte**, so the codegen toolchain
+is part of the contract: `datamodel-code-generator` and `ruff` are pinned
+exactly in the `dev` extra. Bump them deliberately and regenerate in the same
+commit — a range would let any upstream formatting change turn the gate red on
+an unrelated PR.
+
 ## Identifier conventions
 
 - **Person**: `https://orcid.org/{orcid}` when ORCID known, else `https://github.com/{login}`, else `urn:pulse:{uuid}`

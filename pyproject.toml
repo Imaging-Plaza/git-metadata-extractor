@@ -85,9 +85,16 @@ dev = [
     "pytest-testmon>=2.1.3",
     "pytest-xdist>=3.6.1",
     "black>=23.0.0",
-    "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "datamodel-code-generator>=0.54.0",
+    # Pinned exactly, both of them: `just v2-models-check` regenerates the
+    # models and compares byte-for-byte against the committed output, so the
+    # generator AND the formatter it shells out to are part of that contract.
+    # With ranges, any upstream release that reorders imports or retouches
+    # formatting turns the gate red on an unrelated PR (this is exactly how
+    # codegen 0.71.0 + ruff 0.16.0 broke it — the committed files predated
+    # both). Bump these deliberately, then run `just v2-models-generate`.
+    "ruff==0.16.0",
+    "datamodel-code-generator==0.71.0",
     "respx>=0.21",
     "requests-mock>=1.12",
 ]

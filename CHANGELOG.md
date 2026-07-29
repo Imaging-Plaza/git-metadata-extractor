@@ -22,6 +22,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
+- **The generated-models gate was not reproducible, and regenerating on
+  Windows corrupted the output.** `just v2-models-check` regenerates the
+  Pydantic models and compares byte-for-byte, but `datamodel-code-generator`
+  and `ruff` were declared as open ranges — so codegen `0.71.0` + ruff
+  `0.16.0` reordered the imports and failed the gate on an unrelated PR. Both
+  are now pinned exactly and the models regenerated against them. Separately,
+  the bundle builder read the JSON schemas with the platform default encoding:
+  on Windows (cp1252) every non-ASCII description came back mangled
+  (`→` → `â†’`, `École` → `Ã‰cole`) and got baked into the models. It now
+  reads UTF-8 explicitly, and the codegen executable lookup no longer tries to
+  run a POSIX `.venv/bin/` script on Windows.
+
 - **GIMIE extraction was silently dead in every sidecar deployment.** Two
   independent defects: (1) the client requested `/gimie/jsonld/…`, a route
   that never existed on gimie-api — it now fetches `/gimie/ttl/…` and

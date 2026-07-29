@@ -10,9 +10,11 @@
 #
 
 from __future__ import annotations
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
+
 from enum import Enum
 from typing import Literal
+
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
 
 
 class Identifiers(BaseModel):

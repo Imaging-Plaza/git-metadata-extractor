@@ -10,8 +10,10 @@
 #
 
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field
+
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Identifiers(BaseModel):

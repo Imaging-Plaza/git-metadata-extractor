@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Final
@@ -65,7 +66,12 @@ def _build_embedded_bundle(
     assert isinstance(definitions, dict)
 
     for model_name, schema_name in model_schema_files.items():
-        schema_payload = json.loads((schema_dir / schema_name).read_text())
+        # JSON is UTF-8 by spec; without this the platform default (cp1252 on
+        # Windows) mangles non-ASCII descriptions — "→" became "â†’" and
+        # "École" became "Ã‰cole" in the generated models.
+        schema_payload = json.loads(
+            (schema_dir / schema_name).read_text(encoding="utf-8"),
+        )
         schema_payload["title"] = model_name
         definitions[model_name] = schema_payload
         property_name = model_name.lower()
@@ -80,7 +86,14 @@ def _datamodel_codegen_command(
     *,
     extra_fields: str = "forbid",
 ) -> list[str]:
-    local_codegen = REPO_ROOT / ".venv" / "bin" / "datamodel-codegen"
+    # Prefer the project venv, but only the layout this platform can execute:
+    # a checkout shared with a devcontainer keeps a POSIX `.venv/bin/` around,
+    # and handing that shell script to CreateProcess fails with WinError 193.
+    local_codegen = (
+        REPO_ROOT / ".venv" / "Scripts" / "datamodel-codegen.exe"
+        if sys.platform == "win32"
+        else REPO_ROOT / ".venv" / "bin" / "datamodel-codegen"
+    )
     executable = local_codegen if local_codegen.exists() else Path("datamodel-codegen")
     return [
         str(executable),
