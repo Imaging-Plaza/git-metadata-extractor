@@ -64,15 +64,20 @@ services:
   # app reaches it via GIMIE_API_URL (set on the devcontainer above). REQUIRED
   # for repository extraction; mirror this service in the production deploy.
   #
-  # Image pinned by digest for reproducibility (== :latest resolved 2026-06-07,
-  # gimie 0.7.2). Re-resolve + re-validate with scripts/v2/gimie_api_parity.py
-  # when bumping. To follow the moving tag instead, set GIMIE_API_IMAGE=:latest.
+  # GME-maintained image (tools/gimie-api) — the upstream
+  # ghcr.io/sdsc-ordes/gimie-api images ship gimie 0.6.1 with an app written
+  # for the 0.7.x API and never produce output. See
+  # dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md.
   gme-gimie-api:
-    image: ${GIMIE_API_IMAGE:-ghcr.io/sdsc-ordes/gimie-api@sha256:7a8a59b70d0787e1d265ff08f24328dd2d518f25dcc504b0420f8648ce99ecdb}
+    build:
+      context: ../tools/gimie-api
+    image: ${GIMIE_API_IMAGE:-gme-gimie-api:0.7.2}
     container_name: gme-gimie-api
     environment:
-      # gimie-api reads the GitHub token from ACCESS_TOKEN.
-      ACCESS_TOKEN: ${GME_GITHUB_TOKEN:-}
+      # gimie reads GITHUB_TOKEN — a SINGLE PAT (comma pools are normalized
+      # by the sidecar app, first token wins). ACCESS_TOKEN kept as alias.
+      GITHUB_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+      ACCESS_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
     ports:
       - "${GIMIE_API_PORT:-7000}:15400"
     restart: unless-stopped

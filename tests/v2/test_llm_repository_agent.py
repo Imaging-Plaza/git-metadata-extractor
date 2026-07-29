@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from jsonschema import validate
 
-from src.v2.agents.llm.repository import LLMRepositoryAgentV2
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents.llm.repository import LLMRepositoryAgentV2
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 _HAS_LLM_CREDENTIALS = bool(
     os.getenv("RCP_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")

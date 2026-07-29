@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from src.v2.agents.models import ProviderSet
-from src.v2.ingest.providers.orcid_provider import RealORCIDProvider
-from src.v2.ingest.providers.ror_provider import RealRORProvider
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.providers.orcid_provider import RealORCIDProvider
+from git_metadata_extractor.providers.ror_provider import RealRORProvider
 
 
 def test_orcid_provider_close_closes_and_nulls_session():

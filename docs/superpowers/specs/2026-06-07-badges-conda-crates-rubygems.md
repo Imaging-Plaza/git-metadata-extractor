@@ -8,7 +8,7 @@ and **RubyGems**, emitted as flat `gme-internal:*` scalars — extending the
 manifest-linked npm/PyPI discovery already shipped (#138).
 
 ## Build on existing pattern
-- `PackageRegistryProvider` (`src/v2/ingest/providers/package_registry_provider.py`)
+- `PackageRegistryProvider` (`git_metadata_extractor/providers/package_registry_provider.py`)
   already has `get_npm_package` / `get_pypi_package` (injectable `session`,
   optional `ProviderCache`, best-effort None-on-failure). Add the three new
   registries here, same shape.

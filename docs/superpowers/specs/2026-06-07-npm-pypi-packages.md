@@ -21,8 +21,8 @@ releases (#135) and GHCR packages (#136).
 - `context_gather` already stores best-effort extras into `repository_metadata`
   (`releases`, `container_images`, `has_ci`) which the repository agent reads via
   `repository.get(...)` and emits as `_`-prefixed internal fields.
-- `ProviderSet` (`src/v2/agents/models.py`) is the DI bundle; real instances are
-  built in `src/v2/dependencies.py` (mock path ~L351, real paths ~L358/L445).
+- `ProviderSet` (`git_metadata_extractor/agents/models.py`) is the DI bundle; real instances are
+  built in `git_metadata_extractor/dependencies.py` (mock path ~L351, real paths ~L358/L445).
 - Flat-scalar pattern: `summarize_releases` / `summarize_packages` in
   `_repo_signals.py`, splatted into the entity dict in `repository_agent.py`,
   emitted as `gme-internal:*` by `jsonld_build.py` under `?include_internal_fields=true`.
@@ -45,7 +45,7 @@ releases (#135) and GHCR packages (#136).
   `github.com/<full_name>` (case-insensitive on owner/repo). False on None/empty/
   non-github/mismatch.
 
-### 2. Registry provider — `src/v2/ingest/providers/package_registry_provider.py` (NEW)
+### 2. Registry provider — `git_metadata_extractor/providers/package_registry_provider.py` (NEW)
 `class PackageRegistryProvider` with an injectable `session` (a
 `requests.Session`-like with `.get(url, timeout=...)`; default `requests`) and
 optional `ProviderCache` (cache by method+name, like the github provider). Both

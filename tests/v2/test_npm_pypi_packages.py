@@ -17,15 +17,15 @@ import asyncio
 import json
 from typing import Any
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.agents.rule_based._repo_signals import (
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.agents.rule_based._repo_signals import (
     parse_npm_name,
     parse_pypi_name,
     repo_url_matches,
     summarize_registry_package,
 )
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.package_registry_provider import (
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.package_registry_provider import (
     PackageRegistryProvider,
 )
 
@@ -416,7 +416,7 @@ def test_summarize_registry_package_not_dict_all_none() -> None:
 # context_gather — link policy (verified / name_only / mismatch-dropped)
 # ---------------------------------------------------------------------------
 
-from src.v2.pipeline.stages.context_gather import (
+from git_metadata_extractor.pipeline.stages.context_gather import (
     _enrich_repository_metadata_with_registry_packages,
 )
 

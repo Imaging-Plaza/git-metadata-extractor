@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_SCHEMA_DIR = (
     REPO_ROOT / "dev" / "ontology-v2-json-response" / "a-001" / "json-schema" / "strict"
 )
-PROMOTED_SCHEMA_DIR = REPO_ROOT / "src" / "v2" / "schema" / "json" / "strict"
+PROMOTED_SCHEMA_DIR = REPO_ROOT / "git_metadata_extractor" / "schema" / "json" / "strict"
 
 SCHEMA_FILE_MAP = {
     "person.schema.json": "pulse_PersonShape.schema.json",

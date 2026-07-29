@@ -1,4 +1,4 @@
-"""Tests for `src.v2.parsers.publiccode.parse_publiccode`.
+"""Tests for `git_metadata_extractor.parsers.publiccode.parse_publiccode`.
 
 We cover every section the v0.4 core schema declares plus a handful
 of failure modes (malformed YAML, wrong top-level type, missing
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import textwrap
 
-from src.v2.parsers.publiccode import parse_publiccode
+from git_metadata_extractor.parsers.publiccode import parse_publiccode
 
 
 # ---------------------------------------------------------------------------

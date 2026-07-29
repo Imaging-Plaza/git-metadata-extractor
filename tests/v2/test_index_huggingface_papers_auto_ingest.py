@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.v2.api import (
+from git_metadata_extractor.api.auto_ingest import (
     _hf_papers_arxiv_id_from_url,
     _maybe_schedule_huggingface_papers_auto_ingest,
 )

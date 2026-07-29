@@ -3,7 +3,7 @@
 The SHACL gate loads the open-pulse ontology at runtime. The TTL used to
 live under `dev/`, which is NOT copied into the Docker image, so the gate
 died with FileNotFoundError in the container. The file now ships inside
-the package (`src/v2/validation/`); these tests lock that in.
+the package (`git_metadata_extractor/validation/`); these tests lock that in.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from src.v2.validation import ontology as ont
+from git_metadata_extractor.validation import ontology as ont
 
 
 def test_packaged_ttl_is_shipped_inside_the_package() -> None:

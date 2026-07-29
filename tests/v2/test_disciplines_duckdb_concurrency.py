@@ -10,8 +10,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from src.index.epfl_graph.storage.duckdb_store import EpflGraphStore
-from src.v2.pipeline.stages.rule_based_disciplines import _fetch_category_chain_qids
+from open_pulse_sources.index.epfl_graph.storage.duckdb_store import EpflGraphStore
+from git_metadata_extractor.pipeline.stages.rule_based_disciplines import _fetch_category_chain_qids
 
 
 def _build(tmp_path: Path) -> Path:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.snsf import (
+from git_metadata_extractor.canonicalization.snsf import (
     parse_snsf_grant,
     snsf_grant_iri,
     snsf_grant_point_id,

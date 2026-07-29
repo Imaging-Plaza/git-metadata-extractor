@@ -6,19 +6,19 @@ from typing import Any
 
 import pytest
 
-from src.index.infoscience.rerank import RerankHit
-from src.index.infoscience.store import (
+from open_pulse_sources.index.infoscience.rerank import RerankHit
+from open_pulse_sources.index.infoscience.store import (
     ARTICLES_COLLECTION,
     CHUNKS_COLLECTION,
     ORGANIZATIONS_COLLECTION,
     PERSONS_COLLECTION,
 )
-from src.v2.agents.llm.agent_tools.infoscience_rag import (
+from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (
     make_infoscience_rag_fetch_chunks_tool,
     make_infoscience_rag_fetch_records_tool,
     make_infoscience_rag_search_tool,
 )
-from src.v2.ingest.providers.infoscience_rag import InfoscienceRagProvider
+from git_metadata_extractor.providers.infoscience_rag import InfoscienceRagProvider
 
 
 class _FakeStore:
@@ -83,7 +83,7 @@ class _FakeEmbedder:
     async def embed_query(self, query: str, instruction: str | None = None):
         self.embed_calls.append(query)
         if self.fail:
-            from src.index.infoscience.embed import EmbedError
+            from open_pulse_sources.index.infoscience.embed import EmbedError
             raise EmbedError("forced failure")
         return list(self.vector)
 
@@ -109,7 +109,7 @@ class _FakeReranker:
             "top_n": top_n,
         })
         if self.fail:
-            from src.index.infoscience.rerank import RerankError
+            from open_pulse_sources.index.infoscience.rerank import RerankError
             raise RerankError("forced failure")
         return list(self._hits)
 

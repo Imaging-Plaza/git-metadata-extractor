@@ -6,7 +6,7 @@ literal gme-internal: triples a consumer can actually read.
 """
 from __future__ import annotations
 
-from src.v2.agents.rule_based._repo_signals import summarize_badges
+from git_metadata_extractor.agents.rule_based._repo_signals import summarize_badges
 
 _EMPTY = {"badge_labels": None, "badge_image_urls": None, "badge_links": None}
 

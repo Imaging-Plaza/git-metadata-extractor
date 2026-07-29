@@ -5,12 +5,12 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents.llm._verdict_cache import (
+from git_metadata_extractor.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
-from src.v2.agents.models import AgentResult
-from src.v2.ingest.cache import ProviderCache
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.providers.cache import ProviderCache
 
 
 def _result() -> AgentResult:

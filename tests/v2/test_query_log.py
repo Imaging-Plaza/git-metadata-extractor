@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.v2.observation.query_log import (
+from git_metadata_extractor.observation.query_log import (
     QueryLog,
     current_agent,
     current_agent_context_var,

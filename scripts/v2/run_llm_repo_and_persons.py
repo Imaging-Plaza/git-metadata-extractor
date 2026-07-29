@@ -23,12 +23,12 @@ from typing import Literal
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-from src.v2.agents.llm.person import LLMPersonAgentV2
-from src.v2.agents.llm.repository import LLMRepositoryAgentV2
-from src.v2.agents.models import AgentResult, ProviderSet
-from src.v2.dependencies import _default_provider_set
-from src.v2.ingest.detection.github_url_classifier import classify_github_url
-from src.v2.pipeline.stages import gather_context
+from git_metadata_extractor.agents.llm.person import LLMPersonAgentV2
+from git_metadata_extractor.agents.llm.repository import LLMRepositoryAgentV2
+from git_metadata_extractor.agents.models import AgentResult, ProviderSet
+from git_metadata_extractor.dependencies import _default_provider_set
+from git_metadata_extractor.providers.detection.github_url_classifier import classify_github_url
+from git_metadata_extractor.pipeline.stages import gather_context
 
 _SEP = "─" * 60
 _SEP_THIN = "·" * 60

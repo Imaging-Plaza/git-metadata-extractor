@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-import src.v2.agents.llm.runtime as runtime_module
-from src.v2.agents.llm.runtime import (
+import git_metadata_extractor.agents.llm.runtime as runtime_module
+from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeConfigError,
     LLMRuntimeResponseError,
     V2LLMRuntime,

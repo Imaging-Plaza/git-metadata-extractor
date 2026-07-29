@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-from src.v2.agents.llm.agent_tools.huggingface_rag import (
+from git_metadata_extractor.agents.llm.agent_tools.huggingface_rag import (
     make_huggingface_rag_search_tool,
 )
-from src.v2.ingest.providers.huggingface_rag import HuggingFaceRagProvider
+from git_metadata_extractor.providers.huggingface_rag import HuggingFaceRagProvider
 
 
 class _FakeClient:

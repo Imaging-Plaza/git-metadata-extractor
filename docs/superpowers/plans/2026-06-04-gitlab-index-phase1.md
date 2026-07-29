@@ -13,7 +13,7 @@
 ## File Structure (Phase 1)
 
 Create:
-- `src/v2/canonicalization/gitlab.py` — `gitlab_iri()` / `parse_gitlab_iri()`.
+- `git_metadata_extractor/canonicalization/gitlab.py` — `gitlab_iri()` / `parse_gitlab_iri()`.
 - `src/index/_gitlab_base/__init__.py`
 - `src/index/_gitlab_base/client.py` — `GitLabClient` (per-host REST, token, pagination, rate-limit).
 - `src/index/_gitlab_base/models.py` — `GitLabProjectRecord`.
@@ -38,7 +38,7 @@ Modify:
 ## Task 1: Canonical-URL helper
 
 **Files:**
-- Create: `src/v2/canonicalization/gitlab.py`
+- Create: `git_metadata_extractor/canonicalization/gitlab.py`
 - Test: `tests/v2/test_gitlab_canonicalization.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.gitlab import gitlab_iri, parse_gitlab_iri
+from git_metadata_extractor.canonicalization.gitlab import gitlab_iri, parse_gitlab_iri
 
 HOST = "gitlab.epfl.ch"
 
@@ -98,12 +98,12 @@ def test_parse_returns_none_on_non_gitlab():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/v2/test_gitlab_canonicalization.py -q`
-Expected: FAIL with `ModuleNotFoundError: src.v2.canonicalization.gitlab`.
+Expected: FAIL with `ModuleNotFoundError: git_metadata_extractor.canonicalization.gitlab`.
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/v2/canonicalization/gitlab.py
+# git_metadata_extractor/canonicalization/gitlab.py
 """Canonical GitLab URL helpers for index ids.
 
 GitLab's canonical landing-page URL is the id (v3.0.0), with the instance host
@@ -169,7 +169,7 @@ Expected: PASS (10 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/v2/canonicalization/gitlab.py tests/v2/test_gitlab_canonicalization.py
+git add git_metadata_extractor/canonicalization/gitlab.py tests/v2/test_gitlab_canonicalization.py
 git commit -m "feat(canon): gitlab_iri/parse_gitlab_iri canonical-URL helpers"
 ```
 
@@ -484,7 +484,7 @@ def test_falls_back_to_iri_when_web_url_missing():
 # src/index/_gitlab_base/project_ingest.py
 from __future__ import annotations
 from typing import Any, Iterator
-from src.v2.canonicalization.gitlab import gitlab_iri
+from git_metadata_extractor.canonicalization.gitlab import gitlab_iri
 from src.index._gitlab_base.client import GitLabClient
 from src.index._gitlab_base.models import GitLabProjectRecord
 from src.index._gitlab_base.project_store import GitLabProjectStore

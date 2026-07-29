@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.v2.observation.github_rate_limit import (
+from git_metadata_extractor.observation.github_rate_limit import (
     GitHubTokenStatus,
     _summarize,
 )

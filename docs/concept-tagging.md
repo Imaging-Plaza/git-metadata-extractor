@@ -123,15 +123,15 @@ discipline counts) so it warrants its own review. For now the two
 systems coexist:
 
 - `concept_tagging` stage → graphai per-concept (this doc).
-- `search_epfl_graph_disciplines` agent tool → Qdrant semantic search ([epfl-graph-disciplines.md](epfl-graph-disciplines.md)).
+- `search_epfl_graph_disciplines` agent tool → Qdrant semantic search ([epfl-graph-disciplines.md](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/epfl-graph-disciplines.md)).
 
 ## File map
 
 ```
-src/v2/pipeline/stages/concept_tagging.py    # stage entrypoint + backends
-src/v2/pipeline/stages/__init__.py           # re-exports run_concept_tagging_stage etc.
+git_metadata_extractor/pipeline/stages/concept_tagging.py    # stage entrypoint + backends
+git_metadata_extractor/pipeline/stages/__init__.py           # re-exports run_concept_tagging_stage etc.
 src/module/epfl_graph/ontology.py            # /ontology/* wrappers (used by epfl_graph backend)
 src/module/epfl_graph/openalex_related.py    # publications / people / units helpers
-src/v2/api.py                                # wires the stage into the v2 pipeline
+git_metadata_extractor/api.py                                # wires the stage into the v2 pipeline
 .env.example                                 # documents all the V2_CONCEPT_TAGGING_* knobs
 ```

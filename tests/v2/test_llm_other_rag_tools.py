@@ -6,15 +6,15 @@ from typing import Any
 
 import numpy as np
 
-from src.index.ror.rerank import RerankResult
-from src.v2.agents.llm.agent_tools.openalex_rag import make_openalex_rag_search_tool
-from src.v2.agents.llm.agent_tools.orcid_rag import make_orcid_rag_search_tool
-from src.v2.agents.llm.agent_tools.ror_rag import make_ror_rag_search_tool
-from src.v2.agents.llm.agent_tools.zenodo_rag import make_zenodo_rag_search_tool
-from src.v2.ingest.providers.openalex_rag import OpenAlexRagProvider
-from src.v2.ingest.providers.orcid_rag import OrcidRagProvider
-from src.v2.ingest.providers.ror_rag import RorRagProvider
-from src.v2.ingest.providers.zenodo_rag import ZenodoRagProvider
+from open_pulse_sources.index.ror.rerank import RerankResult
+from git_metadata_extractor.agents.llm.agent_tools.openalex_rag import make_openalex_rag_search_tool
+from git_metadata_extractor.agents.llm.agent_tools.orcid_rag import make_orcid_rag_search_tool
+from git_metadata_extractor.agents.llm.agent_tools.ror_rag import make_ror_rag_search_tool
+from git_metadata_extractor.agents.llm.agent_tools.zenodo_rag import make_zenodo_rag_search_tool
+from git_metadata_extractor.providers.openalex_rag import OpenAlexRagProvider
+from git_metadata_extractor.providers.orcid_rag import OrcidRagProvider
+from git_metadata_extractor.providers.ror_rag import RorRagProvider
+from git_metadata_extractor.providers.zenodo_rag import ZenodoRagProvider
 
 
 class _FakeClient:
@@ -224,11 +224,11 @@ class _FakeRorEmbedder:
 def _patched_ror(monkeypatch, embed_fn=None, rerank_fn=None) -> None:
     if embed_fn is not None:
         monkeypatch.setattr(
-            "src.v2.ingest.providers.ror_rag.embed_query", embed_fn,
+            "git_metadata_extractor.providers.ror_rag.embed_query", embed_fn,
         )
     if rerank_fn is not None:
         monkeypatch.setattr(
-            "src.v2.ingest.providers.ror_rag.rerank", rerank_fn,
+            "git_metadata_extractor.providers.ror_rag.rerank", rerank_fn,
         )
 
 

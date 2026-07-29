@@ -15,9 +15,9 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any
 
-from src.v2.agents.llm.refiners.ror_parent.agent import RorParentSelectorPatch
-from src.v2.pipeline.stages.models import AssembledOutput
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.agents.llm.refiners.ror_parent.agent import RorParentSelectorPatch
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.pipeline.stages.ownership_check import (
     _extra_ror_queries_from_metadata,
     _org_context_for_selector,
     infer_github_handle_parents,

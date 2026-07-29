@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.pipeline.stages.ownership_check import _ror_match_has_nexus
+from git_metadata_extractor.pipeline.stages.ownership_check import _ror_match_has_nexus
 
 
 def _rec(name: str, *, aliases: list[str] | None = None, acronyms: list[str] | None = None) -> dict:

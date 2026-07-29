@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from src.v2.pipeline.stages.ownership_check import _select_ror_parent
+from git_metadata_extractor.pipeline.stages.ownership_check import _select_ror_parent
 
 
 class _Patch:

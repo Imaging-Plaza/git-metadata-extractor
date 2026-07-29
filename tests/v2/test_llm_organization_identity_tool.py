@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.agents.llm.agent_tools.organization_identity import (
+from git_metadata_extractor.agents.llm.agent_tools.organization_identity import (
     make_organization_identity_search_tool,
 )
 

@@ -10,8 +10,8 @@ import asyncio
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.api import app as main_app
-from src.v2.rate_limit import reset_rate_limit_state
+from git_metadata_extractor.app import app as main_app
+from git_metadata_extractor.rate_limit import reset_rate_limit_state
 
 _HDR = {"Authorization": "Bearer wrong-token"}  # consistent key; fails auth → 401
 TOO_MANY = 429

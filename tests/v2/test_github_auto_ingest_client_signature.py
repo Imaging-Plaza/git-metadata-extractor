@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from src.v2 import api as v2_api
+from git_metadata_extractor.api import auto_ingest as v2_api
 
 
 @pytest.fixture
@@ -78,7 +78,7 @@ class _GitHubStoreStub:
 def _patched_ingest_modules(monkeypatch, *, config: Any, client_cls: type) -> Any:
     """Stub every module the closure imports lazily.
 
-    The closure does `from src.index.github_repos.* import ...` inside `_run`, so
+    The closure does `from open_pulse_sources.index.github_repos.* import ...` inside `_run`, so
     inserting fake modules into `sys.modules` before the closure runs is
     enough to intercept those imports without monkeypatching attributes
     on objects the closure never touches.
@@ -91,19 +91,19 @@ def _patched_ingest_modules(monkeypatch, *, config: Any, client_cls: type) -> An
         return {"repos": 1}
 
     fakes = {
-        "src.index.github_repos.config": types.SimpleNamespace(
+        "open_pulse_sources.index.github_repos.config": types.SimpleNamespace(
             load_config=lambda: config,
         ),
-        "src.index.github_repos.embed.pipeline": types.SimpleNamespace(
+        "open_pulse_sources.index.github_repos.embed.pipeline": types.SimpleNamespace(
             embed_repos=_embed_repos,
         ),
-        "src.index.github_repos.ingest.github_client": types.SimpleNamespace(
+        "open_pulse_sources.index.github_repos.ingest.github_client": types.SimpleNamespace(
             GitHubClient=client_cls,
         ),
-        "src.index.github_repos.ingest.repos": types.SimpleNamespace(
+        "open_pulse_sources.index.github_repos.ingest.repos": types.SimpleNamespace(
             ingest_single_repo=_ingest_single_repo,
         ),
-        "src.index.github_repos.storage.duckdb_store": types.SimpleNamespace(
+        "open_pulse_sources.index.github_repos.storage.duckdb_store": types.SimpleNamespace(
             GitHubReposStore=_GitHubStoreStub,
         ),
     }
@@ -133,7 +133,7 @@ def test_auto_ingest_constructs_github_client_with_keyword_args(
         monkeypatch, config=fake_config, client_cls=_GitHubClientSpy,
     ):
         async def _drive() -> None:
-            with caplog.at_level(logging.INFO, logger="src.v2.api"):
+            with caplog.at_level(logging.INFO, logger="git_metadata_extractor.api"):
                 v2_api._maybe_schedule_github_repos_auto_ingest(
                     classification=fake_classification, run_id="test-run",
                 )

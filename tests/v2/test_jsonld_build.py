@@ -5,9 +5,9 @@ from typing import Any
 
 from rdflib import Graph, Literal, URIRef
 
-from src.v2.pipeline.stages.jsonld_build import ENTITY_URI_PREFIX, build_jsonld_output
-from src.v2.pipeline.stages.models import AssembledOutput
-from src.v2.schema import load_jsonld_context
+from git_metadata_extractor.pipeline.stages.jsonld_build import ENTITY_URI_PREFIX, build_jsonld_output
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.schema import load_jsonld_context
 
 
 def _context() -> dict[str, Any]:

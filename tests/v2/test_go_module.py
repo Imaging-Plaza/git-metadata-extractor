@@ -7,15 +7,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.agents.rule_based._repo_signals import parse_go_module
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.package_registry_provider import (
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.agents.rule_based._repo_signals import parse_go_module
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.package_registry_provider import (
     PackageRegistryProvider,
     _go_escape,
     _go_repository_url,
 )
-from src.v2.pipeline.stages.context_gather import (
+from git_metadata_extractor.pipeline.stages.context_gather import (
     _enrich_repository_metadata_with_registry_packages,
 )
 

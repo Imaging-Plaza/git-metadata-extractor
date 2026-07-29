@@ -2,18 +2,17 @@
 
 Quick reference for both the extraction service and the per-index CLIs.
 For the full v2 contract see [V2 API Reference](v2-api-reference.md); for
-RAG indices see [RAG Indices Overview](rag-indices.md).
+RAG indices see [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md).
 
 ## Main entrypoints
 
-- API app: `src/api.py` — mounts `/v1/*` (frozen) and `/v2/*` (active).
-- V2 router: `src/v2/api.py`.
-- V2 pipeline driver: `src/v2/pipeline/orchestrator.py`.
-- V1 analysis (frozen): `src/v1/analysis/`.
+- API app: `git_metadata_extractor/app.py` — mounts the `/v2/*` router (v1 was removed in 3.0.0).
+- V2 router: `git_metadata_extractor/api.py`.
+- V2 pipeline driver: `git_metadata_extractor/pipeline/orchestrator.py`.
 
 ## Authentication
 
-All `/v1/*` routes plus `/v2/extract` and `/v2/jobs/{id}` require a bearer
+`/v2/extract` and `/v2/jobs/{id}` require a bearer
 token; `/`, `/docs`, and `/v2/health` stay open. Send the token from the
 server-side `API_TOKEN` env var:
 
@@ -74,24 +73,10 @@ curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/jobs/<job_id>" | jq
 ```
 
-### V1 (frozen, kept for backwards compatibility)
+### V1 (removed in 3.0.0)
 
-- `GET  /v1/repository/gimie/json-ld/{full_path:path}` — GIMIE-only JSON-LD.
-- `GET  /v1/repository/llm/json/{full_path:path}` — repository pydantic output.
-- `GET  /v1/repository/llm/json-ld/{full_path:path}` — repository JSON-LD.
-- `GET  /v1/user/llm/json/{full_path:path}` — user profile.
-- `GET  /v1/org/llm/json/{full_path:path}` — organization analysis.
-- `GET  /v1/cache/stats|entries`, `POST /v1/cache/{cleanup,clear,enable,disable}`,
-  `DELETE /v1/cache/invalidate/{api_type}` — v1 cache controls.
-
-V1 query flags:
-
-- `force_refresh=true` — bypass cache.
-- `enrich_orgs=true` — run organization enrichment.
-- `enrich_users=true` — run user enrichment (repository / user routes).
-
-For mapping V1 calls to V2 see
-[Migration: V1 → V2](migration-v1-to-v2.md).
+The `/v1/*` surface returns 404 since 3.0.0 — see
+[docs/migration-v1-to-v2.md](migration-v1-to-v2.md) for the endpoint mapping.
 
 ## V2 response shape
 
@@ -119,33 +104,14 @@ For mapping V1 calls to V2 see
 - `@graph: list[object]`
 - optional `excluded_entities`
 
-## Per-index CLIs
+## Per-index CLIs (moved)
 
-Every RAG index ships its own CLI (`python -m src.index.<name>`) plus
-`just <prefix>-*` recipes. Common shape:
-
-```bash
-just <prefix>-status                  # counts + paths
-just <prefix>-ingest --scope <scope>  # populate DuckDB
-just <prefix>-embed                   # push vectors to Qdrant
-just <prefix>-search "<query>"        # semantic retrieval
-just <prefix>-query --predefined ...  # SQL over DuckDB
-```
-
-Recipes registered in the justfile:
-
-| Index | Prefix | Notes |
-|---|---|---|
-| HuggingFace | `hf-*` | adds `hf-discover-orgs`, `hf-lineage` |
-| OpenAlex | `openalex-*` | adds `openalex-find-github`, `openalex-rebuild-qdrant`, `openalex-serve` |
-| ORCID | `orcid-*` | adds `orcid-discover`, `orcid-serve` |
-| Zenodo | `zenodo-*` | adds `zenodo-serve` |
-| GitHub | `gh-*` | adds `gh-rebuild-qdrant`, `gh-serve` |
-| Infoscience | `index-infoscience-*` | full lifecycle + `ingest-duckdb` + `query` |
-| ROR | (per-CLI) | `python -m src.index.ror …` |
-| ETH Research Collection | (per-CLI) | `python -m src.index.ethz_research_collection …` |
-| SNSF | (per-CLI) | `python -m src.index.snsf …` |
-| Federated | `gme-*` | `gme-search`, `gme-entity`, `gme-indices` |
+The per-index CLIs (`python -m open_pulse_sources.index.<name>`), their
+`just <prefix>-*` recipes, the federated `gme-search`/`gme-entity` CLI,
+and the `/v2/indices/*` management API all live in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo — see its README and `just --list` there. This service only reads
+the resulting stores.
 
 ## Smoke tests
 
@@ -156,11 +122,6 @@ curl -s "http://localhost:1234/v2/health" | jq
 # v2 extract requires the bearer token
 curl -s -H "Authorization: Bearer $API_TOKEN" \
   "http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&agent_runtime=rule_based" | jq
-
-# v1 (legacy) — recipes also need API_TOKEN; they pick it up from .env via just
-just api-test-gimie
-just api-test-extract
-just api-test-extract-refresh
 ```
 
 ## Batch extraction

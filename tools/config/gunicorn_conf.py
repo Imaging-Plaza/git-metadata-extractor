@@ -73,7 +73,7 @@ def on_starting(server):
         server.log.info("index bootstrap on start disabled; skipping")
         return
     try:
-        from src.index._federated.bootstrap import bootstrap_all  # noqa: PLC0415
+        from open_pulse_sources.index._federated.bootstrap import bootstrap_all  # noqa: PLC0415
 
         results = bootstrap_all()
     except Exception as exc:  # noqa: BLE001 — never block server start on bootstrap

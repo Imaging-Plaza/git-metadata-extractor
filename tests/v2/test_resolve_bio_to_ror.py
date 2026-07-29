@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.resolve_bio_to_ror import (
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror import (
     BIO_KEYS,
     BLOG_KEYS,
     DOMAIN_HINTS,
@@ -525,7 +525,7 @@ def test_stage_returns_zero_when_provider_missing():
 
 
 def test_api_env_flag_defaults_on(monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.delenv("V2_RESOLVE_BIO_TO_ROR", raising=False)
     assert v2_api._resolve_bio_to_ror_enabled() is True
@@ -533,7 +533,7 @@ def test_api_env_flag_defaults_on(monkeypatch):
 
 @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off", "n", "f"])
 def test_api_env_flag_recognises_off_values(value, monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_BIO_TO_ROR", value)
     assert v2_api._resolve_bio_to_ror_enabled() is False
@@ -541,15 +541,15 @@ def test_api_env_flag_recognises_off_values(value, monkeypatch):
 
 @pytest.mark.parametrize("value", ["true", "1", "yes", "on", "anything-else"])
 def test_api_env_flag_treats_other_values_as_on(value, monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_BIO_TO_ROR", value)
     assert v2_api._resolve_bio_to_ror_enabled() is True
 
 
 def test_api_constant_and_export_are_in_place():
-    from src.v2 import api as v2_api
-    from src.v2.pipeline import stages
+    from git_metadata_extractor.api import _helpers as v2_api
+    from git_metadata_extractor.pipeline import stages
 
     assert v2_api.STAGE_RESOLVE_BIO_TO_ROR == "resolve_bio_to_ror"
     assert callable(stages.run_resolve_bio_to_ror_stage)

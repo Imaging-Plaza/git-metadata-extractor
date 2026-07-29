@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.v2.pipeline import PipelineOrchestrator
+from git_metadata_extractor.pipeline import PipelineOrchestrator
 
 
 def test_repository_execution_plan_stage_order() -> None:

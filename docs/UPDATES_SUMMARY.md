@@ -4,7 +4,7 @@ This page summarizes the current documentation baseline for `v2.0.0`.
 
 ## Documentation structure now aligned with code
 
-- API and runtime entrypoints documented from `src/api.py` and `src/analysis/*`.
+- API and runtime entrypoints documented from `git_metadata_extractor/app.py` and `src/analysis/*`.
 - Architecture diagrams updated to reflect repository, user, and organization flows.
 - Infoscience and academic catalog pages updated to match current tool and model names.
 - JSON-LD docs now reference the active conversion implementation in `src/data_models/conversion.py`.

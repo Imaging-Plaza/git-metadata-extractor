@@ -10,10 +10,10 @@ import asyncio
 from typing import Any
 from unittest.mock import patch
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.agents.rule_based._repo_signals import parse_funding_urls
-from src.v2.ingest.providers.github_provider import RealGitHubProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.agents.rule_based._repo_signals import parse_funding_urls
+from git_metadata_extractor.providers.github_provider import RealGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 _EXPECTED_TAGS = 3
 _EXPECTED_HEALTH = 80
@@ -38,7 +38,7 @@ def _provider() -> RealGitHubProvider:
 
 def _patch_get(response: Any):
     return patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=response,
     )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.utils import github_token_pool
+from git_metadata_extractor.providers import github_token_pool
 
 
 @pytest.fixture(autouse=True)

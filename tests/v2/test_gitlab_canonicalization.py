@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.gitlab import gitlab_iri, parse_gitlab_iri
+from git_metadata_extractor.canonicalization.gitlab import gitlab_iri, parse_gitlab_iri
 
 HOST = "gitlab.epfl.ch"
 

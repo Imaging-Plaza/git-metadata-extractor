@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents.llm.link_veracity import LLMLinkVeracityAgentV2
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents.llm.link_veracity import LLMLinkVeracityAgentV2
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29

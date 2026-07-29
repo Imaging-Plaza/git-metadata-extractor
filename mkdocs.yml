@@ -44,15 +44,10 @@ nav:
       - Repository Enrichment Fields: repository-enrichment-fields.md
       - Operations Runbook: OPERATIONS_RUNBOOK.md
       - Migration V1 to V2: migration-v1-to-v2.md
-  - RAG Indices:
-      - Overview: rag-indices.md
-      - Federated Search: federated-search.md
-      - HuggingFace Index: huggingface-index.md
-      - Zenodo Index: zenodo-index.md
-      - Communities Index: communities-index.md
-      - EPFL Graph Disciplines: epfl-graph-disciplines.md
-      - SWISSUbase Index: swissubase-index.md
-      - GitLab Index: gitlab-index.md
+  # Index build/refresh docs moved to the open-pulse-sources repo:
+  # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
+  # (RAG tools the extraction pipeline consumes) is documented here.
+  - RAG (read side):
       - V2 Agent RAG Tools: v2-rag-tools.md
       - Concept Tagging Stage: concept-tagging.md
       - Roadmap: ROADMAP.md

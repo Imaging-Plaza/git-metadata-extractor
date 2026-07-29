@@ -7,7 +7,7 @@ person is matched to an Infoscience identity (person ``@id`` becomes an
 ``https://infoscience.epfl.ch/...`` URL) — a supposed "fusion bug".
 
 Driving the *real* downstream stage functions — in the exact order
-``src/v2/api.py`` runs them for a USER root in hybrid runtime — proves the
+``git_metadata_extractor/api.py`` runs them for a USER root in hybrid runtime — proves the
 claim wrong: ``pulse:owns`` is byte-identical at every stage whether the
 person is Infoscience-anchored or github-anchored, and the rule-based
 person agent emits the same owns list either way. A live 20-extraction run
@@ -17,7 +17,7 @@ These tests lock that in: if a future change makes the person's canonical
 ``@id`` scheme leak into ``pulse:owns`` handling, they fail.
 
 Downstream stage order for a USER root in hybrid runtime
-(from ``src/v2/api.py``):
+(from ``git_metadata_extractor/api.py``):
 
   reconcile_entities
   -> guarantee_repo_author
@@ -34,20 +34,20 @@ import copy
 import uuid
 from typing import Any
 
-from src.v2.agents import PersonAgentV2, ProviderSet
-from src.v2.ingest.providers.base import GitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.pipeline.stages.article_validation import validate_articles
-from src.v2.pipeline.stages.author_validation import validate_author_classes
-from src.v2.pipeline.stages.output_assembly import assemble_output
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.agents import PersonAgentV2, ProviderSet
+from git_metadata_extractor.providers.base import GitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.pipeline.stages.article_validation import validate_articles
+from git_metadata_extractor.pipeline.stages.author_validation import validate_author_classes
+from git_metadata_extractor.pipeline.stages.output_assembly import assemble_output
+from git_metadata_extractor.pipeline.stages.ownership_check import (
     guarantee_repo_author,
     infer_owners,
     validate_ownership,
 )
-from src.v2.pipeline.stages.prune_dangling_refs import prune_dangling_refs
-from src.v2.pipeline.stages.reconciliation import reconcile_entities
-from src.v2.validation.schema_validation import StrictSchemaValidator
+from git_metadata_extractor.pipeline.stages.prune_dangling_refs import prune_dangling_refs
+from git_metadata_extractor.pipeline.stages.reconciliation import reconcile_entities
+from git_metadata_extractor.validation.schema_validation import StrictSchemaValidator
 
 SOMEUSER = "someuser"
 OWNED = [
@@ -318,8 +318,8 @@ def test_prune_dangling_refs_splits_owns_live_vs_external() -> None:
     """prune_dangling_refs keeps live in-graph repos in public `pulse:owns`,
     moves real external repo IRIs to the internal `_owned_repositories`,
     and drops mangled (non-IRI) refs."""
-    from src.v2.pipeline.stages.models import AssembledOutput
-    from src.v2.pipeline.stages.prune_dangling_refs import INTERNAL_OWNS_KEY
+    from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+    from git_metadata_extractor.pipeline.stages.prune_dangling_refs import INTERNAL_OWNS_KEY
 
     repo = {
         "id": "https://github.com/pallets/click",

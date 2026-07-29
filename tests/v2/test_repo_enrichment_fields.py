@@ -12,15 +12,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.agents.rule_based._repo_signals import (
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.agents.rule_based._repo_signals import (
     detect_has_ci,
     parse_docker_hub_url,
     parse_test_coverage,
     summarize_packages,
     summarize_releases,
 )
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 # ---------------------------------------------------------------------------
 # parse_test_coverage

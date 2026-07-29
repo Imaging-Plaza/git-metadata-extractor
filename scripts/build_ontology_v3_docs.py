@@ -10,7 +10,7 @@ Produces, under docs/releases/v3.0.0/:
         including the internal (gme-internal:) provider fields.
 
 Sources (single source of truth — edit those, not the generated files):
-  * src/v2/validation/open-pulse-ontology-v2.1.2.ttl   (current release)
+  * git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl   (current release)
   * .internal/ontology-v3/07-ttl-draft.md              (proposed v3 additions)
   * docs/gme-internal.ttl                              (internal vocabulary)
 
@@ -26,7 +26,7 @@ from rdflib import Graph, RDF, RDFS, OWL, URIRef, BNode, Literal
 from rdflib.namespace import Namespace, SKOS, DCTERMS, XSD
 
 ROOT = Path(__file__).resolve().parent.parent
-V2_TTL = ROOT / "src/v2/validation/open-pulse-ontology-v2.1.2.ttl"
+V2_TTL = ROOT / "git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl"
 V3_DRAFT = ROOT / ".internal/ontology-v3/07-ttl-draft.md"
 GME_TTL = ROOT / "docs/gme-internal.ttl"
 OUT_DIR = ROOT / "docs/releases/v3.0.0"
@@ -186,7 +186,7 @@ def build_merged_ttl() -> str:
         "# Reproduce with:  python3 scripts/build_ontology_v3_docs.py",
         "#",
         "# Merge of:",
-        "#   * src/v2/validation/open-pulse-ontology-v2.1.2.ttl  (current release)",
+        "#   * git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl  (current release)",
         "#   * .internal/ontology-v3/07-ttl-draft.md             (proposed v3 additions)",
         "#   * docs/gme-internal.ttl                             (internal vocabulary)",
         "#",
@@ -885,7 +885,7 @@ NSCOLOR = {"pulse": "#1f6f8b", "schema": "#3b5bdb", "org": "#2e8b57", "prov": "#
 ENUM_FILL = "#f5d98a"
 NS_KIND = {"pulse": "Open Pulse class", "schema": "schema.org class", "org": "ORG class", "prov": "PROV class"}
 
-SCHEMA_DIR = ROOT / "src/v2/schema/json"
+SCHEMA_DIR = ROOT / "git_metadata_extractor/schema/json"
 ENTITIES = ["person", "organization", "repository", "article", "contribution", "membership"]
 ENTITY_COLOR = {"person": "#3b5bdb", "organization": "#2e8b57", "repository": "#1f6f8b",
                 "article": "#b8536b", "contribution": "#d9822b", "membership": "#7a3fb0"}
@@ -1258,7 +1258,7 @@ def build_schemas_html() -> str:
     out.append(
         "<header class='site'><div class='inner'>"
         "<h1>GME JSON Schemas</h1>"
-        "<div class='sub'>Interactive graph viewer for the <code>src/v2/schema/json</code> "
+        "<div class='sub'>Interactive graph viewer for the <code>git_metadata_extractor/schema/json</code> "
         "validation schemas (strict &amp; agent variants)</div></div></header>"
     )
     out.append("<div id='wrap'>")
@@ -1281,7 +1281,7 @@ def build_schemas_html() -> str:
     out.append("<div id='schemaHost' class='graph-host'></div>")
     out.append(
         "<h2>Source files</h2><p>Generated from "
-        "<code>src/v2/schema/json/{strict,agent}/&lt;entity&gt;.schema.json</code> "
+        "<code>git_metadata_extractor/schema/json/{strict,agent}/&lt;entity&gt;.schema.json</code> "
         "(6 entities × 2 variants). Edit those, then re-run "
         "<code>python3 scripts/build_ontology_v3_docs.py</code>.</p>"
     )

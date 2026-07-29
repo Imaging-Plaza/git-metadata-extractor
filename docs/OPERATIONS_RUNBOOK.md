@@ -1,5 +1,10 @@
 # GME operations runbook
 
+> **Repo split (2026-07-02):** the RAG index layer now lives in
+> [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).
+> Index ops commands below run from that repo (same `data/index/` volume);
+> the `open_pulse_sources.*` modules come from its installed library.
+
 Operational notes for running the v3.0.0 (`develop`) build of the
 git-metadata-extractor against the Open Pulse index/RAG stores. Captures the
 gotchas surfaced by real index/RAG enrichment runs.
@@ -20,10 +25,10 @@ opens the split stores read-write):
 
 ```bash
 # dry run — reports per-table source/target row counts, no writes
-python scripts/v2/migrate_monolith_to_split.py
+python scripts/migrate_monolith_to_split.py  # (now in the open-pulse-sources repo)
 
 # copy rows + rebuild Qdrant + republish the .ro.duckdb snapshot
-python scripts/v2/migrate_monolith_to_split.py --apply --reembed
+python scripts/migrate_monolith_to_split.py  # (now in the open-pulse-sources repo) --apply --reembed
 ```
 
 - The orphan monolithic files are opened **read-only** and never modified — they
@@ -34,7 +39,7 @@ python scripts/v2/migrate_monolith_to_split.py --apply --reembed
 - The migration now republishes the `<store>.ro.duckdb` snapshot the Hub reads
   from. **If you mutate a store by any other path, republish the snapshot** or
   the Hub keeps serving stale data:
-  `python -c "from src.index._snapshot import publish_snapshot; ..."`.
+  `python -c "from open_pulse_sources.index._snapshot import publish_snapshot; ..."`.
 
 ### Entities with no monolith source
 
@@ -119,13 +124,13 @@ compacted read-only snapshot (the `<store>.ro.duckdb` the Hub reads):
 
 ```bash
 # Health report (read-only): tables, row counts, live + snapshot sizes
-python -m src.index._federated.maintenance --check
+python -m open_pulse_sources.index._federated.maintenance --check
 
 # Optimize every store: CHECKPOINT (fold WAL) + republish the compacted .ro snapshot
-python -m src.index._federated.maintenance
+python -m open_pulse_sources.index._federated.maintenance
 
 # One store only
-python -m src.index._federated.maintenance --store snsf
+python -m open_pulse_sources.index._federated.maintenance --store snsf
 ```
 
 Enumeration is by disk, so it covers every store with a DuckDB file (including
@@ -145,7 +150,7 @@ for retirement once consumers point at the split ones.
 The serving image bootstraps every index DuckDB store **at startup** so the
 stores exist (with their schema) before the first request. The Gunicorn
 `on_starting` hook (`tools/config/gunicorn_conf.py`) calls
-`src.index._federated.bootstrap.bootstrap_all()` **once in the master process,
+`open_pulse_sources.index._federated.bootstrap.bootstrap_all()` **once in the master process,
 before any worker forks** — so no two workers race to create the same file.
 
 - **Idempotent** — existing stores are left untouched; only missing ones are
@@ -153,7 +158,7 @@ before any worker forks** — so no two workers race to create the same file.
 - **Best-effort** — a bootstrap failure is logged (`index bootstrap on start
   failed: …`) but never blocks the server from coming up. Per-store failures
   are reported as `… store(s) not ready: {…}`.
-- **Auto-discovery** — every store under `src/index/*` is picked up, so newly
+- **Auto-discovery** — every store under `open_pulse_sources/index/* (open-pulse-sources repo)` is picked up, so newly
   added indices (e.g. the GitLab family) are bootstrapped with no extra wiring.
 
 | Env | Default | Purpose |
@@ -164,8 +169,8 @@ Run the same thing by hand (local dev, CI, or to re-create a deleted store):
 
 ```bash
 make bootstrap-index                          # all stores, idempotent
-python -m src.index._federated.bootstrap      # same thing
-python -m src.index._federated.bootstrap --only gitlab_epfl_users
+python -m open_pulse_sources.index._federated.bootstrap      # same thing
+python -m open_pulse_sources.index._federated.bootstrap --only gitlab_epfl_users
 ```
 
 Bootstrap only **creates empty schema'd stores** — it does not ingest or embed.
@@ -177,15 +182,24 @@ Populate a store with its ingest/embed CLI or the
 The heavy `gimie` Python dependency (and its `calamus`/`marshmallow` chain,
 which hard-pinned vulnerable `python-dotenv`/`marshmallow`) was **removed from
 the image**. GIMIE metadata is now fetched from the **`gimie-api` sidecar**
-(`ghcr.io/sdsc-ordes/gimie-api`) over HTTP.
+over HTTP.
+
+> **2026-07-14 — the sidecar image is now GME-maintained** (`tools/gimie-api/`,
+> built by both compose files as `gme-gimie-api:0.7.2`). The upstream
+> `ghcr.io/sdsc-ordes/gimie-api` images (pinned digest AND `:latest`) ship
+> gimie 0.6.1 with an app written for the 0.7.x API — every extraction
+> request fails and the error contract collapses to an empty payload, i.e.
+> **silent** loss of all gimie metadata (descriptions, contributors → no
+> Person/Membership/Contribution entities). Full analysis:
+> `dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md`.
 
 **Required for every deployment that extracts repositories:**
 
-1. Run the sidecar alongside the API (same network). It listens on `:15400` and
-   reads the GitHub token from `ACCESS_TOKEN`. In the dev stack it's the
-   `gme-gimie-api` service in `.devcontainer/docker-compose.yml`; **add an
-   equivalent service to the production compose / k8s manifest** (which lives
-   outside this repo).
+1. Run the sidecar alongside the API (same network). It listens on `:15400`.
+   The gimie library reads **`GITHUB_TOKEN`** — a **single PAT**; if your
+   `GME_GITHUB_TOKEN` is a comma-separated pool, set `GIMIE_ACCESS_TOKEN`
+   to one PAT from it (the compose files wire this; the GME-maintained app
+   also normalizes pools itself, first token wins).
 2. Set **`GIMIE_API_URL`** on the API process, e.g.
    `GIMIE_API_URL=http://gme-gimie-api:15400`.
 
@@ -197,10 +211,14 @@ Behaviour:
 - `GIMIE_API_URL` **unset** → falls back to in-process gimie, which is **no
   longer installed** in the image → a clear `RuntimeError` is raised when
   extraction is attempted. (For local in-process use: `pip install gimie==0.7.2`.)
+- The client requests the sidecar's `/gimie/ttl/` route and converts to
+  JSON-LD with rdflib (byte-compatible with the historical in-process
+  serialization).
 - Tunables: `GIMIE_API_TIMEOUT_SECONDS` (default 180).
 
-Pin the sidecar image by digest for reproducibility. Validate a new image with
-`scripts/v2/gimie_api_parity.py` (diffs sidecar vs in-process output).
+Validate a new sidecar image with `scripts/v2/gimie_api_parity.py` — and be
+aware it previously passed while the live route 404'd; extending it to fail
+on degrade-to-None is tracked in task brief 11.
 
 Both stacks in this repo wire it already:
 

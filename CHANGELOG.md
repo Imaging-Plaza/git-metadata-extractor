@@ -6,6 +6,92 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Removed (breaking — v1 API retired)
+
+- **The legacy v1 API is gone.** All `/v1/*` routes (`/v1/repository/*`,
+  `/v1/org/*`, `/v1/user/*`, `/v1/cache/*`) now return 404 — `src/v1/`,
+  `tests/v1/`, the v1 justfile recipes, and the v1-only env knobs
+  (`CACHE_DB_PATH`, `MAX_CACHE_ENTRIES`, `MAX_SELENIUM_SESSIONS`) were
+  removed. Consumers: see `docs/migration-v1-to-v2.md` for the `/v1` → `/v2`
+  endpoint mapping. Modules v2 shared with v1 moved into v2 homes:
+  the LLM model config (`src/v2/agents/llm/model_config.py`), the gimie
+  extraction intermediate (`src/v2/ingest/providers/gimie_extract.py`),
+  the GitHub user/org parsers + models
+  (`src/v2/ingest/github_accounts/`), and the Infoscience data models
+  (`src/v2/ingest/infoscience_models.py`).
+
+### Fixed
+
+- **The generated-models gate was not reproducible, and regenerating on
+  Windows corrupted the output.** `just v2-models-check` regenerates the
+  Pydantic models and compares byte-for-byte, but `datamodel-code-generator`
+  and `ruff` were declared as open ranges — so codegen `0.71.0` + ruff
+  `0.16.0` reordered the imports and failed the gate on an unrelated PR. Both
+  are now pinned exactly and the models regenerated against them. Separately,
+  the bundle builder read the JSON schemas with the platform default encoding:
+  on Windows (cp1252) every non-ASCII description came back mangled
+  (`→` → `â†’`, `École` → `Ã‰cole`) and got baked into the models. It now
+  reads UTF-8 explicitly, and the codegen executable lookup no longer tries to
+  run a POSIX `.venv/bin/` script on Windows.
+
+- **A fresh dependency resolve broke every pydantic-ai import.**
+  `opentelemetry-api` removed the deprecated `opentelemetry._events` module in
+  `1.44.0`, but logfire (transitive: pydantic-ai → logfire) still imports it
+  and its own metadata allows `opentelemetry-sdk<1.45.0` — so a clean install
+  picked `1.44.0` and any test touching pydantic-ai died at collection with
+  `ModuleNotFoundError`. Capped `opentelemetry-api` / `opentelemetry-sdk` to
+  `<1.44` until logfire stops importing the removed module. Only surfaced now
+  because CI had never run on this branch (`ci.yml` triggers on `main` /
+  `develop` only) — existing environments resolved before the release.
+
+- **GIMIE extraction was silently dead in every sidecar deployment.** Two
+  independent defects: (1) the client requested `/gimie/jsonld/…`, a route
+  that never existed on gimie-api — it now fetches `/gimie/ttl/…` and
+  converts with rdflib, byte-compatible with the historical in-process
+  serialization; (2) the upstream `ghcr.io/sdsc-ordes/gimie-api` images
+  (pinned digest and `:latest`) ship gimie 0.6.1 with an app written for
+  the 0.7.x API, failing every request and JSON-encoding the error to an
+  empty payload — replaced by a **GME-maintained sidecar**
+  (`tools/gimie-api/`, gimie 0.7.2 pinned) that both compose stacks build.
+  Also: the sidecar needs a **single** GitHub PAT (`GIMIE_ACCESS_TOKEN`)
+  when `GME_GITHUB_TOKEN` is a comma-separated pool. Effect: repository
+  descriptions, contributors, and the derived Person/Membership/
+  Contribution entities are extracted again (verified live: 3 → 66
+  entities on `sdsc-ordes/gimie`). See
+  `dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md`.
+
+### Changed (breaking — repo split)
+
+- **The RAG index layer moved to its own repo/service:
+  [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).**
+  `src/index/`, `src/module/`, `src/v2/indices/` and the `/v2/manifest` +
+  `/v2/indices/*` API surface were removed from this repo; the same routes are
+  now served by the `gme-sources` compose service (same paths, same auth).
+  The v2 read-side RAG providers import the split-out code as the
+  `open_pulse_sources` library (installed by `just install-dev`; baked into
+  the Docker image from git). Extract-side auto-ingest is unchanged — it
+  writes through the library into the same `data/index` + Qdrant stores.
+  Index ops (ingest/embed/reset recipes, seeds, reingest/migration scripts,
+  per-index docs) live in the new repo. `config/index/*.yaml` intentionally
+  remains here: the library resolves config/data paths CWD-relative.
+
+- **`open-pulse-sources` is now a declared dependency, pinned in one place.**
+  It was previously installed out-of-band by `just install-dev`, CI, and the
+  Dockerfile — four copies of the same tag, and a `pip install .` of this
+  project produced an installation that could not import its own providers
+  (`ModuleNotFoundError: open_pulse_sources`). The library is now a hard
+  dependency in `pyproject.toml`, pinned to the immutable tag `v0.1.2`, and
+  that entry is the single source of truth: every install path inherits it,
+  the Dockerfile's `OPEN_PULSE_SOURCES_REF` build arg is an empty
+  override-only escape hatch, and the published image records the resolved
+  ref in the `ch.sdsc.pulse.open-pulse-sources-ref` OCI label.
+  `tests/v2/test_open_pulse_sources_pin.py` fails on version skew between
+  the library pin and the `gme-sources` image tag, on a second hardcoded
+  pin, or on a mutable (`main` / `latest`) default. Compatibility matrix in
+  the README. **Minimum supported child release: `v0.1.2`** — `v0.1.1` and
+  earlier answer a missing credential with a raw 500 instead of a 503. See
+  `dev/split-rag-indices/02-cross-repo-dependency-release.md`.
+
 ### Changed (breaking — deployment)
 
 - **GIMIE moved to a sidecar; `gimie` dependency removed.** The `gimie` package
@@ -28,7 +114,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   project/group/user pipelines). All nine are vector-backed, registered in the
   federated layer, and appear in `GET /v2/manifest`. GitLab user records carry
   no ORCID (GitLab exposes no verified-ORCID field). See
-  [`docs/gitlab-index.md`](docs/gitlab-index.md).
+  [`docs/gitlab-index.md`](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/gitlab-index.md).
 - **HTTP ingest + search endpoints for the GitLab family** —
   `POST /v2/indices/<name>/ingest` (full-instance crawl + embed, async job;
   optional `limit`) and `POST /v2/indices/<name>/search` for all nine gitlab

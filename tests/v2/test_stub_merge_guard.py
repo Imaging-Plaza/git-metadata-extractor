@@ -5,8 +5,8 @@ only if BOTH sides were stubs.
 """
 from __future__ import annotations
 
-from src.v2.pipeline.stages.llm_dedup import _merge_entity_payload
-from src.v2.pipeline.stages.output_assembly import _merge_into
+from git_metadata_extractor.pipeline.stages.llm_dedup import _merge_entity_payload
+from git_metadata_extractor.pipeline.stages.output_assembly import _merge_into
 
 
 # --- _merge_into (output_assembly) ---

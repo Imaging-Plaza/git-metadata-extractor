@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from src.v2.agents.llm.agent_tools.email_hash import hash_user_email
-from src.v2.agents.llm.agent_tools.selenium_fetch import fetch_link_content_via_selenium
-from src.v2.agents.llm.agent_tools.uuid import generate_uuid_v4, generate_uuid_v4_batch
+from git_metadata_extractor.agents.llm.agent_tools.email_hash import hash_user_email
+from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import fetch_link_content_via_selenium
+from git_metadata_extractor.agents.llm.agent_tools.uuid import generate_uuid_v4, generate_uuid_v4_batch
 
 
 def test_generate_uuid_v4_returns_valid_uuid4() -> None:

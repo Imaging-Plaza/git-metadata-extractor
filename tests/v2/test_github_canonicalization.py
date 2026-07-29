@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.github import (
+from git_metadata_extractor.canonicalization.github import (
     github_org_iri,
     github_repo_iri,
     github_user_iri,

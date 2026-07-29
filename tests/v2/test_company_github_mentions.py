@@ -12,8 +12,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.resolve_company_to_ror import (
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
     run_resolve_company_to_ror_stage,
 )
 

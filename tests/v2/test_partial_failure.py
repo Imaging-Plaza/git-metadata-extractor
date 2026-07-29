@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.output_assembly import (
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.output_assembly import (
     RootEntityValidationError,
     assemble_output,
 )
-from src.v2.validation.schema_validation import (
+from git_metadata_extractor.validation.schema_validation import (
     BatchValidationResult,
     ValidationResult,
 )

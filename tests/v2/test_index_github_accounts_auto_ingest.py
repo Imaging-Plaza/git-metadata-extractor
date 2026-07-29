@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.v2.api import (
+from git_metadata_extractor.api.auto_ingest import (
     _github_account_login_from_url,
     _maybe_schedule_github_orgs_auto_ingest,
     _maybe_schedule_github_users_auto_ingest,

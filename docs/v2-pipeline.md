@@ -181,7 +181,7 @@ Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extrac
 ## Where to go next
 
 - **Per-stage detail** → `.internal/v2-pipeline-reference.md` (repo-internal)
-- **Schema source-of-truth** → `src/v2/schema/json/` (agent + strict) and `src/v2/schema/ontology/open-pulse-ontology.ttl`
-- **Pipeline entry** → `src/v2/api.py` (the `_run_pipeline` function ties every stage together)
-- **Orchestrator** → `src/v2/pipeline/orchestrator.py` (phases 1–5)
-- **Resolver stages** → `src/v2/pipeline/stages/resolve_*.py`
+- **Schema source-of-truth** → `git_metadata_extractor/schema/json/` (agent + strict) and `git_metadata_extractor/schema/ontology/open-pulse-ontology.ttl`
+- **Pipeline entry** → `git_metadata_extractor/api.py` (the `_run_pipeline` function ties every stage together)
+- **Orchestrator** → `git_metadata_extractor/pipeline/orchestrator.py` (phases 1–5)
+- **Resolver stages** → `git_metadata_extractor/pipeline/stages/resolve_*.py`

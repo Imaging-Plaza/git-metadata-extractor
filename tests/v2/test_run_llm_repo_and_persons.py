@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import scripts.v2.run_llm_repo_and_persons as run_script
-from src.v2.agents.models import AgentResult, ProviderSet
+from git_metadata_extractor.agents.models import AgentResult, ProviderSet
 
 
 def test_run_llm_repo_and_persons_handles_partial_failures_and_prints_entities(

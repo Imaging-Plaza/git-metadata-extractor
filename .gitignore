@@ -1,5 +1,9 @@
 extraction_results
 logs/
+
+# open-pulse-sources migration working clone — separate repo, never commit
+# (would otherwise be picked up as a gitlink/submodule)
+open-pulse-sources/
 .cursor/mcp.json
 .cursor/plans
 .claude/
@@ -181,3 +185,7 @@ MalloryWittwer.json
 output.jsonld
 sdsc-ordes.json
 .internal/RISKS.md
+
+# Local extraction staging area (never commit)
+.staging/
+.venv-win/

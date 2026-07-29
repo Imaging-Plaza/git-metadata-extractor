@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.agents.llm.agent_tools.selenium_fetch import (
+from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
     _is_safe_public_url,
     fetch_link_content_via_selenium,
 )

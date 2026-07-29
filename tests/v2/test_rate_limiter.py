@@ -5,8 +5,8 @@ import logging
 
 import pytest
 
-from src.v2.ingest.providers.base import ProviderRateLimitError
-from src.v2.ingest.providers.rate_limiter import RateLimiter
+from git_metadata_extractor.providers.base import ProviderRateLimitError
+from git_metadata_extractor.providers.rate_limiter import RateLimiter
 
 HTTP_OK = 200
 EXPECTED_RETRY_CALLS = 2
@@ -170,7 +170,7 @@ def test_rate_limiter_logs_rate_limit_events(caplog: pytest.LogCaptureFixture) -
         jitter_func=lambda: 0.0,
     )
 
-    with caplog.at_level(logging.WARNING, logger="src.v2.ingest.providers.rate_limiter"):
+    with caplog.at_level(logging.WARNING, logger="git_metadata_extractor.providers.rate_limiter"):
         asyncio.run(limiter.with_rate_limit("github", lambda: next(responses)))
 
     assert any("Rate limit retry" in record.message for record in caplog.records)

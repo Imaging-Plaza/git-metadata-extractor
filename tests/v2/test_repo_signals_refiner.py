@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents.rule_based._repo_signals import extract_doc_candidate_urls
-from src.v2.pipeline.stages.refine_with_llm import _run_repo_signals_pass
+from git_metadata_extractor.agents.rule_based._repo_signals import extract_doc_candidate_urls
+from git_metadata_extractor.pipeline.stages.refine_with_llm import _run_repo_signals_pass
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ def test_apply_sets_documentation_urls(monkeypatch: pytest.MonkeyPatch) -> None:
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -156,7 +156,7 @@ def test_apply_sets_test_coverage_when_none(monkeypatch: pytest.MonkeyPatch) -> 
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -173,7 +173,7 @@ def test_apply_does_not_override_deterministic_coverage(monkeypatch: pytest.Monk
         return _FIXED_PATCH  # patch.test_coverage = "80%"
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -194,7 +194,7 @@ def test_shadow_runs_agent_but_does_not_mutate(monkeypatch: pytest.MonkeyPatch) 
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -217,7 +217,7 @@ def test_off_never_calls_agent(monkeypatch: pytest.MonkeyPatch) -> None:
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -236,7 +236,7 @@ def test_default_mode_is_apply(monkeypatch: pytest.MonkeyPatch) -> None:
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 
@@ -258,7 +258,7 @@ def test_no_readme_skips_agent(monkeypatch: pytest.MonkeyPatch) -> None:
         return _FIXED_PATCH
 
     monkeypatch.setattr(
-        "src.v2.pipeline.stages.refine_with_llm.run_repo_signals",
+        "git_metadata_extractor.pipeline.stages.refine_with_llm.run_repo_signals",
         _stub_runner,
     )
 

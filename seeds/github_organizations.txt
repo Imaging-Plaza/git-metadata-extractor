@@ -1,2 +1,0 @@
-# GitHub organization handles — one per line (bare handle, not URL).
-huggingface

@@ -26,6 +26,19 @@ classifiers = [
 ]
 
 dependencies = [
+    # THE cross-repo pin. The RAG index layer lives in its own repo since
+    # 3.0.0 and the read-side providers, `canonicalization/doi.py` and the
+    # gunicorn index bootstrap import it unconditionally — so it is a hard
+    # dependency, not an extra. Not on PyPI: pinned to an immutable tag so
+    # every install path (just, CI, Docker) resolves the same revision.
+    #
+    # This line is the single source of truth for the child library version.
+    # `tools/deploy/docker-compose.yml` pins the matching gme-sources image;
+    # tests/v2/test_open_pulse_sources_pin.py fails if the two drift apart
+    # or if either default slips back to a mutable ref (main / latest).
+    # Local cross-repo development overrides it with an editable checkout —
+    # see `just install-dev`.
+    "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.2",
     "fastapi>=0.122.0",
     "uvicorn[standard]==0.34.3",
     "pydantic==2.11.7",
@@ -45,6 +58,16 @@ dependencies = [
     "uvicorn-worker==0.3.0",
     "pydantic-ai>=1.0.15",
     "griffe<2",
+    # logfire (transitive: pydantic-ai -> logfire) imports the deprecated
+    # `opentelemetry._events` module, which opentelemetry-api DROPPED in
+    # 1.44.0 — while logfire 4.39.0 (latest) still declares
+    # `opentelemetry-sdk<1.45.0`, so its own range does not exclude the
+    # break. A fresh resolve therefore installs 1.44.0 and every test that
+    # touches pydantic-ai dies at import with
+    # `ModuleNotFoundError: No module named 'opentelemetry._events'`.
+    # Drop these caps once logfire stops importing the removed module.
+    "opentelemetry-api<1.44",
+    "opentelemetry-sdk<1.44",
     "httpx",
     "markdownify==1.2.0",
     "pyshacl==0.28.1",
@@ -72,9 +95,16 @@ dev = [
     "pytest-testmon>=2.1.3",
     "pytest-xdist>=3.6.1",
     "black>=23.0.0",
-    "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "datamodel-code-generator>=0.54.0",
+    # Pinned exactly, both of them: `just v2-models-check` regenerates the
+    # models and compares byte-for-byte against the committed output, so the
+    # generator AND the formatter it shells out to are part of that contract.
+    # With ranges, any upstream release that reorders imports or retouches
+    # formatting turns the gate red on an unrelated PR (this is exactly how
+    # codegen 0.71.0 + ruff 0.16.0 broke it — the committed files predated
+    # both). Bump these deliberately, then run `just v2-models-generate`.
+    "ruff==0.16.0",
+    "datamodel-code-generator==0.71.0",
     "respx>=0.21",
     "requests-mock>=1.12",
 ]
@@ -85,10 +115,13 @@ docs = [
     "pymdown-extensions>=10.14.0"
 ]
 
+[tool.setuptools.packages.find]
+include = ["git_metadata_extractor*"]
+
 [tool.setuptools.package-data]
 # Ship the open-pulse ontology TTL (and any other in-package data) inside
-# the wheel — the SHACL gate loads it at runtime from src/v2/validation/.
-# The Docker image also gets it via `COPY src ./src`; this covers pip installs.
+# the wheel — the SHACL gate loads it at runtime from git_metadata_extractor/validation/.
+# The Docker image also gets it via the package COPY; this covers pip installs.
 "*" = ["*.ttl"]
 
 [tool.ruff]
@@ -102,14 +135,13 @@ ignore = ["S101","T201", "G004", "E501", "FA100"]
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
-"src/test/*.py" = ["E402"]
 
 [tool.pytest.ini_options]
 markers = [
     "v2: tests for the v2 extraction pipeline and schema validation track",
     "live_provider: opt-in tests that hit live external provider APIs",
     "llm_integration: opt-in tests that call real LLM providers",
-    "openalex: tests for the src/index/openalex module",
+    "openalex: legacy marker for OpenAlex-scoped tests (index code lives in open-pulse-sources now)",
 ]
 
 [tool.datamodel-codegen]

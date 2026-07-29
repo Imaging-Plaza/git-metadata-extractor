@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.infoscience import (
+from git_metadata_extractor.canonicalization.infoscience import (
     infoscience_article_iri,
     infoscience_org_iri,
     infoscience_person_iri,

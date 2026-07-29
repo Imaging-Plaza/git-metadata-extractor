@@ -13,18 +13,18 @@ import base64
 from typing import Any
 from unittest.mock import patch
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.agents.rule_based._repo_signals import (
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.agents.rule_based._repo_signals import (
     _image_ref_to_url,
     _resolve_compose_image,
     compose_image_urls,
     parse_compose_images,
 )
-from src.v2.ingest.providers.github_provider import (
+from git_metadata_extractor.providers.github_provider import (
     RealGitHubProvider,
     _is_compose_path,
 )
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 _EXPECTED_IMAGES = 2
 
@@ -165,7 +165,7 @@ def test_get_repository_compose_files() -> None:
     ]})
     content = _Resp(200, _b64(_COMPOSE))
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         side_effect=[tree, content],
     ):
         out = _provider().get_repository_compose_files("acme/tool")
@@ -179,7 +179,7 @@ def test_get_repository_compose_files() -> None:
 
 def test_get_repository_compose_files_none_on_non_200() -> None:
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=_Resp(404, None),
     ):
         assert _provider().get_repository_compose_files("a/b") == []
