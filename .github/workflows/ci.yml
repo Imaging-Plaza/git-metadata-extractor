@@ -19,6 +19,47 @@ on:
     - cron: "0 6 * * 1"
 
 jobs:
+  # The publish workflow (docs_pages.yml) only runs `mkdocs build --strict` on
+  # a push to main or a v* tag — i.e. after merge. A broken nav entry, a dead
+  # internal link or an unparseable mkdocs.yml would surface at publish time,
+  # on main, instead of on the PR that caused it. Same build, run as a gate.
+  docs-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install docs dependencies
+        # Read the `docs` extra out of pyproject.toml and install *only* that.
+        # `pip install ".[docs]"` would also install the project and its full
+        # runtime dependency tree (including the open-pulse-sources git
+        # dependency) — minutes of work the site build does not need. Reading
+        # the extra keeps pyproject.toml the single source of these versions
+        # instead of duplicating them here.
+        run: |
+          python -m pip install --upgrade pip
+          python - <<'PY' > /tmp/docs-requirements.txt
+          import tomllib
+          with open("pyproject.toml", "rb") as fh:
+              config = tomllib.load(fh)
+          print("\n".join(config["project"]["optional-dependencies"]["docs"]))
+          PY
+          cat /tmp/docs-requirements.txt
+          python -m pip install -r /tmp/docs-requirements.txt
+
+      - name: Build the docs site (strict)
+        # --strict promotes warnings to errors, which covers unresolvable
+        # internal links and pages missing from the nav without an explicit
+        # `not_in_nav` entry.
+        run: mkdocs build --strict
+
   v2-ci-gates:
     runs-on: ubuntu-latest
     timeout-minutes: 20
