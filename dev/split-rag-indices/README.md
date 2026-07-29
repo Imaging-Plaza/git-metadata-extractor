@@ -28,14 +28,23 @@ Release blockers:
    `sdsc-ordes/open-pulse-sources` (main + `v0.1.0`, CI green, public GHCR
    image; parent defaults pinned to it). The **parent** split branch remains
    unpublished — gated on Task 09.
-2. The child wheel omits runtime `.sql` schemas, so non-editable installs used
-   by Docker cannot bootstrap DuckDB stores. *(Empirically confirmed
-   2026-07-14 — see "Compose validation run" below; additionally, without
-   `INDEX_DATA_DIR` set, wheel installs resolve the data root to
-   `site-packages/data`.)*
-3. Parent clean installs/CI do not declare or install the child dependency.
-4. *(Added 2026-07-14)* The v1 API is still served and must be retired in
-   the same `3.0.0` breaking release — Task 09.
+2. ~~The child wheel omits runtime `.sql` schemas, so non-editable installs
+   used by Docker cannot bootstrap DuckDB stores.~~ **Fixed 2026-07-15** in
+   child `b98b85d` (released `v0.1.1`, with a CI guard). *The related
+   data-root problem is only half-fixed: both compose services now set
+   `INDEX_DATA_DIR`, but the child's package-relative fallback still points at
+   `site-packages/data` when it is unset — see Task 01.*
+3. ~~Parent clean installs/CI do not declare or install the child
+   dependency.~~ **Fixed 2026-07-29**: declared and tag-pinned in
+   `pyproject.toml` as the single source of truth, with a drift guard —
+   see Task 02's "Progress (2026-07-29)".
+4. ~~*(Added 2026-07-14)* The v1 API is still served and must be retired in
+   the same `3.0.0` breaking release — Task 09.~~ **Done 2026-07-15**
+   (`a8d465a`).
+
+**Remaining release blocker (2026-07-29):** no published child tag contains
+the service-side 503 fix on child `main` — cut `v0.1.2` and re-pin, then
+publish the parent branch. Detail in Task 02.
 
 Important follow-ups:
 
@@ -69,8 +78,8 @@ Important follow-ups:
 
 | Order | Task | Severity | Parallelism |
 |---|---|---|---|
-| 1 | [01 — Package runtime assets](01-package-runtime-assets.md) | P0 | Do first |
-| 2 | [02 — Cross-repo dependency and release](02-cross-repo-dependency-release.md) | P0 | After 01; final publish also gated on 09 |
+| 1 | [01 — Package runtime assets](01-package-runtime-assets.md) | ~~P0~~ **packaging DONE 2026-07-15** (child `v0.1.1`) — unsafe `site-packages` data-root fallback remains | — |
+| 2 | [02 — Cross-repo dependency and release](02-cross-repo-dependency-release.md) | ~~P0~~ **parent dependency contract DONE 2026-07-29** — child `v0.1.2` tag + parent branch publication remain | Publish gated on the `v0.1.2` go/no-go |
 | 3 | [03 — Child CI and quality gates](03-child-ci-quality-gates.md) | ~~P1~~ **DONE 2026-07-15** (MyPy + branch protection remain) | — |
 | 4 | [04 — Cross-repo contract tests](04-cross-repo-contract-tests.md) | **core DONE 2026-07-15** (import-contract test, HF fix, 503 mapping; fixtures/CI-matrix remain) | — |
 | 5 | [05 — Single-writer operation boundary](05-single-writer-operation-boundary.md) | P1 | Parallel design task |
@@ -79,7 +88,7 @@ Important follow-ups:
 | 8 | [08 — Config ownership and docs cleanup](08-config-and-docs-cleanup.md) | P2 | Parallel |
 | 9 | [09 — Retire the v1 API](09-retire-v1-api.md) | ~~P1~~ **DONE 2026-07-15** | was gating the 3.0.0 publish — unblocked |
 | 10 | [10 — Developer-experience modernization](10-dev-experience.md) | P2 | Parallel; best after 09 |
-| 11 | [11 — GIMIE sidecar JSON-LD broken](11-gimie-sidecar-jsonld-broken.md) | **P0 (prod data quality)** | Independent — pre-existing, found in live e2e tests 2026-07-14 |
+| 11 | [11 — GIMIE sidecar JSON-LD broken](11-gimie-sidecar-jsonld-broken.md) | ~~P0~~ **fix SHIPPED 2026-07-14** (`8a45491`) — parity-script + route-contract check remain | — |
 
 Tasks 09–10 were added 2026-07-14 to carry the product direction for this
 release: `3.0.0` abandons the deprecated v1 API in the same breaking

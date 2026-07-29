@@ -150,6 +150,34 @@ tests/v2/                # default test target
 docs/                    # MkDocs site source
 ```
 
+### Cross-repo compatibility
+
+The index layer is consumed twice — as an imported **library** (read side) and
+as the **`gme-sources` service image** (write side) — and both share the same
+DuckDB stores and Qdrant collections. They must be the same release:
+
+| git-metadata-extractor | open-pulse-sources library | `gme-sources` image | Notes |
+|---|---|---|---|
+| `3.0.0` (this release) | `v0.1.2` | `ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2` | first split release |
+| `< 3.0.0` | — | — | monolith; index layer was in-tree |
+
+`v0.1.1` and earlier are **not** supported by `3.0.0`: they return a raw 500
+instead of a 503 when a credential is missing, which the extract-side error
+handling reads as an unexpected failure rather than a degraded index.
+
+The library version lives in exactly one place — the
+`open-pulse-sources @ git+…@<tag>` entry in `pyproject.toml` — and every
+install path (`just install-dev`, CI, the Docker image) inherits it from
+there. `tests/v2/test_open_pulse_sources_pin.py` fails the build if the
+`gme-sources` image tag drifts from it, or if either default slips back to a
+mutable ref (`main` / `latest`).
+
+Bumping the child version therefore means: edit the pin in `pyproject.toml`,
+match the image tag in `tools/deploy/docker-compose.yml`, add a matrix row
+here, and run the test. For local cross-repo work, `just install-dev`
+re-installs a checkout found at `./open-pulse-sources` or
+`../open-pulse-sources` as editable, overriding the pin.
+
 ---
 
 ## Configuration

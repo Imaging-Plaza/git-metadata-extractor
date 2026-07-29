@@ -8,6 +8,15 @@ This project uses [`uv`](https://docs.astral.sh/uv/) for dependency management.
 just install-dev          # uv pip install -e ".[dev]"
 ```
 
+That single command is enough. The RAG index layer
+([open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)) is a
+declared dependency pinned to a release tag in `pyproject.toml`, so it comes
+in with the install — see
+[Cross-repo compatibility](https://github.com/Imaging-Plaza/git-metadata-extractor#cross-repo-compatibility)
+for the supported version pairs. Working on both repos at once? Clone the
+child at `./open-pulse-sources` or `../open-pulse-sources` and `just
+install-dev` re-installs it editable, overriding the pin.
+
 ## 2. Configure environment
 
 Create `.env` from the template and edit:

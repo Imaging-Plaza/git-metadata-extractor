@@ -55,10 +55,14 @@ services:
   gme-sources:
     # Index management API — the write side of the RAG indices (ingest /
     # embed / reset / stats), same /v2/indices/* paths gme-api used to serve.
-    # Pulled from GHCR (published by open-pulse-sources CI). Pinned to the
-    # v0.1.1 release for reproducibility — bump deliberately, or override
-    # with SOURCES_IMAGE (e.g. ...:latest, ...:sha-<short> for a exact rev).
-    image: ${SOURCES_IMAGE:-ghcr.io/sdsc-ordes/open-pulse-sources:0.1.1}
+    # Pulled from GHCR (published by open-pulse-sources CI). This tag MUST
+    # match the open-pulse-sources library pin in pyproject.toml — gme-api
+    # imports the library and this service writes the same DuckDB/Qdrant
+    # stores, so a version skew corrupts or silently empties shared state.
+    # tests/v2/test_open_pulse_sources_pin.py fails if the two drift apart.
+    # Bump both together, or override for one run with SOURCES_IMAGE
+    # (e.g. ...:sha-<short>, or a @sha256: digest for production).
+    image: ${SOURCES_IMAGE:-ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2}
     container_name: gme-sources
     env_file:
       - ../../.env

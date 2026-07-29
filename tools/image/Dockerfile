@@ -31,15 +31,24 @@ COPY scripts ./scripts
 COPY pyproject.toml .
 COPY tools/config/gunicorn_conf.py ./gunicorn_conf.py
 
+# Installs the RAG index layer (open_pulse_sources) too: it is a declared
+# dependency pinned to an immutable tag in pyproject.toml, which is the one
+# place that version lives. The read-side providers and the index-store
+# bootstrap import it unconditionally.
 RUN uv pip install --system .
 
-# The RAG index layer (open_pulse_sources library) — split out of this repo.
-# The v2 read-side providers and the index-store bootstrap import it. Pinned
-# to the v0.1.1 release; bump deliberately or override with
-# --build-arg OPEN_PULSE_SOURCES_REF=<tag|sha>.
-ARG OPEN_PULSE_SOURCES_REF=v0.1.1
-RUN uv pip install --system \
-    "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@${OPEN_PULSE_SOURCES_REF}"
+# Escape hatch only — leave EMPTY so the pyproject pin governs the build.
+# Set it to test an unreleased child revision without editing pyproject:
+#   docker build --build-arg OPEN_PULSE_SOURCES_REF=<tag|sha> ...
+# A permanent bump belongs in pyproject.toml (+ the gme-sources image tag in
+# tools/deploy/docker-compose.yml); tests/v2/test_open_pulse_sources_pin.py
+# enforces that those two agree.
+ARG OPEN_PULSE_SOURCES_REF=
+RUN if [ -n "${OPEN_PULSE_SOURCES_REF}" ]; then \
+        echo "overriding the pyproject pin with ${OPEN_PULSE_SOURCES_REF}"; \
+        uv pip install --system \
+            "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@${OPEN_PULSE_SOURCES_REF}"; \
+    fi
 
 # Create data directory for cache and ensure proper permissions
 RUN mkdir -p /app/data && chown -R non-root-user:non-root-user /app

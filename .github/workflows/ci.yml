@@ -38,11 +38,10 @@ jobs:
       - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
+          # The RAG index layer (open-pulse-sources) is a declared dependency
+          # pinned to an immutable tag in pyproject.toml — installed here as
+          # part of the project, with no second pin to keep in sync.
           python -m pip install -e ".[dev]"
-          # RAG index layer — split out to its own repo; the v2 read side
-          # imports it as a library. Keep the tag in sync with
-          # tools/image/Dockerfile's OPEN_PULSE_SOURCES_REF.
-          python -m pip install "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.1"
 
       - name: Check generated v2 models freshness
         run: just v2-models-check
@@ -73,11 +72,8 @@ jobs:
       - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
+          # open-pulse-sources comes in via the pyproject pin (see above job).
           python -m pip install -e ".[dev]"
-          # RAG index layer — split out to its own repo; the v2 read side
-          # imports it as a library. Keep the tag in sync with
-          # tools/image/Dockerfile's OPEN_PULSE_SOURCES_REF.
-          python -m pip install "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.1"
 
       - name: Run LLM integration tests
         env:

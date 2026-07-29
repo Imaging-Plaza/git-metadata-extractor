@@ -23,8 +23,12 @@ published `.ro.duckdb` file and every write path republishes it.
 
 Parent code still opens live DuckDB paths directly, including:
 
-- `src/v2/pipeline/stages/refine_with_llm.py:1098-1106`
-- `src/v2/ingest/providers/snsf_grants.py:48-80`
+- `git_metadata_extractor/pipeline/stages/refine_with_llm.py:1106` and `:1154`
+- `git_metadata_extractor/providers/snsf_grants.py:80`, `:105`, `:127`
+
+*(Paths re-verified 2026-07-29 after the `src/v2` → `git_metadata_extractor`
+rename; every call is still a `duckdb.connect(..., read_only=True)` against
+the live store rather than the published `.ro.duckdb` snapshot.)*
 
 Standalone child CLIs and maintenance paths are not uniformly proven to publish
 snapshots. A live-path read can fail, block, or observe partial state during a

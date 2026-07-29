@@ -25,12 +25,20 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# NOTE: the v2 read-side RAG providers import the `open_pulse_sources`
-# library (the RAG index layer split out of this repo). It is not on PyPI;
-# `just install-dev` installs it editable from a sibling clone or from
-# git+https://github.com/sdsc-ordes/open-pulse-sources. The Docker image
-# installs it explicitly (see tools/image/Dockerfile).
 dependencies = [
+    # THE cross-repo pin. The RAG index layer lives in its own repo since
+    # 3.0.0 and the read-side providers, `canonicalization/doi.py` and the
+    # gunicorn index bootstrap import it unconditionally — so it is a hard
+    # dependency, not an extra. Not on PyPI: pinned to an immutable tag so
+    # every install path (just, CI, Docker) resolves the same revision.
+    #
+    # This line is the single source of truth for the child library version.
+    # `tools/deploy/docker-compose.yml` pins the matching gme-sources image;
+    # tests/v2/test_open_pulse_sources_pin.py fails if the two drift apart
+    # or if either default slips back to a mutable ref (main / latest).
+    # Local cross-repo development overrides it with an editable checkout —
+    # see `just install-dev`.
+    "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.2",
     "fastapi>=0.122.0",
     "uvicorn[standard]==0.34.3",
     "pydantic==2.11.7",

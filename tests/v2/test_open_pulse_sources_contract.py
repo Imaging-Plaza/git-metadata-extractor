@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import os
 from pathlib import Path
 
 import pytest
@@ -70,7 +71,7 @@ def test_every_open_pulse_sources_import_resolves():
     )
 
 
-def test_huggingface_rag_provider_constructs():
+def test_huggingface_rag_provider_constructs(monkeypatch: pytest.MonkeyPatch):
     """Regression for the silently-dead HF provider (task brief 04/11).
 
     ``build_default_provider`` degrades to ``None`` on ANY failure — which
@@ -78,19 +79,21 @@ def test_huggingface_rag_provider_constructs():
     present and the flag enabled it must construct.
     """
     pytest.importorskip("qdrant_client")
-    import os
 
     from git_metadata_extractor.providers.huggingface_rag import (
         build_default_provider,
     )
 
-    os.environ.setdefault("RCP_TOKEN", "contract-test-dummy")
-    os.environ["V2_HUGGINGFACE_RAG_ENABLED"] = "true"
-    try:
-        provider = build_default_provider()
-        assert provider is not None, (
-            "HuggingFace RAG provider failed to construct — check the "
-            "config import chain (see module docstring)"
-        )
-    finally:
-        os.environ.pop("V2_HUGGINGFACE_RAG_ENABLED", None)
+    # A dummy credential is enough: construction reads RCP_TOKEN but issues no
+    # request. Override an EMPTY value too — `just test` exports `RCP_TOKEN=`
+    # to keep the fast suite offline, and `os.environ.setdefault` would leave
+    # that empty string in place, failing the provider on a missing credential.
+    if not os.environ.get("RCP_TOKEN"):
+        monkeypatch.setenv("RCP_TOKEN", "contract-test-dummy")
+    monkeypatch.setenv("V2_HUGGINGFACE_RAG_ENABLED", "true")
+
+    provider = build_default_provider()
+    assert provider is not None, (
+        "HuggingFace RAG provider failed to construct — check the "
+        "config import chain (see module docstring)"
+    )

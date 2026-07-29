@@ -23,15 +23,22 @@ install:
 
 # Install in development mode with all dependencies.
 # The RAG-index layer lives in the open-pulse-sources repo; the v2 read-side
-# providers import it as a library. Installed editable from a sibling clone
-# when present (for cross-repo development), else pinned from GitHub —
-# keep the tag in sync with tools/image/Dockerfile's OPEN_PULSE_SOURCES_REF.
+# providers import it as a library. It is a declared dependency of this
+# project (pinned to an immutable tag in pyproject.toml), so the install
+# below already brings it in — no separate pin to keep in sync.
+# For cross-repo development, a checkout found either nested
+# (./open-pulse-sources) or beside this repo (../open-pulse-sources) is then
+# re-installed editable so local child edits take effect immediately.
 install-dev:
     uv pip install -e ".[dev]"
     @if [ -d open-pulse-sources ]; then \
+        echo "open-pulse-sources: nested checkout -> editable install"; \
         uv pip install -e ./open-pulse-sources; \
+    elif [ -d ../open-pulse-sources ]; then \
+        echo "open-pulse-sources: sibling checkout -> editable install"; \
+        uv pip install -e ../open-pulse-sources; \
     else \
-        uv pip install "open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@v0.1.1"; \
+        echo "open-pulse-sources: using the pinned release from pyproject.toml"; \
     fi
 
 # Set up development environment (install + create .env if needed)

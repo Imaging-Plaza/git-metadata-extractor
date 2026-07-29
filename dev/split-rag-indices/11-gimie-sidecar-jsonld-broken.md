@@ -1,7 +1,10 @@
 # Task 11 — GIMIE sidecar JSON-LD integration is broken (route never existed)
 
 **Severity:** P0 (production data quality) ·
-**Status: fix option 1 implemented 2026-07-14 (uncommitted) — see bottom** ·
+**Status: fix option 1 SHIPPED 2026-07-14** (commit `8a45491` on
+`feat/split-rag-indices` — TTL bridge + GME-maintained sidecar image;
+remaining sub-items at the bottom: upstream `jsonld` route, parity-script
+degrade-to-None failure, startup/CI route-contract check) ·
 **Repository:** parent · **Discovered:** 2026-07-14 live e2e extraction tests
 · **Not a split regression** — predates the split; affects every deployment
 since the gimie-sidecar migration.

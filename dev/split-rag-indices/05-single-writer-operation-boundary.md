@@ -11,7 +11,8 @@ workers, migration jobs, and maintenance commands.
 
 - `gme-api` and `gme-sources` share `gme-data` and Qdrant.
 - Child owns bulk ingest/embed/reset/compact through its service.
-- Parent retains four opt-in direct writers in `src/v2/api.py`:
+- Parent retains four opt-in direct writers, now in
+  `git_metadata_extractor/api/auto_ingest.py` (was `src/v2/api.py`):
   GitHub repos, users, organizations, and HuggingFace papers.
 - Parent Gunicorn startup calls child federated bootstrap.
 - Parent locks are process-local and cannot coordinate with child workers.

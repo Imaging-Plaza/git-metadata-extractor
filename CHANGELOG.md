@@ -53,6 +53,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   per-index docs) live in the new repo. `config/index/*.yaml` intentionally
   remains here: the library resolves config/data paths CWD-relative.
 
+- **`open-pulse-sources` is now a declared dependency, pinned in one place.**
+  It was previously installed out-of-band by `just install-dev`, CI, and the
+  Dockerfile — four copies of the same tag, and a `pip install .` of this
+  project produced an installation that could not import its own providers
+  (`ModuleNotFoundError: open_pulse_sources`). The library is now a hard
+  dependency in `pyproject.toml`, pinned to the immutable tag `v0.1.2`, and
+  that entry is the single source of truth: every install path inherits it,
+  the Dockerfile's `OPEN_PULSE_SOURCES_REF` build arg is an empty
+  override-only escape hatch, and the published image records the resolved
+  ref in the `ch.sdsc.pulse.open-pulse-sources-ref` OCI label.
+  `tests/v2/test_open_pulse_sources_pin.py` fails on version skew between
+  the library pin and the `gme-sources` image tag, on a second hardcoded
+  pin, or on a mutable (`main` / `latest`) default. Compatibility matrix in
+  the README. **Minimum supported child release: `v0.1.2`** — `v0.1.1` and
+  earlier answer a missing credential with a raw 500 instead of a 503. See
+  `dev/split-rag-indices/02-cross-repo-dependency-release.md`.
+
 ### Changed (breaking — deployment)
 
 - **GIMIE moved to a sidecar; `gimie` dependency removed.** The `gimie` package

@@ -1,6 +1,13 @@
 # Task 01 — Package runtime assets in `open-pulse-sources`
 
-**Severity:** P0 · **Status:** Ready · **Repository:** `open-pulse-sources/`
+**Severity:** P0 · **Status: packaging DONE 2026-07-15** (child commit
+`b98b85d`, released as `v0.1.1`: `.sql` schemas ship in wheels + a CI guard).
+**Remaining:** the scope-amendment item (b) — 13 child `paths.py` modules
+still fall back to `Path(__file__).resolve().parents[3]`, i.e.
+`site-packages/data`, when `INDEX_DATA_DIR` is unset. Both compose services
+now set it explicitly (item (a) done), so the unsafe fallback is masked, not
+fixed; it must fail loudly or resolve CWD-relative instead. ·
+**Repository:** `open-pulse-sources/`
 
 ## Objective
 

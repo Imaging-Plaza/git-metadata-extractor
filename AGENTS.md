@@ -76,10 +76,11 @@ git_metadata_extractor/
 # /v2/indices/* + /v2/manifest API) lives in a separate repo/service:
 #   https://github.com/sdsc-ordes/open-pulse-sources
 # The v2 read-side providers import it as the `open_pulse_sources`
-# library (installed by `just install-dev`). This service only READS
-# the indices (Qdrant + DuckDB under data/index/); ingest/embed/reset
-# happen in the open-pulse-sources service. config/index/*.yaml stays
-# here because the library resolves config/data paths CWD-relative.
+# library — a declared, tag-pinned dependency in pyproject.toml (see
+# "Cross-repo version pin" below). This service only READS the indices
+# (Qdrant + DuckDB under data/index/); ingest/embed/reset happen in the
+# open-pulse-sources service. config/index/*.yaml stays here because
+# the library resolves config/data paths CWD-relative.
 
 tests/v2/                        # default test target
 ```
@@ -266,6 +267,27 @@ For batch extractions over many repos: `scripts/v2/batch_extract.sh` reads
 a hardcoded URL list and runs them through `/v2/extract` with configurable
 parallelism. Resumable: skips repos whose result file already exists with
 a non-`running` status.
+
+## Cross-repo version pin
+
+The `open_pulse_sources` library version lives in **exactly one place**: the
+`open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@<tag>`
+entry in `pyproject.toml` `dependencies`. Every install path inherits it —
+`just install-dev`, `just install`, CI, and `tools/image/Dockerfile`.
+
+- Never add a second `pip install "open-pulse-sources @ git+…@<tag>"` anywhere;
+  `tests/v2/test_open_pulse_sources_pin.py` fails on hardcoded second pins.
+- The `gme-sources` image tag in `tools/deploy/docker-compose.yml` must match
+  the library pin (same test enforces it). The library reads and that service
+  writes the *same* DuckDB/Qdrant stores — skew corrupts shared state.
+- Pins must be immutable: a release tag (`vX.Y.Z`) or a full commit SHA.
+  `main` / `latest` defaults fail the test.
+- Bumping the child = edit the pyproject pin + the compose image tag + add a
+  README compatibility-matrix row.
+- `OPEN_PULSE_SOURCES_REF` (Dockerfile build arg) defaults to **empty** and is
+  an override-only escape hatch for testing unreleased child revisions.
+- For cross-repo development, `just install-dev` re-installs a checkout at
+  `./open-pulse-sources` or `../open-pulse-sources` as editable.
 
 ## Pipeline cache topology
 
