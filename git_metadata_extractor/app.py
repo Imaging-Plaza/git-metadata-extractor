@@ -127,7 +127,7 @@ with the Open Pulse Ontology.
 The legacy v1 API was removed in 3.0.0 — see the CHANGELOG and
 `docs/migration-v1-to-v2.md`.
     """,
-    version="3.0.0rc1",
+    version="3.0.0",
     contact={
         "name": "EPFL Center for Imaging / SDSC",
         "url": "https://imaging-plaza.epfl.ch",

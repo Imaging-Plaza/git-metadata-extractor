@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Output is aligned with **Open Pulse Ontology v2.1.2** (see `src/v2/schema/json/context/v2.0.jsonld`).
 
-## [Unreleased]
+## [3.0.0] — 2026-07-29
+
+The repo-split release: the RAG index layer moved to
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+(requires `v0.1.2`), the v1 API is retired, and the package was renamed
+`src/v2` → `git_metadata_extractor`. One migration event for consumers.
+Everything under `[3.0.0rc1]` below shipped as part of this release.
 
 ### Removed (breaking — v1 API retired)
 
@@ -158,12 +164,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   bootstrapped as "skipped: no duckdb store"; all nine gitlab leaves now
   bootstrap correctly.
 
-## [3.0.0rc1] — Proposed — Identifier URL canonicalisation + per-entity RAG indices (breaking)
+## [3.0.0rc1] — Identifier URL canonicalisation + per-entity RAG indices (breaking)
 
-> **Status: proposed.** This is the candidate for the next major release
-> (v3.0.0), sitting above the released `2.1.0rc1` below. Breaking
-> identifier-shape and env-var changes warrant the major bump. Nothing
-> here is tagged yet; the version string is `3.0.0rc1`.
+> **Status: shipped in `3.0.0`** (2026-07-29). This was the release candidate
+> — its breaking identifier-shape and env-var changes are what warranted the
+> major bump. It was never tagged on its own; read it as the first half of the
+> `3.0.0` entry above.
 
 This release standardises **every external identifier** to its canonical
 HTTPS URL form, end-to-end. Previously the codebase carried a split
