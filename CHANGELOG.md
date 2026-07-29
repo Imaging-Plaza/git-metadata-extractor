@@ -4,6 +4,62 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). Output is aligned with **Open Pulse Ontology v2.1.2** (see `src/v2/schema/json/context/v2.0.jsonld`).
 
+## [Unreleased]
+
+### Added
+
+- **Two documentation pages that did not exist:**
+  [`docs/architecture/overview.md`](docs/architecture/overview.md) (layers,
+  request lifecycle, the three runtimes and what the hybrid refiner may patch,
+  hallucination guards, the three caches, internal-field handling) and
+  [`docs/cross-repo-contract.md`](docs/cross-repo-contract.md) (which repo owns
+  what, the single-source version pin and its rules, the shared-volume writer
+  problem, required deployment settings). Both were previously documented only
+  in `AGENTS.md` — i.e. for agents, not for people.
+
+### Changed
+
+- **`docs/v2-pipeline.md` is now in the site navigation.** The README calls it
+  "start here", but it was absent from `mkdocs.yml`, so it never appeared on the
+  published site.
+- **The documented pipeline now matches the code.** Both `AGENTS.md` and the
+  pipeline doc described a single flat 25-stage list; there are really *two*
+  sequencers — `PLAN_BY_TYPE` in the orchestrator (agent generation, and it
+  differs for repository / user / organization inputs) and a flat sequence in
+  `api/extract.py` (everything after). Stages that were missing entirely:
+  `permissive_validation`, all four ROR resolvers, `prune_dangling_refs`, the
+  second `validate_ownership` pass, `demote_github_props_to_units`,
+  `emit_fork_parent_stubs`, `infer_article_source_organization`,
+  `tag_rule_based_disciplines`, `shacl_gate`, `compute_stats`. Also corrected:
+  `classify_url` runs in the API layer, not as a plan stage, and
+  `context_summary_agent` runs *inside* `context_gather` and fails open.
+- **Corrected a documented default that was wrong**: `V2_LINK_VERACITY_ENABLED`
+  is `true` (LLM mode), not `false`. And the composite-ID separator is `__`
+  everywhere in code — `AGENTS.md` said `_`.
+- **Site navigation reorganised** around what a reader wants (understand /
+  use / operate) instead of listing everything flat. The 14 historical working
+  notes moved to `docs/archive/` behind a single "Archive" entry with an index
+  page that says plainly they are not current documentation — they were ~half
+  the published page count.
+- **Internal design specs are no longer published.** `docs/superpowers/`
+  (9 plans/specs, unlinked from anywhere but still built into public HTML)
+  moved to `dev/superpowers/`, matching the `dev/` convention for internal
+  material.
+- Fixed stale paths in active docs (`src/index/…` / `src/module/…` now live in
+  open-pulse-sources; `git_metadata_extractor/api.py` is an `api/` package),
+  and removed the pipeline doc's pointer to `.internal/v2-pipeline-reference.md`
+  — that directory is untracked, so the file is absent from a fresh clone.
+
+### Fixed
+
+- **`test_promoted_strict_schemas` could not pass on a Windows checkout.** It
+  byte-compares the three copies of each JSON Schema; without a line-ending
+  rule, one copy checks out CRLF and another LF, so identical content compared
+  unequal. Added `.gitattributes` pinning those three paths to LF.
+- **The app version no longer drifts from `/v2/health`.** `app.py` hardcoded
+  the version string while `/v2/health` reads installed package metadata; both
+  now read the metadata, so a bump in `pyproject.toml` propagates to one place.
+
 ## [3.0.0] — 2026-07-29
 
 The repo-split release: the RAG index layer moved to

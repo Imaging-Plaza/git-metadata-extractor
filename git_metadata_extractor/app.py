@@ -127,7 +127,10 @@ with the Open Pulse Ontology.
 The legacy v1 API was removed in 3.0.0 — see the CHANGELOG and
 `docs/migration-v1-to-v2.md`.
     """,
-    version="3.0.0",
+    # Same source as `/v2/health` and the root endpoint — installed package
+    # metadata, i.e. pyproject.toml. A hardcoded string here silently drifts
+    # from `/v2/health` between a version bump and the next reinstall.
+    version=_resolve_package_version("git-metadata-extractor"),
     contact={
         "name": "EPFL Center for Imaging / SDSC",
         "url": "https://imaging-plaza.epfl.ch",

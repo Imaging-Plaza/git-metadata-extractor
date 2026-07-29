@@ -2,7 +2,12 @@
 
 The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with [Open Pulse Ontology v2.1.2](https://open-pulse.epfl.ch/ontology). This doc is the operator-facing tour: what each stage does, what assumptions hold across the pipeline, and where to dig deeper.
 
-**Deep reference:** `.internal/v2-pipeline-reference.md` (repo-internal) — every stage, every gate, every cache layer.
+**Related:** [Architecture Overview](architecture/overview.md) for how the layers fit together · [Cross-Repo Contract](cross-repo-contract.md) for the index-layer split.
+
+> **Two sequencers, not one.** Agent generation runs from a per-input-type
+> plan in the orchestrator (`PLAN_BY_TYPE`); everything after the agents is a
+> flat sequence in `api/extract.py`. The stage inventory below reflects both —
+> see [Stage inventory](#stage-inventory).
 
 ---
 
@@ -79,6 +84,70 @@ flowchart TB
 ```
 
 Legend: solid blue = agent, green = affiliation resolver, dashed orange = LLM-gated, red = validation, purple = output.
+
+The diagram is deliberately simplified. `classify_url` runs in the API layer *before* the orchestrator, and Phase 5 collapses a dozen inference/validation passes into one box — the full list is below.
+
+---
+
+## Stage inventory
+
+Reconstructed from `PLAN_BY_TYPE`, the `# === <name> stage ===` banners in `api/extract.py` and the `STAGE_*` constants in `api/_helpers.py` (2026-07-29). When in doubt, those three are the source of truth.
+
+### Phase 1 — agent generation (orchestrator)
+
+The plan **varies by what the URL points at**. `ROOT_STAGE_BY_DETECTED_TYPE` picks the root agent; the rest fan out.
+
+| Detected type | Root agent | Then, in order |
+|---|---|---|
+| `repository` | `repo_agent` | `person_agents` → `org_agents` → `article_agents` → `membership_agents` → `contribution_agents` |
+| `user` | `person_agent` | `repo_agents` → `org_agents` → `article_agents` → `membership_agents` → `contribution_agents` |
+| `organization` | `org_agent` | `person_agents` → `repo_agents` → `article_agents` → `membership_agents` → `contribution_agents` |
+
+All three begin with `context_gather`. Two things that look like stages but aren't:
+
+- **`classify_url`** runs in the API layer before the orchestrator is invoked.
+- **`context_summary_agent`** runs *inside* `context_gather`, LLM runtime only, and **fails open** — on error the pipeline continues without a compiled summary and records a warning. So a missing summary degrades entity quality silently rather than failing the request.
+
+Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (50), and by default owned repos are emitted as `pulse:owns` references rather than materialised entities unless `V2_EXPAND_OWNED_REPOS=true`.
+
+### Phase 2 — post-agent sequence (`api/extract.py`)
+
+| Stage | What it does |
+|---|---|
+| `permissive_validation` | per-entity permissive schema pass |
+| `llm_dedup` **[LLM]** | cross-bucket dedup + ID remap (fail-open) |
+| `reconcile_entities` | ID canonicalisation + linkage; anonymises emails |
+| `resolve_company_to_ror` | `_company` → ROR: Membership + Org stub |
+| `resolve_bio_to_ror` | bio / blog / email → ROR: Membership + Org stub |
+| `resolve_bio_to_ror_llm` **[LLM]** | LLM long-tail affiliation resolver |
+| `resolve_placeholder_orgs_to_ror` | upgrade placeholder Orgs to real ROR entities |
+| `llm_critic` **[LLM, off by default]** | drop suggestions |
+| `refine_with_llm` **[hybrid]** | whitelisted-field patches over rule-based output |
+| `guarantee_repo_author` | stamp the GitHub owner as `schema:author` when empty |
+| `strict_validation` | per-entity strict JSON Schema check |
+| `assemble_output` | split graph into root / related / excluded |
+| `link_veracity` **[LLM]** | verify URLs via Selenium + LLM; on failure promotes failed-ID entities and prunes dead links |
+| `validate_articles` | drop placeholder / sentinel-DOI articles |
+| `validate_author_classes` | drop `schema:author` refs that aren't a `schema:Person` |
+| `validate_ownership` | strip mismatched `pulse:owns` |
+| `infer_owners` | stamp `pulse:owns` / `pulse:ownedBy`; coerce bare logins to IRI shape |
+| `validate_ownership` *(again)* | second pass — catches inverse edges `infer_owners` just added |
+| `prune_dangling_refs` | drop refs whose target left the graph |
+| `infer_github_handle_parents` | ROR fuzzy-search for each GitHub org's parent; stamp `unitOf` |
+| `org_relationships` **[LLM]** | whole-graph call refining `unitOf` edges |
+| `infer_org_units` | deterministic name-token fallback for `unitOf` |
+| `demote_github_props_to_units` | move GitHub-only props off ROR-identified orgs |
+| `emit_fork_parent_stubs` | materialise a fork's upstream repository |
+| `infer_article_source_organization` | attribute articles to a source organisation |
+| `concept_tagging` **[off by default]** | EPFL Graph concepts / keywords / disciplines onto the root repo |
+| `tag_rule_based_disciplines` | deterministic discipline fallback |
+| `build_jsonld_output` | final JSON-LD `@graph`; strips redundant `pulse:ror` |
+| `shacl_gate` | SHACL validation — **warning-only**, see below |
+| `compute_stats` | response counters and timings |
+
+### Why `shacl_gate` is warning-only
+
+It reports violations as `result.warnings` instead of rejecting the graph, so conformance is the *upstream* stages' job. Four common violations are fixed deterministically rather than left to the gate: `pulse:ownedBy` IRI shape (`infer_owners`), redundant `pulse:ror` on ROR-identified orgs (`build_jsonld_output`), inverted Membership dates (both membership agents), and non-Person `schema:author` refs (`validate_author_classes`). If you add a shape, add the fix upstream — a red gate does not stop a response.
 
 ---
 
@@ -165,23 +234,34 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | Flag | Default | Effect |
 |---|---|---|
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Pipeline mode (`rule_based` / `llm` / `hybrid`). |
-| `V2_RESOLVE_COMPANY_TO_ROR` | `true` | Stage 8b (deterministic `_company` → ROR). |
-| `V2_RESOLVE_BIO_TO_ROR` | `true` | Stage 8c (deterministic bio/blog/email → ROR). |
-| `V2_RESOLVE_BIO_TO_ROR_LLM` | `true` | Stage 8d (LLM long-tail). LLM/hybrid only. |
-| `V2_RESOLVE_BIO_TO_ROR_LLM_CONCURRENCY` | `4` | Stage 8d semaphore. |
-| `V2_HYBRID_REFINER_ENABLED` | `true` | Stage 10 (`refine_with_llm`). |
-| `V2_APPLY_CRITIC_PRUNING` | `false` | Stage 9 critic actually prunes (vs. soft log). |
-| `V2_LINK_VERACITY_ENABLED` | `false` | Stage 14 (Selenium + LLM URL verification). |
+| `V2_RESOLVE_COMPANY_TO_ROR` | `true` | `resolve_company_to_ror` (deterministic `_company` → ROR). |
+| `V2_RESOLVE_BIO_TO_ROR` | `true` | `resolve_bio_to_ror` (deterministic bio/blog/email → ROR). |
+| `V2_RESOLVE_BIO_TO_ROR_LLM` | `true` | `resolve_bio_to_ror_llm` (LLM long-tail). LLM/hybrid only. |
+| `V2_RESOLVE_BIO_TO_ROR_LLM_CONCURRENCY` | `4` | Semaphore for the LLM resolver. |
+| `V2_HYBRID_REFINER_ENABLED` | `true` | `refine_with_llm` (hybrid runtime). |
+| `V2_APPLY_CRITIC_PRUNING` | `false` | Whether `llm_critic` actually prunes (vs. soft log). |
+| `V2_LINK_VERACITY_ENABLED` | **`true`** | `link_veracity` (Selenium + LLM URL verification). On in LLM mode; set `false` for batch runs. Rule-based mode skips it unconditionally. |
+| `V2_CONCEPT_TAGGING_ENABLED` | `false` | `concept_tagging`. Backend via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph`, `wikipedia`, `llm`}. |
+| `V2_EXPAND_OWNED_REPOS` | `false` | Materialise each owned repo as a full entity instead of a `pulse:owns` reference. |
+| `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency. |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
 
-Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
+Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 2026-07-29. Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
 
 ---
 
 ## Where to go next
 
-- **Per-stage detail** → `.internal/v2-pipeline-reference.md` (repo-internal)
-- **Schema source-of-truth** → `git_metadata_extractor/schema/json/` (agent + strict) and `git_metadata_extractor/schema/ontology/open-pulse-ontology.ttl`
-- **Pipeline entry** → `git_metadata_extractor/api.py` (the `_run_pipeline` function ties every stage together)
-- **Orchestrator** → `git_metadata_extractor/pipeline/orchestrator.py` (phases 1–5)
-- **Resolver stages** → `git_metadata_extractor/pipeline/stages/resolve_*.py`
+| To understand… | Read |
+|---|---|
+| How the layers fit together | [Architecture Overview](architecture/overview.md) |
+| The index-layer split and version pinning | [Cross-Repo Contract](cross-repo-contract.md) |
+| Post-agent stage sequencing | `git_metadata_extractor/api/extract.py` — `_run_extract_job`, with `# === <name> stage ===` banners |
+| Agent plans and fan-out | `git_metadata_extractor/pipeline/orchestrator.py` — `PLAN_BY_TYPE` (line ~120) |
+| Individual stages | `git_metadata_extractor/pipeline/stages/` — one module per stage; resolvers are `resolve_*.py` |
+| Schema source of truth | `git_metadata_extractor/schema/json/` (agent + strict) and `schema/ontology/open-pulse-ontology.ttl` |
+| Env flags and gates | `git_metadata_extractor/api/_helpers.py` — every `V2_*` reader lives here |
+
+The former "deep reference" pointer (`.internal/v2-pipeline-reference.md`) was
+removed: that directory is untracked, so the file does not exist in a fresh
+clone. The stage inventory above replaces it.

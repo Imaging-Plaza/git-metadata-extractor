@@ -116,7 +116,9 @@ Swagger UI: <http://localhost:1234/docs>
 
 | Doc | What's in it |
 |---|---|
-| **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Pipeline overview, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
+| **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Every stage, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
+| **[docs/architecture/overview.md](docs/architecture/overview.md)** | Layers, request lifecycle, the three runtimes, hallucination guards, caches |
+| [docs/cross-repo-contract.md](docs/cross-repo-contract.md) | The index-layer split: who writes, who reads, version pinning |
 | [docs/getting-started.md](docs/getting-started.md) | Install + first run, the long version |
 | [docs/v2-api-reference.md](docs/v2-api-reference.md) | `/v2/extract`, `/v2/jobs`, `/v2/graph` endpoints |
 | [docs/rag-indices.md](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) | Nine RAG indices + federated layer |
