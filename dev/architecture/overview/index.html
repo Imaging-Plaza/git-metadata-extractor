@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/architecture/design-notes/">
+        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/architecture/overview/">
       
       
-        <link rel="prev" href="../../cross-repo-contract/">
+        <link rel="prev" href="../../getting-started/">
       
       
-        <link rel="next" href="../../v2-api-reference/">
+        <link rel="next" href="../../v2-pipeline/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Design Notes - Git Metadata Extractor Documentation</title>
+        <title>Architecture Overview - Git Metadata Extractor Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#design-notes" class="md-skip">
+        <a href="#architecture-overview" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Design Notes
+              Architecture Overview
             
           </span>
         </div>
@@ -331,10 +331,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -350,6 +377,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#two-services-one-data-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two services, one data volume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-runtimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three runtimes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hallucination-guards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hallucination guards
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identifier-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identifier conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -415,37 +550,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Design Notes
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../design-notes/" class="md-nav__link">
         
   
   
@@ -461,81 +569,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#component-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Component architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v2-extract-sequence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        V2 extract sequence
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pipeline-cache-topology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pipeline cache topology
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rag-index-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        RAG index architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1177,10 +1210,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#component-architecture" class="md-nav__link">
+  <a href="#two-services-one-data-volume" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Component architecture
+        Two services, one data volume
       
     </span>
   </a>
@@ -1188,10 +1221,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-extract-sequence" class="md-nav__link">
+  <a href="#layers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        V2 extract sequence
+        Layers
       
     </span>
   </a>
@@ -1199,10 +1232,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-cache-topology" class="md-nav__link">
+  <a href="#request-lifecycle" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline cache topology
+        Request lifecycle
       
     </span>
   </a>
@@ -1210,10 +1243,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rag-index-architecture" class="md-nav__link">
+  <a href="#the-three-runtimes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RAG index architecture
+        The three runtimes
       
     </span>
   </a>
@@ -1221,10 +1254,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
+  <a href="#hallucination-guards" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Notes
+        Hallucination guards
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identifier-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identifier conventions
       
     </span>
   </a>
@@ -1251,191 +1317,245 @@
   
 
 
-<h1 id="design-notes">Design Notes<a class="headerlink" href="#design-notes" title="Permanent link">&para;</a></h1>
-<p>This page documents the current runtime architecture (<code>v2.0.0+</code>).</p>
-<h2 id="component-architecture">Component architecture<a class="headerlink" href="#component-architecture" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>flowchart TB
-    subgraph Client
-        C1[HTTP client / batch script]
-    end
-
-    subgraph API[FastAPI app — git_metadata_extractor/app.py]
-        A1[v2_router&lt;br/&gt;git_metadata_extractor/api/_router.py]
-        A2[Request logging&lt;br/&gt;AsyncRequestContext]
-    end
-
-    subgraph Pipeline[V2 pipeline — git_metadata_extractor/pipeline/]
-        P0[orchestrator]
-        P1[stages/* — 23 stages]
-        P2[per-entity agents&lt;br/&gt;git_metadata_extractor/agents/llm/* + rule_based/*]
-    end
-
-    subgraph Caches[Shared SQLite — V2_PROVIDER_CACHE_PATH]
-        K1[Provider cache]
-        K2[Agent verdict cache]
-        K3[Pipeline response cache]
-        K4[Async-job store]
-    end
-
-    subgraph Providers[git_metadata_extractor/providers/]
-        PG[GitHub REST + GIMIE]
-        PR[ROR / ORCID / Infoscience]
-        PRAG[*_rag — Qdrant-backed]
-    end
-
-    subgraph RAG[RAG indices — open_pulse_sources library / service]
-        RH[HuggingFace]
-        ROA[OpenAlex]
-        RI[Infoscience]
-        RE[ETHZ Research Collection]
-        RO[ORCID]
-        RR[ROR]
-        RZ[Zenodo]
-        RG[GitHub]
-        RS[SNSF]
-        RFED[Federated layer]
-    end
-
-    subgraph External
-        GH[GitHub API]
-        IS[Infoscience API]
-        ORID[ORCID API]
-        ROR[ROR API]
-        SEL[Selenium grid]
-        LLM[LLM provider&lt;br/&gt;RCP / OpenAI / OpenRouter]
-        QD[(Qdrant&lt;br/&gt;gme-qdrant:6333)]
-        RCP[EPFL RCP&lt;br/&gt;embed + rerank]
-    end
-
-    C1 --&gt; A2 --&gt; A1
-    A1 --&gt; P0
-    P0 --&gt; P1
-    P1 --&gt; P2
-    P2 --&gt; Providers
-    Providers --&gt; Caches
-    PG --&gt; GH
-    PR --&gt; IS
-    PR --&gt; ORID
-    PR --&gt; ROR
-    PRAG --&gt; RFED
-    PRAG --&gt; RH
-    PRAG --&gt; ROA
-    PRAG --&gt; RI
-    PRAG --&gt; RE
-    PRAG --&gt; RO
-    PRAG --&gt; RR
-    PRAG --&gt; RZ
-    RAG --&gt; QD
-    RAG --&gt; RCP
-    P1 --&gt; SEL
-    P2 --&gt; LLM</code></pre>
-<h2 id="v2-extract-sequence">V2 extract sequence<a class="headerlink" href="#v2-extract-sequence" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>sequenceDiagram
-    autonumber
-    participant Client
-    participant API as /v2/extract
-    participant Cache as ProviderCache (SQLite)
-    participant Orch as Pipeline orchestrator
-    participant Agents as Per-entity agents (LLM or rule-based)
-    participant RAG as RAG providers + Qdrant
-    participant Ext as External APIs (GitHub / ROR / ORCID / Infoscience / Selenium)
-
-    Client-&gt;&gt;API: GET or POST /v2/extract
-    API-&gt;&gt;Cache: pipeline-cache lookup (full response)
-    alt pipeline cache hit
-        Cache--&gt;&gt;API: V2ExtractResponse
-        API--&gt;&gt;Client: response
-    else miss
-        API-&gt;&gt;Orch: run pipeline
-        Orch-&gt;&gt;Ext: classify_url + gather_context (GIMIE + GitHub REST)
-        Orch-&gt;&gt;Cache: provider-cache lookup / store
-        Orch-&gt;&gt;Agents: context_summary → per-entity fan-out
-        Agents-&gt;&gt;Cache: agent-verdict cache lookup
-        alt verdict miss
-            Agents-&gt;&gt;RAG: search_*_rag / lookup_*_rag (optional)
-            RAG--&gt;&gt;Agents: thin hits
-            Agents-&gt;&gt;Cache: store verdict
-        end
-        Orch-&gt;&gt;Orch: dedup → reconcile → critic → strict → assemble
-        Orch-&gt;&gt;Ext: link_veracity (Selenium fetch + LLM verdict)
-        Orch-&gt;&gt;Orch: ownership + org-hierarchy inference
-        Orch-&gt;&gt;Orch: build_jsonld_output
-        Orch-&gt;&gt;Cache: store pipeline response
-        Orch--&gt;&gt;API: V2ExtractResponse
-        API--&gt;&gt;Client: response
-    end</code></pre>
-<p>For async submission (<code>POST /v2/extract</code>), the API persists a job record
-into the same SQLite under the <code>v2-extract-job</code> namespace and runs the
-pipeline as a background task. Clients poll <code>GET /v2/jobs/{job_id}</code>.</p>
-<h2 id="pipeline-cache-topology">Pipeline cache topology<a class="headerlink" href="#pipeline-cache-topology" title="Permanent link">&para;</a></h2>
-<p>Three caches share a single SQLite DB (path: <code>V2_PROVIDER_CACHE_PATH</code>):</p>
-<ol>
-<li><strong>Provider cache</strong> — gimie payloads, GitHub REST responses, ROR /
-   ORCID / Infoscience hits. Deterministic, content-addressed.</li>
-<li><strong>Agent verdict cache</strong> — LLM agent results keyed on agent name +
-   identity. Skips a repeat LLM call for a known-good payload.</li>
-<li><strong>Pipeline cache</strong> — full <code>/v2/extract</code> response for a given source URL.</li>
-</ol>
-<p>The async-job store also lives in this SQLite (separate namespace, same
-TTL). Set <code>V2_PROVIDER_CACHE_PATH</code> to a different file per run profile
-(e.g. <code>.cache/v2-rule-based/providers.db</code> for rule-based runs) to keep
-them isolated and independently invalidatable.</p>
-<h2 id="rag-index-architecture">RAG index architecture<a class="headerlink" href="#rag-index-architecture" title="Permanent link">&para;</a></h2>
-<p>The index layer lives in the
-<a href="https://github.com/sdsc-ordes/open-pulse-sources">open-pulse-sources</a>
-repo (this service imports its read side as the <code>open_pulse_sources</code>
-library). Each index under <code>open_pulse_sources/index/&lt;name&gt;/</code> is
-independent: its own DuckDB, its own Qdrant collections, its own CLI, its
-own refresh cadence. The federated layer
-(<code>open_pulse_sources/index/_federated/</code>) never shares state — it just
-orchestrates fan-out across registered adapters in a
-<code>ThreadPoolExecutor</code>.</p>
+<h1 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h1>
+<p>How the service is put together: the layers, what each owns, and the seams
+where things go wrong. For the stage-by-stage tour see
+<a href="../../v2-pipeline/">V2 Extract Pipeline</a>; for the index-layer split see
+<a href="../../cross-repo-contract/">Cross-Repo Contract</a>.</p>
+<hr />
+<h2 id="two-services-one-data-volume">Two services, one data volume<a class="headerlink" href="#two-services-one-data-volume" title="Permanent link">&para;</a></h2>
+<p>Since <code>3.0.0</code> the system is two deployables. The split is by <strong>read vs write</strong>,
+not by domain:</p>
 <pre class="mermaid"><code>flowchart LR
-    Src[upstream API&lt;br/&gt;HF / OA / IS / …] --&gt; ING[ingest CLI&lt;br/&gt;just &lt;prefix&gt;-ingest]
-    ING --&gt; DB[(DuckDB&lt;br/&gt;data/index/&lt;name&gt;/duckdb/)]
-    DB --&gt; EMB[embed CLI&lt;br/&gt;just &lt;prefix&gt;-embed]
-    EMB --&gt; RCPq[RCP /v1/embeddings]
-    RCPq --&gt; QD[(Qdrant&lt;br/&gt;gme-qdrant:6333)]
-    DB --&gt; Q[just &lt;prefix&gt;-query]
-    QD --&gt; S[just &lt;prefix&gt;-search]
-    S --&gt; RR[RCP /v1/rerank]
-    RR --&gt; Out[ranked hits]
+    CLIENT([client]) --&gt;|"GET/POST /v2/extract"| API
 
-    subgraph FED[Federated layer]
-        ADAP[adapters/&lt;name&gt;.py]
+    subgraph GME["gme-api · this repo"]
+        API[FastAPI app&lt;br/&gt;api/ package]
+        PIPE[pipeline/&lt;br/&gt;orchestrator + stages]
+        AGENTS[agents/&lt;br/&gt;llm · rule_based · refiners]
+        PROV[providers/&lt;br/&gt;GitHub · ROR · ORCID · Infoscience · RAG readers]
+        API --&gt; PIPE --&gt; AGENTS --&gt; PROV
     end
-    DB -.-&gt; ADAP
-    QD -.-&gt; ADAP
-    ADAP --&gt; GME[gme-search / gme-entity CLI&lt;br/&gt;open-pulse-sources repo]
-    ADAP --&gt; RAGTOOL[v2 LLM RAG tools]</code></pre>
-<p>Shared infrastructure (post-2026-05-01 pattern):</p>
+
+    subgraph SOURCES["gme-sources · open-pulse-sources repo"]
+        MGMT["/v2/indices/* + /v2/manifest&lt;br/&gt;ingest · embed · reset"]
+    end
+
+    PROV --&gt;|read| STORE[(DuckDB stores&lt;br/&gt;gme-data volume)]
+    PROV --&gt;|search| QDRANT[(Qdrant)]
+    MGMT --&gt;|write| STORE
+    MGMT --&gt;|write| QDRANT
+    PROV --&gt;|"library import&lt;br/&gt;open_pulse_sources"| LIB[[pinned wheel]]
+    API --&gt;|HTTP| GIMIE[gme-gimie-api sidecar]
+    AGENTS --&gt;|optional| SEL[gme-selenium]</code></pre>
+<p>The consequence worth internalising: <strong>this service reads index state that
+another service writes, over a shared volume.</strong> DuckDB's file lock is
+per-process and the locks in either service are process-local, so nothing
+enforces a single writer across the two. Keep heavy ingest on <code>gme-sources</code>.
+That gap is tracked as task 05 in <code>dev/split-rag-indices/</code>.</p>
+<hr />
+<h2 id="layers">Layers<a class="headerlink" href="#layers" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>git_metadata_extractor/
+  app.py              FastAPI app: mounts the /v2 router, /docs UI, startup bootstrap
+  api/                the HTTP surface (URL prefix /v2 — the public contract)
+    _router.py        the single APIRouter
+    _helpers.py       env gates, stage constants, app-state resolution
+    extract.py        GET/POST /extract, _run_extract_job, post-agent sequencing
+    auto_ingest.py    post-extract index write-through (opt-in, off by default)
+    jobs.py           /jobs/{id}, cancel, /crawl
+    system.py         /cache/clear, /health
+  jobs.py             async job store backing POST /v2/extract
+  config.py           config knobs
+  dependencies.py     provider wiring, cache resolver
+  log_context.py      request-id logging context
+  observation/        per-request external-query log
+
+  pipeline/
+    orchestrator.py   agent plans (PLAN_BY_TYPE), fan-out concurrency, retries
+    stages/           one module per stage
+
+  agents/
+    models.py         AgentResult, ProviderSet, TypedEntityBuckets
+    registry.py       runtime -&gt; runner table
+    llm/&lt;kind&gt;/       per-entity LLM agents (one Pydantic AI run each)
+    llm/agent_tools/  tool factories (selenium, ROR, ORCID, *_rag.py per index)
+    rule_based/       deterministic counterparts, no LLM
+    refiners/         hybrid-runtime patchers over rule-based output
+
+  providers/          the READ layer: GitHub, ROR, ORCID, Infoscience, gimie,
+                      *_rag.py Qdrant-backed readers, cache.py (SQLite/WAL)
+  schema/             JSON Schemas (agent + strict), JSON-LD context, models
+  validation/         strict-schema + SHACL validators
+  canonicalization/   ID resolution, string normalisation
+  experimental/       NOT production — the pi terminal-agent PoC
+</code></pre></div>
+<p>Two conventions that are easy to trip over:</p>
 <ul>
-<li><strong>Storage</strong>: DuckDB at <code>data/index/&lt;name&gt;/duckdb/&lt;name&gt;.duckdb</code> —
-  canonical records + <code>chunks</code> ledger (one row per Qdrant point).</li>
-<li><strong>Vector store</strong>: Qdrant — per-index collections, cosine distance,
-  4096-dim vectors.</li>
-<li><strong>Embeddings</strong>: <code>Qwen/Qwen3-Embedding-8B</code> on EPFL RCP, instruction-aware.</li>
-<li><strong>Reranker</strong>: <code>Qwen/Qwen3-Reranker-8B</code> on EPFL RCP.</li>
-<li><strong>Chunking</strong>: token-aware sliding window via <code>tiktoken</code> (<code>cl100k_base</code>).</li>
-<li><strong>Auth</strong>: <code>RCP_TOKEN</code> (required); per-index source tokens (<code>HF_TOKEN</code>,
-  <code>GME_GITHUB_TOKEN</code>, <code>INFOSCIENCE_TOKEN</code>, …) where the upstream API requires
-  them.</li>
+<li><strong><code>api/</code> is a package, not a module.</strong> It was a single 2,500-line <code>api.py</code>
+  until <code>3.0.0</code>. Docs or notes referring to <code>src/v2/api.py</code> predate the split.</li>
+<li><strong><code>experimental/</code> is quarantined on purpose.</strong> Nothing in it is wired into
+  the request path; treat it as a sketchpad.</li>
 </ul>
-<p>The <code>ror</code> index is a partial outlier (no DuckDB layer; flat catalog of
-orgs in Qdrant + a JSONL dump for lexical lookup).</p>
-<p>See <a href="https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md">RAG Indices Overview</a> for the full inventory and
-per-index quickstarts.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<ul>
-<li>The legacy v1 pipeline was removed in 3.0.0 (<code>/v1/*</code> routes return 404).</li>
-<li>Internal pipeline metadata fields whose names start with <code>_</code> are
-  stripped before strict validation, JSON-LD output, and any external
-  artefact. Never expose <code>_</code>-prefixed fields in API responses.</li>
-<li><code>identifiers.uuid</code> on every entity is server-generated
-  (<code>git_metadata_extractor/agents/models.py::generate_uuid()</code>); the LLM never controls it.</li>
-<li>See <a href="../../v2-api-reference/">V2 API Reference</a> for the full 23-stage
-  pipeline and gating rules.</li>
-</ul>
+<hr />
+<h2 id="request-lifecycle">Request lifecycle<a class="headerlink" href="#request-lifecycle" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>sequenceDiagram
+    participant C as Client
+    participant A as api/extract.py
+    participant O as Orchestrator
+    participant AG as Agents
+    participant P as Providers
+
+    C-&gt;&gt;A: POST /v2/extract (Bearer token)
+    A-&gt;&gt;A: verify_token · classify_url · pipeline-cache lookup
+    A-&gt;&gt;O: execute(plan for detected type)
+    O-&gt;&gt;P: context_gather (GitHub, gimie, ORCID…)
+    O-&gt;&gt;AG: root agent, then fan-out (bounded concurrency)
+    AG-&gt;&gt;P: provider + RAG tool calls
+    O--&gt;&gt;A: TypedEntityBuckets
+    A-&gt;&gt;A: reconcile · resolvers · validate · infer · build JSON-LD
+    A--&gt;&gt;C: job_id, then GET /v2/jobs/{id} -&gt; result</code></pre>
+<p><code>POST /v2/extract</code> is asynchronous: it returns <code>{job_id, status, status_url}</code>
+and you poll <code>GET /v2/jobs/{job_id}</code>. <code>GET /v2/extract/{path}</code> is the
+synchronous single-repo variant. Both are behind
+<code>Authorization: Bearer &lt;API_TOKEN&gt;</code>, which <strong>fails closed</strong> — a missing
+<code>API_TOKEN</code> yields 503 with no dev bypass. <code>/</code>, <code>/docs</code>, and <code>/v2/health</code>
+stay open.</p>
+<hr />
+<h2 id="the-three-runtimes">The three runtimes<a class="headerlink" href="#the-three-runtimes" title="Permanent link">&para;</a></h2>
+<p><code>agent_runtime</code> selects agent implementations; the post-agent sequence is the
+same in all three.</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Generators</th>
+<th>LLM stages</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rule_based</code></td>
+<td>deterministic agents</td>
+<td><strong>none</strong> — guaranteed LLM-free, <code>link_veracity</code> always skipped</td>
+<td>reproducible runs, tests, batch</td>
+</tr>
+<tr>
+<td><code>llm</code></td>
+<td>LLM agents (one Pydantic AI run per entity)</td>
+<td><code>context_summary</code>, <code>llm_dedup</code>, <code>llm_critic</code> (gated), <code>link_veracity</code>, <code>org_relationships</code>, <code>resolve_bio_to_ror_llm</code></td>
+<td>best coverage</td>
+</tr>
+<tr>
+<td><code>hybrid</code></td>
+<td>rule-based generators <strong>+</strong> <code>refine_with_llm</code></td>
+<td>only the refiner — dedup/critic/veracity/org-relationships are skipped</td>
+<td>cheap targeted improvement</td>
+</tr>
+</tbody>
+</table>
+<p>The hybrid refiner patches a <strong>whitelist</strong> only: organization
+<code>pulse:OrganizationType</code>; repository <code>pulse:discipline</code> and
+<code>pulse:repositoryType</code> (the latter only when it is currently <code>pulse:Other</code>);
+person <code>schema:name</code> (only when it looks like a GitHub handle). Anything
+outside that list is ignored by design — the refiner cannot invent entities.</p>
+<hr />
+<h2 id="hallucination-guards">Hallucination guards<a class="headerlink" href="#hallucination-guards" title="Permanent link">&para;</a></h2>
+<p>The LLM is never trusted with identity or counts. These run post-LLM, in code:</p>
+<table>
+<thead>
+<tr>
+<th>Guard</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>force_server_uuid</code></td>
+<td>overwrites the model's UUID with a server-generated one, in <code>identifiers.uuid</code> only</td>
+</tr>
+<tr>
+<td>Repository agent</td>
+<td>stars/forks come from GitHub REST, not the model; discipline falls back to <code>wd:Q428691</code> when empty</td>
+</tr>
+<tr>
+<td>Contribution agent</td>
+<td><code>schema:author</code> and <code>pulse:contributionTo</code> are stamped from the orchestrator's authoritative pair, whatever the model emitted</td>
+</tr>
+<tr>
+<td>Article agent</td>
+<td>drops the entity when <code>schema:identifier</code> is a placeholder DOI (<code>10.0000/…</code>) or a sentinel (<code>UNKNOWN</code>, <code>N/A</code>, <code>TBD</code>) with no Infoscience id</td>
+</tr>
+<tr>
+<td>Membership agents</td>
+<td>swap <code>time:hasBeginning</code> / <code>hasEnd</code> when ORCID returns them inverted</td>
+</tr>
+</tbody>
+</table>
+<p>Related: the orchestrator filters fan-out work items whose GitHub handle
+resolves to the wrong account type (an Organization queued as a person, or
+vice versa), and materialises a User-account repo owner as a Person when it is
+missing from <code>contributors</code> — otherwise the owner leaks as a bare-string
+reference with no backing entity.</p>
+<hr />
+<h2 id="caches">Caches<a class="headerlink" href="#caches" title="Permanent link">&para;</a></h2>
+<p>Three logical caches share one SQLite file (<code>V2_PROVIDER_CACHE_PATH</code>,
+default <code>.cache/v2/providers.db</code>, WAL mode):</p>
+<ol>
+<li><strong>Provider cache</strong> — gimie payloads, GitHub REST, ROR / ORCID / Infoscience
+   hits. Content-addressed and deterministic.</li>
+<li><strong>Agent verdict cache</strong> — LLM results keyed on agent name + identity, so a
+   repeat run skips the model call.</li>
+<li><strong>Pipeline cache</strong> — the whole <code>/v2/extract</code> response for a source URL.</li>
+</ol>
+<p>Use a <strong>different path per run profile</strong> (LLM vs rule-based) so the two stay
+independently invalidatable. TTL is <code>V2_PROVIDER_CACHE_TTL_DAYS</code> (30).</p>
+<hr />
+<h2 id="internal-fields">Internal fields<a class="headerlink" href="#internal-fields" title="Permanent link">&para;</a></h2>
+<p>Any key starting with <code>_</code> (<code>_person_ref</code>, <code>_company</code>, <code>_concepts</code>, …) is
+internal pipeline metadata. It is stripped before strict validation, JSON-LD
+output, RDF serialisation, and every external artefact — by two independent
+layers, deliberately. Opt in with <code>?include_internal_fields=true</code>, which also
+registers the <code>gme-internal:</code> and <code>publiccode:</code> namespaces in the <code>@context</code>;
+default output stays strictly ontology-conformant.</p>
+<hr />
+<h2 id="identifier-conventions">Identifier conventions<a class="headerlink" href="#identifier-conventions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th><code>@id</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Person</td>
+<td><code>https://orcid.org/{orcid}</code> → <code>https://github.com/{login}</code> → <code>urn:pulse:{uuid}</code></td>
+</tr>
+<tr>
+<td>Organization</td>
+<td><code>https://ror.org/{id}</code> → <code>https://github.com/{handle}</code> → <code>urn:pulse:{uuid}</code></td>
+</tr>
+<tr>
+<td>Repository</td>
+<td><code>https://github.com/{owner}/{name}</code></td>
+</tr>
+<tr>
+<td>Article</td>
+<td><code>https://doi.org/{doi}</code></td>
+</tr>
+<tr>
+<td>Membership</td>
+<td><code>{person_id}__{org_id}</code> composite</td>
+</tr>
+<tr>
+<td>Contribution</td>
+<td><code>{person_id}__{repo_id}</code> composite</td>
+</tr>
+</tbody>
+</table>
+<p>Arrows mean "first non-null wins". <code>identifiers.uuid</code> is always
+server-generated; the LLM never controls it.</p>
 
 
 

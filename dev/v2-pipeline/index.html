@@ -1,0 +1,2037 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/v2-pipeline/">
+      
+      
+        <link rel="prev" href="../architecture/overview/">
+      
+      
+        <link rel="next" href="../cross-repo-contract/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>V2 Extract Pipeline - Git Metadata Extractor Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#v2-extract-pipeline-overview" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-header__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Git Metadata Extractor Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              V2 Extract Pipeline
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-nav__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Git Metadata Extractor Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understand the system
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Understand the system
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Extract Pipeline
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Extract Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#30-second-mental-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        30-second mental model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-agent-generation-orchestrator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — agent generation (orchestrator)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-post-agent-sequence-apiextractpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — post-agent sequence (api/extract.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-shacl_gate-is-warning-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why shacl_gate is warning-only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-bearing-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load-bearing assumptions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Load-bearing assumptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-rdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output / RDF
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idempotency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Idempotency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-affiliation-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The affiliation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-namespaces-for-rdf-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal namespaces (for RDF consumers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#env-flags-worth-knowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Env flags worth knowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repo-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repo Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-and-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API and CLI Quick Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-enrichment-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Enrichment Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration V1 to V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operate it
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operate it
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPERATIONS_RUNBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RAG (read side)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RAG (read side)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-rag-tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Agent RAG Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concept-tagging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concept Tagging Stage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ontology
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ontology
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/ontology-v3.0.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v3.0.0 Reference (proposed)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/json-schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Schema Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#30-second-mental-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        30-second mental model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-agent-generation-orchestrator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — agent generation (orchestrator)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-post-agent-sequence-apiextractpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — post-agent sequence (api/extract.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-shacl_gate-is-warning-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why shacl_gate is warning-only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-bearing-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load-bearing assumptions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Load-bearing assumptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-rdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output / RDF
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idempotency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Idempotency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-affiliation-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The affiliation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-namespaces-for-rdf-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal namespaces (for RDF consumers)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#env-flags-worth-knowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Env flags worth knowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="v2-extract-pipeline-overview">V2 Extract Pipeline — Overview<a class="headerlink" href="#v2-extract-pipeline-overview" title="Permanent link">&para;</a></h1>
+<p>The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with <a href="https://open-pulse.epfl.ch/ontology">Open Pulse Ontology v2.1.2</a>. This doc is the operator-facing tour: what each stage does, what assumptions hold across the pipeline, and where to dig deeper.</p>
+<p><strong>Related:</strong> <a href="../architecture/overview/">Architecture Overview</a> for how the layers fit together · <a href="../cross-repo-contract/">Cross-Repo Contract</a> for the index-layer split.</p>
+<blockquote>
+<p><strong>Two sequencers, not one.</strong> Agent generation runs from a per-input-type
+plan in the orchestrator (<code>PLAN_BY_TYPE</code>); everything after the agents is a
+flat sequence in <code>api/extract.py</code>. The stage inventory below reflects both —
+see <a href="#stage-inventory">Stage inventory</a>.</p>
+</blockquote>
+<hr />
+<h2 id="30-second-mental-model">30-second mental model<a class="headerlink" href="#30-second-mental-model" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    classDef agent fill:#e7f1ff,stroke:#3a6da3
+    classDef llm fill:#fff5e6,stroke:#b07a2e,stroke-dasharray: 5 5
+    classDef resolver fill:#e8f5e9,stroke:#3c7c46
+    classDef validate fill:#fbe9e7,stroke:#a14a3c
+    classDef output fill:#f3e5f5,stroke:#6b3a8b
+
+    URL([GitHub URL])
+
+    subgraph PHASE_1["Phase 1 · Orchestrator"]
+        CLASSIFY[classify_url] --&gt; GATHER[gather_context&lt;br/&gt;GitHub · ORCID · GIMIE · publiccode.yml · CITATION.cff]
+        GATHER --&gt; SUMMARY[context_summary_agent&lt;br/&gt;LLM brief]:::llm
+        GATHER --&gt; ROOT[Root entity agent&lt;br/&gt;repo / person / org]:::agent
+        SUMMARY --&gt; ROOT
+        ROOT --&gt; FANOUT[Fan-out agents&lt;br/&gt;persons · orgs · articles · memberships · contributions]:::agent
+    end
+
+    subgraph PHASE_2["Phase 2 · Reconciliation"]
+        PERMISSIVE[permissive_validation]
+        DEDUP[llm_dedup]:::llm
+        RECONCILE[reconcile_entities&lt;br/&gt;canonical IDs · cross-entity refs]
+        PERMISSIVE --&gt; DEDUP
+        PERMISSIVE --&gt; RECONCILE
+        DEDUP --&gt; RECONCILE
+    end
+
+    subgraph PHASE_3["Phase 3 · Affiliation resolvers"]
+        direction TB
+        RC[8b · resolve_company_to_ror&lt;br/&gt;_company → Membership + Org]:::resolver
+        RB[8c · resolve_bio_to_ror&lt;br/&gt;bio · blog · email → Membership + Org]:::resolver
+        RBLLM[8d · resolve_bio_to_ror_llm&lt;br/&gt;LLM long-tail → Membership + Org]:::resolver
+        RC --&gt; RB --&gt; RBLLM
+    end
+
+    subgraph PHASE_4["Phase 4 · Refinement"]
+        CRITIC[llm_critic&lt;br/&gt;drop low-confidence]:::llm
+        REFINER[refine_with_llm&lt;br/&gt;patch whitelisted fields]:::llm
+    end
+
+    subgraph PHASE_5["Phase 5 · Validation &amp; inference"]
+        SAUTHOR[guarantee_repo_author]
+        STRICT[strict_validation&lt;br/&gt;per-entity JSON Schema]:::validate
+        ASSEMBLE[assemble_output]
+        LV[link_veracity&lt;br/&gt;Selenium fetch + LLM]:::llm
+        ARTICLES[validate_articles]:::validate
+        AUTHOR[validate_author_classes]:::validate
+        OWNED[validate_ownership]:::validate
+        INFER_OWN[infer_owners]
+        PRUNE[prune_dangling_refs]
+        PARENTS[infer_github_handle_parents]
+        ORGREL[org_relationships&lt;br/&gt;LLM]:::llm
+        ORGUNITS[infer_org_units]
+        CONCEPTS[concept_tagging]:::llm
+    end
+
+    subgraph PHASE_6["Phase 6 · Output"]
+        JSONLD[build_jsonld_output&lt;br/&gt;JSON-LD @graph]:::output
+        SHACL[shacl_gate&lt;br/&gt;warning-only]:::output
+    end
+
+    URL --&gt; PHASE_1
+    PHASE_1 --&gt; PHASE_2
+    PHASE_2 --&gt; PHASE_3
+    PHASE_3 --&gt; PHASE_4
+    PHASE_4 --&gt; PHASE_5
+    PHASE_5 --&gt; PHASE_6
+    PHASE_6 --&gt; RESPONSE([JSON-LD response])</code></pre>
+<p>Legend: solid blue = agent, green = affiliation resolver, dashed orange = LLM-gated, red = validation, purple = output.</p>
+<p>The diagram is deliberately simplified. <code>classify_url</code> runs in the API layer <em>before</em> the orchestrator, and Phase 5 collapses a dozen inference/validation passes into one box — the full list is below.</p>
+<hr />
+<h2 id="stage-inventory">Stage inventory<a class="headerlink" href="#stage-inventory" title="Permanent link">&para;</a></h2>
+<p>Reconstructed from <code>PLAN_BY_TYPE</code>, the <code># === &lt;name&gt; stage ===</code> banners in <code>api/extract.py</code> and the <code>STAGE_*</code> constants in <code>api/_helpers.py</code> (2026-07-29). When in doubt, those three are the source of truth.</p>
+<h3 id="phase-1-agent-generation-orchestrator">Phase 1 — agent generation (orchestrator)<a class="headerlink" href="#phase-1-agent-generation-orchestrator" title="Permanent link">&para;</a></h3>
+<p>The plan <strong>varies by what the URL points at</strong>. <code>ROOT_STAGE_BY_DETECTED_TYPE</code> picks the root agent; the rest fan out.</p>
+<table>
+<thead>
+<tr>
+<th>Detected type</th>
+<th>Root agent</th>
+<th>Then, in order</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>repository</code></td>
+<td><code>repo_agent</code></td>
+<td><code>person_agents</code> → <code>org_agents</code> → <code>article_agents</code> → <code>membership_agents</code> → <code>contribution_agents</code></td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td><code>person_agent</code></td>
+<td><code>repo_agents</code> → <code>org_agents</code> → <code>article_agents</code> → <code>membership_agents</code> → <code>contribution_agents</code></td>
+</tr>
+<tr>
+<td><code>organization</code></td>
+<td><code>org_agent</code></td>
+<td><code>person_agents</code> → <code>repo_agents</code> → <code>article_agents</code> → <code>membership_agents</code> → <code>contribution_agents</code></td>
+</tr>
+</tbody>
+</table>
+<p>All three begin with <code>context_gather</code>. Two things that look like stages but aren't:</p>
+<ul>
+<li><strong><code>classify_url</code></strong> runs in the API layer before the orchestrator is invoked.</li>
+<li><strong><code>context_summary_agent</code></strong> runs <em>inside</em> <code>context_gather</code>, LLM runtime only, and <strong>fails open</strong> — on error the pipeline continues without a compiled summary and records a warning. So a missing summary degrades entity quality silently rather than failing the request.</li>
+</ul>
+<p>Fan-out is capped: <code>V2_MAX_REPO_FANOUT_ORG</code> (25) and <code>V2_MAX_REPO_FANOUT_USER</code> (50), and by default owned repos are emitted as <code>pulse:owns</code> references rather than materialised entities unless <code>V2_EXPAND_OWNED_REPOS=true</code>.</p>
+<h3 id="phase-2-post-agent-sequence-apiextractpy">Phase 2 — post-agent sequence (<code>api/extract.py</code>)<a class="headerlink" href="#phase-2-post-agent-sequence-apiextractpy" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>permissive_validation</code></td>
+<td>per-entity permissive schema pass</td>
+</tr>
+<tr>
+<td><code>llm_dedup</code> <strong>[LLM]</strong></td>
+<td>cross-bucket dedup + ID remap (fail-open)</td>
+</tr>
+<tr>
+<td><code>reconcile_entities</code></td>
+<td>ID canonicalisation + linkage; anonymises emails</td>
+</tr>
+<tr>
+<td><code>resolve_company_to_ror</code></td>
+<td><code>_company</code> → ROR: Membership + Org stub</td>
+</tr>
+<tr>
+<td><code>resolve_bio_to_ror</code></td>
+<td>bio / blog / email → ROR: Membership + Org stub</td>
+</tr>
+<tr>
+<td><code>resolve_bio_to_ror_llm</code> <strong>[LLM]</strong></td>
+<td>LLM long-tail affiliation resolver</td>
+</tr>
+<tr>
+<td><code>resolve_placeholder_orgs_to_ror</code></td>
+<td>upgrade placeholder Orgs to real ROR entities</td>
+</tr>
+<tr>
+<td><code>llm_critic</code> <strong>[LLM, off by default]</strong></td>
+<td>drop suggestions</td>
+</tr>
+<tr>
+<td><code>refine_with_llm</code> <strong>[hybrid]</strong></td>
+<td>whitelisted-field patches over rule-based output</td>
+</tr>
+<tr>
+<td><code>guarantee_repo_author</code></td>
+<td>stamp the GitHub owner as <code>schema:author</code> when empty</td>
+</tr>
+<tr>
+<td><code>strict_validation</code></td>
+<td>per-entity strict JSON Schema check</td>
+</tr>
+<tr>
+<td><code>assemble_output</code></td>
+<td>split graph into root / related / excluded</td>
+</tr>
+<tr>
+<td><code>link_veracity</code> <strong>[LLM]</strong></td>
+<td>verify URLs via Selenium + LLM; on failure promotes failed-ID entities and prunes dead links</td>
+</tr>
+<tr>
+<td><code>validate_articles</code></td>
+<td>drop placeholder / sentinel-DOI articles</td>
+</tr>
+<tr>
+<td><code>validate_author_classes</code></td>
+<td>drop <code>schema:author</code> refs that aren't a <code>schema:Person</code></td>
+</tr>
+<tr>
+<td><code>validate_ownership</code></td>
+<td>strip mismatched <code>pulse:owns</code></td>
+</tr>
+<tr>
+<td><code>infer_owners</code></td>
+<td>stamp <code>pulse:owns</code> / <code>pulse:ownedBy</code>; coerce bare logins to IRI shape</td>
+</tr>
+<tr>
+<td><code>validate_ownership</code> <em>(again)</em></td>
+<td>second pass — catches inverse edges <code>infer_owners</code> just added</td>
+</tr>
+<tr>
+<td><code>prune_dangling_refs</code></td>
+<td>drop refs whose target left the graph</td>
+</tr>
+<tr>
+<td><code>infer_github_handle_parents</code></td>
+<td>ROR fuzzy-search for each GitHub org's parent; stamp <code>unitOf</code></td>
+</tr>
+<tr>
+<td><code>org_relationships</code> <strong>[LLM]</strong></td>
+<td>whole-graph call refining <code>unitOf</code> edges</td>
+</tr>
+<tr>
+<td><code>infer_org_units</code></td>
+<td>deterministic name-token fallback for <code>unitOf</code></td>
+</tr>
+<tr>
+<td><code>demote_github_props_to_units</code></td>
+<td>move GitHub-only props off ROR-identified orgs</td>
+</tr>
+<tr>
+<td><code>emit_fork_parent_stubs</code></td>
+<td>materialise a fork's upstream repository</td>
+</tr>
+<tr>
+<td><code>infer_article_source_organization</code></td>
+<td>attribute articles to a source organisation</td>
+</tr>
+<tr>
+<td><code>concept_tagging</code> <strong>[off by default]</strong></td>
+<td>EPFL Graph concepts / keywords / disciplines onto the root repo</td>
+</tr>
+<tr>
+<td><code>tag_rule_based_disciplines</code></td>
+<td>deterministic discipline fallback</td>
+</tr>
+<tr>
+<td><code>build_jsonld_output</code></td>
+<td>final JSON-LD <code>@graph</code>; strips redundant <code>pulse:ror</code></td>
+</tr>
+<tr>
+<td><code>shacl_gate</code></td>
+<td>SHACL validation — <strong>warning-only</strong>, see below</td>
+</tr>
+<tr>
+<td><code>compute_stats</code></td>
+<td>response counters and timings</td>
+</tr>
+</tbody>
+</table>
+<h3 id="why-shacl_gate-is-warning-only">Why <code>shacl_gate</code> is warning-only<a class="headerlink" href="#why-shacl_gate-is-warning-only" title="Permanent link">&para;</a></h3>
+<p>It reports violations as <code>result.warnings</code> instead of rejecting the graph, so conformance is the <em>upstream</em> stages' job. Four common violations are fixed deterministically rather than left to the gate: <code>pulse:ownedBy</code> IRI shape (<code>infer_owners</code>), redundant <code>pulse:ror</code> on ROR-identified orgs (<code>build_jsonld_output</code>), inverted Membership dates (both membership agents), and non-Person <code>schema:author</code> refs (<code>validate_author_classes</code>). If you add a shape, add the fix upstream — a red gate does not stop a response.</p>
+<hr />
+<h2 id="load-bearing-assumptions">Load-bearing assumptions<a class="headerlink" href="#load-bearing-assumptions" title="Permanent link">&para;</a></h2>
+<p>These invariants are the contract every stage relies on. Breaking one of them tends to cause silent-drop bugs that look like "the pipeline ran but the graph is empty."</p>
+<h3 id="output-rdf">Output / RDF<a class="headerlink" href="#output-rdf" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every entity emitted matches an existing SHACL shape</td>
+<td>Strict-validation gate refuses entities outside the ontology.</td>
+</tr>
+<tr>
+<td>No new predicates on existing shapes — extensions go to <code>gme-internal:</code></td>
+<td>The ontology is closed-world; novelty without <code>gme-internal:</code> triggers <code>additionalProperties</code> errors.</td>
+</tr>
+<tr>
+<td><code>schema:affiliation</code> is <strong>never</strong> emitted on <code>schema:Person</code></td>
+<td>Affiliation-with-evidence is modelled as <code>org:Membership</code>. Resolver stages materialise Memberships instead.</td>
+</tr>
+<tr>
+<td>JSON-LD keys use short-form prefixes (<code>schema:name</code>), never full IRIs</td>
+<td>Full-IRI keys are silently dropped by rdflib because the @context has no <code>@vocab</code> fallback.</td>
+</tr>
+<tr>
+<td>Predicates whose object is a URL must declare <code>@type: @id</code> in @context</td>
+<td>Otherwise the URL becomes an RDF literal, not an IRI node, and SPARQL queries fail silently.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stage-ordering">Stage ordering<a class="headerlink" href="#stage-ordering" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reconciliation runs before any stage that references canonical IDs</td>
+<td>Membership composites and Org references all assume canonical IRIs.</td>
+</tr>
+<tr>
+<td>Resolver stages (8b/c/d) run AFTER reconciliation, BEFORE the critic</td>
+<td>Resolver output feeds the critic; running before reconciliation would use raw (non-canonical) Person ids in composites.</td>
+</tr>
+<tr>
+<td>Strict validation runs BEFORE JSON-LD output assembly</td>
+<td>Two layers strip <code>_</code>-prefixed fields — validator (<code>StrictSchemaValidator</code>) and output builder (<code>_drop_internal_keys</code>). Defense in depth.</td>
+</tr>
+<tr>
+<td>Reconciliation requires evidence to build a Membership from agent output</td>
+<td>Phantom-org guard ("Statistics Botswana" class). Resolver stages have their <strong>own</strong> strict ROR acceptance gate and bypass this — they're the only authorised path to evidence-free Memberships.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="identity">Identity<a class="headerlink" href="#identity" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Composite Membership IDs use <code>__</code> (double underscore)</td>
+<td><code>_extract_composite_pair</code> accepts <code>_</code> and <code>__</code> for back-compat; new code uses <code>__</code>.</td>
+</tr>
+<tr>
+<td>ROR URL is the canonical Org id when available</td>
+<td>Falls back to GitHub handle / Infoscience id / UUID per <code>idSource</code>.</td>
+</tr>
+<tr>
+<td><code>_email</code> carries <code>&lt;sha256_prefix&gt;@&lt;domain&gt;</code></td>
+<td>Resolvers match on domain; agents must never stamp raw emails.</td>
+</tr>
+<tr>
+<td>Repository <code>@id</code> is the GitHub <code>{owner}/{repo}</code> handle</td>
+<td><code>urn:pulse:</code> prefix added only at output.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="idempotency">Idempotency<a class="headerlink" href="#idempotency" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Assumption</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resolver stages are idempotent — re-running adds nothing</td>
+<td>Existing Org IRIs + Membership composites pre-computed as de-dup sets. Safe to re-extract a cached graph.</td>
+</tr>
+<tr>
+<td>DuckDB IRI migrations are atomic</td>
+<td>CTAS-swap (<code>CREATE shadow → INSERT → DROP original → RENAME</code>) wrapped in <code>BEGIN/COMMIT</code>. A mid-migration crash rolls back to the pre-migration state.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="the-affiliation-strategy">The affiliation strategy<a class="headerlink" href="#the-affiliation-strategy" title="Permanent link">&para;</a></h2>
+<p>When the resolver stages find a high-confidence ROR match for a Person, they create:</p>
+<ol>
+<li><strong><code>org:Membership</code></strong> linking Person → Organization. No role, no dates (we have no evidence).</li>
+<li><strong><code>org:Organization</code></strong> stub with <code>pulse:ror</code>, <code>schema:name</code>, <code>idSource = pulse:ror</code> — only when that ROR URL isn't already in the graph.</li>
+<li><strong>Provenance</strong> via <code>_source</code> on both entities. Stripped at output unless <code>include_internal_fields=true</code>. Values: <code>resolve_company_to_ror</code>, <code>resolve_bio_to_ror</code>, <code>resolve_bio_to_ror_llm</code>.</li>
+</ol>
+<pre class="mermaid"><code>graph LR
+    P[schema:Person] --&gt;|org:hasMembership| M[org:Membership&lt;br/&gt;id=PersonId__RorURL]
+    M --&gt;|org:organization| O[org:Organization&lt;br/&gt;id=RorURL&lt;br/&gt;idSource=pulse:ror]
+    style P fill:#e7f1ff,stroke:#3a6da3
+    style M fill:#e8f5e9,stroke:#3c7c46
+    style O fill:#fff5e6,stroke:#b07a2e</code></pre>
+<p><strong>Acceptance gate</strong> (shared across stages 8b/c/d):
+- Top-1 ROR hit score ≥ 0.55
+- Top-1 types ∈ {company, education, funder, facility, government, nonprofit}
+- Top-2 score gap ≥ 0.02, OR top-1 name (with country stripped) matches the query exactly</p>
+<p>The LLM stage (8d) additionally requires <code>confidence ≥ 0.7</code> from the bio-resolver agent and a verbatim quote from the source text in <code>reason</code>.</p>
+<hr />
+<h2 id="internal-namespaces-for-rdf-consumers">Internal namespaces (for RDF consumers)<a class="headerlink" href="#internal-namespaces-for-rdf-consumers" title="Permanent link">&para;</a></h2>
+<p>The pipeline collects rich metadata the v2 ontology doesn't model — but we still want it available for SPARQL queries when consumers opt in via <code>?include_internal_fields=true</code>. Two separate non-ontology vocabularies handle this:</p>
+<ul>
+<li><strong><code>gme-internal:</code></strong> → <code>https://openpulse.science/git-metadata-extractor#</code> — catch-all for GitHub / ORCID / Infoscience / ROR fields without an ontology term. <code>_company</code> → <code>gme-internal:company</code>, <code>_bio</code> → <code>gme-internal:bio</code>, etc.</li>
+<li><strong><code>publiccode:</code></strong> → <code>https://yml.publiccode.tools/</code> — when a repo carries <code>publiccode.yml</code>, scalar/list top-level fields are hoisted into this namespace (<code>publiccode:license</code>, <code>publiccode:softwareType</code>, …) so they're directly queryable. Nested sub-trees stay inside <code>gme-internal:publiccode</code>.</li>
+</ul>
+<p>Both namespaces register in <code>@context</code> only when <code>include_internal_fields=true</code>, so default output stays strictly ontology-conformant.</p>
+<hr />
+<h2 id="env-flags-worth-knowing">Env flags worth knowing<a class="headerlink" href="#env-flags-worth-knowing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>V2_AGENT_RUNTIME_DEFAULT</code></td>
+<td><code>llm</code></td>
+<td>Pipeline mode (<code>rule_based</code> / <code>llm</code> / <code>hybrid</code>).</td>
+</tr>
+<tr>
+<td><code>V2_RESOLVE_COMPANY_TO_ROR</code></td>
+<td><code>true</code></td>
+<td><code>resolve_company_to_ror</code> (deterministic <code>_company</code> → ROR).</td>
+</tr>
+<tr>
+<td><code>V2_RESOLVE_BIO_TO_ROR</code></td>
+<td><code>true</code></td>
+<td><code>resolve_bio_to_ror</code> (deterministic bio/blog/email → ROR).</td>
+</tr>
+<tr>
+<td><code>V2_RESOLVE_BIO_TO_ROR_LLM</code></td>
+<td><code>true</code></td>
+<td><code>resolve_bio_to_ror_llm</code> (LLM long-tail). LLM/hybrid only.</td>
+</tr>
+<tr>
+<td><code>V2_RESOLVE_BIO_TO_ROR_LLM_CONCURRENCY</code></td>
+<td><code>4</code></td>
+<td>Semaphore for the LLM resolver.</td>
+</tr>
+<tr>
+<td><code>V2_HYBRID_REFINER_ENABLED</code></td>
+<td><code>true</code></td>
+<td><code>refine_with_llm</code> (hybrid runtime).</td>
+</tr>
+<tr>
+<td><code>V2_APPLY_CRITIC_PRUNING</code></td>
+<td><code>false</code></td>
+<td>Whether <code>llm_critic</code> actually prunes (vs. soft log).</td>
+</tr>
+<tr>
+<td><code>V2_LINK_VERACITY_ENABLED</code></td>
+<td><strong><code>true</code></strong></td>
+<td><code>link_veracity</code> (Selenium + LLM URL verification). On in LLM mode; set <code>false</code> for batch runs. Rule-based mode skips it unconditionally.</td>
+</tr>
+<tr>
+<td><code>V2_CONCEPT_TAGGING_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>concept_tagging</code>. Backend via <code>V2_CONCEPT_TAGGING_BACKEND</code> ∈ {<code>epfl_graph</code>, <code>wikipedia</code>, <code>llm</code>}.</td>
+</tr>
+<tr>
+<td><code>V2_EXPAND_OWNED_REPOS</code></td>
+<td><code>false</code></td>
+<td>Materialise each owned repo as a full entity instead of a <code>pulse:owns</code> reference.</td>
+</tr>
+<tr>
+<td><code>V2_MAX_CONCURRENT_AGENTS</code></td>
+<td><code>6</code></td>
+<td>Per-stage fan-out concurrency.</td>
+</tr>
+<tr>
+<td><code>V2_PIPELINE_CACHE_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Outer <code>/extract</code> cache. Set to <code>false</code> to force a fresh pipeline run.</td>
+</tr>
+</tbody>
+</table>
+<p>Defaults verified against <code>api/_helpers.py</code> and <code>pipeline/orchestrator.py</code> on 2026-07-29. Full list: <a href="https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example"><code>.env.example</code></a>.</p>
+<hr />
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>To understand…</th>
+<th>Read</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How the layers fit together</td>
+<td><a href="../architecture/overview/">Architecture Overview</a></td>
+</tr>
+<tr>
+<td>The index-layer split and version pinning</td>
+<td><a href="../cross-repo-contract/">Cross-Repo Contract</a></td>
+</tr>
+<tr>
+<td>Post-agent stage sequencing</td>
+<td><code>git_metadata_extractor/api/extract.py</code> — <code>_run_extract_job</code>, with <code># === &lt;name&gt; stage ===</code> banners</td>
+</tr>
+<tr>
+<td>Agent plans and fan-out</td>
+<td><code>git_metadata_extractor/pipeline/orchestrator.py</code> — <code>PLAN_BY_TYPE</code> (line ~120)</td>
+</tr>
+<tr>
+<td>Individual stages</td>
+<td><code>git_metadata_extractor/pipeline/stages/</code> — one module per stage; resolvers are <code>resolve_*.py</code></td>
+</tr>
+<tr>
+<td>Schema source of truth</td>
+<td><code>git_metadata_extractor/schema/json/</code> (agent + strict) and <code>schema/ontology/open-pulse-ontology.ttl</code></td>
+</tr>
+<tr>
+<td>Env flags and gates</td>
+<td><code>git_metadata_extractor/api/_helpers.py</code> — every <code>V2_*</code> reader lives here</td>
+</tr>
+</tbody>
+</table>
+<p>The former "deep reference" pointer (<code>.internal/v2-pipeline-reference.md</code>) was
+removed: that directory is untracked, so the file does not exist in a fresh
+clone. The stage inventory above replaces it.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
+      
+        <script src="../assets/javascripts/mermaid-init.js"></script>
+      
+    
+  </body>
+</html>

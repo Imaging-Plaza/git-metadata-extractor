@@ -1,0 +1,1946 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/v2-api-reference/">
+      
+      
+        <link rel="prev" href="../architecture/design-notes/">
+      
+      
+        <link rel="next" href="../api-and-cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>V2 API Reference - Git Metadata Extractor Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#v2-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-header__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Git Metadata Extractor Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              V2 API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-nav__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Git Metadata Extractor Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understand the system
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Understand the system
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Extract Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repo-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repo Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-v2health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-v2extractfull_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/extract/{full_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-v2extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v2/extract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-v2jobsjob_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/jobs/{job_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-stage-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Stage Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-agent-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Agent Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-agent-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Agent Tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="LLM Agent Tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-entity-schema-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Entity Schema Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v2-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-and-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API and CLI Quick Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-enrichment-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Enrichment Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration V1 to V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operate it
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operate it
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPERATIONS_RUNBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RAG (read side)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RAG (read side)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-rag-tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Agent RAG Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concept-tagging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concept Tagging Stage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ontology
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ontology
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/ontology-v3.0.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v3.0.0 Reference (proposed)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/json-schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Schema Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-v2health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-v2extractfull_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/extract/{full_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-v2extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v2/extract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-v2jobsjob_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /v2/jobs/{job_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-stage-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Stage Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-contracts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Contracts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-agent-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Agent Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-agent-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM Agent Tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="LLM Agent Tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-entity-schema-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Entity Schema Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v2-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="v2-api-reference">V2 API Reference<a class="headerlink" href="#v2-api-reference" title="Permanent link">&para;</a></h1>
+<p>This document describes the mounted v2 API surface under <code>/v2</code>.</p>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p><code>/v2/extract</code> (both <code>GET</code> and <code>POST</code>) and <code>/v2/jobs/{job_id}</code> require a
+bearer token in the <code>Authorization</code> header. <code>/v2/health</code> is the only v2
+endpoint that stays open.</p>
+<div class="highlight"><pre><span></span><code><span class="err">Authorization: Bearer &lt;API_TOKEN&gt;</span>
+</code></pre></div>
+<p>The expected token comes from the server-side <code>API_TOKEN</code> env var
+(generate with <code>python -c "import secrets; print(secrets.token_urlsafe(32))"</code>).
+The check uses <code>hmac.compare_digest</code> for constant-time comparison.</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>API_TOKEN</code> unset on the server</td>
+<td><code>503</code></td>
+<td>Fails closed; no dev bypass.</td>
+</tr>
+<tr>
+<td>Header missing</td>
+<td><code>401</code></td>
+<td>Includes <code>WWW-Authenticate: Bearer</code>.</td>
+</tr>
+<tr>
+<td>Wrong token</td>
+<td><code>401</code></td>
+<td>Same response shape as missing header.</td>
+</tr>
+<tr>
+<td>Valid token</td>
+<td>route's normal response</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>(The legacy <code>/v1/*</code> routes were removed in 3.0.0.)
+Implementation lives in <code>git_metadata_extractor/auth.py</code> (<code>verify_token</code> dependency).</p>
+<h2 id="rate-limiting">Rate limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h2>
+<p>Disabled by default. Set <code>V2_RATE_LIMIT_PER_MINUTE</code> to a positive integer to
+cap requests per client on the compute-/cost-heavy routes:</p>
+<ul>
+<li><code>POST /v2/extract</code> and <code>POST /v2/indices/{provider}/ingest</code></li>
+<li><code>GET /v2/extract/{full_path}</code></li>
+</ul>
+<p>Clients are keyed by bearer token (falling back to client IP). Exceeding the
+limit returns <code>429 Too Many Requests</code> with a <code>Retry-After</code> header. The window
+is a fixed 60 s. State is in-memory and <strong>per worker</strong>, so under gunicorn with
+N workers the effective limit is ~N × the configured value — use a shared store
+(e.g. Redis) for a true global cap. Implementation: <code>git_metadata_extractor/rate_limit.py</code>.</p>
+<h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Permanent link">&para;</a></h2>
+<h3 id="get-v2health"><code>GET /v2/health</code><a class="headerlink" href="#get-v2health" title="Permanent link">&para;</a></h3>
+<p>Returns service readiness for v2 dependencies. Open (no auth required).</p>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:1234/v2/health&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h3 id="get-v2extractfull_path"><code>GET /v2/extract/{full_path}</code><a class="headerlink" href="#get-v2extractfull_path" title="Permanent link">&para;</a></h3>
+<p>Runs the v2 extraction pipeline for a GitHub URL path.</p>
+<p>Repository-mode traversal contract:</p>
+<ul>
+<li>GitHub traversal is direct-only: source repository, direct owner, and direct contributors.</li>
+<li>GitHub repo-list expansion (<code>/users/{u}/repos</code>, <code>/orgs/{o}/repos</code>) is disabled.</li>
+<li>ORCID, Infoscience, and ROR enrichment remain enabled for discovered people/organizations.</li>
+<li><code>pulse:owns</code> emitted during repository runs is constrained to the source repository handle when present.</li>
+</ul>
+<p>Query parameters:</p>
+<ul>
+<li><code>output_format</code>: <code>jsonld</code> (default) or <code>json</code></li>
+<li><code>agent_runtime</code>: <code>rule_based|llm</code> (optional; defaults to <code>V2_AGENT_RUNTIME_DEFAULT=llm</code>)</li>
+<li><code>agent_runtime=llm</code> runs LLM agents for repository/user/organization roots and fanout stages.</li>
+<li>In LLM runtime, two global fail-open stages are always enabled:<ul>
+<li><code>llm_dedup</code> (post-permissive, pre-reconciliation): LLM duplicate-cluster suggestions + deterministic constrained merge/remap.</li>
+<li><code>llm_critic</code> (post-reconciliation, pre-strict, gated by <code>V2_APPLY_CRITIC_PRUNING</code>): LLM prune suggestions + deterministic non-root pruning/cascade cleanup.</li>
+</ul>
+</li>
+<li>Both stages are warning-only on failure (pipeline continues).</li>
+<li>Root-stage hard-fail policy in LLM mode (no rule-based fallback):<ul>
+<li>repository input: <code>repo_agent</code></li>
+<li>user input: <code>person_agent</code></li>
+<li>organization input: <code>org_agent</code></li>
+</ul>
+</li>
+<li><code>include_context_summary</code>: <code>true|false</code> (default <code>false</code>, includes the compiled LLM context summary markdown used by downstream agents when available)</li>
+</ul>
+<p>Examples:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&amp;agent_runtime=rule_based&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&amp;agent_runtime=llm&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h3 id="post-v2extract"><code>POST /v2/extract</code><a class="headerlink" href="#post-v2extract" title="Permanent link">&para;</a></h3>
+<p>Submits an extraction asynchronously. The handler validates the URL synchronously, creates a <code>pending</code> job in the <code>ProviderCache</code>-backed job store, schedules the pipeline as a background task, and returns <code>202 Accepted</code> with a <code>job_id</code>. Poll <code>GET /v2/jobs/{job_id}</code> to retrieve the result. <code>GET /v2/extract/{full_path}</code> remains synchronous and unchanged.</p>
+<p>Request body:</p>
+<ul>
+<li><code>source_url</code> (required): GitHub path or URL (for example <code>github.com/octocat/Hello-World</code>)</li>
+<li><code>output_format</code>: <code>jsonld|json</code> (default <code>jsonld</code>)</li>
+<li><code>agent_runtime</code>: <code>rule_based|llm</code> (optional)</li>
+<li><code>include_context_summary</code>: <code>true|false</code> (default <code>false</code>)</li>
+</ul>
+<p>Response (<code>202 Accepted</code>):</p>
+<ul>
+<li><code>job_id</code>: opaque UUID to poll</li>
+<li><code>status</code>: <code>pending</code></li>
+<li><code>status_url</code>: convenience path (<code>/v2/jobs/{job_id}</code>) for the companion GET</li>
+<li><code>submitted_at</code>: ISO-8601 timestamp</li>
+</ul>
+<p>Error responses:</p>
+<ul>
+<li><code>422 Unprocessable Entity</code> if <code>source_url</code> is unsupported (returned synchronously, no job is created).</li>
+<li><code>503 Service Unavailable</code> if the provider cache is disabled — the async job store has no backing storage.</li>
+</ul>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;http://localhost:1234/v2/extract&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">    &quot;source_url&quot;: &quot;github.com/octocat/Hello-World&quot;,</span>
+<span class="s1">    &quot;output_format&quot;: &quot;json&quot;,</span>
+<span class="s1">    &quot;agent_runtime&quot;: &quot;llm&quot;,</span>
+<span class="s1">    &quot;include_context_summary&quot;: true</span>
+<span class="s1">  }&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pending&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;status_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;submitted_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-04-29T10:31:00.000Z&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="get-v2jobsjob_id"><code>GET /v2/jobs/{job_id}</code><a class="headerlink" href="#get-v2jobsjob_id" title="Permanent link">&para;</a></h3>
+<p>Companion retrieval endpoint for jobs submitted via <code>POST /v2/extract</code>. Returns the persisted <code>V2ExtractJob</code> record with the latest status.</p>
+<p>Response fields:</p>
+<ul>
+<li><code>job_id</code></li>
+<li><code>status</code>: <code>pending|running|completed|failed</code></li>
+<li><code>request</code>: the original <code>V2ExtractRequest</code> payload (with <code>source_url</code> normalized)</li>
+<li><code>submitted_at</code>, <code>started_at</code>, <code>completed_at</code></li>
+<li><code>result</code>: present only when <code>status == "completed"</code>. Same <code>V2ExtractResponse</code> contract as <code>GET /v2/extract/{full_path}</code> (<code>source_url</code>, <code>detected_type</code>, <code>output_format</code>, <code>output</code>, <code>warnings</code>, <code>stats</code>, optional <code>context_summary_markdown</code>).</li>
+<li><code>error</code>: present only when <code>status == "failed"</code>. Same <code>V2ErrorResponse</code> shape as the error responses on <code>GET /v2/extract/{full_path}</code> (<code>error_type</code>, <code>detail</code>, <code>source_url</code>, optional <code>errors[]</code>).</li>
+</ul>
+<p>Status responses:</p>
+<ul>
+<li><code>200 OK</code> — record found (any status).</li>
+<li><code>404 Not Found</code> — no job exists with that id (also returned for jobs that have aged past the <code>ProviderCache</code> TTL).</li>
+<li><code>503 Service Unavailable</code> — provider cache disabled, job store unavailable.</li>
+</ul>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/jobs/5d2b8b3d-3e6e-4a82-9b17-1c2f5b6e7a31&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<p>Persistence: jobs share the SQLite-backed <code>ProviderCache</code> (<code>V2_PROVIDER_CACHE_PATH</code>, TTL <code>V2_PROVIDER_CACHE_TTL_DAYS</code>) under the <code>v2-extract-job</code> namespace. <code>V2_PROVIDER_CACHE_ENABLED=false</code> disables the job store entirely.</p>
+<h2 id="runtime-stage-flow">Runtime Stage Flow<a class="headerlink" href="#runtime-stage-flow" title="Permanent link">&para;</a></h2>
+<p><code>/v2/extract</code> runs the same pipeline regardless of <code>agent_runtime</code>. The
+runtime only controls which agent implementations execute (LLM agents vs.
+deterministic rule-based agents). Other stages run unconditionally.</p>
+<div class="highlight"><pre><span></span><code>1.  classify_url               classify the input as repository / user / org
+2.  gather_context             fetch GitHub metadata + GIMIE JSON-LD
+3.  context_summary  [LLM]     compile a markdown summary; raw blobs are stripped
+                               from per-agent prompts in LLM mode
+4.  repo_agent                 produce the root repository entity
+5.  person_agents (fan-out)    one agent per discovered contributor / user
+6.  org_agents    (fan-out)    one agent per discovered organisation
+7.  article_agents (fan-out)   discover scholarly articles tied to the repo
+8.  membership_agents (fan-out) one agent per (person, org) pair
+9.  contribution_agents (fan-out) one agent per (person, repo) pair
+10. llm_dedup       [LLM]      cross-bucket entity dedup + ID remap (fail-open)
+11. reconcile_entities         deterministic ID canonicalisation + linkage
+12. llm_critic      [LLM, gated] drop-suggestion stage (off by default)
+13. guarantee_repo_author      stamp github-owner as schema:author when empty
+14. strict_validation          per-entity strict JSON Schema check
+15. assemble_output            split graph into root + related + excluded
+16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
+17. validate_articles          drop placeholder / sentinel-DOI articles
+18. validate_author_classes    drop `schema:author` refs whose target is
+                               not a `schema:Person`
+19. validate_ownership         strip mismatched pulse:owns
+20. infer_owners               stamp pulse:owns / pulse:ownedBy from handles;
+                               coerces residual bare-login strings on
+                               `pulse:ownedBy` to `{&quot;@id&quot;: &quot;https://github.com/{handle}&quot;}`
+21. infer_github_handle_parents  fuzzy-search ROR for parent of every github
+                                 org; add ROR org entities, stamp unitOf
+22. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
+23. infer_org_units            deterministic name-token fallback for unitOf
+24. build_jsonld_output        produce the final JSON-LD graph; strips
+                               redundant `pulse:ror` from any
+                               `org:Organization` whose `@id` is already
+                               the ROR (closed-shape fix)
+</code></pre></div>
+<p><strong>Gates:</strong></p>
+<ul>
+<li>Stages tagged <code>[LLM]</code> only run in <code>agent_runtime=llm</code>.</li>
+<li><code>link_veracity</code> is <code>[LLM]</code>-only: in <code>agent_runtime=rule_based</code> it is <strong>always skipped</strong> (rule-based mode is guaranteed LLM-free).</li>
+<li><code>llm_critic</code> is <strong>off by default</strong>. Set <code>V2_APPLY_CRITIC_PRUNING=true</code> to enable (LLM mode only).</li>
+<li><code>link_veracity</code> is <strong>on by default in LLM mode</strong>. Set <code>V2_LINK_VERACITY_ENABLED=false</code> to skip even in LLM mode (recommended for batch runs).</li>
+</ul>
+<p><code>link_veracity</code> behavior:</p>
+<ul>
+<li>Scans all discovered HTTP(S) links across assembled entities.</li>
+<li>For articles, validates <code>schema:identifier</code> as DOI (bare DOI strings are normalized to <code>https://doi.org/&lt;doi&gt;</code>).</li>
+<li>Removes links explicitly fetched and marked unreachable.</li>
+<li>Removes entities when their canonical URL/DOI fails validation, or when no valid URL remains.</li>
+<li>Checker/runtime errors are fail-open (warnings only) and do not auto-prune.</li>
+</ul>
+<h2 id="response-contracts">Response Contracts<a class="headerlink" href="#response-contracts" title="Permanent link">&para;</a></h2>
+<p><code>/v2/extract</code> returns:</p>
+<ul>
+<li><code>source_url</code></li>
+<li><code>detected_type</code></li>
+<li><code>output_format</code></li>
+<li><code>output</code></li>
+<li><code>warnings</code></li>
+<li><code>stats</code></li>
+<li>optional <code>context_summary_markdown</code> (when <code>include_context_summary=true</code> and a compiled summary exists)</li>
+</ul>
+<p><code>output_format=json</code> contract (<code>output</code>):</p>
+<ul>
+<li><code>root_entity: object | null</code></li>
+<li><code>related_entities: list[object]</code></li>
+<li><code>excluded_entities: list[object]</code></li>
+<li><code>entities_by_type: {repositories, persons, organizations, articles, memberships, contributions}</code></li>
+</ul>
+<p><code>output_format=jsonld</code> contract (<code>output</code>):</p>
+<ul>
+<li><code>@context: object</code></li>
+<li><code>@graph: list[object]</code></li>
+<li>optional <code>excluded_entities</code> (only when present)</li>
+</ul>
+<h2 id="llm-agent-architecture">LLM Agent Architecture<a class="headerlink" href="#llm-agent-architecture" title="Permanent link">&para;</a></h2>
+<p>Each entity bucket has a dedicated agent under <code>git_metadata_extractor/agents/llm/&lt;kind&gt;/agent.py</code>
+(repository, person, organization, article, membership, contribution).
+Each is a <strong>single pydantic-ai <code>Agent</code> call</strong> that produces all output
+fields in one prompt/response round-trip. Hallucination guards baked into
+agents:</p>
+<ul>
+<li><code>force_server_uuid</code> overwrites whatever UUID the LLM emitted with a
+  server-generated one in <code>identifiers.uuid</code> only.</li>
+<li>Repository agent post-LLM: stars/forks from GitHub REST (deterministic);
+  discipline fallback <code>wd:Q428691</code> (computer engineering) when the LLM
+  emits empty/null.</li>
+<li>Contribution agent post-LLM: stamps <code>schema:author</code> and
+  <code>pulse:contributionTo</code> from the orchestrator's authoritative pair.</li>
+<li>Article agent post-LLM: drops the entity if <code>schema:identifier</code> is a
+  placeholder DOI (<code>10.0000/...</code>) or sentinel string (<code>UNKNOWN</code>, <code>N/A</code>,
+  <code>TBD</code>, …) and no <code>pulse:infoscienceArticleIdentifier</code> is present.</li>
+</ul>
+<p>Token counts (<code>tokens_prompt</code>, <code>tokens_completion</code>) are extracted from
+<code>result.usage()</code> (pydantic-ai 1.5+ exposes <code>usage</code> as a method on
+<code>AgentRunResult</code>, not a property — the <code>V2LLMRuntime</code> resolves this with
+a <code>callable</code> guard).</p>
+<h2 id="llm-agent-tools">LLM Agent Tools<a class="headerlink" href="#llm-agent-tools" title="Permanent link">&para;</a></h2>
+<p>LLM agents can call server-side tools during generation. Tools are
+registered per-agent by passing a <code>tools=[...]</code> list to
+<code>V2LLMRuntime.run_json_prompt</code>, which forwards them to the pydantic-ai
+<code>Agent</code>. Shared tools live in <code>git_metadata_extractor/agents/llm/agent_tools/</code> — add a new
+module there to make a tool available to multiple agents.</p>
+<p>Two main families:</p>
+<ul>
+<li><strong>Per-index RAG tools</strong> (<code>*_rag.py</code>) — Qdrant-backed semantic search +
+  on-demand fetch over Infoscience, ETH Research Collection, HuggingFace,
+  OpenAlex, ORCID, ROR, Zenodo. Plus the <strong>federated</strong> tools
+  (<code>search_federated_rag</code>, <code>lookup_entity_federated</code>) that fan out across
+  all nine indices in parallel. Documented in
+  <a href="../v2-rag-tools/"><code>v2-rag-tools.md</code></a>.</li>
+<li><strong>Direct provider tools</strong> — disciplines list (<code>list_disciplines</code>),
+  GitHub SPDX SBOM (<code>query_dependencies</code>), GitHub org / ROR org / ORCID
+  person identity lookups, Infoscience search and orgunit, repository
+  corpus grep, Selenium fetch (<code>fetch_link_content_via_selenium</code>), email
+  hashing, UUID generation, DuckDuckGo search.</li>
+</ul>
+<p>The full registered set lives in
+<code>git_metadata_extractor/agents/llm/agent_tools/__init__.py</code>.</p>
+<h3 id="observability">Observability<a class="headerlink" href="#observability" title="Permanent link">&para;</a></h3>
+<p>Tool calls emit an INFO log line from <code>git_metadata_extractor.agents.llm.agent_tools.&lt;module&gt;</code>:</p>
+<div class="highlight"><pre><span></span><code>INFO git_metadata_extractor.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
+</code></pre></div>
+<p>If this line is absent after an LLM repository run with
+<code>agent_runtime=llm</code>, the model did not call the tool.</p>
+<h2 id="repository-entity-schema-notes">Repository Entity Schema Notes<a class="headerlink" href="#repository-entity-schema-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Repository <code>identifiers</code> use <code>schema:citation</code> (not <code>schema:identifier</code>) for the DOI/citation link. The <code>idSource</code> enum values for repositories are <code>pulse:githubRepositoryHandle</code>, <code>schema:citation</code>, and <code>uuid</code>.</li>
+<li>Article entities continue to use <code>schema:identifier</code> for their canonical identifier.</li>
+<li><code>schema:alternateName</code> is an internal intermediate field on organization entities: it is consumed by pipeline stages during alias matching and is not present in final <code>/v2/extract</code> outputs.</li>
+<li>Internal pipeline metadata fields whose names start with <code>_</code> (e.g. <code>_person_ref</code> on Memberships) are stripped before strict validation, JSON-LD output, RDF serialisation, and any external artefact.</li>
+</ul>
+<h2 id="v2-environment-variables">V2 Environment Variables<a class="headerlink" href="#v2-environment-variables" title="Permanent link">&para;</a></h2>
+<p>The most-touched knobs (full list in <code>.env.example</code> and <code>CLAUDE.md</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>API_TOKEN</code></td>
+<td>unset</td>
+<td>Bearer token guarding the protected <code>/v2/*</code> routes. Missing → 503 (no dev bypass). See <a href="#authentication">Authentication</a>.</td>
+</tr>
+<tr>
+<td><code>V2_RATE_LIMIT_PER_MINUTE</code></td>
+<td>unset (off)</td>
+<td>Opt-in per-client request cap on the compute-heavy routes (<code>POST /v2/extract</code> + the <code>GET</code> extract routes). Keyed by bearer token (else IP); in-memory &amp; per-worker. Over limit → <code>429</code> + <code>Retry-After</code>. See <a href="#rate-limiting">Rate limiting</a>.</td>
+</tr>
+<tr>
+<td><code>V2_AGENT_RUNTIME_DEFAULT</code></td>
+<td><code>llm</code></td>
+<td>Default runtime when <code>/v2/extract</code> omits <code>agent_runtime</code></td>
+</tr>
+<tr>
+<td><code>V2_USE_MOCK_PROVIDERS</code></td>
+<td><code>true</code></td>
+<td>Swap in mock GitHub/ORCID/Infoscience/ROR providers</td>
+</tr>
+<tr>
+<td><code>V2_LINK_VERACITY_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Skip the link-veracity stage in LLM mode (rule-based skips unconditionally)</td>
+</tr>
+<tr>
+<td><code>V2_APPLY_CRITIC_PRUNING</code></td>
+<td><code>false</code></td>
+<td>Enable critic drop suggestions (LLM mode only)</td>
+</tr>
+<tr>
+<td><code>V2_MAX_CONCURRENT_AGENTS</code></td>
+<td><code>6</code></td>
+<td>Per-stage fan-out concurrency</td>
+</tr>
+<tr>
+<td><code>V2_PROVIDER_CACHE_PATH</code></td>
+<td><code>.cache/v2/providers.db</code></td>
+<td>Shared provider + verdict + pipeline + job-store SQLite path</td>
+</tr>
+<tr>
+<td><code>V2_PROVIDER_CACHE_TTL_DAYS</code></td>
+<td><code>30</code></td>
+<td>TTL for cached entries</td>
+</tr>
+<tr>
+<td><code>V2_PROVIDER_CACHE_ENABLED</code></td>
+<td><code>true</code></td>
+<td>When <code>false</code>, every external lookup is fresh and the async-job store is disabled</td>
+</tr>
+<tr>
+<td><code>V2_PIPELINE_CACHE_ENABLED</code></td>
+<td><code>true</code></td>
+<td>When <code>false</code>, every <code>/extract</code> re-runs the full pipeline</td>
+</tr>
+<tr>
+<td><code>V2_&lt;INDEX&gt;_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Toggle each RAG tool family (<code>INFOSCIENCE</code>, <code>ETHZ_RESEARCH_COLLECTION</code>, <code>HUGGINGFACE</code>, <code>OPENALEX</code>, <code>ZENODO</code>, <code>ORCID</code>, <code>ROR</code>)</td>
+</tr>
+<tr>
+<td><code>INDEX_QDRANT_URL</code></td>
+<td>YAML-driven</td>
+<td>Qdrant endpoint for every RAG index. Use <code>http://gme-qdrant:6333</code> inside the devcontainer.</td>
+</tr>
+<tr>
+<td><code>V2_QUERY_LOG_DIR</code></td>
+<td><code>logs/v2_queries</code></td>
+<td>Per-request external-query log destination</td>
+</tr>
+<tr>
+<td><code>LOG_LEVEL</code></td>
+<td><code>INFO</code></td>
+<td>DEBUG/INFO/WARNING/ERROR</td>
+</tr>
+<tr>
+<td><code>GME_GITHUB_TOKEN</code></td>
+<td>unset</td>
+<td>Required for healthy provider preflight</td>
+</tr>
+<tr>
+<td><code>RCP_TOKEN</code> / <code>OPENAI_API_KEY</code> / <code>OPENROUTER_API_KEY</code></td>
+<td>unset</td>
+<td>At least one required in LLM mode</td>
+</tr>
+<tr>
+<td><code>SELENIUM_REMOTE_URL</code></td>
+<td>unset</td>
+<td>Enables link-veracity + the <code>fetch_link_content_via_selenium</code> tool</td>
+</tr>
+<tr>
+<td><code>GIMIE_API_URL</code></td>
+<td>unset</td>
+<td><strong>Required for repository extraction.</strong> Points at the <code>gimie-api</code> sidecar (e.g. <code>http://gme-gimie-api:15400</code>); the <code>gimie</code> package was removed from the image. Unset → in-process gimie, which is no longer installed → <code>RuntimeError</code>. See <a href="../OPERATIONS_RUNBOOK/#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required">operations runbook §8</a>.</td>
+</tr>
+<tr>
+<td><code>GIMIE_API_TIMEOUT_SECONDS</code></td>
+<td><code>180</code></td>
+<td>Per-request timeout for the gimie-api sidecar call.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
+      
+        <script src="../assets/javascripts/mermaid-init.js"></script>
+      
+    
+  </body>
+</html>

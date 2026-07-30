@@ -11,25 +11,25 @@
         <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/api-and-cli/">
       
       
-        <link rel="prev" href="../getting-started/">
+        <link rel="prev" href="../v2-api-reference/">
       
       
-        <link rel="next" href="../architecture/design-notes/">
+        <link rel="next" href="../repository-enrichment-fields/">
       
       
         
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>API and CLI - Git Metadata Extractor Documentation</title>
+        <title>API and CLI Quick Reference - Git Metadata Extractor Documentation</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              API and CLI
+              API and CLI Quick Reference
             
           </span>
         </div>
@@ -277,6 +277,259 @@
       
   
   
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understand the system
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Understand the system
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Extract Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repo-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repo Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -296,7 +549,7 @@
   <span class="md-ellipsis">
     
   
-    API and CLI
+    API and CLI Quick Reference
   
 
     
@@ -314,7 +567,7 @@
   <span class="md-ellipsis">
     
   
-    API and CLI
+    API and CLI Quick Reference
   
 
     
@@ -351,10 +604,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#active-api-endpoints" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Active API endpoints
+        Authentication
       
     </span>
   </a>
@@ -362,10 +615,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#response-shape" class="md-nav__link">
+  <a href="#active-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Response shape
+        Active endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Active endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v2-use-these-for-new-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 (use these for new clients)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#v1-removed-in-300" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V1 (removed in 3.0.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v2-response-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 response shape
       
     </span>
   </a>
@@ -373,21 +665,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#endpoint-to-pipeline-map" class="md-nav__link">
+  <a href="#per-index-clis-moved" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Endpoint-to-pipeline map
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#run-the-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run the API
+        Per-index CLIs (moved)
       
     </span>
   </a>
@@ -406,10 +687,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cli-status-and-alternatives" class="md-nav__link">
+  <a href="#batch-extraction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CLI status and alternatives
+        Batch extraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoint-to-pipeline-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoint-to-pipeline map
       
     </span>
   </a>
@@ -423,58 +715,7 @@
     </li>
   
 
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Architecture
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Architecture
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+              
             
               
                 
@@ -483,14 +724,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../architecture/design-notes/" class="md-nav__link">
+      <a href="../repository-enrichment-fields/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Design Notes
+    Repository Enrichment Fields
   
 
     
@@ -511,14 +752,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../AGENT_STRATEGY/" class="md-nav__link">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Repository Analysis Strategy
+    Migration V1 to V2
   
 
     
@@ -569,7 +810,7 @@
   <span class="md-ellipsis">
     
   
-    Integrations
+    Operate it
   
 
     
@@ -585,7 +826,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Integrations
+    Operate it
   
 
           </label>
@@ -598,42 +839,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../INFOSCIENCE_INTEGRATION/" class="md-nav__link">
+      <a href="../OPERATIONS_RUNBOOK/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Infoscience Integration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../INFOSCIENCE_API_FINDINGS/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Infoscience API Findings
+    Operations Runbook
   
 
     
@@ -684,7 +897,7 @@
   <span class="md-ellipsis">
     
   
-    JSON-LD
+    RAG (read side)
   
 
     
@@ -700,7 +913,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    JSON-LD
+    RAG (read side)
   
 
           </label>
@@ -713,14 +926,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../JSONLD_CONVERSION/" class="md-nav__link">
+      <a href="../v2-rag-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Conversion Guide
+    V2 Agent RAG Tools
   
 
     
@@ -741,98 +954,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../PYDANTIC_JSONLD_MAPPING/" class="md-nav__link">
+      <a href="../concept-tagging/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Mapping Documentation
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../JSONLD_CONVERSION_SUMMARY/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Conversion Summary
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../JSONLD_MAPPING_UPDATE/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Mapping Update
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../JSON_JSONLD_CONVERSION_CLI/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    JSON and JSON-LD CLI
+    Concept Tagging Stage
   
 
     
@@ -883,7 +1012,7 @@
   <span class="md-ellipsis">
     
   
-    Academic Catalog
+    Ontology
   
 
     
@@ -899,7 +1028,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Academic Catalog
+    Ontology
   
 
           </label>
@@ -912,14 +1041,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION/" class="md-nav__link">
+      <a href="../releases/ontology-v3.0.0/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Option B Implementation
+    v3.0.0 Reference (proposed)
   
 
     
@@ -940,14 +1069,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../ACADEMIC_CATALOG_REFACTOR_SUMMARY/" class="md-nav__link">
+      <a href="../releases/json-schemas/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Refactor Summary
+    JSON Schema Graphs
   
 
     
@@ -998,7 +1127,7 @@
   <span class="md-ellipsis">
     
   
-    Updates
+    Project
   
 
     
@@ -1014,7 +1143,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Updates
+    Project
   
 
           </label>
@@ -1027,70 +1156,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../AFFILIATION_CHANGES/" class="md-nav__link">
+      <a href="../ROADMAP/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Affiliation Changes
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../ESTIMATED_TOKENS_FIX/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Estimated Tokens Fix
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../UPDATES_SUMMARY/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Updates Summary
+    Roadmap
   
 
     
@@ -1117,67 +1190,15 @@
   
   
   
-    
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
-        
-          
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Releases
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Releases
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
-      <a href="../releases/legacy-releases/" class="md-nav__link">
+      <a href="../archive/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Legacy Releases
+    Archive
   
 
     
@@ -1186,14 +1207,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -1236,10 +1249,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#active-api-endpoints" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Active API endpoints
+        Authentication
       
     </span>
   </a>
@@ -1247,10 +1260,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#response-shape" class="md-nav__link">
+  <a href="#active-endpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Response shape
+        Active endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Active endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v2-use-these-for-new-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 (use these for new clients)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#v1-removed-in-300" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V1 (removed in 3.0.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v2-response-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V2 response shape
       
     </span>
   </a>
@@ -1258,21 +1310,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#endpoint-to-pipeline-map" class="md-nav__link">
+  <a href="#per-index-clis-moved" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Endpoint-to-pipeline map
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#run-the-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run the API
+        Per-index CLIs (moved)
       
     </span>
   </a>
@@ -1291,10 +1332,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cli-status-and-alternatives" class="md-nav__link">
+  <a href="#batch-extraction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CLI status and alternatives
+        Batch extraction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpoint-to-pipeline-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoint-to-pipeline map
       
     </span>
   </a>
@@ -1322,60 +1374,126 @@
 
 
 <h1 id="api-and-cli">API and CLI<a class="headerlink" href="#api-and-cli" title="Permanent link">&para;</a></h1>
+<p>Quick reference for both the extraction service and the per-index CLIs.
+For the full v2 contract see <a href="../v2-api-reference/">V2 API Reference</a>; for
+RAG indices see <a href="https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md">RAG Indices Overview</a>.</p>
 <h2 id="main-entrypoints">Main entrypoints<a class="headerlink" href="#main-entrypoints" title="Permanent link">&para;</a></h2>
 <ul>
-<li>API app: <code>src/api.py</code></li>
-<li>Repository analysis orchestrator: <code>src/analysis/repositories.py</code></li>
-<li>User analysis orchestrator: <code>src/analysis/user.py</code></li>
-<li>Organization analysis orchestrator: <code>src/analysis/organization.py</code></li>
+<li>API app: <code>git_metadata_extractor/app.py</code> — mounts the <code>/v2/*</code> router (v1 was removed in 3.0.0).</li>
+<li>V2 router: <code>git_metadata_extractor/api/_router.py</code> (the <code>api/</code> package —
+  extract / jobs / auto_ingest / system; it was a single <code>api.py</code> before 3.0.0).</li>
+<li>V2 pipeline driver: <code>git_metadata_extractor/pipeline/orchestrator.py</code>.</li>
 </ul>
-<h2 id="active-api-endpoints">Active API endpoints<a class="headerlink" href="#active-api-endpoints" title="Permanent link">&para;</a></h2>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p><code>/v2/extract</code> and <code>/v2/jobs/{id}</code> require a bearer
+token; <code>/</code>, <code>/docs</code>, and <code>/v2/health</code> stay open. Send the token from the
+server-side <code>API_TOKEN</code> env var:</p>
+<div class="highlight"><pre><span></span><code><span class="err">Authorization: Bearer &lt;API_TOKEN&gt;</span>
+</code></pre></div>
+<p>Missing or wrong token → <code>401</code> (with <code>WWW-Authenticate: Bearer</code>). Server
+without <code>API_TOKEN</code> set → <code>503</code>. Generate a value with:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import secrets; print(secrets.token_urlsafe(32))&quot;</span>
+</code></pre></div>
+<p>Full failure-mode table at
+<a href="../v2-api-reference/#authentication">v2-api-reference.md#authentication</a>.</p>
+<h2 id="active-endpoints">Active endpoints<a class="headerlink" href="#active-endpoints" title="Permanent link">&para;</a></h2>
+<h3 id="v2-use-these-for-new-clients">V2 (use these for new clients)<a class="headerlink" href="#v2-use-these-for-new-clients" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>GET /v1/repository/gimie/json-ld/{full_path:path}</code>: GIMIE-only JSON-LD extraction.</li>
-<li><code>GET /v1/repository/llm/json/{full_path:path}</code>: repository Pydantic output.</li>
-<li><code>GET /v1/repository/llm/json-ld/{full_path:path}</code>: repository JSON-LD output.</li>
-<li><code>GET /v1/user/llm/json/{full_path:path}</code>: user profile analysis.</li>
-<li><code>GET /v1/org/llm/json/{full_path:path}</code>: organization analysis.</li>
-<li>Cache management endpoints under <code>/v1/cache/*</code>.</li>
+<li><code>GET  /v2/health</code> — health check + provider preflight.</li>
+<li><code>GET  /v2/extract/{full_path:path}</code> — synchronous extraction. Path is a
+  GitHub URL or path (<code>github.com/owner/name</code>).</li>
+<li><code>POST /v2/extract</code> — async submission. Returns <code>202</code> + <code>job_id</code>. Body:
+  <code>{source_url, agent_runtime?, output_format?, include_context_summary?}</code>.</li>
+<li><code>GET  /v2/jobs/{job_id}</code> — poll for async job status / result.</li>
 </ul>
-<p>Common query flags:</p>
+<p>Common query parameters on <code>GET /v2/extract</code>:</p>
 <ul>
-<li><code>force_refresh=true</code>: bypass cache.</li>
-<li><code>enrich_orgs=true</code>: run organization enrichment.</li>
-<li><code>enrich_users=true</code>: run user enrichment (repository/user routes).</li>
+<li><code>output_format</code> — <code>jsonld</code> (default) or <code>json</code>.</li>
+<li><code>agent_runtime</code> — <code>rule_based</code> or <code>llm</code> (defaults to
+  <code>V2_AGENT_RUNTIME_DEFAULT</code>, which itself defaults to <code>llm</code>).</li>
+<li><code>include_context_summary</code> — <code>true|false</code> (default <code>false</code>).</li>
 </ul>
-<h2 id="response-shape">Response shape<a class="headerlink" href="#response-shape" title="Permanent link">&para;</a></h2>
-<p>All analysis endpoints return <code>APIOutput</code> (<code>src/data_models/api.py</code>):</p>
+<p>Example requests (export <code>API_TOKEN</code> first so the snippets work as-is):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">API_TOKEN</span><span class="o">=</span>...<span class="w">   </span><span class="c1"># value from .env</span>
+
+<span class="c1"># sync, JSON-LD</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+
+<span class="c1"># sync, JSON, rule-based</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&amp;agent_runtime=rule_based&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+
+<span class="c1"># async</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:1234/v2/extract<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;source_url&quot;: &quot;github.com/octocat/Hello-World&quot;, &quot;output_format&quot;: &quot;json&quot;, &quot;agent_runtime&quot;: &quot;llm&quot;}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+<span class="c1"># → {&quot;job_id&quot;: &quot;...&quot;, &quot;status&quot;: &quot;pending&quot;, &quot;status_url&quot;: &quot;/v2/jobs/...&quot;}</span>
+
+<span class="c1"># poll</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/jobs/&lt;job_id&gt;&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h3 id="v1-removed-in-300">V1 (removed in 3.0.0)<a class="headerlink" href="#v1-removed-in-300" title="Permanent link">&para;</a></h3>
+<p>The <code>/v1/*</code> surface returns 404 since 3.0.0 — see
+<a href="../migration-v1-to-v2/">docs/migration-v1-to-v2.md</a> for the endpoint mapping.</p>
+<h2 id="v2-response-shape">V2 response shape<a class="headerlink" href="#v2-response-shape" title="Permanent link">&para;</a></h2>
+<p><code>GET /v2/extract</code> and the <code>result</code> field of a completed job both return
+<code>V2ExtractResponse</code>:</p>
 <ul>
-<li><code>link</code></li>
-<li><code>type</code> (<code>repository</code>, <code>user</code>, <code>organization</code>)</li>
-<li><code>parsedTimestamp</code></li>
-<li><code>output</code> (model object or JSON-LD dict)</li>
-<li><code>stats</code> (<code>APIStats</code> token usage, duration, GitHub rate-limit headers)</li>
+<li><code>source_url</code></li>
+<li><code>detected_type</code> — <code>repository | user | organization</code></li>
+<li><code>output_format</code> — <code>jsonld | json</code></li>
+<li><code>output</code> — see below</li>
+<li><code>warnings</code> — non-fatal pipeline warnings</li>
+<li><code>stats</code> — run-scoped counts + duration</li>
+<li>optional <code>context_summary_markdown</code> (when requested and available)</li>
 </ul>
+<p><code>output_format=json</code>:</p>
+<ul>
+<li><code>root_entity: object | null</code></li>
+<li><code>related_entities: list[object]</code></li>
+<li><code>excluded_entities: list[object]</code></li>
+<li><code>entities_by_type: {repositories, persons, organizations, articles, memberships, contributions}</code></li>
+</ul>
+<p><code>output_format=jsonld</code>:</p>
+<ul>
+<li><code>@context: object</code></li>
+<li><code>@graph: list[object]</code></li>
+<li>optional <code>excluded_entities</code></li>
+</ul>
+<h2 id="per-index-clis-moved">Per-index CLIs (moved)<a class="headerlink" href="#per-index-clis-moved" title="Permanent link">&para;</a></h2>
+<p>The per-index CLIs (<code>python -m open_pulse_sources.index.&lt;name&gt;</code>), their
+<code>just &lt;prefix&gt;-*</code> recipes, the federated <code>gme-search</code>/<code>gme-entity</code> CLI,
+and the <code>/v2/indices/*</code> management API all live in the
+<a href="https://github.com/sdsc-ordes/open-pulse-sources">open-pulse-sources</a>
+repo — see its README and <code>just --list</code> there. This service only reads
+the resulting stores.</p>
+<h2 id="smoke-tests">Smoke tests<a class="headerlink" href="#smoke-tests" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># v2 — health is open</span>
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:1234/v2/health&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+
+<span class="c1"># v2 extract requires the bearer token</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&amp;agent_runtime=rule_based&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h2 id="batch-extraction">Batch extraction<a class="headerlink" href="#batch-extraction" title="Permanent link">&para;</a></h2>
+<p><code>scripts/v2/batch_extract.sh</code> reads a hardcoded URL list and drives
+<code>/v2/extract</code> with configurable parallelism. Resumable: skips repos whose
+result file already exists with a non-<code>running</code> status.</p>
 <h2 id="endpoint-to-pipeline-map">Endpoint-to-pipeline map<a class="headerlink" href="#endpoint-to-pipeline-map" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
-    A[/repository/llm/*] --&gt; R[Repository.run_analysis]
-    B[/user/llm/json/*] --&gt; U[User.run_analysis]
-    C[/org/llm/json/*] --&gt; O[Organization.run_analysis]
-
-    R --&gt; RA[Atomic repository pipeline + optional enrichments]
-    U --&gt; UA[GitHub parse + user/org enrich + linked entities + EPFL]
-    O --&gt; OA[Atomic organization pipeline]</code></pre>
-<h2 id="run-the-api">Run the API<a class="headerlink" href="#run-the-api" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>just<span class="w"> </span>serve-dev
-</code></pre></div>
-<h2 id="smoke-tests">Smoke tests<a class="headerlink" href="#smoke-tests" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>just<span class="w"> </span>api-test-gimie
-just<span class="w"> </span>api-test-extract
-just<span class="w"> </span>api-test-extract-refresh
-</code></pre></div>
-<h2 id="cli-status-and-alternatives">CLI status and alternatives<a class="headerlink" href="#cli-status-and-alternatives" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>just extract ...</code> currently calls <code>src/main.py</code>, which still imports legacy <code>core.*</code> modules.</li>
-<li>Use API endpoints for full extraction flows.</li>
-<li>Use <code>scripts/convert_json_jsonld.py</code> for JSON &lt;-&gt; JSON-LD conversion workflows.</li>
-</ul>
+    A[GET /v2/extract] --&gt; P[Pipeline orchestrator]
+    B[POST /v2/extract] --&gt; J[Job store&lt;br/&gt;SQLite-backed]
+    J --&gt; P
+    P --&gt; S1[context_summary]
+    S1 --&gt; S2[per-entity agents]
+    S2 --&gt; S3[dedup → reconcile → critic]
+    S3 --&gt; S4[strict + assemble + link veracity]
+    S4 --&gt; S5[ownership + org-hierarchy inference]
+    S5 --&gt; S6[build_jsonld_output]
+    GJ[GET /v2/jobs/id] --&gt; J</code></pre>
 
 
 
@@ -1428,7 +1546,7 @@ just<span class="w"> </span>api-test-extract-refresh
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
       

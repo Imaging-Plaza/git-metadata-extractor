@@ -1,0 +1,1935 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/v2-rag-tools/">
+      
+      
+        <link rel="prev" href="../OPERATIONS_RUNBOOK/">
+      
+      
+        <link rel="next" href="../concept-tagging/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>V2 Agent RAG Tools - Git Metadata Extractor Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#v2-rag-agent-tools" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-header__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Git Metadata Extractor Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              V2 Agent RAG Tools
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-nav__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Git Metadata Extractor Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Imaging-Plaza/git-metadata-extractor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Imaging-Plaza/git-metadata-extractor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understand the system
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Understand the system
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Extract Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-repo-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-Repo Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-and-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API and CLI Quick Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-enrichment-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Enrichment Fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration V1 to V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operate it
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operate it
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPERATIONS_RUNBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RAG (read side)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RAG (read side)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Agent RAG Tools
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 Agent RAG Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-indices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The indices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-dict-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter dict format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hit-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hit shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reranker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reranker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring-into-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring into agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#federated-tools-picking-up-eth-rc-alongside-everything-else" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Federated tools — picking up ETH RC alongside everything else
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concept-tagging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concept Tagging Stage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ontology
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ontology
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/ontology-v3.0.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v3.0.0 Reference (proposed)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/json-schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Schema Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-indices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The indices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-dict-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter dict format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hit-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hit shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reranker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reranker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring-into-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring into agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#federated-tools-picking-up-eth-rc-alongside-everything-else" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Federated tools — picking up ETH RC alongside everything else
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="v2-rag-agent-tools">V2 RAG Agent Tools<a class="headerlink" href="#v2-rag-agent-tools" title="Permanent link">&para;</a></h1>
+<p>LLM agents in the v2 pipeline can query several Qdrant-backed indices on
+demand: Infoscience, ETH Research Collection, HuggingFace Hub, OpenAlex,
+Zenodo, ORCID, ROR, SWISSUbase, RenkuLab, <strong>GitHub repositories</strong>, and
+the <strong>EPFL Graph academic-discipline ontology</strong>. Each index has a thin
+async <strong>provider</strong> in
+<code>git_metadata_extractor/providers/*_rag.py</code> and one or more <strong>pydantic-ai tools</strong> in
+<code>git_metadata_extractor/agents/llm/agent_tools/*_rag.py</code>.</p>
+<p>There is also a <strong>federated layer</strong> (<code>FederatedRagProvider</code>, two tools:
+<code>search_federated_rag</code> and <code>lookup_entity_federated</code>) that fans out across
+every index in parallel and merges results — the right default when
+the agent doesn't know which index has the answer. See
+<a href="https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/federated-search.md"><code>federated-search.md</code></a> for the full design.</p>
+<p>The pattern is uniform: <code>embed query → vector search Qdrant → optional
+cross-encoder rerank → return thin hits</code>. Bulky payload bodies are kept
+out of the prompt; agents pull full content with a separate fetch tool
+when needed.</p>
+<h2 id="the-indices">The indices<a class="headerlink" href="#the-indices" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Tools</th>
+<th>Collections</th>
+<th>Filter keys (allowlist)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>InfoscienceRagProvider</code> (<code>git_metadata_extractor/providers/infoscience_rag.py</code>)</td>
+<td><code>search_infoscience_rag</code>, <code>fetch_infoscience_chunks</code>, <code>fetch_infoscience_records</code></td>
+<td><code>chunks</code>, <code>articles</code>, <code>persons</code>, <code>organizations</code></td>
+<td><code>has_github_match, has_hf_match, year, publication_type, language, lab_uuid, org_uuids, doi, orcid, ror_id, sciper_id, sciper_unit_id, author_uuids, subjects, keywords</code></td>
+</tr>
+<tr>
+<td><code>EthzResearchCollectionRagProvider</code> (<code>git_metadata_extractor/providers/ethz_research_collection_rag.py</code>)</td>
+<td><code>search_ethz_research_collection_rag</code>, <code>fetch_ethz_research_collection_chunks</code>, <code>fetch_ethz_research_collection_records</code></td>
+<td><code>chunks</code>, <code>articles</code>, <code>persons</code>, <code>organizations</code></td>
+<td><code>has_github_match, has_hf_match, year, publication_type, language, lab_uuid, org_uuids, doi, orcid, ror_id, author_uuids, subjects, keywords</code> (sciper_* dropped — EPFL-specific)</td>
+</tr>
+<tr>
+<td><code>HuggingFaceRagProvider</code> (<code>git_metadata_extractor/providers/huggingface_rag.py</code>)</td>
+<td><code>search_huggingface_rag</code>, <code>lineage_huggingface</code></td>
+<td><code>models</code>, <code>datasets</code>, <code>spaces</code>, <code>orgs</code></td>
+<td><code>library_name, pipeline_tag, sdk, gated, downloads, downloads_all_time, likes, author, license, entity_type, base_model</code></td>
+</tr>
+<tr>
+<td><code>OpenAlexRagProvider</code> (<code>git_metadata_extractor/providers/openalex_rag.py</code>)</td>
+<td><code>search_openalex_rag</code></td>
+<td><code>works</code>, <code>authors</code>, <code>institutions</code>, <code>sources</code>, <code>topics</code>, <code>concepts</code></td>
+<td><code>year, publication_year, doi, entity_type, openalex_id, country_code, type, field_id, domain_id, level, primary_topic_id, primary_source_id, last_known_institution_id, orcid, ror</code></td>
+</tr>
+<tr>
+<td><code>ZenodoRagProvider</code> (<code>git_metadata_extractor/providers/zenodo_rag.py</code>)</td>
+<td><code>search_zenodo_rag</code>, <code>fetch_zenodo_records</code></td>
+<td><code>zenodo_records</code></td>
+<td><code>year, doi, resource_type, access_right, entity_type, zenodo_id</code>. <code>fetch_zenodo_records(ids)</code> accepts both <code>zenodo_id</code> (canonical version-record) and <code>concept_recid</code> (parent / "all versions" id Zenodo redirects from), reading full bodies — title, doi, description, license, dates — from DuckDB rather than Qdrant. Use after <code>search_zenodo_rag</code> to hydrate hits, or to confirm a citation by id. See <a href="https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/zenodo-index.md"><code>zenodo-index.md</code></a>.</td>
+</tr>
+<tr>
+<td><code>OrcidRagProvider</code> (<code>git_metadata_extractor/providers/orcid_rag.py</code>)</td>
+<td><code>search_orcid_rag</code></td>
+<td><code>persons</code>, <code>employments</code>, <code>educations</code> (collections namespaced by scope, e.g. <code>orcid_epfl_persons</code>)</td>
+<td><code>orcid_id, in_scope, discovered_via, org_ror, organization, department, role</code></td>
+</tr>
+<tr>
+<td><code>RorRagProvider</code> (<code>git_metadata_extractor/providers/ror_rag.py</code>)</td>
+<td><code>search_ror_rag</code></td>
+<td><code>epfl_ethz</code>, <code>switzerland</code>, <code>europe</code>, <code>worldwide</code> (scope mode → collection <code>ror_&lt;scope&gt;</code>)</td>
+<td>only <code>country_code</code> (the upstream ROR store has a fixed-shape filter)</td>
+</tr>
+<tr>
+<td><code>RenkulabRagProvider</code> (<code>git_metadata_extractor/providers/renkulab_rag.py</code>)</td>
+<td><code>search_renkulab_rag</code></td>
+<td><code>renkulab_projects</code>, <code>renkulab_groups</code>, <code>renkulab_users</code>, <code>renkulab_data_connectors</code></td>
+<td><code>entity_type, slug, namespace, path, visibility, storage_type, storage_provider, entity_id</code>. The tool also accepts an <code>entity_types</code> list to scope the search to a subset of the four collections (default: all four, results merged + reranked together).</td>
+</tr>
+<tr>
+<td><code>SwissubaseRagProvider</code> (<code>git_metadata_extractor/providers/swissubase_rag.py</code>)</td>
+<td><code>search_swissubase_rag</code></td>
+<td><code>swissubase_entities</code> (single collection; <code>entity_type</code> payload disambiguates <code>studies</code> / <code>datasets</code> / <code>persons</code> / <code>institutions</code>)</td>
+<td><code>entity_type, study_id, dataset_id, person_key, institution_key, ref, main_discipline, sub_discipline, progress, year_start, year_end, access_right</code>. Backed by <code>open_pulse_sources/index/ (open-pulse-sources library) swissubase/</code> (Selenium-driven ingest of the swissUbase social-science research-data platform: 18k+ studies via direct studyVersionId enumeration since the search endpoint caps at 250 items). Default <code>INDEX_SWISSUBASE_SCOPE=epfl_sdsc_ethz</code> ingests every study but only embeds those whose institution string matches EPFL / ETHZ / SDSC. Every hit carries the canonical <code>https://www.swissubase.ch/...</code> URL in <code>source_url</code>. Wired into the <strong>article agent</strong>.</td>
+</tr>
+<tr>
+<td><code>SnsfRagProvider</code> (<code>git_metadata_extractor/providers/snsf_rag.py</code>)</td>
+<td><code>search_snsf_rag</code></td>
+<td><code>epfl</code>, <code>ethz</code>, <code>switzerland</code> (scope mode → collection <code>snsf_&lt;scope&gt;</code>)</td>
+<td><code>institution</code> (exact match on <code>research_institution</code>, e.g. <code>EPF Lausanne – EPFL</code>), <code>institute</code> (substring on the lab/centre name, resolved from DuckDB after the ANN — surgical for SDSC-style queries), <code>discipline_l1</code>, <code>state</code> (PascalCase: <code>Completed</code> / <code>Ongoing</code> / <code>Approved</code>). Other keys dropped with a warning. Backed by <code>open_pulse_sources/index/ (open-pulse-sources library) snsf/</code> (Qwen3-Embedding-8B over title + discipline + keywords + abstract); the bulk CSV ingest covers every SNSF P3 grant from 1975–2027 (~90 k records). Wired into the <strong>person</strong> and <strong>organization</strong> agents — useful to ground a researcher's funding history or to attribute a project to its host institute.</td>
+</tr>
+<tr>
+<td><code>GitHubRagProvider</code> (<code>git_metadata_extractor/providers/github_rag.py</code>)</td>
+<td><code>search_github_rag</code></td>
+<td><code>github_repos</code></td>
+<td><code>entity_type, repo_id, owner, primary_language, license_spdx, is_archived, is_fork</code>. Backed by the deterministic, REST-fed <code>open_pulse_sources/index/ (open-pulse-sources library) github/</code> corpus (EPFL/Swiss-research repos: metadata + README chunks, Qwen3-Embedding-8B). Wired into the <strong>repository agent</strong> so the LLM can find related implementations / canonical forks while reasoning about the repo it is processing.</td>
+</tr>
+<tr>
+<td><code>EpflGraphRagProvider</code> (<code>git_metadata_extractor/providers/epfl_graph_rag.py</code>)</td>
+<td><code>search_epfl_graph_disciplines</code></td>
+<td><code>epfl_graph_disciplines</code> (single collection, one point per ontology category)</td>
+<td><code>category_id, depth, parent_id, entity_type</code>. Backed by <code>open_pulse_sources/index/ (open-pulse-sources library) epfl_graph/</code> — ~2226 EPFL Graph academic-discipline categories (depth 1..5) with embeddings built from <code>name + canonical Wikipedia lead-section + top anchor concept names</code>. Wired into the <strong>repository, person, organization, and article</strong> LLM agents. Use <code>filters={"depth": 4}</code> to keep only leaf disciplines and skip broad ancestor nodes.</td>
+</tr>
+<tr>
+<td><code>FederatedRagProvider</code> (<code>git_metadata_extractor/providers/federated_rag.py</code>)</td>
+<td><code>search_federated_rag</code>, <code>lookup_entity_federated</code></td>
+<td>wraps <strong>12</strong> indices (HuggingFace, OpenAlex, Infoscience, ORCID, ROR, Zenodo, ETH Research Collection, GitHub, SNSF, RenkuLab, EPFL Graph, SWISSUbase)</td>
+<td>forwarded as-is to every adapter — each picks up the keys it knows, ignores the rest. <code>search_federated_rag(rerank=True)</code> engages the cross-index reranker.</td>
+</tr>
+</tbody>
+</table>
+<p>Infoscience and the ETH Research Collection are DSpace-based sister
+indices with chunked bodies — search hits return a short snippet plus an
+<code>article_uuid</code> the agent can pass to <code>fetch_*_chunks</code> for the full text.
+The other indices already return complete records from search.</p>
+<h2 id="tool-flow">Tool flow<a class="headerlink" href="#tool-flow" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    A[LLM agent] --&gt;|search_*_rag| T[Tool factory]
+    T --&gt; P[Provider.search]
+    P --&gt; E[RCP /embeddings]
+    E --&gt; Q[Qdrant query_points]
+    Q --&gt;|rerank=True| R[RCP /rerank]
+    R --&gt; H[Thin hits]
+    Q --&gt;|rerank=False| H
+    H --&gt; A
+    A -.optional.-&gt; F[fetch_infoscience_*]
+    F --&gt; P2[Provider.fetch_*]
+    P2 --&gt; Q2[Qdrant scroll/retrieve]
+    Q2 --&gt; A</code></pre>
+<p><code>search</code> returns a list of small dicts (id + score + identifiers + a
+≤320-char snippet for the indices that index body text). The agent can
+then call <code>fetch_infoscience_chunks(article_uuid)</code> /
+<code>fetch_infoscience_records(collection, ids)</code> to spend context on the full
+body only for the hit that looks promising.</p>
+<h2 id="filter-dict-format">Filter dict format<a class="headerlink" href="#filter-dict-format" title="Permanent link">&para;</a></h2>
+<p>All <code>search_*_rag</code> tools accept the same operator dict (the per-store
+quirks are translated by <code>_rag_helpers.to_simple_filter_payload</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Operator / shape</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>scalar</td>
+<td><code>field == value</code></td>
+<td><code>{"year": 2024}</code></td>
+</tr>
+<tr>
+<td><code>[v1, v2, …]</code> or <code>{"$in": […]}</code></td>
+<td><code>field</code> ∈ list</td>
+<td><code>{"library_name": ["transformers", "diffusers"]}</code></td>
+</tr>
+<tr>
+<td><code>{"$gte": X, "$lte": Y}</code></td>
+<td>range</td>
+<td><code>{"downloads": {"$gte": 1000}}</code></td>
+</tr>
+<tr>
+<td><code>{"$eq": v}</code></td>
+<td>explicit equals</td>
+<td><code>{"country_code": {"$eq": "CH"}}</code></td>
+</tr>
+<tr>
+<td><code>{"$ne": v}</code></td>
+<td>infoscience only</td>
+<td><code>{"publication_type": {"$ne": "thesis"}}</code></td>
+</tr>
+<tr>
+<td><code>{"$contains": "needle"}</code></td>
+<td>infoscience only (list-of-string fields)</td>
+<td><code>{"keywords": {"$contains": "drug"}}</code></td>
+</tr>
+</tbody>
+</table>
+<p>Keys not in a provider's allowlist are dropped with a warning before the
+filter reaches Qdrant — see the table above. Operators not supported by a
+backend (e.g. <code>$ne</code> outside infoscience) are also dropped with a
+warning. ROR is the strictest: only <code>country_code</code> is honoured.</p>
+<h2 id="hit-shape">Hit shape<a class="headerlink" href="#hit-shape" title="Permanent link">&para;</a></h2>
+<p>Search hits are small dicts intended for the LLM to skim. The exact keys
+vary by index but always include <code>id</code>, <code>score</code>, and a short
+identifier-like key (<code>repo_id</code>, <code>openalex_id</code>, <code>zenodo_id</code>, <code>orcid_id</code>,
+<code>ror_id</code>, …). Indices with body text also include
+<code>snippet</code> (first ~320 chars of <code>text</code> / <code>abstract</code> / <code>biography</code>).</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># example: search_huggingface_rag(query=…, collection=&quot;models&quot;, top_k=3)</span>
+<span class="p">[</span>
+  <span class="p">{</span>
+    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;0a4f…&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="mf">0.91</span><span class="p">,</span>
+    <span class="s2">&quot;collection&quot;</span><span class="p">:</span> <span class="s2">&quot;models&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;repo_id&quot;</span><span class="p">:</span> <span class="s2">&quot;ZurichNLP/swissbert&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;author&quot;</span><span class="p">:</span> <span class="s2">&quot;ZurichNLP&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;library_name&quot;</span><span class="p">:</span> <span class="s2">&quot;transformers&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;pipeline_tag&quot;</span><span class="p">:</span> <span class="s2">&quot;fill-mask&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;downloads&quot;</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span>
+    <span class="s2">&quot;likes&quot;</span><span class="p">:</span> <span class="mi">17</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="err">…</span>
+<span class="p">]</span>
+</code></pre></div>
+<h2 id="reranker">Reranker<a class="headerlink" href="#reranker" title="Permanent link">&para;</a></h2>
+<p><code>rerank=True</code> widens the vector top-k by <code>RERANK_CANDIDATE_MULTIPLIER ×
+top_k</code> (floored at 30) and runs <code>Qwen/Qwen3-Reranker-8B</code> over the
+candidates. It's slower (one extra RCP call, hundreds of ms) but more
+precise — useful for ambiguous semantic queries, less so for exact-id
+lookups. Default off; the agent opts in.</p>
+<p>When the indexed payload doesn't carry body text (e.g. HF chunks only
+have metadata) the provider builds a synthetic doc string from
+<code>repo_id</code> + <code>library_name</code>/<code>sdk</code> so the reranker still has something to
+score against. Empty docs are replaced with a single space
+(<code>safe_rerank_documents</code>) — the reranker rejects empty inputs.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Each provider is gated by a <code>V2_&lt;INDEX&gt;_RAG_ENABLED</code> flag (all default
+<code>true</code>). The full table:</p>
+<table>
+<thead>
+<tr>
+<th>Var</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>V2_INFOSCIENCE_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables Infoscience tools</td>
+</tr>
+<tr>
+<td><code>V2_ETHZ_RESEARCH_COLLECTION_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables ETH Research Collection tools</td>
+</tr>
+<tr>
+<td><code>V2_HUGGINGFACE_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables HF Hub tool</td>
+</tr>
+<tr>
+<td><code>V2_OPENALEX_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables OpenAlex tool</td>
+</tr>
+<tr>
+<td><code>V2_ZENODO_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables Zenodo tool</td>
+</tr>
+<tr>
+<td><code>V2_ORCID_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables ORCID tool</td>
+</tr>
+<tr>
+<td><code>V2_ROR_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables ROR tool</td>
+</tr>
+<tr>
+<td><code>V2_SNSF_RAG_ENABLED</code></td>
+<td><code>true</code></td>
+<td>enables SNSF P3 tool</td>
+</tr>
+<tr>
+<td><code>INDEX_QDRANT_URL</code></td>
+<td>yaml default per index</td>
+<td>Qdrant endpoint. Inside the devcontainer use <code>http://gme-qdrant:6333</code></td>
+</tr>
+<tr>
+<td><code>INDEX_QDRANT_API_KEY</code></td>
+<td>unset</td>
+<td>Qdrant API key</td>
+</tr>
+<tr>
+<td><code>RCP_TOKEN</code></td>
+<td>required for embed/rerank</td>
+<td>EPFL RCP inference endpoint token</td>
+</tr>
+<tr>
+<td><code>INFOSCIENCE_TOKEN</code></td>
+<td>unset</td>
+<td>only for protected Infoscience read paths</td>
+</tr>
+<tr>
+<td><code>ETHZ_RESEARCH_COLLECTION_TOKEN</code></td>
+<td>unset</td>
+<td>only for protected ETH Research Collection read paths</td>
+</tr>
+</tbody>
+</table>
+<p>Construction is best-effort: missing config, unreachable Qdrant, missing
+RCP token, or a missing collection all yield <code>None</code> (or empty results)
+without raising. The rest of the v2 pipeline keeps running without RAG.</p>
+<h2 id="wiring-into-agents">Wiring into agents<a class="headerlink" href="#wiring-into-agents" title="Permanent link">&para;</a></h2>
+<p>The five non-Infoscience providers are not auto-wired to any agent — each
+agent's prompt budget is finite and adding 5 more tools to every prompt
+risks bloating the system prompt. Wire by hand inside the agent's
+<code>run()</code> method, guarded on <code>providers.&lt;field&gt;</code> being non-<code>None</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># inside e.g. git_metadata_extractor/agents/llm/article/agent.py</span>
+<span class="k">if</span> <span class="n">providers</span><span class="o">.</span><span class="n">openalex_rag</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">tools</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">make_openalex_rag_search_tool</span><span class="p">(</span><span class="n">providers</span><span class="o">.</span><span class="n">openalex_rag</span><span class="p">))</span>
+<span class="k">if</span> <span class="n">providers</span><span class="o">.</span><span class="n">zenodo_rag</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">tools</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">make_zenodo_rag_search_tool</span><span class="p">(</span><span class="n">providers</span><span class="o">.</span><span class="n">zenodo_rag</span><span class="p">))</span>
+</code></pre></div>
+<p>Recommended pairings:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Tools to add</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>article</code></td>
+<td><code>openalex_rag</code> (works), <code>zenodo_rag</code>, <code>renkulab_rag</code>, <code>epfl_graph_rag</code> (discipline tagging)</td>
+</tr>
+<tr>
+<td><code>person</code></td>
+<td><code>orcid_rag</code>, <code>openalex_rag</code> (authors), <code>epfl_graph_rag</code> (researcher → primary discipline)</td>
+</tr>
+<tr>
+<td><code>organization</code></td>
+<td><code>ror_rag</code>, <code>huggingface_rag</code> (orgs), <code>openalex_rag</code> (institutions), <code>renkulab_rag</code> (groups), <code>epfl_graph_rag</code> (lab/unit → primary discipline)</td>
+</tr>
+<tr>
+<td><code>repository</code></td>
+<td><code>huggingface_rag</code> (models/datasets), <code>renkulab_rag</code> (projects), <code>epfl_graph_rag</code> (README → discipline)</td>
+</tr>
+<tr>
+<td><code>contribution</code>, <code>membership</code></td>
+<td>(none — pure linking agents)</td>
+</tr>
+</tbody>
+</table>
+<p>Infoscience and ETH Research Collection are already wired into article /
+person / organization agents (the two DSpace-based institutional
+repositories cover EPFL + ETHZ outputs respectively).</p>
+<h2 id="federated-tools-picking-up-eth-rc-alongside-everything-else">Federated tools — picking up ETH RC alongside everything else<a class="headerlink" href="#federated-tools-picking-up-eth-rc-alongside-everything-else" title="Permanent link">&para;</a></h2>
+<p><code>search_federated_rag</code> is the LLM-facing wrapper over <code>FederatedRagProvider</code>.
+It fans out to every adapter that's loaded — including the ETH Research
+Collection one — and returns one merged hit list:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># What the LLM sees in the tool response</span>
+<span class="p">{</span>
+  <span class="s2">&quot;hits&quot;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span><span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="s2">&quot;huggingface&quot;</span><span class="p">,</span> <span class="s2">&quot;entity_type&quot;</span><span class="p">:</span> <span class="s2">&quot;model&quot;</span><span class="p">,</span>
+     <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;ZurichNLP/swissbert&quot;</span><span class="p">,</span> <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="mf">0.87</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;ZurichNLP/swissbert&quot;</span><span class="p">,</span>
+     <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="s2">&quot;https://huggingface.co/ZurichNLP/swissbert&quot;</span><span class="p">,</span> <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">}},</span>
+    <span class="p">{</span><span class="s2">&quot;index&quot;</span><span class="p">:</span> <span class="s2">&quot;ethz_research_collection&quot;</span><span class="p">,</span> <span class="s2">&quot;entity_type&quot;</span><span class="p">:</span> <span class="s2">&quot;chunk&quot;</span><span class="p">,</span>
+     <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;941936d3-…&quot;</span><span class="p">,</span> <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="mf">0.85</span><span class="p">,</span>
+     <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="s2">&quot;first 200 chars of the chunk text&quot;</span><span class="p">,</span>
+     <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;article_uuid&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="s2">&quot;chunk_index&quot;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span> <span class="o">...</span><span class="p">}},</span>
+    <span class="o">...</span>
+  <span class="p">],</span>
+  <span class="s2">&quot;by_index&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;huggingface&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;ethz_research_collection&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+               <span class="s2">&quot;infoscience&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;openalex&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>
+  <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="p">{},</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Restrict the fan-out with <code>indices=[…]</code> when the agent already knows where
+to look — e.g. <code>["ethz_research_collection", "infoscience"]</code> to query the
+two DSpace-based institutional repositories side by side. Cross-index
+identifier resolution (<code>lookup_entity_federated</code>) recognises ETH RC
+handles (<code>20.500.11850/...</code>) and full <code>research-collection.ethz.ch</code> URLs.</p>
+<h2 id="telemetry">Telemetry<a class="headerlink" href="#telemetry" title="Permanent link">&para;</a></h2>
+<p>Each tool call records a <code>record_query(service="&lt;index&gt;.rag.search.&lt;collection&gt;", query=…)</code> entry on the per-request <code>QueryLog</code>. The
+log is written to <code>${V2_QUERY_LOG_DIR}/${run_id}.json</code> at the end of
+<code>/v2/extract</code>. Useful for measuring which indices the agents actually
+reach for. The federated tool emits <code>federated.rag.search</code> /
+<code>federated.rag.lookup</code> so you can distinguish a fan-out call from the
+per-index calls each adapter makes downstream.</p>
+<h2 id="adding-a-new-index">Adding a new index<a class="headerlink" href="#adding-a-new-index" title="Permanent link">&para;</a></h2>
+<p>The shape every provider needs to satisfy:</p>
+<ol>
+<li><strong>Wrap a Qdrant store</strong> — anything with a <code>search(collection, *,
+   query_vector, top_k, ...)</code> method works.</li>
+<li><strong>Wrap an embedder</strong> — async callable returning <code>list[float]</code> for one
+   query.</li>
+<li><strong>Optional reranker</strong> — async callable returning <code>list[{index,
+   relevance_score}]</code>.</li>
+<li><strong>Define a <code>_ALLOWED_FILTER_KEYS</code> frozenset</strong> — anything not in here
+   is dropped with a warning.</li>
+<li><strong>Define a per-collection <code>_THIN_KEYS</code></strong> tuple — fields copied from
+   the Qdrant payload into the LLM-facing hit.</li>
+<li><strong>Use <code>_rag_helpers</code></strong> for <code>filter_allowlist</code>,
+   <code>to_simple_filter_payload</code>, <code>expand_candidate_k</code>,
+   <code>apply_rerank_indices</code>, <code>safe_rerank_documents</code>, <code>make_snippet</code>,
+   <code>thin_payload</code>, <code>env_enabled</code>. Avoid re-implementing.</li>
+<li><strong>Provide <code>build_default_provider()</code></strong> gated by <code>env_enabled("V2_&lt;INDEX&gt;_RAG_ENABLED")</code> and best-effort (return <code>None</code> on any error).</li>
+<li><strong>Wire into <code>ProviderSet</code></strong> (<code>git_metadata_extractor/agents/models.py:168</code>) and
+   <code>dependencies.py:_resolve_rag_provider</code>.</li>
+<li><strong>Export the tool factory</strong> from <code>git_metadata_extractor/agents/llm/agent_tools/__init__.py</code>.</li>
+</ol>
+<p><code>git_metadata_extractor/providers/zenodo_rag.py</code> is the simplest reference (single
+collection, reuses OpenAlex's clients, ~150 lines).</p>
+<h2 id="code-map">Code map<a class="headerlink" href="#code-map" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>git_metadata_extractor/providers/
+  _rag_helpers.py            # filter allowlist / operator translation /
+                              # candidate expansion / rerank reorder /
+                              # snippet truncation / env toggle
+  infoscience_rag.py         # search + fetch_chunks + fetch_records
+  ethz_research_collection_rag.py  # search + fetch_chunks + fetch_records
+                                    # (sister DSpace index to infoscience)
+  huggingface_rag.py         # search + lineage (models/datasets/spaces/orgs)
+  openalex_rag.py            # search (6 entity collections)
+  zenodo_rag.py              # search + fetch_records
+  orcid_rag.py               # search (persons/employments/educations)
+  ror_rag.py                 # search (4 scope modes; country_code only)
+  github_rag.py              # search (Swiss/EPFL repo seed)
+  snsf_rag.py                # search (grants + people + institutions)
+  renkulab_rag.py            # search (projects/groups/users/data_connectors)
+  swissubase_rag.py          # search (studies/datasets/persons/institutions)
+  epfl_graph_rag.py          # search (EPFL discipline ontology)
+  federated_rag.py           # search + lookup; fans out to every adapter
+
+git_metadata_extractor/agents/llm/agent_tools/
+  infoscience_rag.py         # 3 tools
+  ethz_research_collection_rag.py  # 3 tools (search + fetch_chunks + fetch_records)
+  huggingface_rag.py         # 1 tool (+ lineage helper)
+  openalex_rag.py            # 1 tool
+  zenodo_rag.py              # 2 tools (search + fetch_records)
+  orcid_rag.py               # 1 tool
+  ror_rag.py                 # 1 tool
+  github_rag.py              # 1 tool
+  snsf_rag.py                # 1 tool
+  renkulab_rag.py            # 1 tool
+  swissubase_rag.py          # 1 tool
+  epfl_graph_rag.py          # 1 tool
+  federated_rag.py           # 2 tools (search_federated_rag + lookup_entity_federated)
+
+git_metadata_extractor/dependencies.py       # _resolve_rag_provider + ProviderSet builder
+git_metadata_extractor/agents/models.py      # ProviderSet (12 per-index *_rag fields + federated_rag)
+</code></pre></div>
+<h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/v2/test_llm_rag_helpers.py</code></td>
+<td><code>_rag_helpers</code> (filter allowlist, operator translation, candidate expansion, rerank reorder, snippet, thin payload).</td>
+</tr>
+<tr>
+<td><code>tests/v2/test_llm_infoscience_rag_tool.py</code></td>
+<td>Infoscience search/fetch flows + tool factories.</td>
+</tr>
+<tr>
+<td><code>tests/v2/test_llm_ethz_research_collection_rag_tool.py</code></td>
+<td>ETH Research Collection search/fetch flows + tool factories.</td>
+</tr>
+<tr>
+<td><code>tests/v2/test_llm_huggingface_rag_tool.py</code></td>
+<td>HF collection routing, allowlist, missing-collection skip, rerank reorder.</td>
+</tr>
+<tr>
+<td><code>tests/v2/test_llm_other_rag_tools.py</code></td>
+<td>OpenAlex, Zenodo, ORCID, ROR — including ROR's country-only filter and graceful empty on missing collections.</td>
+</tr>
+</tbody>
+</table>
+<p>Tests use fake stores / embedders / rerankers and never hit Qdrant or
+RCP — fast and deterministic.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
+      
+        <script src="../assets/javascripts/mermaid-init.js"></script>
+      
+    
+  </body>
+</html>

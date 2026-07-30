@@ -8,28 +8,28 @@
       
       
       
-        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/architecture/design-notes/">
+        <link rel="canonical" href="https://imaging-plaza.github.io/git-metadata-extractor/dev/migration-v1-to-v2/">
       
       
-        <link rel="prev" href="../../cross-repo-contract/">
+        <link rel="prev" href="../repository-enrichment-fields/">
       
       
-        <link rel="next" href="../../v2-api-reference/">
+        <link rel="next" href="../OPERATIONS_RUNBOOK/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Design Notes - Git Metadata Extractor Documentation</title>
+        <title>Migration V1 to V2 - Git Metadata Extractor Documentation</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -48,7 +48,7 @@
       
     
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#design-notes" class="md-skip">
+        <a href="#migration-guide-v1-to-v2" class="md-skip">
           Skip to content
         </a>
       
@@ -86,7 +86,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Git Metadata Extractor Documentation" class="md-header__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-header__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Design Notes
+              Migration V1 to V2
             
           </span>
         </div>
@@ -196,7 +196,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Git Metadata Extractor Documentation" class="md-nav__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
+    <a href=".." title="Git Metadata Extractor Documentation" class="md-nav__button md-logo" aria-label="Git Metadata Extractor Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -226,7 +226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -253,7 +253,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -277,8 +277,6 @@
       
   
   
-    
-  
   
   
     
@@ -291,11 +289,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -316,7 +314,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -334,7 +332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+      <a href="../architecture/overview/" class="md-nav__link">
         
   
   
@@ -362,7 +360,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../v2-pipeline/" class="md-nav__link">
+      <a href="../v2-pipeline/" class="md-nav__link">
         
   
   
@@ -390,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cross-repo-contract/" class="md-nav__link">
+      <a href="../cross-repo-contract/" class="md-nav__link">
         
   
   
@@ -398,6 +396,179 @@
     
   
     Cross-Repo Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v2-api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V2 API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-and-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API and CLI Quick Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-enrichment-fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Enrichment Fields
   
 
     
@@ -434,7 +605,7 @@
   <span class="md-ellipsis">
     
   
-    Design Notes
+    Migration V1 to V2
   
 
     
@@ -452,7 +623,7 @@
   <span class="md-ellipsis">
     
   
-    Design Notes
+    Migration V1 to V2
   
 
     
@@ -478,10 +649,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#component-architecture" class="md-nav__link">
+  <a href="#coexistence-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Component architecture
+        Coexistence Model
       
     </span>
   </a>
@@ -489,10 +660,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-extract-sequence" class="md-nav__link">
+  <a href="#authentication-applies-to-v1-and-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        V2 extract sequence
+        Authentication (applies to v1 and v2)
       
     </span>
   </a>
@@ -500,10 +671,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-cache-topology" class="md-nav__link">
+  <a href="#endpoint-mapping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline cache topology
+        Endpoint Mapping
       
     </span>
   </a>
@@ -511,10 +682,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rag-index-architecture" class="md-nav__link">
+  <a href="#copy-paste-migration-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RAG index architecture
+        Copy-Paste Migration Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Copy-Paste Migration Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-json-ld-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository JSON-LD extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repository-json-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository JSON extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-format-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Format Differences
       
     </span>
   </a>
@@ -522,10 +732,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
+  <a href="#newrelevant-v2-environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Notes
+        New/Relevant V2 Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breakingbehavior-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking/Behavior Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecation-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecation Timeline
       
     </span>
   </a>
@@ -536,177 +768,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Use the API
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Use the API
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../v2-api-reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    V2 API Reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../api-and-cli/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    API and CLI Quick Reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../repository-enrichment-fields/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Repository Enrichment Fields
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../migration-v1-to-v2/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migration V1 to V2
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -778,7 +839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../OPERATIONS_RUNBOOK/" class="md-nav__link">
+      <a href="../OPERATIONS_RUNBOOK/" class="md-nav__link">
         
   
   
@@ -865,7 +926,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../v2-rag-tools/" class="md-nav__link">
+      <a href="../v2-rag-tools/" class="md-nav__link">
         
   
   
@@ -893,7 +954,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concept-tagging/" class="md-nav__link">
+      <a href="../concept-tagging/" class="md-nav__link">
         
   
   
@@ -980,7 +1041,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../releases/ontology-v3.0.0/" class="md-nav__link">
+      <a href="../releases/ontology-v3.0.0/" class="md-nav__link">
         
   
   
@@ -1008,7 +1069,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../releases/json-schemas/" class="md-nav__link">
+      <a href="../releases/json-schemas/" class="md-nav__link">
         
   
   
@@ -1095,7 +1156,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ROADMAP/" class="md-nav__link">
+      <a href="../ROADMAP/" class="md-nav__link">
         
   
   
@@ -1130,7 +1191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../archive/" class="md-nav__link">
+      <a href="../archive/" class="md-nav__link">
         
   
   
@@ -1177,10 +1238,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#component-architecture" class="md-nav__link">
+  <a href="#coexistence-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Component architecture
+        Coexistence Model
       
     </span>
   </a>
@@ -1188,10 +1249,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-extract-sequence" class="md-nav__link">
+  <a href="#authentication-applies-to-v1-and-v2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        V2 extract sequence
+        Authentication (applies to v1 and v2)
       
     </span>
   </a>
@@ -1199,10 +1260,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pipeline-cache-topology" class="md-nav__link">
+  <a href="#endpoint-mapping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pipeline cache topology
+        Endpoint Mapping
       
     </span>
   </a>
@@ -1210,10 +1271,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rag-index-architecture" class="md-nav__link">
+  <a href="#copy-paste-migration-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RAG index architecture
+        Copy-Paste Migration Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Copy-Paste Migration Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-json-ld-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository JSON-LD extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repository-json-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository JSON extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-format-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Format Differences
       
     </span>
   </a>
@@ -1221,10 +1321,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
+  <a href="#newrelevant-v2-environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Notes
+        New/Relevant V2 Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breakingbehavior-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking/Behavior Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecation-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecation Timeline
       
     </span>
   </a>
@@ -1251,191 +1373,128 @@
   
 
 
-<h1 id="design-notes">Design Notes<a class="headerlink" href="#design-notes" title="Permanent link">&para;</a></h1>
-<p>This page documents the current runtime architecture (<code>v2.0.0+</code>).</p>
-<h2 id="component-architecture">Component architecture<a class="headerlink" href="#component-architecture" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>flowchart TB
-    subgraph Client
-        C1[HTTP client / batch script]
-    end
-
-    subgraph API[FastAPI app — git_metadata_extractor/app.py]
-        A1[v2_router&lt;br/&gt;git_metadata_extractor/api/_router.py]
-        A2[Request logging&lt;br/&gt;AsyncRequestContext]
-    end
-
-    subgraph Pipeline[V2 pipeline — git_metadata_extractor/pipeline/]
-        P0[orchestrator]
-        P1[stages/* — 23 stages]
-        P2[per-entity agents&lt;br/&gt;git_metadata_extractor/agents/llm/* + rule_based/*]
-    end
-
-    subgraph Caches[Shared SQLite — V2_PROVIDER_CACHE_PATH]
-        K1[Provider cache]
-        K2[Agent verdict cache]
-        K3[Pipeline response cache]
-        K4[Async-job store]
-    end
-
-    subgraph Providers[git_metadata_extractor/providers/]
-        PG[GitHub REST + GIMIE]
-        PR[ROR / ORCID / Infoscience]
-        PRAG[*_rag — Qdrant-backed]
-    end
-
-    subgraph RAG[RAG indices — open_pulse_sources library / service]
-        RH[HuggingFace]
-        ROA[OpenAlex]
-        RI[Infoscience]
-        RE[ETHZ Research Collection]
-        RO[ORCID]
-        RR[ROR]
-        RZ[Zenodo]
-        RG[GitHub]
-        RS[SNSF]
-        RFED[Federated layer]
-    end
-
-    subgraph External
-        GH[GitHub API]
-        IS[Infoscience API]
-        ORID[ORCID API]
-        ROR[ROR API]
-        SEL[Selenium grid]
-        LLM[LLM provider&lt;br/&gt;RCP / OpenAI / OpenRouter]
-        QD[(Qdrant&lt;br/&gt;gme-qdrant:6333)]
-        RCP[EPFL RCP&lt;br/&gt;embed + rerank]
-    end
-
-    C1 --&gt; A2 --&gt; A1
-    A1 --&gt; P0
-    P0 --&gt; P1
-    P1 --&gt; P2
-    P2 --&gt; Providers
-    Providers --&gt; Caches
-    PG --&gt; GH
-    PR --&gt; IS
-    PR --&gt; ORID
-    PR --&gt; ROR
-    PRAG --&gt; RFED
-    PRAG --&gt; RH
-    PRAG --&gt; ROA
-    PRAG --&gt; RI
-    PRAG --&gt; RE
-    PRAG --&gt; RO
-    PRAG --&gt; RR
-    PRAG --&gt; RZ
-    RAG --&gt; QD
-    RAG --&gt; RCP
-    P1 --&gt; SEL
-    P2 --&gt; LLM</code></pre>
-<h2 id="v2-extract-sequence">V2 extract sequence<a class="headerlink" href="#v2-extract-sequence" title="Permanent link">&para;</a></h2>
-<pre class="mermaid"><code>sequenceDiagram
-    autonumber
-    participant Client
-    participant API as /v2/extract
-    participant Cache as ProviderCache (SQLite)
-    participant Orch as Pipeline orchestrator
-    participant Agents as Per-entity agents (LLM or rule-based)
-    participant RAG as RAG providers + Qdrant
-    participant Ext as External APIs (GitHub / ROR / ORCID / Infoscience / Selenium)
-
-    Client-&gt;&gt;API: GET or POST /v2/extract
-    API-&gt;&gt;Cache: pipeline-cache lookup (full response)
-    alt pipeline cache hit
-        Cache--&gt;&gt;API: V2ExtractResponse
-        API--&gt;&gt;Client: response
-    else miss
-        API-&gt;&gt;Orch: run pipeline
-        Orch-&gt;&gt;Ext: classify_url + gather_context (GIMIE + GitHub REST)
-        Orch-&gt;&gt;Cache: provider-cache lookup / store
-        Orch-&gt;&gt;Agents: context_summary → per-entity fan-out
-        Agents-&gt;&gt;Cache: agent-verdict cache lookup
-        alt verdict miss
-            Agents-&gt;&gt;RAG: search_*_rag / lookup_*_rag (optional)
-            RAG--&gt;&gt;Agents: thin hits
-            Agents-&gt;&gt;Cache: store verdict
-        end
-        Orch-&gt;&gt;Orch: dedup → reconcile → critic → strict → assemble
-        Orch-&gt;&gt;Ext: link_veracity (Selenium fetch + LLM verdict)
-        Orch-&gt;&gt;Orch: ownership + org-hierarchy inference
-        Orch-&gt;&gt;Orch: build_jsonld_output
-        Orch-&gt;&gt;Cache: store pipeline response
-        Orch--&gt;&gt;API: V2ExtractResponse
-        API--&gt;&gt;Client: response
-    end</code></pre>
-<p>For async submission (<code>POST /v2/extract</code>), the API persists a job record
-into the same SQLite under the <code>v2-extract-job</code> namespace and runs the
-pipeline as a background task. Clients poll <code>GET /v2/jobs/{job_id}</code>.</p>
-<h2 id="pipeline-cache-topology">Pipeline cache topology<a class="headerlink" href="#pipeline-cache-topology" title="Permanent link">&para;</a></h2>
-<p>Three caches share a single SQLite DB (path: <code>V2_PROVIDER_CACHE_PATH</code>):</p>
-<ol>
-<li><strong>Provider cache</strong> — gimie payloads, GitHub REST responses, ROR /
-   ORCID / Infoscience hits. Deterministic, content-addressed.</li>
-<li><strong>Agent verdict cache</strong> — LLM agent results keyed on agent name +
-   identity. Skips a repeat LLM call for a known-good payload.</li>
-<li><strong>Pipeline cache</strong> — full <code>/v2/extract</code> response for a given source URL.</li>
-</ol>
-<p>The async-job store also lives in this SQLite (separate namespace, same
-TTL). Set <code>V2_PROVIDER_CACHE_PATH</code> to a different file per run profile
-(e.g. <code>.cache/v2-rule-based/providers.db</code> for rule-based runs) to keep
-them isolated and independently invalidatable.</p>
-<h2 id="rag-index-architecture">RAG index architecture<a class="headerlink" href="#rag-index-architecture" title="Permanent link">&para;</a></h2>
-<p>The index layer lives in the
-<a href="https://github.com/sdsc-ordes/open-pulse-sources">open-pulse-sources</a>
-repo (this service imports its read side as the <code>open_pulse_sources</code>
-library). Each index under <code>open_pulse_sources/index/&lt;name&gt;/</code> is
-independent: its own DuckDB, its own Qdrant collections, its own CLI, its
-own refresh cadence. The federated layer
-(<code>open_pulse_sources/index/_federated/</code>) never shares state — it just
-orchestrates fan-out across registered adapters in a
-<code>ThreadPoolExecutor</code>.</p>
-<pre class="mermaid"><code>flowchart LR
-    Src[upstream API&lt;br/&gt;HF / OA / IS / …] --&gt; ING[ingest CLI&lt;br/&gt;just &lt;prefix&gt;-ingest]
-    ING --&gt; DB[(DuckDB&lt;br/&gt;data/index/&lt;name&gt;/duckdb/)]
-    DB --&gt; EMB[embed CLI&lt;br/&gt;just &lt;prefix&gt;-embed]
-    EMB --&gt; RCPq[RCP /v1/embeddings]
-    RCPq --&gt; QD[(Qdrant&lt;br/&gt;gme-qdrant:6333)]
-    DB --&gt; Q[just &lt;prefix&gt;-query]
-    QD --&gt; S[just &lt;prefix&gt;-search]
-    S --&gt; RR[RCP /v1/rerank]
-    RR --&gt; Out[ranked hits]
-
-    subgraph FED[Federated layer]
-        ADAP[adapters/&lt;name&gt;.py]
-    end
-    DB -.-&gt; ADAP
-    QD -.-&gt; ADAP
-    ADAP --&gt; GME[gme-search / gme-entity CLI&lt;br/&gt;open-pulse-sources repo]
-    ADAP --&gt; RAGTOOL[v2 LLM RAG tools]</code></pre>
-<p>Shared infrastructure (post-2026-05-01 pattern):</p>
+<h1 id="migration-guide-v1-to-v2">Migration Guide: V1 to V2<a class="headerlink" href="#migration-guide-v1-to-v2" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>The v1 API was REMOVED in 3.0.0</strong> (the repo-split release): <code>/v1/*</code>
+routes now return 404. This guide is kept as the endpoint mapping for
+consumers migrating off the removed surface. Sections describing
+"coexistence" are historical.</p>
+</blockquote>
+<h2 id="coexistence-model">Coexistence Model<a class="headerlink" href="#coexistence-model" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Storage</strong>: DuckDB at <code>data/index/&lt;name&gt;/duckdb/&lt;name&gt;.duckdb</code> —
-  canonical records + <code>chunks</code> ledger (one row per Qdrant point).</li>
-<li><strong>Vector store</strong>: Qdrant — per-index collections, cosine distance,
-  4096-dim vectors.</li>
-<li><strong>Embeddings</strong>: <code>Qwen/Qwen3-Embedding-8B</code> on EPFL RCP, instruction-aware.</li>
-<li><strong>Reranker</strong>: <code>Qwen/Qwen3-Reranker-8B</code> on EPFL RCP.</li>
-<li><strong>Chunking</strong>: token-aware sliding window via <code>tiktoken</code> (<code>cl100k_base</code>).</li>
-<li><strong>Auth</strong>: <code>RCP_TOKEN</code> (required); per-index source tokens (<code>HF_TOKEN</code>,
-  <code>GME_GITHUB_TOKEN</code>, <code>INFOSCIENCE_TOKEN</code>, …) where the upstream API requires
-  them.</li>
+<li>v1 endpoints remain mounted under <code>/v1/...</code>.</li>
+<li>v2 endpoints are mounted under <code>/v2/...</code>.</li>
+<li>v2 does not require v1 route changes and can be adopted per client.</li>
 </ul>
-<p>The <code>ror</code> index is a partial outlier (no DuckDB layer; flat catalog of
-orgs in Qdrant + a JSONL dump for lexical lookup).</p>
-<p>See <a href="https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md">RAG Indices Overview</a> for the full inventory and
-per-index quickstarts.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<h2 id="authentication-applies-to-v1-and-v2">Authentication (applies to v1 and v2)<a class="headerlink" href="#authentication-applies-to-v1-and-v2" title="Permanent link">&para;</a></h2>
+<p>Both v1 and v2 routes are now bearer-protected. Every <code>/v1/*</code> route, plus
+<code>/v2/extract</code> and <code>/v2/jobs/{id}</code>, requires:</p>
+<div class="highlight"><pre><span></span><code><span class="err">Authorization: Bearer &lt;API_TOKEN&gt;</span>
+</code></pre></div>
+<p><code>/</code>, <code>/docs</code>, and <code>/v2/health</code> stay open. See
+<a href="../v2-api-reference/#authentication">v2-api-reference.md#authentication</a>
+for failure modes (401 / 503).</p>
+<p>If you're migrating an existing v1 client, you must add the bearer header
+<strong>before</strong> switching to v2 — otherwise the v1 client will already be
+returning 401 against the new server.</p>
+<h2 id="endpoint-mapping">Endpoint Mapping<a class="headerlink" href="#endpoint-mapping" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>V1 usage</th>
+<th>V2 equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /v1/repository/llm/json-ld/{full_path}</code></td>
+<td><code>GET /v2/extract/{full_path}?output_format=jsonld</code></td>
+</tr>
+<tr>
+<td><code>GET /v1/repository/llm/json/{full_path}</code></td>
+<td><code>GET /v2/extract/{full_path}?output_format=json</code></td>
+</tr>
+<tr>
+<td><code>GET /v1/repository/gimie/json-ld/{full_path}</code></td>
+<td><code>GET /v2/extract/{full_path}?output_format=jsonld</code></td>
+</tr>
+<tr>
+<td><code>GET /v1/user/llm/json/{full_path}</code></td>
+<td><code>GET /v2/extract/{full_path}?output_format=json</code> (user URL)</td>
+</tr>
+<tr>
+<td><code>GET /v1/org/llm/json/{full_path}</code></td>
+<td><code>GET /v2/extract/{full_path}?output_format=json</code> (org URL)</td>
+</tr>
+<tr>
+<td>n/a</td>
+<td><code>POST /v2/extract</code> (async) + <code>GET /v2/jobs/{id}</code></td>
+</tr>
+<tr>
+<td>n/a</td>
+<td><code>GET /v2/health</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="copy-paste-migration-examples">Copy-Paste Migration Examples<a class="headerlink" href="#copy-paste-migration-examples" title="Permanent link">&para;</a></h2>
+<h3 id="repository-json-ld-extraction">Repository JSON-LD extraction<a class="headerlink" href="#repository-json-ld-extraction" title="Permanent link">&para;</a></h3>
+<p>V1:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v1/repository/llm/json-ld/https://github.com/octocat/Hello-World&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<p>V2:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=jsonld&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h3 id="repository-json-extraction">Repository JSON extraction<a class="headerlink" href="#repository-json-extraction" title="Permanent link">&para;</a></h3>
+<p>V1:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v1/repository/llm/json/https://github.com/octocat/Hello-World&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<p>V2:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$API_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;http://localhost:1234/v2/extract/github.com/octocat/Hello-World?output_format=json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<h2 id="response-format-differences">Response Format Differences<a class="headerlink" href="#response-format-differences" title="Permanent link">&para;</a></h2>
 <ul>
-<li>The legacy v1 pipeline was removed in 3.0.0 (<code>/v1/*</code> routes return 404).</li>
-<li>Internal pipeline metadata fields whose names start with <code>_</code> are
-  stripped before strict validation, JSON-LD output, and any external
-  artefact. Never expose <code>_</code>-prefixed fields in API responses.</li>
-<li><code>identifiers.uuid</code> on every entity is server-generated
-  (<code>git_metadata_extractor/agents/models.py::generate_uuid()</code>); the LLM never controls it.</li>
-<li>See <a href="../../v2-api-reference/">V2 API Reference</a> for the full 23-stage
-  pipeline and gating rules.</li>
+<li>v1 repository endpoints return <code>APIOutput</code> (<code>link</code>, <code>output</code>, <code>cached</code>).</li>
+<li>v2 extract returns <code>V2ExtractResponse</code> (<code>source_url</code>, <code>detected_type</code>,
+  <code>output_format</code>, <code>output</code>, <code>warnings</code>, <code>stats</code>, optional
+  <code>context_summary_markdown</code>).</li>
+<li>v2 also offers an <strong>async</strong> submission flow (<code>POST /v2/extract</code> →
+  <code>GET /v2/jobs/{id}</code>); the job record carries the same response payload
+  in its <code>result</code> field once <code>status == "completed"</code>.</li>
 </ul>
+<h2 id="newrelevant-v2-environment-variables">New/Relevant V2 Environment Variables<a class="headerlink" href="#newrelevant-v2-environment-variables" title="Permanent link">&para;</a></h2>
+<p>See <a href="../v2-api-reference/#v2-environment-variables">V2 API Reference — V2 Environment Variables</a>
+for the full list. Notable additions vs. v1:</p>
+<ul>
+<li><code>API_TOKEN</code> (required) — bearer token guarding both v1 and v2 routes;
+  missing → 503.</li>
+<li><code>V2_AGENT_RUNTIME_DEFAULT</code> (default <code>llm</code>) — runtime selector.</li>
+<li><code>V2_USE_MOCK_PROVIDERS</code> (default <code>true</code>) — set <code>false</code> in production.</li>
+<li><code>V2_PROVIDER_CACHE_*</code> — shared provider + verdict + pipeline + job-store cache.</li>
+<li><code>V2_&lt;INDEX&gt;_RAG_ENABLED</code> — toggle each RAG tool family.</li>
+<li><code>INDEX_QDRANT_URL</code> — Qdrant endpoint for the RAG indices.</li>
+<li><code>GME_GITHUB_TOKEN</code> — required for healthy provider preflight (same as v1).</li>
+</ul>
+<h2 id="breakingbehavior-changes">Breaking/Behavior Changes<a class="headerlink" href="#breakingbehavior-changes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>V2 response envelopes are not shape-identical to v1 responses.</li>
+<li>V2 introduces run-scoped stats and optional intermediates payloads.</li>
+<li>V2 canonicalization and reconciliation pipelines are stricter than v1 heuristics.</li>
+</ul>
+<h2 id="deprecation-timeline">Deprecation Timeline<a class="headerlink" href="#deprecation-timeline" title="Permanent link">&para;</a></h2>
+<ul>
+<li>March 31, 2026: v1 marked as deprecated in docs and release notes.</li>
+<li>June 30, 2026: v1 feature freeze; only critical bug fixes.</li>
+<li>September 30, 2026 (target <code>v3.0.0</code>): v1 endpoints removed.</li>
+</ul>
+<p>If timeline dates move, update this document and <code>CHANGELOG.md</code> in the same release.</p>
 
 
 
@@ -1485,14 +1544,14 @@ per-index quickstarts.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "navigation.sections"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
       
-        <script src="../../assets/javascripts/mermaid-init.js"></script>
+        <script src="../assets/javascripts/mermaid-init.js"></script>
       
     
   </body>
