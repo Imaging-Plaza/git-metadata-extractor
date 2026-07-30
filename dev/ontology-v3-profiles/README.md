@@ -181,6 +181,12 @@ the exact GME field names in [`field-mapping.md`](field-mapping.md#unmapped--gap
    / crates / RubyGems. The ontology has no artifact, package or release
    concept, so "this repo ships as `pypi:gimie`" has nowhere to go. This is the
    single biggest gap — it is how software actually gets *used*.
+
+   **It also blocks a dependency term they just added.** `pulse:dependsOn` is
+   typed repository → repository, but our dependency data is an SPDX SBOM of
+   *package* coordinates (`pypi:requests@2.31`). There is no lossless way to
+   emit `dependsOn` without a package node. Detail and options:
+   [`dependencies-and-dependents.md`](dependencies-and-dependents.md).
 2. **Container artifacts and deployment topology.** `_docker_hub_url`,
    `_container_images`, `_compose_files`, `_compose_images`,
    `_compose_image_urls`. Only `pulse:externalReference` comes close, and it is

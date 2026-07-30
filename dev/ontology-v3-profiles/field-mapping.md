@@ -63,7 +63,8 @@ node.
 | `_funding_urls` | `pulse:fundingConfig` | |
 | `_citation_cff_url`, `_citation_cff` | `schema:citation` | already emitted |
 | README | `pulse:readme` | also HF model/dataset cards |
-| dependents/dependencies | `pulse:dependencyCount`, `pulse:dependentCount`, `pulse:dependsOn`, `pulse:dependencyOf` | we scrape dependents (`tests/v2/fixtures/github/dependents/`) — good match |
+| SBOM packages / scraped dependents | `pulse:dependencyCount`, `pulse:dependentCount`, `pulse:dependencyOf` | collected but never emitted — see [dependencies-and-dependents.md](dependencies-and-dependents.md) |
+| — | `pulse:dependsOn` | **does not map**: range is a repository, our dependency data is package-shaped |
 | `_is_template` | `pulse:isTemplate` | |
 | `pulse:githubRepoStars` / `Forks` (emitted) | `pulse:repositoryStars` / `pulse:repositoryForks` | rename |
 | `pulse:githubRepositoryHandle` (emitted) | `pulse:repositoryHandle` | rename |
