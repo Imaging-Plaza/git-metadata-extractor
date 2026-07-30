@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.v2.agents.llm import (
+from git_metadata_extractor.agents.llm import (
     LLMArticleAgentV2,
     LLMContributionAgentV2,
     LLMLinkVeracityAgentV2,
@@ -11,7 +11,7 @@ from src.v2.agents.llm import (
     LLMPersonAgentV2,
     LLMRepositoryAgentV2,
 )
-from src.v2.agents.rule_based import (
+from git_metadata_extractor.agents.rule_based import (
     ArticleAgentV2,
     ContributionAgentV2,
     MembershipAgentV2,
@@ -21,7 +21,7 @@ from src.v2.agents.rule_based import (
 )
 
 if TYPE_CHECKING:
-    from src.v2.agents.contracts import RuntimeAgent
+    from git_metadata_extractor.agents.contracts import RuntimeAgent
 
 
 def _assert_runtime_agent_shape(agent: RuntimeAgent) -> None:

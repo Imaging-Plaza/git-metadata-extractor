@@ -5,11 +5,11 @@ from typing import Any, Callable
 
 from jsonschema import validate
 
-from src.v2.agents import OrganizationAgentV2, ProviderSet
-from src.v2.ingest.providers.base import GitHubProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_ror import MockRORProvider
+from git_metadata_extractor.agents import OrganizationAgentV2, ProviderSet
+from git_metadata_extractor.providers.base import GitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_ror import MockRORProvider
 
 
 class _FailingGitHubProvider(GitHubProvider):
@@ -106,7 +106,7 @@ def test_organization_agent_falls_back_when_ror_is_unavailable() -> None:
 
     assert result.warnings
     assert result.data["idSource"] == "pulse:githubOrganizationHandle"
-    assert result.data["id"] == "github"
+    assert result.data["id"] == "https://github.com/github"
 
 
 def test_organization_agent_populates_unit_relationships_from_ror_hierarchy() -> None:

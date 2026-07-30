@@ -15,7 +15,7 @@ LLM refiners receive. We pin the contract:
 
 from __future__ import annotations
 
-from src.v2.pipeline.stages.refine_with_llm import (
+from git_metadata_extractor.pipeline.stages.refine_with_llm import (
     AUX_FILE_CONTEXT_MAX_CHARS,
     _build_repo_context_summary,
 )

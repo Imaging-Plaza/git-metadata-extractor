@@ -14,14 +14,14 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents.llm.refiners.ror_parent.agent import (
+from git_metadata_extractor.agents.llm.refiners.ror_parent.agent import (
     MIN_SELECTION_CONFIDENCE,
     RorCandidate,
     RorParentSelectorAgent,
     RorParentSelectorInput,
     RorParentSelectorPatch,
 )
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
 
 _EPFL_ROR = "https://ror.org/02s376052"
 _NCAR_ROR = "https://ror.org/05cvfcr44"

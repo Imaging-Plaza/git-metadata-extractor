@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.module.dependents.scraper import (
+from open_pulse_sources.module.dependents.scraper import (
     build_dependents_url,
     iterate_dependents,
     parse_dependents_page,

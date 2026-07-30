@@ -21,6 +21,10 @@ services:
       # Avoid ~/.cache/uv (often root-owned after sshd/common-utils); workspace is bind-mounted as vscode.
       UV_CACHE_DIR: /workspaces/project/.uv-cache
       SELENIUM_REMOTE_URL: ${SELENIUM_REMOTE_URL:-http://gme-selenium-firefox:4444}
+      # GIMIE runs as the gme-gimie-api sidecar (the `gimie` Python dep was
+      # removed). Required for repository extraction — unset → in-process gimie,
+      # which is no longer installed (RuntimeError). Mirror this in prod.
+      GIMIE_API_URL: ${GIMIE_API_URL:-http://gme-gimie-api:15400}
     ports:
       - "${SSH_PORT:-2222}:2222"
       - "${APP_PORT:-1234}:1234"
@@ -52,6 +56,30 @@ services:
     environment:
       SE_NODE_MAX_SESSIONS: "5"
       SE_NODE_SESSION_TIMEOUT: "300"
+    restart: unless-stopped
+    networks:
+      - dev
+  # gimie-api sidecar: runs gimie out-of-process so the app calls it over HTTP
+  # (the `gimie` Python dependency was removed — see OPERATIONS_RUNBOOK §8). The
+  # app reaches it via GIMIE_API_URL (set on the devcontainer above). REQUIRED
+  # for repository extraction; mirror this service in the production deploy.
+  #
+  # GME-maintained image (tools/gimie-api) — the upstream
+  # ghcr.io/sdsc-ordes/gimie-api images ship gimie 0.6.1 with an app written
+  # for the 0.7.x API and never produce output. See
+  # dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md.
+  gme-gimie-api:
+    build:
+      context: ../tools/gimie-api
+    image: ${GIMIE_API_IMAGE:-gme-gimie-api:0.7.2}
+    container_name: gme-gimie-api
+    environment:
+      # gimie reads GITHUB_TOKEN — a SINGLE PAT (comma pools are normalized
+      # by the sidecar app, first token wins). ACCESS_TOKEN kept as alias.
+      GITHUB_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+      ACCESS_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+    ports:
+      - "${GIMIE_API_PORT:-7000}:15400"
     restart: unless-stopped
     networks:
       - dev

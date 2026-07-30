@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from scripts.v2.extract_enums_from_ttl import default_ttl_path, extract_enums_from_ttl
-from src.v2.api_models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
+from git_metadata_extractor.api_models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
 
 EXPECTED_COMPUTER_SCIENCE_WIKIDATA_URI = "http://www.wikidata.org/entity/Q428691"
 

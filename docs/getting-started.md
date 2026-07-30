@@ -8,6 +8,15 @@ This project uses [`uv`](https://docs.astral.sh/uv/) for dependency management.
 just install-dev          # uv pip install -e ".[dev]"
 ```
 
+That single command is enough. The RAG index layer
+([open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)) is a
+declared dependency pinned to a release tag in `pyproject.toml`, so it comes
+in with the install — see
+[Cross-repo compatibility](https://github.com/Imaging-Plaza/git-metadata-extractor#cross-repo-compatibility)
+for the supported version pairs. Working on both repos at once? Clone the
+child at `./open-pulse-sources` or `../open-pulse-sources` and `just
+install-dev` re-installs it editable, overriding the pin.
+
 ## 2. Configure environment
 
 Create `.env` from the template and edit:
@@ -19,13 +28,12 @@ cp .env.example .env
 Required to serve `/v2/extract`:
 
 - `GME_GITHUB_TOKEN` — `/v2/health` flips to `degraded` without it.
-- `API_TOKEN` — bearer token guarding every `/v1/*` route plus
-  `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
+- `API_TOKEN` — bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. **Fails closed**: missing →
   every protected request returns `503` (no dev bypass). Generate with
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`. See
   [Authentication](v2-api-reference.md#authentication).
 - One LLM credential (validated at startup against the active model
-  profile in `src/v2/agents/llm/model_config.py`):
+  profile in `git_metadata_extractor/agents/llm/model_config.py`):
   - `RCP_TOKEN` (EPFL RCP), or
   - `OPENAI_API_KEY`, or
   - `OPENROUTER_API_KEY`.
@@ -61,11 +69,17 @@ and `.env.example`):
   `ZENODO`, `ORCID`, `ROR`).
 - `INDEX_QDRANT_URL` — Qdrant endpoint. **Inside the devcontainer use
   `http://gme-qdrant:6333`**, not `localhost:6333`.
+- `GIMIE_API_URL` — **required for repository extraction.** GIMIE runs as the
+  `gme-gimie-api` sidecar (the `gimie` package was removed from the image); the
+  devcontainer compose sets this to `http://gme-gimie-api:15400` for you. Outside
+  the devcontainer, either point it at a running sidecar or `pip install
+  gimie==0.7.2` for in-process extraction. See
+  [operations runbook §8](OPERATIONS_RUNBOOK.md#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required).
 
 ## 3. Run the API locally
 
 ```bash
-just serve-dev            # uvicorn + auto-reload on src/**/*.py
+just serve-dev            # uvicorn + auto-reload on package *.py changes
 ```
 
 Default port is `1234`. Override with `HOST=0.0.0.0 PORT=8080 just serve-dev`.
@@ -112,14 +126,6 @@ just check               # lint + type-check
 just ci                  # lint + type-check + coverage
 ```
 
-Per-index test suites:
-
-```bash
-just hf-test
-just openalex-test
-just orcid-test
-```
-
 Opt-in real-provider tests (require credentials and live network):
 
 ```bash
@@ -131,15 +137,16 @@ If testmon selection looks stale: `rm -f .testmondata` then `just test-full`.
 
 ## 5. Try the RAG indices
 
-Each index is independent; common shape:
+The index layer (ingest / embed / search CLIs, federated search, and the
+`/v2/indices/*` management API) lives in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo — clone it and run its recipes there; common shape:
 
 ```bash
-# HuggingFace
-just hf-status
-just hf-ingest --scope switzerland     # idempotent — skips already-ingested
-just hf-embed                           # only embeds new chunks
-just hf-search "swiss german LLM" --top-k 5
-just hf-lineage epfl-llm/meditron-7b    # walk base_models DAG
+# in an open-pulse-sources checkout
+just openalex-ingest --scope epfl      # idempotent — skips already-ingested
+just openalex-embed                    # only embeds new chunks
+just openalex-search "swiss german LLM" --top-k 5
 
 # Federated (cross-index)
 just gme-indices                                 # list registered adapters
@@ -147,7 +154,10 @@ just gme-search "Swiss German LLM" --top-k 10
 just gme-entity 0000-0001-9534-3870              # by ORCID, ROR, DOI, HF slug, …
 ```
 
-See [RAG Indices Overview](rag-indices.md) for the full per-index
+This service only *reads* the resulting stores (Qdrant + DuckDB under
+`INDEX_DATA_DIR`) through the `open_pulse_sources` library.
+
+See [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) for the full per-index
 inventory, scopes, and storage layout.
 
 ## 6. Build and preview docs
@@ -178,9 +188,9 @@ flowchart LR
 
 ## CLI status
 
-- The primary production interface is the FastAPI service (`src/api.py`).
+- The primary production interface is the FastAPI service (`git_metadata_extractor/app.py`).
 - For batch extractions: `scripts/v2/batch_extract.sh` reads a hardcoded
   URL list and drives `/v2/extract` with configurable parallelism
   (resumable — skips already-completed result files).
-- Each RAG index ships its own CLI (`python -m src.index.<name>`) wired
-  up via `just <prefix>-*` recipes.
+- The RAG index CLIs live in the
+  [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) repo.

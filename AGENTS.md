@@ -14,49 +14,52 @@ agents to produce a graph of `schema:SoftwareSourceCode`,
 `schema:Person`, `org:Organization`, `org:Membership`,
 `pulse:Contribution`, and `schema:ScholarlyArticle` entities.
 
-V1 (under `src/v1/`) is a **frozen** legacy pipeline kept around for
-backwards-compatible endpoints. **All new work targets V2** under
-`src/v2/`.
+The legacy v1 API was **removed in 3.0.0** (repo-split release). All work
+targets V2 under `git_metadata_extractor/`; `docs/migration-v1-to-v2.md` maps the removed
+endpoints for old consumers.
 
 ## Code map
 
 ```
-src/api.py                       # FastAPI app, mounts /v1 and /v2 routers, /docs UI
-src/v1/                          # frozen legacy pipeline (no new work)
-src/v2/
-  api.py                         # /v2/extract endpoint + pipeline driver
+git_metadata_extractor/
+  app.py                         # FastAPI app: mounts the /v2 router + /docs UI
+  api/                           # the /v2 HTTP surface (URL prefix is /v2 — public contract)
+    _router.py                   # the single APIRouter
+    _helpers.py                  # env gates, stage constants, app-state resolution
+    extract.py                   # GET/POST /extract + _run_extract_job + assembly
+    auto_ingest.py               # post-extract index write-through (opt-in flags)
+    jobs.py                      # /jobs/{id}, cancel, /crawl
+    system.py                    # /cache/clear, /health
   jobs.py                        # async job store backing POST /v2/extract
   config.py                      # config knobs
   dependencies.py                # provider wiring, cache resolver
   log_context.py                 # request-id logging context
   observation/query_log.py       # per-request external-query log
 
-  agents/
+  agents/                        # production runtimes only
     models.py                    # AgentResult, ProviderSet, TypedEntityBuckets
     registry.py                  # runtime → runner table
     llm/                         # LLM-backed agents
       _payload_helpers.py        # force_server_uuid + shared post-LLM stamps
       _verdict_cache.py          # per-agent result cache
+      model_config.py            # LLM provider/model profiles + credentials
       <kind>/agent.py            # per-entity LLM agents (one Pydantic AI run each)
       agent_tools/               # Tool factories (selenium, ROR, ORCID, etc.)
                                   #   *_rag.py: per-index Qdrant search tools
-                                  #   (infoscience, huggingface, openalex,
-                                  #    zenodo, orcid, ror, renkulab,
-                                  #    epfl_graph_rag) — see
-                                  #    docs/v2-rag-tools.md
+                                  #   — see docs/v2-rag-tools.md
     rule_based/
       <kind>_agent.py            # deterministic counterparts (no LLM)
     refiners/                    # hybrid-runtime LLM refiners — propose targeted
       <kind>/agent.py            # patches over rule-based output, whitelisted fields only
-                                 #   organization/agent.py — pulse:OrganizationType
-                                 #   repository/agent.py   — pulse:discipline, pulse:repositoryType
-                                 #   person/agent.py       — schema:name (handle→canonical)
 
-  ingest/
+  providers/                     # the provider/READ layer (was "ingest" pre-split)
     cache.py                     # ProviderCache (SQLite, WAL)
-    providers/                   # github / ror / orcid / infoscience clients
+    github_provider.py etc.      # github / ror / orcid / infoscience clients
                                   # *_rag.py: async Qdrant-backed RAG providers
-                                  # _rag_helpers.py: shared filter/rerank utils
+    gimie_api_client.py          # gimie sidecar client (TTL → JSON-LD bridge)
+    gimie_extract.py             # extract_gimie intermediate (sidecar/in-process seam)
+    github_accounts/             # GitHub user/org GraphQL parsers + models
+    detection/                   # GitHub URL classifier
 
   pipeline/
     orchestrator.py              # stage runner, fan-out concurrency, retries
@@ -66,71 +69,112 @@ src/v2/
   validation/                    # strict-schema + SHACL validators
   canonicalization/              # ID resolution, string normalisation
 
-src/index/                       # 11 sibling RAG indices (DuckDB + Qdrant per index) +
-                                 # _federated/ adapter layer.
-                                 #   epfl_graph/  — disciplines ontology RAG
-                                 #                  (see docs/epfl-graph-disciplines.md)
-                                 # See docs/rag-indices.md for the full inventory.
+  experimental/                  # not production: pi terminal-agent PoC
+    terminal/ terminal_subagent/ skills/
 
-src/module/                      # Standalone analytical modules complementing v2.
-                                 #   dependents/  — GitHub `/network/dependents` scraper
-                                 #   epfl_graph/  — graphai-client wrapper + ontology
-                                 #                  endpoints + OpenAlex bridge.
-                                 #                  Used by concept_tagging and the
-                                 #                  src/index/epfl_graph/ ingest pass.
+# NOTE: the RAG index layer (formerly src/index/ + src/module/ + the
+# /v2/indices/* + /v2/manifest API) lives in a separate repo/service:
+#   https://github.com/sdsc-ordes/open-pulse-sources
+# The v2 read-side providers import it as the `open_pulse_sources`
+# library — a declared, tag-pinned dependency in pyproject.toml (see
+# "Cross-repo version pin" below). This service only READS the indices
+# (Qdrant + DuckDB under data/index/); ingest/embed/reset happen in the
+# open-pulse-sources service. config/index/*.yaml stays here because
+# the library resolves config/data paths CWD-relative.
 
 tests/v2/                        # default test target
 ```
 
 ## Pipeline (the actual stages, in order)
 
-`/v2/extract` runs the same pipeline regardless of `agent_runtime`. The
-runtime only controls which agent implementations execute (LLM agents vs.
-deterministic rule-based agents). All other stages run unconditionally.
+There are **two sequencers, not one** — a distinction worth holding onto,
+because "add a stage" means different work in each:
+
+1. **`PLAN_BY_TYPE`** (`pipeline/orchestrator.py:120`) — the agent-generation
+   plan. Three plans, one per detected type; the orchestrator runs them with
+   fan-out concurrency and retries. This is the only part that varies with the
+   input kind.
+2. **`_run_extract_job`** (`api/extract.py`) — everything after the agents:
+   reconciliation, ROR resolvers, validation, inference, output. A flat
+   sequence of direct calls, not a plan object. Stage banners in that file
+   (`# === <name> stage ===`) and the `STAGE_*` constants in
+   `api/_helpers.py` are the naming source of truth.
+
+`/v2/extract` runs the same post-agent sequence regardless of
+`agent_runtime`; the runtime selects agent implementations and gates the
+`[LLM]` stages below.
+
+**Phase 1 — agent generation (orchestrator, `PLAN_BY_TYPE`):**
 
 ```
-1.  classify_url               classify the input as repository / user / org
-2.  gather_context             fetch GitHub metadata + GIMIE JSON-LD
-3.  context_summary  [LLM]     compile a markdown summary; raw blobs are stripped
-                               from per-agent prompts in LLM mode
-4.  repo_agent                 produce the root repository entity
-5.  person_agents (fan-out)    one agent per discovered contributor / user
-6.  org_agents    (fan-out)    one agent per discovered organisation
-7.  article_agents (fan-out)   discover scholarly articles tied to the repo
-8.  membership_agents (fan-out) one agent per (person, org) pair
-9.  contribution_agents (fan-out) one agent per (person, repo) pair
-10. llm_dedup       [LLM]      cross-bucket entity dedup + ID remap (fail-open)
-11. reconcile_entities         deterministic ID canonicalisation + linkage
-12. llm_critic      [LLM, gated] drop-suggestion stage (off by default)
-13. guarantee_repo_author      stamp github-owner as schema:author when empty
-14. strict_validation          per-entity strict JSON Schema check
-15. assemble_output            split graph into root + related + excluded
-16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
-17. validate_articles          drop placeholder/sentinel-DOI articles
-18. validate_author_classes    drop `schema:author` refs whose target is
-                               not a `schema:Person` (closes a SHACL
-                               class-shape violation that was previously
-                               warning-only)
-19. validate_ownership         strip mismatched pulse:owns
-20. infer_owners               stamp pulse:owns / pulse:ownedBy from handles;
-                               also coerces any residual bare-login string
-                               on `pulse:ownedBy` (e.g. "luzpaz") to the
-                               IRI shape `{"@id": "https://github.com/luzpaz"}`
-                               so SHACL never sees a `<file:///CWD/...>` URI
-21. infer_github_handle_parents  fuzzy-search ROR for parent of every github
-                                 org; add ROR org entities, stamp unitOf
-22. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
-23. infer_org_units            deterministic name-token fallback for unitOf
-24. concept_tagging  [gated]   pull EPFL Graph concepts/keywords/disciplines
-                               from the README onto the root repo entity as
-                               internal `_concepts`/`_keywords`/`_disciplines`
-                               metadata (off by default; opt-in with
-                               `V2_CONCEPT_TAGGING_ENABLED=true`)
-25. build_jsonld_output        produce the final JSON-LD graph; also
-                               strips redundant `pulse:ror` from any
-                               `org:Organization` whose `@id` is already
-                               the ROR (closed-shape violation fix)
+repository:   context_gather -> repo_agent   -> person_agents -> org_agents
+                             -> article_agents -> membership_agents -> contribution_agents
+user:         context_gather -> person_agent -> repo_agents   -> org_agents
+                             -> article_agents -> membership_agents -> contribution_agents
+organization: context_gather -> org_agent    -> person_agents -> repo_agents
+                             -> article_agents -> membership_agents -> contribution_agents
 ```
+
+- `classify_url` runs in the API layer *before* the orchestrator, not as a
+  plan stage.
+- `context_summary_agent` is **not** a plan entry: it runs inside
+  `context_gather` (orchestrator.py:377), LLM runtime only, and fails open
+  with a warning — the pipeline continues without a compiled summary.
+- The root stage per type comes from `ROOT_STAGE_BY_DETECTED_TYPE`.
+
+**Phase 2 — post-agent sequence (`api/extract.py`, in execution order):**
+
+```
+permissive_validation          per-entity permissive schema pass
+llm_dedup           [LLM]      cross-bucket entity dedup + ID remap (fail-open)
+reconcile_entities             deterministic ID canonicalisation + linkage
+                               (also anonymises emails via stages/privacy.py)
+resolve_company_to_ror         _company -> ROR: Membership + Org stub
+resolve_bio_to_ror             bio/blog/email -> ROR: Membership + Org stub
+resolve_bio_to_ror_llm  [LLM]  LLM long-tail affiliation resolver
+resolve_placeholder_orgs_to_ror  upgrade placeholder Orgs to real ROR entities
+llm_critic          [LLM, gated] drop-suggestion stage (off by default)
+refine_with_llm     [hybrid]   whitelisted-field patches over rule-based output
+guarantee_repo_author          stamp github-owner as schema:author when empty
+strict_validation              per-entity strict JSON Schema check
+assemble_output                split graph into root + related + excluded
+link_veracity       [LLM, gated] verify every URL via Selenium fetch + LLM;
+                               on failure promote_failed_id_entities +
+                               apply_link_pruning_to_assembled_output
+validate_articles              drop placeholder/sentinel-DOI articles
+validate_author_classes        drop schema:author refs whose target is missing
+                               or not a schema:Person (SHACL class shape)
+validate_ownership             strip mismatched pulse:owns
+infer_owners                   stamp pulse:owns / pulse:ownedBy from handles;
+                               coerces bare-login strings (e.g. "luzpaz") to
+                               {"@id": "https://github.com/luzpaz"} so SHACL
+                               never sees a <file:///CWD/...> URI
+validate_ownership             SECOND pass — catches inverse edges that
+                               infer_owners just added
+prune_dangling_refs            drop refs whose target left the graph
+infer_github_handle_parents    fuzzy-search ROR for each github org's parent;
+                               add ROR org entities, stamp unitOf
+org_relationships   [LLM]      whole-graph LLM call to refine unitOf edges
+infer_org_units                deterministic name-token fallback for unitOf
+demote_github_props_to_units   move github-only props off ROR-identified orgs
+emit_fork_parent_stubs         materialise the upstream repo of a fork
+infer_article_source_organization  attribute articles to a source org
+concept_tagging     [gated]    EPFL Graph concepts/keywords/disciplines from
+                               README + GitHub description onto the root repo
+                               as internal _concepts/_keywords/_disciplines
+                               (off by default: V2_CONCEPT_TAGGING_ENABLED)
+tag_rule_based_disciplines     deterministic discipline fallback
+build_jsonld_output            final JSON-LD graph; strips redundant pulse:ror
+                               from any org:Organization whose @id is already
+                               the ROR (closed-shape violation fix)
+shacl_gate                     SHACL validation — warning-only (see below)
+compute_stats                  response counters/timings
+```
+
+Verify this list against the code before trusting it — it was reconstructed
+from `PLAN_BY_TYPE`, the stage banners, and the `STAGE_*` constants on
+2026-07-29. A published, human-facing version lives in
+[`docs/v2-pipeline.md`](docs/v2-pipeline.md).
 
 **Gates:**
 
@@ -194,20 +238,17 @@ addressed deterministically:
 - `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
 - `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
 
-**Auth:** every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}` requires
+**Auth:** `/v2/extract` and `/v2/jobs/{id}` require
 `Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
 `/docs`, and `/v2/health` are open. The dependency lives in
-`src/v2/auth.py::verify_token`.
-
-V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
-(and now also bearer-protected).
+`git_metadata_extractor/auth.py::verify_token`.
 
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
 |---|---|---|
 | `GME_GITHUB_TOKEN` | — | required for live GitHub provider |
-| `API_TOKEN` | — | bearer token guarding every `/v1/*` route plus `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
+| `API_TOKEN` | — | bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. Fails closed: missing → 503 (no dev bypass). `/`, `/docs`, `/v2/health` stay open. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | — | one is required for LLM mode |
 | `INFOSCIENCE_TOKEN` | unset | only for protected Infoscience routes |
 | `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |
@@ -225,7 +266,7 @@ V1 endpoints (`/v1/extract`, `/v1/cache/*`) are still mounted but frozen
 | `V2_SWISSUBASE_RAG_ENABLED` | `true` | enables the SWISSUbase RAG search tool (collection: `swissubase_entities`; entities: `studies`, `datasets`, `persons`, `institutions`). Ingest is Selenium-driven; default scope embeds only EPFL/ETHZ/SDSC-affiliated studies. |
 | `V2_RENKULAB_RAG_ENABLED` | `true` | enables the RenkuLab RAG search tool (renkulab.io). One Qdrant collection per entity type: `renkulab_projects`, `renkulab_groups`, `renkulab_users`, `renkulab_data_connectors`. The single tool searches across all four by default; the `entity_types` argument scopes to a subset. |
 | `RENKULAB_TOKEN` | unset | optional; without it the indexer can still ingest public projects/groups/data_connectors and harvest users via `/search/query?q=type:User`. With it, set on `https://renkulab.io/api/data` for richer user records. |
-| `V2_EPFL_GRAPH_RAG_ENABLED` | `true` | enables the EPFL Graph disciplines RAG search tool (`search_epfl_graph_disciplines`). Single Qdrant collection `epfl_graph_disciplines` over the curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5, embeddings built from `name + canonical Wikipedia lead-section + top anchor concept names`). Wired into the repository, person, organization, and article LLM agents. Refresh with `just epfl-graph-{ingest,enrich-wikipedia,embed}`. See [`docs/epfl-graph-disciplines.md`](docs/epfl-graph-disciplines.md). |
+| `V2_EPFL_GRAPH_RAG_ENABLED` | `true` | enables the EPFL Graph disciplines RAG search tool (`search_epfl_graph_disciplines`). Single Qdrant collection `epfl_graph_disciplines` over the curated EPFL Graph academic-discipline ontology (~2226 categories, depth 1..5, embeddings built from `name + canonical Wikipedia lead-section + top anchor concept names`). Wired into the repository, person, organization, and article LLM agents. Refresh with `just epfl-graph-{ingest,enrich-wikipedia,embed}`. See [`docs/epfl-graph-disciplines.md`](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/epfl-graph-disciplines.md). |
 | `EPFL_GRAPH_USERNAME`, `EPFL_GRAPH_PASSWORD` | unset | required by the `epfl-graph-ingest` recipe (the auth handshake against `graphai.epfl.ch`). Not needed at runtime once the index is hydrated — `search_epfl_graph_disciplines` only hits Qdrant + RCP. |
 | `INDEX_QDRANT_URL` | `http://qdrant:6333` (yaml default) | Qdrant endpoint for every RAG index. Inside the devcontainer use `http://gme-qdrant:6333`. |
 | `V2_APPLY_CRITIC_PRUNING` | `false` | turn on to enable critic drop suggestions |
@@ -268,6 +309,27 @@ a hardcoded URL list and runs them through `/v2/extract` with configurable
 parallelism. Resumable: skips repos whose result file already exists with
 a non-`running` status.
 
+## Cross-repo version pin
+
+The `open_pulse_sources` library version lives in **exactly one place**: the
+`open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@<tag>`
+entry in `pyproject.toml` `dependencies`. Every install path inherits it —
+`just install-dev`, `just install`, CI, and `tools/image/Dockerfile`.
+
+- Never add a second `pip install "open-pulse-sources @ git+…@<tag>"` anywhere;
+  `tests/v2/test_open_pulse_sources_pin.py` fails on hardcoded second pins.
+- The `gme-sources` image tag in `tools/deploy/docker-compose.yml` must match
+  the library pin (same test enforces it). The library reads and that service
+  writes the *same* DuckDB/Qdrant stores — skew corrupts shared state.
+- Pins must be immutable: a release tag (`vX.Y.Z`) or a full commit SHA.
+  `main` / `latest` defaults fail the test.
+- Bumping the child = edit the pyproject pin + the compose image tag + add a
+  README compatibility-matrix row.
+- `OPEN_PULSE_SOURCES_REF` (Dockerfile build arg) defaults to **empty** and is
+  an override-only escape hatch for testing unreleased child revisions.
+- For cross-repo development, `just install-dev` re-installs a checkout at
+  `./open-pulse-sources` or `../open-pulse-sources` as editable.
+
 ## Pipeline cache topology
 
 Three caches share a single SQLite DB (path: `V2_PROVIDER_CACHE_PATH`):
@@ -293,13 +355,19 @@ isolated and independently invalidatable.
 
 JSON Schemas live in **three byte-identical copies** that must stay in sync:
 
-1. `src/v2/schema/json/{type}/{entity}.schema.json` (source)
+1. `git_metadata_extractor/schema/json/{type}/{entity}.schema.json` (source)
 2. `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted)
 3. `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture)
 
 After any schema edit: copy to all three and run `just v2-models-generate`
-to regenerate Pydantic models in `src/v2/schema/models/`. `just v2-models-check`
+to regenerate Pydantic models in `git_metadata_extractor/schema/models/`. `just v2-models-check`
 in CI catches drift.
+
+The check regenerates and compares **byte-for-byte**, so the codegen toolchain
+is part of the contract: `datamodel-code-generator` and `ruff` are pinned
+exactly in the `dev` extra. Bump them deliberately and regenerate in the same
+commit — a range would let any upstream formatting change turn the gate red on
+an unrelated PR.
 
 ## Identifier conventions
 
@@ -307,11 +375,17 @@ in CI catches drift.
 - **Organization**: `https://ror.org/{id}` when ROR known, else `https://github.com/{handle}`, else `urn:pulse:{uuid}`
 - **Repository**: `https://github.com/{owner}/{name}`
 - **Article**: `https://doi.org/{doi}` when DOI known
-- **Membership**: `{person_id}_{org_id}` composite
-- **Contribution**: `{person_id}_{repo_id}` composite
+- **Membership**: `{person_id}__{org_id}` composite (**double** underscore)
+- **Contribution**: `{person_id}__{repo_id}` composite (**double** underscore)
+
+Composites are built with `__` (see `rule_based/membership_agent.py:431`,
+`contribution_agent.py:355`, `ownership_check.py:1801`,
+`resolve_bio_to_ror_llm.py:209`). `_extract_composite_pair` still accepts a
+single `_` when parsing, for back-compat with graphs produced before the
+convention changed — never emit that form in new code.
 
 `identifiers.uuid` is always a server-generated UUIDv4 (via
-`src/v2/agents/models.py::generate_uuid()`); the LLM never controls it.
+`git_metadata_extractor/agents/models.py::generate_uuid()`); the LLM never controls it.
 
 ## Internal pipeline metadata
 

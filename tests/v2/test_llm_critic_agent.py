@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents.llm.critic.agent import LLMCriticAgentV2
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents.llm.critic.agent import LLMCriticAgentV2
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:

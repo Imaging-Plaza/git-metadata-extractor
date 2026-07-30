@@ -6,9 +6,9 @@ from typing import Any, Callable
 
 from jsonschema import validate
 
-from src.v2.agents import ArticleAgentV2, ProviderSet
-from src.v2.ingest.providers.base import InfoscienceProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ArticleAgentV2, ProviderSet
+from git_metadata_extractor.providers.base import InfoscienceProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 EXPECTED_RANKED_ARTICLE_COUNT = 2
 
@@ -166,7 +166,7 @@ def test_article_agent_ranks_dedupes_and_maps_links(
     schema = load_schema("agent", "article")
     validate(instance=result.data, schema=schema)
 
-    assert result.data["id"] == "10.1000/graph-1"
+    assert result.data["id"] == "https://doi.org/10.1000/graph-1"
     assert result.data["idSource"] == "schema:identifier"
     assert result.data["schema:sourceOrganization"] == "https://ror.org/02s376052"
     assert result.data["schema:author"] == [
@@ -179,8 +179,8 @@ def test_article_agent_ranks_dedupes_and_maps_links(
     )
     assert result.stats["ranked_candidate_count"] == EXPECTED_RANKED_ARTICLE_COUNT
     assert [article["id"] for article in result.stats["articles"]] == [
-        "10.1000/graph-1",
-        "10.1000/graph-2",
+        "https://doi.org/10.1000/graph-1",
+        "https://doi.org/10.1000/graph-2",
     ]
     assert provider.queries[:3] == [
         "sdsc-ordes/gimie",
@@ -231,7 +231,7 @@ def test_article_agent_drops_unresolved_author_references() -> None:
 
     result = asyncio.run(agent.run(context, providers))
 
-    assert result.data["id"] == "10.1000/graph-3"
+    assert result.data["id"] == "https://doi.org/10.1000/graph-3"
     assert result.data["schema:author"] == ["https://orcid.org/0000-0002-1825-0097"]
     assert any(
         warning.startswith("Dropped unresolved article author references for 1 name(s)")
@@ -265,7 +265,7 @@ def test_article_agent_normalizes_year_only_date() -> None:
 
     result = asyncio.run(agent.run(context, providers))
 
-    assert result.data["id"] == "10.1000/graph-4"
+    assert result.data["id"] == "https://doi.org/10.1000/graph-4"
     assert result.data["schema:datePublished"] == "2016-01-01"
     assert result.stats["articles"]
     assert any(
@@ -311,7 +311,7 @@ def test_article_agent_resolves_accent_and_name_order_variants() -> None:
 
     result = asyncio.run(agent.run(context, providers))
 
-    assert result.data["id"] == "10.1000/variant-1"
+    assert result.data["id"] == "https://doi.org/10.1000/variant-1"
     assert result.data["schema:author"] == ["https://orcid.org/0000-0003-1234-5678"]
     assert not any(
         "Skipped article candidate due to missing resolvable authors"

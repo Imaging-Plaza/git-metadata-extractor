@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from src.v2.api_models.errors import V2ErrorResponse, V2ErrorType, V2FieldError
+from git_metadata_extractor.api_models.errors import V2ErrorResponse, V2ErrorType, V2FieldError
 
 HTTP_UNPROCESSABLE_ENTITY = 422
 

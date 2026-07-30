@@ -48,6 +48,49 @@ errorlog = "-"  # Log to stderr
 loglevel = os.getenv("LOG_LEVEL", "info")
 
 
+def _bootstrap_on_start_enabled() -> bool:
+    """Whether to create + schema-bootstrap every index store at server start.
+
+    Defaults to on. Set ``INDEX_BOOTSTRAP_ON_START=false`` (or ``0``/``no``)
+    to skip — e.g. when the index data dir is provisioned by a separate
+    job/init-container and the serving process should not touch it.
+    """
+    raw = os.getenv("INDEX_BOOTSTRAP_ON_START", "true").strip().lower()
+    return raw not in {"false", "0", "no", "off"}
+
+
+def on_starting(server):
+    """Called once in the Gunicorn master before any worker is forked.
+
+    Running the federated bootstrap here (rather than per-worker) means every
+    index DuckDB store — including newly added stores, which are auto-discovered
+    from ``src/index/*`` — exists with its schema applied before the first
+    request, with no risk of N workers racing to create the same file. The
+    bootstrap is idempotent (existing stores are left untouched) and best-effort:
+    a failure is logged but never blocks the server from coming up.
+    """
+    if not _bootstrap_on_start_enabled():
+        server.log.info("index bootstrap on start disabled; skipping")
+        return
+    try:
+        from open_pulse_sources.index._federated.bootstrap import bootstrap_all  # noqa: PLC0415
+
+        results = bootstrap_all()
+    except Exception as exc:  # noqa: BLE001 — never block server start on bootstrap
+        server.log.warning("index bootstrap on start failed: %s", exc)
+        return
+    created = sum(1 for s in results.values() if s == "created")
+    existed = sum(1 for s in results.values() if s == "exists")
+    errored = {n: s for n, s in results.items() if s not in {"created", "exists"}}
+    server.log.info(
+        "index bootstrap on start: %d stores (created=%d, existing=%d)",
+        len(results), created, existed,
+    )
+    if errored:
+        server.log.warning("index bootstrap on start: %d store(s) not ready: %s",
+                           len(errored), errored)
+
+
 def post_fork(server, worker):
     """
     Called just after a worker has been forked.

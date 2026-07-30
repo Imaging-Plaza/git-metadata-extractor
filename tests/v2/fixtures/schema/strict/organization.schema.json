@@ -5,7 +5,14 @@
   "description": "Schema for validating Organization entities following Open Pulse Ontology v2.1.2. ID hierarchy: ror → infoscienceOrganizationIdentifier → githubOrganizationHandle → uuid. SHACL requires: schema:name AND at least ONE of (schema:identifier, pulse:githubOrganizationHandle, pulse:infoscienceOrganizationIdentifier).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "type", "shacl", "identifiers", "idSource", "schema:name"],
+  "required": [
+    "id",
+    "type",
+    "shacl",
+    "identifiers",
+    "idSource",
+    "schema:name"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -22,18 +29,30 @@
     "identifiers": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["uuid"],
+      "required": [
+        "uuid"
+      ],
       "properties": {
         "pulse:ror": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^https://ror\\.org/[0-9a-z]{9}$"
         },
         "pulse:infoscienceOrganizationIdentifier": {
-          "type": ["string", "null"],
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "pulse:githubOrganizationHandle": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         },
         "uuid": {
           "type": "string",
@@ -43,23 +62,38 @@
     },
     "idSource": {
       "type": "string",
-      "enum": ["pulse:ror", "pulse:infoscienceOrganizationIdentifier", "pulse:githubOrganizationHandle", "uuid"]
+      "enum": [
+        "pulse:ror",
+        "pulse:infoscienceOrganizationIdentifier",
+        "pulse:githubOrganizationHandle",
+        "uuid"
+      ]
     },
     "schema:name": {
       "type": "string",
       "minLength": 1
     },
     "schema:identifier": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^https://ror\\.org/[0-9a-z]{9}$",
       "description": "Canonical identifier (typically ROR URL). Optional per SHACL."
     },
     "pulse:githubOrganizationHandle": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
     },
     "pulse:infoscienceOrganizationIdentifier": {
-      "type": ["string", "null"],
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://infoscience\\.epfl\\.ch/entities/orgunit/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "Infoscience organization identifier (UUID4 format)."
     },
     "pulse:OrganizationType": {
@@ -76,7 +110,10 @@
       ]
     },
     "pulse:githubOrgFollowers": {
-      "type": ["integer", "null"],
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0
     },
     "org:hasUnit": {
@@ -104,7 +141,9 @@
   "anyOf": [
     {
       "description": "At least schema:identifier required",
-      "required": ["schema:identifier"],
+      "required": [
+        "schema:identifier"
+      ],
       "properties": {
         "schema:identifier": {
           "type": "string"
@@ -113,16 +152,21 @@
     },
     {
       "description": "At least githubOrganizationHandle required",
-      "required": ["pulse:githubOrganizationHandle"],
+      "required": [
+        "pulse:githubOrganizationHandle"
+      ],
       "properties": {
         "pulse:githubOrganizationHandle": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
         }
       }
     },
     {
       "description": "At least infoscienceOrganizationIdentifier required",
-      "required": ["pulse:infoscienceOrganizationIdentifier"],
+      "required": [
+        "pulse:infoscienceOrganizationIdentifier"
+      ],
       "properties": {
         "pulse:infoscienceOrganizationIdentifier": {
           "type": "string"

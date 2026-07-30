@@ -23,8 +23,22 @@ The check uses `hmac.compare_digest` for constant-time comparison.
 | Wrong token | `401` | Same response shape as missing header. |
 | Valid token | route's normal response | |
 
-`/v1/*` routes share the same `API_TOKEN` and behave the same way.
-Implementation lives in `src/v2/auth.py` (`verify_token` dependency).
+(The legacy `/v1/*` routes were removed in 3.0.0.)
+Implementation lives in `git_metadata_extractor/auth.py` (`verify_token` dependency).
+
+## Rate limiting
+
+Disabled by default. Set `V2_RATE_LIMIT_PER_MINUTE` to a positive integer to
+cap requests per client on the compute-/cost-heavy routes:
+
+- `POST /v2/extract` and `POST /v2/indices/{provider}/ingest`
+- `GET /v2/extract/{full_path}`
+
+Clients are keyed by bearer token (falling back to client IP). Exceeding the
+limit returns `429 Too Many Requests` with a `Retry-After` header. The window
+is a fixed 60 s. State is in-memory and **per worker**, so under gunicorn with
+N workers the effective limit is ~N × the configured value — use a shared store
+(e.g. Redis) for a true global cap. Implementation: `git_metadata_extractor/rate_limit.py`.
 
 ## Endpoints
 
@@ -241,7 +255,7 @@ deterministic rule-based agents). Other stages run unconditionally.
 
 ## LLM Agent Architecture
 
-Each entity bucket has a dedicated agent under `src/v2/agents/llm/<kind>/agent.py`
+Each entity bucket has a dedicated agent under `git_metadata_extractor/agents/llm/<kind>/agent.py`
 (repository, person, organization, article, membership, contribution).
 Each is a **single pydantic-ai `Agent` call** that produces all output
 fields in one prompt/response round-trip. Hallucination guards baked into
@@ -268,7 +282,7 @@ a `callable` guard).
 LLM agents can call server-side tools during generation. Tools are
 registered per-agent by passing a `tools=[...]` list to
 `V2LLMRuntime.run_json_prompt`, which forwards them to the pydantic-ai
-`Agent`. Shared tools live in `src/v2/agents/llm/agent_tools/` — add a new
+`Agent`. Shared tools live in `git_metadata_extractor/agents/llm/agent_tools/` — add a new
 module there to make a tool available to multiple agents.
 
 Two main families:
@@ -286,14 +300,14 @@ Two main families:
   hashing, UUID generation, DuckDuckGo search.
 
 The full registered set lives in
-`src/v2/agents/llm/agent_tools/__init__.py`.
+`git_metadata_extractor/agents/llm/agent_tools/__init__.py`.
 
 ### Observability
 
-Tool calls emit an INFO log line from `src.v2.agents.llm.agent_tools.<module>`:
+Tool calls emit an INFO log line from `git_metadata_extractor.agents.llm.agent_tools.<module>`:
 
 ```
-INFO src.v2.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
+INFO git_metadata_extractor.agents.llm.agent_tools.disciplines: tool call: list_disciplines — returning 46 entries
 ```
 
 If this line is absent after an LLM repository run with
@@ -312,7 +326,8 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `API_TOKEN` | unset | Bearer token guarding `/v1/*` and protected `/v2/*` routes. Missing → 503 (no dev bypass). See [Authentication](#authentication). |
+| `API_TOKEN` | unset | Bearer token guarding the protected `/v2/*` routes. Missing → 503 (no dev bypass). See [Authentication](#authentication). |
+| `V2_RATE_LIMIT_PER_MINUTE` | unset (off) | Opt-in per-client request cap on the compute-heavy routes (`POST /v2/extract` + the `GET` extract routes). Keyed by bearer token (else IP); in-memory & per-worker. Over limit → `429` + `Retry-After`. See [Rate limiting](#rate-limiting). |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | Swap in mock GitHub/ORCID/Infoscience/ROR providers |
 | `V2_LINK_VERACITY_ENABLED` | `true` | Skip the link-veracity stage in LLM mode (rule-based skips unconditionally) |
@@ -329,3 +344,5 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 | `GME_GITHUB_TOKEN` | unset | Required for healthy provider preflight |
 | `RCP_TOKEN` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | unset | At least one required in LLM mode |
 | `SELENIUM_REMOTE_URL` | unset | Enables link-veracity + the `fetch_link_content_via_selenium` tool |
+| `GIMIE_API_URL` | unset | **Required for repository extraction.** Points at the `gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); the `gimie` package was removed from the image. Unset → in-process gimie, which is no longer installed → `RuntimeError`. See [operations runbook §8](OPERATIONS_RUNBOOK.md#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required). |
+| `GIMIE_API_TIMEOUT_SECONDS` | `180` | Per-request timeout for the gimie-api sidecar call. |

@@ -5,11 +5,11 @@ from typing import Any, Callable
 
 from jsonschema import validate
 
-from src.v2.agents import PersonAgentV2, ProviderSet
-from src.v2.ingest.providers.base import GitHubProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from git_metadata_extractor.agents import PersonAgentV2, ProviderSet
+from git_metadata_extractor.providers.base import GitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
 
 MIN_EXPECTED_MEMBERSHIPS = 2
 INVALID_ORCID_FIELD_VALUE = 123
@@ -69,7 +69,7 @@ def test_person_agent_output_validates_and_merges_affiliations(
     validate(instance=result.data, schema=schema)
 
     assert result.data["schema:name"] == "Alice Example"
-    assert result.data["pulse:githubUsername"] == "octocat"
+    assert result.data["pulse:githubUsername"] == "https://github.com/octocat"
     assert result.data["schema:email"] == "2bd806c97f0e@example.org"
     assert len(result.data["org:hasMembership"]) >= MIN_EXPECTED_MEMBERSHIPS
     assert "affiliations" not in result.data
@@ -101,7 +101,7 @@ def test_person_agent_warns_and_falls_back_when_orcid_record_is_unavailable() ->
 
     assert result.warnings
     assert result.data["idSource"] == "pulse:githubUsername"
-    assert result.data["pulse:githubUsername"] == "octocat"
+    assert result.data["pulse:githubUsername"] == "https://github.com/octocat"
 
 
 def test_person_agent_permissive_validation_warns_without_raising() -> None:

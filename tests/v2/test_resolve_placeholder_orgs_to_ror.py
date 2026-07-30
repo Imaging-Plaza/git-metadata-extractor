@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.resolve_placeholder_orgs_to_ror import (
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.resolve_placeholder_orgs_to_ror import (
     STAGE_SOURCE_TAG,
     PlaceholderResolutionResult,
     run_resolve_placeholder_orgs_to_ror_stage,
@@ -339,9 +339,22 @@ def test_stage_returns_zero_when_no_organizations():
     assert result.placeholders_examined == 0
 
 
-def test_stage_returns_zero_when_provider_missing():
+def test_stage_returns_zero_when_provider_missing(monkeypatch):
     """No provider configured (Qdrant absent) — stage returns a sane
-    result and never raises."""
+    result and never raises.
+
+    Passing ``provider=None`` makes the stage fall back to
+    ``build_default_provider()``. We force that to return ``None`` so the
+    test deterministically exercises the provider-unavailable branch
+    *without* constructing a real Qdrant client — otherwise the stage
+    would issue a live ROR-RAG query and fail on DNS in a
+    network-isolated CI sandbox (the production call-site in api.py wraps
+    this stage in try/except, so a real outage degrades gracefully there).
+    """
+    monkeypatch.setattr(
+        "git_metadata_extractor.pipeline.stages.resolve_placeholder_orgs_to_ror.build_default_provider",
+        lambda *a, **k: None,
+    )
     placeholder = _placeholder_org("u1", "EPFL")
     reconciled = ReconciledEntities(
         entities={"organizations": [placeholder], "memberships": []},
@@ -353,6 +366,8 @@ def test_stage_returns_zero_when_provider_missing():
     )
     # Result is well-formed even when provider building fails.
     assert isinstance(result, PlaceholderResolutionResult)
+    assert result.placeholders_examined == 0
+    assert result.rejection_reasons == {"provider_unavailable": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +376,7 @@ def test_stage_returns_zero_when_provider_missing():
 
 
 def test_api_env_flag_defaults_on(monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.delenv("V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR", raising=False)
     assert v2_api._resolve_placeholder_orgs_to_ror_enabled() is True
@@ -369,15 +384,15 @@ def test_api_env_flag_defaults_on(monkeypatch):
 
 @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off", "n", "f"])
 def test_api_env_flag_recognises_off_values(value, monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR", value)
     assert v2_api._resolve_placeholder_orgs_to_ror_enabled() is False
 
 
 def test_api_constant_and_export_are_in_place():
-    from src.v2 import api as v2_api
-    from src.v2.pipeline import stages
+    from git_metadata_extractor.api import _helpers as v2_api
+    from git_metadata_extractor.pipeline import stages
 
     assert v2_api.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR == "resolve_placeholder_orgs_to_ror"
     assert callable(stages.run_resolve_placeholder_orgs_to_ror_stage)

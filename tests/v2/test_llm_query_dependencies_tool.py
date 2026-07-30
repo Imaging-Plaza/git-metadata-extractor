@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.agents.llm.agent_tools.query_dependencies import (
+from git_metadata_extractor.agents.llm.agent_tools.query_dependencies import (
     make_query_dependencies_tool,
 )
 

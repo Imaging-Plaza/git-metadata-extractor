@@ -10,12 +10,12 @@
       "identifiers": {
         "pulse:ror": null,
         "pulse:infoscienceOrganizationIdentifier": null,
-        "pulse:githubOrganizationHandle": "github"
+        "pulse:githubOrganizationHandle": "https://github.com/github"
       },
       "idSource": "pulse:githubOrganizationHandle",
       "schema:name": "GitHub",
       "schema:identifier": null,
-      "pulse:githubOrganizationHandle": "github",
+      "pulse:githubOrganizationHandle": "https://github.com/github",
       "pulse:infoscienceOrganizationIdentifier": null,
       "pulse:OrganizationType": "pulse:OtherOrganizationType",
       "pulse:githubOrgFollowers": 200000,
@@ -40,12 +40,12 @@
           "identifiers": {
             "pulse:ror": null,
             "pulse:infoscienceOrganizationIdentifier": null,
-            "pulse:githubOrganizationHandle": "github"
+            "pulse:githubOrganizationHandle": "https://github.com/github"
           },
           "idSource": "pulse:githubOrganizationHandle",
           "schema:name": "GitHub",
           "schema:identifier": null,
-          "pulse:githubOrganizationHandle": "github",
+          "pulse:githubOrganizationHandle": "https://github.com/github",
           "pulse:infoscienceOrganizationIdentifier": null,
           "pulse:OrganizationType": "pulse:OtherOrganizationType",
           "pulse:githubOrgFollowers": 200000,

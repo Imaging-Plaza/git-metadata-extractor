@@ -3,15 +3,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.v2.agents import ProviderSet
-from src.v2.agents.models import AgentResult
-from src.v2.pipeline.stages import (
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.pipeline.stages import (
     AssembledOutput,
     apply_link_pruning_to_assembled_output,
     collect_unique_http_link_contexts,
     run_link_veracity_stage,
 )
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 def _providers() -> ProviderSet:
@@ -52,7 +52,7 @@ def test_collect_unique_http_link_contexts_deduplicates_nested_links() -> None:
 
 
 def test_run_link_veracity_stage_counts_and_warnings(monkeypatch) -> None:
-    import src.v2.pipeline.stages.link_veracity as stage_module
+    import git_metadata_extractor.pipeline.stages.link_veracity as stage_module
 
     class _FakeVerifier:
         def __init__(
@@ -149,7 +149,7 @@ def test_run_link_veracity_stage_handles_no_links() -> None:
 
 
 def test_run_link_veracity_stage_scans_entities_and_derives_article_doi_link(monkeypatch) -> None:
-    import src.v2.pipeline.stages.link_veracity as stage_module
+    import git_metadata_extractor.pipeline.stages.link_veracity as stage_module
 
     class _FakeVerifier:
         def __init__(

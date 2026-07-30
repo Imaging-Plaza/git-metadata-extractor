@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.v2.canonicalization.orcid import (
+from git_metadata_extractor.canonicalization.orcid import (
     ORCID_BARE_RE,
     orcid_iri,
     parse_orcid,

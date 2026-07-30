@@ -1,0 +1,41 @@
+# Docker Hub repository RAG indexer config.
+# Resolved by `src/index/dockerhub/config.py` and merged with env vars
+# (`RCP_TOKEN`, `DOCKERHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
+# `INDEX_DATA_DIR`) at startup.
+
+rcp:
+  # Same RCP deployment as the openalex / github / huggingface indexers —
+  # single Qwen3-Embedding-8B / Qwen3-Reranker-8B pair.
+  base_url: https://inference-rcp.epfl.ch/v1
+  embedding_model: Qwen/Qwen3-Embedding-8B
+  embedding_dim: 4096
+  query_instruction: "Given a search query, retrieve relevant Docker images"
+  reranker_model: Qwen/Qwen3-Reranker-8B
+  batch_size: 32
+  max_concurrency: 4
+  timeout_seconds: 120
+
+dockerhub:
+  # Public Docker Hub v2 API. Anonymous access works for public repos
+  # (rate-limited); set DOCKERHUB_TOKEN for higher limits.
+  api_base: https://hub.docker.com/v2
+  # Tags fetched per repo (newest first); kept as a payload/field, not
+  # ingested as separate rows.
+  tags_limit: 50
+  # Skip embedding repos whose composite text (repo_id + description +
+  # full_description) is shorter than this — defends against empty
+  # placeholder images.
+  min_card_chars: 64
+  # Truncate the full_description (README) larger than this before
+  # chunking (1 MiB).
+  full_description_max_bytes: 1048576
+
+qdrant:
+  # Compose service `gme-qdrant` on the `dev` network.
+  url: http://gme-qdrant:6333
+  prefer_grpc: false
+
+chunking:
+  size_tokens: 512
+  overlap_tokens: 64
+  tokenizer: cl100k_base

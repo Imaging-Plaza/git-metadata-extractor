@@ -25,12 +25,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.pipeline.stages.models import AssembledOutput
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.pipeline.stages.ownership_check import (
     _synthesize_owner_person_stub,
     demote_github_props_to_units,
 )
-from src.v2.pipeline.stages.reconciliation import (
+from git_metadata_extractor.pipeline.stages.reconciliation import (
     _normalize_role_value,
     _pick_membership_role,
 )

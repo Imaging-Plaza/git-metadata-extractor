@@ -5,8 +5,8 @@ from typing import Any, Callable
 
 from jsonschema import validate
 
-from src.v2.agents import ProviderSet, RepositoryAgentV2
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 class _NoFetchGitHubProvider(MockGitHubProvider):
@@ -40,7 +40,7 @@ def test_repository_agent_output_validates_against_agent_schema(
     validate(instance=result.data, schema=schema)
 
     assert result.data["schema:name"] == "Hello-World"
-    assert result.data["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
+    assert result.data["pulse:githubRepositoryHandle"] == "https://github.com/octocat/Hello-World"
     assert result.data["schema:author"]
     assert result.data["pulse:repositoryType"]
     # `pulse:discipline` is now allowed to be empty when no domain

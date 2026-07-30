@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from src.v2.agents.models import generate_uuid
+from git_metadata_extractor.agents.models import generate_uuid
 
 UUID_VERSION_4 = 4
 

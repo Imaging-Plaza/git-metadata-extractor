@@ -1,0 +1,136 @@
+# Production-oriented deployment stack for git-metadata-extractor.
+#
+#   docker compose -f tools/deploy/docker-compose.yml --env-file .env up -d
+#
+# Services:
+#   gme-api          the extraction API (gunicorn on :1234; bootstraps index
+#                    stores at startup via the on_starting hook)
+#   gme-sources      the RAG index management API (open-pulse-sources repo):
+#                    /v2/manifest + /v2/indices/* ingest/search/stats/reset
+#                    moved here from gme-api in the repo split. Shares the
+#                    gme-data volume (DuckDB stores) and gme-qdrant.
+#   gme-gimie-api    REQUIRED sidecar — the `gimie` Python dep was removed, so
+#                    repository extraction calls this over HTTP. See
+#                    docs/OPERATIONS_RUNBOOK.md §8.
+#   gme-qdrant       vector store for the RAG indices
+#   gme-selenium     headless Firefox for link-veracity + Selenium-backed RAG
+#                    ingest (SWISSUbase, ORCID scraping). Optional — drop it and
+#                    unset SELENIUM_REMOTE_URL if you don't need those.
+#
+# Secrets/config come from `.env` (see .env.example): API_TOKEN,
+# GME_GITHUB_TOKEN, RCP_TOKEN (or an LLM key), etc. The inter-service URLs below
+# are set explicitly so they don't need to live in .env.
+services:
+  gme-api:
+    image: ${GME_IMAGE:-ghcr.io/imaging-plaza/git-metadata-extractor:latest}
+    # To build locally instead of pulling, comment `image:` and uncomment:
+    # build:
+    #   context: ../..
+    #   dockerfile: tools/image/Dockerfile
+    container_name: gme-api
+    env_file:
+      - ../../.env
+    environment:
+      # GIMIE is served by the sidecar (gimie is no longer in the image).
+      GIMIE_API_URL: http://gme-gimie-api:15400
+      INDEX_QDRANT_URL: http://gme-qdrant:6333
+      # Explicit store root on the shared volume — REQUIRED: without it the
+      # wheel-installed open_pulse_sources library resolves its fallback
+      # relative to site-packages.
+      INDEX_DATA_DIR: /app/data/index
+      SELENIUM_REMOTE_URL: http://gme-selenium:4444
+      WORKERS: ${WORKERS:-2}
+    ports:
+      - "${APP_PORT:-1234}:1234"
+    volumes:
+      # Persist index DuckDB stores + provider cache across restarts.
+      - gme-data:/app/data
+    depends_on:
+      - gme-gimie-api
+      - gme-qdrant
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-sources:
+    # Index management API — the write side of the RAG indices (ingest /
+    # embed / reset / stats), same /v2/indices/* paths gme-api used to serve.
+    # Pulled from GHCR (published by open-pulse-sources CI). This tag MUST
+    # match the open-pulse-sources library pin in pyproject.toml — gme-api
+    # imports the library and this service writes the same DuckDB/Qdrant
+    # stores, so a version skew corrupts or silently empties shared state.
+    # tests/v2/test_open_pulse_sources_pin.py fails if the two drift apart.
+    # Bump both together, or override for one run with SOURCES_IMAGE
+    # (e.g. ...:sha-<short>, or a @sha256: digest for production).
+    image: ${SOURCES_IMAGE:-ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2}
+    container_name: gme-sources
+    env_file:
+      - ../../.env
+    environment:
+      INDEX_QDRANT_URL: http://gme-qdrant:6333
+      # Explicit store root on the shared volume (same rationale as gme-api).
+      INDEX_DATA_DIR: /app/data/index
+      SELENIUM_REMOTE_URL: http://gme-selenium:4444
+      WORKERS: ${SOURCES_WORKERS:-1}
+    ports:
+      - "${SOURCES_PORT:-8080}:8080"
+    volumes:
+      # SHARED with gme-api: the per-index DuckDB stores live here. DuckDB's
+      # file lock is per-process — keep heavy ingest on this service and
+      # consider V2_*_RAG_AUTO_INGEST=false on gme-api to avoid two writers
+      # contending for the same store file.
+      - gme-data:/app/data
+    depends_on:
+      - gme-qdrant
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-gimie-api:
+    # GME-maintained sidecar image (tools/gimie-api) — the upstream
+    # ghcr.io/sdsc-ordes/gimie-api images (pinned digest AND :latest) ship
+    # gimie 0.6.1 with an app written for the 0.7.x API: every extraction
+    # request fails and the error contract collapses to an empty payload.
+    # See dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md.
+    build:
+      context: ../gimie-api
+    image: ${GIMIE_API_IMAGE:-gme-gimie-api:0.7.2}
+    container_name: gme-gimie-api
+    environment:
+      # The gimie LIBRARY inside the sidecar reads GITHUB_TOKEN (the app's
+      # ACCESS_TOKEN is consumed by nothing but a debug print — kept for
+      # forward-compat). Must be a SINGLE PAT: GME_GITHUB_TOKEN may be a
+      # comma-separated pool (the extractor round-robins it), which gimie
+      # cannot parse — set GIMIE_ACCESS_TOKEN to one PAT in that case.
+      GITHUB_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+      ACCESS_TOKEN: ${GIMIE_ACCESS_TOKEN:-${GME_GITHUB_TOKEN:-}}
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: gme-qdrant
+    volumes:
+      - gme-qdrant-storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - gme
+
+  gme-selenium:
+    image: selenium/standalone-firefox
+    container_name: gme-selenium
+    shm_size: "2g"
+    environment:
+      SE_NODE_MAX_SESSIONS: "5"
+      SE_NODE_SESSION_TIMEOUT: "300"
+    restart: unless-stopped
+    networks:
+      - gme
+
+volumes:
+  gme-data:
+  gme-qdrant-storage:
+
+networks:
+  gme:

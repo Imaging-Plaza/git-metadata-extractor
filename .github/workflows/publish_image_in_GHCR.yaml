@@ -29,6 +29,21 @@ jobs:
           VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Extract the open-pulse-sources pin from pyproject.toml
+        id: sources_pin
+        # The child library revision baked into the image. Recorded as an OCI
+        # label so a deployment smoke test can compare the image against the
+        # running gme-sources service without rebuilding. The build itself
+        # takes the pin from pyproject.toml (no build-arg override).
+        run: |
+          REF=$(sed -nE 's#.*open-pulse-sources @ git\+https://github.com/sdsc-ordes/open-pulse-sources@([^"]+)".*#\1#p' pyproject.toml)
+          if [ -z "${REF}" ]; then
+            echo "::error::no open-pulse-sources pin found in pyproject.toml"
+            exit 1
+          fi
+          echo "ref=${REF}" >> $GITHUB_OUTPUT
+          echo "open-pulse-sources pinned to ${REF}"
+
       - name: Extract changelog section for version
         id: changelog
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -94,6 +109,9 @@ jobs:
             org.opencontainers.image.source=${{ github.event.repository.clone_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
+            # Which open-pulse-sources revision this image's library is built
+            # from — must match the gme-sources service image it runs against.
+            ch.sdsc.pulse.open-pulse-sources-ref=${{ steps.sources_pin.outputs.ref }}
             # Add cleanup hint for PR images
             io.github.pr-image=${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 

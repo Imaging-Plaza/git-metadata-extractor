@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from jsonschema import validate
 
-from src.v2.agents.llm.repository import LLMRepositoryAgentV2
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.agents.llm.repository import LLMRepositoryAgentV2
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 _HAS_LLM_CREDENTIALS = bool(
     os.getenv("RCP_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
@@ -142,10 +142,20 @@ def test_llm_repository_agent_real_provider_call() -> None:
     # Note: pydantic-ai already validated the output against AgentRepositoryShape
     # (first pass) during the LLM call, so a redundant jsonschema.validate() here
     # would fail on optional array fields the LLM returns as null rather than [].
-    assert result.data["id"] == "octocat/Hello-World"
+    #
+    # v3.0.0 identifiers are canonical URL form in the *pipeline* output, but
+    # canonicalization happens in a downstream stage — the LLM agent layer
+    # returns the model's raw payload. The agent schema only *describes*
+    # pulse:githubRepositoryHandle as the GitHub URL in prose; it doesn't
+    # enforce a regex, so a live (nondeterministic) LLM may emit either the
+    # canonical URL or the bare `owner/repo` handle. Accept both here and
+    # assert on the resolved identity rather than the exact string form.
+    bare = "octocat/Hello-World"
+    url = "https://github.com/octocat/Hello-World"
+    assert result.data["id"] in {bare, url}
     assert result.data["type"] == "schema:SoftwareSourceCode"
     assert result.data["shacl"] == "pulse:RepositoryShape"
-    assert result.data["pulse:githubRepositoryHandle"] == "octocat/Hello-World"
+    assert result.data["pulse:githubRepositoryHandle"] in {bare, url}
     assert len(result.data["schema:author"]) >= 1
 
     # LLM metadata should be populated.

@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from src.module.dependents.scraper import build_dependents_url
-from src.module.dependents.service import list_dependents
-from src.v2.ingest.cache import ProviderCache
+from open_pulse_sources.module.dependents.scraper import build_dependents_url
+from open_pulse_sources.module.dependents.service import list_dependents
+from git_metadata_extractor.providers.cache import ProviderCache
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "github" / "dependents"
 

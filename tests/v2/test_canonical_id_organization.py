@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Callable
 
-from src.v2.canonicalization import resolve_organization_id
-from src.v2.validation.schema_validation import StrictSchemaValidator
+from git_metadata_extractor.canonicalization import resolve_organization_id
+from git_metadata_extractor.validation.schema_validation import StrictSchemaValidator
 
 UUID_V5_VERSION = 5
 
@@ -28,14 +28,17 @@ def test_resolve_organization_id_uses_infoscience_when_ror_missing() -> None:
     organization = {
         "identifiers": {
             "pulse:ror": None,
-            "pulse:infoscienceOrganizationIdentifier": "12345",
+            "pulse:infoscienceOrganizationIdentifier": "6a95499f-7def-427d-ba0a-1ff2a27f58f6",
             "pulse:githubOrganizationHandle": "epfl-center-imaging",
         },
     }
 
     canonical_id, id_source = resolve_organization_id(organization)
 
-    assert canonical_id == "https://infoscience.epfl.ch/server/api/core/items/12345"
+    assert canonical_id == (
+        "https://infoscience.epfl.ch/entities/orgunit/"
+        "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
+    )
     assert id_source == "pulse:infoscienceOrganizationIdentifier"
 
 
@@ -54,7 +57,7 @@ def test_resolve_organization_id_normalizes_infoscience_api_url_with_full_suffix
     canonical_id, id_source = resolve_organization_id(organization)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/orgunit/"
         "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
     )
     assert id_source == "pulse:infoscienceOrganizationIdentifier"
@@ -75,7 +78,7 @@ def test_resolve_organization_id_normalizes_infoscience_core_items_url() -> None
     canonical_id, id_source = resolve_organization_id(organization)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/orgunit/"
         "6a95499f-7def-427d-ba0a-1ff2a27f58f6"
     )
     assert id_source == "pulse:infoscienceOrganizationIdentifier"

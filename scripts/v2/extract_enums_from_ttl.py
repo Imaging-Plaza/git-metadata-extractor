@@ -22,17 +22,13 @@ def _compact_identifier(uri: str) -> str:
 
 
 def default_ttl_path() -> Path:
-    # Keep this aligned with `src.v2.validation.ontology.ONTOLOGY_RELATIVE_PATH`
-    # — the SHACL validator binds against v2.1.2 at runtime, and the enum
-    # alignment tests must compare the Python enums against the same source
-    # of truth. v2.0.1 still had the Wikipedia-URL placeholder for
-    # "Information engineering"; v2.1.2 fixed it to `wd:Q1254373`.
-    return (
-        Path(__file__).resolve().parents[2]
-        / "dev"
-        / "ontology-v2-json-response"
-        / "open-pulse-ontology-v2.1.2.ttl"
-    )
+    # Single source of truth: resolve via the runtime helper so this dev
+    # script and the SHACL validator always read the same packaged TTL
+    # (the file moved from `dev/` into `git_metadata_extractor/validation/` so it ships in
+    # the image — see git_metadata_extractor.validation.ontology).
+    from git_metadata_extractor.validation.ontology import ontology_ttl_path
+
+    return ontology_ttl_path()
 
 
 def _extract_entries(graph: Graph, enum_type_iri: Any) -> list[dict[str, str]]:

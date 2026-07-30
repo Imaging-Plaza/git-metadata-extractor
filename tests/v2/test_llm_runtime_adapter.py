@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-import src.v2.agents.llm.runtime as runtime_module
-from src.v2.agents.llm.runtime import (
+import git_metadata_extractor.agents.llm.runtime as runtime_module
+from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeConfigError,
     LLMRuntimeResponseError,
     V2LLMRuntime,
@@ -175,3 +175,55 @@ def test_llm_runtime_rejects_non_json_string_outputs(
                 user_prompt="user prompt",
             ),
         )
+
+
+# --- per-request model override (#1b) ---------------------------------------
+
+
+def _base_config() -> dict[str, Any]:
+    return {"provider": "openai", "model": "gpt-4o", "api_key_env": "OPENAI_API_KEY"}
+
+
+def test_request_override_ignored_when_flag_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("V2_ALLOW_REQUEST_MODEL_OVERRIDE", raising=False)
+    token = runtime_module.set_request_model_override(
+        {"model": "Qwen/Qwen3", "base_url": "https://rcp/v1", "api_key_env": "RCP_TOKEN"},
+    )
+    try:
+        assert runtime_module._apply_request_override(_base_config()) == _base_config()
+    finally:
+        runtime_module.reset_request_model_override(token)
+
+
+def test_request_override_applied_when_flag_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("V2_ALLOW_REQUEST_MODEL_OVERRIDE", "true")
+    token = runtime_module.set_request_model_override(
+        {
+            "provider": "openai-compatible",
+            "model": "Qwen/Qwen3",
+            "base_url": "https://rcp/v1",
+            "api_key_env": "RCP_TOKEN",
+        },
+    )
+    try:
+        merged = runtime_module._apply_request_override(_base_config())
+    finally:
+        runtime_module.reset_request_model_override(token)
+    assert merged["provider"] == "openai-compatible"
+    assert merged["model"] == "Qwen/Qwen3"
+    assert merged["base_url"] == "https://rcp/v1"
+    assert merged["api_key_env"] == "RCP_TOKEN"
+
+
+def test_request_override_drops_unknown_and_empty_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("V2_ALLOW_REQUEST_MODEL_OVERRIDE", "on")
+    token = runtime_module.set_request_model_override(
+        {"model": "m", "evil": "x", "base_url": ""},
+    )
+    try:
+        merged = runtime_module._apply_request_override(_base_config())
+    finally:
+        runtime_module.reset_request_model_override(token)
+    assert merged["model"] == "m"
+    assert "evil" not in merged  # unknown key dropped
+    assert "base_url" not in merged  # empty override value dropped, base had none

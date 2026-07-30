@@ -7,17 +7,17 @@ from typing import Any
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.v2.agents import ProviderSet
-from src.v2.agents.models import AgentResult
-from src.v2.api import v2_router
-from src.v2.api_models.contracts import V2ExtractJob, V2ExtractResponse
-from src.v2.ingest.cache import ProviderCache
-from src.v2.pipeline import PipelineOrchestrator
-from src.v2.pipeline.stages.models import ContextBundle
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
-from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
-from src.v2.ingest.providers.mock_ror import MockRORProvider
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.api import v2_router
+from git_metadata_extractor.api_models.contracts import V2ExtractJob, V2ExtractResponse
+from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.pipeline import PipelineOrchestrator
+from git_metadata_extractor.pipeline.stages.models import ContextBundle
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
+from git_metadata_extractor.providers.mock_ror import MockRORProvider
 
 HTTP_OK = 200
 HTTP_ACCEPTED = 202
@@ -27,7 +27,7 @@ HTTP_SERVICE_UNAVAILABLE = 503
 
 # Matches the value seeded by the `_isolate_v2_runtime_env` autouse
 # fixture in `tests/v2/conftest.py`. Every protected request needs a
-# matching bearer header — see `src/v2/auth.py::verify_token`.
+# matching bearer header — see `git_metadata_extractor/auth.py::verify_token`.
 TEST_API_TOKEN = "test-api-token"  # noqa: S105 — test fixture
 _AUTH_HEADERS = {"Authorization": f"Bearer {TEST_API_TOKEN}"}
 
@@ -543,6 +543,63 @@ def test_get_job_returns_404_for_unknown_id(tmp_path: Any) -> None:
             headers=_AUTH_HEADERS,
         ) as client:
             response = await client.get("/v2/jobs/does-not-exist")
+        return response.status_code, response.json()
+
+    status_code, payload = asyncio.run(_run())
+    assert status_code == HTTP_NOT_FOUND
+    assert payload["error_type"] == "not_found"
+
+
+def test_crawl_status_returns_compact_status_for_completed_job(tmp_path: Any) -> None:
+    """GET /v2/crawl/{job_id} mirrors the job's status but omits the result
+    graph and links to the full record via `result_url`."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any], dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers=_AUTH_HEADERS,
+        ) as client:
+            submit = await client.post(
+                "/v2/extract",
+                json={
+                    "source_url": "github.com/octocat/Hello-World",
+                    "agent_runtime": "rule_based",
+                },
+            )
+            job_id = submit.json()["job_id"]
+            await _wait_for_job_completion(client, job_id)
+            crawl = await client.get(f"/v2/crawl/{job_id}")
+        return crawl.status_code, crawl.json(), {"job_id": job_id}
+
+    status_code, status_payload, meta = asyncio.run(_run())
+    assert status_code == HTTP_OK
+    assert status_payload["job_id"] == meta["job_id"]
+    assert status_payload["status"] == "completed"
+    assert status_payload["result_url"] == f"/v2/jobs/{meta['job_id']}"
+    assert status_payload["source_url"].endswith("github.com/octocat/Hello-World")
+    # The compact view must NOT carry the (potentially large) result graph.
+    assert "result" not in status_payload
+
+
+def test_crawl_status_returns_404_for_unknown_id(tmp_path: Any) -> None:
+    """Parity with GET /v2/jobs/{job_id}: unknown id -> typed 404."""
+    cache_db = tmp_path / "providers.db"
+
+    async def _run() -> tuple[int, dict[str, Any]]:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(cache_db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers=_AUTH_HEADERS,
+        ) as client:
+            response = await client.get("/v2/crawl/does-not-exist")
         return response.status_code, response.json()
 
     status_code, payload = asyncio.run(_run())

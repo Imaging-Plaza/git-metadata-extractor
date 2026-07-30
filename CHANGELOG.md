@@ -6,7 +6,455 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- **Two documentation pages that did not exist:**
+  [`docs/architecture/overview.md`](docs/architecture/overview.md) (layers,
+  request lifecycle, the three runtimes and what the hybrid refiner may patch,
+  hallucination guards, the three caches, internal-field handling) and
+  [`docs/cross-repo-contract.md`](docs/cross-repo-contract.md) (which repo owns
+  what, the single-source version pin and its rules, the shared-volume writer
+  problem, required deployment settings). Both were previously documented only
+  in `AGENTS.md` — i.e. for agents, not for people.
+
+### Changed
+
+- **`docs/v2-pipeline.md` is now in the site navigation.** The README calls it
+  "start here", but it was absent from `mkdocs.yml`, so it never appeared on the
+  published site.
+- **The documented pipeline now matches the code.** Both `AGENTS.md` and the
+  pipeline doc described a single flat 25-stage list; there are really *two*
+  sequencers — `PLAN_BY_TYPE` in the orchestrator (agent generation, and it
+  differs for repository / user / organization inputs) and a flat sequence in
+  `api/extract.py` (everything after). Stages that were missing entirely:
+  `permissive_validation`, all four ROR resolvers, `prune_dangling_refs`, the
+  second `validate_ownership` pass, `demote_github_props_to_units`,
+  `emit_fork_parent_stubs`, `infer_article_source_organization`,
+  `tag_rule_based_disciplines`, `shacl_gate`, `compute_stats`. Also corrected:
+  `classify_url` runs in the API layer, not as a plan stage, and
+  `context_summary_agent` runs *inside* `context_gather` and fails open.
+- **Corrected a documented default that was wrong**: `V2_LINK_VERACITY_ENABLED`
+  is `true` (LLM mode), not `false`. And the composite-ID separator is `__`
+  everywhere in code — `AGENTS.md` said `_`.
+- **Site navigation reorganised** around what a reader wants (understand /
+  use / operate) instead of listing everything flat. The 14 historical working
+  notes moved to `docs/archive/` behind a single "Archive" entry with an index
+  page that says plainly they are not current documentation — they were ~half
+  the published page count.
+- **Internal design specs are no longer published.** `docs/superpowers/`
+  (9 plans/specs, unlinked from anywhere but still built into public HTML)
+  moved to `dev/superpowers/`, matching the `dev/` convention for internal
+  material.
+- Fixed stale paths in active docs (`src/index/…` / `src/module/…` now live in
+  open-pulse-sources; `git_metadata_extractor/api.py` is an `api/` package),
+  and removed the pipeline doc's pointer to `.internal/v2-pipeline-reference.md`
+  — that directory is untracked, so the file is absent from a fresh clone.
+
+### Fixed
+
+- **`test_promoted_strict_schemas` could not pass on a Windows checkout.** It
+  byte-compares the three copies of each JSON Schema; without a line-ending
+  rule, one copy checks out CRLF and another LF, so identical content compared
+  unequal. Added `.gitattributes` pinning those three paths to LF.
+- **The app version no longer drifts from `/v2/health`.** `app.py` hardcoded
+  the version string while `/v2/health` reads installed package metadata; both
+  now read the metadata, so a bump in `pyproject.toml` propagates to one place.
+
+## [3.0.0] — 2026-07-29
+
+The repo-split release: the RAG index layer moved to
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+(requires `v0.1.2`), the v1 API is retired, and the package was renamed
+`src/v2` → `git_metadata_extractor`. One migration event for consumers.
+Everything under `[3.0.0rc1]` below shipped as part of this release.
+
+### Removed (breaking — v1 API retired)
+
+- **The legacy v1 API is gone.** All `/v1/*` routes (`/v1/repository/*`,
+  `/v1/org/*`, `/v1/user/*`, `/v1/cache/*`) now return 404 — `src/v1/`,
+  `tests/v1/`, the v1 justfile recipes, and the v1-only env knobs
+  (`CACHE_DB_PATH`, `MAX_CACHE_ENTRIES`, `MAX_SELENIUM_SESSIONS`) were
+  removed. Consumers: see `docs/migration-v1-to-v2.md` for the `/v1` → `/v2`
+  endpoint mapping. Modules v2 shared with v1 moved into v2 homes:
+  the LLM model config (`src/v2/agents/llm/model_config.py`), the gimie
+  extraction intermediate (`src/v2/ingest/providers/gimie_extract.py`),
+  the GitHub user/org parsers + models
+  (`src/v2/ingest/github_accounts/`), and the Infoscience data models
+  (`src/v2/ingest/infoscience_models.py`).
+
+### Fixed
+
+- **The generated-models gate was not reproducible, and regenerating on
+  Windows corrupted the output.** `just v2-models-check` regenerates the
+  Pydantic models and compares byte-for-byte, but `datamodel-code-generator`
+  and `ruff` were declared as open ranges — so codegen `0.71.0` + ruff
+  `0.16.0` reordered the imports and failed the gate on an unrelated PR. Both
+  are now pinned exactly and the models regenerated against them. Separately,
+  the bundle builder read the JSON schemas with the platform default encoding:
+  on Windows (cp1252) every non-ASCII description came back mangled
+  (`→` → `â†’`, `École` → `Ã‰cole`) and got baked into the models. It now
+  reads UTF-8 explicitly, and the codegen executable lookup no longer tries to
+  run a POSIX `.venv/bin/` script on Windows.
+
+- **A fresh dependency resolve broke every pydantic-ai import.**
+  `opentelemetry-api` removed the deprecated `opentelemetry._events` module in
+  `1.44.0`, but logfire (transitive: pydantic-ai → logfire) still imports it
+  and its own metadata allows `opentelemetry-sdk<1.45.0` — so a clean install
+  picked `1.44.0` and any test touching pydantic-ai died at collection with
+  `ModuleNotFoundError`. Capped `opentelemetry-api` / `opentelemetry-sdk` to
+  `<1.44` until logfire stops importing the removed module. Only surfaced now
+  because CI had never run on this branch (`ci.yml` triggers on `main` /
+  `develop` only) — existing environments resolved before the release.
+
+- **GIMIE extraction was silently dead in every sidecar deployment.** Two
+  independent defects: (1) the client requested `/gimie/jsonld/…`, a route
+  that never existed on gimie-api — it now fetches `/gimie/ttl/…` and
+  converts with rdflib, byte-compatible with the historical in-process
+  serialization; (2) the upstream `ghcr.io/sdsc-ordes/gimie-api` images
+  (pinned digest and `:latest`) ship gimie 0.6.1 with an app written for
+  the 0.7.x API, failing every request and JSON-encoding the error to an
+  empty payload — replaced by a **GME-maintained sidecar**
+  (`tools/gimie-api/`, gimie 0.7.2 pinned) that both compose stacks build.
+  Also: the sidecar needs a **single** GitHub PAT (`GIMIE_ACCESS_TOKEN`)
+  when `GME_GITHUB_TOKEN` is a comma-separated pool. Effect: repository
+  descriptions, contributors, and the derived Person/Membership/
+  Contribution entities are extracted again (verified live: 3 → 66
+  entities on `sdsc-ordes/gimie`). See
+  `dev/split-rag-indices/11-gimie-sidecar-jsonld-broken.md`.
+
+### Changed (breaking — repo split)
+
+- **The RAG index layer moved to its own repo/service:
+  [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).**
+  `src/index/`, `src/module/`, `src/v2/indices/` and the `/v2/manifest` +
+  `/v2/indices/*` API surface were removed from this repo; the same routes are
+  now served by the `gme-sources` compose service (same paths, same auth).
+  The v2 read-side RAG providers import the split-out code as the
+  `open_pulse_sources` library (installed by `just install-dev`; baked into
+  the Docker image from git). Extract-side auto-ingest is unchanged — it
+  writes through the library into the same `data/index` + Qdrant stores.
+  Index ops (ingest/embed/reset recipes, seeds, reingest/migration scripts,
+  per-index docs) live in the new repo. `config/index/*.yaml` intentionally
+  remains here: the library resolves config/data paths CWD-relative.
+
+- **`open-pulse-sources` is now a declared dependency, pinned in one place.**
+  It was previously installed out-of-band by `just install-dev`, CI, and the
+  Dockerfile — four copies of the same tag, and a `pip install .` of this
+  project produced an installation that could not import its own providers
+  (`ModuleNotFoundError: open_pulse_sources`). The library is now a hard
+  dependency in `pyproject.toml`, pinned to the immutable tag `v0.1.2`, and
+  that entry is the single source of truth: every install path inherits it,
+  the Dockerfile's `OPEN_PULSE_SOURCES_REF` build arg is an empty
+  override-only escape hatch, and the published image records the resolved
+  ref in the `ch.sdsc.pulse.open-pulse-sources-ref` OCI label.
+  `tests/v2/test_open_pulse_sources_pin.py` fails on version skew between
+  the library pin and the `gme-sources` image tag, on a second hardcoded
+  pin, or on a mutable (`main` / `latest`) default. Compatibility matrix in
+  the README. **Minimum supported child release: `v0.1.2`** — `v0.1.1` and
+  earlier answer a missing credential with a raw 500 instead of a 503. See
+  `dev/split-rag-indices/02-cross-repo-dependency-release.md`.
+
+### Changed (breaking — deployment)
+
+- **GIMIE moved to a sidecar; `gimie` dependency removed.** The `gimie` package
+  (and its `calamus`/`marshmallow` chain, which hard-pinned vulnerable
+  `python-dotenv<0.22` + `marshmallow<3.24`) is gone from the image. Repository
+  GIMIE metadata is now fetched from the **`gimie-api` sidecar**
+  (`ghcr.io/sdsc-ordes/gimie-api`) via HTTP. **Every deployment must run the
+  sidecar and set `GIMIE_API_URL`** (e.g. `http://gme-gimie-api:15400`) — see
+  the [operations runbook](docs/OPERATIONS_RUNBOOK.md). `extract_gimie` is now a
+  single intermediate (sidecar when `GIMIE_API_URL` is set, else in-process gimie
+  if separately installed). This frees `python-dotenv` (→1.2.2) and removes
+  `marshmallow`, clearing the last 3 Dependabot alerts.
+
+### Added
+
+- **GitLab index family** — nine new RAG stores
+  (`gitlab_{epfl,ethz,datascience}_{projects,groups,users}`) over the EPFL,
+  ETHZ, and Datascience self-hosted GitLab instances, built on a shared
+  `src/index/_gitlab_base/` engine (one REST v4 client + parallel
+  project/group/user pipelines). All nine are vector-backed, registered in the
+  federated layer, and appear in `GET /v2/manifest`. GitLab user records carry
+  no ORCID (GitLab exposes no verified-ORCID field). See
+  [`docs/gitlab-index.md`](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/gitlab-index.md).
+- **HTTP ingest + search endpoints for the GitLab family** —
+  `POST /v2/indices/<name>/ingest` (full-instance crawl + embed, async job;
+  optional `limit`) and `POST /v2/indices/<name>/search` for all nine gitlab
+  stores, at parity with the other indices.
+- **Deploy-time index bootstrap** — the Gunicorn `on_starting` hook runs the
+  federated bootstrap once in the master process before workers fork, so every
+  index store exists with its schema before the first request. Idempotent and
+  best-effort; toggle with `INDEX_BOOTSTRAP_ON_START` (default `true`).
+- **LLM README enrichment** — a `repo_signals` refiner that reads the README to
+  populate `gme-internal:hasDocumentation` (documentation URLs) and fill the
+  test-coverage signal when the deterministic badge parse found none. Gated by
+  `V2_REPO_SIGNALS_AGENT_MODE` (`apply`/`shadow`/`off`).
+- **Repository enrichment fields (`gme-internal:*`)** — a broad deterministic
+  layer surfaced under `?include_internal_fields=true`. See
+  [`docs/repository-enrichment-fields.md`](docs/repository-enrichment-fields.md):
+    - **Releases** — `release_count`, `first_release_date`, `latest_release_date`
+      (+ raw `releases`, `latest_version`); **git tags** (`git_tags`,
+      `git_tag_count`).
+    - **Container distribution** — `docker_hub_url`; GHCR `package_count`,
+      `package_names`, `package_image_refs`, `package_tags`,
+      `latest_package_updated_at` (+ raw `container_images`).
+    - **Published packages** for **npm, PyPI, conda, crates.io, RubyGems, Maven,
+      Go, NuGet** — each with `_package`, `_latest_version`, `_versions`,
+      `_latest_release_date`, `_registry_url`, and a `_link`
+      (`verified`/`name_only`) back-reference (+ `conda_channel`,
+      `maven_group_id`/`maven_artifact_id`). Discovered from manifests
+      (`package.json`, `pyproject.toml`, `cargo.toml`, `pom.xml`, `go.mod`) and
+      README badges; name-collision results are dropped.
+    - **README badges** — `badges` (label/image/link) + `badge_count`.
+    - **Funding** — `funding_urls` from `.github/FUNDING.yml`.
+    - **Community health** — `community_health_percentage`,
+      `has_code_of_conduct`, `has_issue_template`, `has_pull_request_template`.
+    - **CI / coverage** — `has_ci`, `test_coverage`; governance-file URL
+      pointers (`code_of_conduct_url`, `security_url`, …).
+  - Public-registry queries gated by `V2_PACKAGE_REGISTRY_ENABLED` (default on).
+
+### Fixed
+
+- **Federated bootstrap `_LEAF_STORES`** — the gitlab `groups` (and now `users`)
+  leaf stores were missing from the leaf-opener allowlist and silently
+  bootstrapped as "skipped: no duckdb store"; all nine gitlab leaves now
+  bootstrap correctly.
+
+## [3.0.0rc1] — Identifier URL canonicalisation + per-entity RAG indices (breaking)
+
+> **Status: shipped in `3.0.0`** (2026-07-29). This was the release candidate
+> — its breaking identifier-shape and env-var changes are what warranted the
+> major bump. It was never tagged on its own; read it as the first half of the
+> `3.0.0` entry above.
+
+This release standardises **every external identifier** to its canonical
+HTTPS URL form, end-to-end. Previously the codebase carried a split
+convention: ROR was URL-form, DOI/ORCID/Infoscience/GitHub were bare.
+All identifiers now match.
+
+### Fixed — read-only DuckDB snapshot (Hub 404s from write-lock contention)
+
+The serving process holds a persistent **read-write** DuckDB handle on
+every v2-ingest provider's store (cached on `app.state`). DuckDB allows
+N readers **or** 1 writer — so a separate process (the Hub) opening the
+live file read-only to sniff the schema failed with a lock conflict, the
+collection never registered, and queries 404'd.
+
+Fix (zero-contention via separate files): after each ingest+embed job,
+`run_embed_step` publishes a read-only copy to `<provider>.ro.duckdb`
+(`src/index/_snapshot.py`) — `CHECKPOINT`, copy the data tables into a
+temp DB via `CREATE TABLE … AS SELECT`, atomic `os.replace`. The heavy
+`chunks` table is skipped. The Hub points at the `.ro.duckdb` snapshot;
+the live file stays owned solely by GME (which reads it in-process via
+its own writer connection — no change to serving). Writer and readers
+operate on different files → zero contention, even mid-ingest.
+
+- Toggles: `INDEX_DUCKDB_SNAPSHOT` (default on),
+  `INDEX_SNAPSHOT_MIN_INTERVAL_SECONDS` (debounce for large stores).
+- `reset` deletes the snapshot alongside the live DB.
+- The CLI-managed catalogs (ror/infoscience/snsf/epfl_graph/
+  zenodo_communities) and ethz already serve read-only-per-request /
+  config-only, so they never held the lock and need no snapshot.
+- **Hub-side change required:** point its read-only opens at
+  `<provider>.ro.duckdb` instead of the live `<provider>.duckdb`.
+
+### Fixed — SHACL gate ships its ontology + invalid `pulse:Company` enum
+
+- **SHACL gate was dead in the container.** The open-pulse ontology TTL
+  lived under `dev/`, which the Docker image does not copy, so
+  `ontology_ttl_path()` resolved to `/app/dev/…` → `FileNotFoundError`
+  and the SHACL gate never ran in production. Moved the TTL into the
+  package (`src/v2/validation/open-pulse-ontology-v2.1.2.ttl`, shipped by
+  `COPY src` and via `[tool.setuptools.package-data]`). Resolution is now
+  a chain: `GME_ONTOLOGY_TTL` env override → packaged copy → `dev/`
+  source-checkout fallback, with an informative error listing all three.
+- **Invalid `pulse:OrganizationType` value.** Two LLM refiners
+  (`discovery`, `org_resolver`) could emit `pulse:Company`, which is not
+  a member of `pulse:OrganizationTypeEnumeration` (the ontology defines
+  `pulse:PrivateCompany`). `org_resolver` even allowed it via its
+  `Literal` with no normalisation, so it reached the graph and failed
+  `sh:class` (`ClassConstraintComponent`) even when the ontology was
+  loaded. Removed `pulse:Company` from both prompts + the Literal;
+  refiners now emit only the 8 real enum members.
+
+Note for downstream SHACL validators: the remaining bulk of
+`ClassConstraintComponent` findings on `pulse:repositoryType` /
+`pulse:OrganizationType` / `pulse:discipline` are **not** output defects
+— those values are enum IRIs whose class-membership triples live in the
+ontology. Validate `data + ontology` (load the TTL as `ont_graph`, as the
+in-pipeline gate does); validating data-only reports them spuriously.
+
+### Added — `GET /v2/crawl/{job_id}` extract-job status endpoint
+
+Lightweight status endpoint for async extract jobs, for cheap polling
+and parity with the v1 crawl-status surface. Returns just the lifecycle
+fields (`status` + timestamps + `error`) plus a `result_url` pointing at
+the full record/graph — previously a job's status could only be read
+from the `status` field buried inside the full `GET /v2/jobs/{job_id}`
+response. Shares the same store lookup + orphaned-job (stale-heartbeat)
+detection as `/v2/jobs/{job_id}` via extracted helpers, so both agree on
+liveness; 503/404 behaviour matches.
+
+### Added — `dockerhub` RAG index
+
+New per-provider index for **Docker Hub repositories (images)**, with
+full parity to the existing indices: dedicated DuckDB store + `dockerhub`
+Qdrant collection, `POST /v2/indices/dockerhub/{ingest,search}` routes
+(ingest chains the embed step + WAL checkpoint like the others),
+federated search/lookup adapter, reset spec, `IndexName` enum entry,
+`seeds/dockerhub.txt`, and a `dockerhub` entry in the cold-start
+re-ingest driver.
+
+- One row per `namespace/name` (official images under `library/`);
+  metadata from the public Docker Hub v2 API
+  (`https://hub.docker.com/v2/repositories/{namespace}/{name}`), which
+  serves public repos anonymously. `DOCKERHUB_TOKEN` is optional (raises
+  the rate limit only).
+- Ingest accepts flexible references: `namespace/name`, bare official
+  names, `hub.docker.com/r/…` and `/_/…` URLs, and `docker.io/…` pull
+  refs (any `:tag` is dropped — repositories are the indexed unit).
+- Embedding text = `repo_id` + short description + `full_description`
+  (README); tags / pull_count / star_count ride in the payload.
+
+### Added — Repository releases + GHCR container images
+
+The repository extractor now surfaces a repo's **published releases**
+and the **GHCR container (Docker) images** built from it:
+
+- `GitHubProvider.get_repository_releases` — thinned release list
+  (tag, name, dates, draft/prerelease flags, assets) from
+  `/repos/{owner}/{repo}/releases`. Public endpoint, no extra scope.
+- `GitHubProvider.get_repository_container_images` — owner-scoped
+  `container` packages filtered to those linked to (or named after)
+  the repo, each with its `ghcr.io/...` reference and version tags.
+  Requires the `read:packages` token scope; degrades to an empty list
+  without it.
+- `context_gather` fetches both (best-effort, like aux-files) and the
+  repository agent stamps them onto the internal `_releases` /
+  `_container_images` fields (surfaced when
+  `include_internal_fields=true`).
+
+Layer 1 only: the Pulse ontology has no predicate for releases or
+container images yet (v1 carried a never-shipped `hasSoftwareImage`),
+so these ride under the `_`-prefix convention. Promoting them to
+canonical `schema:`/`pulse:` terms is a tracked v3.0.0 ontology
+follow-up.
+
+### Breaking — Persisted identifier shapes
+
+Every `pulse:*Identifier` / `pulse:github*Handle` field now stores the
+canonical URL form. The wire-input layer accepts either shape (bare or
+URL) on ingest; persisted output is always URL.
+
+| Property                                       | v2.1.x (bare)                    | v3.0.0 (URL)                                                                     |
+|-----------------------------------------------|----------------------------------|----------------------------------------------------------------------------------|
+| `schema:identifier` (DOI on Article)           | `10.1038/s41586-024-...`         | `https://doi.org/10.1038/s41586-024-...`                                         |
+| `pulse:orcidIdentifier` / `pulse:orcid`        | `0000-0001-2345-6789`            | `https://orcid.org/0000-0001-2345-6789`                                          |
+| `pulse:infosciencePersonIdentifier`            | `f97b60da-...`                   | `https://infoscience.epfl.ch/entities/person/f97b60da-...`                       |
+| `pulse:infoscienceOrganizationIdentifier`      | `95372c6b-...`                   | `https://infoscience.epfl.ch/entities/orgunit/95372c6b-...`                      |
+| `pulse:infoscienceArticleIdentifier`           | `dbce93b0-...`                   | `https://infoscience.epfl.ch/entities/publication/dbce93b0-...`                  |
+| `pulse:githubUsername`                         | `caviri`                         | `https://github.com/caviri`                                                      |
+| `pulse:githubOrganizationHandle`               | `EPFL-ENAC`                      | `https://github.com/EPFL-ENAC`                                                   |
+| `pulse:githubRepositoryHandle`                 | `EPFL-ENAC/geodata-toolkit`      | `https://github.com/EPFL-ENAC/geodata-toolkit`                                   |
+
+ROR was already URL-form; unchanged.
+
+### Breaking — Resolved `id` values
+
+`resolve_*_id()` helpers now produce the canonical URL for every
+identifier source (not just ROR / DOI). Composite IDs in Membership
+(`{personId}__{orgId}`) and Contribution (`{personId}__{repoId}`)
+therefore carry URLs on both sides:
+
+  `https://orcid.org/0000-0001-2345-6789__https://ror.org/02s376052`
+  `https://orcid.org/0000-0001-2345-6789__https://github.com/EPFL-ENAC/geodata-toolkit`
+
+### SPARQL migration
+
+Existing graph stores carry the old (bare) values. To migrate:
+
+```sparql
+# DOI (schema:identifier on ScholarlyArticle)
+DELETE { ?article schema:identifier ?bare }
+INSERT { ?article schema:identifier ?url }
+WHERE  { ?article a schema:ScholarlyArticle ; schema:identifier ?bare .
+         FILTER(STRSTARTS(STR(?bare), "10."))
+         BIND(IRI(CONCAT("https://doi.org/", STR(?bare))) AS ?url) }
+
+# ORCID
+DELETE { ?person pulse:orcidIdentifier ?bare }
+INSERT { ?person pulse:orcidIdentifier ?url }
+WHERE  { ?person pulse:orcidIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"))
+         BIND(IRI(CONCAT("https://orcid.org/", STR(?bare))) AS ?url) }
+
+# Infoscience Person
+DELETE { ?p pulse:infosciencePersonIdentifier ?bare }
+INSERT { ?p pulse:infosciencePersonIdentifier ?url }
+WHERE  { ?p pulse:infosciencePersonIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/person/", STR(?bare))) AS ?url) }
+
+# Infoscience Organization
+DELETE { ?o pulse:infoscienceOrganizationIdentifier ?bare }
+INSERT { ?o pulse:infoscienceOrganizationIdentifier ?url }
+WHERE  { ?o pulse:infoscienceOrganizationIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/orgunit/", STR(?bare))) AS ?url) }
+
+# Infoscience Article
+DELETE { ?a pulse:infoscienceArticleIdentifier ?bare }
+INSERT { ?a pulse:infoscienceArticleIdentifier ?url }
+WHERE  { ?a pulse:infoscienceArticleIdentifier ?bare .
+         FILTER(REGEX(STR(?bare), "^[0-9a-f]{8}-"))
+         BIND(IRI(CONCAT("https://infoscience.epfl.ch/entities/publication/", STR(?bare))) AS ?url) }
+
+# GitHub user / org handles (same URL shape)
+DELETE { ?s ?p ?bare }
+INSERT { ?s ?p ?url }
+WHERE  { VALUES ?p { pulse:githubUsername pulse:githubOrganizationHandle }
+         ?s ?p ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+
+# GitHub repository handle
+DELETE { ?r pulse:githubRepositoryHandle ?bare }
+INSERT { ?r pulse:githubRepositoryHandle ?url }
+WHERE  { ?r pulse:githubRepositoryHandle ?bare .
+         FILTER(REGEX(STR(?bare), "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.][A-Za-z0-9_.-]{0,99}$"))
+         BIND(IRI(CONCAT("https://github.com/", STR(?bare))) AS ?url) }
+```
+
+### Added
+
+- `src/v2/canonicalization/{doi,orcid,infoscience,github}.py` — shared
+  identifier helpers (`*_iri()` to build the canonical URL, `parse_*`
+  to extract the bare form). Each helper is idempotent on canonical
+  input and tolerates every wire shape that arrived during the
+  v2.1.x lifetime.
+
+### Changed — SHACL ontology
+
+- `dev/ontology-v2-json-response/open-pulse-ontology-v2.1.2.ttl`:
+  `sh:pattern` on all eight identifier shapes (DOI, ORCID, Infoscience
+  person/org/article, GitHub username/org/repo) now constrains the
+  URL form. ROR was already URL-form; unchanged.
+
+### Changed — Pipeline
+
+- Rule-based and LLM agents stamp identifiers in URL form via the
+  canonicalisation helpers.
+- `reconciliation` promotes pre-resolved bare identifiers to URL form
+  on ingest, normalises legacy `core/items/<uuid>` URLs to the
+  `entities/<kind>/<uuid>` canonical form, and registers bare-shape
+  aliases in the entity-lookup tables so cross-references in either
+  shape resolve correctly.
+- `id_resolution.resolve_*_id()` returns the canonical URL on every
+  resolution path (no more f-string concatenation against base URIs).
+- `ownership_check._entity_owner_handle` returns the bare GitHub
+  handle regardless of whether the persisted property carries the
+  URL form or the legacy bare shape — keeps `pulse:owns` owner-equality
+  checks correct post-migration.
 
 ## [2.1.0rc1] — 2026-05-28
 

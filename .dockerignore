@@ -31,3 +31,19 @@ ENV/
 # Git
 .git/
 .gitignore
+
+# Heavy local state — never ship in a build context (data/ alone is ~36GB)
+data/
+logs/
+extraction_results/
+.venv/
+.venv-win/
+.cache/
+.uv-cache/
+.claude/
+.internal/
+site/
+dev/
+.staging/
+# Sibling repo clone (has its own image); wheel is staged via opswheel/
+open-pulse-sources/

@@ -5,9 +5,9 @@ import asyncio
 from fastapi import FastAPI
 from starlette.requests import Request
 
-from src.v2.dependencies import get_provider_set
-from src.v2.ingest.providers.github_provider import RealGitHubProvider
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.dependencies import get_provider_set
+from git_metadata_extractor.providers.github_provider import RealGitHubProvider
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 def _build_request(

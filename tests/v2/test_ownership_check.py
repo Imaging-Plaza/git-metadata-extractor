@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from src.v2.pipeline.stages.models import AssembledOutput, ReconciledEntities
-from src.v2.pipeline.stages.ownership_check import (
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
+from git_metadata_extractor.pipeline.stages.ownership_check import (
+    _synthesize_owner_person_stub,
     guarantee_repo_author,
     infer_owners,
     validate_ownership,
 )
+
+
+def test_synthesized_owner_person_is_marked_reference_stub():
+    # Bug 07: genuine placeholders must carry `_stub` so its absence reliably
+    # means "independently extracted".
+    person = _synthesize_owner_person_stub("octocat")
+    assert person["_stub"] is True
+    assert person["id"] == "https://github.com/octocat"
+    assert person["type"] == "schema:Person"
 
 
 def _person(*, github_username: str, owns: list) -> dict:
@@ -318,3 +328,18 @@ def test_guarantee_repo_author_person_owner_uses_person_id() -> None:
     # No new persons synthesized — Person owner was reused.
     assert new_reconciled.entities["persons"] == [alice]
     assert any("stamped fallback owner 'https://github.com/alice'" in w for w in warnings)
+
+
+def test_entity_github_org_handle_returns_bare_handle_from_canonical_url() -> None:
+    """v3.0.0: handles are stored as canonical URLs, but ROR queries +
+    handle comparisons need the bare handle (the URL 500s the ROR API)."""
+    from git_metadata_extractor.pipeline.stages.ownership_check import _entity_github_org_handle
+
+    assert _entity_github_org_handle(
+        {"pulse:githubOrganizationHandle": "https://github.com/epfl-lts2"},
+    ) == "epfl-lts2"
+    # Nested under identifiers, and bare input still resolves.
+    assert _entity_github_org_handle(
+        {"identifiers": {"pulse:githubOrganizationHandle": "EPFL-LTS2"}},
+    ) == "epfl-lts2"
+    assert _entity_github_org_handle({"schema:name": "no handle"}) is None

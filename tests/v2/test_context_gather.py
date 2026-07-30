@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents import ProviderSet
-from src.v2.ingest.detection.models import GitHubURLClassification, GitHubURLType
-from src.v2.pipeline.stages import gather_context
-from src.v2.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from src.v2.ingest.providers.base import (
+from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.providers.detection.models import GitHubURLClassification, GitHubURLType
+from git_metadata_extractor.pipeline.stages import gather_context
+from git_metadata_extractor.pipeline.stages.context_gather import RequiredProviderUnavailableError
+from git_metadata_extractor.providers.base import (
     GitHubProvider,
     ORCIDProvider,
     ORCIDRecord,

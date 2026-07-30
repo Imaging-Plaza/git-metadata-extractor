@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.v2.ingest.providers.github_provider import (
+from git_metadata_extractor.providers.github_provider import (
     RealGitHubProvider,
     _normalize_sbom,
     _parse_purl,
@@ -221,7 +221,7 @@ def test_get_repository_sbom_returns_normalized_list_on_200() -> None:
     response = _FakeResponse(status_code=200, payload=payload)
 
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=response,
     ) as fake_get:
         result = provider.get_repository_sbom("octocat/Hello-World")
@@ -245,7 +245,7 @@ def test_get_repository_sbom_returns_none_on_missing_or_forbidden(status_code: i
     response = _FakeResponse(status_code=status_code, payload={"message": "nope"})
 
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=response,
     ):
         assert provider.get_repository_sbom("ghost/repo") is None
@@ -256,7 +256,7 @@ def test_get_repository_sbom_returns_none_on_other_http_error() -> None:
     response = _FakeResponse(status_code=500, payload={"message": "boom"})
 
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=response,
     ):
         assert provider.get_repository_sbom("octocat/Hello-World") is None
@@ -267,7 +267,7 @@ def test_get_repository_sbom_returns_none_when_response_not_json() -> None:
     response = _FakeResponse(status_code=200, raise_json=True)
 
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         return_value=response,
     ):
         assert provider.get_repository_sbom("octocat/Hello-World") is None
@@ -277,7 +277,7 @@ def test_get_repository_sbom_returns_none_when_request_raises() -> None:
     provider = _build_provider()
 
     with patch(
-        "src.v2.ingest.providers.github_provider.requests.get",
+        "git_metadata_extractor.providers.github_provider.requests.get",
         side_effect=ConnectionError("boom"),
     ):
         assert provider.get_repository_sbom("octocat/Hello-World") is None

@@ -6,12 +6,12 @@ from typing import Any, Callable
 
 import pytest
 
-from src.v2.ingest.providers.base import (
+from git_metadata_extractor.providers.base import (
     INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
     INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
     InfoscienceProvider,
 )
-from src.v2.ingest.providers.mock_infoscience import MockInfoscienceProvider
+from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "infoscience"
 MIN_FIXTURE_COUNT = 5

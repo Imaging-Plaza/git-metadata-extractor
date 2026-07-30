@@ -28,6 +28,6 @@
       ]
     }
   },
-  "postCreateCommand": "mkdir -p .uv-cache && rm -rf .venv && uv venv && uv pip install -e .[dev] && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc",
+  "postCreateCommand": "mkdir -p .uv-cache && rm -rf .venv && uv venv && just install-dev && echo '. $PWD/.venv/bin/activate' >> /home/vscode/.bashrc",
   "postStartCommand": "bash .devcontainer/set-vscode-password.sh"
 }

@@ -6,12 +6,12 @@ from typing import Any
 import pytest
 from jsonschema import validate
 
-from src.v2.agents.llm.membership import LLMMembershipAgentV2
-from src.v2.agents.llm.membership import agent as membership_agent_module
-from src.v2.agents.models import ProviderSet
-from src.v2.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
-from src.v2.ingest.providers.mock_github import MockGitHubProvider
-from src.v2.ingest.providers.mock_orcid import MockORCIDProvider
+from git_metadata_extractor.agents.llm.membership import LLMMembershipAgentV2
+from git_metadata_extractor.agents.llm.membership import agent as membership_agent_module
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, LLMRuntimeResult
+from git_metadata_extractor.providers.mock_github import MockGitHubProvider
+from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29

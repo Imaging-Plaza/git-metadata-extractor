@@ -10,16 +10,15 @@ flowchart TB
         C1[HTTP client / batch script]
     end
 
-    subgraph API[FastAPI app — src/api.py]
-        A1[v2_router<br/>src/v2/api.py]
+    subgraph API[FastAPI app — git_metadata_extractor/app.py]
+        A1[v2_router<br/>git_metadata_extractor/api/_router.py]
         A2[Request logging<br/>AsyncRequestContext]
-        A3[v1 frozen<br/>src/v1/]
     end
 
-    subgraph Pipeline[V2 pipeline — src/v2/pipeline/]
+    subgraph Pipeline[V2 pipeline — git_metadata_extractor/pipeline/]
         P0[orchestrator]
         P1[stages/* — 23 stages]
-        P2[per-entity agents<br/>src/v2/agents/llm/* + rule_based/*]
+        P2[per-entity agents<br/>git_metadata_extractor/agents/llm/* + rule_based/*]
     end
 
     subgraph Caches[Shared SQLite — V2_PROVIDER_CACHE_PATH]
@@ -29,13 +28,13 @@ flowchart TB
         K4[Async-job store]
     end
 
-    subgraph Providers[src/v2/ingest/providers/]
+    subgraph Providers[git_metadata_extractor/providers/]
         PG[GitHub REST + GIMIE]
         PR[ROR / ORCID / Infoscience]
         PRAG[*_rag — Qdrant-backed]
     end
 
-    subgraph RAG[RAG indices — src/index/*]
+    subgraph RAG[RAG indices — open_pulse_sources library / service]
         RH[HuggingFace]
         ROA[OpenAlex]
         RI[Infoscience]
@@ -61,7 +60,6 @@ flowchart TB
 
     C1 --> A2 --> A1
     A1 --> P0
-    A1 --> A3
     P0 --> P1
     P1 --> P2
     P2 --> Providers
@@ -144,10 +142,14 @@ them isolated and independently invalidatable.
 
 ## RAG index architecture
 
-Each index under `src/index/<name>/` is independent: its own DuckDB, its
-own Qdrant collections, its own CLI, its own FastAPI app, its own refresh
-cadence. The federated layer (`src/index/_federated/`) never shares
-state — it just orchestrates fan-out across registered adapters in a
+The index layer lives in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
+repo (this service imports its read side as the `open_pulse_sources`
+library). Each index under `open_pulse_sources/index/<name>/` is
+independent: its own DuckDB, its own Qdrant collections, its own CLI, its
+own refresh cadence. The federated layer
+(`open_pulse_sources/index/_federated/`) never shares state — it just
+orchestrates fan-out across registered adapters in a
 `ThreadPoolExecutor`.
 
 ```mermaid
@@ -167,7 +169,7 @@ flowchart LR
     end
     DB -.-> ADAP
     QD -.-> ADAP
-    ADAP --> GME[just gme-search / gme-entity]
+    ADAP --> GME[gme-search / gme-entity CLI<br/>open-pulse-sources repo]
     ADAP --> RAGTOOL[v2 LLM RAG tools]
 ```
 
@@ -187,17 +189,16 @@ Shared infrastructure (post-2026-05-01 pattern):
 The `ror` index is a partial outlier (no DuckDB layer; flat catalog of
 orgs in Qdrant + a JSONL dump for lexical lookup).
 
-See [RAG Indices Overview](../rag-indices.md) for the full inventory and
+See [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) for the full inventory and
 per-index quickstarts.
 
 ## Notes
 
-- The frozen v1 pipeline (`src/v1/`) shares the FastAPI app but has its
-  own cache (`src/v1/cache/`) and code paths. No new work targets v1.
+- The legacy v1 pipeline was removed in 3.0.0 (`/v1/*` routes return 404).
 - Internal pipeline metadata fields whose names start with `_` are
   stripped before strict validation, JSON-LD output, and any external
   artefact. Never expose `_`-prefixed fields in API responses.
 - `identifiers.uuid` on every entity is server-generated
-  (`src/v2/agents/models.py::generate_uuid()`); the LLM never controls it.
+  (`git_metadata_extractor/agents/models.py::generate_uuid()`); the LLM never controls it.
 - See [V2 API Reference](../v2-api-reference.md) for the full 23-stage
   pipeline and gating rules.

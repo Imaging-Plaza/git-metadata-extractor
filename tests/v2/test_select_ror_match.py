@@ -9,7 +9,7 @@ leaves `pulse:ror` null so the agent-backed parent selector decides.
 
 from __future__ import annotations
 
-from src.v2.agents.rule_based.organization_agent import (
+from git_metadata_extractor.agents.rule_based.organization_agent import (
     _GENERIC_ORG_TOKENS,
     _select_ror_match,
 )

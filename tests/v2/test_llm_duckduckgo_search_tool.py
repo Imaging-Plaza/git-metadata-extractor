@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.v2.agents.llm.agent_tools.duckduckgo_search import (
+from git_metadata_extractor.agents.llm.agent_tools.duckduckgo_search import (
     DUCKDUCKGO_INSTANT_ANSWER_URL,
     make_duckduckgo_search_tool,
 )

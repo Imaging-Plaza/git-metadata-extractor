@@ -21,13 +21,13 @@ from typing import Any
 
 import pytest
 
-from src.v2.agents.llm.refiners.bio_resolver import (
+from git_metadata_extractor.agents.llm.refiners.bio_resolver import (
     BioResolverInput,
     BioResolverPatch,
 )
-from src.v2.agents.llm.runtime import LLMRuntimeError
-from src.v2.pipeline.stages.models import ReconciledEntities
-from src.v2.pipeline.stages.resolve_bio_to_ror_llm import (
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError
+from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror_llm import (
     BioLLMAffiliationResult,
     _apply_patch,
     _resolve_max_concurrency,
@@ -368,7 +368,7 @@ def test_concurrency_env_garbage_falls_back(monkeypatch):
 
 
 def test_api_env_flag_defaults_on(monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.delenv("V2_RESOLVE_BIO_TO_ROR_LLM", raising=False)
     assert v2_api._resolve_bio_to_ror_llm_enabled() is True
@@ -376,15 +376,15 @@ def test_api_env_flag_defaults_on(monkeypatch):
 
 @pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off", "n", "f"])
 def test_api_env_flag_recognises_off_values(value, monkeypatch):
-    from src.v2 import api as v2_api
+    from git_metadata_extractor.api import _helpers as v2_api
 
     monkeypatch.setenv("V2_RESOLVE_BIO_TO_ROR_LLM", value)
     assert v2_api._resolve_bio_to_ror_llm_enabled() is False
 
 
 def test_api_constant_and_export_in_place():
-    from src.v2 import api as v2_api
-    from src.v2.pipeline import stages
+    from git_metadata_extractor.api import _helpers as v2_api
+    from git_metadata_extractor.pipeline import stages
 
     assert v2_api.STAGE_RESOLVE_BIO_TO_ROR_LLM == "resolve_bio_to_ror_llm"
     assert callable(stages.run_resolve_bio_to_ror_llm_stage)

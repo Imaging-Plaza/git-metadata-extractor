@@ -1,6 +1,9 @@
 # Migration Guide: V1 to V2
 
-This guide describes how to run v1 and v2 side by side and migrate clients incrementally.
+> **The v1 API was REMOVED in 3.0.0** (the repo-split release): `/v1/*`
+> routes now return 404. This guide is kept as the endpoint mapping for
+> consumers migrating off the removed surface. Sections describing
+> "coexistence" are historical.
 
 ## Coexistence Model
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Callable
 
-from src.v2.canonicalization import resolve_person_id
-from src.v2.validation.schema_validation import StrictSchemaValidator
+from git_metadata_extractor.canonicalization import resolve_person_id
+from git_metadata_extractor.validation.schema_validation import StrictSchemaValidator
 
 UUID_V5_VERSION = 5
 
@@ -28,14 +28,17 @@ def test_resolve_person_id_uses_infoscience_when_orcid_missing() -> None:
     person = {
         "identifiers": {
             "pulse:orcid": None,
-            "pulse:infosciencePersonIdentifier": "12345",
+            "pulse:infosciencePersonIdentifier": "cc69e432-9742-4ebd-a318-02a491f44e69",
             "pulse:githubUsername": "johndoe",
         },
     }
 
     canonical_id, id_source = resolve_person_id(person)
 
-    assert canonical_id == "https://infoscience.epfl.ch/server/api/core/items/12345"
+    assert canonical_id == (
+        "https://infoscience.epfl.ch/entities/person/"
+        "cc69e432-9742-4ebd-a318-02a491f44e69"
+    )
     assert id_source == "pulse:infosciencePersonIdentifier"
 
 
@@ -54,7 +57,7 @@ def test_resolve_person_id_normalizes_infoscience_entity_url_with_full_suffix() 
     canonical_id, id_source = resolve_person_id(person)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/person/"
         "cc69e432-9742-4ebd-a318-02a491f44e69"
     )
     assert id_source == "pulse:infosciencePersonIdentifier"
@@ -75,7 +78,7 @@ def test_resolve_person_id_normalizes_infoscience_core_items_url() -> None:
     canonical_id, id_source = resolve_person_id(person)
 
     assert canonical_id == (
-        "https://infoscience.epfl.ch/server/api/core/items/"
+        "https://infoscience.epfl.ch/entities/person/"
         "cc69e432-9742-4ebd-a318-02a491f44e69"
     )
     assert id_source == "pulse:infosciencePersonIdentifier"

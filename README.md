@@ -33,7 +33,7 @@ A single GitHub URL → a typed graph you can SPARQL. The pipeline combines dete
 git clone https://github.com/Imaging-Plaza/git-metadata-extractor.git
 cd git-metadata-extractor
 just install-dev
-cp .env.example .env   # fill in GME_GITHUB_TOKEN + one LLM credential
+cp .env.example .env   # fill in API_TOKEN, GME_GITHUB_TOKEN + one LLM credential
 
 # 2. Run
 just serve-dev         # starts on http://localhost:1234
@@ -116,10 +116,12 @@ Swagger UI: <http://localhost:1234/docs>
 
 | Doc | What's in it |
 |---|---|
-| **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Pipeline overview, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
+| **[docs/v2-pipeline.md](docs/v2-pipeline.md)** | Every stage, **load-bearing assumptions**, affiliation strategy, env flags. Start here. |
+| **[docs/architecture/overview.md](docs/architecture/overview.md)** | Layers, request lifecycle, the three runtimes, hallucination guards, caches |
+| [docs/cross-repo-contract.md](docs/cross-repo-contract.md) | The index-layer split: who writes, who reads, version pinning |
 | [docs/getting-started.md](docs/getting-started.md) | Install + first run, the long version |
 | [docs/v2-api-reference.md](docs/v2-api-reference.md) | `/v2/extract`, `/v2/jobs`, `/v2/graph` endpoints |
-| [docs/rag-indices.md](docs/rag-indices.md) | Nine RAG indices + federated layer |
+| [docs/rag-indices.md](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) | Nine RAG indices + federated layer |
 | [docs/v2-rag-tools.md](docs/v2-rag-tools.md) | Agent-side RAG tools wired into the pipeline |
 | [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) | `/v1` → `/v2` endpoint mapping |
 | [.env.example](.env.example) | Every env var with defaults and notes |
@@ -131,22 +133,52 @@ Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
 ## Repository layout
 
 ```
-src/v2/                  # v2 extraction pipeline (new work here)
-  api.py                 # /v2/extract endpoint
+git_metadata_extractor/
+  app.py                 # FastAPI app
+  api/                   # /v2 routes (extract, jobs, auto-ingest, system)
   pipeline/stages/       # 25 sequential pipeline stages
   agents/llm/            # LLM-backed entity agents + RAG tools
   agents/rule_based/     # deterministic counterparts
-  ingest/providers/      # GitHub, ROR, ORCID, Infoscience clients
+  providers/             # GitHub, gimie, ROR, ORCID, Infoscience clients + RAG readers
   schema/                # JSON Schema + JSON-LD context + Pydantic models
   validation/            # strict-schema + SHACL validators
+  experimental/          # pi terminal-agent PoC (not production)
 
-src/index/               # nine RAG indices (HuggingFace, OpenAlex, Infoscience,
-                         # ORCID, ROR, Zenodo, ETHZ, GitHub, SNSF) + federated
+# RAG indices moved to https://github.com/sdsc-ordes/open-pulse-sources —
+# the read-side providers import it as the `open_pulse_sources` library;
+# ingest/embed and the /v2/indices management API live in that repo/service.
 
-src/v1/                  # frozen legacy pipeline — no new work
 tests/v2/                # default test target
 docs/                    # MkDocs site source
 ```
+
+### Cross-repo compatibility
+
+The index layer is consumed twice — as an imported **library** (read side) and
+as the **`gme-sources` service image** (write side) — and both share the same
+DuckDB stores and Qdrant collections. They must be the same release:
+
+| git-metadata-extractor | open-pulse-sources library | `gme-sources` image | Notes |
+|---|---|---|---|
+| `3.0.0` (this release) | `v0.1.2` | `ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2` | first split release |
+| `< 3.0.0` | — | — | monolith; index layer was in-tree |
+
+`v0.1.1` and earlier are **not** supported by `3.0.0`: they return a raw 500
+instead of a 503 when a credential is missing, which the extract-side error
+handling reads as an unexpected failure rather than a degraded index.
+
+The library version lives in exactly one place — the
+`open-pulse-sources @ git+…@<tag>` entry in `pyproject.toml` — and every
+install path (`just install-dev`, CI, the Docker image) inherits it from
+there. `tests/v2/test_open_pulse_sources_pin.py` fails the build if the
+`gme-sources` image tag drifts from it, or if either default slips back to a
+mutable ref (`main` / `latest`).
+
+Bumping the child version therefore means: edit the pin in `pyproject.toml`,
+match the image tag in `tools/deploy/docker-compose.yml`, add a matrix row
+here, and run the test. For local cross-repo work, `just install-dev`
+re-installs a checkout found at `./open-pulse-sources` or
+`../open-pulse-sources` as editable, overriding the pin.
 
 ---
 
@@ -154,7 +186,9 @@ docs/                    # MkDocs site source
 
 Everything is in `.env` — copy `.env.example` and fill in what you need. Required minimum:
 
+- `API_TOKEN` — bearer token guarding `/v2/extract` and `/v2/jobs/{id}`. **Fails closed** (unset → `503` on every protected route). Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - `GME_GITHUB_TOKEN` — required for any real GitHub call.
+- `GIMIE_API_URL` — points at the `gme-gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); **required for repository extraction** (the `gimie` package was removed from the image).
 - **One LLM credential** — `RCP_TOKEN` (EPFL), `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`.
 
 Optional (only when you use the feature): `INFOSCIENCE_TOKEN`, `SELENIUM_REMOTE_URL`, `HF_TOKEN`, `ZENODO_TOKEN`, `OPENALEX_MAILTO`, `EPFL_GRAPH_USERNAME` / `EPFL_GRAPH_PASSWORD`.
@@ -173,7 +207,9 @@ just type-check        # mypy
 just ci                # lint + type-check + coverage
 ```
 
-Per-index suites: `just hf-test`, `just orcid-test`, `just openalex-test`, etc.
+Index-layer test suites live in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) repo
+(`just test` there).
 
 ---
 
