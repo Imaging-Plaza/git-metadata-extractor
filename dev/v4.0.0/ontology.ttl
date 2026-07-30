@@ -30,7 +30,8 @@
 #   Section 1  blocks a term already in PR #25 (pulse:dependsOn) — highest priority
 #   Section 2-7  new terms, ordered by how much extraction they strand
 #   Section 8  enumeration members (cheapest possible change)
-#   Section 9  a privacy question, not a request
+#   Section 9  git identities — the current shapes block a use case outright
+#              (gitAuthorName/Email are maxCount 1; a person has many)
 #   Section 10 SHACL fragments showing where these attach
 #
 # Where an existing vocabulary already covers a need we say so and do NOT
@@ -425,29 +426,124 @@ pulse:RORScheme         a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "RO
 
 
 # =========================================================================
-# 9. A PRIVACY QUESTION, NOT A REQUEST
+# 9. GIT IDENTITIES — one person commits under many names and emails
 #
-# Canonical pulse:ContributionShape defines pulse:gitAuthorEmail. GME
-# deliberately never emits raw addresses: pipeline/stages/privacy.py
-# anonymises every commit email to <sha256_prefix>@<domain> before it enters
-# the graph, and resolvers match on the domain alone.
+# THE PROBLEM: canonical pulse:ContributionShape defines pulse:gitAuthorName
+# and pulse:gitAuthorEmail, both with sh:maxCount 1, described as "the author
+# name as it literally appeared in the aggregated commits" — singular. But a
+# Contribution is one (person, repository) pair, and one person commits under
+# SEVERAL (name, email) pairs: work laptop vs personal machine, a
+# users.noreply.github.com address after enabling email privacy, a changed
+# employer address, a typo'd name. That plurality is the entire reason
+# .mailmap exists.
 #
-# Emitting gitAuthorEmail as modelled would reverse that decision. We would
-# rather not, and we would rather the ontology not require us to. Two shapes
-# that would let both sides keep their position — we have no preference:
+# With maxCount 1 an extractor must pick one identity and silently discard the
+# rest. We have a downstream requirement for ALL author names and emails a
+# repository yields, so this is the one place where the current shapes block a
+# use case outright rather than merely lacking a term.
+#
+# THE ASK: a first-class git identity node, so the (name, email) pair is the
+# subject and its commit count and date range hang off it. Minimal
+# alternative if you would rather not add a class: raise gitAuthorName and
+# gitAuthorEmail to sh:maxCount unbounded — but then the pairing between a
+# name and the email it was used with is lost, which is what makes identity
+# reconciliation possible.
+#
+# Rationale: dev/v4.0.0/git-author-identities.md
 # =========================================================================
+
+pulse:GitIdentity
+    a rdfs:Class ;
+    skos:prefLabel "Git Identity" ;
+    skos:definition "One (author name, author email) pair as it literally appears in a repository's commit history, together with how much it committed and when. A Person typically has several per repository; keeping the pair as one node preserves which name was used with which email, which is the strongest signal available for reconciling identities." .
+
+pulse:hasGitIdentity
+    a rdf:Property ;
+    rdfs:range pulse:GitIdentity ;
+    owl:inverseOf pulse:gitIdentityOf ;
+    skos:prefLabel "has git identity" ;
+    skos:definition "Links a Contribution (or a Person) to a git identity observed in the commit history. Multi-valued by design." .
+
+pulse:gitIdentityOf
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git identity of" ;
+    skos:definition "Links a git identity back to the Contribution or Person it belongs to." .
+
+pulse:gitIdentityRole
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git identity role" ;
+    skos:definition "Whether this identity appeared as the commit author, the committer, or a Co-authored-by trailer. These answer different questions: rebases and web-UI edits set a different committer, and trailer identities never appear as the author at all — so pair-programmed work is invisible if only authors are read." .
+
+pulse:isBotIdentity
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is bot identity" ;
+    skos:definition "Whether this identity is an automation account (dependabot[bot], github-actions[bot], renovate[bot], ...). Bots are commit authors and are not people; without this flag they inflate contributor counts and cause Person entities to be created for machines." .
+
+pulse:isPseudonymousEmail
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is pseudonymous email" ;
+    skos:definition "Whether the address is a platform-issued privacy address (e.g. 12345+login@users.noreply.github.com) rather than a contact address. Distinguishing the two matters: a noreply address carries no affiliation signal and must not be presented as a way to reach someone." .
+
+pulse:mailmapApplied
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "mailmap applied" ;
+    skos:definition "Whether this identity was normalised through the repository's .mailmap. A mailmap entry is the maintainer's own assertion that two identities are the same person — better evidence than anything an extractor can infer, and worth recording as such." .
+
+# --- The email itself, in three grades ----------------------------------
+# GME anonymises commit emails by default (pipeline/stages/privacy.py:
+# local@domain -> <sha256(local)[:12]>@domain) because aggregating addresses
+# into a queryable graph is a different act from their existing in git
+# objects. We need all three grades: the first two publishable by default,
+# the third behind an explicit opt-in a deployment can refuse.
 
 pulse:gitAuthorEmailDomain
     a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
     skos:prefLabel "git author email domain" ;
-    skos:definition "The domain part of a commit author's email address, with the local part discarded. Sufficient for institutional affiliation inference — which is the only thing we use commit emails for — while carrying no personal identifier." ;
+    skos:definition "The domain part of the address, local part discarded. Carries the institutional affiliation signal — which is all our ROR resolvers use — with no personal identifier." ;
     gme:mapsFrom "_email" .
 
 pulse:gitAuthorEmailHash
     a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
     skos:prefLabel "git author email hash" ;
-    skos:definition "A stable one-way hash of a commit author's email address, for joining identities across records without storing the address. GME already computes this (sha256 prefix)." ;
+    skos:definition "A stable one-way hash of the address, letting consumers join identities across records without holding the address itself." ;
     gme:mapsFrom "_email" .
+
+# pulse:gitAuthorEmail (already defined in the canonical profile) is the full
+# address. We propose no change to it beyond cardinality — it belongs on
+# GitIdentity, and emitting it should remain an explicit choice by whoever
+# operates the deployment.
+
+
+# --- Proposed shape for the new node ------------------------------------
+
+pulse:ProposedGitIdentityShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:GitIdentity ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [ sh:path pulse:gitAuthorName ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Git Author Name" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmail ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Git Author Email" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmailDomain ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Email Domain" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmailHash ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Email Hash" ] ;
+    sh:property [ sh:path pulse:gitIdentityRole ; sh:datatype xsd:string ; sh:name "Role" ] ;
+    sh:property [ sh:path pulse:contributionCount ; sh:datatype xsd:integer ; sh:maxCount 1 ; sh:name "Commit Count" ] ;
+    sh:property [ sh:path pulse:firstContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "First Commit" ] ;
+    sh:property [ sh:path pulse:lastContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "Last Commit" ] ;
+    sh:property [ sh:path pulse:isBotIdentity ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Is Bot" ] ;
+    sh:property [ sh:path pulse:isPseudonymousEmail ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Is Pseudonymous" ] ;
+    sh:property [ sh:path pulse:mailmapApplied ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Mailmap Applied" ] ;
+    sh:property [ sh:path pulse:gitIdentityOf ; sh:name "Identity Of" ] ;
+    sh:property [ sh:path pulse:partOfRun ; sh:class pulse:ExtractionOutput ; sh:maxCount 1 ; sh:name "Part Of Run" ] .
 
 
 # =========================================================================
@@ -521,7 +617,15 @@ pulse:ProposedContainerImageShape
 #   sh:property [ sh:path pulse:unitCode ; sh:datatype xsd:string ] ;
 #   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
 #
-# --- to merge into ContributionShape, if Section 9 is accepted ----------
+# --- to merge into ContributionShape (Section 9) -------------------------
 #
-#   sh:property [ sh:path pulse:gitAuthorEmailDomain ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
-#   sh:property [ sh:path pulse:gitAuthorEmailHash ; sh:datatype xsd:string ; sh:maxCount 1 ] .
+#   sh:property [ sh:path pulse:hasGitIdentity ; sh:class pulse:GitIdentity ] ;
+#
+# and, on the existing gitAuthorName / gitAuthorEmail property shapes there,
+# either remove them in favour of the GitIdentity node or drop their
+# sh:maxCount 1 — as they stand, an extractor with five observed identities
+# must discard four of them.
+#
+# --- to merge into RawPersonShape / PersonShape --------------------------
+#
+#   sh:property [ sh:path pulse:hasGitIdentity ; sh:class pulse:GitIdentity ] .
