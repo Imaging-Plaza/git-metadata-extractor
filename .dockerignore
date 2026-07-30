@@ -39,6 +39,9 @@ extraction_results/
 .venv/
 .venv-win/
 .cache/
+.uv-cache/
+.claude/
+.internal/
 site/
 dev/
 .staging/
