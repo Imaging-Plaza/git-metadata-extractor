@@ -87,53 +87,94 @@ tests/v2/                        # default test target
 
 ## Pipeline (the actual stages, in order)
 
-`/v2/extract` runs the same pipeline regardless of `agent_runtime`. The
-runtime only controls which agent implementations execute (LLM agents vs.
-deterministic rule-based agents). All other stages run unconditionally.
+There are **two sequencers, not one** — a distinction worth holding onto,
+because "add a stage" means different work in each:
+
+1. **`PLAN_BY_TYPE`** (`pipeline/orchestrator.py:120`) — the agent-generation
+   plan. Three plans, one per detected type; the orchestrator runs them with
+   fan-out concurrency and retries. This is the only part that varies with the
+   input kind.
+2. **`_run_extract_job`** (`api/extract.py`) — everything after the agents:
+   reconciliation, ROR resolvers, validation, inference, output. A flat
+   sequence of direct calls, not a plan object. Stage banners in that file
+   (`# === <name> stage ===`) and the `STAGE_*` constants in
+   `api/_helpers.py` are the naming source of truth.
+
+`/v2/extract` runs the same post-agent sequence regardless of
+`agent_runtime`; the runtime selects agent implementations and gates the
+`[LLM]` stages below.
+
+**Phase 1 — agent generation (orchestrator, `PLAN_BY_TYPE`):**
 
 ```
-1.  classify_url               classify the input as repository / user / org
-2.  gather_context             fetch GitHub metadata + GIMIE JSON-LD
-3.  context_summary  [LLM]     compile a markdown summary; raw blobs are stripped
-                               from per-agent prompts in LLM mode
-4.  repo_agent                 produce the root repository entity
-5.  person_agents (fan-out)    one agent per discovered contributor / user
-6.  org_agents    (fan-out)    one agent per discovered organisation
-7.  article_agents (fan-out)   discover scholarly articles tied to the repo
-8.  membership_agents (fan-out) one agent per (person, org) pair
-9.  contribution_agents (fan-out) one agent per (person, repo) pair
-10. llm_dedup       [LLM]      cross-bucket entity dedup + ID remap (fail-open)
-11. reconcile_entities         deterministic ID canonicalisation + linkage
-12. llm_critic      [LLM, gated] drop-suggestion stage (off by default)
-13. guarantee_repo_author      stamp github-owner as schema:author when empty
-14. strict_validation          per-entity strict JSON Schema check
-15. assemble_output            split graph into root + related + excluded
-16. link_veracity   [LLM, gated] verify every URL via Selenium fetch + LLM
-17. validate_articles          drop placeholder/sentinel-DOI articles
-18. validate_author_classes    drop `schema:author` refs whose target is
-                               not a `schema:Person` (closes a SHACL
-                               class-shape violation that was previously
-                               warning-only)
-19. validate_ownership         strip mismatched pulse:owns
-20. infer_owners               stamp pulse:owns / pulse:ownedBy from handles;
-                               also coerces any residual bare-login string
-                               on `pulse:ownedBy` (e.g. "luzpaz") to the
-                               IRI shape `{"@id": "https://github.com/luzpaz"}`
-                               so SHACL never sees a `<file:///CWD/...>` URI
-21. infer_github_handle_parents  fuzzy-search ROR for parent of every github
-                                 org; add ROR org entities, stamp unitOf
-22. org_relationships [LLM]    whole-graph LLM call to refine unitOf edges
-23. infer_org_units            deterministic name-token fallback for unitOf
-24. concept_tagging  [gated]   pull EPFL Graph concepts/keywords/disciplines
-                               from the README onto the root repo entity as
-                               internal `_concepts`/`_keywords`/`_disciplines`
-                               metadata (off by default; opt-in with
-                               `V2_CONCEPT_TAGGING_ENABLED=true`)
-25. build_jsonld_output        produce the final JSON-LD graph; also
-                               strips redundant `pulse:ror` from any
-                               `org:Organization` whose `@id` is already
-                               the ROR (closed-shape violation fix)
+repository:   context_gather -> repo_agent   -> person_agents -> org_agents
+                             -> article_agents -> membership_agents -> contribution_agents
+user:         context_gather -> person_agent -> repo_agents   -> org_agents
+                             -> article_agents -> membership_agents -> contribution_agents
+organization: context_gather -> org_agent    -> person_agents -> repo_agents
+                             -> article_agents -> membership_agents -> contribution_agents
 ```
+
+- `classify_url` runs in the API layer *before* the orchestrator, not as a
+  plan stage.
+- `context_summary_agent` is **not** a plan entry: it runs inside
+  `context_gather` (orchestrator.py:377), LLM runtime only, and fails open
+  with a warning — the pipeline continues without a compiled summary.
+- The root stage per type comes from `ROOT_STAGE_BY_DETECTED_TYPE`.
+
+**Phase 2 — post-agent sequence (`api/extract.py`, in execution order):**
+
+```
+permissive_validation          per-entity permissive schema pass
+llm_dedup           [LLM]      cross-bucket entity dedup + ID remap (fail-open)
+reconcile_entities             deterministic ID canonicalisation + linkage
+                               (also anonymises emails via stages/privacy.py)
+resolve_company_to_ror         _company -> ROR: Membership + Org stub
+resolve_bio_to_ror             bio/blog/email -> ROR: Membership + Org stub
+resolve_bio_to_ror_llm  [LLM]  LLM long-tail affiliation resolver
+resolve_placeholder_orgs_to_ror  upgrade placeholder Orgs to real ROR entities
+llm_critic          [LLM, gated] drop-suggestion stage (off by default)
+refine_with_llm     [hybrid]   whitelisted-field patches over rule-based output
+guarantee_repo_author          stamp github-owner as schema:author when empty
+strict_validation              per-entity strict JSON Schema check
+assemble_output                split graph into root + related + excluded
+link_veracity       [LLM, gated] verify every URL via Selenium fetch + LLM;
+                               on failure promote_failed_id_entities +
+                               apply_link_pruning_to_assembled_output
+validate_articles              drop placeholder/sentinel-DOI articles
+validate_author_classes        drop schema:author refs whose target is missing
+                               or not a schema:Person (SHACL class shape)
+validate_ownership             strip mismatched pulse:owns
+infer_owners                   stamp pulse:owns / pulse:ownedBy from handles;
+                               coerces bare-login strings (e.g. "luzpaz") to
+                               {"@id": "https://github.com/luzpaz"} so SHACL
+                               never sees a <file:///CWD/...> URI
+validate_ownership             SECOND pass — catches inverse edges that
+                               infer_owners just added
+prune_dangling_refs            drop refs whose target left the graph
+infer_github_handle_parents    fuzzy-search ROR for each github org's parent;
+                               add ROR org entities, stamp unitOf
+org_relationships   [LLM]      whole-graph LLM call to refine unitOf edges
+infer_org_units                deterministic name-token fallback for unitOf
+demote_github_props_to_units   move github-only props off ROR-identified orgs
+emit_fork_parent_stubs         materialise the upstream repo of a fork
+infer_article_source_organization  attribute articles to a source org
+concept_tagging     [gated]    EPFL Graph concepts/keywords/disciplines from
+                               README + GitHub description onto the root repo
+                               as internal _concepts/_keywords/_disciplines
+                               (off by default: V2_CONCEPT_TAGGING_ENABLED)
+tag_rule_based_disciplines     deterministic discipline fallback
+build_jsonld_output            final JSON-LD graph; strips redundant pulse:ror
+                               from any org:Organization whose @id is already
+                               the ROR (closed-shape violation fix)
+shacl_gate                     SHACL validation — warning-only (see below)
+compute_stats                  response counters/timings
+```
+
+Verify this list against the code before trusting it — it was reconstructed
+from `PLAN_BY_TYPE`, the stage banners, and the `STAGE_*` constants on
+2026-07-29. A published, human-facing version lives in
+[`docs/v2-pipeline.md`](docs/v2-pipeline.md).
 
 **Gates:**
 
@@ -334,8 +375,14 @@ an unrelated PR.
 - **Organization**: `https://ror.org/{id}` when ROR known, else `https://github.com/{handle}`, else `urn:pulse:{uuid}`
 - **Repository**: `https://github.com/{owner}/{name}`
 - **Article**: `https://doi.org/{doi}` when DOI known
-- **Membership**: `{person_id}_{org_id}` composite
-- **Contribution**: `{person_id}_{repo_id}` composite
+- **Membership**: `{person_id}__{org_id}` composite (**double** underscore)
+- **Contribution**: `{person_id}__{repo_id}` composite (**double** underscore)
+
+Composites are built with `__` (see `rule_based/membership_agent.py:431`,
+`contribution_agent.py:355`, `ownership_check.py:1801`,
+`resolve_bio_to_ror_llm.py:209`). `_extract_composite_pair` still accepts a
+single `_` when parsing, for back-compat with graphs produced before the
+convention changed — never emit that form in new code.
 
 `identifiers.uuid` is always a server-generated UUIDv4 (via
 `git_metadata_extractor/agents/models.py::generate_uuid()`); the LLM never controls it.

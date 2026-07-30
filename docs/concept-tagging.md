@@ -115,8 +115,9 @@ v1; the stripper closes that gap.
 
 The legacy concept_tagging path calls graphai's
 `/ontology/nearest_neighbor/concept/category` once per concept (~3 HTTP
-per README). Now that `src/index/epfl_graph/` mirrors the ontology into
-Qdrant locally, the same job can be done with a single embed +
+per README). Now that `open_pulse_sources/index/epfl_graph/` (in the
+[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) repo)
+mirrors the ontology into Qdrant, the same job can be done with a single embed +
 vector-search per README. **That swap is a planned follow-up** — the
 behaviour change is non-trivial (different scoring, different
 discipline counts) so it warrants its own review. For now the two
@@ -130,8 +131,10 @@ systems coexist:
 ```
 git_metadata_extractor/pipeline/stages/concept_tagging.py    # stage entrypoint + backends
 git_metadata_extractor/pipeline/stages/__init__.py           # re-exports run_concept_tagging_stage etc.
-src/module/epfl_graph/ontology.py            # /ontology/* wrappers (used by epfl_graph backend)
-src/module/epfl_graph/openalex_related.py    # publications / people / units helpers
-git_metadata_extractor/api.py                                # wires the stage into the v2 pipeline
-.env.example                                 # documents all the V2_CONCEPT_TAGGING_* knobs
+git_metadata_extractor/api/extract.py                        # wires the stage into the v2 pipeline
+.env.example                                                 # documents all the V2_CONCEPT_TAGGING_* knobs
+
+# in the open-pulse-sources repo (installed as the open_pulse_sources library):
+open_pulse_sources/module/epfl_graph/ontology.py         # /ontology/* wrappers (epfl_graph backend)
+open_pulse_sources/module/epfl_graph/openalex_related.py  # publications / people / units helpers
 ```

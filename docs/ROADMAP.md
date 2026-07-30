@@ -5,6 +5,14 @@ Each item links to the relevant module so you can pick one and go.
 
 > Status as of **2026-05-02**. Re-rank after every major shipment.
 
+!!! info "Paths on this page predate the 3.0.0 repo split"
+    Every `src/index/…` and `src/module/…` path below now lives in the
+    [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) repo
+    as `open_pulse_sources/index/…` / `open_pulse_sources/module/…`, and the
+    ingest work these items describe belongs there — this service only reads
+    the resulting indices. Historical entries are left as written; open items
+    were re-pointed. See [Cross-Repo Contract](cross-repo-contract.md).
+
 ## Tier 1 — quick wins, big impact (do these first)
 
 > **Items 1, 2, 3 shipped 2026-05-02** — see "Done" section below. Items 4 and 5 are still open.
@@ -23,7 +31,7 @@ Use the [`/schedule`](https://github.com/Imaging-Plaza/git-metadata-extractor) r
 **Effort**: ~10 LOC each.
 **Impact**: same win as the HF fix on 2026-05-01 — refreshes go from minutes to seconds.
 
-The pattern is now in `src/index/huggingface/ingest/{models,datasets,spaces}_ingest.py`: ask the listing endpoint to expand `lastModified` + `sha`, compare against the stored `sha`, skip if unchanged. Apply to:
+The pattern is now in `open_pulse_sources/index/huggingface/ingest/{models,datasets,spaces}_ingest.py` (open-pulse-sources repo): ask the listing endpoint to expand `lastModified` + `sha`, compare against the stored `sha`, skip if unchanged. Apply to:
 - `openalex/ingest/` (compare `updated_date` per work)
 - `orcid/ingest/` (compare `last_modified_date`)
 - `zenodo/ingest/` (compare `updated`)
@@ -74,7 +82,7 @@ HF "collections" are author-curated bundles (e.g. `EPFL-VILAB/4M-21B`). Worth in
 
 ### 15. arXiv adapter
 **Effort**: ~200 LOC + dump pipeline.
-Many EPFL papers live on arXiv before infoscience indexes them. arXiv has a clean OAI-PMH bulk API. New module `src/index/arxiv/` mirroring infoscience.
+Many EPFL papers live on arXiv before infoscience indexes them. arXiv has a clean OAI-PMH bulk API. New module `open_pulse_sources/index/arxiv/` (open-pulse-sources repo) mirroring infoscience.
 
 ### 16. Crossref adapter
 **Effort**: ~150 LOC.

@@ -38,37 +38,48 @@ extra_javascript:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - V2 Extraction Service:
+  - Understand the system:
+      - Architecture Overview: architecture/overview.md
+      - V2 Extract Pipeline: v2-pipeline.md
+      - Cross-Repo Contract: cross-repo-contract.md
+      - Design Notes: architecture/design-notes.md
+  - Use the API:
       - V2 API Reference: v2-api-reference.md
       - API and CLI Quick Reference: api-and-cli.md
       - Repository Enrichment Fields: repository-enrichment-fields.md
-      - Operations Runbook: OPERATIONS_RUNBOOK.md
       - Migration V1 to V2: migration-v1-to-v2.md
-  # Index build/refresh docs moved to the open-pulse-sources repo:
+  - Operate it:
+      - Operations Runbook: OPERATIONS_RUNBOOK.md
+  # Index build/refresh docs live in the open-pulse-sources repo:
   # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
   # (RAG tools the extraction pipeline consumes) is documented here.
   - RAG (read side):
       - V2 Agent RAG Tools: v2-rag-tools.md
       - Concept Tagging Stage: concept-tagging.md
-      - Roadmap: ROADMAP.md
-  - Architecture:
-      - Design Notes: architecture/design-notes.md
   - Ontology:
       - v3.0.0 Reference (proposed): releases/ontology-v3.0.0.md
       - JSON Schema Graphs: releases/json-schemas.md
-  - Legacy / Historical:
-      - V1 Repository Analysis Strategy: AGENT_STRATEGY.md
-      - Infoscience Integration: INFOSCIENCE_INTEGRATION.md
-      - Infoscience API Findings: INFOSCIENCE_API_FINDINGS.md
-      - JSON-LD Conversion Guide: JSONLD_CONVERSION.md
-      - JSON-LD Mapping: PYDANTIC_JSONLD_MAPPING.md
-      - JSON-LD Conversion Summary: JSONLD_CONVERSION_SUMMARY.md
-      - JSON-LD Mapping Update: JSONLD_MAPPING_UPDATE.md
-      - JSON / JSON-LD CLI: JSON_JSONLD_CONVERSION_CLI.md
-      - Academic Catalog Option B: ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md
-      - Academic Catalog Refactor: ACADEMIC_CATALOG_REFACTOR_SUMMARY.md
-      - Affiliation Changes: AFFILIATION_CHANGES.md
-      - Estimated Tokens Fix: ESTIMATED_TOKENS_FIX.md
-      - Updates Summary: UPDATES_SUMMARY.md
-      - GIMIE / GitHub CFF Edge Cases: issue-brief-gimie-github-cff-edge-cases.md
-      - Legacy Releases: releases/legacy-releases.md
+  - Project:
+      - Roadmap: ROADMAP.md
+  # Historical working notes. Kept for provenance, deliberately one nav entry:
+  # the individual pages are linked from archive/index.md and are listed in
+  # not_in_nav below so `mkdocs build --strict` stays quiet about them.
+  - Archive: archive/index.md
+
+# Pages reachable by link but intentionally absent from the nav tree.
+not_in_nav: |
+  archive/AGENT_STRATEGY.md
+  archive/INFOSCIENCE_INTEGRATION.md
+  archive/INFOSCIENCE_API_FINDINGS.md
+  archive/JSONLD_CONVERSION.md
+  archive/PYDANTIC_JSONLD_MAPPING.md
+  archive/JSONLD_CONVERSION_SUMMARY.md
+  archive/JSONLD_MAPPING_UPDATE.md
+  archive/JSON_JSONLD_CONVERSION_CLI.md
+  archive/ACADEMIC_CATALOG_OPTION_B_IMPLEMENTATION.md
+  archive/ACADEMIC_CATALOG_REFACTOR_SUMMARY.md
+  archive/AFFILIATION_CHANGES.md
+  archive/ESTIMATED_TOKENS_FIX.md
+  archive/UPDATES_SUMMARY.md
+  archive/issue-brief-gimie-github-cff-edge-cases.md
+  releases/legacy-releases.md

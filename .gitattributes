@@ -1,0 +1,14 @@
+# Line-ending policy for the JSON Schemas that live in three byte-identical
+# copies (see AGENTS.md "Schema change rules"):
+#
+#   git_metadata_extractor/schema/json/{type}/{entity}.schema.json   (source)
+#   dev/ontology-v2-json-response/.../pulse_{Entity}Shape.schema.json (promoted)
+#   tests/v2/fixtures/schema/{type}/{entity}.schema.json              (fixture)
+#
+# tests/v2/test_promoted_strict_schemas.py byte-compares them. Without an
+# explicit rule, a Windows checkout can hand one copy CRLF and another LF —
+# identical content, different bytes — so the test fails locally while passing
+# on CI. Pinning LF makes the comparison mean the same thing everywhere.
+git_metadata_extractor/schema/json/**/*.json text eol=lf
+dev/ontology-v2-json-response/**/*.json     text eol=lf
+tests/v2/fixtures/schema/**/*.json          text eol=lf

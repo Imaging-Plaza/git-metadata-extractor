@@ -11,7 +11,7 @@ flowchart TB
     end
 
     subgraph API[FastAPI app — git_metadata_extractor/app.py]
-        A1[v2_router<br/>git_metadata_extractor/api.py]
+        A1[v2_router<br/>git_metadata_extractor/api/_router.py]
         A2[Request logging<br/>AsyncRequestContext]
     end
 
