@@ -64,14 +64,45 @@ The best-covered source in PR #25. Our gap is wiring, not vocabulary — the
 | **access status** (`info:eu-repo/semantics/openAccess`) | **+** §13 `accessRights` |
 | keywords | ✓ `keyword` (**+** aligned `⊑ dct:subject`) |
 
-## 4. ORCID
+## 4. ORCID — do we have all of it? No, and in two different ways
 
-| What we read | Raw profile |
+GME's provider (`providers/orcid_provider.py`) fetches exactly **three**
+endpoints against `pub.orcid.org/v3.0`: `/person`, `/employments`,
+`/educations`. So there are two separate gaps — terms we lack, and data we
+never ask for.
+
+| What we read today | Raw profile |
 |---|---|
-| ORCID iD, biography, country, keywords, other names, researcher URLs | ✓ / **+** (`biography`, `country`, `keyword`, `socialLink`; variants → `skos:altLabel`, ask #10) |
-| employments / educations (+ role, dates, department, degree) | ✓ `membershipType`, `department`, `qualification` |
-| external identifiers (Scopus, ResearcherID, …) | ✓ `ExternalIdentifier` + scheme enum |
-| funding records | ✓ `pulse:Funding` (**+** aligned `⊑ frapo:Grant`) |
+| ORCID iD, biography, country, keywords, other names, researcher URLs, emails, external identifiers (all from `/person`) | ✓ / **+** (`biography`, `country`, `keyword`, `socialLink`, `ExternalIdentifier`; name variants → `skos:altLabel`, ask #10) |
+| `/employments`, `/educations` (+ role, dates, department, degree) | ✓ `membershipType`, `department`; **+** `qualification` |
+
+### Terms missing: four of ORCID's seven affiliation types
+
+ORCID models seven affiliation kinds, each its own endpoint —
+`/employments`, `/educations`, `/qualifications`, `/invited-positions`,
+`/distinctions`, `/memberships`, `/services`. `MembershipTypeEnumeration` has
+three. **+** §17 adds `Qualification`, `InvitedPosition`, `Distinction`,
+`Service`.
+
+Without them a qualification, an invited chair, a prize and committee service
+all collapse into "membership" — erasing the difference between *held a
+position at*, *was recognised by* and *sat on a committee of*.
+
+### Data we never fetch
+
+| ORCID endpoint | Raw profile | Why it matters |
+|---|---|---|
+| `/fundings` | ✓ term exists (`pulse:Funding`, `hasFunding`) — **we just don't call it** | PR #25 added the class *for* ORCID funding; we would populate nothing |
+| `/qualifications`, `/invited-positions`, `/distinctions`, `/memberships`, `/services` | **+** §17 once added | five of seven affiliation endpoints unfetched |
+| `/works` | ✓ ≈ Article | we discover articles via Infoscience instead, so ORCID's own work list is unused |
+| `/peer-reviews` | ✗ **not modelled, deliberately** | would need its own class; we do not fetch it, so modelling it would be ahead of the requirement |
+| `/research-resources` | ✗ **not modelled, deliberately** | same |
+
+So: the honest answer to "do we have all ORCID properties" is that we have most
+of `/person` and two of seven affiliation types, the terms for a third
+(funding) without the fetch, and nothing for peer review or research
+resources. The cheapest real win is `/fundings` — the term already exists in
+PR #25.
 
 ## 5. ROR
 

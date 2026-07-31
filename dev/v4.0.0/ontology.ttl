@@ -996,6 +996,46 @@ pulse:OptionalDependency    a pulse:DependencyScopeEnumeration ; skos:prefLabel 
 
 
 # =========================================================================
+# 17. ORCID AFFILIATION TYPES — four of seven are missing
+#
+# ORCID v3.0 models SEVEN affiliation kinds, each its own endpoint:
+#   /employments  /educations  /qualifications  /invited-positions
+#   /distinctions  /memberships  /services
+#
+# PR #25's MembershipTypeEnumeration has three — Employment, Education,
+# SocietyMembership — so an extractor reading a full ORCID record has nowhere
+# to put a qualification, an invited position, a distinction or a service. They
+# collapse into "membership", which loses the distinction between "held a chair
+# at", "was awarded by" and "sat on a committee of" — three quite different
+# claims about a person's standing.
+#
+# Cheap to close: four enumeration members, no new class, no shape change.
+#
+# NB a naming collision to avoid: our §14 pulse:qualification is a PROPERTY
+# (the degree obtained, e.g. "PhD"), while ORCID's Qualification is an
+# affiliation TYPE (a credential granted by an organization). Both are needed
+# and they are not the same thing.
+# =========================================================================
+
+pulse:Qualification a pulse:MembershipTypeEnumeration ; skos:prefLabel "Qualification" ;
+    skos:definition "A credential or qualification granted by an organization (ORCID /qualifications). Distinct from Education, which is enrolment: one can hold a qualification from a body one never studied at." .
+pulse:InvitedPosition a pulse:MembershipTypeEnumeration ; skos:prefLabel "Invited Position" ;
+    skos:definition "An invited or honorary position (ORCID /invited-positions) — a visiting professorship, a chair. Not employment, but a strong affiliation signal, and often the one that connects a researcher to a second institution." .
+pulse:Distinction a pulse:MembershipTypeEnumeration ; skos:prefLabel "Distinction" ;
+    skos:definition "An award, prize or honour conferred by an organization (ORCID /distinctions). The relation is 'was recognised by', not 'worked at' — treating it as employment would fabricate an affiliation." .
+pulse:Service a pulse:MembershipTypeEnumeration ; skos:prefLabel "Service" ;
+    skos:definition "Service to an organization (ORCID /services) — committee work, editorial boards, reviewing. Community contribution rather than employment, and the main way senior researchers connect to bodies that never employed them." .
+
+# NOT proposed, deliberately, though ORCID exposes them:
+#   /peer-reviews       — peer-review activity would need its own class, and we
+#                         do not fetch it. Modelling it now would be modelling
+#                         ahead of the requirement.
+#   /research-resources — same.
+# Both are recorded in raw-source-coverage.md as known unmodelled ORCID
+# activities so the omission is a decision, not an oversight.
+
+
+# =========================================================================
 # 10. SHACL FRAGMENTS
 #
 # Where the above would attach, as sh:property blocks to merge into the
