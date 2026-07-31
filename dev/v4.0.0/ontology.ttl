@@ -48,6 +48,13 @@
 @prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
 @prefix pulse:    <https://open-pulse.epfl.ch/ontology#> .
 @prefix gme:      <https://openpulse.science/git-metadata-extractor#> .
+# Section 13 alignment targets. cito:/fabio:/frapo: IRIs taken from
+# dev/rete/scholar.ttl, which documents correcting frapo: away from the
+# non-existent purl.org/spar/frapo/.
+@prefix dct:      <http://purl.org/dc/terms/> .
+@prefix cito:     <http://purl.org/spar/cito/> .
+@prefix fabio:    <http://purl.org/spar/fabio/> .
+@prefix frapo:    <http://purl.org/cerif/frapo/> .
 
 # The annotation property carrying proposal provenance. Not for adoption.
 gme:mapsFrom
@@ -557,6 +564,88 @@ pulse:ProposedGitIdentityShape
     sh:property [ sh:path pulse:mailmapApplied ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Mailmap Applied" ] ;
     sh:property [ sh:path pulse:gitIdentityOf ; sh:name "Identity Of" ] ;
     sh:property [ sh:path pulse:partOfRun ; sh:class pulse:ExtractionOutput ; sh:maxCount 1 ; sh:name "Part Of Run" ] .
+
+
+# =========================================================================
+# 13. REUSE AND ALIGNMENT — from the rete scholarly graphs
+#
+# Added 2026-07-31 after surveying the rete catalog and its alignment
+# ontology (dev/rete/scholar.ttl v1.4.0). Two kinds of entry:
+#
+#   (a) ALIGNMENT of terms proposed above to vocabularies already in use by
+#       the sibling scholarly graphs, so our output joins them without a
+#       mapping table. Reuse beats minting, and these cost one axiom each.
+#   (b) TWO NEW TERMS that a real Zenodo record proved we cannot express.
+#
+# VERIFICATION STATUS — their own review found several non-existent IRIs in
+# this space (fabio:hasReference, six invented CiTO terms), so provenance is
+# marked per line. LOV's term API was returning 404 during this work, so
+# anything not verified from data or from scholar.ttl is flagged TO-VERIFY
+# rather than asserted.
+# =========================================================================
+
+# --- (a) alignment axioms ------------------------------------------------
+# cito: and frapo: IRIs verified from dev/rete/scholar.ttl, whose README
+# documents correcting frapo: from the non-existent purl.org/spar/frapo/ to
+# purl.org/cerif/frapo/. dct: is Dublin Core Terms.
+
+pulse:references    rdfs:subPropertyOf cito:cites .        # OpenCitations/SPAR idiom; `opencitations` is the crosswalk hub
+pulse:keyword       rdfs:subPropertyOf dct:subject .       # what Zenodo actually emits — ~30 dct:subject literals on one record
+pulse:Funding       rdfs:subClassOf    frapo:Grant .       # scholar:Grant ⊑ frapo:Grant unifies oaire/orcid/cx Funding
+pulse:Collection    rdfs:subClassOf    skos:Collection .   # TO-VERIFY: skos:Collection semantics fit a curated set
+# pulse:Package    rdfs:subClassOf spdx:Package .          # TO-VERIFY: SPDX namespace not checked (LOV down). Worth doing —
+#                                                          # our dependency data IS an SPDX SBOM, so if spdx:Package fits,
+#                                                          # aligning costs one axiom and buys the whole SBOM ecosystem.
+
+# --- (b) the deposit relation, which we cannot currently express ---------
+# EVIDENCE (queried 2026-07-31, dataset `zenodo-records`, record
+# https://doi.org/10.0.20.161/zenodo.15848625):
+#
+#   dcite:isDerivedFrom  → https://github.com/MUESdummy/Emergent-Necessity-Theory-ENT-
+#   dcite:isPartOf       → https://github.com/…/tree/main/Simulationa
+#   dcite:isSupplementTo → https://github.com/…/blob/174121c…/ENT_….pdf
+#   dcite:creator        → https://orcid.org/0009-0001-0536-8504
+#
+# Zenodo states not just THAT a record relates to a GitHub repository but
+# HOW — derived-from, part-of, supplement-to — and it does so against exactly
+# the IRI form GME mints for repositories. pulse:hasDeposit (RawArticleShape)
+# carries the link but not the relation, so that distinction is lost on
+# import. "This DOI is the archived snapshot of that repo" and "this DOI is a
+# PDF that supplements it" are different claims about software citation.
+
+pulse:DepositRelationEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Deposit Relation Enumeration" ;
+    skos:definition "How an archived deposit relates to the resource it was deposited from. Values mirror the DataCite relation types actually observed on Zenodo records." .
+
+pulse:DerivedFrom   a pulse:DepositRelationEnumeration ; skos:prefLabel "derived from" ;
+    skos:definition "The deposit was produced from the resource — e.g. an archived snapshot of a repository at a release." .
+pulse:SupplementTo  a pulse:DepositRelationEnumeration ; skos:prefLabel "supplement to" ;
+    skos:definition "The deposit supplements the resource — e.g. a PDF or figure set accompanying the code." .
+pulse:PartOf        a pulse:DepositRelationEnumeration ; skos:prefLabel "part of" ;
+    skos:definition "The deposit covers part of the resource — e.g. one subdirectory of a repository." .
+pulse:DocumentedBy  a pulse:DepositRelationEnumeration ; skos:prefLabel "documented by" ;
+    skos:definition "The deposit documents the resource." .
+
+pulse:depositRelation
+    a rdf:Property ;
+    rdfs:range pulse:DepositRelationEnumeration ;
+    skos:prefLabel "deposit relation" ;
+    skos:definition "How this deposit relates to the repository or work it was deposited from. Without it, pulse:hasDeposit cannot distinguish an archived snapshot of the code from a paper that merely accompanies it." .
+
+# --- (b continued) access rights ----------------------------------------
+# EVIDENCE: the same record carries two dct:license values —
+#   <https://creativecommons.org/licenses/by/4.0/legalcode>  (the licence)
+#   <info:eu-repo/semantics/openAccess>                       (the access status)
+# Neither profile models access status, yet for a research-output observatory
+# "is this open?" is a first-order question, and the vocabulary for it is
+# already standard in the repository world.
+
+pulse:accessRights
+    a rdf:Property ;
+    rdfs:subPropertyOf dct:accessRights ;   # TO-VERIFY: dct:accessRights spelling not re-checked (LOV down)
+    skos:prefLabel "access rights" ;
+    skos:definition "The access status of a work or deposit, as an info:eu-repo/semantics/* IRI (openAccess, embargoedAccess, restrictedAccess, closedAccess). Kept separate from schema:license: a CC-BY licence and an embargo can coexist, and conflating them makes 'open' unqueryable." .
 
 
 # =========================================================================
