@@ -1,0 +1,241 @@
+# =========================================================================
+# PROPOSED ADDITION to src/ontology/ontology-shapes-raw.ttl
+#
+# Target:  sdsc-ordes/open-pulse-ontology @ feature/platform-profiles (PR #25)
+# From:    Imaging-Plaza/git-metadata-extractor
+# Date:    2026-07-31
+# Style:   matches the surrounding file (closed shapes, ignoredProperties,
+#          compact sh:property one-liners, pulse:partOfRun last).
+#
+# Drop-in: append the two shapes below to ontology-shapes-raw.ttl. The
+# prefixes they use (sh, xsd, schema, rdf, pulse, owl, prov) are already
+# declared in that file's header; no new prefix is required. Companion term
+# definitions for ontology-definitions-raw.ttl are in ontology.ttl §9 of this
+# directory.
+#
+# ---------------------------------------------------------------------
+# WHY
+#
+# Two problems, one fix.
+#
+# 1. THE RAW PROFILE HAS NO CONTRIBUTION SHAPE.
+#    pulse:RawPersonShape declares
+#      sh:property [ sh:path pulse:hasContribution ; sh:class pulse:Contribution ]
+#    but no shape in ontology-shapes-raw.ttl targets pulse:Contribution, and
+#    the file header states it must never be loaded alongside
+#    ontology-shapes-canonical.ttl. So a Contribution emitted by an extractor
+#    — in the profile written specifically for extractor output — is governed
+#    by nothing: any property, any cardinality, no validation.
+#
+# 2. CANONICAL CAPS GIT AUTHORSHIP AT ONE IDENTITY.
+#    pulse:ContributionShape gives pulse:gitAuthorName and
+#    pulse:gitAuthorEmail sh:maxCount 1, described as "the author name as it
+#    literally appeared in the aggregated commits" — singular. A Contribution
+#    is one (person, repository) pair, but one person commits under SEVERAL
+#    (name, email) pairs: work laptop vs personal, a
+#    users.noreply.github.com address after enabling email privacy, a changed
+#    employer address, a misspelled name. That plurality is the entire reason
+#    .mailmap exists.
+#
+#    Raw is the profile that must hold all of them: extraction observes what
+#    the commit log actually contains, and collapsing identities is a
+#    canonical-layer decision that needs the full set as input. Under
+#    maxCount 1 an extractor has to pick one and silently discard the rest,
+#    which destroys precisely the evidence the unifier needs.
+#
+# ---------------------------------------------------------------------
+# WHAT WE EMIT (so the constraints below are not speculative)
+#
+# git-metadata-extractor will populate, per identity:
+#   pulse:gitAuthorName        full, unmodified — the attribution record
+#   pulse:gitAuthorEmailHash   sha256 of the local part, stable across runs
+#   pulse:gitAuthorEmailDomain the domain, which is what ROR resolution uses
+#
+# We will NOT populate pulse:gitAuthorEmail. Full addresses are never emitted
+# — there is no flag and no code path for it. The property is left in the
+# shape below because other extractors may have a different policy, and
+# because removing it would be a breaking change to your canonical profile.
+#
+# Note the hash+domain pair must stay TWO properties. Our internal composite
+# form, "a1b2c3d4e5f6@epfl.ch", satisfies the email sh:pattern used in
+# pulse:RawPlatformProfileShape — a consumer receiving that in an email-typed
+# field cannot tell a pseudonymised value from a real mailbox, and may try to
+# write to it.
+#
+# ---------------------------------------------------------------------
+# EVIDENCE — this was tested, not asserted (2026-07-31, pySHACL 0.28.1)
+#
+# Merge check: parsing ontology-shapes-raw.ttl (864 triples) together with
+# this file (124) yields 988 with no shape-name collision and no duplicated
+# sh:targetClass — so it does not create the two-shapes-on-one-class problem
+# this file's header warns about.
+#
+#   examples/multi-identity-contribution.ttl
+#     One Contribution, three GitIdentity nodes (a real name + institutional
+#     domain, a noreply pseudonym, a personal address), validated against
+#     raw shapes + these additions:            conforms = True
+#
+#   examples/multi-identity-under-current-canonical.ttl
+#     The same three identities expressed the only way the current canonical
+#     ContributionShape allows — repeated directly on the Contribution —
+#     validated against ontology-shapes-canonical.ttl:  conforms = False
+#       "More than 1 values on <contrib1>->pulse:gitAuthorName"
+#       "More than 1 values on <contrib1>->pulse:gitAuthorEmail"
+#
+#     (That file also trips required-field violations on its deliberately
+#     minimal repository stub — schema:name, schema:author, pulse:platform,
+#     pulse:repositoryHandle. Those are artifacts of keeping the example
+#     small, not part of this proposal.)
+#
+# ---------------------------------------------------------------------
+# MINIMAL ALTERNATIVE
+#
+# If you would rather not add pulse:GitIdentity, the smallest change that
+# unblocks us is to delete the two sh:maxCount 1 constraints from
+# pulse:gitAuthorName and pulse:gitAuthorEmail in the canonical
+# ContributionShape. That works, but loses which name was used with which
+# email — and that pairing is the strongest signal available for deciding
+# whether two identities are the same person, which is the job the canonical
+# layer has to do.
+# =========================================================================
+
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema: <http://schema.org/> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix pulse:  <https://open-pulse.epfl.ch/ontology#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix prov:   <http://www.w3.org/ns/prov#> .
+
+
+# ---------------------------------------------------------
+# RAW CONTRIBUTION — currently absent from this profile
+# ---------------------------------------------------------
+
+pulse:RawContributionShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:Contribution ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [
+        sh:path pulse:contributionTo ;
+        sh:class schema:SoftwareSourceCode ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:name "Contribution To" ;
+        sh:description "The repository these contributions were made to."
+    ] ;
+    sh:property [
+        sh:path schema:author ;
+        sh:class schema:Person ;
+        sh:maxCount 1 ;
+        sh:name "Contributor" ;
+        sh:description "The provisional person these contributions are attributed to. Provisional at extraction time — the canonical layer decides who that really is."
+    ] ;
+    sh:property [
+        sh:path pulse:hasGitIdentity ;
+        sh:class pulse:GitIdentity ;
+        sh:name "Has Git Identity" ;
+        sh:description "Every (author name, author email) pair observed for this contributor in this repository's history. Deliberately unbounded: one person routinely commits under several, and which ones they are is the evidence identity reconciliation runs on."
+    ] ;
+    sh:property [ sh:path pulse:contributionCount ; sh:datatype xsd:integer ; sh:maxCount 1 ; sh:name "Contribution Count" ] ;
+    sh:property [ sh:path pulse:firstContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "First Contribution Date" ] ;
+    sh:property [ sh:path pulse:lastContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "Last Contribution Date" ] ;
+    sh:property [
+        sh:path pulse:partOfRun ;
+        sh:class pulse:ExtractionOutput ;
+        sh:maxCount 1 ;
+        sh:name "Part Of Run"
+    ] .
+
+
+# ---------------------------------------------------------
+# GIT IDENTITY — one observed (name, email) pair
+# ---------------------------------------------------------
+
+pulse:RawGitIdentityShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:GitIdentity ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [
+        sh:path pulse:gitAuthorName ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Git Author Name" ;
+        sh:description "The author name exactly as it appears in the commit, unmodified. maxCount 1 is correct HERE — this node is a single observed pair; multiplicity lives on pulse:hasGitIdentity."
+    ] ;
+    sh:property [
+        sh:path pulse:gitAuthorEmailHash ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Git Author Email Hash" ;
+        sh:description "One-way hash of the address's local part. Stable across runs and repositories, so one person's commits under one address collapse wherever they appear."
+    ] ;
+    sh:property [
+        sh:path pulse:gitAuthorEmailDomain ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Git Author Email Domain" ;
+        sh:description "The domain part alone. Carries the institutional affiliation signal with no personal identifier."
+    ] ;
+    sh:property [
+        sh:path pulse:gitAuthorEmail ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Git Author Email" ;
+        sh:description "The full address. git-metadata-extractor never populates this; retained for extractors with a different disclosure policy."
+    ] ;
+    sh:property [
+        sh:path pulse:gitIdentityRole ;
+        sh:datatype xsd:string ;
+        sh:name "Role" ;
+        sh:description "Whether this identity appeared as the commit author, the committer, or a Co-authored-by trailer. Multi-valued: the same pair is often several of these. Rebases and web-UI edits set a different committer, and trailer identities never appear as the author at all — so pair-programmed work is invisible if only authors are read."
+    ] ;
+    sh:property [ sh:path pulse:contributionCount ; sh:datatype xsd:integer ; sh:maxCount 1 ; sh:name "Commit Count" ] ;
+    sh:property [ sh:path pulse:firstContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "First Commit" ] ;
+    sh:property [ sh:path pulse:lastContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "Last Commit" ] ;
+    sh:property [
+        sh:path pulse:isBotIdentity ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        sh:name "Is Bot" ;
+        sh:description "Whether this is an automation account (dependabot[bot], github-actions[bot], renovate[bot], ...). Bots are commit authors and are not people; unflagged they inflate contributor counts and cause Person nodes to be minted for machines."
+    ] ;
+    sh:property [
+        sh:path pulse:isPseudonymousEmail ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        sh:name "Is Pseudonymous Email" ;
+        sh:description "Whether the address is a platform-issued privacy address (12345+login@users.noreply.github.com). It carries no affiliation signal and is not a way to reach anyone."
+    ] ;
+    sh:property [
+        sh:path pulse:mailmapApplied ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        sh:name "Mailmap Applied" ;
+        sh:description "Whether this identity was normalised through the repository's .mailmap. A mailmap entry is the maintainer's own assertion that two identities are one person — stronger evidence than anything an extractor infers."
+    ] ;
+    sh:property [ sh:path pulse:gitIdentityOf ; sh:name "Identity Of" ] ;
+    sh:property [
+        sh:path pulse:partOfRun ;
+        sh:class pulse:ExtractionOutput ;
+        sh:maxCount 1 ;
+        sh:name "Part Of Run"
+    ] .
+
+
+# ---------------------------------------------------------
+# ALSO NEEDED, in ontology-shapes-canonical.ttl
+#
+# The canonical ContributionShape is where the cap actually bites once raw
+# output is unified. Either mirror the link:
+#
+#   sh:property [ sh:path pulse:hasGitIdentity ; sh:class pulse:GitIdentity ] ;
+#
+# and drop the two gitAuthorName / gitAuthorEmail property shapes, or keep
+# them and remove their sh:maxCount 1. Canonical PersonShape would take the
+# same pulse:hasGitIdentity property if you would rather hang identities off
+# the person than off the contribution — we have no preference, as long as
+# more than one survives.
+# ---------------------------------------------------------
