@@ -237,11 +237,11 @@ pulse:badgeCount
     skos:definition "The number of status badges in the repository README. A crude but effective maturity signal: CI, coverage, DOI, package and license badges cluster on maintained projects." ;
     gme:mapsFrom "_badge_count" .
 
-pulse:badge
-    a rdf:Property ;
-    skos:prefLabel "badge" ;
-    skos:definition "A link to a status badge declared in the README (its image or target URL). Multi-valued. DOI and package badges in particular often name artifacts that no API exposes." ;
-    gme:mapsFrom "_badges" .
+# pulse:badge (a bare link per badge) was proposed here in the first draft.
+# Superseded by pulse:hasBadge → pulse:Badge in §16: the provider, subject and
+# asserted value are three facts about one assertion, and a link carries none
+# of them. pulse:badgeCount above stays — it is a cheap maturity signal that
+# needs no traversal.
 
 pulse:hasIssues
     a rdf:Property ;
@@ -798,9 +798,10 @@ pulse:CrossrefFunderScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel 
 #
 # A venue class — reused fabio:Journal instead (§14).
 #
-# pulse:Badge, pulse:Dependency — a property and an edge respectively. A badge
-#   is a link; a dependency is pulse:dependsOnPackage between two nodes that
-#   already exist. Neither earns identity.
+# (Badge and Dependency were listed here in the first draft as "a link and an
+#  edge, neither earns identity". That was wrong — see §16. Both carry
+#  structure that a bare link or a bare edge cannot hold, and in both cases
+#  the lost structure is the useful part.)
 #
 # SWISSUbase Study, RenkuLab Project — we read those indices for search, not
 #   to emit entities. Classing them would be modelling ahead of the
@@ -815,6 +816,183 @@ pulse:CrossrefFunderScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel 
 # else. Package, ContainerImage, GitIdentity and (conditionally) RegistryRecord
 # pass. Everything above fails it, and each avoided class is one fewer closed
 # shape to keep in sync across three profiles.
+
+
+# =========================================================================
+# 16. BADGES AND DEPENDENCIES, MODELLED PROPERLY
+#
+# Correcting §3 and §1, which reduced these to pulse:badge (a link) and
+# pulse:dependsOnPackage (an edge) plus counts. Both throw away the part we
+# actually want.
+#
+# A BADGE IS AN ASSERTION WITH A VALUE AND A SOURCE, not a link. What a
+# README badge encodes:
+#     provider   Codecov, GitHub Actions, Zenodo, PyPI, conda-forge, JOSS,
+#                OpenSSF Scorecard, readthedocs …
+#     subject    what is being claimed — build status, coverage, DOI, version,
+#                downloads, licence, security score
+#     value      the claim itself — "passing", "87%", "10.5281/zenodo.1234",
+#                "v1.2.3"
+#     image + target URLs
+# As one link we lose all four, and every consumer has to re-parse badge URLs
+# to get them back. Worse, badges are frequently the ONLY place some facts
+# appear: a DOI badge names the Zenodo deposit, a PyPI badge names the
+# package, a JOSS badge names the paper. So a badge is also a discovery bridge
+# to pulse:Package, pulse:hasDeposit and schema:ScholarlyArticle — which is
+# exactly what a bare link cannot express.
+#
+# A DEPENDENCY IS A QUALIFIED RELATION, and your own model already says so:
+# org:Membership qualifies person↔organization and pulse:Contribution
+# qualifies person↔repository, rather than being plain edges. A dependency has
+# the same shape. From the SPDX SBOM we get, per dependency: the resolved
+# version, the declared constraint, the scope (runtime / dev / build / test),
+# which manifest declared it, and whether it is direct or transitive.
+# "depends on pypi:requests" cannot say any of that — and "a dev dependency
+# pinned in pyproject.toml" versus "a transitive runtime dependency" is the
+# difference between a real dependency graph and a bag of names.
+# =========================================================================
+
+# --- badges ---------------------------------------------------------------
+
+pulse:Badge
+    a rdfs:Class ;
+    skos:prefLabel "Badge" ;
+    skos:definition "A status badge declared in a repository's README: a claim by some service about the repository, with an asserted value. Modelled as a node because provider, subject and value are three facts about one assertion, and because badges routinely name artifacts — a DOI, a package, a paper — that appear nowhere else in the repository metadata." ;
+    gme:mapsFrom "_badges" .
+
+pulse:hasBadge
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:Badge ;
+    skos:prefLabel "has badge" ;
+    skos:definition "Links a repository to a badge declared in its README." ;
+    gme:mapsFrom "_badges" .
+
+pulse:badgeProvider
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge provider" ;
+    skos:definition "The service making the claim (Codecov, GitHub Actions, Zenodo, PyPI, JOSS, OpenSSF Scorecard, …). Left open rather than enumerated: the set of badge services is long-tailed and changes faster than an ontology release." .
+
+pulse:badgeSubject
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    rdfs:range pulse:BadgeSubjectEnumeration ;
+    skos:prefLabel "badge subject" ;
+    skos:definition "What the badge claims — build status, coverage, DOI, and so on. Enumerated because this is the axis consumers filter on." .
+
+pulse:badgeValue
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge value" ;
+    skos:definition "The asserted value as displayed: 'passing', '87%', 'v1.2.3', a DOI. Kept as a literal because badge values are self-reported and unverified — recording them as typed measurements would lend them a precision they do not have." .
+
+pulse:badgeImage
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge image" ;
+    skos:definition "The badge's image URL (usually a shields.io-style endpoint, which itself encodes the provider and subject)." .
+
+pulse:badgeTarget
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge target" ;
+    skos:definition "Where the badge links to — the CI run, the coverage report, the Zenodo record, the package page." .
+
+pulse:badgeAsserts
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge asserts" ;
+    skos:definition "Links a badge to the entity it identifies, when it names one: a pulse:Package for a registry badge, a schema:ScholarlyArticle for a JOSS or DOI badge, a deposit for a Zenodo badge. This is the discovery value of badges — often the repository states its DOI or its package name nowhere else." .
+
+pulse:BadgeSubjectEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Badge Subject Enumeration" ;
+    skos:definition "What a badge claims about a repository." .
+
+pulse:BuildStatusBadge   a pulse:BadgeSubjectEnumeration ; skos:prefLabel "build status" .
+pulse:CoverageBadge      a pulse:BadgeSubjectEnumeration ; skos:prefLabel "test coverage" .
+pulse:DoiBadge           a pulse:BadgeSubjectEnumeration ; skos:prefLabel "DOI" ;
+    skos:definition "Names an archived deposit — the usual way a repository declares its citable DOI." .
+pulse:PackageVersionBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "package version" ;
+    skos:definition "Names a registry package and its published version." .
+pulse:DownloadsBadge     a pulse:BadgeSubjectEnumeration ; skos:prefLabel "downloads" .
+pulse:LicenseBadge       a pulse:BadgeSubjectEnumeration ; skos:prefLabel "license" .
+pulse:SecurityScoreBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "security score" ;
+    skos:definition "An OpenSSF Scorecard or comparable automated security assessment." .
+pulse:DocumentationBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "documentation" .
+pulse:PublicationBadge   a pulse:BadgeSubjectEnumeration ; skos:prefLabel "publication" ;
+    skos:definition "Names a paper about the software — a JOSS review badge, for instance." .
+pulse:ChatBadge          a pulse:BadgeSubjectEnumeration ; skos:prefLabel "chat / community" .
+pulse:FundingBadge       a pulse:BadgeSubjectEnumeration ; skos:prefLabel "funding" .
+pulse:OtherBadgeSubject  a pulse:BadgeSubjectEnumeration ; skos:prefLabel "other" .
+
+# --- dependencies as a qualified relation --------------------------------
+# Same pattern as org:Membership and pulse:Contribution: the relation is a
+# node because it carries facts of its own. pulse:dependsOnPackage (§1) stays
+# as the direct shortcut for consumers who only need the edge.
+
+pulse:DependencyRelation
+    a rdfs:Class ;
+    skos:prefLabel "Dependency Relation" ;
+    skos:definition "One declared dependency of a repository on a package, qualified with the facts an SBOM actually provides: resolved version, declared constraint, scope, the manifest that declared it, and whether it is direct or transitive." .
+
+pulse:hasDependency
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:DependencyRelation ;
+    skos:prefLabel "has dependency" ;
+    skos:definition "Links a repository to a qualified dependency relation." .
+
+pulse:dependencyTarget
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range pulse:Package ;
+    skos:prefLabel "dependency target" ;
+    skos:definition "The package depended upon." .
+
+pulse:dependencyScope
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range pulse:DependencyScopeEnumeration ;
+    skos:prefLabel "dependency scope" ;
+    skos:definition "Runtime, development, build, test or optional. Without it, a project's 20 runtime dependencies and its 200 test-only ones are one undifferentiated list, and any 'how heavy is this software' question is unanswerable." .
+
+pulse:resolvedVersion
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "resolved version" ;
+    skos:definition "The concrete version the SBOM resolved to, e.g. '2.31.0'." .
+
+pulse:versionConstraint
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "version constraint" ;
+    skos:definition "The constraint as declared in the manifest, e.g. '>=2.28,<3'. Distinct from the resolved version: the constraint is the maintainer's intent, the resolution is one outcome of it." .
+
+pulse:declaredIn
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "declared in" ;
+    skos:definition "The manifest that declared this dependency (pyproject.toml, package.json, Cargo.toml …). Locates the claim, and distinguishes a real dependency from one inherited via a lockfile." .
+
+pulse:isDirectDependency
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is direct dependency" ;
+    skos:definition "Whether the repository declares this dependency itself, as opposed to acquiring it transitively. Counting transitive dependencies as if they were chosen misrepresents both effort and risk." .
+
+pulse:DependencyScopeEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Dependency Scope Enumeration" ;
+    skos:definition "The role a dependency plays in a project." .
+
+pulse:RuntimeDependency     a pulse:DependencyScopeEnumeration ; skos:prefLabel "runtime" .
+pulse:DevelopmentDependency a pulse:DependencyScopeEnumeration ; skos:prefLabel "development" .
+pulse:BuildDependency       a pulse:DependencyScopeEnumeration ; skos:prefLabel "build" .
+pulse:TestDependency        a pulse:DependencyScopeEnumeration ; skos:prefLabel "test" .
+pulse:OptionalDependency    a pulse:DependencyScopeEnumeration ; skos:prefLabel "optional" .
 
 
 # =========================================================================
@@ -862,7 +1040,8 @@ pulse:ProposedContainerImageShape
 #   sh:property [ sh:path pulse:testCoverage ; sh:datatype xsd:decimal ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:communityHealthScore ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:badgeCount ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
-#   sh:property [ sh:path pulse:badge ; sh:nodeKind sh:IRI ] ;
+#   sh:property [ sh:path pulse:hasBadge ; sh:class pulse:Badge ] ;            # §16, replaces pulse:badge
+#   sh:property [ sh:path pulse:hasDependency ; sh:class pulse:DependencyRelation ] ;  # §16
 #   sh:property [ sh:path pulse:hasIssues ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:hasProjects ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:hasIssueTemplate ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
