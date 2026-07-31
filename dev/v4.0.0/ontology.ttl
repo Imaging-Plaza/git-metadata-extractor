@@ -1036,6 +1036,187 @@ pulse:Service a pulse:MembershipTypeEnumeration ; skos:prefLabel "Service" ;
 
 
 # =========================================================================
+# 18. COMPATIBILITY — accept everything, and say where it came from
+#
+# This is the point of the raw profile, so it deserves to be stated as a
+# requirement rather than inferred: raw must accept whatever a source gives
+# us, keep conflicting answers side by side, and record for every value WHERE
+# it came from and WHEN it was queried. Five things currently stand in the way.
+# All five are verified against ontology-shapes-raw.ttl, 2026-07-31.
+#
+# ---------------------------------------------------------------------
+# (1) NINE OF ELEVEN RAW SHAPES ARE sh:closed true
+#
+#   sh:closed false : RawPersonShape, RawOrganizationShape
+#   sh:closed true  : RawPlatformProfileShape, RawOrganizationProfileShape,
+#                     RawRepositoryShape, RawArticleShape, RawMembershipShape,
+#                     CollectionShape, CommunityShape, FundingShape,
+#                     ExternalIdentifierShape
+#
+# The two anchor classes are open and everything that actually carries source
+# data is closed. That inverts the requirement. This file's own header says raw
+# exists for "full field-parity with GitHub/Hugging Face/Zenodo/ORCID" — but
+# those APIs add fields continuously, and under a closed shape every new field
+# is a validation error until the ontology ships a release. An extractor then
+# has two options, both bad: drop the field, or emit invalid data.
+#
+# ASK: make the raw node shapes sh:closed false. Canonical can stay closed —
+# that is where the discipline belongs, because canonical is a curated view.
+# Raw is the intake, and an intake that rejects unanticipated input is not an
+# intake. Closedness in raw buys tidiness at the cost of the profile's purpose.
+#
+# ---------------------------------------------------------------------
+# (2) SEVEN OF ELEVEN CANNOT SAY WHICH RUN PRODUCED THEM
+#
+#   has pulse:partOfRun : RawPersonShape, RawOrganizationShape,
+#                         RawRepositoryShape, RawArticleShape
+#   lacks it            : RawPlatformProfileShape, RawOrganizationProfileShape,
+#                         RawMembershipShape, CollectionShape, CommunityShape,
+#                         FundingShape, ExternalIdentifierShape
+#
+# PlatformProfile is the sharpest case: it is the node that exists specifically
+# to hold one platform's view of a person, and it cannot state which
+# ExtractionOutput produced it. Nor can a Membership, a Funding record or an
+# ExternalIdentifier — so "where did this affiliation come from, and when?"
+# is unanswerable for exactly the entities whose credibility depends on it.
+#
+# ASK: pulse:partOfRun on every raw node shape. It is one sh:property line per
+# shape and it is the backbone of the provenance profile.
+#
+# ---------------------------------------------------------------------
+# (3) CONFLICTING VALUES SURVIVE FOR PEOPLE, NOT FOR REPOSITORIES
+#
+# PlatformProfile solves this elegantly for Person and Organization: one
+# profile per platform, so GitHub's bio and ORCID's biography coexist without
+# either being wrong. Repository and Article have NO equivalent. One
+# schema:SoftwareSourceCode node carries GitHub, Zenodo and Hugging Face facts
+# together, with sh:maxCount 1 on much of it — so when GitHub's licence and
+# Zenodo's licence disagree, extraction must pick one. Choosing is a canonical
+# decision, and forcing it in raw is precisely what the raw/canonical split
+# exists to avoid.
+#
+# ASK: drop sh:maxCount 1 in the raw repository and article shapes wherever
+# two sources can legitimately disagree (licence, name, description, dates,
+# discipline), and let pulse:Observation below say which source said what. The
+# alternative — a per-source record node mirroring PlatformProfile — also works;
+# we have no preference, only that both answers survive.
+#
+# ---------------------------------------------------------------------
+# (4) PER-VALUE PROVENANCE NEEDS A FORM THAT TODAY'S TOOLS CAN READ
+#
+# The provenance profile records winner-links as RDF-star annotations, and its
+# own header notes that pySHACL has no RDF-star support and rdflib cannot parse
+# Turtle-star. We pin rdflib 6.3.2 and pyshacl 0.28.1, so we can neither emit
+# nor validate that form. pulse:Observation below is the same information as an
+# ordinary reified node: deliberately ISOMORPHIC to the RDF-star shape, same
+# predicate names, so a consumer can support either and a producer can emit
+# both. It is not a competing design; it is the interoperable encoding of the
+# one already chosen.
+#
+# ---------------------------------------------------------------------
+# (5) NOTHING SHOULD EVER BE SILENTLY DROPPED
+#
+# pulse:UnmappedField below is the escape hatch that makes "accept everything"
+# literally true: an extractor meeting a field with no term keeps it, with its
+# source and timestamp, instead of discarding it. It is what we do today with
+# gme-internal:, formalised so any extractor can do it — and it makes ontology
+# growth non-breaking, because promoting a field later is a rename, not a
+# re-extraction.
+# =========================================================================
+
+# --- per-value provenance, without RDF-star ------------------------------
+
+pulse:Observation
+    a rdfs:Class ;
+    skos:prefLabel "Observation" ;
+    skos:definition "One source's assertion of one value about one subject, at one point in time. The non-RDF-star encoding of the provenance profile's quoted-triple annotations: same predicates, ordinary triples, so pySHACL can validate it and rdflib can parse it today. Emit this, the RDF-star form, or both." .
+
+pulse:hasObservation
+    a rdf:Property ;
+    rdfs:range pulse:Observation ;
+    skos:prefLabel "has observation" ;
+    skos:definition "Links any entity to an observation about it. Unbounded: the same property observed from three sources is three observations, which is the point." .
+
+pulse:observedSubject
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed subject" ;
+    skos:definition "The entity the observation is about — the subject of the quoted triple in the RDF-star form." .
+
+pulse:observedProperty
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed property" ;
+    skos:definition "The property whose value was observed — the predicate of the quoted triple." .
+
+pulse:observedValue
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed value" ;
+    skos:definition "The value observed — the object of the quoted triple. Literal or IRI." .
+
+pulse:retrievedFrom
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "retrieved from" ;
+    skos:definition "The endpoint the value came from, as specifically as possible — 'https://pub.orcid.org/v3.0/0000-0002-1825-0097/employments', not just 'ORCID'. prov:wasDerivedFrom names the ExtractionOutput; this names the actual request, which is what makes a value auditable and re-fetchable." .
+
+pulse:retrievedAt
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    rdfs:range xsd:dateTime ;
+    skos:prefLabel "retrieved at" ;
+    skos:definition "When the query that produced this value was executed. Distinct from pulse:observedOn (when the value was recorded) and from schema:dateModified (when the upstream resource changed): a stars count retrieved in January is not wrong in June, it is stale, and only the query time can tell you which." .
+
+pulse:sourceQuery
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "source query" ;
+    skos:definition "The query or parameters used, when the endpoint alone does not identify the request — a search string, a GraphQL document, a SPARQL query. Without it, a value derived from a search cannot be reproduced." .
+
+pulse:sourcePlatform
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    # Range is YOUR class, declared in ontology-enumerations-canonical.ttl —
+    # not re-declared here. Same for the MembershipType / IdentifierScheme /
+    # PublicationType enumerations this file adds members to.
+    rdfs:range pulse:PlatformEnumeration ;
+    skos:prefLabel "source platform" ;
+    skos:definition "The platform the value came from, as an enumeration member — the coarse filter consumers actually use ('show me only ROR-sourced affiliations'). Requires the platform enumeration to cover our real sources; see ask #4." .
+
+# The provenance profile's existing annotation properties apply unchanged to
+# an Observation node — pulse:observationKind, observationConfidence,
+# observedOn, firstObservedOn, lastConfirmedOn, observationCount. That is what
+# "isomorphic" means here: no second vocabulary to learn, and a SPARQL query
+# differs only in whether it matches << s p o >> or an Observation node.
+
+# --- the escape hatch: never drop anything -------------------------------
+
+pulse:UnmappedField
+    a rdfs:Class ;
+    skos:prefLabel "Unmapped Field" ;
+    skos:definition "A source field with no term in this ontology, preserved verbatim rather than discarded. Makes ontology growth non-breaking: a field captured today as unmapped becomes a first-class property later without re-extracting anything, and an extractor never has to choose between dropping data and emitting invalid data." .
+
+pulse:hasUnmappedField
+    a rdf:Property ;
+    rdfs:range pulse:UnmappedField ;
+    skos:prefLabel "has unmapped field" ;
+    skos:definition "Links an entity to a source field that has no term yet." .
+
+pulse:sourceFieldName
+    a rdf:Property ;
+    rdfs:domain pulse:UnmappedField ;
+    skos:prefLabel "source field name" ;
+    skos:definition "The field's name at the source, verbatim — 'community_health_percentage', 'crisrp.name.variant'. Keeping the upstream spelling is what makes the value traceable back to the API that produced it." .
+
+pulse:rawValue
+    a rdf:Property ;
+    rdfs:domain pulse:UnmappedField ;
+    skos:prefLabel "raw value" ;
+    skos:definition "The value as received, unconverted. A literal — including a JSON string for structured values, since inventing a shape for data the ontology does not model would defeat the purpose." .
+
+
+# =========================================================================
 # 10. SHACL FRAGMENTS
 #
 # Where the above would attach, as sh:property blocks to merge into the
