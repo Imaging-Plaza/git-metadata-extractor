@@ -42,6 +42,7 @@ have; **P1** = strands extraction we do today; **P2** = worth having.
 | 9 | Registry org metadata: `establishedYear`, `registryStatus`, `acronym`, `unitCode` | `ontology-definitions-raw.ttl`, `ontology-shapes-raw.ttl` (+ canonical `OrganizationShape`) | [`ontology.ttl`](ontology.ttl) §5 | **P2** |
 | 10 | Permit **`skos:altLabel`** on Person / Organization / Repository — no new term, the closed shapes just exclude it | `ontology-shapes-raw.ttl`, `ontology-shapes-canonical.ttl` | [`ontology.ttl`](ontology.ttl) §6 | **P2** |
 | 11 | `PackageEcosystemEnumeration` (purl types) | `ontology-enumerations-raw.ttl` | [`ontology.ttl`](ontology.ttl) §7 | with #1 |
+| 12 | **`pulse:samePersonAs` should not be `⊑ owl:sameAs`** — prefer `skos:exactMatch`, or standalone with a comment that it is a unifier assertion rather than an identity axiom | `ontology-definitions-provenance.ttl` | [`../rete/gme-alignment-findings.md`](../rete/gme-alignment-findings.md#a-finding-worth-acting-on-samepersonas-should-not-be-a-sameas) | **P1** |
 
 Most of it is the **raw** profile, which is the expected answer: raw is the
 extractor's profile, and everything above is data an extractor observes. Only
@@ -72,10 +73,22 @@ Recorded so the proposal is read as considered rather than maximal:
   `_source_index`, `_score` and friends should keep being stripped; they are
   our internals, not ontology material. Inventory in
   [`../ontology-v3-profiles/field-mapping.md`](../ontology-v3-profiles/field-mapping.md#unmapped--gaps-to-feed-back).
-- **Nothing on the provenance profile yet.** It needs RDF-star, which our
-  pinned stack (`rdflib==6.3.2`, `pyshacl==0.28.1`) cannot emit or validate —
-  and their own file header notes rdflib 7.6.0 cannot parse Turtle-star either.
-  That is a tooling conversation, not a term request.
+- **Nothing on the provenance profile yet** beyond ask #12. It needs RDF-star,
+  which our pinned stack (`rdflib==6.3.2`, `pyshacl==0.28.1`) cannot emit or
+  validate — and their own file header notes rdflib 7.6.0 cannot parse
+  Turtle-star either. That is a tooling conversation, not a term request. Ask
+  #12 is the exception because it is a one-word semantic fix with a real
+  consequence, and needs no RDF-star to matter.
+
+## External corroboration
+
+The rete scholarly-graph alignment ontology (`dev/rete/scholar.ttl`, v1.4.0)
+independently arrives at GME's exact identifier conventions — DOI, ORCID and ROR
+IRIs identical — which means our output already joins ten scholarly graphs with
+no `owl:sameAs`. It also treats **ROR as *the* organization authority**, which
+is direct outside support for ask #4, and its explicit "use `skos:exactMatch`,
+not `owl:sameAs`" rule is where ask #12 comes from. Survey:
+[`../rete/gme-alignment-findings.md`](../rete/gme-alignment-findings.md).
 
 ---
 
