@@ -94,27 +94,28 @@ of an unchanged repo costs nothing.
    infer, and worth recording as such.
 6. **Squashed/imported history** can attribute everything to one identity.
 
-## Privacy position
+## Privacy position — settled 2026-07-31
 
-Commit emails are personal data. They are published in the git objects, but
-aggregating them into a queryable graph is a separate processing act from their
-existing in a repository — which is why the current pipeline hashes them by
-default. That is a data-protection decision for whoever operates the
-deployment, not something to settle in code, so the design should make it
-explicit rather than implicit:
+**Hashed local part, domain kept, no full addresses anywhere.** That is what
+`privacy.py` already produces, so the requirement is satisfied by the existing
+behaviour — the work is to capture *all* identities, not to change how they are
+represented.
 
-- **Default stays anonymised** — `<hash>@domain`, as today.
-- **Full identities are opt-in**, mirroring `?include_internal_fields=true`:
-  an env flag plus a request parameter, so a deployment can refuse it outright.
-- **Emit the domain unconditionally** (`pulse:gitAuthorEmailDomain`): it carries
-  the affiliation signal our resolvers actually use, with no personal
-  identifier.
-- **Emit a stable hash unconditionally** (`pulse:gitAuthorEmailHash`): lets
-  consumers join identities across records without holding addresses.
+- **Names in full.** They are the authorship record; hashing them would defeat
+  attribution, which is the point.
+- **Emails as two properties**: `pulse:gitAuthorEmailHash` (stable, joins
+  identities across records) and `pulse:gitAuthorEmailDomain` (the affiliation
+  signal the ROR resolvers use). Both publishable by default.
+- **`pulse:gitAuthorEmail` is never populated.** No opt-in flag, no request
+  parameter, no deployment switch — there is no code path that emits a full
+  address, which is simpler to reason about and to audit than a gated one.
 
-That way "all names and emails" is available where it is wanted, and the graph
-we publish by default is not an email list. Whoever turns the flag on owns that
-decision and should record the lawful basis for it.
+One consequence worth carrying into the implementation: the current internal
+representation is a single composite string, `<hash>@<domain>`, which *looks
+like* an email — it satisfies the email regex in `RawPlatformProfileShape`. When
+emitting, split it into the two properties rather than passing the composite
+through an email-typed field, so no consumer can mistake a pseudonymised value
+for a mailbox.
 
 ## Implementation sketch
 
@@ -130,6 +131,8 @@ decision and should record the lawful basis for it.
 4. **Feed dedup**: identity variants sharing a mailmap entry, or a name, are
    strong evidence for `pulse:samePersonAs`. This is the same information the
    raw/provenance split wants and we currently discard.
-5. **Gate**: `V2_GIT_IDENTITIES_ENABLED` (off by default) for collection;
-   `?include_git_emails=true` for un-hashed output. Bots filtered by default
-   with an explicit `is_bot` flag retained.
+5. **Gate**: `V2_GIT_IDENTITIES_ENABLED` for collection only — it is a clone or
+   a pagination walk, so it should be switchable on cost grounds. No output
+   gate is needed: hashing happens before the value reaches the graph, so there
+   is nothing to withhold. Bots filtered by default, with `is_bot` retained on
+   the identity so the filter is visible rather than silent.

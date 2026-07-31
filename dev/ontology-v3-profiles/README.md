@@ -222,15 +222,24 @@ the exact GME field names in [`field-mapping.md`](field-mapping.md#unmapped--gap
    (`_aliases`, `_original_name`, `_orcid_other_names` — no `skos:altLabel`
    modelling), `_profile_readme`.
 
-### One conflict, not a gap
+### Git author identities — resolved, and still blocked on cardinality
 
-Canonical `pulse:ContributionShape` defines **`pulse:gitAuthorName` and
-`pulse:gitAuthorEmail`**. GME deliberately anonymises emails —
-`pipeline/stages/privacy.py::anonymize_email`, applied in `reconciliation.py`,
-storing `<sha256_prefix>@<domain>` in `_email` precisely so raw addresses never
-leave the pipeline. Emitting `gitAuthorEmail` as modelled would reverse a
-privacy decision. Needs an explicit position from both sides — hashed value,
-domain only, or omit — before it is implemented, not after.
+Canonical `pulse:ContributionShape` defines `pulse:gitAuthorName` and
+`pulse:gitAuthorEmail`. Two separate issues, one now settled:
+
+**Privacy — settled 2026-07-31.** We emit the hashed local part plus the domain
+and never a full address, which is what
+`pipeline/stages/privacy.py::anonymize_email` already produces. So
+`pulse:gitAuthorEmail` simply stays unpopulated; no flag, no opt-in, no code
+path that emits an address. Names are emitted in full — they are the
+attribution record.
+
+**Cardinality — still blocking.** Both properties are `sh:maxCount 1`, but one
+person commits under several (name, email) pairs. Capturing *all* of them, as
+required, is impossible under the current shape. Proposal:
+[`../v4.0.0/ontology.ttl`](../v4.0.0/ontology.ttl) §9 (`pulse:GitIdentity`);
+analysis in
+[`../v4.0.0/git-author-identities.md`](../v4.0.0/git-author-identities.md).
 
 ---
 

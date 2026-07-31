@@ -497,12 +497,22 @@ pulse:mailmapApplied
     skos:prefLabel "mailmap applied" ;
     skos:definition "Whether this identity was normalised through the repository's .mailmap. A mailmap entry is the maintainer's own assertion that two identities are the same person — better evidence than anything an extractor can infer, and worth recording as such." .
 
-# --- The email itself, in three grades ----------------------------------
-# GME anonymises commit emails by default (pipeline/stages/privacy.py:
-# local@domain -> <sha256(local)[:12]>@domain) because aggregating addresses
-# into a queryable graph is a different act from their existing in git
-# objects. We need all three grades: the first two publishable by default,
-# the third behind an explicit opt-in a deployment can refuse.
+# --- The email, hashed, with the domain kept ----------------------------
+# DECIDED (2026-07-31): GME will not emit full commit addresses at all. Every
+# identity carries the hashed local part and the domain, which is what
+# pipeline/stages/privacy.py already produces today
+# (local@domain -> <sha256(local)[:12]>@domain). The domain is the part our
+# ROR resolvers actually use; the hash is enough to join identities across
+# records. So pulse:gitAuthorEmail stays defined in the canonical profile and
+# we simply never populate it — no opt-in, no flag, no full addresses.
+#
+# One request that follows from that: keep these as TWO properties rather
+# than reusing pulse:gitAuthorEmail for a hashed composite. "a1b2c3d4e5f6@epfl.ch"
+# satisfies the email sh:pattern in RawPlatformProfileShape
+# (^[\w\-\.\+]+@([\w-]+\.)+[\w-]{2,}$), so a consumer receiving it in an email
+# field has no way to tell a pseudonymised value from a real mailbox and may
+# try to write to it. Separate properties make the distinction unambiguous in
+# the data instead of in a comment.
 
 pulse:gitAuthorEmailDomain
     a rdf:Property ;
@@ -515,13 +525,16 @@ pulse:gitAuthorEmailHash
     a rdf:Property ;
     rdfs:domain pulse:GitIdentity ;
     skos:prefLabel "git author email hash" ;
-    skos:definition "A stable one-way hash of the address, letting consumers join identities across records without holding the address itself." ;
+    skos:definition "A stable one-way hash of the address's local part, letting consumers join identities across records without holding the address itself. Stable across runs and repositories, so the same person's commits under one address collapse wherever they appear." ;
     gme:mapsFrom "_email" .
 
 # pulse:gitAuthorEmail (already defined in the canonical profile) is the full
-# address. We propose no change to it beyond cardinality — it belongs on
-# GitIdentity, and emitting it should remain an explicit choice by whoever
-# operates the deployment.
+# address. We propose no change to it and will not populate it. The only
+# change we need on it is cardinality — see the shape fragments in Section 10.
+#
+# Author NAMES are emitted in full: they are the authorship record itself,
+# they are what CITATION.cff and the commit log exist to state, and a hashed
+# name would defeat attribution, which is the point of the graph.
 
 
 # --- Proposed shape for the new node ------------------------------------
