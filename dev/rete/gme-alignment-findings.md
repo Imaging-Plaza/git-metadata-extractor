@@ -97,13 +97,40 @@ Live in the catalog now:
 | `biosyslit` | — | Zenodo Biodiversity Literature Repository; carries ORCID. |
 | `wikidata`, `wikidata-100mb`, `wikidata-xxl`, `wikidata-ontology` | 100 MB → 600M triples | we already emit Wikidata QIDs for disciplines (`wd:Q428691` is our fallback). `wikidata-ontology` is every Wikidata class — a way to validate our discipline IRIs resolve to real classes. |
 
-**Not published in this catalog**, despite being aligned in `scholar.ttl` and
-reviewed in `README.md`: dedicated **ORCID, Crossref, DBLP, DataCite, OpenAIRE,
-ROR and CORDIS** graphs. Their ontologies exist (prefixes under
-`https://w3id.org/rete/…`, with a per-dataset review status table) but the
-`.rete` files are not in this server's list — ORCID and ROR data appears only
-*inside* other graphs (`zenodo-records`, `biosyslit`). So the alignment layer is
-written ahead of the data for those seven.
+### Aligned but not in this catalog
+
+Checked against a fresh `list_datasets` pull (199 entries incl. `local/`,
+byte-identical to the earlier one). Two different states get conflated easily,
+so they are separated here:
+
+| Source | Aligned in `scholar.ttl`? | Review row in its README? | Dataset in this catalog? |
+|---|---|---|---|
+| ROR | yes (39 mentions) | yes — "the organization authority" | **no** |
+| ORCID | yes (35) | yes — "fixed" | **no** |
+| DBLP | yes (26) | yes — "clean" | **no** |
+| DataCite | yes (19) | yes — "clean" | **no** |
+| OpenAIRE | yes (16) | yes — "fixed" | **no** |
+| CORDIS | yes (15) | yes — "clean*" | **no** |
+| Crossref | yes (11) | yes — "fixed" | **no** |
+| HuggingFace | yes — `hf:Model/DatasetRepo/Space/Paper/User/Organization`, `hf:doi` | **no row** | **no** |
+| GH Archive | **no — 0 mentions** | no | **no** |
+
+Where those names *do* appear in the catalog it is as mentions inside other
+graphs: `datacite` / `openaire` → `zenodo-records`, `biosyslit`, `gotriple`;
+`orcid` → those plus `open-pulse`, `scholar-noisy`; `ror` → `open-pulse`,
+`bcul`, `worldcup2026`, `arxiu`. None is a standalone authority graph here. So
+for eight of the nine the alignment layer is written ahead of the data, and
+HuggingFace is the least developed of them — aligned in the ontology but absent
+from the review table.
+
+**GH Archive is the interesting absence.** It is in neither the catalog nor the
+alignment, and it is the one source on this list that would matter most to GME:
+the GitHub event firehose is commit- and contributor-level activity at scale,
+which is exactly the evidence the
+[git-identity requirement](../v4.0.0/git-author-identities.md) needs and the
+thing we currently reconstruct one repository at a time through the API. If a
+`gharchive` graph existed, `pulse:GitIdentity` could be populated from it in
+bulk rather than per-extraction.
 
 If/when the ROR and ORCID graphs land, they are the two that matter most to us:
 they are the authorities behind our two most important `@id` forms, and they
