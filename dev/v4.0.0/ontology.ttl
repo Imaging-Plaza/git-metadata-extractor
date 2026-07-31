@@ -734,6 +734,90 @@ pulse:abstract
 
 
 # =========================================================================
+# 15. ROR, AND WHY WE ARE NOT ASKING FOR MANY MORE CLASSES
+#
+# rete's ROR vocabulary (dev/rete/scholar.ttl) is small and pointed:
+#   ror:Organization ⊑ scholar:Organization
+#   ror:Funder       ⊑ scholar:Funder
+#   ror:rorId ⊑ scholar:ror · ror:grid ⊑ scholar:grid
+#   ror:isni  ⊑ scholar:isni · ror:fundref ⊑ scholar:fundref
+#   ror:wikidata ⊑ scholar:wikidata
+#
+# Note what rete does NOT do: it does not model a ROR *record* separate from
+# the organization. Because the org is minted AT https://ror.org/{id}, the ROR
+# node simply IS the organization, and its registry facts are properties of
+# it. That is the same choice we make — our org:Organization @id is the ROR —
+# so the natural home for established year, status, types and acronyms is the
+# Organization itself.
+#
+# The obstacle is not conceptual, it is the shape: canonical OrganizationShape
+# is sh:closed and admits none of those fields, and RawOrganizationProfileShape
+# is platform-scoped (handle, followers, avatar) — a ROR record is an authority
+# record, not a social profile. So:
+#
+#   PREFERRED — widen the Organization shapes to admit the §5 registry
+#   properties (establishedYear, registryStatus, acronym, unitCode,
+#   orgUnitLevel). Matches rete, keeps one node per organization, no new class.
+#
+#   FALLBACK — if you want Organization to stay thin, take
+#   pulse:RegistryRecord below and hang the registry facts off it. We have no
+#   preference beyond "the facts must land somewhere".
+# =========================================================================
+
+pulse:RegistryRecord
+    a rdfs:Class ;
+    skos:prefLabel "Registry Record" ;
+    skos:definition "An authority record about an organization in a registry (ROR, GRID, ISNI, Wikidata), as distinct from a platform profile: it asserts what the organization IS rather than what it does on a site. Only needed if the Organization shapes stay closed to registry facts — see the note above." .
+
+pulse:hasRegistryRecord
+    a rdf:Property ;
+    rdfs:domain org:Organization ;
+    rdfs:range pulse:RegistryRecord ;
+    skos:prefLabel "has registry record" ;
+    skos:definition "Links an organization to an authority record describing it." .
+
+# --- the crosswalk: enumeration members, not new properties -------------
+# IdentifierSchemeEnumeration already carries Ringgold, GRID and ISNI, so
+# ror:grid and ror:isni need no new property — they are
+# pulse:hasExternalIdentifier with a scheme. Two schemes are missing.
+
+pulse:WikidataScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "Wikidata" ;
+    skos:definition "A Wikidata QID (ror:wikidata). We already emit wd: IRIs for disciplines, so the vocabulary is in our output already; this covers the organization crosswalk." .
+pulse:CrossrefFunderScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "Crossref Funder ID" ;
+    skos:definition "A Crossref Funder ID (ror:fundref). The rete hub makes Crossref the authority for this key and mints it at https://doi.org/10.13039/{id} — it is how DataCite funding references join to an organization." .
+
+# --- classes we deliberately do NOT propose ------------------------------
+#
+# pulse:Funder — rete has ror:Funder ⊑ scholar:Funder, and we still would not
+#   ask for it. Funding is a ROLE an organization plays in relation to a work,
+#   not a kind of thing: EPFL funds some work and performs other work. As a
+#   class it forces every organization that ever funded anything to carry a
+#   second type, and every consumer to union two classes to ask "which
+#   organization is this". schema:funder as a property already says it, and it
+#   says it about the relationship, which is where the fact belongs.
+#
+# A venue class — reused fabio:Journal instead (§14).
+#
+# pulse:Badge, pulse:Dependency — a property and an edge respectively. A badge
+#   is a link; a dependency is pulse:dependsOnPackage between two nodes that
+#   already exist. Neither earns identity.
+#
+# SWISSUbase Study, RenkuLab Project — we read those indices for search, not
+#   to emit entities. Classing them would be modelling ahead of the
+#   requirement.
+#
+# A class per platform-profile kind (GitHubProfile, ORCIDProfile, …) — that is
+#   what pulse:platform on one PlatformProfile is for. Subclassing per platform
+#   multiplies shapes without adding a single fact.
+#
+# The test we applied: a class earns its keep when the thing has identity of
+# its own, its own lifecycle, and properties that make no sense on anything
+# else. Package, ContainerImage, GitIdentity and (conditionally) RegistryRecord
+# pass. Everything above fails it, and each avoided class is one fewer closed
+# shape to keep in sync across three profiles.
+
+
+# =========================================================================
 # 10. SHACL FRAGMENTS
 #
 # Where the above would attach, as sh:property blocks to merge into the
@@ -796,13 +880,19 @@ pulse:ProposedContainerImageShape
 #   sh:property [ sh:path pulse:profileReadme ; sh:nodeKind sh:IRI ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
 #
-# --- to merge into RawOrganizationProfileShape / OrganizationShape ------
+# --- to merge into the ORGANIZATION shapes (see §15: registry facts belong
+#     on the organization, because its @id already IS the ROR) -------------
 #
 #   sh:property [ sh:path pulse:establishedYear ; sh:datatype xsd:gYear ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:registryStatus ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
 #   sh:property [ sh:path pulse:acronym ; sh:datatype xsd:string ] ;
 #   sh:property [ sh:path pulse:unitCode ; sh:datatype xsd:string ] ;
+#   sh:property [ sh:path pulse:orgUnitLevel ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasExternalIdentifier ; sh:class pulse:ExternalIdentifier ] ;
 #   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
+#
+#   Only if you take the §15 fallback instead:
+#   sh:property [ sh:path pulse:hasRegistryRecord ; sh:class pulse:RegistryRecord ] ;
 #
 # --- to merge into ContributionShape (Section 9) -------------------------
 #
