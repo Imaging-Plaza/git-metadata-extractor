@@ -129,6 +129,94 @@ range-read graph instead of live APIs.
   terms travel into published graphs, which is the concrete argument for
   promoting them (that is what all of [`../v4.0.0/ontology.ttl`](../v4.0.0/ontology.ttl) is about).
 
+## Appendix — the complete catalog, 65 datasets
+
+All published (non-`local/`) datasets, every one accounted for. Relevance is
+judged from key, label and tags — **not** from querying each graph, so treat the
+"why" column as a lead to verify, not a finding.
+
+### Directly relevant — scholarly outputs (9)
+
+| Dataset | Triples | Why it matters to GME |
+|---|---|---|
+| `zenodo-records` | 215 M | every Zenodo record as DataCite; keeps concept DOI separate from version DOI |
+| `biosyslit` | 106 M | Zenodo biodiversity literature; carries ORCID |
+| `gotriple` | 57.7 M | 2.7 M SSH publications + a 27-discipline SKOS scheme |
+| `orkg` | 37 K | research contributions |
+| `openalex-astrocytes` | 24 K | OpenAlex as RDF — the shape our OpenAlex index would take |
+| `opencitations` | 8.1 K | citation graph; the DOI+PMID+OpenAlex+OMID crosswalk hub |
+| `scholar` | 7.0 K | synthetic clean scholarly world — ground truth |
+| `scholar-noisy` | 6.7 K | same world, 25% injected noise — our failure surface |
+| `open-pulse` | 3.7 M | our own output, older ontology version |
+
+### Provenance and data-quality patterns (5) — *missed in my first pass*
+
+Relevant because the provenance profile is the part of PR #25 we understand
+least well, and these are worked examples of PROV-O in practice.
+
+| Dataset | Triples | Why |
+|---|---|---|
+| `causenet` | 256 M | causality claims **with provenance** from web extraction, at scale — the closest published analogue to what `pulse:ExtractionOutput` + confidence annotations are for |
+| `nidm` | 3.2 K | Neuroimaging Data Model — a real cohort modelled with **PROV**; small enough to read end to end as a reference for provenance modelling |
+| `causalgraph` | 315 | causal graphs in KGs (Fraunhofer), OWL |
+| `causal` | 170 | cardiometabolic causal model with confounders |
+| `ontoneurolog` | 17.7 K | a data-*sharing* ontology — the metadata-about-metadata problem we have |
+
+### Identity, mappings and authority files (7) — *mostly missed in my first pass*
+
+Directly relevant to reconciliation and to ask #12: these are graphs whose whole
+job is stating that two records are the same thing.
+
+| Dataset | Triples | Why |
+|---|---|---|
+| `mira-wikidata` | 125 | an **SSSOM linkset** — the community standard for mapping sets, i.e. the disciplined version of what `pulse:samePersonAs` is trying to say |
+| `databnf` | 673 M | the whole BnF linked data, **VIAF-aligned authorities** — person/org authority control at scale |
+| `bne` | 267 M | Spanish National Library authorities, same pattern |
+| `getty-ulan` | 205 K | ULAN artist authority + mentorship lineage — an authority file modelling person-to-person relations |
+| `factgrid-illuminati` | 35 K | prosopography — person-centric historical graph |
+| `wikidata-ontology` | 185.5 M | every Wikidata class; we emit `wd:` discipline IRIs (`wd:Q428691` fallback) and could validate they resolve |
+| `wikidata` / `wikidata-100mb` / `wikidata-xxl` / `wikidata-zenodo` | 100 MB → 600 M | the QID substrate our disciplines point into; `wikidata-zenodo` adds DOIs |
+
+### Swiss / EPFL-adjacent institutions (3)
+
+| Dataset | Triples | Why |
+|---|---|---|
+| `bcul` | 117 M | BCU Lausanne as a graph (MARC catalogue); mentions ROR |
+| `ecal` | 1.0 M | ECAL art & design school library |
+| `vidy` | 457 K | Lausanne archives |
+
+### Domain science / research data (5)
+
+`gbif-birds` (334 M, Darwin Core), `chebi-full` (8.8 M, chemistry ontology),
+`bioexplora` (7.9 M, natural history), `chemotion` (1.5 M — a chemistry
+**ELN** with its own ontology, i.e. research-software-adjacent RDM),
+`monarch` (7.8 K, biomedical Biolink).
+
+### Not relevant to GME (36)
+
+Cultural heritage, archives and rare books: `biblissima`, `mmm`, `bcn`,
+`arxiu`, `albala`, `bph`, `ustc`, `jonas`, `mira`, `postscriptum`,
+`fuero_juzgo`, `ramon_llull`, `peirce`, `mimotext`, `memoria`, `boe`,
+`smithsonian3d`, `scrolls`, `lineara`, `nomisma`, `theographic-graph`,
+`antarctic-expeditions`, `linked-jazz`. Geo: `geoadmin`, `geoadmin-tiles`,
+`ohm-full`, `history`. Sport/games/media: `worldcup`, `worldcup2026`,
+`tracking`, `mtg`, `mtg-game`, `subtitles`.
+
+They are still useful as *modelling* references — `mmm` for CIDOC-CRM
+provenance chains, `biblissima` for a full Wikibase in one file — but they carry
+no data we would ingest.
+
+### What I got wrong on the first pass
+
+My initial sweep was a keyword filter over key/label/description for scholarly
+terms, which surfaced 69 of 199 entries (including `local/` duplicates). It
+missed the four categories above that matter on *pattern* rather than on
+subject matter: `causenet` and `nidm` (provenance in practice),
+`mira-wikidata` (SSSOM mappings), and `databnf` / `bne` / `getty-ulan`
+(authority control). Those are arguably more useful to us than another
+publication corpus, because provenance modelling and identity assertion are the
+two hard parts of the v4 adaptation.
+
 ## Suggested next steps
 
 1. Add ask #12 (`samePersonAs` → `skos:exactMatch`) to the proposal — done.
@@ -139,3 +227,12 @@ range-read graph instead of live APIs.
    `rdfs:subClassOf` line per entity type (`schema:SoftwareSourceCode` and
    `pulse:Contribution` → `scholar:Work`, etc.) makes our graph queryable
    through the same hub as the other ten.
+4. **Read `nidm` and `causenet` before implementing the provenance profile.**
+   Both model provenance with PROV in anger — `nidm` at 3.2 K triples is small
+   enough to read whole, `causenet` shows it at 256 M. Provenance is the part
+   of PR #25 we have the least experience with, and these are the only worked
+   examples in the catalog.
+5. **Look at `mira-wikidata` (SSSOM) before settling ask #12.** If the
+   ecosystem's answer to "these two records are the same" is an SSSOM linkset,
+   that is a stronger precedent than either `owl:sameAs` or `skos:exactMatch`
+   chosen on our own reasoning.
