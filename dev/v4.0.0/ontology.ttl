@@ -649,6 +649,91 @@ pulse:accessRights
 
 
 # =========================================================================
+# 14. SOURCES WE READ BUT CANNOT TYPE
+#
+# From the source-by-source audit in raw-source-coverage.md. Each item below
+# is a record kind or relation we receive from a source already wired into the
+# pipeline, and currently discard because no term accepts it.
+#
+# The EPFL Infoscience ontology (dev/rete/epfl-infoscience.ttl v1.2.0) is the
+# evidence: it models DSpace-CRIS faithfully and therefore enumerates exactly
+# what an Infoscience query returns. Our article agent queries Infoscience in
+# production, so these are live gaps, not hypotheticals.
+#
+# Following that ontology's own rule — reuse the standard, mint only the
+# residue — most of this is enumeration members and alignments, not new
+# classes.
+# =========================================================================
+
+# --- output kinds: add members, don't add classes ------------------------
+# PublicationTypeEnumeration already has SoftwarePublication,
+# DatasetPublication, Poster, Presentation, Image, Video, Workflow,
+# PhysicalObject. Two kinds Infoscience returns are missing.
+
+pulse:ThesisPublication a pulse:PublicationTypeEnumeration ; skos:prefLabel "Thesis" ;
+    skos:definition "A thesis or dissertation (infs:Thesis ⊑ schema:Thesis, fabio:Thesis). EPFL doctoral output is a large share of what Infoscience holds, and it is how a researcher's earliest work is recorded." .
+pulse:PatentPublication a pulse:PublicationTypeEnumeration ; skos:prefLabel "Patent" ;
+    skos:definition "A patent (infs:Patent ⊑ fabio:Patent). Distinct from a scholarly article in review, ownership and citation behaviour." .
+
+# --- the venue: reuse fabio:Journal, do not mint ------------------------
+# Infoscience models journals as a first-class entity (infs:Journal ⊑
+# schema:Periodical, fabio:Journal) with ISSN/eISSN. Neither profile has a
+# venue concept, so "published in" is unexpressible — yet venue is the
+# primary axis bibliometrics is read on.
+
+pulse:publishedInVenue
+    a rdf:Property ;
+    rdfs:range fabio:Journal ;
+    skos:prefLabel "published in venue" ;
+    skos:definition "The journal, serial or proceedings an article appeared in. Range is fabio:Journal, reused rather than minted — Infoscience, DBLP and the rete scholarly hub all already model the venue that way. Identify it by ISSN where possible: https://portal.issn.org/resource/ISSN/{issn}, the IRI form the rete hub uses." .
+
+pulse:issn
+    a rdf:Property ;
+    rdfs:subPropertyOf schema:identifier ;
+    skos:prefLabel "ISSN" ;
+    skos:definition "The ISSN of a venue (infs:issn / infs:eissn). The canonical join key for serials across DBLP, Crossref and Infoscience." .
+
+# --- supervision: a person→person edge nothing expresses ----------------
+
+pulse:hasAdvisor
+    a rdf:Property ;
+    rdfs:domain schema:Person ;
+    rdfs:range schema:Person ;
+    owl:inverseOf pulse:advisorOf ;
+    skos:prefLabel "has advisor" ;
+    skos:definition "The doctoral advisor or thesis supervisor of a person (infs:hasAdvisor, from dc.contributor.advisor). No property in pulse: relates one person to another, so academic lineage — arguably the strongest signal of how research groups actually propagate — cannot be recorded at all." .
+
+pulse:advisorOf
+    a rdf:Property ;
+    rdfs:domain schema:Person ;
+    rdfs:range schema:Person ;
+    skos:prefLabel "advisor of" ;
+    skos:definition "Inverse of pulse:hasAdvisor." .
+
+# --- identifiers: sciper is the EPFL Graph join key ---------------------
+
+pulse:SciperScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "EPFL Sciper" ;
+    skos:definition "An EPFL sciper — the institutional person id (infs:sciper, epfl.sciperId). Documented in the Infoscience ontology as the join key to the EPFL Graph dataset, which we already query for disciplines, so without it we cannot connect a person to the discipline graph we consume." ;
+    gme:mapsFrom "_infoscience_code" .
+
+# --- organizational granularity -----------------------------------------
+
+pulse:orgUnitLevel
+    a rdf:Property ;
+    skos:prefLabel "org unit level" ;
+    skos:definition "Where a unit sits in its institution's hierarchy — lab, institute, section, school (infs:orgUnitLevel). org:unitOf gives the parent edge but not the rank, so 'is this a lab or a faculty?' cannot be answered, and that is what decides whether an affiliation is specific enough to be useful." ;
+    gme:mapsFrom "_unit_code" .
+
+# --- the abstract, which we read and drop -------------------------------
+
+pulse:abstract
+    a rdf:Property ;
+    rdfs:subPropertyOf dct:abstract ;   # TO-VERIFY: dct:abstract spelling not re-checked (LOV down)
+    skos:prefLabel "abstract" ;
+    skos:definition "The abstract of a work (infs:abstract, dc.description.abstract). We fetch it from Infoscience today and discard it; it is the single most useful text for discipline classification and for LLM-side judgement about what a work is." .
+
+
+# =========================================================================
 # 10. SHACL FRAGMENTS
 #
 # Where the above would attach, as sh:property blocks to merge into the
