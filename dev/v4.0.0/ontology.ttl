@@ -55,6 +55,9 @@
 @prefix cito:     <http://purl.org/spar/cito/> .
 @prefix fabio:    <http://purl.org/spar/fabio/> .
 @prefix frapo:    <http://purl.org/cerif/frapo/> .
+# §19: the deps.dev graph, verified live at
+# https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete
+@prefix deps:     <https://w3id.org/rete/deps-dev#> .
 
 # The annotation property carrying proposal provenance. Not for adoption.
 gme:mapsFrom
@@ -1214,6 +1217,105 @@ pulse:rawValue
     rdfs:domain pulse:UnmappedField ;
     skos:prefLabel "raw value" ;
     skos:definition "The value as received, unconverted. A literal — including a JSON string for structured values, since inventing a shape for data the ontology does not model would defeat the purpose." .
+
+
+# =========================================================================
+# 19. deps.dev — the package layer already exists, and it joins on our IRIs
+#
+# The rete catalog ships deps.dev (Google Open Source Insights) as
+# 2,555,320,067 triples across 8 federated shards. Verified live 2026-07-31
+# against https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete:
+#
+#   9,221,041  deps:PackageVersion
+#     431,715  deps:Project
+#      23,795  deps:Advisory
+#
+# THE JOIN IS FREE. deps:Project's own comment reads "A source repository /
+# project a package is built from (e.g. a GitHub repo). Instance IRI = the
+# repository URL." That is GME's Repository @id. Querying that shard for
+#
+#   ?pv deps:hasProject <https://github.com/psf/requests> ; deps:purl ?purl
+#
+# returns pkg:pypi/requests@2.23.0 and its resolved dependencies
+# (certifi, chardet, idna, urllib3), plus republished forks. No mapping table,
+# no owl:sameAs — the same repository IRI we mint is the key.
+#
+# So §1's package layer is not something we need to build; it is something we
+# need to ALIGN to. Everything below is an alignment axiom, plus the one
+# concept deps.dev has that we have no term for at all: security advisories.
+#
+# One modelling nuance to get right: deps.dev is VERSION-LEVEL. Its node is a
+# PackageVersion and its join key deps:purl carries the version
+# ("pkg:pypi/requests@2.23.0"). Our pulse:Package is therefore version-level
+# too, which is worth stating explicitly — "requests" and "requests 2.23.0"
+# are different subjects, and only the second one has dependencies.
+# =========================================================================
+
+pulse:Package            rdfs:subClassOf    deps:PackageVersion .
+pulse:packageIdentifier  rdfs:subPropertyOf deps:purl .        # both purl; the cross-registry key
+pulse:packageEcosystem   rdfs:subPropertyOf deps:system .      # NPM GO MAVEN PYPI CARGO NUGET RUBYGEMS
+pulse:packageRegistry    rdfs:subPropertyOf deps:registry .
+pulse:dependsOnPackage   rdfs:subPropertyOf deps:dependsOn .   # resolved + version-pinned, depth 1
+pulse:packageDependencyOf rdfs:subPropertyOf deps:dependencyOf .
+pulse:sourceRepository   rdfs:subPropertyOf deps:hasProject .  # target IRI = the repository URL
+
+pulse:isRelease
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range xsd:boolean ;
+    rdfs:subPropertyOf deps:isRelease ;
+    skos:prefLabel "is release" ;
+    skos:definition "Whether this is a stable release rather than a pre-release. The cheapest way to answer 'what is the current version of this software' without version-string parsing, which is unreliable across seven ecosystems." .
+
+# --- security advisories: we have no term for these ---------------------
+# 23,795 advisories in the PyPI shard alone, attached to the package versions
+# they affect, sourced from GHSA / OSV / NSWG. §3 proposes a SecurityScoreBadge
+# — a self-reported summary — while this is the underlying fact, from an
+# authority, joined to a version. For research software, "does this depend on
+# something with a known vulnerability" is a question people actually ask, and
+# nothing in either profile can express it.
+
+pulse:Advisory
+    a rdfs:Class ;
+    rdfs:subClassOf deps:Advisory ;
+    skos:prefLabel "Advisory" ;
+    skos:definition "A security advisory affecting one or more package versions. Identified by its source URL (a GHSA or OSV record)." .
+
+pulse:hasAdvisory
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range pulse:Advisory ;
+    rdfs:subPropertyOf deps:hasAdvisory ;
+    skos:prefLabel "has advisory" ;
+    skos:definition "A security advisory affecting this package version." .
+
+pulse:advisoryAffects
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:range pulse:Package ;
+    rdfs:subPropertyOf deps:affects ;
+    skos:prefLabel "advisory affects" ;
+    skos:definition "The package versions this advisory affects." .
+
+pulse:advisorySource
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:subPropertyOf deps:advisorySource ;
+    skos:prefLabel "advisory source" ;
+    skos:definition "The database that issued it — GHSA, OSV, NSWG. Provenance matters here: severity is assessed differently by different issuers." .
+
+pulse:advisorySeverity
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:subPropertyOf deps:severity ;
+    skos:prefLabel "advisory severity" ;
+    skos:definition "The severity as stated by the issuing database. Kept as issued rather than normalised — the scales differ, and flattening them would invent a comparability that is not there." .
+
+# NOT proposed, though deps.dev carries them: deps:slsaVerified and
+# deps:slsaSourceRepository (build provenance), deps:ossFuzzLineCoverCount,
+# deps:versionOrdinal. All available if wanted; left out because we do not
+# consume them today and supply-chain attestation is a different axis from
+# research-software description. Recorded so the omission is a choice.
 
 
 # =========================================================================
