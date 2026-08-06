@@ -58,6 +58,9 @@
 # §19: the deps.dev graph, verified live at
 # https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete
 @prefix deps:     <https://w3id.org/rete/deps-dev#> .
+# §20: the rete scholarly hub's project/grant dimension.
+@prefix foaf:     <http://xmlns.com/foaf/0.1/> .
+@prefix scholar:  <https://w3id.org/rete/scholar#> .
 
 # The annotation property carrying proposal provenance. Not for adoption.
 gme:mapsFrom
@@ -1316,6 +1319,88 @@ pulse:advisorySeverity
 # deps:versionOrdinal. All available if wanted; left out because we do not
 # consume them today and supply-chain attestation is a different axis from
 # research-software description. Recorded so the omission is a choice.
+
+
+# =========================================================================
+# 20. PROJECT — canonical has it, raw does not
+#
+# Yes, the ontology has a project concept. It is only on one side:
+#
+#   ontology-definitions-canonical.ttl  schema:Project ("A collaborative
+#                                       research endeavor with a particular
+#                                       aim, typically time-bounded and
+#                                       funded"), pulse:projectOutput
+#   ontology-shapes-canonical.ttl       pulse:ProjectShape (sh:closed) —
+#                                       name, description, url, projectOutput
+#                                       (repo | article), schema:member,
+#                                       sourceOrganization, funder,
+#                                       hasBeginning/hasEnd
+#   ontology-shapes-raw.ttl             NOTHING. Zero occurrences of "project".
+#
+# This is the same defect as the missing RawContributionShape (see
+# ontology-shapes-raw.additions.ttl): canonical expects projects to exist, the
+# extractor profile has no shape to emit them, so nothing can legally produce
+# one. And we hold project-shaped data today:
+#
+#   SNSF     providers/snsf_grants.py returns grant_number, title, state,
+#            start/end dates, and we already mint grant IRIs via
+#            snsf_grant_iri() — so we have identified projects we cannot emit
+#   ORCID    /fundings (the endpoint we do not yet call)
+#   CORDIS   EU projects — scholar:Project ⊑ foaf:Project in the rete hub,
+#            unifying s66:Project and oaire:Project
+#   Infoscience  DSpace-CRIS ships a `crispj` project schema, noted in
+#            dev/rete/epfl-infoscience.ttl's header
+#
+# Three gaps, in order of how much they cost us.
+# =========================================================================
+
+# --- (a) the raw shape. Proposed in ontology-shapes-raw.additions.ttl. -----
+
+# --- (b) Funding and Project are not connected ---------------------------
+# pulse:Funding is "a grant or funding award held directly by a Person …
+# distinct from schema:Project's funder relationship" — a good distinction,
+# but the two classes have no property between them. So an ORCID funding
+# record and the CORDIS project it paid for cannot be joined, even when both
+# are in the graph and carry the same award number.
+
+pulse:fundsProject
+    a rdf:Property ;
+    rdfs:domain pulse:Funding ;
+    rdfs:range schema:Project ;
+    owl:inverseOf pulse:fundedBy ;
+    skos:prefLabel "funds project" ;
+    skos:definition "Links a Funding record to the Project it supports. Without it, the person-side view of an award (ORCID) and the project-side view (CORDIS, SNSF) stay in separate components of the graph." .
+
+pulse:fundedBy
+    a rdf:Property ;
+    rdfs:domain schema:Project ;
+    rdfs:range pulse:Funding ;
+    skos:prefLabel "funded by" ;
+    skos:definition "The funding awards supporting this project." .
+
+# --- (c) no award number anywhere ----------------------------------------
+# ProjectShape is closed and has no identifier property beyond schema:name and
+# url, and FundingShape offers only hasExternalIdentifier — whose scheme
+# enumeration has no grant scheme. So "SNSF grant 200021_192356" or an EU
+# grant agreement number has nowhere to live, and grant numbers are how
+# funders, institutions and publications all refer to a project.
+# Infoscience models it directly as infs:awardNumber.
+
+pulse:awardNumber
+    a rdf:Property ;
+    rdfs:subPropertyOf schema:identifier ;
+    skos:prefLabel "award number" ;
+    skos:definition "The funder's own identifier for a grant or project — an SNSF grant number, an EU grant agreement number, an NSF award id (infs:awardNumber). The join key between a funder's records, an institution's CRIS and the acknowledgements printed in papers." ;
+    gme:mapsFrom "_infoscience_code" .
+
+# --- alignment to the rete hub -------------------------------------------
+# scholar:Project ⊑ foaf:Project unifies s66:Project (CORDIS/EURIO) and
+# oaire:Project; scholar:Grant ⊑ frapo:Grant unifies oaire:Funding,
+# orcid:Funding and cx:Funding. Two axioms put our projects and funding in the
+# same hub, so an EU project and a GME-extracted project answer one query.
+
+schema:Project  rdfs:subClassOf foaf:Project .
+pulse:Funding   rdfs:subClassOf scholar:Grant .
 
 
 # =========================================================================

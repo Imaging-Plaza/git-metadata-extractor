@@ -103,6 +103,8 @@
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix schema: <http://schema.org/> .
 @prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix org:    <http://www.w3.org/ns/org#> .
+@prefix time:   <http://www.w3.org/2006/time#> .
 @prefix pulse:  <https://open-pulse.epfl.ch/ontology#> .
 @prefix owl:    <http://www.w3.org/2002/07/owl#> .
 @prefix prov:   <http://www.w3.org/ns/prov#> .
@@ -223,6 +225,58 @@ pulse:RawGitIdentityShape
         sh:maxCount 1 ;
         sh:name "Part Of Run"
     ] .
+
+
+# ---------------------------------------------------------
+# RAW PROJECT — canonical has pulse:ProjectShape, raw has nothing
+#
+# ontology-shapes-raw.ttl contains zero occurrences of "project", while
+# canonical defines schema:Project and a closed pulse:ProjectShape. So an
+# extractor cannot legally emit a project, even though we hold project-shaped
+# data: SNSF grants (grant number, title, state, dates — with IRIs we already
+# mint), ORCID /fundings, CORDIS EU projects, Infoscience's crispj schema.
+#
+# Mirrors the canonical shape but extraction-shaped: open, run-stamped, and
+# multi-valued where two funders describe the same project differently.
+# ---------------------------------------------------------
+
+pulse:RawProjectShape
+    a sh:NodeShape ;
+    sh:targetClass schema:Project ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [ sh:path schema:name ; sh:datatype xsd:string ; sh:name "Title" ] ;
+    sh:property [ sh:path schema:description ; sh:datatype xsd:string ; sh:name "Description" ] ;
+    sh:property [ sh:path schema:url ; sh:nodeKind sh:IRI ; sh:name "URL" ] ;
+    sh:property [
+        sh:path pulse:awardNumber ;
+        sh:datatype xsd:string ;
+        sh:name "Award Number" ;
+        sh:description "The funder's identifier — an SNSF grant number, an EU grant agreement number. Multi-valued: a project co-funded by two bodies has two."
+    ] ;
+    sh:property [
+        sh:path pulse:projectOutput ;
+        sh:name "Project Output" ;
+        sh:description "A repository or article produced by the project. Left untyped here, unlike canonical's sh:or, because at extraction time an output is often only a DOI or a URL whose kind is not yet resolved."
+    ] ;
+    sh:property [ sh:path schema:member ; sh:class schema:Person ; sh:name "Member" ] ;
+    sh:property [ sh:path schema:sourceOrganization ; sh:class org:Organization ; sh:name "Host Organization" ] ;
+    sh:property [ sh:path schema:funder ; sh:class org:Organization ; sh:name "Funder" ] ;
+    sh:property [ sh:path pulse:fundedBy ; sh:class pulse:Funding ; sh:name "Funded By" ] ;
+    sh:property [ sh:path time:hasBeginning ; sh:datatype xsd:date ; sh:name "Start Date" ] ;
+    sh:property [ sh:path time:hasEnd ; sh:datatype xsd:date ; sh:name "End Date" ] ;
+    sh:property [
+        sh:path pulse:partOfRun ;
+        sh:class pulse:ExtractionOutput ;
+        sh:maxCount 1 ;
+        sh:name "Part Of Run"
+    ] .
+
+# Note the two deliberate departures from canonical ProjectShape, both for the
+# reasons in §18 of ontology.ttl: sh:closed false, because a funder API will
+# always have a field we have not modelled; and no sh:maxCount on the dates or
+# the title, because SNSF and CORDIS can describe one project differently and
+# raw is not where that gets resolved.
 
 
 # ---------------------------------------------------------
