@@ -1365,6 +1365,8 @@ pulse:advisorySeverity
 
 pulse:fundsProject
     a rdf:Property ;
+    # pulse:Funding is YOUR class (ontology-definitions-raw.ttl), not
+    # re-declared here — as with pulse:PlatformEnumeration in §18.
     rdfs:domain pulse:Funding ;
     rdfs:range schema:Project ;
     owl:inverseOf pulse:fundedBy ;
@@ -1446,6 +1448,94 @@ pulse:fundingProgramme
 
 schema:Project  rdfs:subClassOf foaf:Project .
 pulse:Funding   rdfs:subClassOf scholar:Grant .
+
+
+# =========================================================================
+# 21. ecosyste.ms — a second package/project source, and it joins the same way
+#
+# Researched 2026-08-06. Open API platform (code AGPL-3, data CC-BY-SA-4.0):
+# 14.4m packages / 109 registries, 293m repos / ~1.95k hosts, 33.6k advisories,
+# 889m commits, GitHub Sponsors and Open Collective money flows. OpenAPI 3.0.1
+# per service at https://<svc>.ecosyste.ms/docs/api/v1/openapi.yaml.
+#
+# IDENTITY — it joins exactly like deps.dev. ecosyste.ms has a Project concept
+# distinct from Repository and Package, and its identity is THE SOURCE
+# REPOSITORY URL: /projects/lookup?url=https://github.com/numpy/numpy resolves.
+# So a third source merges into our Repository node with no new IRI scheme.
+# Two caveats worth writing down before anyone builds on it:
+#   - its host key is the display name "GitHub", not "github.com" as deps.dev
+#     uses, so bridging the two needs a normalisation shim (plus owner/repo
+#     case-folding);
+#   - its numeric ids are service-local — a repo is id 1068937 in `repos` but
+#     its summary Project is id 365143. Never mint IRIs from those.
+#
+# It also puts a purl on REPOSITORIES — pkg:github/{owner}/{repo} — which
+# deps.dev does not. That makes purl a single join key across both the package
+# and the repository layer.
+#
+# CORROBORATION of choices already made here, from an independent design:
+#   - its Dependency carries `direct` (bool), `kind` (scope), `requirements`
+#     (the constraint string) and the manifest `filepath` — the same four
+#     facts as §16's isDirectDependency / dependencyScope / versionConstraint /
+#     declaredIn. Two systems converging on the same qualified relation is
+#     good evidence the plain edge was the wrong model.
+#   - its Repository exposes total_bot_commits / total_bot_committers,
+#     matching §9's pulse:isBotIdentity.
+#   - its Committer carries an `emails` ARRAY and resolves one committer across
+#     repositories — the multi-identity problem §9 exists for, treated the same
+#     way. (Note it exposes addresses in the clear; our §9 position is
+#     unchanged — hash the local part, keep the domain.)
+#   - OpenSSF Scorecard is structured data on the Repository, not a badge —
+#     worth preferring over §3's SecurityScoreBadge when both are available.
+#
+# THE RDF SURFACE: /codemeta. ecosyste.ms publishes no ontology, no SPARQL and
+# no @context of its own, but it emits CodeMeta 3.0 JSON-LD per package and
+# per version (@context https://w3id.org/codemeta/3.0, @type
+# schema:SoftwareSourceCode). Verified fields include codeRepository,
+# issueTracker, downloadUrl, softwareHelp, applicationCategory,
+# runtimePlatform, developmentStatus, maintainer, copyrightHolder, funder.
+# CodeMeta is the community standard for software metadata and is
+# schema.org-based, so it is the natural alignment target for our
+# repository-level terms — more so than anything we would mint.
+# TO-VERIFY before asserting axioms: exact codemeta: IRIs for the non-schema.org
+# terms (developmentStatus, issueTracker, buildInstructions). Same discipline as
+# spdx: in §13 and oaire: in §20 — no axiom without a confirmed IRI.
+# =========================================================================
+
+pulse:fundingLink
+    a rdf:Property ;
+    skos:prefLabel "funding link" ;
+    skos:definition "A resolved funding-platform page for a repository, package or owner — Open Collective, GitHub Sponsors, Tidelift, Ko-fi, a donation page. Distinct from §3's pulse:fundingConfig, which is the FUNDING.yml FILE: the config is where the claim is written, this is where the money goes. Distinct again from pulse:Funding, which is a research grant — sponsorship and grant funding are different economies and conflating them makes both unqueryable." ;
+    gme:mapsFrom "_funding_urls" .
+
+pulse:developmentDistributionScore
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range xsd:decimal ;
+    skos:prefLabel "development distribution score" ;
+    skos:definition "The DDS (bus-factor proxy): how concentrated a repository's commits are among few committers. ecosyste.ms computes it per repository. For research software sustainability this is among the most predictive single numbers available — a 0.9 DDS says one departure ends the project — and neither profile has anywhere to put it." .
+
+pulse:epssScore
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:range xsd:decimal ;
+    skos:prefLabel "EPSS score" ;
+    skos:definition "Exploit Prediction Scoring System probability for an advisory (ecosyste.ms epss_percentage). Severity says how bad exploitation would be; EPSS estimates how likely it is — the two answer different questions, and triage needs both." .
+
+# NOT proposed though ecosyste.ms has them: blast_radius and
+# related_advisories (advisory-side aggregates we would be re-deriving),
+# issue/PR analytics, and the Dependabot index. Out of scope for describing
+# research software; recorded so the omission is a choice.
+#
+# DIVISION OF LABOUR, if both sources are wired: take resolved transitive
+# dependency graphs from deps.dev (it precomputes them per version with each
+# ecosystem's real resolver; ecosyste.ms stores only declared manifest
+# requirements and resolves on demand), and take from ecosyste.ms the three
+# layers deps.dev has nothing for — funding, people/commits, and scholarly
+# linkage (its `papers` service carries DOI and openalex_id; `science` carries
+# readme_doi_urls, works and citation counts). Its ~1.95k forges also cover
+# self-hosted GitLab and Codeberg, which matters for institutional
+# repositories that deps.dev's GitHub/GitLab/Bitbucket does not reach.
 
 
 # =========================================================================
