@@ -1393,6 +1393,51 @@ pulse:awardNumber
     skos:definition "The funder's own identifier for a grant or project — an SNSF grant number, an EU grant agreement number, an NSF award id (infs:awardNumber). The join key between a funder's records, an institution's CRIS and the acknowledgements printed in papers." ;
     gme:mapsFrom "_infoscience_code" .
 
+# --- (d) OpenAIRE already models all of this -----------------------------
+# Projects are indeed an OpenAIRE concept, and the rete hub says so:
+# scholar.ttl:236  oaire:Project ⊑ scholar:Project
+# scholar.ttl:238  oaire:Funding ⊑ scholar:Grant
+# alongside s66:Project (CORDIS/EURIO) and s66:Grant. So schema:Project ⊑
+# foaf:Project above puts our projects in the same hub as OpenAIRE's and
+# CORDIS's — one query spans all three.
+#
+# It matters more than a nice-to-have because EPFL's own CRIS already speaks
+# OpenAIRE: dev/rete/epfl-infoscience.ttl maps DSpace's `oaire` schema to
+# OpenAIRE and `oairecerif` to OpenAIRE CERIF 1.1, and several infs: terms are
+# subproperties of oairecerif fields (affiliation role and dates, acronym,
+# event place, patent country). Aligning to OpenAIRE is therefore also
+# aligning to Infoscience, for free.
+#
+# VERIFIED (OpenAIRE literature guidelines, fetched 2026-08-06): OpenAIRE
+# encodes project identity as a dc:relation carrying a STRUCTURED string —
+#   info:eu-repo/grantAgreement/{Funder}/{FundingProgram}/{ProjectID}
+#                              [/{Jurisdiction}/{ProjectName}/{ProjectAcronym}]
+# with Funder/FundingProgram/ProjectID mandatory. Note the same info:eu-repo
+# family as the access-rights values on Zenodo records (§13) — one vocabulary,
+# two uses.
+#
+# That form carries funder AND programme AND number in one token, which
+# pulse:awardNumber alone cannot: an award number is ambiguous without its
+# funder, and "grant 200021" means nothing across funders. Two more terms.
+
+pulse:grantAgreementIdentifier
+    a rdf:Property ;
+    rdfs:subPropertyOf schema:identifier ;
+    skos:prefLabel "grant agreement identifier" ;
+    skos:definition "A project identifier in OpenAIRE's info:eu-repo/grantAgreement/{Funder}/{FundingProgram}/{ProjectID} form. Preserved whole rather than split, because it is what repositories actually deposit and what OpenAIRE harvests on — Zenodo and Infoscience records carry these strings verbatim." .
+
+pulse:fundingProgramme
+    a rdf:Property ;
+    skos:prefLabel "funding programme" ;
+    skos:definition "The funder's programme or stream that awarded the grant — H2020, Horizon Europe, an SNSF instrument. The middle component of the grantAgreement form, and the level at which research funding is actually analysed; neither profile has a term for it." .
+
+# TO-VERIFY: the oaire XML schema's fundingReference sub-elements
+# (funderName, funderIdentifier, fundingStream, awardNumber, awardTitle,
+# awardURI) are the natural alignment targets for the four terms above, but
+# namespace.openaire.eu did not resolve (DNS) when this was written, so no
+# rdfs:subPropertyOf axiom is asserted against them. Worth adding once the
+# exact IRIs are confirmed — same discipline applied to spdx:Package in §13.
+
 # --- alignment to the rete hub -------------------------------------------
 # scholar:Project ⊑ foaf:Project unifies s66:Project (CORDIS/EURIO) and
 # oaire:Project; scholar:Grant ⊑ frapo:Grant unifies oaire:Funding,
