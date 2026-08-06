@@ -55,6 +55,8 @@
 @prefix cito:     <http://purl.org/spar/cito/> .
 @prefix fabio:    <http://purl.org/spar/fabio/> .
 @prefix frapo:    <http://purl.org/cerif/frapo/> .
+# §20 alignment targets, both verified from their published ontology files.
+@prefix vivo:     <http://vivoweb.org/ontology/core#> .
 # §19: the deps.dev graph, verified live at
 # https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete
 @prefix deps:     <https://w3id.org/rete/deps-dev#> .
@@ -1390,7 +1392,15 @@ pulse:fundedBy
 
 pulse:awardNumber
     a rdf:Property ;
-    rdfs:subPropertyOf schema:identifier ;
+    # Verified from frapo.ttl and vivo.owl directly. frapo:hasGrantNumber has
+    # domain frapo:Grant and is ⊑ dcterms:identifier with NO rdfs:range
+    # declared — so no datatype clash (a secondary source claiming
+    # xsd:decimal is wrong). vivo:sponsorAwardId is "the ID of the grant as
+    # assigned by the funding organization", the closest semantic match there
+    # is; it is functional, so assert it only where one number is certain.
+    rdfs:subPropertyOf frapo:hasGrantNumber , vivo:sponsorAwardId ;
+    rdfs:seeAlso <https://www.openaire.eu/schema/repo-lit/4.0/oaire.xsd> ;
+    rdfs:comment "Corresponds to the XML element oaire:awardNumber in the OpenAIRE Guidelines for Literature Repositories v4. That is an XSD element, not an RDF property, so the correspondence is documentary only — no formal alignment is possible." ;
     skos:prefLabel "award number" ;
     skos:definition "The funder's own identifier for a grant or project — an SNSF grant number, an EU grant agreement number, an NSF award id (infs:awardNumber). The join key between a funder's records, an institution's CRIS and the acknowledgements printed in papers." ;
     gme:mapsFrom "_infoscience_code" .
@@ -1410,35 +1420,72 @@ pulse:awardNumber
 # event place, patent country). Aligning to OpenAIRE is therefore also
 # aligning to Infoscience, for free.
 #
-# VERIFIED (OpenAIRE literature guidelines, fetched 2026-08-06): OpenAIRE
-# encodes project identity as a dc:relation carrying a STRUCTURED string —
-#   info:eu-repo/grantAgreement/{Funder}/{FundingProgram}/{ProjectID}
-#                              [/{Jurisdiction}/{ProjectName}/{ProjectAcronym}]
-# with Funder/FundingProgram/ProjectID mandatory. Note the same info:eu-repo
-# family as the access-rights values on Zenodo records (§13) — one vocabulary,
-# two uses.
+# VERIFIED against the official XSD (https://www.openaire.eu/schema/repo-lit/4.0/
+# oaire.xsd) 2026-08-06. The real structure, correcting an earlier draft here:
 #
-# That form carries funder AND programme AND number in one token, which
-# pulse:awardNumber alone cannot: an award number is ambiguous without its
-# funder, and "grant 200021" means nothing across funders. Two more terms.
+#   oaire:fundingReferences                  (plural container — was omitted)
+#   └── oaire:fundingReference
+#       ├── oaire:funderName                 (required)
+#       ├── oaire:funderIdentifier           @funderIdentifierType required
+#       │                                    enum v4.0: ISNI | GRID |
+#       │                                    Crossref Funder ID | Other;
+#       │                                    4.1-SNAPSHOT adds ROR
+#       ├── oaire:fundingStream
+#       ├── oaire:awardNumber                @awardURI is an ATTRIBUTE of this,
+#       │                                    not a sibling element
+#       └── oaire:awardTitle
+#
+# Note the funderIdentifierType enum adding ROR in 4.1 — the same conclusion
+# ask #4 reaches from the other direction.
+#
+# NO RDF ALIGNMENT IS POSSIBLE. Three independent findings:
+#   1. oaire.xsd declares its terms only as xs:element / xs:attribute /
+#      xs:simpleType — zero rdf: in the body (an unused xmlns:rdf sits in the
+#      header). An xs:element is not an rdf:Property, so rdfs:subPropertyOf
+#      over one asserts nothing.
+#   2. namespace.openaire.eu is NXDOMAIN from Google Public DNS — the
+#      namespace IRI is not dereferenceable anywhere, not just from our
+#      network.
+#   3. OpenAIRE's LOD service (lod.openaire.eu) was switched off on
+#      2023-05-08 and is not being revived; the CRIS Managers guidelines are
+#      CERIF XML, not RDF, so they are no escape hatch either.
+# The same holds for DataCite: FundingReference is defined in XML and JSON
+# only. So the OpenAIRE relationship is recorded below as rdfs:seeAlso and
+# prose — a non-logical annotation — never as a subPropertyOf axiom.
+#
+# ALSO CORRECTED: info:eu-repo/grantAgreement is LEGACY. The form is right —
+#   info:eu-repo/grantAgreement/{Funder}/{FundingProgramme}/{ProjectID}
+#                              [/{Jurisdiction}/{ProjectName}/{ProjectAcronym}]
+# (3-part mandatory, 6-part recommended, e.g. .../EC/FP7/244909/EU/Making
+# Capabilities Work/WorkAble) — but it is a v3 construct carried in
+# dc:relation, and the v4 Guidelines state the fundingReference block
+# "replaces the info:eu-repo/grantAgreement syntax". Primary project identity
+# in v4 is funderName + funderIdentifier + awardNumber + awardURI. We keep the
+# string as a compatibility identifier, not as the primary one, because
+# repositories still deposit it and OpenAIRE still parses it.
 
 pulse:grantAgreementIdentifier
     a rdf:Property ;
-    rdfs:subPropertyOf schema:identifier ;
+    rdfs:subPropertyOf frapo:hasProjectIdentifier ;
+    rdfs:seeAlso <https://guidelines.openaire.eu/en/latest/literature/field_projectid.html> ;
     skos:prefLabel "grant agreement identifier" ;
-    skos:definition "A project identifier in OpenAIRE's info:eu-repo/grantAgreement/{Funder}/{FundingProgram}/{ProjectID} form. Preserved whole rather than split, because it is what repositories actually deposit and what OpenAIRE harvests on — Zenodo and Infoscience records carry these strings verbatim." .
+    skos:definition "A project identifier in OpenAIRE's legacy info:eu-repo/grantAgreement/{Funder}/{FundingProgramme}/{ProjectID} form. Kept whole rather than split because repositories deposit it verbatim — Zenodo and Infoscience records carry these strings. A COMPATIBILITY identifier: OpenAIRE Guidelines v4 supersede it with the fundingReference block, so do not treat it as primary project identity." .
 
 pulse:fundingProgramme
     a rdf:Property ;
+    # No rdfs:subPropertyOf: FRAPO declares the class frapo:FundingProgramme
+    # but no property whose range is it, and schema:FundingScheme is a
+    # subclass of Organization — it models a funding BODY, not a programme,
+    # so aligning to it would be wrong. Constrained by range instead.
+    rdfs:range frapo:FundingProgramme ;
     skos:prefLabel "funding programme" ;
-    skos:definition "The funder's programme or stream that awarded the grant — H2020, Horizon Europe, an SNSF instrument. The middle component of the grantAgreement form, and the level at which research funding is actually analysed; neither profile has a term for it." .
+    skos:definition "The funder's programme or stream that awarded the grant — H2020, Horizon Europe, an SNSF instrument (oaire:fundingStream). The level at which research funding is actually analysed, and absent from both profiles. For EU programmes the values SHOULD be SKOS concepts from the Publications Office authority table, e.g. http://publications.europa.eu/resource/authority/eu-programme/H2020 — verified live, so the values need no minting either." .
 
-# TO-VERIFY: the oaire XML schema's fundingReference sub-elements
-# (funderName, funderIdentifier, fundingStream, awardNumber, awardTitle,
-# awardURI) are the natural alignment targets for the four terms above, but
-# namespace.openaire.eu did not resolve (DNS) when this was written, so no
-# rdfs:subPropertyOf axiom is asserted against them. Worth adding once the
-# exact IRIs are confirmed — same discipline applied to spdx:Package in §13.
+# --- (e) award title and URI: nothing to mint ----------------------------
+# FRAPO has no award-title and no award-URI property. Use dcterms:title on the
+# grant, and make the grant itself an IRI (or use schema:url) rather than
+# inventing pulse: terms for either. Recorded so the absence is not mistaken
+# for an oversight.
 
 # --- alignment to the rete hub -------------------------------------------
 # scholar:Project ⊑ foaf:Project unifies s66:Project (CORDIS/EURIO) and
