@@ -4,9 +4,9 @@ The assessment estimated; this measures. Real extraction data from **every
 source GME reads**, converted into the proposed raw profile and validated with
 pySHACL against the actual shapes from PR #25.
 
-**46 violations as published → 0 with the proposed changes applied.**
+**52 violations as published → 0 with the proposed changes applied.**
 
-Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2. 603 triples, nine platforms.
+Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2. 691 triples, eleven platforms.
 
 ---
 
@@ -49,7 +49,9 @@ Infoscience, deps.dev, ecosyste.ms, OpenAlex, HuggingFace, Zenodo, Docker Hub),
 | **Zenodo** | live rete query | a real deposit and **how** it relates (`isSupplementTo`) |
 | **SNSF (FNS)** | local P3 bulk CSV | 2 real EPFL grants → `schema:Project` + `pulse:Funding`, `awardNumber`, `fundingProgramme` |
 | **CORDIS** | live, via OpenAIRE | a real EU project (`CodeSupply`, grant 101298846) with `grantAgreementIdentifier` in `info:eu-repo/grantAgreement/…` form |
-| **Docker Hub** | live API | **nothing** — the namespace probed returned zero results, so no image instance exists in the graph |
+| **Docker Hub** | local index | 2 real indexed images → `pulse:ContainerImage`. Not published *by* the repository under test — they are what our index holds, so they are attached as referenced rather than claimed as ours |
+| **deps.dev** *(advisories)* | live rete query | 3 real GHSA advisories on `pkg:pypi/urllib3@0.3.0`, source OSV → `pulse:Advisory` |
+| **Zenodo** *(depth)* | local index | 2 EPFL software records with `conceptDoi`, `accessRights`, licence and their **community** → `pulse:Community` + `memberOfCommunity`; creators with real ORCIDs |
 
 | Node type | n |
 |---|---|
@@ -74,24 +76,25 @@ Infoscience, deps.dev, ecosyste.ms, OpenAlex, HuggingFace, Zenodo, Docker Hub),
 
 | Shapes | Conforms | Violations |
 |---|---|---|
-| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **46** |
+| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **52** |
 | …with the proposed changes applied | ✅ | **0** |
 
-### The 46, and which ask each one is
+### The 52, and which ask each one is
 
 | n | Path | Cause | Ask |
 |---|---|---|---|
-| 16 | `pulse:partOfRun` | profiles, memberships, projects, packages and images are closed **and** lack `partOfRun` | **#14**, #13 |
+| 18 | `pulse:partOfRun` | profiles, memberships, projects, packages, communities, advisories and images are closed **and** lack `partOfRun` | **#14**, #13 |
 | 6 | `pulse:hasDependency` | closed `RawRepositoryShape` | #13, §16 terms |
-| 4 | `pulse:platform` | `ROR`, `OpenAlex`, `CORDIS`, `SNSF_P3` are not `PlatformEnumeration` members | **#4** |
+| 6 | `pulse:platform` | `ROR`, `OpenAlex`, `CORDIS`, `SNSF_P3`, `DepsDev`, `DockerHub` are not `PlatformEnumeration` members | **#4** |
 | 4 | `pulse:hasUnmappedField` | closed shape rejects preserved-but-unmodelled fields | **#17**, #13 |
 | 2 | `pulse:awardNumber` | closed shape — on both SNSF grants | **#19**, #13 |
 | 2 | `pulse:fundsProject` | closed shape — Funding↔Project link | **#19**, #13 |
-| 1 each | `hasDeposit`, `depositRelation`, `accessRights`, `distributedAs`, `hasIssues`, `hasProjects`, `sizeInBytes`, `forkNetworkCount`, `primaryProgrammingLanguage`, `developmentDistributionScore` | closed shape | #7, #8, #13, #19, #21 |
+| 3 | `pulse:accessRights` | closed shape — on every Zenodo record | **#13**, §13 |
+| 1 each | `hasDeposit`, `depositRelation`, `distributedAs`, `hasIssues`, `hasProjects`, `sizeInBytes`, `forkNetworkCount`, `primaryProgrammingLanguage`, `developmentDistributionScore` | closed shape | #7, #8, #13, #19, #21 |
 | 1 | `pulse:identifierScheme` | `pulse:OpenAlexScheme` is not an `IdentifierSchemeEnumeration` member | **#5** |
 | 1 | `pulse:partOfRun` | **"More than 1 values"** — see the new finding below | **#22** |
 
-**The closed shapes remain the dominant failure mode**: 40 of 46 are a closed
+**The closed shapes remain the dominant failure mode**: 45 of 52 are a closed
 shape rejecting a value, not a modelling disagreement. Ask #13 alone clears
 them. The funding platforms added 8 more of the same kind — `fundsProject`,
 `awardNumber`, `grantAgreementIdentifier` and `fundingProgramme` rejected by the
@@ -145,9 +148,9 @@ than one that reports none.
 
 ## Caveats
 
-- **Still not the whole profile.** `pulse:Collection`, `pulse:Community` and
-  `pulse:Advisory` remain unexercised. `schema:Project` and `pulse:Funding` now
-  are, via SNSF and CORDIS. 46 is a floor, not a total.
+- **One node type left.** `pulse:Collection` (HuggingFace collections) is the
+  only proposed class with no instance — we do not index them. Everything else
+  now has real data behind it. 52 is a floor, not a total.
 - **The SNSF DuckDB store is empty.** Its schema exists
   (`grant_number, title, funding_instrument, institute, …`) but has 0 rows —
   ingest is a manual CSV drop (`open_pulse_sources/index/snsf/ingest/
@@ -178,6 +181,7 @@ python dev/v4.0.0/fetch_live_sources.py          # refresh the live captures
 python dev/v4.0.0/build_instance_example.py      # GitHub + ROR, from snapshots
 python dev/v4.0.0/build_instance_multisource.py  # every other platform
 python dev/v4.0.0/build_instance_funding.py      # SNSF (FNS) + CORDIS
+python dev/v4.0.0/build_instance_ecosystem.py    # Community, Advisory, images
 
 pyshacl -s <(cat …/ontology-shapes-raw.ttl dev/v4.0.0/ontology-shapes-raw.additions.ttl) \
         -e …/ontology-enumerations-canonical.ttl \

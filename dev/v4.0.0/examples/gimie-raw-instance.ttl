@@ -727,3 +727,112 @@
     pulse:sourcePlatform pulse:CORDIS ;
     pulse:observationKind "single-source" .
 
+
+# =====================================================================
+# ECOSYSTEM TAIL — Community, Advisory, ContainerImage, conceptDoi.
+# Appended by build_instance_ecosystem.py — do not hand-edit.
+# =====================================================================
+
+# --- Zenodo depth: 2 real EPFL software records with their community ---
+<https://doi.org/10.5281/zenodo.4724843> a schema:ScholarlyArticle ;
+    schema:name "Physiological signals labeler" ;
+    pulse:doi "10.5281/zenodo.4724843" ;
+    pulse:conceptDoi "10.5281/zenodo.4724842" ;
+    pulse:accessRights <info:eu-repo/semantics/openAccess> ;
+    schema:license <https://spdx.org/licenses/CC-BY-4.0.html> ;
+    pulse:memberOfCommunity <https://zenodo.org/communities/epfl> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+<https://zenodo.org/communities/epfl> a pulse:Community ;
+    schema:name "EPFL - École Polytechnique Fédérale de Lausanne" ;
+    schema:url <https://zenodo.org/communities/epfl> ;
+    pulse:platformInternalId "epfl" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+<https://doi.org/10.5281/zenodo.3257530> a schema:ScholarlyArticle ;
+    schema:name "Supplemental material to 'Tri-linear model for the out-of-plane seismic assessment of vertically-spanning unreinforced masonry walls'" ;
+    pulse:doi "10.5281/zenodo.3257530" ;
+    pulse:conceptDoi "10.5281/zenodo.1407050" ;
+    pulse:accessRights <info:eu-repo/semantics/openAccess> ;
+    schema:license <https://spdx.org/licenses/CC-BY-4.0.html> ;
+    pulse:memberOfCommunity <https://zenodo.org/communities/eesd_at_epfl> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+<https://zenodo.org/communities/eesd_at_epfl> a pulse:Community ;
+    schema:name "EESD at EPFL" ;
+    schema:url <https://zenodo.org/communities/eesd_at_epfl> ;
+    pulse:platformInternalId "eesd_at_epfl" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+
+# --- Zenodo creators: real ORCIDs, so they merge with the ORCID layer ---
+<https://orcid.org/0009-0000-9868-5156> a schema:Person ;
+    schema:name "Lin, Guo-Shiuan" ;
+    pulse:orcidIdentifier "0009-0000-9868-5156" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+# affiliation string as given by Zenodo: "Swiss Federal Institute of Technology in Lausanne"
+<https://orcid.org/0000-0002-9158-8764> a schema:Person ;
+    schema:name "Dede, Didem" ;
+    pulse:orcidIdentifier "0000-0002-9158-8764" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+# affiliation string as given by Zenodo: "Swiss Federal Institute of Technology in Lausanne"
+
+<urn:pulse:output:gimie-baseline:dockerhub> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:DockerHub ;
+    prov:generatedAtTime "2026-08-07T00:00:00Z"^^xsd:dateTime .
+
+# --- Docker Hub: 2 images from our own index. NOT published by the
+# repository under test — these are what the dockerhub index actually holds,
+# so they are attached as referenced images rather than invented as ours. ---
+<urn:pulse:image:grafana/grafana> a pulse:ContainerImage ;
+    pulse:imageReference "grafana/grafana" ;
+    pulse:platform pulse:DockerHub ;
+    schema:description "The official Grafana docker container" ;
+    schema:url <https://hub.docker.com/r/grafana/grafana> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:dockerhub> .
+<urn:pulse:image:library/python> a pulse:ContainerImage ;
+    pulse:imageReference "library/python" ;
+    pulse:platform pulse:DockerHub ;
+    schema:description "Python is an interpreted, interactive, object-oriented, open-source programming language." ;
+    schema:url <https://hub.docker.com/r/library/python> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:dockerhub> .
+
+<urn:pulse:output:gimie-baseline:depsdev> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:DepsDev ;
+    prov:generatedAtTime "2026-08-07T00:00:00Z"^^xsd:dateTime .
+
+# --- security advisories (§19): real GHSA records from deps.dev, on a real
+# package version. This is the layer neither profile can express today. ---
+<https://deps.dev/pypi/urllib3/0.3.0> a pulse:Package ;
+    schema:name "urllib3" ;
+    pulse:packageIdentifier "pkg:pypi/urllib3@0.3.0" ;
+    pulse:packageEcosystem pulse:PyPI ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:depsdev> .
+<https://deps.dev/pypi/urllib3/0.3.0> pulse:hasAdvisory <https://github.com/advisories/GHSA-34jh-p97f-mpxf> .
+<https://github.com/advisories/GHSA-34jh-p97f-mpxf> a pulse:Advisory ;
+    schema:identifier "GHSA-34jh-p97f-mpxf" ;
+    pulse:advisorySource "OSV" ;
+    pulse:advisorySeverity "UNKNOWN" ;
+    pulse:advisoryAffects <https://deps.dev/pypi/urllib3/0.3.0> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:depsdev> .
+<https://deps.dev/pypi/urllib3/0.3.0> pulse:hasAdvisory <https://github.com/advisories/GHSA-g4mx-q9vg-27p4> .
+<https://github.com/advisories/GHSA-g4mx-q9vg-27p4> a pulse:Advisory ;
+    schema:identifier "GHSA-g4mx-q9vg-27p4" ;
+    pulse:advisorySource "OSV" ;
+    pulse:advisorySeverity "UNKNOWN" ;
+    pulse:advisoryAffects <https://deps.dev/pypi/urllib3/0.3.0> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:depsdev> .
+<https://deps.dev/pypi/urllib3/0.3.0> pulse:hasAdvisory <https://github.com/advisories/GHSA-gwvm-45gx-3cf8> .
+<https://github.com/advisories/GHSA-gwvm-45gx-3cf8> a pulse:Advisory ;
+    schema:identifier "GHSA-gwvm-45gx-3cf8" ;
+    pulse:advisorySource "OSV" ;
+    pulse:advisorySeverity "UNKNOWN" ;
+    pulse:advisoryAffects <https://deps.dev/pypi/urllib3/0.3.0> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:depsdev> .
+
+<urn:pulse:obs:adv:0> a pulse:Observation ;
+    pulse:observedSubject <https://deps.dev/pypi/urllib3/0.3.0> ;
+    pulse:observedProperty pulse:hasAdvisory ;
+    pulse:observedValue "GHSA-34jh-p97f-mpxf" ;
+    pulse:retrievedFrom <https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete> ;
+    pulse:retrievedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:DepsDev ;
+    pulse:observationKind "single-source" .
