@@ -606,3 +606,124 @@
     pulse:sourcePlatform pulse:GitHub ;
     pulse:observationKind "single-source" .
 
+
+# =====================================================================
+# FUNDING PLATFORMS — SNSF (FNS) and CORDIS, from real records.
+# Appended by build_instance_funding.py — do not hand-edit.
+# =====================================================================
+
+<urn:pulse:output:gimie-baseline:snsf_p3> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:SNSF_P3 ;
+    prov:generatedAtTime "2026-08-07T00:00:00Z"^^xsd:dateTime .
+
+# --- SNSF / FNS: 2 real EPFL grants from the P3 bulk CSV ---
+<https://data.snf.ch/grants/grant/140861> a schema:Project ;
+    schema:name "Advanced signal processing for calibration and imaging in radio interferometry" ;
+    pulse:awardNumber "140861" ;
+    pulse:fundingProgramme "Project funding" ;
+    schema:sourceOrganization <https://ror.org/02s376052> ;
+    schema:funder <https://ror.org/00yjd3n13> ;
+    pulse:fundedBy <urn:pulse:funding:snsf:140861> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:snsf_p3> .
+
+<urn:pulse:funding:snsf:140861> a pulse:Funding ;
+    schema:name "Project funding" ;
+    pulse:awardNumber "140861" ;
+    pulse:fundsProject <https://data.snf.ch/grants/grant/140861> ;
+    schema:funder <https://ror.org/00yjd3n13> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:snsf_p3> .
+
+<urn:pulse:obs:snsf:140861> a pulse:Observation ;
+    pulse:observedSubject <https://data.snf.ch/grants/grant/140861> ;
+    pulse:observedProperty pulse:awardNumber ;
+    pulse:observedValue "140861" ;
+    pulse:retrievedFrom <https://data.snf.ch/grants> ;
+    pulse:retrievedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:SNSF_P3 ;
+    pulse:observationKind "bulk-export" .
+
+<https://data.snf.ch/grants/grant/182517> a schema:Project ;
+    schema:name "Spatial Coupling and Interpolation Methods for the Analysis of Coding and Estimation" ;
+    pulse:awardNumber "182517" ;
+    pulse:fundingProgramme "Project funding" ;
+    schema:sourceOrganization <https://ror.org/02s376052> ;
+    schema:funder <https://ror.org/00yjd3n13> ;
+    pulse:fundedBy <urn:pulse:funding:snsf:182517> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:snsf_p3> .
+
+<urn:pulse:funding:snsf:182517> a pulse:Funding ;
+    schema:name "Project funding" ;
+    pulse:awardNumber "182517" ;
+    pulse:fundsProject <https://data.snf.ch/grants/grant/182517> ;
+    schema:funder <https://ror.org/00yjd3n13> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:snsf_p3> .
+
+<urn:pulse:obs:snsf:182517> a pulse:Observation ;
+    pulse:observedSubject <https://data.snf.ch/grants/grant/182517> ;
+    pulse:observedProperty pulse:awardNumber ;
+    pulse:observedValue "182517" ;
+    pulse:retrievedFrom <https://data.snf.ch/grants> ;
+    pulse:retrievedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:SNSF_P3 ;
+    pulse:observationKind "bulk-export" .
+
+# the funder, identified the way we identify every organization
+<https://ror.org/00yjd3n13> a org:Organization ;
+    schema:name "Swiss National Science Foundation" ;
+    pulse:acronym "SNSF" , "FNS" .
+
+<urn:pulse:output:gimie-baseline:cordis> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:CORDIS ;
+    prov:generatedAtTime "2026-08-07T00:00:00Z"^^xsd:dateTime .
+
+# --- CORDIS via OpenAIRE: 2 real EU projects ---
+<https://cordis.europa.eu/project/id/101298846> a schema:Project ;
+    schema:name "Open source, federated, and digitally sovereign database of software package metadata to strengthen software supply chain security." ;
+    pulse:acronym "CodeSupply" ;
+    pulse:awardNumber "101298846" ;
+    pulse:grantAgreementIdentifier "info:eu-repo/grantAgreement/EC/HORIZON/101298846" ;
+    pulse:fundingProgramme "HORIZON" ;
+    schema:funder <urn:pulse:funder:EC> ;
+    time:hasBeginning "2026-06-01"^^xsd:date ;
+    time:hasEnd "2029-05-31"^^xsd:date ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:cordis> .
+
+<urn:pulse:funder:EC> a org:Organization ;
+    schema:name "European Commission" ;
+    pulse:acronym "EC" .
+
+<urn:pulse:obs:cordis:101298846> a pulse:Observation ;
+    pulse:observedSubject <https://cordis.europa.eu/project/id/101298846> ;
+    pulse:observedProperty pulse:grantAgreementIdentifier ;
+    pulse:observedValue "info:eu-repo/grantAgreement/EC/HORIZON/101298846" ;
+    pulse:retrievedFrom <https://api.openaire.eu/search/projects?funder=EC> ;
+    pulse:retrievedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:CORDIS ;
+    pulse:observationKind "single-source" .
+
+<https://cordis.europa.eu/project/id/101129744> a schema:Project ;
+    schema:name "European Virtual Institute for Research Software Excellence" ;
+    pulse:acronym "EVERSE" ;
+    pulse:awardNumber "101129744" ;
+    pulse:grantAgreementIdentifier "info:eu-repo/grantAgreement/EC/HORIZON/101129744" ;
+    pulse:fundingProgramme "HORIZON" ;
+    schema:funder <urn:pulse:funder:EC> ;
+    time:hasBeginning "2024-03-01"^^xsd:date ;
+    time:hasEnd "2027-02-28"^^xsd:date ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:cordis> .
+
+<urn:pulse:funder:EC> a org:Organization ;
+    schema:name "European Commission" ;
+    pulse:acronym "EC" .
+
+<urn:pulse:obs:cordis:101129744> a pulse:Observation ;
+    pulse:observedSubject <https://cordis.europa.eu/project/id/101129744> ;
+    pulse:observedProperty pulse:grantAgreementIdentifier ;
+    pulse:observedValue "info:eu-repo/grantAgreement/EC/HORIZON/101129744" ;
+    pulse:retrievedFrom <https://api.openaire.eu/search/projects?funder=EC> ;
+    pulse:retrievedAt "2026-08-07T00:00:00Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:CORDIS ;
+    pulse:observationKind "single-source" .
+

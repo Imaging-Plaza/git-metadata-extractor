@@ -4,9 +4,9 @@ The assessment estimated; this measures. Real extraction data from **every
 source GME reads**, converted into the proposed raw profile and validated with
 pySHACL against the actual shapes from PR #25.
 
-**38 violations as published → 0 with the proposed changes applied.**
+**46 violations as published → 0 with the proposed changes applied.**
 
-Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2. 508 triples.
+Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2. 603 triples, nine platforms.
 
 ---
 
@@ -27,10 +27,12 @@ Every literal traces to a captured payload, and every `pulse:retrievedFrom` /
 `pulse:retrievedAt` is a real request URL and timestamp — the §18 provenance
 model is exercised on genuine data, not stubs.
 
-Generators:
-[`build_instance_example.py`](build_instance_example.py) (GitHub + ROR) then
-[`build_instance_multisource.py`](build_instance_multisource.py) (everything
-else) → [`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl).
+Generators, run in order →
+[`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl):
+[`build_instance_example.py`](build_instance_example.py) (GitHub + ROR),
+[`build_instance_multisource.py`](build_instance_multisource.py) (ORCID,
+Infoscience, deps.dev, ecosyste.ms, OpenAlex, HuggingFace, Zenodo, Docker Hub),
+[`build_instance_funding.py`](build_instance_funding.py) (SNSF + CORDIS).
 
 ### Platforms exercised
 
@@ -45,6 +47,8 @@ else) → [`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl).
 | **OpenAlex** | live API | the same organization from a *third* source, acronym, `ExternalIdentifier` |
 | **HuggingFace** | live API | a model repository typed as `schema:SoftwareSourceCode` |
 | **Zenodo** | live rete query | a real deposit and **how** it relates (`isSupplementTo`) |
+| **SNSF (FNS)** | local P3 bulk CSV | 2 real EPFL grants → `schema:Project` + `pulse:Funding`, `awardNumber`, `fundingProgramme` |
+| **CORDIS** | live, via OpenAIRE | a real EU project (`CodeSupply`, grant 101298846) with `grantAgreementIdentifier` in `info:eu-repo/grantAgreement/…` form |
 | **Docker Hub** | live API | **nothing** — the namespace probed returned zero results, so no image instance exists in the graph |
 
 | Node type | n |
@@ -70,24 +74,29 @@ else) → [`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl).
 
 | Shapes | Conforms | Violations |
 |---|---|---|
-| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **38** |
+| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **46** |
 | …with the proposed changes applied | ✅ | **0** |
 
-### The 38, and which ask each one is
+### The 46, and which ask each one is
 
 | n | Path | Cause | Ask |
 |---|---|---|---|
-| 14 | `pulse:partOfRun` | profiles, memberships, packages and images are closed **and** lack `partOfRun` | **#14**, #13 |
-| 6 | `pulse:hasDependency` | closed `RawRepositoryShape` | #16-terms, #13 |
+| 16 | `pulse:partOfRun` | profiles, memberships, projects, packages and images are closed **and** lack `partOfRun` | **#14**, #13 |
+| 6 | `pulse:hasDependency` | closed `RawRepositoryShape` | #13, §16 terms |
+| 4 | `pulse:platform` | `ROR`, `OpenAlex`, `CORDIS`, `SNSF_P3` are not `PlatformEnumeration` members | **#4** |
 | 4 | `pulse:hasUnmappedField` | closed shape rejects preserved-but-unmodelled fields | **#17**, #13 |
-| 2 | `pulse:platform` | `pulse:ROR` and `pulse:OpenAlex` are not `PlatformEnumeration` members | **#4** |
-| 1 each | `hasProjects`, `hasIssues`, `sizeInBytes`, `forkNetworkCount`, `primaryProgrammingLanguage`, `distributedAs`, `hasDeposit`, `depositRelation`, `accessRights` | closed shape | #7, #8, #13, #19 |
+| 2 | `pulse:awardNumber` | closed shape — on both SNSF grants | **#19**, #13 |
+| 2 | `pulse:fundsProject` | closed shape — Funding↔Project link | **#19**, #13 |
+| 1 each | `hasDeposit`, `depositRelation`, `accessRights`, `distributedAs`, `hasIssues`, `hasProjects`, `sizeInBytes`, `forkNetworkCount`, `primaryProgrammingLanguage`, `developmentDistributionScore` | closed shape | #7, #8, #13, #19, #21 |
 | 1 | `pulse:identifierScheme` | `pulse:OpenAlexScheme` is not an `IdentifierSchemeEnumeration` member | **#5** |
 | 1 | `pulse:partOfRun` | **"More than 1 values"** — see the new finding below | **#22** |
 
-**The closed shapes remain the dominant failure mode**: 33 of 38 are a closed
+**The closed shapes remain the dominant failure mode**: 40 of 46 are a closed
 shape rejecting a value, not a modelling disagreement. Ask #13 alone clears
-them.
+them. The funding platforms added 8 more of the same kind — `fundsProject`,
+`awardNumber`, `grantAgreementIdentifier` and `fundingProgramme` rejected by the
+closed shapes, plus `pulse:CORDIS` and `pulse:SNSF_P3` not being platform
+members (ask #4, extended).
 
 ### New finding, which only multi-source data could surface
 
@@ -136,10 +145,19 @@ than one that reports none.
 
 ## Caveats
 
-- **Still not the whole profile.** `pulse:Funding`, `pulse:Collection`,
-  `pulse:Community`, `pulse:Advisory` and `schema:Project` are not exercised —
-  no funding or advisory data was captured for this repository. 38 is a floor,
-  not a total.
+- **Still not the whole profile.** `pulse:Collection`, `pulse:Community` and
+  `pulse:Advisory` remain unexercised. `schema:Project` and `pulse:Funding` now
+  are, via SNSF and CORDIS. 46 is a floor, not a total.
+- **The SNSF DuckDB store is empty.** Its schema exists
+  (`grant_number, title, funding_instrument, institute, …`) but has 0 rows —
+  ingest is a manual CSV drop (`open_pulse_sources/index/snsf/ingest/
+  local_ingest.py`), and nobody has run it. The raw P3 CSVs *are* on disk, so
+  this test reads them directly. Worth knowing: the SNSF index is scaffolding,
+  not data.
+- **No live SNSF API exists.** Three endpoint shapes on `data.snf.ch` all
+  return 404; P3 is distributed as bulk CSV. That is why `pulse:SNSF_P3` is
+  proposed as a distinct source term — its provenance is a dated download, not
+  a request URL.
 - **Docker Hub contributed nothing.** The namespace probed
   (`hub.docker.com/v2/repositories/sdscordes/`) returned zero results. The
   project publishes to GHCR instead, so the image layer is untested.
@@ -159,6 +177,7 @@ than one that reports none.
 python dev/v4.0.0/fetch_live_sources.py          # refresh the live captures
 python dev/v4.0.0/build_instance_example.py      # GitHub + ROR, from snapshots
 python dev/v4.0.0/build_instance_multisource.py  # every other platform
+python dev/v4.0.0/build_instance_funding.py      # SNSF (FNS) + CORDIS
 
 pyshacl -s <(cat …/ontology-shapes-raw.ttl dev/v4.0.0/ontology-shapes-raw.additions.ttl) \
         -e …/ontology-enumerations-canonical.ttl \

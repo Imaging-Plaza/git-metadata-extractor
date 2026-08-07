@@ -430,6 +430,31 @@ pulse:RenkuLab    a pulse:PlatformEnumeration ; skos:prefLabel "RenkuLab" .
 pulse:EPFLGraph   a pulse:PlatformEnumeration ; skos:prefLabel "EPFL Graph" ;
     skos:definition "The EPFL Graph academic-discipline ontology service." .
 
+# --- added 2026-08-07 after auditing the enumeration against what we read ---
+# The check: list every source with an index or a wired provider, subtract the
+# members upstream and above. These six were left over, and four of them are
+# sources whose data is already in the conversion test.
+
+pulse:CORDIS      a pulse:PlatformEnumeration ; skos:prefLabel "CORDIS" ;
+    skos:definition "The EU research-projects database (EURIO/s66 in the rete scholarly hub, where s66:Project ⊑ scholar:Project). The project-and-grant dimension for European funding: without it an EU grant agreement number has a value but no source. Reachable through OpenAIRE, which aggregates it." .
+pulse:SNSF_P3     a pulse:PlatformEnumeration ; skos:prefLabel "SNSF P3" ;
+    skos:definition "The SNSF (Fonds National Suisse) P3 grant database, distinct from pulse:SNSF as an organization: this names the DATA SOURCE. Distributed as a bulk CSV rather than an API, which is why a source term matters — the provenance of a P3 row is a dated download, not a live endpoint." .
+pulse:DepsDev     a pulse:PlatformEnumeration ; skos:prefLabel "deps.dev" ;
+    skos:definition "Google Open Source Insights. §19 aligns our package layer to it, and the conversion test takes real dependency data from it — yet without a member here, a deps.dev-sourced fact cannot name its origin in pulse:sourcePlatform or partOfRun." .
+pulse:Ecosystems  a pulse:PlatformEnumeration ; skos:prefLabel "ecosyste.ms" ;
+    skos:definition "The ecosyste.ms platform (§21). Same argument as deps.dev: we consume it, so its output needs a name." .
+pulse:Crossref    a pulse:PlatformEnumeration ; skos:prefLabel "Crossref" ;
+    skos:definition "The DOI registration agency and the authority for Funder IDs — pulse:CrossrefFunderScheme above names its identifiers, so the platform issuing them should be nameable too." .
+pulse:GHArchive   a pulse:PlatformEnumeration ; skos:prefLabel "GH Archive" ;
+    skos:definition "The GitHub event firehose. Not consumed today, but it is the bulk route to pulse:GitIdentity (see git-author-identities.md), and naming it now costs one line." .
+
+# NOT added: PyPI, npm, Maven and the other registries. They are package
+# ECOSYSTEMS (pulse:PackageEcosystemEnumeration, §7), not extraction sources —
+# we learn about a PyPI package from deps.dev or ecosyste.ms, never from PyPI
+# directly. Adding them here would conflate "where the artifact lives" with
+# "who told us about it", which is exactly the distinction pulse:sourcePlatform
+# exists to make.
+
 # --- IdentifierSchemeEnumeration ----------------------------------------
 # Currently: arXiv, Scopus, ResearcherId, ISBN, ISSN, PMID, Ringgold, GRID,
 # ISNI, SWHID, Other. Infoscience is missing even though pulse:Infoscience
