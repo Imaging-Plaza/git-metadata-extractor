@@ -13,6 +13,7 @@
 @prefix prov:   <http://www.w3.org/ns/prov#> .
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
+@prefix time:   <http://www.w3.org/2006/time#> .
 
 # --- the extraction run and its per-platform outputs (§18(2)) ---
 <urn:pulse:run:gimie-baseline> a pulse:ExtractionRun ;
@@ -399,3 +400,209 @@
     pulse:retrievedAt "2026-02-24T14:18:29Z"^^xsd:dateTime ;
     pulse:sourcePlatform pulse:ROR ;
     pulse:observationKind "single-source" .
+
+# =====================================================================
+# MULTI-SOURCE: every platform GME reads, from real captured data.
+# Appended by build_instance_multisource.py — do not hand-edit.
+# =====================================================================
+
+<urn:pulse:output:gimie-baseline:orcid> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:ORCID ;
+    prov:generatedAtTime "2026-02-24T14:18:29Z"^^xsd:dateTime .
+
+# --- ORCID: a person, and a second PlatformProfile for the same human ---
+<https://orcid.org/0000-0002-1825-0097> a schema:Person ;
+    schema:name "Josiah Carberry" ;
+    pulse:orcidIdentifier "0000-0002-1825-0097" ;
+    pulse:hasProfile <urn:pulse:profile:orcid:0000-0002-1825-0097> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:orcid> .
+
+<urn:pulse:profile:orcid:0000-0002-1825-0097> a pulse:PlatformProfile ;
+    pulse:platform pulse:ORCID ;
+    pulse:profileOf <https://orcid.org/0000-0002-1825-0097> ;
+    schema:name "Josiah Carberry" ;
+    schema:url <https://orcid.org/0000-0002-1825-0097> ;
+    pulse:biography "Josiah Carberry is a fictitious person. This account is used as a demonstration account by ORCID, CrossRef and others who wish to demonstrate the interaction of ORCID with other scholarly communication systems without having to use a real-person's account. Josiah Stinkney Carberry is a fictional professor, created as a joke in 1929. He is said to still teach at Brown University, and to be known for his work in \"psychoceramics\", the supposed study of \"cracked pots\". See his Wikipedia entry for more details." ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:orcid> .
+
+<https://orcid.org/0000-0002-1825-0097> pulse:keyword "psychoceramics" .
+<https://orcid.org/0000-0002-1825-0097> pulse:keyword "ionian philology" .
+<https://orcid.org/0000-0002-1825-0097> pulse:hasExternalIdentifier <urn:pulse:extid:orcid:0> .
+<urn:pulse:extid:orcid:0> a pulse:ExternalIdentifier ;
+    pulse:identifierScheme pulse:OtherIdentifierScheme ;
+    schema:identifier "7007156898" .
+
+<https://orcid.org/0000-0002-1825-0097> org:hasMembership <urn:pulse:membership:orcid:0> .
+<urn:pulse:membership:orcid:0> a org:Membership ;
+    pulse:membershipType pulse:Employment ;
+    org:role "Professor" ;
+    time:hasBeginning "1930-01-01"^^xsd:date ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:orcid> .
+
+<https://orcid.org/0000-0002-1825-0097> org:hasMembership <urn:pulse:membership:orcid:1> .
+<urn:pulse:membership:orcid:1> a org:Membership ;
+    pulse:membershipType pulse:Employment ;
+    org:role "Professor" ;
+    time:hasBeginning "1929-01-01"^^xsd:date ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:orcid> .
+
+<urn:pulse:output:gimie-baseline:infoscience> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:Infoscience ;
+    prov:generatedAtTime "2026-02-24T14:18:31Z"^^xsd:dateTime .
+
+# --- Infoscience: scholarly records (10 in the snapshot) ---
+<urn:pulse:article:infoscience:0> a schema:ScholarlyArticle ;
+    schema:name "Search for high-mass exclusive diphoton production with tagged protons in proton-proton collisions at √<i>s</i>=13 TeV" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:infoscience> .
+<urn:pulse:article:infoscience:1> a schema:ScholarlyArticle ;
+    schema:name "Measurement of <i>CP</i> Violation in <i>B</i><SUP>0</SUP> → ψ(→ <i>l</i><SUP>+</SUP> <i>l</i><SUP>-</SUP>)<i>K<sub>S</s" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:infoscience> .
+
+# --- deps.dev: the package layer (§1, §19), joined on our repository IRI ---
+<https://github.com/sdsc-ordes/gimie> pulse:distributedAs <https://deps.dev/pypi/gimie/0.4.0> .
+<https://deps.dev/pypi/gimie/0.4.0> a pulse:Package ;
+    schema:name "gimie" ;
+    pulse:packageIdentifier "pkg:pypi/gimie@0.4.0" ;
+    pulse:packageEcosystem pulse:PyPI ;
+    pulse:packageVersion "0.4.0" ;
+    pulse:isRelease true ;
+    pulse:sourceRepository <https://github.com/sdsc-ordes/gimie> .
+
+# 46 resolved dependencies in the real graph, 8 direct
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:0> .
+<urn:pulse:dep:0> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/calamus/0.4.3> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "0.4.3" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/calamus/0.4.3> a pulse:Package ;
+    schema:name "calamus" ;
+    pulse:packageIdentifier "pkg:pypi/calamus@0.4.3" ;
+    pulse:packageEcosystem pulse:PyPI .
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:1> .
+<urn:pulse:dep:1> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/importlib/1.0.4> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "1.0.4" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/importlib/1.0.4> a pulse:Package ;
+    schema:name "importlib" ;
+    pulse:packageIdentifier "pkg:pypi/importlib@1.0.4" ;
+    pulse:packageEcosystem pulse:PyPI .
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:2> .
+<urn:pulse:dep:2> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/pre-commit/3.8.0> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "3.8.0" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/pre-commit/3.8.0> a pulse:Package ;
+    schema:name "pre-commit" ;
+    pulse:packageIdentifier "pkg:pypi/pre-commit@3.8.0" ;
+    pulse:packageEcosystem pulse:PyPI .
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:3> .
+<urn:pulse:dep:3> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/pydriller/2.10.0> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "2.10.0" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/pydriller/2.10.0> a pulse:Package ;
+    schema:name "pydriller" ;
+    pulse:packageIdentifier "pkg:pypi/pydriller@2.10.0" ;
+    pulse:packageEcosystem pulse:PyPI .
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:4> .
+<urn:pulse:dep:4> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/pyshacl/0.20.0> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "0.20.0" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/pyshacl/0.20.0> a pulse:Package ;
+    schema:name "pyshacl" ;
+    pulse:packageIdentifier "pkg:pypi/pyshacl@0.20.0" ;
+    pulse:packageEcosystem pulse:PyPI .
+<https://github.com/sdsc-ordes/gimie> pulse:hasDependency <urn:pulse:dep:5> .
+<urn:pulse:dep:5> a pulse:DependencyRelation ;
+    pulse:dependencyTarget <https://deps.dev/pypi/python-dotenv/0.21.1> ;
+    pulse:dependencyScope pulse:RuntimeDependency ;
+    pulse:resolvedVersion "0.21.1" ;
+    pulse:isDirectDependency true .
+<https://deps.dev/pypi/python-dotenv/0.21.1> a pulse:Package ;
+    schema:name "python-dotenv" ;
+    pulse:packageIdentifier "pkg:pypi/python-dotenv@0.21.1" ;
+    pulse:packageEcosystem pulse:PyPI .
+
+# --- ecosyste.ms (§21): purl on the repository, DDS, funding links ---
+<https://github.com/sdsc-ordes/gimie> pulse:hasExternalIdentifier <urn:pulse:extid:eco:purl> .
+<urn:pulse:extid:eco:purl> a pulse:ExternalIdentifier ;
+    pulse:identifierScheme pulse:OtherIdentifierScheme ;
+    schema:identifier "pkg:github/sdsc-ordes/gimie" .
+<https://github.com/sdsc-ordes/gimie> pulse:developmentDistributionScore 0.6949152542372881 .
+
+<urn:pulse:output:gimie-baseline:openalex> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:OpenAlex ;
+    prov:generatedAtTime "2026-08-07T05:59:21Z"^^xsd:dateTime .
+
+# --- OpenAlex: the same organization from a third source ---
+<https://ror.org/02s376052> pulse:hasExternalIdentifier <urn:pulse:extid:openalex:epfl> ;
+    pulse:acronym "EPFL" ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:openalex> .
+
+<urn:pulse:extid:openalex:epfl> a pulse:ExternalIdentifier ;
+    pulse:identifierScheme pulse:OpenAlexScheme ;
+    schema:identifier "https://openalex.org/I5124864" .
+
+<urn:pulse:obs:src:91> a pulse:Observation ;
+    pulse:observedSubject <https://ror.org/02s376052> ;
+    pulse:observedProperty pulse:acronym ;
+    pulse:observedValue "EPFL" ;
+    pulse:retrievedFrom <https://api.openalex.org/institutions/ror:02s376052?mailto=openpulse%40epfl.ch> ;
+    pulse:retrievedAt "2026-08-07T05:59:21Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:OpenAlex ;
+    pulse:observationKind "single-source" .
+
+<urn:pulse:output:gimie-baseline:huggingface> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:HuggingFace ;
+    prov:generatedAtTime "2026-08-07T05:59:21Z"^^xsd:dateTime .
+
+# --- HuggingFace: a model repository, same class as a code repository ---
+<https://huggingface.co/SDSC/open-pulse-graph-classifier> a schema:SoftwareSourceCode ;
+    schema:name "SDSC/open-pulse-graph-classifier" ;
+    pulse:platform pulse:HuggingFace ;
+    pulse:repositoryHandle "SDSC/open-pulse-graph-classifier" ;
+    pulse:likeCount 0 ;
+    pulse:downloadCount 0 ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:huggingface> .
+<https://huggingface.co/SDSC/open-pulse-graph-classifier> pulse:tag "license:mit" .
+<https://huggingface.co/SDSC/open-pulse-graph-classifier> pulse:tag "region:us" .
+
+<urn:pulse:output:gimie-baseline:zenodo> a pulse:ExtractionOutput ;
+    prov:wasGeneratedBy <urn:pulse:run:gimie-baseline> ;
+    pulse:platform pulse:Zenodo ;
+    prov:generatedAtTime "2026-08-07T00:00:00Z"^^xsd:dateTime .
+
+# --- Zenodo: a real deposit, and HOW it relates to its repository (§13) ---
+<https://github.com/sdsc-ordes/modos-poster> a schema:SoftwareSourceCode ;
+    schema:name "modos-poster" ;
+    pulse:platform pulse:GitHub ;
+    pulse:repositoryHandle "sdsc-ordes/modos-poster" ;
+    pulse:hasDeposit <https://doi.org/10.5281/zenodo.13342187> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:github> .
+
+<https://doi.org/10.5281/zenodo.13342187> a schema:ScholarlyArticle ;
+    pulse:doi "10.5281/zenodo.13342187" ;
+    pulse:depositRelation pulse:SupplementTo ;
+    pulse:accessRights <info:eu-repo/semantics/openAccess> ;
+    pulse:partOfRun <urn:pulse:output:gimie-baseline:zenodo> .
+
+<urn:pulse:obs:src:90> a pulse:Observation ;
+    pulse:observedSubject <https://github.com/sdsc-ordes/gimie> ;
+    pulse:observedProperty pulse:distributedAs ;
+    pulse:observedValue "pkg:pypi/gimie@0.4.0" ;
+    pulse:retrievedFrom <https://api.deps.dev/v3alpha/systems/pypi/packages/gimie/versions/0.4.0> ;
+    pulse:retrievedAt "2026-08-07T05:59:18Z"^^xsd:dateTime ;
+    pulse:sourcePlatform pulse:GitHub ;
+    pulse:observationKind "single-source" .
+

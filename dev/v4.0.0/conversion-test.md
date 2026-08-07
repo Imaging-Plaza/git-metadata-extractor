@@ -4,7 +4,8 @@ The assessment estimated; this measures. A real GME extraction converted into
 the proposed raw profile and validated with pySHACL against the actual shapes
 from PR #25.
 
-**Result: 21 violations as published, 0 with the proposed changes applied.**
+**Result: 38 violations as published, 0 with the proposed changes applied** —
+across seven platforms.
 
 Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2.
 
@@ -41,8 +42,27 @@ Generator: [`build_instance_example.py`](build_instance_example.py) →
 
 | Shapes | Conforms | Violations |
 |---|---|---|
-| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **21** |
-| …with asks #13, #14, #4 applied | ✅ | **0** |
+| PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **38** |
+| …with the proposed changes applied | ✅ | **0** |
+
+### Platforms exercised
+
+`GitHub` · `ROR` · `ORCID` · `Infoscience` · `Zenodo` · `OpenAlex` ·
+`HuggingFace` — plus the package layer from **deps.dev** and repository
+signals from **ecosyste.ms**. 508 triples.
+
+| Platform | Source | What it contributes |
+|---|---|---|
+| GitHub | snapshot | repository, 10 contributors, org, languages |
+| ROR | snapshot | the organization authority record |
+| ORCID | snapshot | a person, second `PlatformProfile`, employments → `Membership`, external identifiers, keywords, biography |
+| Infoscience | snapshot | scholarly records |
+| deps.dev | live API | `pkg:pypi/gimie@0.4.0`, 6 resolved dependencies with `isDirectDependency` |
+| ecosyste.ms | live API | repository purl, `developmentDistributionScore` |
+| OpenAlex | live API | the same organization from a third source, acronym, `ExternalIdentifier` |
+| HuggingFace | live API | a model repository typed as `schema:SoftwareSourceCode` |
+| Zenodo | live rete query | a real deposit and **how** it relates (`isSupplementTo`) |
+| Docker Hub | live API | **no data** — the namespace probed was empty, so no image instance |
 
 ### The 21, and which ask each one is
 

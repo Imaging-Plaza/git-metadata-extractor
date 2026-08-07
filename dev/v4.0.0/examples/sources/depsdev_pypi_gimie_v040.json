@@ -1,0 +1,69 @@
+{
+ "request": {
+  "url": "https://api.deps.dev/v3alpha/systems/pypi/packages/gimie/versions/0.4.0"
+ },
+ "captured_at": "2026-08-07T05:59:18Z",
+ "status_code": 200,
+ "response": {
+  "versionKey": {
+   "system": "PYPI",
+   "name": "gimie",
+   "version": "0.4.0"
+  },
+  "purl": "pkg:pypi/gimie@0.4.0",
+  "publishedAt": "2023-06-09T13:34:39Z",
+  "isDefault": false,
+  "isDeprecated": false,
+  "deprecatedReason": "",
+  "licenses": [
+   "Apache-2.0"
+  ],
+  "licenseDetails": [
+   {
+    "license": "Apache-2.0",
+    "spdx": "Apache-2.0"
+   }
+  ],
+  "advisoryKeys": [],
+  "links": [
+   {
+    "label": "SOURCE_REPO",
+    "url": "https://github.com/SDSC-ORD/gimie"
+   }
+  ],
+  "slsaProvenances": [],
+  "attestations": [],
+  "registries": [
+   "https://pypi.org/simple"
+  ],
+  "relatedProjects": [
+   {
+    "projectKey": {
+     "id": "github.com/sdsc-ord/gimie"
+    },
+    "relationProvenance": "UNVERIFIED_METADATA",
+    "relationType": "SOURCE_REPO"
+   }
+  ],
+  "upstreamIdentifiers": [
+   {
+    "packageName": "gimie",
+    "versionString": "0.4.0",
+    "source": "PYPI_RELEASE_FILENAME"
+   },
+   {
+    "packageName": "gimie",
+    "versionString": "0.4.0",
+    "source": "PYPI_METADATA_FILE"
+   }
+  ],
+  "cooldown": {
+   "end": "2023-06-14T13:34:39Z",
+   "description": ""
+  },
+  "projectStatus": {
+   "status": "active",
+   "reason": ""
+  }
+ }
+}

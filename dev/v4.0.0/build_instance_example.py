@@ -31,7 +31,11 @@ def load(rel: str) -> dict | list:
 
 
 def esc(s: str) -> str:
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+    t = str(s).replace("\\", "\\\\").replace('"', '\\"')
+    # Collapse ALL whitespace. Real payloads carry \r\n (an ORCID biography
+    # broke the first run with "newline found in string literal"), tabs and
+    # stray control characters.
+    return " ".join(t.split())
 
 
 def hashed_email(addr: str) -> tuple[str, str]:
@@ -73,6 +77,7 @@ add("""# Raw-profile instance graph — REAL data, not a hand-written example.
 @prefix prov:   <http://www.w3.org/ns/prov#> .
 @prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
 @prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
+@prefix time:   <http://www.w3.org/2006/time#> .
 """)
 
 # ---------------------------------------------------------------- extraction run
