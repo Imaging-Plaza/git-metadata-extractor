@@ -1,42 +1,70 @@
-# Conversion test — real data against the raw profile
+# Conversion test — real data, every platform, against the raw profile
 
-The assessment estimated; this measures. A real GME extraction converted into
-the proposed raw profile and validated with pySHACL against the actual shapes
-from PR #25.
+The assessment estimated; this measures. Real extraction data from **every
+source GME reads**, converted into the proposed raw profile and validated with
+pySHACL against the actual shapes from PR #25.
 
-**Result: 38 violations as published, 0 with the proposed changes applied** —
-across seven platforms.
+**38 violations as published → 0 with the proposed changes applied.**
 
-Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2.
+Run 2026-08-07. pySHACL 0.28.1, rdflib 6.3.2. 508 triples.
 
 ---
 
 ## Input — real, not invented
 
-`tests/v2/fixtures/providers/live_snapshots/` (the `gimie-baseline` dataset):
-real GitHub, ROR, ORCID and Infoscience API responses for
-`sdsc-ordes/gimie`, captured **2026-02-24T14:18:28Z**, each with a
-`.meta.json` sidecar carrying the request URL and capture time.
+Two kinds of source, both carrying genuine provenance:
 
-Every literal in the instance graph traces to a snapshot field, and every
-`pulse:retrievedFrom` / `pulse:retrievedAt` is the actual request URL and
-capture timestamp — the provenance is real, not stubbed.
+- **Committed snapshots** — `tests/v2/fixtures/providers/live_snapshots/`
+  (the `gimie-baseline` dataset): real GitHub, ROR, ORCID and Infoscience
+  responses for `sdsc-ordes/gimie`, captured **2026-02-24T14:18:28Z**, each
+  with a `.meta.json` sidecar holding the request URL and capture time.
+- **Live captures** — [`fetch_live_sources.py`](fetch_live_sources.py) pulls
+  deps.dev, ecosyste.ms, OpenAlex, HuggingFace and Docker Hub into
+  `examples/sources/`, recording each request URL and fetch time in the same
+  shape, so the test stays reproducible offline afterwards.
 
-Generator: [`build_instance_example.py`](build_instance_example.py) →
-[`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl)
-(337 triples).
+Every literal traces to a captured payload, and every `pulse:retrievedFrom` /
+`pulse:retrievedAt` is a real request URL and timestamp — the §18 provenance
+model is exercised on genuine data, not stubs.
 
-| Node type | n | From |
+Generators:
+[`build_instance_example.py`](build_instance_example.py) (GitHub + ROR) then
+[`build_instance_multisource.py`](build_instance_multisource.py) (everything
+else) → [`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl).
+
+### Platforms exercised
+
+| Platform | Source | What it contributes |
 |---|---|---|
-| `schema:Person` (provisional) | 10 | GitHub contributors |
-| `pulse:PlatformProfile` | 10 | one per contributor |
-| `pulse:Contribution` | 10 | with real commit counts (cmdoret 128, sabinem 40, …) |
-| `pulse:UnmappedField` | 4 | real GitHub fields with no term |
-| `pulse:Observation` | 4 | real request URLs + capture times |
-| `pulse:GitIdentity` | 3 | hashed local part + domain |
-| `org:Organization` | 2 | GitHub org + ROR record |
-| `pulse:ExtractionOutput` | 2 | one per platform |
-| `schema:SoftwareSourceCode` | 1 | the repository |
+| **GitHub** | snapshot | repository, 10 contributors, the org, languages |
+| **ROR** | snapshot | the organization authority record |
+| **ORCID** | snapshot | a person, a *second* `PlatformProfile` for the same human, employments → `Membership`, external identifiers, keywords, biography |
+| **Infoscience** | snapshot | scholarly records |
+| **deps.dev** | live API | `pkg:pypi/gimie@0.4.0` and 6 resolved dependencies with `isDirectDependency` / `resolvedVersion` |
+| **ecosyste.ms** | live API | repository purl, `developmentDistributionScore` |
+| **OpenAlex** | live API | the same organization from a *third* source, acronym, `ExternalIdentifier` |
+| **HuggingFace** | live API | a model repository typed as `schema:SoftwareSourceCode` |
+| **Zenodo** | live rete query | a real deposit and **how** it relates (`isSupplementTo`) |
+| **Docker Hub** | live API | **nothing** — the namespace probed returned zero results, so no image instance exists in the graph |
+
+| Node type | n |
+|---|---|
+| `schema:Person` (provisional) | 11 |
+| `pulse:PlatformProfile` | 11 |
+| `pulse:Contribution` | 10 |
+| `pulse:ExtractionOutput` | 7 |
+| `pulse:Package` | 7 |
+| `pulse:Observation` | 6 |
+| `pulse:DependencyRelation` | 6 |
+| `pulse:UnmappedField` | 4 |
+| `schema:SoftwareSourceCode` | 3 |
+| `pulse:GitIdentity` | 3 |
+| `pulse:ExternalIdentifier` | 3 |
+| `schema:ScholarlyArticle` | 3 |
+| `org:Organization`, `org:Membership` | 2 each |
+| `pulse:ExtractionRun`, `prov:SoftwareAgent` | 1 each |
+
+---
 
 ## Result
 
@@ -45,92 +73,93 @@ Generator: [`build_instance_example.py`](build_instance_example.py) →
 | PR #25 `ontology-shapes-raw.ttl` **as published** + our patch | ❌ | **38** |
 | …with the proposed changes applied | ✅ | **0** |
 
-### Platforms exercised
-
-`GitHub` · `ROR` · `ORCID` · `Infoscience` · `Zenodo` · `OpenAlex` ·
-`HuggingFace` — plus the package layer from **deps.dev** and repository
-signals from **ecosyste.ms**. 508 triples.
-
-| Platform | Source | What it contributes |
-|---|---|---|
-| GitHub | snapshot | repository, 10 contributors, org, languages |
-| ROR | snapshot | the organization authority record |
-| ORCID | snapshot | a person, second `PlatformProfile`, employments → `Membership`, external identifiers, keywords, biography |
-| Infoscience | snapshot | scholarly records |
-| deps.dev | live API | `pkg:pypi/gimie@0.4.0`, 6 resolved dependencies with `isDirectDependency` |
-| ecosyste.ms | live API | repository purl, `developmentDistributionScore` |
-| OpenAlex | live API | the same organization from a third source, acronym, `ExternalIdentifier` |
-| HuggingFace | live API | a model repository typed as `schema:SoftwareSourceCode` |
-| Zenodo | live rete query | a real deposit and **how** it relates (`isSupplementTo`) |
-| Docker Hub | live API | **no data** — the namespace probed was empty, so no image instance |
-
-### The 21, and which ask each one is
+### The 38, and which ask each one is
 
 | n | Path | Cause | Ask |
 |---|---|---|---|
-| 11 | `pulse:partOfRun` | `PlatformProfile` ×10 and `OrganizationProfile` ×1 are closed **and** lack `partOfRun` — the nodes that exist to hold one platform's data cannot say which run produced them | **#14**, #13 |
-| 4 | `pulse:hasUnmappedField` | `RawRepositoryShape` is closed, so preserved-but-unmodelled fields are rejected | **#17**, #13 |
-| 1 | `pulse:sizeInBytes` | closed shape | #8, #13 |
-| 1 | `pulse:forkNetworkCount` | closed shape | #8, #13 |
-| 1 | `pulse:primaryProgrammingLanguage` | closed shape | #8, #13 |
-| 1 | `pulse:hasIssues` | closed shape | #7, #13 |
-| 1 | `pulse:hasProjects` | closed shape | #7, #13 |
-| 1 | `pulse:platform` | `pulse:ROR` is not a `PlatformEnumeration` member, so a ROR-sourced organization cannot state where it came from | **#4** |
+| 14 | `pulse:partOfRun` | profiles, memberships, packages and images are closed **and** lack `partOfRun` | **#14**, #13 |
+| 6 | `pulse:hasDependency` | closed `RawRepositoryShape` | #16-terms, #13 |
+| 4 | `pulse:hasUnmappedField` | closed shape rejects preserved-but-unmodelled fields | **#17**, #13 |
+| 2 | `pulse:platform` | `pulse:ROR` and `pulse:OpenAlex` are not `PlatformEnumeration` members | **#4** |
+| 1 each | `hasProjects`, `hasIssues`, `sizeInBytes`, `forkNetworkCount`, `primaryProgrammingLanguage`, `distributedAs`, `hasDeposit`, `depositRelation`, `accessRights` | closed shape | #7, #8, #13, #19 |
+| 1 | `pulse:identifierScheme` | `pulse:OpenAlexScheme` is not an `IdentifierSchemeEnumeration` member | **#5** |
+| 1 | `pulse:partOfRun` | **"More than 1 values"** — see the new finding below | **#22** |
 
-Two things this shows that the prose could not:
+**The closed shapes remain the dominant failure mode**: 33 of 38 are a closed
+shape rejecting a value, not a modelling disagreement. Ask #13 alone clears
+them.
 
-- **The closed shapes are the dominant failure mode.** 20 of 21 violations are
-  a closed shape rejecting a value, not a modelling disagreement. Ask #13 alone
-  clears them.
-- **Ask #4 is not cosmetic.** The single non-closed-shape violation is ROR
-  missing from the platform enumeration — hit immediately, on the first real
-  organization, because ROR is our organization authority.
+### New finding, which only multi-source data could surface
+
+`pulse:partOfRun` is **`sh:maxCount 1`** in the published shapes. So an entity
+described by two platforms cannot record both — and it fired immediately, on
+`https://ror.org/02s376052`, which **ROR and OpenAlex both describe**.
+
+For a profile whose stated job is accepting everything from every source, an
+entity being attributable to exactly one extraction output is a real limit. The
+same organization, repository or person seen by three sources is the normal
+case, not the exception. **`partOfRun` should be unbounded** — filed as ask
+#22.
+
+This is precisely the class of problem a single-source test cannot find, which
+is the argument for having run this one.
 
 ### Applying the asks
 
 Simulated programmatically rather than by hand-editing their file: flip
-`sh:closed` to `false` on the 12 closed raw shapes, add a `pulse:partOfRun`
-property shape to the 8 node shapes lacking one, and type `pulse:ROR` as a
-`PlatformEnumeration` member. Then **0 violations**.
+`sh:closed` to `false` on the closed raw shapes, drop `sh:maxCount` from
+`partOfRun` and add it to the shapes lacking it, and type the proposed
+enumeration members (`ROR`, `OpenAlex`, `OpenAlexScheme`, `PyPI`,
+`RuntimeDependency`, `SupplementTo`). Then **0 violations**.
 
-That is the useful half of the result: the asks are not just *necessary*, they
-are *sufficient* for real data from our largest source.
+The asks are therefore not just *necessary* but *sufficient* for real data from
+every platform we read.
 
-## A false finding I nearly filed
+## Three bugs of mine that the validator caught
 
-The first run produced a 22nd violation —
-`schema:license: Value is not of Node Kind sh:IRI` — and it looked like a real
-gap: GitHub returns an SPDX id string (`"Apache-2.0"`) while the shape demands
-an IRI.
+Recorded because a proposal that reports non-existent problems is worth less
+than one that reports none.
 
-It was my generator's bug. GME already emits an IRI:
-`repository_agent.py::_normalize_license_url()` produces
-`https://spdx.org/licenses/{spdx_id}.html`, and the strict schema documents the
-field as *"SPDX license IRI"*. The instance builder was emitting the raw
-`spdx_id` instead. Fixed, and recorded here because a proposal that reports
-non-existent problems is worth less than one that reports none.
+1. **A false finding I nearly filed.** The first run reported
+   `schema:license: Value is not of Node Kind sh:IRI`, which looked real —
+   GitHub returns `"Apache-2.0"` while the shape demands an IRI. It was my
+   generator: GME already emits `https://spdx.org/licenses/{id}.html` via
+   `repository_agent.py::_normalize_license_url()`, and the strict schema
+   documents the field as *"SPDX license IRI"*.
+2. **The ORCID id.** `person["path"]` is `/0000-0002-1825-0097/person`;
+   stripping slashes left `0000-0002-1825-0097/person`, which failed the ORCID
+   `sh:pattern`. Now takes the first path segment — and note the shape caught
+   it, which is the pattern doing its job.
+3. **Literal escaping.** The ORCID biography contains `\r\n`, producing
+   *"newline found in string literal"*. `esc()` now collapses all whitespace
+   rather than only `\n`.
 
 ## Caveats
 
-- **Not the whole profile.** Articles, Memberships, Funding, Packages and
-  Collections are not exercised — the snapshot set has no Zenodo or deps.dev
-  capture, and ORCID/Infoscience snapshots exist but were not wired in. The 21
-  violations are a floor, not a total.
-- **`pulse:GitIdentity` uses platform noreply addresses** (`{id}+{login}@users.
-  noreply.github.com`), because the contributors API returns logins, not commit
-  identities. Real addresses need the git-log path in
-  [`git-author-identities.md`](git-author-identities.md). The hashing and the
-  `isPseudonymousEmail` flag are exercised; the multi-identity case is not.
+- **Still not the whole profile.** `pulse:Funding`, `pulse:Collection`,
+  `pulse:Community`, `pulse:Advisory` and `schema:Project` are not exercised —
+  no funding or advisory data was captured for this repository. 38 is a floor,
+  not a total.
+- **Docker Hub contributed nothing.** The namespace probed
+  (`hub.docker.com/v2/repositories/sdscordes/`) returned zero results. The
+  project publishes to GHCR instead, so the image layer is untested.
+- **`pulse:GitIdentity` uses platform noreply addresses**
+  (`{id}+{login}@users.noreply.github.com`), because the contributors API
+  returns logins, not commit identities. Hashing and `isPseudonymousEmail` are
+  exercised; the multi-identity case that motivates §9 is not — that needs the
+  git-log path in [`git-author-identities.md`](git-author-identities.md).
 - **Enumeration members must be loaded as data.** `pulse:GitHub` and friends
-  are declared in `ontology-enumerations-canonical.ttl`; without that file in
-  the data graph, every `sh:class …Enumeration` check fails. That is expected
-  SHACL behaviour, not a finding — but it caught me on the first run and will
-  catch anyone else.
+  live in `ontology-enumerations-canonical.ttl`; without that file in the data
+  graph every `sh:class …Enumeration` check fails. Expected SHACL behaviour,
+  not a finding — but it caught me on the first run.
 
 ## Reproducing
 
 ```bash
-python dev/v4.0.0/build_instance_example.py     # regenerate from the snapshots
+python dev/v4.0.0/fetch_live_sources.py          # refresh the live captures
+python dev/v4.0.0/build_instance_example.py      # GitHub + ROR, from snapshots
+python dev/v4.0.0/build_instance_multisource.py  # every other platform
+
 pyshacl -s <(cat …/ontology-shapes-raw.ttl dev/v4.0.0/ontology-shapes-raw.additions.ttl) \
         -e …/ontology-enumerations-canonical.ttl \
         dev/v4.0.0/examples/gimie-raw-instance.ttl
