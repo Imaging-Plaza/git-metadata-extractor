@@ -57,6 +57,11 @@
 @prefix frapo:    <http://purl.org/cerif/frapo/> .
 # §20 alignment targets, both verified from their published ontology files.
 @prefix vivo:     <http://vivoweb.org/ontology/core#> .
+# Verified 2026-08-07 (see verification.md): spdx is the 2.3 ontology
+# (versionIRI http://spdx.org/rdf/terms/2.3); codemeta's own terms live at
+# codemeta.github.io/terms/, per the live @context at w3id.org/codemeta/3.0.
+@prefix spdx:     <http://spdx.org/rdf/terms#> .
+@prefix codemeta: <https://codemeta.github.io/terms/> .
 # §19: the deps.dev graph, verified live at
 # https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete
 @prefix deps:     <https://w3id.org/rete/deps-dev#> .
@@ -600,10 +605,12 @@ pulse:ProposedGitIdentityShape
 pulse:references    rdfs:subPropertyOf cito:cites .        # OpenCitations/SPAR idiom; `opencitations` is the crosswalk hub
 pulse:keyword       rdfs:subPropertyOf dct:subject .       # what Zenodo actually emits — ~30 dct:subject literals on one record
 pulse:Funding       rdfs:subClassOf    frapo:Grant .       # scholar:Grant ⊑ frapo:Grant unifies oaire/orcid/cx Funding
-pulse:Collection    rdfs:subClassOf    skos:Collection .   # TO-VERIFY: skos:Collection semantics fit a curated set
-# pulse:Package    rdfs:subClassOf spdx:Package .          # TO-VERIFY: SPDX namespace not checked (LOV down). Worth doing —
-#                                                          # our dependency data IS an SPDX SBOM, so if spdx:Package fits,
-#                                                          # aligning costs one axiom and buys the whole SBOM ecosystem.
+pulse:Collection    rdfs:subClassOf    skos:Collection .   # verified: skos:Collection is an owl:Class
+pulse:Package       rdfs:subClassOf    spdx:Package .      # verified: spdx:Package is an owl:Class in SPDX 2.3.
+#   Our dependency data IS an SPDX SBOM, so this buys the SBOM ecosystem for
+#   one axiom. Caveat: verified against SPDX 2.3 (versionIRI
+#   http://spdx.org/rdf/terms/2.3); SPDX 3.0 moved to a different namespace,
+#   so re-point this when you adopt 3.0.
 
 # --- (b) the deposit relation, which we cannot currently express ---------
 # EVIDENCE (queried 2026-07-31, dataset `zenodo-records`, record
@@ -651,7 +658,7 @@ pulse:depositRelation
 
 pulse:accessRights
     a rdf:Property ;
-    rdfs:subPropertyOf dct:accessRights ;   # TO-VERIFY: dct:accessRights spelling not re-checked (LOV down)
+    rdfs:subPropertyOf dct:accessRights ;   # verified: dcterms:accessRights is an rdf:Property
     skos:prefLabel "access rights" ;
     skos:definition "The access status of a work or deposit, as an info:eu-repo/semantics/* IRI (openAccess, embargoedAccess, restrictedAccess, closedAccess). Kept separate from schema:license: a CC-BY licence and an embargo can coexist, and conflating them makes 'open' unqueryable." .
 
@@ -736,7 +743,7 @@ pulse:orgUnitLevel
 
 pulse:abstract
     a rdf:Property ;
-    rdfs:subPropertyOf dct:abstract ;   # TO-VERIFY: dct:abstract spelling not re-checked (LOV down)
+    rdfs:subPropertyOf dct:abstract ;   # verified: dcterms:abstract is an rdf:Property
     skos:prefLabel "abstract" ;
     skos:definition "The abstract of a work (infs:abstract, dc.description.abstract). We fetch it from Infoscience today and discard it; it is the single most useful text for discipline classification and for LLM-side judgement about what a work is." .
 
@@ -1544,10 +1551,39 @@ pulse:Funding   rdfs:subClassOf scholar:Grant .
 # CodeMeta is the community standard for software metadata and is
 # schema.org-based, so it is the natural alignment target for our
 # repository-level terms — more so than anything we would mint.
-# TO-VERIFY before asserting axioms: exact codemeta: IRIs for the non-schema.org
-# terms (developmentStatus, issueTracker, buildInstructions). Same discipline as
-# spdx: in §13 and oaire: in §20 — no axiom without a confirmed IRI.
+# VERIFIED 2026-08-07: https://w3id.org/codemeta/3.0 returns HTTP 200 and its
+# @context declares the codemeta-specific terms — continuousIntegration,
+# buildInstructions, developmentStatus, readme, issueTracker — under the
+# namespace https://codemeta.github.io/terms/. So the alignments below are
+# asserted, not deferred. (Everything else in CodeMeta 3.0 is schema.org.)
 # =========================================================================
+
+# --- CodeMeta alignment, and two terms it shows we are missing -----------
+
+pulse:issueTracker
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:issueTracker ;
+    skos:prefLabel "issue tracker" ;
+    skos:definition "The repository's issue tracker. §3's pulse:hasIssues says whether one is enabled; this says where it is — which is what a reader needs in order to report a problem, and the two are not the same fact." .
+
+pulse:developmentStatus
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:developmentStatus ;
+    skos:prefLabel "development status" ;
+    skos:definition "The project's lifecycle status. CodeMeta's convention is a repostatus.org term (concept, wip, active, inactive, unsupported, moved, abandoned). Neither profile can express it, yet 'is this maintained?' is the first question asked of research software — and pulse:archived only catches the case where someone remembered to archive." .
+
+pulse:continuousIntegrationUrl
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:continuousIntegration ;
+    skos:prefLabel "continuous integration URL" ;
+    skos:definition "A link to the project's CI service. Note the deliberate split from §3's pulse:hasContinuousIntegration, which is a boolean we derive from the presence of a workflow file: CodeMeta models the LINK, we also want the derived signal, and collapsing them would lose one or the other." .
+
+# The repository README already has a term upstream — pulse:readme in
+# ontology-definitions-raw.ttl. Proposed alignment, one axiom:
+pulse:readme rdfs:subPropertyOf codemeta:readme .
 
 pulse:fundingLink
     a rdf:Property ;
@@ -1583,6 +1619,37 @@ pulse:epssScore
 # readme_doi_urls, works and citation counts). Its ~1.95k forges also cover
 # self-hosted GitLab and Codeberg, which matters for institutional
 # repositories that deps.dev's GitHub/GitLab/Bitbucket does not reach.
+
+
+# =========================================================================
+# 22. schema.org is spelled two different ways across these ontologies
+#
+# Found while verifying every external IRI (verification.md). The prefix
+# declarations, verbatim:
+#
+#   ontology-definitions-raw.ttl        @prefix schema: <http://schema.org/>
+#   ontology-shapes-raw.ttl             @prefix schema: <http://schema.org/>
+#   ontology-definitions-canonical.ttl  @prefix schema: <http://schema.org/>
+#   dev/rete/epfl-infoscience.ttl       @prefix schema: <https://schema.org/>
+#
+# In RDF those are DIFFERENT IRIs. http://schema.org/Person and
+# https://schema.org/Person are two unrelated terms as far as any reasoner or
+# triple store is concerned — nothing relates them unless someone says so.
+#
+# The consequence is precise and it defeats the point of the alignment work:
+# infs:Person ⊑ https://schema.org/Person and pulse:PersonShape targeting
+# http://schema.org/Person do NOT unify in a union graph. An EPFL Infoscience
+# person and an Open Pulse person stay in separate components, and a query
+# over one finds none of the other — silently, with no error anywhere.
+#
+# ASK: pick one spelling across the ecosystem. schema.org itself canonicalises
+# on https:// today, but Open Pulse already uses http:// in three files and
+# consistency matters more than which one wins. If both must coexist, the fix
+# is explicit bridges (owl:equivalentClass / owl:equivalentProperty per term),
+# not silence.
+#
+# This proposal uses http://schema.org/ throughout, matching Open Pulse.
+# =========================================================================
 
 
 # =========================================================================

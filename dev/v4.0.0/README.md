@@ -16,9 +16,10 @@ asks.
 
 | File | What it is |
 |---|---|
-| [`ontology.ttl`](ontology.ttl) | The term proposal — 20 sections, 728 triples: 13 classes, 82 properties, members for six enumerations, and alignment axioms to deps.dev / SPAR / FRAPO / Dublin Core / SKOS. Every minted term carries `gme:mapsFrom`, naming the GME internal field it would promote. |
+| [`ontology.ttl`](ontology.ttl) | The term proposal — 22 sections, 771 triples: 13 classes, 90 properties, members for six enumerations, and **30 alignment axioms** to deps.dev / SPDX / CodeMeta / FRAPO / VIVO / SPAR (CiTO, FaBiO) / Dublin Core / SKOS / FOAF / W3C ORG. Every minted term carries `gme:mapsFrom`, naming the GME internal field it would promote; every external IRI is verified in [`verification.md`](verification.md). |
 | [`ontology-shapes-raw.additions.ttl`](ontology-shapes-raw.additions.ttl) | Drop-in patch for **their** `ontology-shapes-raw.ttl`: the missing `RawContributionShape`, `RawGitIdentityShape` and `RawProjectShape`. Verified to merge without shape-name or `targetClass` collisions. |
 | [`raw-source-coverage.md`](raw-source-coverage.md) | Source-by-source audit: what each source gives us vs what raw can hold. |
+| [`verification.md`](verification.md) + [`verify_iris.py`](verify_iris.py) | Evidence for every external IRI asserted — 30 alignment axioms across 12 vocabularies, each checked against the publisher's own file. Re-runnable. |
 | [`git-author-identities.md`](git-author-identities.md) | Why git identities need a node, how we obtain all of them, six caveats, and the settled email policy. |
 | [`examples/`](examples/) | Two instance graphs proving the cardinality problem is real — one conforms with the patch, one fails without it. |
 
@@ -52,6 +53,7 @@ have; **P1** = strands extraction we do today; **P2** = worth having.
 | 18 | ORCID affiliation types: `Qualification`, `InvitedPosition`, `Distinction`, `Service` — four of ORCID's seven are missing | `ontology-enumerations-raw.ttl` | [`ontology.ttl`](ontology.ttl) §17 | **P1** |
 | 19 | **`schema:Project` has no raw shape.** Canonical defines it and `pulse:ProjectShape`; `ontology-shapes-raw.ttl` has zero occurrences of "project" — so an extractor cannot emit one. Plus `pulse:awardNumber` (no grant id anywhere) and `fundsProject`/`fundedBy` (Funding and Project are unconnected) | `ontology-shapes-raw.ttl`, `ontology-definitions-raw.ttl` | [`ontology.ttl`](ontology.ttl) §20, [patch](ontology-shapes-raw.additions.ttl) | **P1** |
 | 20 | **Align the package layer to deps.dev** — `pulse:Package ⊑ deps:PackageVersion`, `packageIdentifier ⊑ deps:purl`, `dependsOnPackage ⊑ deps:dependsOn`, `sourceRepository ⊑ deps:hasProject` — plus `pulse:Advisory` for security advisories, which neither profile can express | `ontology-definitions-raw.ttl` | [`ontology.ttl`](ontology.ttl) §19 | **P1** |
+| 21 | **schema.org is spelled two ways.** The Open Pulse profiles use `http://schema.org/`; `epfl-infoscience.ttl` uses `https://schema.org/`. Different IRIs in RDF, so an Infoscience person and an Open Pulse person never unify — silently | all files declaring a `schema:` prefix | [`ontology.ttl`](ontology.ttl) §22, [`verification.md`](verification.md) | **P1** |
 
 Most of it is the **raw** profile, which is the expected answer: raw is the
 extractor's profile, and everything above is data an extractor observes. Only
