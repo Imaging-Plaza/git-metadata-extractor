@@ -28,11 +28,16 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # for platform_inventory
+
 from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, SH, SKOS
+
+import platform_inventory   # sibling module; see its docstring for the evidence
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -873,6 +878,7 @@ payload = {
         "violationsAfter": 0,
     },
     "terms": terms,
+    "platformFields": platform_inventory.build(terms),
     "sources": sources,
     "observations": observations,
     "shapes": shapes,

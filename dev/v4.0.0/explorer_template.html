@@ -318,6 +318,7 @@ th.sortable:hover { color: var(--ink); }
     <section class="view" id="v-shapes" hidden></section>
     <section class="view" id="v-align" hidden></section>
     <section class="view" id="v-enums" hidden></section>
+    <section class="view" id="v-platforms" hidden></section>
     <section class="view" id="v-sources" hidden></section>
     <section class="view" id="v-terms" hidden></section>
   </main>
@@ -1274,6 +1275,133 @@ function renderEnums() {
   v.appendChild(grid);
 }
 
+/* --------------------------------------------------------- platforms */
+const HOW = {
+  wired: {label: "wired provider", note: "runs in production today"},
+  index: {label: "index + RAG provider", note: "an index exists and a provider serves it"},
+  test: {label: "conversion test only", note: "read in the test, not wired as a provider"}
+};
+const pstate = {sel: null, only: "all"};
+function renderPlatforms() {
+  const v = $("#v-platforms");
+  const P = (DATA.platformFields || {}).platforms || [];
+  const totF = P.reduce((n, p) => n + p.totals.distinct, 0);
+  const totM = P.reduce((n, p) => n + p.totals.matched, 0);
+  v.innerHTML = `<h1>Platforms, and the fields we can get from them</h1>
+    <p class="lede">${P.length} platforms, <b>${totF}</b> distinct field names.
+      Read off the DuckDB column names under <code>data/index/</code>, the response
+      keys of the captured payloads, and the field lists in
+      <code>package_registry_provider.py</code> — so this is what we can actually
+      obtain, not what we hope to. A field is outlined and clickable when an
+      ontology term <b>shares its name</b> — that is a floor on coverage, not a
+      measure of it: ROR's <code>country_code</code> is mapped, just not under that
+      name. Read a plain tag as "no same-name term", never as "unmapped".</p>`;
+
+  const tiles = el("div", "tiles");
+  tiles.innerHTML =
+    `<div class="tile"><div class="v">${P.filter(p => p.how === "wired").length}</div>
+      <div class="k">wired providers</div><div class="sub">${esc(HOW.wired.note)}</div></div>
+     <div class="tile"><div class="v">${P.filter(p => p.how === "index").length}</div>
+      <div class="k">index only</div><div class="sub">${esc(HOW.index.note)}</div></div>
+     <div class="tile"><div class="v">${P.filter(p => p.how === "test").length}</div>
+      <div class="k">test only</div><div class="sub">${esc(HOW.test.note)}</div></div>
+     <div class="tile"><div class="v">${totF}</div><div class="k">distinct fields</div>
+      <div class="sub">${totM} share a name with a term</div></div>
+     <div class="tile"><div class="v">${P.reduce((n, p) => n + p.totals.rows, 0).toLocaleString()}</div>
+      <div class="k">rows indexed</div>
+      <div class="sub">${P.filter(p => !p.totals.rows).length} platforms hold none yet</div></div>`;
+  v.appendChild(tiles);
+
+  const c = el("div", "card");
+  c.style.marginTop = "18px";
+  c.innerHTML = `<h3 style="margin-top:0">Fields available, by platform</h3>`;
+  c.appendChild(barChart(P.slice().sort((a, b) => b.totals.distinct - a.totals.distinct)
+    .map(p => ({k: p.name, v: p.totals.distinct, go: () => { pstate.sel = p.name; paint(); },
+      note: `${p.totals.matched} of ${p.totals.distinct} match a term by name · ${
+        HOW[p.how].label}`})), {unit: "distinct fields"}));
+  v.appendChild(c);
+
+  const f = el("div", "filters");
+  f.style.marginTop = "18px";
+  f.innerHTML = ["all", "wired", "index", "test"].map(k =>
+    `<button class="chip" data-only="${k}" aria-pressed="${pstate.only === k}">${
+      k === "all" ? "every platform" : esc(HOW[k].label)}</button>`).join("");
+  v.appendChild(f);
+  const host = el("div");
+  v.appendChild(host);
+
+  function fieldTags(fields) {
+    const seen = new Set();
+    return fields.filter(x => x.status !== "housekeeping" &&
+      !seen.has(x.name) && seen.add(x.name)).map(x => x.status === "matched"
+        ? `<button class="tag link" data-go="${esc(x.term)}"
+             title="name matches ${esc(x.term)}"
+             style="border-color:var(--c-upstream)">${esc(x.name)}</button>`
+        : `<span class="tag" title="no term matched by name">${esc(x.name)}</span>`).join("");
+  }
+
+  function paint() {
+    f.querySelectorAll("[data-only]").forEach(b =>
+      b.setAttribute("aria-pressed", b.dataset.only === pstate.only));
+    host.innerHTML = "";
+    P.filter(p => pstate.only === "all" || p.how === pstate.only)
+     .filter(p => !pstate.sel || p.name === pstate.sel)
+     .forEach(p => {
+      const card = el("div", "card");
+      card.style.marginBottom = "12px";
+      const t = p.totals;
+      card.innerHTML = `<div class="detail-head" style="margin-bottom:6px">
+          <h2 style="margin:0;font-size:14px">${esc(p.name)}</h2>
+          <span class="pill">${esc(HOW[p.how].label)}</span>
+          <span class="pill">${t.distinct} fields</span>
+          <span class="pill">${t.matched} share a name with a term</span>
+          ${t.rows ? `<span class="pill">${t.rows.toLocaleString()} rows</span>`
+            : `<span class="pill">no rows indexed</span>`}</div>
+        <div class="mono muted" style="font-size:11px;margin-bottom:8px">${esc(p.where)}</div>`;
+      p.indices.forEach(i => {
+        const b = el("div");
+        b.style.margin = "8px 0";
+        b.innerHTML = `<div style="font-size:12px;margin-bottom:4px">
+            <span class="mono">${esc(i.index)}.${esc(i.table)}</span>
+            <span class="muted">— ${i.rows.toLocaleString()} rows,
+            ${esc(i.path)}</span></div>
+          <div class="tags">${fieldTags(i.fields)}</div>`;
+        card.appendChild(b);
+      });
+      p.endpoints.forEach(e => {
+        const b = el("div");
+        b.style.margin = "8px 0";
+        b.innerHTML = `<div style="font-size:12px;margin-bottom:4px">
+            <span class="muted">${esc(e.kind)}</span>
+            ${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener"
+              class="mono" style="font-size:11px">${esc(e.url)}</a>`
+              : `<span class="mono">${esc(e.case)}</span>`}
+            ${e.capturedAt ? `<span class="muted">· ${esc(e.capturedAt)}</span>` : ""}</div>
+          <div class="tags">${fieldTags(e.fields)}</div>`;
+        card.appendChild(b);
+      });
+      p.registries.forEach(r => {
+        const b = el("div");
+        b.style.margin = "8px 0";
+        b.innerHTML = `<div style="font-size:12px;margin-bottom:4px"><span class="mono">${
+          esc(r.registry.replace(/_/g, " "))}</span></div>
+          <div class="tags">${fieldTags(r.fields)}</div>`;
+        card.appendChild(b);
+      });
+      host.appendChild(card);
+    });
+    if (pstate.sel) {
+      const back = el("button", "chip", "← every platform");
+      back.addEventListener("click", () => { pstate.sel = null; paint(); });
+      host.prepend(back);
+    }
+  }
+  f.querySelectorAll("[data-only]").forEach(b => b.addEventListener("click", () => {
+    pstate.only = b.dataset.only; pstate.sel = null; paint();
+  }));
+  paint();
+}
+
 /* ----------------------------------------------------------- sources */
 function renderSources() {
   const v = $("#v-sources");
@@ -1436,6 +1564,8 @@ const VIEWS = [
   {id: "shapes", label: "Shapes", n: () => DATA.shapes.length, render: renderShapes},
   {id: "align", label: "Alignment", n: () => DATA.alignments.length, render: renderAlign},
   {id: "enums", label: "Enumerations", n: () => members.length, render: renderEnums},
+  {id: "platforms", label: "Platforms", n: () =>
+    (DATA.platformFields.platforms || []).length, render: renderPlatforms},
   {id: "sources", label: "Sources", n: () => DATA.sources.length, render: renderSources},
   {id: "terms", label: "All terms", n: () => all.length, render: renderTerms}
 ];
