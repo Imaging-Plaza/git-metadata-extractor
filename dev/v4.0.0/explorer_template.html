@@ -207,6 +207,11 @@ h3 { font-size: 13px; margin: 18px 0 8px; color: var(--ink-2); text-transform: u
 .kv dt { color: var(--ink-muted); font-size: 11.5px; padding-top: 2px; }
 .kv dd { margin: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.srcs { list-style: none; margin: 0; padding: 0; }
+.srcs li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 4px 0; border-top: 1px solid var(--hairline); font-size: 12px; }
+.srcs li:first-child { border-top: 0; }
+.src-url { font-size: 11px; overflow-wrap: anywhere; max-width: 100%; }
 .tag { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 5px;
   background: var(--surface-2); border: 1px solid var(--hairline); color: var(--ink-2); }
 .tag.link { cursor: pointer; }
@@ -313,6 +318,7 @@ th.sortable:hover { color: var(--ink); }
     <section class="view" id="v-shapes" hidden></section>
     <section class="view" id="v-align" hidden></section>
     <section class="view" id="v-enums" hidden></section>
+    <section class="view" id="v-sources" hidden></section>
     <section class="view" id="v-terms" hidden></section>
   </main>
 </div>
@@ -409,7 +415,8 @@ function renderOverview() {
     tile(classes.length, "classes", `${exercised} carry real instance data`) +
     tile(props.length, "properties", `${usedProps} exercised by real data`) +
     tile(proposedN, "terms we propose", "the rest is already theirs") +
-    tile(platforms.length, "platforms", `${M.triplesInstance} triples of real data`) +
+    tile(platforms.length, "platforms", `${M.triplesInstance} triples of real data
+      from ${DATA.sources.length} payloads`) +
     tile(DATA.alignments.length, "alignment axioms", `across ${
       new Set(DATA.alignments.map(a => a.vocab)).size} external vocabularies`);
   v.appendChild(tiles);
@@ -431,8 +438,10 @@ function renderOverview() {
     note: T[k] ? (T[k].definition || "").slice(0, 140) : "not a declared class"
   })), {unit: "instances"}));
 
-  const gaps = classes.filter(c => !c.instances);
-  const noShape = classes.filter(c => !c.shapes.length);
+  const gaps = classes.filter(c => !c.instances && c.origin !== "external");
+  // scoped to the raw profile: a class of theirs may well be shaped in their
+  // canonical profile, which this proposal does not mirror
+  const noShape = classes.filter(c => !c.shapes.length && c.origin !== "external");
   const c3 = el("div", "card", `<h3 style="margin-top:0">What is not covered</h3>
     <p class="muted" style="font-size:12px;margin:0 0 10px">Stated rather than hidden:
     a class with no instance is untested, and a class with no shape cannot be validated.</p>
@@ -440,7 +449,7 @@ function renderOverview() {
       <dt>No real instance</dt><dd class="tags">${gaps.map(c =>
         `<button class="tag link" data-go="${esc(c.curie)}">${esc(c.curie)}</button>`).join("") ||
         "<span class='muted'>none</span>"}</dd>
-      <dt>No SHACL shape</dt><dd class="tags">${noShape.map(c =>
+      <dt>No shape in the raw profile</dt><dd class="tags">${noShape.map(c =>
         `<button class="tag link" data-go="${esc(c.curie)}">${esc(c.curie)}</button>`).join("") ||
         "<span class='muted'>none</span>"}</dd>
       <dt>Properties unexercised</dt><dd>${props.length - usedProps} of ${props.length}
@@ -539,6 +548,47 @@ function renderClasses() {
   paint();
 }
 
+/* ---------------------------------------------------------- provenance bits */
+const KIND_NOTE = {
+  "committed snapshot": "a captured HTTP response committed to the test fixtures",
+  "live capture": "fetched by fetch_live_sources.py, then replayed offline",
+  "local index": "one of our own DuckDB stores",
+  "bulk export": "a dated bulk download, not a request",
+  "rete query": "range-read SPARQL against a published .rete graph"
+};
+// one source list per platform, so a term can name its actual payloads
+const srcByPlatform = {};
+DATA.sources.forEach((s, i) => (srcByPlatform[s.platform] = srcByPlatform[s.platform] || []).push(i));
+const sourcesFor = t => (t.platforms || [])
+  .flatMap(p => srcByPlatform[p] || []).map(i => DATA.sources[i]);
+
+function declLinks(list) {
+  if (!list || !list.length) return "";
+  return `<div class="tags">${list.map(d => {
+    const label = d.line ? `${d.file}:${d.line}` : d.file;
+    const title = d.note ? ` title="${esc(d.note)}"` : "";
+    return d.url
+      ? `<a class="tag link" href="${esc(d.url)}" target="_blank" rel="noopener"${title}>${
+          esc(label)} ↗</a>`
+      : `<span class="tag"${title}>${esc(d.path ? d.path + ":" + d.line : label)}</span>`;
+  }).join("")}</div>`;
+}
+
+function srcList(srcs) {
+  const seen = new Set();
+  const rows = srcs.filter(s => { const k = s.kind + s.name;
+    if (seen.has(k)) return false; seen.add(k); return true; });
+  return `<ul class="srcs">${rows.map(s => `<li>
+    <span class="pill">${esc(s.platform)}</span>
+    <span class="muted">${esc(s.kind)}</span>
+    ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener" class="mono src-url">${
+      esc(s.url)}</a>` : `<span class="mono src-url">${esc(s.path || "")}</span>`}
+    ${s.capturedAt ? `<span class="muted nowrap">${esc(s.capturedAt)}</span>` : ""}
+    ${s.rows != null ? `<span class="muted nowrap">${esc(String(s.rows))} rows</span>` : ""}
+    ${s.note ? `<div class="muted" style="font-size:11px">${esc(s.note)}</div>` : ""}
+  </li>`).join("")}</ul>`;
+}
+
 function constraintsFor(cls, path) {
   for (const s of DATA.shapes) {
     if (s.targetClass !== cls) continue;
@@ -589,6 +639,20 @@ function termCard(curie) {
   row("SHACL shape", shapesFor.length ? tagList(shapesFor.map(s => s.name)) :
     `<span class="muted">none — this class has no shape in the profile yet</span>`);
   row("argued in", sec ? `<span class="mono">§${sec.n}</span> ${esc(sec.title)}` : "");
+  row("stated in", declLinks(t.declaredIn));
+  if (t.emittedBy && t.emittedBy.length)
+    row("instances emitted by", `<div class="tags">${t.emittedBy.map(b =>
+      `<span class="tag">${esc(b)}</span>`).join("")}</div>`);
+  const srcs = sourcesFor(t);
+  // platform-level, not triple-level: we know which platforms produced this term
+  // and every payload those platforms contributed, but only the Observation layer
+  // pins an individual value to an individual request. Said plainly rather than
+  // implied away.
+  if (srcs.length) row("payloads behind it",
+    `<p class="muted" style="margin:0 0 6px;font-size:11.5px">Attribution is
+       platform-level: these are every payload the contributing platforms produced.
+       Only the <a href="#sources">Observation rows</a> tie one value to one request.</p>` +
+    srcList(srcs));
   box.appendChild(kv);
 
   if (enumMembers.length) {
@@ -1210,6 +1274,96 @@ function renderEnums() {
   v.appendChild(grid);
 }
 
+/* ----------------------------------------------------------- sources */
+function renderSources() {
+  const v = $("#v-sources");
+  const kinds = {};
+  DATA.sources.forEach(s => kinds[s.kind] = (kinds[s.kind] || 0) + 1);
+  const withUrl = DATA.sources.filter(s => s.url).length;
+  v.innerHTML = `<h1>Where every value came from</h1>
+    <p class="lede">${DATA.sources.length} payloads behind the
+      ${M.triplesInstance}-triple instance graph. ${withUrl} carry the exact request
+      URL and the moment it was captured; the rest are dated bulk files or local
+      indices, and say so. Nothing in this table is asserted by hand — it is read
+      from the fixture manifest, the capture sidecars, and the graph's own
+      <code>pulse:retrievedFrom</code> values.</p>`;
+
+  const tiles = el("div", "tiles");
+  tiles.innerHTML = Object.entries(kinds).map(([k, n]) =>
+    `<div class="tile"><div class="v">${n}</div><div class="k">${esc(k)}${n > 1 ? "s" : ""}</div>
+      <div class="sub">${esc(KIND_NOTE[k] || "")}</div></div>`).join("");
+  v.appendChild(tiles);
+
+  const c = el("div", "card");
+  c.style.marginTop = "18px";
+  c.innerHTML = "<h3 style='margin-top:0'>Nodes contributed, by platform</h3>";
+  c.appendChild(barChart(Object.entries(DATA.instances.byPlatform).map(([k, n]) => ({
+    k, v: n, note: (srcByPlatform[k] || []).length + " payload(s) behind it"
+  })), {unit: "nodes"}));
+  c.appendChild(el("p", "muted", `<span style="font-size:11.5px">ecosyste.ms is missing
+    from this chart on purpose: its two payloads contributed properties to the
+    repository node rather than nodes of their own, so it has no
+    <code>ExtractionOutput</code> to attribute them to — the same gap ask #4
+    describes for the platform enumeration.</span>`));
+  v.appendChild(c);
+
+  const groups = {};
+  DATA.sources.forEach(s => (groups[s.platform] = groups[s.platform] || []).push(s));
+  const h = el("div");
+  h.innerHTML = "<h2>Every payload</h2>";
+  v.appendChild(h);
+  Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])).forEach(([plat, list]) => {
+    const card = el("div", "card");
+    card.style.marginBottom = "12px";
+    const nodes = DATA.instances.byPlatform[plat];
+    card.innerHTML = `<div class="detail-head" style="margin-bottom:8px">
+        <h2 style="margin:0;font-size:14px">${esc(plat)}</h2>
+        <span class="pill">${list.length} payload${list.length > 1 ? "s" : ""}</span>
+        ${nodes ? `<span class="pill">${nodes} nodes in the graph</span>`
+          : `<span class="pill">no ExtractionOutput of its own</span>`}
+        ${list[0].builder ? `<span class="pill mono" style="font-size:10.5px">${
+          esc(list[0].builder)}</span>` : ""}</div>`;
+    const sc = el("div", "scrollx");
+    sc.innerHTML = `<table><thead><tr><th>kind</th><th>request URL or path</th>
+      <th>captured</th><th class="num">rows</th><th>payload on disk</th></tr></thead><tbody>${
+      list.map(s => `<tr>
+        <td class="nowrap muted">${esc(s.kind)}</td>
+        <td>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener"
+            class="mono" style="font-size:11.5px">${esc(s.url)}</a>`
+          : `<span class="mono muted" style="font-size:11.5px">${esc(s.path || "—")}</span>`}
+          ${s.note ? `<div class="muted" style="font-size:11px">${esc(s.note)}</div>` : ""}</td>
+        <td class="nowrap muted" style="font-size:11.5px">${esc(s.capturedAt || "—")}</td>
+        <td class="num">${s.rows != null ? esc(String(s.rows)) : ""}</td>
+        <td class="mono muted" style="font-size:11px">${esc(s.url ? (s.path || "") : "")}</td>
+      </tr>`).join("")}</tbody></table>`;
+    card.appendChild(sc);
+    v.appendChild(card);
+  });
+
+  const obs = el("div");
+  obs.innerHTML = `<h2>The provenance layer, value by value</h2>
+    <p class="lede" style="margin-bottom:12px">${DATA.observations.length}
+      <code>pulse:Observation</code> nodes — §18(4)'s non-RDF-star encoding. Each one
+      records a single claimed value, the URL it was read from and when. This is the
+      part of the model that survives two sources disagreeing.</p>`;
+  const osc = el("div", "scrollx");
+  osc.innerHTML = `<table><thead><tr><th>subject</th><th>property</th><th>value</th>
+    <th>retrieved from</th><th>at</th><th>platform</th><th>kind</th></tr></thead><tbody>${
+    DATA.observations.map(o => `<tr>
+      <td class="mono" style="font-size:11px;max-width:210px;overflow-wrap:anywhere">${
+        esc(o.subject)}</td>
+      <td class="nowrap">${T[o.property] ? `<button class="tag link" data-go="${
+        esc(o.property)}">${esc(o.property)}</button>` : esc(o.property)}</td>
+      <td style="max-width:190px;overflow-wrap:anywhere">${esc(o.value)}</td>
+      <td style="max-width:230px;overflow-wrap:anywhere"><a href="${esc(o.url)}"
+        target="_blank" rel="noopener" class="mono" style="font-size:11px">${esc(o.url)}</a></td>
+      <td class="nowrap muted" style="font-size:11px">${esc(o.at.slice(0, 19))}</td>
+      <td class="nowrap">${esc(o.platform)}</td>
+      <td class="nowrap muted">${esc(o.obsKind)}</td></tr>`).join("")}</tbody></table>`;
+  obs.appendChild(osc);
+  v.appendChild(obs);
+}
+
 /* --------------------------------------------------------- all terms */
 const tstate = {sort: "curie", dir: 1, q: "", kind: "all"};
 function renderTerms() {
@@ -1243,7 +1397,7 @@ function renderTerms() {
     sc.innerHTML = `<table><thead><tr>${cols.map(([k, l]) =>
       `<th class="sortable${k === "uses" || k === "instances" ? " num" : ""}" data-sort="${k}">${l}${
         tstate.sort === k ? (tstate.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}
-      <th>GME field</th><th>platforms</th></tr></thead><tbody>${rows.map(t => `<tr>
+      <th>stated in</th><th>GME field</th><th>platforms</th></tr></thead><tbody>${rows.map(t => `<tr>
         <td class="nowrap"><button class="tag link" data-go="${esc(t.curie)}">${esc(t.curie)}</button></td>
         <td class="muted">${esc(t.kind)}</td>
         <td class="nowrap">${originDot(t.origin)} <span class="muted" style="font-size:11.5px">${
@@ -1251,6 +1405,10 @@ function renderTerms() {
         <td>${esc(t.label)}</td>
         <td class="num">${t.uses || ""}</td>
         <td class="num">${t.instances || ""}</td>
+        <td class="nowrap" style="font-size:11px">${(t.declaredIn || []).slice(0, 1).map(dc =>
+          dc.url ? `<a href="${esc(dc.url)}" target="_blank" rel="noopener" class="mono">${
+            esc(dc.line ? dc.file + ":" + dc.line : dc.file)}</a>`
+            : `<span class="mono muted">${esc(dc.file)}:${dc.line}</span>`).join("")}</td>
         <td class="mono muted" style="font-size:11px">${esc(t.mapsFrom.join(" "))}</td>
         <td class="muted" style="font-size:11px">${esc(t.platforms.join(" "))}</td></tr>`).join("")}
       </tbody></table>`;
@@ -1278,6 +1436,7 @@ const VIEWS = [
   {id: "shapes", label: "Shapes", n: () => DATA.shapes.length, render: renderShapes},
   {id: "align", label: "Alignment", n: () => DATA.alignments.length, render: renderAlign},
   {id: "enums", label: "Enumerations", n: () => members.length, render: renderEnums},
+  {id: "sources", label: "Sources", n: () => DATA.sources.length, render: renderSources},
   {id: "terms", label: "All terms", n: () => all.length, render: renderTerms}
 ];
 const painted = {};

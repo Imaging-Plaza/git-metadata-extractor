@@ -35,7 +35,11 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, SH, SKOS
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
 PROPOSED = HERE / "proposed"
+# the upstream commit proposed/ was generated from; keep in step with
+# materialize_proposed_raw.py
+REF = "290579dd7dfe"
 OUT = HERE / "ontology-explorer.html"
 TEMPLATE = HERE / "explorer_template.html"
 
@@ -140,6 +144,8 @@ defs_up_txt, defs_ours_txt = split_text(
     PROPOSED / "ontology-definitions-raw.proposed.ttl", SPLIT["definitions"])
 enum_up_txt, enum_ours_txt = split_text(
     PROPOSED / "ontology-enumerations-raw.proposed.ttl", SPLIT["enumerations"])
+shapes_up_txt, shapes_ours_txt = split_text(
+    PROPOSED / "ontology-shapes-raw.proposed.ttl", SPLIT["shapes"])
 shapes_txt = (PROPOSED / "ontology-shapes-raw.proposed.ttl").read_text(encoding="utf-8")
 
 g_up = parse(defs_up_txt + "\n" + enum_up_txt, "upstream definitions")
@@ -178,6 +184,86 @@ def definition_of(g: Graph, s) -> str:
             return str(v)
     return ""
 
+
+# ----------------------------------------------------- where each term is DEFINED
+# rdflib gives no line numbers, so the declarations are found textually. Result:
+# every term links to the exact line of the exact file — their file at the pinned
+# commit for their terms, ours in this repo for ours.
+GH_BLOB = (f"https://github.com/sdsc-ordes/open-pulse-ontology/blob/{REF}/src/ontology")
+SUBJECT_RE = re.compile(r"^([A-Za-z][\w-]*:[\w.-]+)")
+
+
+def header_lines(text: str) -> int:
+    """Length of the generated banner materialize_proposed_raw.py prepends.
+
+    Needed to turn a line number in our copy into the line number in THEIR
+    file, which is what a reviewer wants to open.
+    """
+    marks = [i for i, ln in enumerate(text.splitlines()) if ln.startswith("# ===")]
+    return marks[1] + 2 if len(marks) > 1 else 0
+
+
+declared_in: dict[str, list[dict]] = defaultdict(list)
+
+
+def scan_declarations(text: str, label: str, *, upstream: bool, offset: int = 0,
+                      path: str = "") -> None:
+    for i, ln in enumerate(text.splitlines(), start=1):
+        m = SUBJECT_RE.match(ln)
+        if not m:
+            continue
+        line = i - offset
+        if line < 1:
+            continue
+        entry = {
+            "file": label,
+            "line": line,
+            "side": "upstream" if upstream else "gme",
+            "url": f"{GH_BLOB}/{label}#L{line}" if upstream else "",
+            "path": path,
+        }
+        cur = declared_in[m.group(1)]
+        if not any(e["file"] == label and e["line"] == line for e in cur):
+            cur.append(entry)
+
+
+for label, text in (("ontology-definitions-raw.ttl", defs_up_txt),
+                    ("ontology-enumerations-raw.ttl", enum_up_txt),
+                    ("ontology-shapes-raw.ttl", shapes_up_txt)):
+    scan_declarations(text, label, upstream=True, offset=header_lines(text))
+for label, p in (("ontology.ttl", HERE / "ontology.ttl"),
+                 ("ontology-shapes-raw.additions.ttl",
+                  HERE / "ontology-shapes-raw.additions.ttl")):
+    scan_declarations(p.read_text(encoding="utf-8"), label, upstream=False,
+                      path=f"dev/v4.0.0/{label}")
+TREE = f"https://github.com/sdsc-ordes/open-pulse-ontology/tree/{REF}/src/ontology"
+
+
+def declarations_for(c: str) -> list[dict]:
+    """Where a term is stated, or an honest note when we cannot say.
+
+    pulse: terms the raw profile only *references* — pulse:partOfRun,
+    pulse:PlatformProfile — are declared in their canonical or provenance
+    profile, which we do not mirror here. Saying "declared elsewhere in their
+    ontology" is true; guessing a file and a line would not be.
+    """
+    hits = declared_in.get(c, [])
+    if hits:
+        return hits
+    pfx = prefix_of(c)
+    if pfx and pfx != "pulse":
+        # someone else's vocabulary: name it and point at its namespace
+        ns = next((k for k, v in PREFIXES.items() if v == pfx), "")
+        return [{"file": VOCAB_NAMES.get(pfx, pfx), "line": 0, "side": "external",
+                 "url": ns, "path": "",
+                 "note": f"defined by {VOCAB_NAMES.get(pfx, pfx)}, not by this proposal"}]
+    return [{"file": "outside the raw profile", "line": 0, "side": "upstream",
+             "url": TREE, "path": "",
+             "note": "referenced by the raw profile; declared in their canonical or "
+                     "provenance profile, which this proposal does not mirror"}]
+
+
+print(f"declared  {len(declared_in)} terms located to a file and line")
 
 # ------------------------------------------------------------------ instances
 inst_by_class: Counter = Counter()
@@ -261,6 +347,155 @@ for obs in g_inst.subjects(RDF.type, pulse("Observation")):
 print(f"instances {len(inst_by_class)} node types, {len(platform_nodes)} platforms, "
       f"{len(prop_usage)} distinct properties used")
 
+# ------------------------------------------------------ where the DATA came from
+# Four kinds of source, each carrying its own provenance:
+#   committed snapshot  a captured HTTP response in the test fixtures, with a
+#                       .meta.json sidecar holding the request URL and time
+#   live capture        fetched by fetch_live_sources.py into examples/sources/,
+#                       same sidecar shape, so the test reproduces offline
+#   local index         one of our DuckDB stores, or the SNSF bulk CSV
+#   rete query          a SPARQL query against a published .rete graph
+# Nothing here is asserted by hand: it is read off the manifests and the graph.
+PLATFORM_OF = {
+    "github": "GitHub", "ror": "ROR", "orcid": "ORCID", "infoscience": "Infoscience",
+    "depsdev": "DepsDev", "dockerhub": "DockerHub", "openalex": "OpenAlex",
+    "hf": "HuggingFace", "zenodo": "Zenodo", "cordis": "CORDIS", "snsf": "SNSF_P3",
+    "ecosystems": "ecosyste.ms",
+}
+BUILDER_OF = {
+    "GitHub": "build_instance_example.py", "ROR": "build_instance_example.py",
+    "ORCID": "build_instance_multisource.py",
+    "Infoscience": "build_instance_multisource.py",
+    "DepsDev": "build_instance_multisource.py",
+    "ecosyste.ms": "build_instance_multisource.py",
+    "OpenAlex": "build_instance_multisource.py",
+    "HuggingFace": "build_instance_multisource.py",
+    "Zenodo": "build_instance_multisource.py",
+    "SNSF_P3": "build_instance_funding.py", "CORDIS": "build_instance_funding.py",
+    "DockerHub": "build_instance_ecosystem.py",
+}
+sources: list[dict] = []
+
+
+def add_source(**kw) -> None:
+    kw.setdefault("builder", BUILDER_OF.get(kw.get("platform", ""), ""))
+    sources.append(kw)
+
+
+# --- committed snapshots, from the fixture manifest
+SNAP = ROOT / "tests" / "v2" / "fixtures" / "providers" / "live_snapshots"
+manifest = SNAP / "manifest.json"
+if manifest.exists():
+    mf = json.loads(manifest.read_text(encoding="utf-8"))
+    for e in mf.get("entries", []):
+        meta = SNAP / e.get("meta_path", "")
+        url = ""
+        if meta.exists():
+            url = ((json.loads(meta.read_text(encoding="utf-8")).get("request") or {})
+                   .get("url", ""))
+        add_source(
+            kind="committed snapshot", platform=PLATFORM_OF.get(e.get("provider", ""), e.get("provider", "")),
+            name=e.get("case", ""), url=url, capturedAt=e.get("captured_at", ""),
+            status=e.get("status_code", ""), dataset=mf.get("dataset", ""),
+            path=f"tests/v2/fixtures/providers/live_snapshots/{e.get('response_path', '')}",
+        )
+
+# --- live captures written by fetch_live_sources.py
+for p in sorted((HERE / "examples" / "sources").glob("*.json")):
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    req = d.get("request") if isinstance(d, dict) else None
+    plat = PLATFORM_OF.get(p.stem.split("_")[0], p.stem.split("_")[0])
+    add_source(
+        kind="live capture", platform=plat, name=p.stem,
+        url=(req or {}).get("url", "") if isinstance(req, dict) else "",
+        capturedAt=(d.get("captured_at", "") if isinstance(d, dict) else ""),
+        status=(d.get("status_code", "") if isinstance(d, dict) else ""),
+        path=f"dev/v4.0.0/examples/sources/{p.name}",
+        note="" if isinstance(req, dict) else
+             "no request sidecar — captured before fetch_live_sources.py recorded one",
+    )
+
+# --- local indices and bulk files the builders read directly
+LOCAL = [
+    ("Zenodo", "data/index/zenodo/duckdb", "records", "build_instance_ecosystem.py"),
+    ("DockerHub", "data/index/dockerhub/duckdb", "images", "build_instance_ecosystem.py"),
+]
+for plat, rel, table, builder in LOCAL:
+    files = sorted((ROOT / rel).glob("*.duckdb")) if (ROOT / rel).exists() else []
+    rows = None
+    if files:
+        try:
+            import duckdb
+            con = duckdb.connect(str(files[0]), read_only=True)
+            rows = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            con.close()
+        except Exception as exc:                     # absent store, lock, schema drift
+            rows = f"unreadable ({type(exc).__name__})"
+    add_source(kind="local index", platform=plat, name=f"{table} table",
+               path=f"{rel}/{files[0].name}" if files else rel,
+               rows=rows, available=bool(files), builder=builder,
+               note="" if files else "not present in this checkout")
+
+snsf_csv = ROOT / "data" / "index" / "snsf" / "raw" / "grants.csv"
+add_source(kind="bulk export", platform="SNSF_P3", name="P3 grants.csv",
+           path="data/index/snsf/raw/grants.csv", available=snsf_csv.exists(),
+           rows=(sum(1 for _ in snsf_csv.open(encoding="utf-8-sig")) - 1
+                 if snsf_csv.exists() else None),
+           note="no live SNSF API exists — P3 is distributed as bulk CSV, so the "
+                "provenance is a dated download rather than a request URL")
+
+# --- rete SPARQL queries, taken from the graph's own retrievedFrom values
+for url in sorted({str(o) for o in g_inst.objects(None, pulse("retrievedFrom"))
+                   if ".rete" in str(o)}):
+    add_source(kind="rete query", platform="DepsDev", name=url.rsplit("/", 1)[-1],
+               url=url, note="range-read SPARQL against a published .rete graph")
+
+# --- which builder emitted which subject, and on which line of the instance file
+inst_txt = (HERE / "examples" / "gimie-raw-instance.ttl").read_text(encoding="utf-8")
+emitted_by: dict[str, dict] = {}
+builder = "build_instance_example.py"
+for i, ln in enumerate(inst_txt.splitlines(), start=1):
+    m = re.search(r"(build_instance_\w+\.py)", ln)
+    if m:
+        builder = m.group(1)
+        continue
+    m = re.match(r"^(<[^>]+>|[A-Za-z][\w-]*:[\w.-]+)\s", ln)
+    if m:
+        subj = m.group(1)
+        subj = curie(URIRef(subj[1:-1])) if subj.startswith("<") else subj
+        emitted_by.setdefault(subj, {"builder": builder, "line": i})
+
+class_builders: dict[str, set[str]] = defaultdict(set)
+for s, o in g_inst.subject_objects(RDF.type):
+    e = emitted_by.get(curie(s))
+    if e:
+        class_builders[curie(o)].add(e["builder"])
+
+# --- the §18 provenance layer, as a table: every claimed value with its URL
+observations: list[dict] = []
+for obs in g_inst.subjects(RDF.type, pulse("Observation")):
+    g = g_inst
+    observations.append({
+        "subject": curie(g.value(obs, pulse("observedSubject"))),
+        "property": curie(g.value(obs, pulse("observedProperty"))),
+        "value": str(g.value(obs, pulse("observedValue")) or ""),
+        "url": str(g.value(obs, pulse("retrievedFrom")) or ""),
+        "at": str(g.value(obs, pulse("retrievedAt")) or ""),
+        "platform": curie(g.value(obs, pulse("sourcePlatform")) or "").split(":")[-1],
+        "obsKind": str(g.value(obs, pulse("observationKind")) or ""),
+    })
+observations.sort(key=lambda o: (o["platform"], o["property"]))
+
+by_platform_src: dict[str, list[int]] = defaultdict(list)
+for i, s in enumerate(sources):
+    by_platform_src[s["platform"]].append(i)
+print(f"sources   {len(sources)} payloads across {len(by_platform_src)} platforms "
+      f"({Counter(s['kind'] for s in sources).most_common()}), "
+      f"{len(observations)} observations")
+
 # --------------------------------------------------------------------- shapes
 # the three node shapes ontology-shapes-raw.additions.ttl contributes
 OUR_SHAPES = {f"pulse:{n}Shape" for n in ("RawContribution", "RawGitIdentity", "RawProject")}
@@ -300,6 +535,7 @@ for sh_node in set(g_shapes.subjects(SH.property, None)) | set(
         "closed": str(closed).lower() if closed is not None else "",
         "properties": sorted(props, key=lambda e: e["path"]),
         "origin": "proposed" if name in OUR_SHAPES else "upstream",
+        "declaredIn": declared_in.get(name, []),
     })
     if tgt:
         shape_for_class[tgt].append(name)
@@ -348,6 +584,8 @@ def register(subject, kind: str) -> dict:
         "uses": prop_usage.get(c, 0),
         "platforms": sorted(class_platforms.get(c, set()) | prop_platforms.get(c, set())),
         "shapes": sorted(shape_for_class.get(c, [])),
+        "declaredIn": declarations_for(c),
+        "emittedBy": sorted(class_builders.get(c, set())),
     }
     terms[c] = entry
     return entry
@@ -380,6 +618,36 @@ for k in enums:
     enums[k].sort()
     if k not in terms:
         register(URIRef(OURS_NS + k.split(":", 1)[-1]), "class")
+
+# Terms the raw profile leans on but does not declare: pulse:PlatformProfile,
+# pulse:Contribution and pulse:ExtractionOutput live in their canonical or
+# provenance profile. Leaving them out made the class list quietly wrong — those
+# three are the busiest nodes in the real data.
+IRI_OF = {pfx: ns for ns, pfx in PREFIXES.items()}
+
+
+def iri_of(c: str) -> URIRef | None:
+    pfx, _, local = c.partition(":")
+    ns = IRI_OF.get(pfx)
+    return URIRef(ns + local) if ns and local else None
+
+
+referenced_classes = ({sh["targetClass"] for sh in shapes} | set(inst_by_class) |
+                      {p["class"] for sh in shapes for p in sh["properties"] if p["class"]})
+referenced_props = ({p["path"] for sh in shapes for p in sh["properties"]} |
+                    set(prop_usage))
+added = 0
+for c, kind in ([(c, "class") for c in sorted(referenced_classes)] +
+                [(p, "property") for p in sorted(referenced_props)]):
+    if not c or c in terms or ":" not in c or c.startswith(("_:", "http")):
+        continue
+    if prefix_of(c) in ("xsd", "rdf", "rdfs", "sh"):
+        continue
+    subject = iri_of(c)
+    if subject is not None:
+        register(subject, kind)
+        added += 1
+print(f"referenced {added} terms used by the profile but declared outside the raw files")
 
 print(f"terms     {sum(1 for t in terms.values() if t['kind'] == 'class')} classes, "
       f"{sum(1 for t in terms.values() if t['kind'] == 'property')} properties, "
@@ -592,7 +860,8 @@ print(f"network   {len(net_nodes)} nodes, {len(links)} links "
 # ----------------------------------------------------------------- the payload
 payload = {
     "meta": {
-        "upstreamRef": "290579dd7dfe",
+        "upstreamRef": REF,
+        "upstreamBlob": GH_BLOB,
         "upstreamRepo": "sdsc-ordes/open-pulse-ontology",
         "upstreamBranch": "feature/platform-profiles (PR #25)",
         "gmeVersion": "3.0.0",
@@ -604,6 +873,8 @@ payload = {
         "violationsAfter": 0,
     },
     "terms": terms,
+    "sources": sources,
+    "observations": observations,
     "shapes": shapes,
     "enums": {k: v for k, v in sorted(enums.items())},
     "alignments": alignments,

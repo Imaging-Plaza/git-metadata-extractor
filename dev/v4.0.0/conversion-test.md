@@ -27,6 +27,13 @@ Every literal traces to a captured payload, and every `pulse:retrievedFrom` /
 `pulse:retrievedAt` is a real request URL and timestamp — the §18 provenance
 model is exercised on genuine data, not stubs.
 
+The **Sources** view of [`ontology-explorer.html`](ontology-explorer.html) lists
+all **26 payloads** with their request URL, capture time and status: 12 committed
+snapshots, 10 live captures, 2 local DuckDB indices, 1 bulk CSV and 1 rete query.
+Attribution there is platform-level, except for the 11 `pulse:Observation` rows,
+which tie an individual value to an individual request. That distinction is
+stated on the page rather than blurred.
+
 Generators, run in order →
 [`examples/gimie-raw-instance.ttl`](examples/gimie-raw-instance.ttl):
 [`build_instance_example.py`](build_instance_example.py) (GitHub + ROR),
