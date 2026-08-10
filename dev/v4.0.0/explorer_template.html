@@ -1,0 +1,1388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Pulse raw profile — ontology explorer</title>
+<!--
+  GENERATED FILE — do not hand-edit.
+  Built by dev/v4.0.0/build_explorer.py from the TTLs in this directory.
+  Self-contained on purpose: no CDN, no fetch, no server. Open it.
+-->
+<style>
+/* ---------------------------------------------------------------- tokens */
+:root {
+  color-scheme: light;
+  --plane:        #f9f9f7;
+  --surface:      #fcfcfb;
+  --surface-2:    #f2f1ed;
+  --ink:          #0b0b0b;
+  --ink-2:        #52514e;
+  --ink-muted:    #898781;
+  --grid:         #e1e0d9;
+  --axis:         #c3c2b7;
+  --hairline:     rgba(11,11,11,.10);
+  /* categorical — 3 slots only: the documented all-pairs safe subset */
+  --c-upstream:   #2a78d6;
+  --c-proposed:   #eb6834;
+  --c-external:   #1baf7a;
+  --seq:          #2a78d6;
+  --seq-soft:     #cde2fb;
+  --good:         #0ca30c;
+  --warning:      #fab219;
+  --critical:     #d03b3b;
+  --shadow:       0 1px 2px rgba(11,11,11,.06), 0 8px 24px rgba(11,11,11,.06);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19; --surface-2: #232322;
+    --ink: #fff; --ink-2: #c3c2b7; --ink-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --hairline: rgba(255,255,255,.10);
+    --c-upstream: #3987e5; --c-proposed: #d95926; --c-external: #199e70;
+    --seq: #3987e5; --seq-soft: #184f95;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0d0d0d; --surface: #1a1a19; --surface-2: #232322;
+  --ink: #fff; --ink-2: #c3c2b7; --ink-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --hairline: rgba(255,255,255,.10);
+  --c-upstream: #3987e5; --c-proposed: #d95926; --c-external: #199e70;
+  --seq: #3987e5; --seq-soft: #184f95;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--plane); color: var(--ink); font-family: var(--sans);
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+a { color: var(--c-upstream); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; }
+code, .mono { font-family: var(--mono); font-size: .92em; }
+
+/* ---------------------------------------------------------------- shell */
+.app { display: grid; grid-template-columns: 232px minmax(0,1fr); min-height: 100vh; }
+.sidebar {
+  border-right: 1px solid var(--hairline); background: var(--surface);
+  padding: 18px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.brand { font-weight: 650; letter-spacing: -.01em; margin: 0 0 2px; font-size: 15px; }
+.brand-sub { color: var(--ink-muted); font-size: 11.5px; margin-bottom: 18px; line-height: 1.4; }
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav button {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  background: none; border: 0; text-align: left; padding: 7px 9px;
+  border-radius: 7px; cursor: pointer; color: var(--ink-2);
+}
+.nav button:hover { background: var(--surface-2); color: var(--ink); }
+.nav button[aria-current="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.nav .n { color: var(--ink-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.side-foot { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--hairline);
+  color: var(--ink-muted); font-size: 11px; line-height: 1.6; }
+main { padding: 0 0 64px; min-width: 0; }
+.topbar {
+  position: sticky; top: 0; z-index: 30; display: flex; gap: 12px; align-items: center;
+  padding: 12px 24px; background: color-mix(in srgb, var(--plane) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline);
+}
+.search { position: relative; flex: 1; max-width: 460px; }
+.search input {
+  width: 100%; padding: 8px 11px; border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--hairline); color: var(--ink); font: inherit;
+}
+.search input:focus { outline: 2px solid var(--c-upstream); outline-offset: -1px; }
+.results {
+  position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 40;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px;
+  box-shadow: var(--shadow); max-height: 380px; overflow-y: auto; display: none;
+}
+.results.open { display: block; }
+.results button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 7px 11px; cursor: pointer; border-bottom: 1px solid var(--hairline);
+}
+.results button:last-child { border-bottom: 0; }
+.results button:hover, .results button.sel { background: var(--surface-2); }
+.results .r-def { color: var(--ink-muted); font-size: 11.5px; display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn { background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.icon-btn:hover { background: var(--surface-2); }
+.view { padding: 22px 24px 0; max-width: 1320px; }
+.view[hidden] { display: none; }
+h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.015em; }
+h2 { font-size: 15px; margin: 26px 0 10px; letter-spacing: -.01em; }
+h3 { font-size: 13px; margin: 18px 0 8px; color: var(--ink-2); text-transform: uppercase;
+  letter-spacing: .06em; font-weight: 600; }
+.lede { color: var(--ink-2); max-width: 74ch; margin: 0 0 18px; }
+.card { background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 12px; padding: 16px 18px; }
+
+/* ------------------------------------------------------------ stat tiles */
+.tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(158px,1fr)); }
+.tile { background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 12px; padding: 13px 15px; }
+.tile .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
+.tile .k { color: var(--ink-muted); font-size: 11.5px; margin-top: 2px; }
+.tile .sub { color: var(--ink-2); font-size: 11.5px; margin-top: 6px; }
+.hero { display: flex; align-items: baseline; gap: 10px; }
+.hero .from { font-size: 26px; color: var(--ink-muted); text-decoration: line-through;
+  text-decoration-thickness: 1px; }
+.hero .arrow { color: var(--ink-muted); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--hairline);
+  color: var(--ink-2); background: var(--surface-2); white-space: nowrap; }
+.pill.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+/* inline-block, not inline: an inline box ignores width/height and collapses */
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.sq { border-radius: 2px; }
+.dot.di { border-radius: 2px; transform: rotate(45deg); }
+
+/* ---------------------------------------------------------------- charts */
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 168px minmax(0,1fr) 52px;
+  gap: 10px; align-items: center; cursor: default; }
+.bar-row.click { cursor: pointer; }
+.bar-row.click:hover .bar-label { color: var(--ink); }
+.bar-label { color: var(--ink-2); font-size: 12px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--seq); border-radius: 0 4px 4px 0;
+  min-width: 2px; transition: width .3s ease; }
+.bar-val { font-size: 12px; color: var(--ink-2); text-align: right;
+  font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0;
+  color: var(--ink-2); font-size: 11.5px; }
+.legend span.li { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { flex: none; }
+
+/* --------------------------------------------------------------- classes */
+.split { display: grid; grid-template-columns: 296px minmax(0,1fr); gap: 18px;
+  align-items: start; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { border: 1px solid var(--hairline); background: var(--surface);
+  border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--plane); border-color: var(--ink); }
+.seg { display: inline-flex; gap: 0; }
+.seg .chip { border-radius: 0; }
+.seg .chip:first-child { border-radius: 999px 0 0 999px; }
+.seg .chip:last-child { border-radius: 0 999px 999px 0; margin-left: -1px; }
+.opts { display: grid; gap: 9px 20px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+  padding: 13px 16px; margin: -6px 0 14px; }
+.opts[hidden] { display: none; }
+.opt { display: grid; grid-template-columns: 92px minmax(0,1fr) 34px; gap: 9px;
+  align-items: center; font-size: 12px; color: var(--ink-2); }
+.opt output { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-muted); }
+.opt input[type=range] { accent-color: var(--seq); width: 100%; }
+.list { border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden;
+  background: var(--surface); max-height: calc(100vh - 190px); overflow-y: auto; }
+.list-group { padding: 8px 12px 4px; color: var(--ink-muted); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .07em; background: var(--surface-2);
+  position: sticky; top: 0; }
+.list button {
+  display: flex; align-items: center; gap: 8px; width: 100%; background: none;
+  border: 0; border-top: 1px solid var(--hairline); padding: 8px 12px;
+  text-align: left; cursor: pointer;
+}
+.list button:hover { background: var(--surface-2); }
+.list button[aria-current="true"] { background: var(--surface-2); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--ink); }
+.list .li-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.list .li-n { color: var(--ink-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.detail { min-width: 0; }
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.detail h1 { margin: 0; }
+.iri { color: var(--ink-muted); font-size: 11.5px; word-break: break-all; margin: 4px 0 12px; }
+.def { max-width: 78ch; color: var(--ink-2); }
+.kv { display: grid; grid-template-columns: 152px minmax(0,1fr); gap: 6px 14px;
+  margin: 14px 0; font-size: 13px; }
+.kv dt { color: var(--ink-muted); font-size: 11.5px; padding-top: 2px; }
+.kv dd { margin: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 5px;
+  background: var(--surface-2); border: 1px solid var(--hairline); color: var(--ink-2); }
+.tag.link { cursor: pointer; }
+.tag.link:hover { color: var(--ink); border-color: var(--axis); }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.scrollx { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); }
+th { text-align: left; font-weight: 600; color: var(--ink-muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; padding: 9px 12px;
+  border-bottom: 1px solid var(--grid); white-space: nowrap; position: sticky; top: 0;
+  background: var(--surface); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-muted); }
+.nowrap { white-space: nowrap; }
+
+/* --------------------------------------------------------------- network */
+.net-wrap { position: relative; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); overflow: hidden; }
+#net { display: block; width: 100%; height: clamp(430px, 72vh, 760px);
+  touch-action: none; cursor: grab; }
+#net.dragging { cursor: grabbing; }
+/* Below the board, not on top of it — an overlay legend always covers nodes. */
+.net-legend { display: grid; gap: 2px 26px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  border: 1px solid var(--hairline); border-top: 0; border-radius: 0 0 12px 12px;
+  background: var(--surface); padding: 10px 14px 12px; font-size: 11.5px; color: var(--ink-2);
+  margin: -1px 0 0; }
+.net-legend .row { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.net-legend .row .li { display: inline-flex; align-items: center; gap: 6px; }
+/* .hd, not `b` — a bare element selector here also restyled the inline <b> in
+   the footnote, which came out as a stray uppercase block */
+.net-legend .hd { color: var(--ink); font-weight: 600; display: block; margin: 2px 0 3px;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+.net-legend .foot { grid-column: 1/-1; color: var(--ink-muted); margin-top: 4px; font-size: 11px; }
+.net-side { position: absolute; right: 12px; top: 12px; width: min(300px, 46%);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 13px;
+  box-shadow: var(--shadow); max-height: calc(100% - 24px); overflow-y: auto; }
+.net-side[hidden] { display: none; }
+.net-side h4 { margin: 0 0 2px; font-size: 13.5px; }
+.net-side ul { margin: 6px 0 0; padding-left: 0; list-style: none; }
+.net-side li { padding: 3px 0; border-top: 1px solid var(--hairline); font-size: 12px; }
+.net-side .close { position: absolute; right: 8px; top: 7px; background: none;
+  border: 0; cursor: pointer; color: var(--ink-muted); font-size: 15px; line-height: 1; }
+.tooltip {
+  position: fixed; z-index: 60; pointer-events: none; opacity: 0; transition: opacity .1s;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px;
+  box-shadow: var(--shadow); padding: 7px 9px; font-size: 12px; max-width: 320px;
+}
+.tooltip.on { opacity: 1; }
+.tooltip .t-h { font-weight: 600; }
+.tooltip .t-d { color: var(--ink-2); font-size: 11.5px; }
+.node-label { font-size: 10.5px; fill: var(--ink); paint-order: stroke;
+  stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.edge { fill: none; stroke: var(--axis); }
+.edge.observed { stroke: var(--ink-muted); }
+.node-hit { cursor: pointer; }
+
+/* ----------------------------------------------------------- responsive */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; border-right: 0;
+    border-bottom: 1px solid var(--hairline); }
+  .nav { flex-direction: row; flex-wrap: wrap; }
+  .side-foot { display: none; }
+  .split { grid-template-columns: 1fr; }
+  .list { max-height: 320px; }
+  .net-side { position: static; width: auto; max-height: none; margin: 0 12px 12px; }
+  .net-legend { position: static; margin: 12px; max-width: none; }
+  .bar-row { grid-template-columns: 120px minmax(0,1fr) 46px; }
+}
+@media print, (forced-colors: active) {
+  .sidebar, .topbar { display: none; }
+  .view[hidden] { display: block; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <p class="brand">Raw profile explorer</p>
+    <p class="brand-sub" id="brandSub"></p>
+    <nav class="nav" id="nav" aria-label="Views"></nav>
+    <div class="side-foot" id="sideFoot"></div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="search">
+        <input id="q" type="search" placeholder="Search terms, definitions, GME fields…"
+               autocomplete="off" aria-label="Search terms">
+        <div class="results" id="results" role="listbox"></div>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="Toggle light / dark">◐</button>
+    </div>
+
+    <section class="view" id="v-overview"></section>
+    <section class="view" id="v-classes" hidden></section>
+    <section class="view" id="v-network" hidden></section>
+    <section class="view" id="v-shapes" hidden></section>
+    <section class="view" id="v-align" hidden></section>
+    <section class="view" id="v-enums" hidden></section>
+    <section class="view" id="v-terms" hidden></section>
+  </main>
+</div>
+<div class="tooltip" id="tip" role="status"></div>
+
+<script>
+const DATA=/*__DATA__*/null;
+(function () {
+"use strict";
+const T = DATA.terms, M = DATA.meta;
+const $ = (s, r) => (r || document).querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const el = (tag, cls, html) => { const n = document.createElement(tag);
+  if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+
+const ORIGIN = {
+  proposed: {label: "proposed by GME", color: "var(--c-proposed)", shape: "circle"},
+  extended: {label: "theirs, extended", color: "var(--c-upstream)", shape: "circle", ring: true},
+  upstream: {label: "in PR #25 already", color: "var(--c-upstream)", shape: "circle"},
+  external: {label: "external vocabulary", color: "var(--c-external)", shape: "square"}
+};
+const originDot = o => `<span class="dot ${ORIGIN[o] && ORIGIN[o].shape === "square" ? "sq" : ""}"
+  style="background:${(ORIGIN[o] || {}).color || "var(--ink-muted)"}${
+  ORIGIN[o] && ORIGIN[o].ring ? ";box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--c-upstream)" : ""}"></span>`;
+const originPill = o => `<span class="pill">${originDot(o)}${esc((ORIGIN[o] || {}).label || o)}</span>`;
+
+const all = Object.values(T);
+const isEnumClass = c => c.endsWith("Enumeration");
+const classes = all.filter(t => t.kind === "class" && !isEnumClass(t.curie));
+const enumClasses = all.filter(t => t.kind === "class" && isEnumClass(t.curie));
+const props = all.filter(t => t.kind === "property");
+const members = all.filter(t => t.kind === "member");
+const platforms = Object.keys(DATA.instances.byPlatform);
+const sectionOf = {};
+DATA.sections.forEach(s => s.terms.forEach(c => { if (!sectionOf[c]) sectionOf[c] = s; }));
+
+/* ------------------------------------------------------------ tooltip */
+const tip = $("#tip");
+function showTip(e, html) {
+  tip.innerHTML = html; tip.classList.add("on");
+  const r = tip.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 12;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 12;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+const hideTip = () => tip.classList.remove("on");
+function bindTip(node, htmlFn) {
+  node.addEventListener("pointermove", e => showTip(e, htmlFn()));
+  node.addEventListener("pointerleave", hideTip);
+}
+
+/* -------------------------------------------------------------- charts */
+function barChart(rows, opts) {
+  const o = opts || {}, max = Math.max(1, ...rows.map(r => r.v));
+  const wrap = el("div", "bars");
+  rows.forEach(r => {
+    const row = el("div", "bar-row" + (r.go ? " click" : ""));
+    row.innerHTML = `<div class="bar-label">${esc(r.k)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.v / max * 100).toFixed(1)}%${
+        r.color ? ";background:" + r.color : ""}"></div></div>
+      <div class="bar-val">${r.v.toLocaleString()}</div>`;
+    bindTip(row, () => `<div class="t-h">${esc(r.k)} — ${r.v.toLocaleString()} ${
+      esc(o.unit || "")}</div>${r.note ? `<div class="t-d">${esc(r.note)}</div>` : ""}`);
+    if (r.go) row.addEventListener("click", r.go);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+/* ------------------------------------------------------------ overview */
+function renderOverview() {
+  const v = $("#v-overview");
+  const exercised = classes.filter(c => c.instances > 0).length;
+  const proposedN = all.filter(t => t.origin === "proposed").length;
+  const usedProps = props.filter(p => p.uses > 0).length;
+  v.innerHTML = `
+    <h1>The raw profile, as GME proposes it</h1>
+    <p class="lede">Everything on this page is read out of the Turtle files in
+      <code>dev/v4.0.0/</code> — no number is typed by hand. It covers what
+      <b>${esc(M.upstreamRepo)}</b> ${esc(M.upstreamBranch)} publishes at commit
+      <code>${esc(M.upstreamRef)}</code>, what we propose adding, and what
+      ${platforms.length} real platforms actually produced when we ran it.</p>`;
+
+  const tiles = el("div", "tiles");
+  const tile = (v_, k, sub) => `<div class="tile"><div class="v">${v_}</div>
+     <div class="k">${k}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+  tiles.innerHTML =
+    `<div class="tile"><div class="v hero"><span class="from">${M.violationsBefore}</span>
+       <span class="arrow">→</span><span style="color:var(--good)">${M.violationsAfter}</span></div>
+       <div class="k">SHACL violations</div>
+       <div class="sub"><span class="pill good">✓ conforms</span> with the asks applied</div></div>` +
+    tile(classes.length, "classes", `${exercised} carry real instance data`) +
+    tile(props.length, "properties", `${usedProps} exercised by real data`) +
+    tile(proposedN, "terms we propose", "the rest is already theirs") +
+    tile(platforms.length, "platforms", `${M.triplesInstance} triples of real data`) +
+    tile(DATA.alignments.length, "alignment axioms", `across ${
+      new Set(DATA.alignments.map(a => a.vocab)).size} external vocabularies`);
+  v.appendChild(tiles);
+
+  const g = el("div");
+  g.style.cssText = "display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));margin-top:26px";
+
+  const c1 = el("div", "card", "<h3 style='margin-top:0'>Nodes produced, by platform</h3>");
+  c1.appendChild(barChart(Object.entries(DATA.instances.byPlatform).map(([k, v_]) => ({
+    k, v: v_, note: "nodes in the instance graph attributable to this platform"
+  })), {unit: "nodes"}));
+  c1.appendChild(el("p", "muted", `<span style="font-size:11.5px">GitHub dominates because it
+    supplies the repository, its contributors and their identities. One node can be
+    attributed to several platforms — that is the point of ask #22.</span>`));
+
+  const c2 = el("div", "card", "<h3 style='margin-top:0'>Instances, by node type</h3>");
+  c2.appendChild(barChart(Object.entries(DATA.instances.byClass).slice(0, 14).map(([k, v_]) => ({
+    k, v: v_, go: T[k] ? () => goTerm(k) : null,
+    note: T[k] ? (T[k].definition || "").slice(0, 140) : "not a declared class"
+  })), {unit: "instances"}));
+
+  const gaps = classes.filter(c => !c.instances);
+  const noShape = classes.filter(c => !c.shapes.length);
+  const c3 = el("div", "card", `<h3 style="margin-top:0">What is not covered</h3>
+    <p class="muted" style="font-size:12px;margin:0 0 10px">Stated rather than hidden:
+    a class with no instance is untested, and a class with no shape cannot be validated.</p>
+    <dl class="kv">
+      <dt>No real instance</dt><dd class="tags">${gaps.map(c =>
+        `<button class="tag link" data-go="${esc(c.curie)}">${esc(c.curie)}</button>`).join("") ||
+        "<span class='muted'>none</span>"}</dd>
+      <dt>No SHACL shape</dt><dd class="tags">${noShape.map(c =>
+        `<button class="tag link" data-go="${esc(c.curie)}">${esc(c.curie)}</button>`).join("") ||
+        "<span class='muted'>none</span>"}</dd>
+      <dt>Properties unexercised</dt><dd>${props.length - usedProps} of ${props.length}
+        — mostly the ones behind an index that holds no rows yet</dd>
+    </dl>`);
+
+  g.append(c1, c2, c3);
+  v.appendChild(g);
+
+  const sec = el("div");
+  sec.innerHTML = `<h2>The argument, section by section</h2>
+    <p class="lede" style="margin-bottom:12px">${DATA.sections.length} sections of
+      <code>ontology.ttl</code>, each one an ask with its own reasoning.</p>`;
+  const grid = el("div");
+  grid.style.cssText = "display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))";
+  DATA.sections.forEach(s => {
+    const c = el("div", "card");
+    c.style.padding = "13px 15px";
+    c.innerHTML = `<div style="display:flex;gap:8px;align-items:baseline">
+        <span class="muted mono" style="font-size:11px">§${s.n}</span>
+        <b style="font-size:13px">${esc(s.title)}</b></div>
+      <p class="muted" style="font-size:11.5px;margin:6px 0 8px;line-height:1.45">${
+        esc(s.blurb.slice(0, 190))}${s.blurb.length > 190 ? "…" : ""}</p>
+      <div class="tags">${s.terms.slice(0, 6).map(t =>
+        `<button class="tag link" data-go="${esc(t)}">${esc(t)}</button>`).join("")}${
+        s.terms.length > 6 ? `<span class="tag muted">+${s.terms.length - 6}</span>` : ""}</div>`;
+    grid.appendChild(c);
+  });
+  sec.appendChild(grid);
+  v.appendChild(sec);
+}
+
+/* ------------------------------------------------------------- classes */
+const cstate = {sel: null, origin: "all", platform: "all", dataOnly: false};
+function renderClasses() {
+  const v = $("#v-classes");
+  v.innerHTML = `<h1>Classes</h1>
+    <p class="lede">Every class in the raw profile: what it means, which GME field it
+      rescues, what constrains it, and which platforms produced one.</p>`;
+
+  const f = el("div", "filters");
+  f.innerHTML =
+    ["all", "proposed", "extended", "upstream"].map(o =>
+      `<button class="chip" data-origin="${o}" aria-pressed="${cstate.origin === o}">${
+        o === "all" ? "all origins" : esc((ORIGIN[o] || {}).label || o)}</button>`).join("") +
+    `<button class="chip" data-dataonly aria-pressed="${cstate.dataOnly}">has real data</button>` +
+    `<select class="chip" id="platSel" style="padding:4px 8px">
+      <option value="all">any platform</option>${platforms.map(p =>
+      `<option value="${esc(p)}"${cstate.platform === p ? " selected" : ""}>${esc(p)}</option>`).join("")}</select>`;
+  v.appendChild(f);
+
+  const split = el("div", "split");
+  const list = el("div", "list");
+  const detail = el("div", "detail");
+  split.append(list, detail);
+  v.appendChild(split);
+
+  function paint() {
+    const keep = c => (cstate.origin === "all" || c.origin === cstate.origin) &&
+      (!cstate.dataOnly || c.instances > 0) &&
+      (cstate.platform === "all" || c.platforms.indexOf(cstate.platform) >= 0);
+    list.innerHTML = "";
+    const groups = [["Classes", classes.filter(keep)], ["Enumerations", enumClasses.filter(keep)]];
+    let first = null;
+    groups.forEach(([name, items]) => {
+      if (!items.length) return;
+      list.appendChild(el("div", "list-group", `${name} · ${items.length}`));
+      items.sort((a, b) => b.instances - a.instances ||
+        a.curie.localeCompare(b.curie)).forEach(c => {
+        if (!first) first = c.curie;
+        const b = el("button");
+        b.setAttribute("aria-current", cstate.sel === c.curie);
+        b.innerHTML = `${originDot(c.origin)}<span class="li-name">${esc(c.curie)}</span>
+          <span class="li-n">${c.instances || (DATA.enums[c.curie] || []).length || ""}</span>`;
+        b.addEventListener("click", () => { cstate.sel = c.curie; paint(); });
+        list.appendChild(b);
+      });
+    });
+    if (!list.children.length) list.appendChild(el("div", "list-group", "nothing matches"));
+    if (!cstate.sel || !T[cstate.sel]) cstate.sel = first || "pulse:Package";
+    detail.innerHTML = "";
+    detail.appendChild(termCard(cstate.sel));
+  }
+  f.querySelectorAll("[data-origin]").forEach(b => b.addEventListener("click", () => {
+    cstate.origin = b.dataset.origin;
+    f.querySelectorAll("[data-origin]").forEach(x =>
+      x.setAttribute("aria-pressed", x.dataset.origin === cstate.origin));
+    paint();
+  }));
+  f.querySelector("[data-dataonly]").addEventListener("click", e => {
+    cstate.dataOnly = !cstate.dataOnly;
+    e.currentTarget.setAttribute("aria-pressed", cstate.dataOnly); paint();
+  });
+  $("#platSel", f).addEventListener("change", e => { cstate.platform = e.target.value; paint(); });
+  cstate.paint = paint;
+  paint();
+}
+
+function constraintsFor(cls, path) {
+  for (const s of DATA.shapes) {
+    if (s.targetClass !== cls) continue;
+    const p = s.properties.find(x => x.path === path);
+    if (p) return p;
+  }
+  return null;
+}
+function card(cls) { const c = el("div", "card"); c.style.marginBottom = "14px"; return c; }
+
+function termCard(curie) {
+  const t = T[curie];
+  const box = el("div");
+  if (!t) { box.innerHTML = `<p class="muted">Unknown term <code>${esc(curie)}</code>.</p>`; return box; }
+  const sec = sectionOf[curie];
+  const enumMembers = DATA.enums[curie] || [];
+  const shapesFor = DATA.shapes.filter(s => s.targetClass === curie);
+
+  box.innerHTML = `
+    <div class="detail-head">
+      <h1>${esc(t.label || curie)}</h1>${originPill(t.origin)}
+      ${t.instances ? `<span class="pill">${t.instances} instance${t.instances > 1 ? "s" : ""}</span>` : ""}
+      ${t.uses ? `<span class="pill">${t.uses} triple${t.uses > 1 ? "s" : ""} of real data</span>` : ""}
+      ${!t.instances && !t.uses ? `<span class="pill" title="no real data exercises this term yet">
+        ○ not yet exercised</span>` : ""}
+    </div>
+    <div class="mono iri">${esc(curie)} &nbsp;·&nbsp; ${esc(t.iri)}</div>
+    <p class="def">${esc(t.definition) || "<span class='muted'>No definition in the source files.</span>"}</p>
+    ${t.note ? `<p class="def muted" style="font-size:12.5px"><b>Note:</b> ${esc(t.note)}</p>` : ""}`;
+
+  const kv = el("dl", "kv");
+  const row = (k, html) => { if (!html) return; kv.appendChild(el("dt", null, k));
+    kv.appendChild(el("dd", null, html)); };
+  const tagList = (arr, link) => arr.length ? `<div class="tags">${arr.map(x =>
+    link && T[x] ? `<button class="tag link" data-go="${esc(x)}">${esc(x)}</button>`
+      : `<span class="tag">${esc(x)}</span>`).join("")}</div>` : "";
+
+  row("kind", `<span class="mono">${esc(t.kind)}</span>`);
+  row("GME field it rescues", tagList(t.mapsFrom));
+  row("subclass of", tagList(t.subClassOf, true));
+  row("subproperty of", tagList(t.subPropertyOf, true));
+  row("equivalent to", tagList(t.equivalent, true));
+  row("inverse of", tagList(t.inverseOf, true));
+  row("domain", tagList(t.domain, true));
+  row("range", tagList(t.range, true));
+  row("platforms seen", t.platforms.length ? `<div class="tags">${t.platforms.map(p =>
+    `<span class="tag">${esc(p)}</span>`).join("")}</div>` : "<span class='muted'>none yet</span>");
+  row("SHACL shape", shapesFor.length ? tagList(shapesFor.map(s => s.name)) :
+    `<span class="muted">none — this class has no shape in the profile yet</span>`);
+  row("argued in", sec ? `<span class="mono">§${sec.n}</span> ${esc(sec.title)}` : "");
+  box.appendChild(kv);
+
+  if (enumMembers.length) {
+    const c = card();
+    c.innerHTML = `<h3 style="margin-top:0">${enumMembers.length} members</h3>
+      <div class="tags">${enumMembers.map(m => `<button class="tag link" data-go="${esc(m)}"
+        style="color:${T[m] && T[m].origin === "proposed" ? "var(--ink)" : "var(--ink-2)"}">${
+        esc(m.split(":")[1])}${T[m] && T[m].origin === "proposed" ? " +" : ""}</button>`).join("")}</div>
+      <p class="muted" style="font-size:11.5px;margin:8px 0 0">A <code>+</code> marks a member we
+        propose adding. ${enumMembers.filter(m => T[m] && T[m].origin === "proposed").length} of
+        ${enumMembers.length} here.</p>`;
+    box.appendChild(c);
+  }
+
+  if (t.propsOut && t.propsOut.length) {
+    const rows = [...new Set(t.propsOut)].sort().map(p => {
+      const pt = T[p] || {curie: p, label: p, origin: "upstream", range: [], uses: 0, platforms: []};
+      const con = constraintsFor(curie, p);
+      return `<tr>
+        <td class="nowrap">${originDot(pt.origin)}
+          <button class="tag link" data-go="${esc(p)}">${esc(p)}</button></td>
+        <td>${esc((pt.range || []).join(", ") || (con && (con.class || con.datatype)) || "—")}</td>
+        <td class="nowrap muted">${con ? esc(`${con.minCount || 0}..${con.maxCount || "*"}`) : "—"}</td>
+        <td class="num">${pt.uses || 0}</td>
+        <td class="muted" style="font-size:11.5px">${esc((pt.platforms || []).join(" "))}</td></tr>`;
+    }).join("");
+    const c = el("div", "scrollx");
+    c.innerHTML = `<table><thead><tr><th>property</th><th>range / datatype</th>
+      <th>card.</th><th class="num">triples</th><th>platforms</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const h = el("div"); h.innerHTML = `<h3>${[...new Set(t.propsOut)].length} properties on this class</h3>`;
+    h.appendChild(c); box.appendChild(h);
+  }
+
+  if (t.propsIn && t.propsIn.length) {
+    const c = el("div");
+    c.innerHTML = `<h3>Pointed at by</h3><div class="tags">${[...new Set(t.propsIn)].sort()
+      .map(p => `<button class="tag link" data-go="${esc(p)}">${esc(p)}</button>`).join("")}</div>`;
+    box.appendChild(c);
+  }
+
+  shapesFor.forEach(s => {
+    const c = el("div");
+    c.innerHTML = `<h3>${esc(s.name)}
+      <span class="pill" style="text-transform:none;letter-spacing:0">sh:closed ${
+        esc(s.closed || "—")}</span></h3>`;
+    const sc = el("div", "scrollx");
+    sc.innerHTML = `<table><thead><tr><th>path</th><th>class / datatype</th><th>card.</th>
+      <th>node kind</th><th>pattern</th></tr></thead><tbody>${s.properties.map(p => `<tr>
+        <td class="nowrap mono">${esc(p.path)}</td>
+        <td>${esc(p.class || p.datatype || "—")}</td>
+        <td class="nowrap muted">${esc(`${p.minCount || 0}..${p.maxCount || "*"}`)}</td>
+        <td class="muted">${esc(p.nodeKind.replace("sh:", "") || "—")}</td>
+        <td class="mono muted" style="font-size:11px">${esc(p.pattern.slice(0, 40))}</td></tr>`).join("")}
+      </tbody></table>`;
+    c.appendChild(sc); box.appendChild(c);
+  });
+
+  const netBtn = el("button", "chip", "→ show in the network");
+  netBtn.style.marginTop = "14px";
+  netBtn.addEventListener("click", () => { setView("network"); netFocus(curie); });
+  box.appendChild(netBtn);
+  return box;
+}
+
+/* ------------------------------------------------------------- network */
+const EDGE = {
+  property: {label: "declared property (domain → range)", dash: "", w: 1.7, op: .5},
+  observed: {label: "actually observed in the real data", dash: "", w: 2.6, op: .8},
+  shape: {label: "SHACL constraint (sh:class)", dash: "5 3", w: 1.6, op: .45},
+  subclass: {label: "rdfs:subClassOf, inside Open Pulse", dash: "1 3", w: 1.7, op: .55},
+  alignment: {label: "aligned to an external class", dash: "7 3", w: 1.7, op: .65},
+  vocabAlignment: {label: "aligned to an external vocabulary", dash: "2 5", w: 1.7, op: .6}
+};
+const nstate = {
+  layers: {structure: true, observed: true, alignment: true},
+  sel: null, allLabels: false,
+  mode: "pcb",        // "pcb" = grid-snapped orthogonal traces, "organic" = curves
+  nodeScale: .62,     // pads default small; the slider goes up to 1.6
+  spacing: 150,       // link rest length
+  repulsion: 1,       // multiplier on the many-body term
+  labelTop: 16,       // how many hubs keep a permanent label
+  grid: 22            // PCB grid pitch, in px
+};
+
+function renderNetwork() {
+  const v = $("#v-network");
+  v.innerHTML = `<h1>The network</h1>
+    <p class="lede">Every connection the profile draws, from four different sources:
+      declared <code>domain</code>/<code>range</code>, SHACL <code>sh:class</code>
+      constraints, alignment axioms, and — the thick lines — the edges the
+      ${platforms.length}-platform instance graph <b>actually</b> produced.
+      Drag to pan, scroll to zoom, click a node to isolate its neighbourhood.</p>`;
+
+  const f = el("div", "filters");
+  f.innerHTML = `
+    <button class="chip" data-layer="structure" aria-pressed="${nstate.layers.structure}">structure</button>
+    <button class="chip" data-layer="observed" aria-pressed="${nstate.layers.observed}">observed in real data</button>
+    <button class="chip" data-layer="alignment" aria-pressed="${nstate.layers.alignment}">external alignment</button>
+    <span class="seg" role="group" aria-label="Layout">
+      <button class="chip" data-mode="pcb" aria-pressed="${nstate.mode === "pcb"}">board</button>
+      <button class="chip" data-mode="organic" aria-pressed="${nstate.mode === "organic"}">organic</button>
+    </span>
+    <button class="chip" data-labels aria-pressed="${nstate.allLabels}">all labels</button>
+    <button class="chip" data-opts aria-pressed="false">options ▾</button>
+    <button class="chip" data-reset>reset view</button>`;
+  v.appendChild(f);
+
+  const opts = el("div", "opts");
+  opts.hidden = true;
+  const SLIDERS = [
+    ["nodeScale", "pad size", .3, 1.6, .02],
+    ["spacing", "trace length", 80, 300, 5],
+    ["repulsion", "spread", .3, 2.5, .05],
+    ["labelTop", "labelled hubs", 0, 44, 1],
+    ["grid", "grid pitch", 10, 46, 2]
+  ];
+  opts.innerHTML = SLIDERS.map(([k, label, min, max, step]) =>
+    `<label class="opt"><span>${label}</span>
+      <input type="range" data-opt="${k}" min="${min}" max="${max}" step="${step}"
+             value="${nstate[k]}" aria-label="${label}">
+      <output data-out="${k}">${nstate[k]}</output></label>`).join("") +
+    `<p class="muted" style="grid-column:1/-1;margin:2px 0 0;font-size:11px">
+       Grid pitch applies to the board layout: nodes snap to it and traces run on it.</p>`;
+  v.appendChild(opts);
+
+  const wrap = el("div", "net-wrap");
+  wrap.innerHTML = `<svg id="net" role="img" aria-label="Ontology class network"></svg>
+    <div class="net-side" id="netSide" hidden></div>`;
+  v.appendChild(wrap);
+
+  const legend = el("div", "net-legend");
+  legend.innerHTML = `
+    <div><span class="hd">pad</span><div class="row">
+      <span class="li"><span class="dot sq" style="background:var(--c-proposed)"></span>proposed by GME</span>
+      <span class="li"><span class="dot sq" style="background:var(--c-upstream)"></span>already in PR #25</span>
+      <span class="li"><span class="dot sq" style="background:var(--c-external)"></span>external class</span>
+      <span class="li"><span class="dot di" style="background:var(--c-external)"></span>vocabulary hub</span>
+    </div></div>
+    <div><span class="hd">trace</span><div class="row" id="edgeLegend"></div></div>
+    <div class="foot">Pad size = number of connections; the badge on a pad counts real
+      instances; a ring marks a term of theirs that we extend. Everything is tunable
+      under <b>options</b>.</div>`;
+  v.appendChild(legend);
+  $("#edgeLegend", legend).innerHTML = Object.entries(EDGE).map(([k, e]) =>
+    `<span class="li"><svg width="24" height="8"><line x1="1" y1="4" x2="23" y2="4"
+      stroke="var(--ink-muted)" stroke-width="${e.w}" ${e.dash ? `stroke-dasharray="${e.dash}"` : ""}/>
+     </svg>${esc(e.label.replace(/ \(.*\)/, ""))}</span>`).join("");
+
+  const tbl = el("div");
+  tbl.innerHTML = `<h2>The same edges, as a table</h2>`;
+  const sc = el("div", "scrollx");
+  sc.style.maxHeight = "420px"; sc.style.overflowY = "auto";
+  sc.innerHTML = `<table><thead><tr><th>from</th><th>via</th><th>to</th><th>kind</th>
+    <th class="num">triples</th></tr></thead><tbody>${
+    DATA.network.links.slice().sort((a, b) => b.count - a.count ||
+      a.source.localeCompare(b.source)).map(l => `<tr>
+      <td class="nowrap"><button class="tag link" data-go="${esc(l.source)}">${esc(l.source)}</button></td>
+      <td class="mono" style="font-size:11.5px">${T[l.via] ?
+        `<button class="tag link" data-go="${esc(l.via)}">${esc(l.via)}</button>` : esc(l.via)}</td>
+      <td class="nowrap">${l.target.indexOf("vocab:") === 0 ? esc(l.target.slice(6)) :
+        `<button class="tag link" data-go="${esc(l.target)}">${esc(l.target)}</button>`}</td>
+      <td class="muted nowrap">${esc(l.kind)}</td>
+      <td class="num">${l.count || ""}</td></tr>`).join("")}</tbody></table>`;
+  tbl.appendChild(sc);
+  v.appendChild(tbl);
+
+  f.querySelectorAll("[data-layer]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.layer; nstate.layers[k] = !nstate.layers[k];
+    b.setAttribute("aria-pressed", nstate.layers[k]); buildNet();
+  }));
+  f.querySelector("[data-labels]").addEventListener("click", e => {
+    nstate.allLabels = !nstate.allLabels;
+    e.currentTarget.setAttribute("aria-pressed", nstate.allLabels); buildNet();
+  });
+  f.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
+    nstate.mode = b.dataset.mode;
+    f.querySelectorAll("[data-mode]").forEach(x =>
+      x.setAttribute("aria-pressed", x.dataset.mode === nstate.mode));
+    buildNet();
+  }));
+  f.querySelector("[data-opts]").addEventListener("click", e => {
+    opts.hidden = !opts.hidden;
+    e.currentTarget.setAttribute("aria-pressed", !opts.hidden);
+    e.currentTarget.textContent = opts.hidden ? "options ▾" : "options ▴";
+  });
+  let pending = 0;
+  opts.querySelectorAll("[data-opt]").forEach(r => r.addEventListener("input", () => {
+    nstate[r.dataset.opt] = +r.value;
+    $(`[data-out="${r.dataset.opt}"]`, opts).textContent = r.value;
+    // one rebuild per frame, so dragging a slider stays smooth
+    if (pending) return;
+    pending = requestAnimationFrame(() => { pending = 0; buildNet(); });
+  }));
+  f.querySelector("[data-reset]").addEventListener("click", () => {
+    nstate.sel = null; view.k = 1; view.x = 0; view.y = 0; buildNet();
+  });
+  buildNet();
+}
+
+const LAYER_OF = {property: "structure", shape: "structure", subclass: "structure",
+  observed: "observed", alignment: "alignment", vocabAlignment: "alignment"};
+const view = {k: 1, x: 0, y: 0};
+let netRoot = null;   // the <g> every rebuild replaces; pan/zoom transforms it
+const applyView = () => netRoot && netRoot.setAttribute("transform",
+  `translate(${view.x},${view.y}) scale(${view.k})`);
+const SVGNS = "http://www.w3.org/2000/svg";
+const mk = (t, attrs) => { const n = document.createElementNS(SVGNS, t);
+  for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+
+function buildNet() {
+  const svg = $("#net");
+  if (!svg) return;
+  const W = svg.clientWidth || 900, H = svg.clientHeight || 600;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = "";
+
+  const links = DATA.network.links.filter(l => nstate.layers[LAYER_OF[l.kind]]);
+  const keep = new Set();
+  links.forEach(l => { keep.add(l.source); keep.add(l.target); });
+  let nodes = DATA.network.nodes.filter(n => keep.has(n.id) || n.instances > 0);
+  const byId = {};
+  // deterministic seed layout: a circle, so every render is identical
+  nodes = nodes.map((n, i) => {
+    // seeded on an ellipse matching the canvas aspect, not a circle: a circular
+    // seed in a 2:1 frame settles into a blob that wastes half the width
+    const a = i / nodes.length * Math.PI * 2;
+    const o = byId[n.id] = Object.assign({}, n, {
+      x: W / 2 + Math.cos(a) * W * .34, y: H / 2 + Math.sin(a) * H * .34, vx: 0, vy: 0,
+      r: Math.max(5, (7 + Math.sqrt(n.degree || 1) * 3.4) * nstate.nodeScale)
+    });
+    return o;
+  });
+  const ls = links.filter(l => byId[l.source] && byId[l.target])
+    .map(l => Object.assign({}, l, {s: byId[l.source], t: byId[l.target]}));
+
+  // ---- force layout, settled before the first paint (43 nodes: cheap).
+  // Degree also sets how hard a node pushes: hubs need room for their labels,
+  // leaves do not. Positions are unclamped here — fitting happens afterwards,
+  // so the layout is never squeezed into the viewport it was seeded in.
+  const pairIndex = {};
+  ls.forEach(l => { const k = [l.source, l.target].sort().join("|");
+    l.curve = (pairIndex[k] = (pairIndex[k] || 0) + 1) - 1; });
+  const STEPS = 600;
+  for (let step = 0; step < STEPS; step++) {
+    const alpha = Math.pow(1 - step / STEPS, 1.4);
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = (i - j) || 1; dy = (j - i) * .7 || .7; d2 = dx * dx + dy * dy; }
+        const d = Math.sqrt(d2);
+        const f = Math.min(60, (14000 + a.r * b.r * 90) / d2 * nstate.repulsion) * (.35 + alpha);
+        const ux = dx / d, uy = dy / d;
+        a.vx -= ux * f; a.vy -= uy * f; b.vx += ux * f; b.vy += uy * f;
+        const minD = a.r + b.r + 26;
+        if (d < minD) { const push = (minD - d) * .45;
+          a.vx -= ux * push; a.vy -= uy * push; b.vx += ux * push; b.vy += uy * push; }
+      }
+    }
+    ls.forEach(l => {
+      const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const target = nstate.spacing * (l.kind === "vocabAlignment" ? 1.4 : 1);
+      const f = (d - target) * .06 * (.4 + alpha), ux = dx / d, uy = dy / d;
+      l.s.vx += ux * f; l.s.vy += uy * f; l.t.vx -= ux * f; l.t.vy -= uy * f;
+    });
+    // centering is stronger on the short axis, which flattens the blob into the
+    // frame's aspect instead of fighting it
+    const ar = W / H;
+    nodes.forEach(n => {
+      n.vx += (W / 2 - n.x) * .0016 / ar; n.vy += (H / 2 - n.y) * .0016 * ar;
+      n.x += (n.vx *= .86); n.y += (n.vy *= .86);
+    });
+  }
+
+  // ---- fit the settled layout to the canvas, so the graph fills the frame
+  // whatever the forces produced and whatever size the container is.
+  if (nodes.length) {
+    const pad = 46;
+    const x0 = Math.min(...nodes.map(n => n.x - n.r)), x1 = Math.max(...nodes.map(n => n.x + n.r));
+    const y0 = Math.min(...nodes.map(n => n.y - n.r)), y1 = Math.max(...nodes.map(n => n.y + n.r));
+    const sx = (W - pad * 2) / Math.max(1, x1 - x0);
+    const sy = (H - pad * 2) / Math.max(1, y1 - y0);
+    const s = Math.min(sx, sy, 1.6);
+    // a little extra stretch on the roomier axis — capped, so edge lengths stay
+    // broadly comparable and the picture is not a funhouse mirror
+    const kx = Math.min(1.4, Math.max(1, sx / s)), ky = Math.min(1.4, Math.max(1, sy / s));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    nodes.forEach(n => {
+      n.x = W / 2 + (n.x - cx) * s * kx;
+      n.y = H / 2 + (n.y - cy) * s * ky;
+      n.r = Math.max(5, n.r * Math.min(1, s * 1.15));
+    });
+  }
+
+  // ---- board mode: snap every pad to the grid, and never onto an occupied
+  // cell. Traces are only legible if their endpoints sit on the same lattice
+  // they run along.
+  const G = Math.max(8, nstate.grid);
+  if (nstate.mode === "pcb") {
+    const taken = new Set();
+    const key = (gx, gy) => gx + "," + gy;
+    nodes.slice().sort((a, b) => b.degree - a.degree).forEach(n => {
+      let gx = Math.round(n.x / G), gy = Math.round(n.y / G);
+      const need = Math.max(1, Math.ceil((n.r + 6) / G));   // pads reserve a halo
+      const free = (x, y) => {
+        for (let i = -need; i <= need; i++)
+          for (let j = -need; j <= need; j++) if (taken.has(key(x + i, y + j))) return false;
+        return true;
+      };
+      if (!free(gx, gy)) {                     // spiral out to the nearest free cell
+        outer: for (let ring = 1; ring < 40; ring++)
+          for (let i = -ring; i <= ring; i++)
+            for (let j = -ring; j <= ring; j++) {
+              if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue;
+              if (free(gx + i, gy + j)) { gx += i; gy += j; break outer; }
+            }
+      }
+      for (let i = -need; i <= need; i++)
+        for (let j = -need; j <= need; j++) taken.add(key(gx + i, gy + j));
+      n.x = gx * G; n.y = gy * G;
+    });
+  }
+
+  if (nstate.mode === "pcb") {
+    const defs = mk("defs", {});
+    const pat = mk("pattern", {id: "boardGrid", width: G, height: G,
+      patternUnits: "userSpaceOnUse"});
+    pat.appendChild(mk("circle", {cx: .9, cy: .9, r: .9, fill: "var(--axis)",
+      "fill-opacity": .7}));
+    defs.appendChild(pat);
+    svg.appendChild(defs);
+    svg.appendChild(mk("rect", {x: -2000, y: -2000, width: 6000, height: 6000,
+      fill: "url(#boardGrid)"}));
+  }
+  const root = mk("g", {});
+  svg.appendChild(root);
+  const gEdge = mk("g", {}), gNode = mk("g", {}), gLabel = mk("g", {});
+  root.append(gEdge, gNode, gLabel);
+  netRoot = root;
+  applyView();
+
+  // label the hubs by default — 43 labels at once is a wall of text. The rest
+  // come in on hover, on selection, or with the "all labels" toggle.
+  const degrees = nodes.map(n => n.degree).sort((a, b) => b - a);
+  const labelCut = nstate.labelTop <= 0 ? Infinity
+    : (degrees[Math.min(nstate.labelTop - 1, degrees.length - 1)] || 1);
+
+  const neigh = new Set();
+  if (nstate.sel) { neigh.add(nstate.sel);
+    ls.forEach(l => { if (l.source === nstate.sel) neigh.add(l.target);
+      if (l.target === nstate.sel) neigh.add(l.source); }); }
+  const lit = id => !nstate.sel || neigh.has(id);
+
+  // Board traces: leave the pad on an axis, turn once at 45°, arrive on an axis
+  // — the way a router actually draws copper. Parallel traces between the same
+  // pair are lane-offset so they read as separate nets.
+  function tracePath(l) {
+    const lane = ((l.curve % 2 ? 1 : -1) * Math.ceil(l.curve / 2)) * Math.max(4, G * .34);
+    const sx = l.s.x, sy = l.s.y, tx = l.t.x + lane, ty = l.t.y + lane;
+    const dx = tx - sx, dy = ty - sy;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    const diag = Math.min(ax, ay);
+    const sgx = Math.sign(dx) || 1, sgy = Math.sign(dy) || 1;
+    // run along the long axis first, then cut the corner at 45°
+    return ax >= ay
+      ? `M${sx},${sy} H${(sx + sgx * (ax - diag)).toFixed(1)} L${tx.toFixed(1)},${ty.toFixed(1)}`
+      : `M${sx},${sy} V${(sy + sgy * (ay - diag)).toFixed(1)} L${tx.toFixed(1)},${ty.toFixed(1)}`;
+  }
+  function curvePath(l) {
+    const mx = (l.s.x + l.t.x) / 2, my = (l.s.y + l.t.y) / 2;
+    const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y;
+    const off = (l.curve % 2 ? 1 : -1) * Math.ceil(l.curve / 2) * 26;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    return `M${l.s.x.toFixed(1)},${l.s.y.toFixed(1)} Q${
+      (mx - dy / d * off).toFixed(1)},${(my + dx / d * off).toFixed(1)} ${
+      l.t.x.toFixed(1)},${l.t.y.toFixed(1)}`;
+  }
+
+  const paths = ls.map(l => {
+    const e = EDGE[l.kind];
+    const on = lit(l.source) && lit(l.target);
+    const pcb = nstate.mode === "pcb";
+    const d = pcb ? tracePath(l) : curvePath(l);
+    // a surface-coloured halo under each lit trace, so a crossing reads as one
+    // trace passing over the other instead of a merged blob
+    if (on) gEdge.appendChild(mk("path", {d, fill: "none", stroke: "var(--surface)",
+      "stroke-width": e.w + 2.4, "stroke-opacity": .9, "stroke-linejoin": "round"}));
+    const p = mk("path", {
+      class: "edge" + (l.kind === "observed" ? " observed" : ""), d,
+      "stroke-width": e.w, "stroke-opacity": on ? e.op : .06,
+      "stroke-dasharray": e.dash || "none",
+      "stroke-linecap": pcb ? "butt" : "round",
+      "stroke-linejoin": "round"
+    });
+    p.style.pointerEvents = "stroke";
+    p.addEventListener("pointermove", ev => showTip(ev,
+      `<div class="t-h">${esc(l.source)} → ${esc(l.target.replace("vocab:", ""))}</div>
+       <div class="t-d">${esc(l.via)} · ${esc(EDGE[l.kind].label)}${
+        l.count ? ` · ${l.count} triple${l.count > 1 ? "s" : ""}` : ""}</div>`));
+    p.addEventListener("pointerleave", hideTip);
+    gEdge.appendChild(p);
+    return p;
+  });
+
+  nodes.forEach(n => {
+    const o = ORIGIN[n.origin] || ORIGIN.external;
+    const on = lit(n.id);
+    const pcb = nstate.mode === "pcb";
+    const g = mk("g", {class: "node-hit", opacity: on ? 1 : .18});
+    let shape;
+    if (n.kind === "vocab") {
+      shape = mk("rect", {x: -n.r * .82, y: -n.r * .82, width: n.r * 1.64,
+        height: n.r * 1.64, transform: "rotate(45)", rx: pcb ? 1 : 2});
+    } else if (pcb) {
+      // a pad, not a bubble: square-ish copper with a rounded corner
+      shape = mk("rect", {x: -n.r, y: -n.r, width: n.r * 2, height: n.r * 2,
+        rx: Math.min(3, n.r * .35)});
+    } else if (o.shape === "square") {
+      shape = mk("rect", {x: -n.r * .86, y: -n.r * .86, width: n.r * 1.72,
+        height: n.r * 1.72, rx: 3});
+    } else {
+      shape = mk("circle", {r: n.r});
+    }
+    shape.setAttribute("fill", o.color);
+    shape.setAttribute("stroke", "var(--surface)");
+    shape.setAttribute("stroke-width", 1.5);
+    g.setAttribute("transform", `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
+    g.appendChild(shape);
+    // the drill hole — only when the pad is big enough to show one
+    if (pcb && n.r >= 7) g.appendChild(mk("circle", {r: n.r * .3,
+      fill: "var(--surface)", "fill-opacity": .95}));
+    if (o.ring) g.appendChild(mk(pcb ? "rect" : "circle", pcb
+      ? {x: -n.r - 3, y: -n.r - 3, width: (n.r + 3) * 2, height: (n.r + 3) * 2,
+         rx: 2, fill: "none", stroke: o.color, "stroke-width": 1.3, "stroke-opacity": .9}
+      : {r: n.r + 3.5, fill: "none", stroke: o.color, "stroke-width": 1.5,
+         "stroke-opacity": .9}));
+    if (n.instances && n.r >= 7) {
+      const b = mk("circle", {r: 5.5, cx: n.r * .95, cy: -n.r * .95, fill: "var(--surface)",
+        stroke: "var(--ink-muted)", "stroke-width": 1});
+      g.appendChild(b);
+      const tx = mk("text", {x: n.r * .95, y: -n.r * .95 + 2.6, "text-anchor": "middle",
+        "font-size": 7.5, fill: "var(--ink-2)"});
+      tx.textContent = n.instances; g.appendChild(tx);
+    }
+    g.addEventListener("pointermove", ev => showTip(ev,
+      `<div class="t-h">${esc(n.label)} <span class="muted mono">${esc(n.id)}</span></div>
+       <div class="t-d">${esc((ORIGIN[n.origin] || {}).label || n.origin)} ·
+       ${n.degree} connection${n.degree === 1 ? "" : "s"}${
+        n.instances ? ` · ${n.instances} instance${n.instances > 1 ? "s" : ""}` : ""}${
+        n.platforms && n.platforms.length ? `<br>${esc(n.platforms.join(", "))}` : ""}</div>`));
+    g.addEventListener("pointerleave", hideTip);
+    g.addEventListener("click", ev => { ev.stopPropagation();
+      nstate.sel = nstate.sel === n.id ? null : n.id; buildNet(); });
+    gNode.appendChild(g);
+
+    if (nstate.allLabels || n.degree >= labelCut || n.kind === "vocab" ||
+        nstate.sel === n.id || (nstate.sel && neigh.has(n.id))) {
+      const label = mk("text", {class: "node-label", x: n.x, y: n.y - n.r - 5,
+        "text-anchor": "middle", opacity: on ? 1 : .2});
+      label.textContent = n.id.replace("vocab:", "").replace(/^\w+:/, "");
+      gLabel.appendChild(label);
+    }
+  });
+
+  // side panel for the selected node
+  const side = $("#netSide");
+  if (nstate.sel) {
+    const n = byId[nstate.sel], t = T[nstate.sel] || {};
+    const rel = ls.filter(l => l.source === nstate.sel || l.target === nstate.sel);
+    side.hidden = false;
+    side.innerHTML = `<button class="close" aria-label="Close">×</button>
+      <h4>${esc(n.label)}</h4>
+      <div class="mono muted" style="font-size:11px">${esc(n.id)}</div>
+      <div style="margin:7px 0">${originPill(n.origin)}${
+        n.instances ? `<span class="pill">${n.instances} instance${n.instances > 1 ? "s" : ""}</span>` : ""}</div>
+      ${t.definition ? `<p class="t-d" style="margin:6px 0">${esc(t.definition.slice(0, 200))}${
+        t.definition.length > 200 ? "…" : ""}</p>` : ""}
+      <ul>${rel.map(l => { const other = l.source === nstate.sel ? l.target : l.source;
+        const dir = l.source === nstate.sel ? "→" : "←";
+        return `<li>${dir} <b>${esc(other.replace("vocab:", ""))}</b>
+          <span class="muted mono" style="font-size:10.5px">${esc(l.via)}</span></li>`; }).join("")}</ul>
+      ${T[nstate.sel] ? `<button class="chip" data-go="${esc(nstate.sel)}"
+        style="margin-top:9px">open the full term →</button>` : ""}`;
+    side.querySelector(".close").addEventListener("click", () => { nstate.sel = null; buildNet(); });
+  } else { side.hidden = true; side.innerHTML = ""; }
+
+  // ---- pan / zoom / drag. Bound once: buildNet() re-runs on every click and
+  // re-registering here would stack a handler per rebuild.
+  if (svg.dataset.bound) return;
+  svg.dataset.bound = "1";
+  let drag = null;
+  svg.addEventListener("pointerdown", e => {
+    drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y};
+    svg.classList.add("dragging");
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!drag) return;
+    view.x = drag.vx + (e.clientX - drag.x); view.y = drag.vy + (e.clientY - drag.y);
+    applyView();
+  });
+  const end = () => { drag = null; svg.classList.remove("dragging"); };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointerleave", end);
+  svg.addEventListener("click", e => { if (e.target === svg && nstate.sel) {
+    nstate.sel = null; buildNet(); } });
+  svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const k = Math.max(.4, Math.min(3.2, view.k * (e.deltaY < 0 ? 1.12 : .89)));
+    const r = svg.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    view.x = mx - (mx - view.x) * (k / view.k);
+    view.y = my - (my - view.y) * (k / view.k);
+    view.k = k; applyView();
+  }, {passive: false});
+}
+function netFocus(id) {
+  nstate.sel = DATA.network.nodes.some(n => n.id === id) ? id : null;
+  buildNet();
+  if (!nstate.sel) alert(id + " has no class-level connections, so it is not a network node.");
+}
+
+/* -------------------------------------------------------------- shapes */
+function renderShapes() {
+  const v = $("#v-shapes");
+  const open = DATA.shapes.filter(s => s.closed === "false").length;
+  v.innerHTML = `<h1>SHACL shapes</h1>
+    <p class="lede">${DATA.shapes.length} node shapes,
+      ${DATA.shapes.reduce((n, s) => n + s.properties.length, 0)} property constraints.
+      <b>${open}</b> are open (<code>sh:closed false</code>) — that is ask #13, and it alone
+      clears 45 of the 52 violations the published shapes raise on real data.</p>`;
+  DATA.shapes.forEach(s => {
+    const c = el("div", "card");
+    c.style.marginBottom = "14px";
+    c.innerHTML = `<div class="detail-head" style="margin-bottom:8px">
+        <h2 style="margin:0">${esc(s.name)}</h2>
+        <span class="pill">sh:closed ${esc(s.closed || "—")}</span>
+        ${s.targetClass ? `<button class="chip" data-go="${esc(s.targetClass)}">${
+          esc(s.targetClass)}</button>` : "<span class='pill'>no target class</span>"}
+        <span class="pill">${s.properties.length} constraints</span></div>`;
+    const sc = el("div", "scrollx");
+    sc.innerHTML = `<table><thead><tr><th>path</th><th>name</th><th>class / datatype</th>
+      <th>card.</th><th>node kind</th><th>pattern</th></tr></thead><tbody>${
+      s.properties.map(p => `<tr>
+        <td class="nowrap">${T[p.path] ? `<button class="tag link" data-go="${esc(p.path)}">${
+          esc(p.path)}</button>` : `<span class="mono">${esc(p.path)}</span>`}</td>
+        <td>${esc(p.name)}</td><td>${esc(p.class || p.datatype || "—")}</td>
+        <td class="nowrap muted">${esc(`${p.minCount || 0}..${p.maxCount || "*"}`)}</td>
+        <td class="muted">${esc(p.nodeKind.replace("sh:", "") || "—")}</td>
+        <td class="mono muted" style="font-size:11px">${esc(p.pattern.slice(0, 46))}</td></tr>`).join("")}
+      </tbody></table>`;
+    c.appendChild(sc); v.appendChild(c);
+  });
+}
+
+/* ----------------------------------------------------------- alignment */
+function renderAlign() {
+  const v = $("#v-align");
+  const byVocab = {};
+  DATA.alignments.forEach(a => (byVocab[a.vocab] = byVocab[a.vocab] || []).push(a));
+  v.innerHTML = `<h1>External alignment</h1>
+    <p class="lede">${DATA.alignments.length} axioms saying our term <i>is a kind of</i>
+      someone else's, plus ${DATA.typings.length} places where a domain or range reuses an
+      external class. Every target IRI below was fetched and checked against the published
+      vocabulary — see <code>verification.md</code>. Kept apart on purpose: reusing a class
+      as a range is not the same claim as declaring a subproperty.</p>`;
+  const c = el("div", "card");
+  c.innerHTML = "<h3 style='margin-top:0'>Axioms per vocabulary</h3>";
+  c.appendChild(barChart(Object.entries(byVocab).sort((a, b) => b[1].length - a[1].length)
+    .map(([k, arr]) => ({k, v: arr.length, note: arr.map(a => a.term).join(", ").slice(0, 160)})),
+    {unit: "axioms"}));
+  v.appendChild(c);
+
+  const sc = el("div", "scrollx");
+  sc.style.marginTop = "18px";
+  const rowsOf = (arr, tag) => arr.map(a => `<tr>
+      <td class="nowrap">${T[a.term] ? `<button class="tag link" data-go="${esc(a.term)}">${
+        esc(a.term)}</button>` : `<span class="mono">${esc(a.term)}</span>`}</td>
+      <td class="mono muted nowrap">${esc(a.axiom)}</td>
+      <td class="mono nowrap">${esc(a.target)}</td>
+      <td>${esc(a.vocab)}</td>
+      <td class="muted nowrap">${tag}</td></tr>`).join("");
+  sc.innerHTML = `<table><thead><tr><th>our term</th><th>axiom</th><th>their term</th>
+    <th>vocabulary</th><th>kind of claim</th></tr></thead><tbody>${
+    rowsOf(DATA.alignments, "alignment") + rowsOf(DATA.typings, "reuse as domain/range")
+  }</tbody></table>`;
+  v.appendChild(sc);
+}
+
+/* --------------------------------------------------------- enumerations */
+function renderEnums() {
+  const v = $("#v-enums");
+  const newN = members.filter(m => m.origin === "proposed").length;
+  v.innerHTML = `<h1>Enumerations</h1>
+    <p class="lede">${enumClasses.length} enumerations, ${members.length} members,
+      of which <b>${newN}</b> are ours to add. These are the cheapest asks in the proposal:
+      no new class, no shape edit. Six of them are the reason the conversion test failed —
+      <code>ROR</code>, <code>OpenAlex</code>, <code>CORDIS</code>, <code>SNSF_P3</code>,
+      <code>DepsDev</code> and <code>DockerHub</code> are platforms we read in production
+      but cannot name.</p>`;
+  const grid = el("div");
+  grid.style.cssText = "display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr))";
+  Object.entries(DATA.enums).forEach(([cls, ms]) => {
+    const mine = ms.filter(m => T[m] && T[m].origin === "proposed");
+    const c = el("div", "card");
+    c.innerHTML = `<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+        <b style="font-size:13.5px">${esc(cls.split(":")[1].replace("Enumeration", ""))}</b>
+        <span class="pill">${ms.length} members</span>
+        ${mine.length ? `<span class="pill">${originDot("proposed")}${mine.length} new</span>` : ""}
+      </div>
+      <div class="tags" style="margin-top:9px">${ms.map(m => {
+        const isNew = T[m] && T[m].origin === "proposed";
+        return `<button class="tag link" data-go="${esc(m)}"${isNew ?
+          ' style="border-color:var(--c-proposed);color:var(--ink)"' : ""}>${
+          esc(m.split(":")[1])}</button>`; }).join("")}</div>`;
+    grid.appendChild(c);
+  });
+  v.appendChild(grid);
+}
+
+/* --------------------------------------------------------- all terms */
+const tstate = {sort: "curie", dir: 1, q: "", kind: "all"};
+function renderTerms() {
+  const v = $("#v-terms");
+  v.innerHTML = `<h1>All ${all.length} terms</h1>
+    <p class="lede">The table view: everything at once, sortable. <code>triples</code> counts
+      how often real data actually used the term — a zero there is a term no platform we read
+      has exercised yet.</p>`;
+  const f = el("div", "filters");
+  f.innerHTML = ["all", "class", "property", "member"].map(k =>
+    `<button class="chip" data-kind="${k}" aria-pressed="${tstate.kind === k}">${
+      k === "all" ? "everything" : k + "es"}</button>`).join("") +
+    `<input class="chip" id="tq" placeholder="filter…" style="padding:4px 10px" value="${esc(tstate.q)}">`;
+  v.appendChild(f);
+  const sc = el("div", "scrollx");
+  v.appendChild(sc);
+
+  function paint() {
+    const q = tstate.q.toLowerCase();
+    const rows = all.filter(t => (tstate.kind === "all" || t.kind === tstate.kind) &&
+      (!q || (t.curie + " " + t.label + " " + t.definition + " " + t.mapsFrom.join(" "))
+        .toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const k = tstate.sort;
+        const av = k === "uses" || k === "instances" ? a[k] : String(a[k] || "");
+        const bv = k === "uses" || k === "instances" ? b[k] : String(b[k] || "");
+        return (av > bv ? 1 : av < bv ? -1 : 0) * tstate.dir;
+      });
+    const cols = [["curie", "term"], ["kind", "kind"], ["origin", "origin"],
+      ["label", "label"], ["uses", "triples"], ["instances", "instances"]];
+    sc.innerHTML = `<table><thead><tr>${cols.map(([k, l]) =>
+      `<th class="sortable${k === "uses" || k === "instances" ? " num" : ""}" data-sort="${k}">${l}${
+        tstate.sort === k ? (tstate.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}
+      <th>GME field</th><th>platforms</th></tr></thead><tbody>${rows.map(t => `<tr>
+        <td class="nowrap"><button class="tag link" data-go="${esc(t.curie)}">${esc(t.curie)}</button></td>
+        <td class="muted">${esc(t.kind)}</td>
+        <td class="nowrap">${originDot(t.origin)} <span class="muted" style="font-size:11.5px">${
+          esc(t.origin)}</span></td>
+        <td>${esc(t.label)}</td>
+        <td class="num">${t.uses || ""}</td>
+        <td class="num">${t.instances || ""}</td>
+        <td class="mono muted" style="font-size:11px">${esc(t.mapsFrom.join(" "))}</td>
+        <td class="muted" style="font-size:11px">${esc(t.platforms.join(" "))}</td></tr>`).join("")}
+      </tbody></table>`;
+    sc.querySelectorAll("[data-sort]").forEach(th => th.addEventListener("click", () => {
+      const k = th.dataset.sort;
+      tstate.dir = tstate.sort === k ? -tstate.dir : (k === "uses" || k === "instances" ? -1 : 1);
+      tstate.sort = k; paint();
+    }));
+  }
+  f.querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
+    tstate.kind = b.dataset.kind;
+    f.querySelectorAll("[data-kind]").forEach(x =>
+      x.setAttribute("aria-pressed", x.dataset.kind === tstate.kind));
+    paint();
+  }));
+  $("#tq", f).addEventListener("input", e => { tstate.q = e.target.value; paint(); });
+  paint();
+}
+
+/* ---------------------------------------------------------- navigation */
+const VIEWS = [
+  {id: "overview", label: "Overview", n: () => DATA.sections.length + " sections", render: renderOverview},
+  {id: "classes", label: "Classes", n: () => classes.length, render: renderClasses},
+  {id: "network", label: "Network", n: () => DATA.network.links.length + " edges", render: renderNetwork},
+  {id: "shapes", label: "Shapes", n: () => DATA.shapes.length, render: renderShapes},
+  {id: "align", label: "Alignment", n: () => DATA.alignments.length, render: renderAlign},
+  {id: "enums", label: "Enumerations", n: () => members.length, render: renderEnums},
+  {id: "terms", label: "All terms", n: () => all.length, render: renderTerms}
+];
+const painted = {};
+function setView(id, skipHash) {
+  const v = VIEWS.find(x => x.id === id) || VIEWS[0];
+  VIEWS.forEach(x => { $("#v-" + x.id).hidden = x.id !== v.id; });
+  $("#nav").querySelectorAll("button").forEach(b =>
+    b.setAttribute("aria-current", b.dataset.view === v.id));
+  if (!painted[v.id]) { v.render(); painted[v.id] = true; }
+  if (v.id === "network") requestAnimationFrame(buildNet);
+  if (!skipHash) location.hash = "#" + v.id + (v.id === "classes" && cstate.sel ?
+    "/" + cstate.sel : "");
+  scrollTo({top: 0});
+}
+function goTerm(curie) {
+  const t = T[curie];
+  if (!t) return;
+  if (t.kind === "member") {
+    setView("enums");
+    return;
+  }
+  if (t.kind === "class") { cstate.sel = curie; cstate.origin = "all"; cstate.dataOnly = false;
+    setView("classes"); if (cstate.paint) cstate.paint(); return; }
+  // a property: show it in the detail panel of the classes view
+  cstate.sel = curie; setView("classes");
+  const d = $("#v-classes .detail");
+  if (d) { d.innerHTML = ""; d.appendChild(termCard(curie)); }
+  location.hash = "#classes/" + curie;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-go]");
+  if (b) { e.preventDefault(); goTerm(b.dataset.go); }
+});
+
+/* -------------------------------------------------------------- search */
+const index = all.map(t => ({t, hay: (t.curie + " " + t.label + " " + t.definition + " " +
+  t.mapsFrom.join(" ")).toLowerCase()}));
+const qEl = $("#q"), resEl = $("#results");
+let sel = 0, hits = [];
+function runSearch() {
+  const q = qEl.value.trim().toLowerCase();
+  if (!q) { resEl.classList.remove("open"); return; }
+  hits = index.filter(x => x.hay.includes(q))
+    .sort((a, b) => a.t.curie.toLowerCase().indexOf(q) - b.t.curie.toLowerCase().indexOf(q) ||
+      a.t.curie.length - b.t.curie.length).slice(0, 24);
+  sel = 0;
+  resEl.innerHTML = hits.length ? hits.map((h, i) => `<button data-i="${i}" class="${
+    i === 0 ? "sel" : ""}">${originDot(h.t.origin)} <b>${esc(h.t.curie)}</b>
+    <span class="muted" style="font-size:11.5px">${esc(h.t.kind)}</span>
+    <span class="r-def">${esc((h.t.definition || h.t.label).slice(0, 110))}</span></button>`).join("")
+    : `<div style="padding:9px 11px" class="muted">nothing matches “${esc(q)}”</div>`;
+  resEl.classList.add("open");
+  resEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    goTerm(hits[+b.dataset.i].t.curie); resEl.classList.remove("open"); qEl.blur();
+  }));
+}
+qEl.addEventListener("input", runSearch);
+qEl.addEventListener("focus", runSearch);
+qEl.addEventListener("keydown", e => {
+  if (e.key === "Escape") { resEl.classList.remove("open"); qEl.blur(); return; }
+  if (!hits.length) return;
+  if (e.key === "Enter") { goTerm(hits[sel].t.curie); resEl.classList.remove("open"); qEl.blur(); }
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    sel = (sel + (e.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length;
+    resEl.querySelectorAll("button").forEach((b, i) => b.classList.toggle("sel", i === sel));
+    const cur = resEl.querySelector("button.sel");
+    if (cur) cur.scrollIntoView({block: "nearest"});
+  }
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest(".search")) resEl.classList.remove("open");
+});
+document.addEventListener("keydown", e => {
+  if ((e.key === "/" || (e.key === "k" && (e.metaKey || e.ctrlKey))) &&
+      document.activeElement !== qEl) { e.preventDefault(); qEl.focus(); qEl.select(); }
+});
+
+/* ---------------------------------------------------------------- boot */
+$("#brandSub").innerHTML = `${esc(M.upstreamRepo)}<br>${esc(M.upstreamBranch)}<br>
+  <span class="mono">@${esc(M.upstreamRef)}</span> · GME ${esc(M.gmeVersion)}`;
+$("#sideFoot").innerHTML = `Generated from the Turtle in <code>dev/v4.0.0/</code> by
+  <code>build_explorer.py</code>. Upstream is CC-BY-SA-4.0.<br><br>
+  ${M.triplesUpstream} upstream + ${M.triplesProposed} proposed triples ·
+  ${M.triplesShapes} in shapes · ${M.triplesInstance} of real instance data.<br><br>
+  Press <b>/</b> to search.`;
+$("#nav").innerHTML = VIEWS.map(v =>
+  `<button data-view="${v.id}"><span>${v.label}</span><span class="n">${v.n()}</span></button>`).join("");
+$("#nav").querySelectorAll("button").forEach(b =>
+  b.addEventListener("click", () => setView(b.dataset.view)));
+$("#themeBtn").addEventListener("click", () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = document.documentElement.getAttribute("data-theme") || (dark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+  if (painted.network) buildNet();
+});
+addEventListener("resize", () => { if (painted.network && !$("#v-network").hidden) buildNet(); });
+function fromHash() {
+  const [id, term] = location.hash.replace(/^#/, "").split("/");
+  if (term && T[decodeURIComponent(term)]) { goTerm(decodeURIComponent(term)); return; }
+  setView(id || "overview", true);
+}
+addEventListener("hashchange", fromHash);
+fromHash();
+})();
+</script>
+</body>
+</html>

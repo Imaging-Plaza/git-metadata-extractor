@@ -127,6 +127,23 @@ enumeration members (`ROR`, `OpenAlex`, `OpenAlexScheme`, `PyPI`,
 The asks are therefore not just *necessary* but *sufficient* for real data from
 every platform we read.
 
+## An inconsistency in our own patch, found by the explorer
+
+Building [`ontology-explorer.html`](ontology-explorer.html) put every shape's
+`sh:closed` value in one column, and two of the three shapes **we** contribute
+—`RawContributionShape` and `RawGitIdentityShape` — were `sh:closed true`. We
+were asking upstream to open all of theirs (ask #13) while shipping closed ones
+ourselves.
+
+Both are now `sh:closed false`, so all 15 raw node shapes in
+[`proposed/`](proposed/) are open. Re-validated after the change:
+**conforms = True, 0 violations**, unchanged — opening a shape can only remove
+violations, but it was worth confirming rather than assuming.
+
+Worth recording because it is the argument for having built the visualisation:
+the fact was in the files all along and nobody had a view that put it side by
+side.
+
 ## Three bugs of mine that the validator caught
 
 Recorded because a proposal that reports non-existent problems is worth less
@@ -183,7 +200,16 @@ python dev/v4.0.0/build_instance_multisource.py  # every other platform
 python dev/v4.0.0/build_instance_funding.py      # SNSF (FNS) + CORDIS
 python dev/v4.0.0/build_instance_ecosystem.py    # Community, Advisory, images
 
-pyshacl -s <(cat …/ontology-shapes-raw.ttl dev/v4.0.0/ontology-shapes-raw.additions.ttl) \
-        -e …/ontology-enumerations-canonical.ttl \
-        dev/v4.0.0/examples/gimie-raw-instance.ttl
+python dev/v4.0.0/materialize_proposed_raw.py   # regenerate proposed/ from upstream
+python dev/v4.0.0/build_explorer.py             # regenerate ontology-explorer.html
+
+pyshacl -s dev/v4.0.0/proposed/ontology-shapes-raw.proposed.ttl \
+        dev/v4.0.0/examples/gimie-raw-instance.ttl \
+        …/ontology-enumerations-canonical.ttl \
+        dev/v4.0.0/proposed/ontology-enumerations-raw.proposed.ttl
 ```
+
+Note the enumeration files go in the **data** graph, not `-e`: `sh:class
+…Enumeration` checks membership by asserted type, and an ontology graph without
+inference does not entail it. Passing them with `-e` produces 32 spurious
+violations, including one claiming `pulse:GitHub` is not a platform.

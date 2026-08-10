@@ -510,7 +510,10 @@ pulse:ExternalIdentifierShape sh:property [
 pulse:RawContributionShape
     a sh:NodeShape ;
     sh:targetClass pulse:Contribution ;
-    sh:closed true ;
+    # open, for the same reason as ask #13: a raw shape that rejects an
+    # unanticipated property is a shape that drops data at the intake. Asking
+    # them to open theirs while ours stayed closed was our own inconsistency.
+    sh:closed false ;
     sh:ignoredProperties ( rdf:type owl:sameAs ) ;
     sh:property [
         sh:path pulse:contributionTo ;
@@ -551,7 +554,7 @@ pulse:RawContributionShape
 pulse:RawGitIdentityShape
     a sh:NodeShape ;
     sh:targetClass pulse:GitIdentity ;
-    sh:closed true ;
+    sh:closed false ;   # ask #13 applies to our own raw shapes too
     sh:ignoredProperties ( rdf:type owl:sameAs ) ;
     sh:property [
         sh:path pulse:gitAuthorName ;
