@@ -1,0 +1,148 @@
+{
+ "request": {
+  "url": "https://api.deps.dev/v3alpha/systems/pypi/packages/gimie"
+ },
+ "captured_at": "2026-08-07T05:59:18Z",
+ "status_code": 200,
+ "response": {
+  "packageKey": {
+   "system": "PYPI",
+   "name": "gimie"
+  },
+  "purl": "pkg:pypi/gimie",
+  "versions": [
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.1.0"
+    },
+    "purl": "pkg:pypi/gimie@0.1.0",
+    "publishedAt": "2023-01-06T09:43:31Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.2.0"
+    },
+    "purl": "pkg:pypi/gimie@0.2.0",
+    "publishedAt": "2023-01-20T10:53:56Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.3.0"
+    },
+    "purl": "pkg:pypi/gimie@0.3.0",
+    "publishedAt": "2023-02-24T10:36:27Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.4.0"
+    },
+    "purl": "pkg:pypi/gimie@0.4.0",
+    "publishedAt": "2023-06-09T13:34:39Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.5.0"
+    },
+    "purl": "pkg:pypi/gimie@0.5.0",
+    "publishedAt": "2023-07-04T10:13:08Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.6.0"
+    },
+    "purl": "pkg:pypi/gimie@0.6.0",
+    "publishedAt": "2023-10-19T12:52:13Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.6.1"
+    },
+    "purl": "pkg:pypi/gimie@0.6.1",
+    "publishedAt": "2023-11-01T12:56:46Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.7.0"
+    },
+    "purl": "pkg:pypi/gimie@0.7.0",
+    "publishedAt": "2024-12-03T10:20:29Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.7.1"
+    },
+    "purl": "pkg:pypi/gimie@0.7.1",
+    "publishedAt": "2024-12-09T17:07:50Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.7.2"
+    },
+    "purl": "pkg:pypi/gimie@0.7.2",
+    "publishedAt": "2024-12-18T09:05:42Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.8.0"
+    },
+    "purl": "pkg:pypi/gimie@0.8.0",
+    "publishedAt": "2026-08-05T11:25:49Z",
+    "isDefault": true,
+    "isDeprecated": false,
+    "deprecatedReason": ""
+   }
+  ]
+ }
+}

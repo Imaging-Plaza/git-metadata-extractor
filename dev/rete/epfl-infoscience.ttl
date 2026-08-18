@@ -1,0 +1,273 @@
+@prefix infs:    <https://w3id.org/rete/infoscience#> .
+@prefix scholar: <https://w3id.org/rete/scholar#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix foaf:    <http://xmlns.com/foaf/0.1/> .
+@prefix org:     <http://www.w3.org/ns/org#> .
+@prefix schema:  <https://schema.org/> .
+@prefix prism:   <http://prismstandard.org/namespaces/basic/2.1/> .
+@prefix fabio:   <http://purl.org/spar/fabio/> .
+@prefix frapo:   <http://purl.org/cerif/frapo/> .
+
+#################################################################
+#  EPFL Infoscience Ontology (rete)
+#
+#  Infoscience (https://infoscience.epfl.ch) is EPFL's DSpace-CRIS
+#  research information system (all metadata CC0). Its metadata fields
+#  already use STANDARD schemas — this is DSpace's own registry
+#  (GET /server/api/core/metadataschemas):
+#     dc        -> Dublin Core         (dublincore.org / purl.org/dc/terms)
+#     dcterms   -> DCMI Terms
+#     person    -> schema.org          (person.givenName = schema:givenName, …)
+#     organization -> schema.org       periodical -> schema:Periodical
+#     thesis / creativework -> schema.org
+#     oaire     -> OpenAIRE            (namespace.openaire.eu/schema/oaire)
+#     oairecerif-> OpenAIRE CERIF 1.1
+#     datacite  -> DataCite kernel-4
+#     prism     -> PRISM
+#     epfl / cris / crisrp / crisou / crispj -> EPFL & DSpace-CRIS custom
+#
+#  So this ontology REUSES the standard vocabularies those fields map
+#  to (schema.org for Person/Organization/Journal, Dublin Core, PRISM,
+#  FaBiO, FRAPO), and mints infs: terms ONLY for the EPFL/CRIS-specific
+#  fields with no standard equivalent (sciper, unit codes, thesis
+#  metadata, …). Every infs: term is rdfs:subPropertyOf the exact
+#  standard the DSpace field corresponds to.
+#
+#  It aligns INLINE to the rete scholarly hub (usable stand-alone) and
+#  joins the wider graph on DOI / ORCID / EPFL sciper / handle. Nothing
+#  is lost either way: the Parquet `metadata_json` column keeps the
+#  COMPLETE raw field map (incl. pure DSpace/CRIS system fields).
+#  OWL 2 QL-safe.
+#################################################################
+
+infs: a owl:Ontology ;
+    dcterms:title "EPFL Infoscience Ontology (rete)"@en ;
+    dcterms:license <https://creativecommons.org/publicdomain/zero/1.0/> ;
+    rdfs:seeAlso scholar: , <https://infoscience.epfl.ch> ;
+    owl:versionInfo "1.2.0 (2026-07-17)" .
+
+#################################################################
+#  Entity classes  (DSpace entityType -> standard class + scholar hub)
+#################################################################
+
+infs:Publication a owl:Class ; rdfs:label "Publication"@en ;
+    rdfs:comment "A scholarly work (entityType=Publication)."@en ;
+    rdfs:subClassOf scholar:Work , schema:CreativeWork , fabio:Work .
+infs:Thesis a owl:Class ; rdfs:label "Thesis"@en ;
+    rdfs:comment "A thesis/dissertation (dc.type thesis::…)."@en ;
+    rdfs:subClassOf infs:Publication , schema:Thesis , fabio:Thesis .
+infs:Person a owl:Class ; rdfs:label "Person"@en ;
+    rdfs:comment "A researcher profile (entityType=Person). DSpace `person` schema = schema.org."@en ;
+    rdfs:subClassOf scholar:Person , schema:Person , foaf:Person .
+infs:OrgUnit a owl:Class ; rdfs:label "Organizational unit"@en ;
+    rdfs:comment "An EPFL unit — lab/institute/section/school (entityType=OrgUnit). DSpace `organization` schema = schema.org."@en ;
+    rdfs:subClassOf scholar:Organization , schema:Organization , org:OrganizationalUnit .
+infs:Journal a owl:Class ; rdfs:label "Journal"@en ;
+    rdfs:comment "A journal/serial (entityType=Journal). DSpace `periodical` schema = schema.org."@en ;
+    rdfs:subClassOf schema:Periodical , fabio:Journal .
+infs:Event a owl:Class ; rdfs:label "Event"@en ;
+    rdfs:comment "A conference or event (entityType=Event)."@en ;
+    rdfs:subClassOf schema:Event .
+infs:Patent a owl:Class ; rdfs:label "Patent"@en ;
+    rdfs:subClassOf scholar:Work , fabio:Patent .
+infs:Product a owl:Class ; rdfs:label "Product"@en ;
+    rdfs:comment "A research product/output (entityType=Product)."@en ;
+    rdfs:subClassOf scholar:Work .
+infs:Funding a owl:Class ; rdfs:label "Funding"@en ;
+    rdfs:subClassOf scholar:Grant , frapo:Funding .
+
+#################################################################
+#  Object properties  (DSpace `authority` relations)
+#################################################################
+
+infs:hasAuthor a owl:ObjectProperty ; rdfs:label "has author"@en ;
+    rdfs:comment "dc.contributor.author authority → a Person."@en ;
+    rdfs:domain infs:Publication ; rdfs:range infs:Person ; rdfs:subPropertyOf dcterms:creator .
+infs:hasAdvisor a owl:ObjectProperty ; rdfs:label "has advisor"@en ;
+    rdfs:comment "dc.contributor.advisor authority → a Person (thesis supervisor)."@en ;
+    rdfs:domain infs:Publication ; rdfs:range infs:Person ; rdfs:subPropertyOf dcterms:contributor .
+infs:inJournal a owl:ObjectProperty ; rdfs:label "in journal"@en ;
+    rdfs:domain infs:Publication ; rdfs:range infs:Journal ; rdfs:subPropertyOf dcterms:isPartOf .
+infs:presentedAt a owl:ObjectProperty ; rdfs:label "presented at"@en ;
+    rdfs:domain infs:Publication ; rdfs:range infs:Event .
+infs:affiliatedWith a owl:ObjectProperty ; rdfs:label "affiliated with"@en ;
+    rdfs:comment "person→OrgUnit (oairecerif.person.affiliation / cris.virtual.parent-organization)."@en ;
+    rdfs:range infs:OrgUnit ; rdfs:subPropertyOf schema:affiliation .
+infs:parentOrg a owl:ObjectProperty ; rdfs:label "parent organization"@en ;
+    rdfs:comment "organization.parentOrganization."@en ;
+    rdfs:domain infs:OrgUnit ; rdfs:range infs:OrgUnit ; rdfs:subPropertyOf org:subOrganizationOf .
+infs:director a owl:ObjectProperty ; rdfs:label "director"@en ;
+    rdfs:comment "crisou.director → a Person."@en ;
+    rdfs:domain infs:OrgUnit ; rdfs:range infs:Person .
+
+#################################################################
+#  Datatype properties — shared item (dc.* -> Dublin Core)
+#################################################################
+
+infs:uuid a owl:DatatypeProperty ; rdfs:label "DSpace UUID"@en ; rdfs:range xsd:string .
+infs:handle a owl:DatatypeProperty ; rdfs:label "handle"@en ; rdfs:range xsd:string ;
+    rdfs:comment "Infoscience handle 20.500.14299/{n} (native id / IRI base)."@en .
+infs:title a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:title ; rdfs:range xsd:string ;
+    rdfs:label "title"@en ; rdfs:comment "dc.title"@en .
+infs:uri a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:identifier ; rdfs:range xsd:anyURI ;
+    rdfs:label "URI"@en ; rdfs:comment "dc.identifier.uri"@en .
+infs:rights a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:rights ; rdfs:range xsd:string ;
+    rdfs:label "rights"@en ; rdfs:comment "datacite.rights (access-rights code)."@en .
+infs:abstract a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:abstract ; rdfs:range xsd:string ;
+    rdfs:label "abstract / biography"@en ; rdfs:comment "dc.description.abstract (publication abstract or person bio)."@en .
+infs:subject a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:subject ; rdfs:range xsd:string ;
+    rdfs:label "subject"@en ; rdfs:comment "dc.subject"@en .
+infs:dateCreated a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:created ; rdfs:range xsd:string ;
+    rdfs:label "date created"@en ; rdfs:comment "dc.date.created"@en .
+infs:dateModified a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:modified ; rdfs:range xsd:string ;
+    rdfs:label "date modified"@en ; rdfs:comment "dc.date.modified"@en .
+infs:dateAccessioned a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:dateSubmitted ; rdfs:range xsd:string ;
+    rdfs:label "date accessioned"@en ; rdfs:comment "dc.date.accessioned"@en .
+infs:dateAvailable a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:available ; rdfs:range xsd:string ;
+    rdfs:label "date available"@en ; rdfs:comment "dc.date.available"@en .
+
+# --- cross-dataset join keys → scholar hub ---
+infs:doi a owl:DatatypeProperty ; rdfs:subPropertyOf scholar:doi ; rdfs:range xsd:string ;
+    rdfs:domain infs:Publication ; rdfs:label "DOI"@en ;
+    rdfs:comment "dc.identifier.doi (lowercased, bare). IRI form https://doi.org/{doi}."@en .
+infs:orcid a owl:DatatypeProperty ; rdfs:subPropertyOf scholar:orcid ; rdfs:range xsd:string ;
+    rdfs:domain infs:Person ; rdfs:label "ORCID iD"@en ;
+    rdfs:comment "person.identifier.orcid. IRI form https://orcid.org/{orcid}."@en .
+infs:sciper a owl:DatatypeProperty ; rdfs:range xsd:string ; rdfs:domain infs:Person ;
+    rdfs:label "SCIPER"@en ;
+    rdfs:comment "epfl.sciperId — EPFL person id. Join key to the epfl-graph dataset."@en .
+
+#################################################################
+#  PERSON — person.* = schema.org; oairecerif.* / epfl.* custom
+#################################################################
+
+infs:fullName a owl:DatatypeProperty ; rdfs:subPropertyOf schema:name ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "full name"@en ; rdfs:comment "dc.title of a Person."@en .
+infs:givenName a owl:DatatypeProperty ; rdfs:subPropertyOf schema:givenName ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "given name"@en ; rdfs:comment "person.givenName"@en .
+infs:familyName a owl:DatatypeProperty ; rdfs:subPropertyOf schema:familyName ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "family name"@en ; rdfs:comment "person.familyName"@en .
+infs:nameVariant a owl:DatatypeProperty ; rdfs:subPropertyOf skos:altLabel ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "name variant"@en ; rdfs:comment "crisrp.name.variant"@en .
+infs:email a owl:DatatypeProperty ; rdfs:subPropertyOf schema:email ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "email"@en ; rdfs:comment "person.email"@en .
+infs:homepage a owl:DatatypeProperty ; rdfs:subPropertyOf schema:url ; rdfs:domain infs:Person ;
+    rdfs:range xsd:anyURI ; rdfs:label "homepage"@en ; rdfs:comment "oairecerif.identifier.url / crisrp.site.title"@en .
+infs:jobTitle a owl:DatatypeProperty ; rdfs:subPropertyOf schema:jobTitle ; rdfs:domain infs:Person ;
+    rdfs:range xsd:string ; rdfs:label "job title"@en ; rdfs:comment "person.jobTitle"@en .
+infs:sciperActive a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:boolean ;
+    rdfs:label "sciper active"@en ; rdfs:comment "epfl.sciper.active"@en .
+infs:synchronizationDate a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:label "synchronization date"@en ; rdfs:comment "epfl.synchronization.date"@en .
+infs:scopusAuthorId a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "Scopus Author ID"@en ; rdfs:comment "person.identifier.scopus-author-id"@en .
+infs:researcherId a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "ResearcherID (WoS)"@en ; rdfs:comment "person.identifier.rid"@en .
+infs:openalexAuthorId a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "OpenAlex Author ID"@en ; rdfs:comment "person.identifier.openalex"@en .
+infs:affiliationName a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "affiliation name"@en ; rdfs:comment "person.affiliation.name / oairecerif.person.affiliation"@en .
+infs:affiliationRole a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "affiliation role"@en ; rdfs:comment "oairecerif.affiliation.role"@en .
+infs:affiliationStartDate a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "affiliation start date"@en ; rdfs:comment "oairecerif.affiliation.startDate"@en .
+infs:affiliationEndDate a owl:DatatypeProperty ; rdfs:domain infs:Person ; rdfs:range xsd:string ;
+    rdfs:label "affiliation end date"@en ; rdfs:comment "oairecerif.affiliation.endDate"@en .
+
+#################################################################
+#  PUBLICATION / THESIS  (dc.* Dublin Core; epfl.thesis.* custom)
+#################################################################
+
+infs:type a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:type ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "type"@en ; rdfs:comment "dc.type"@en .
+infs:dateIssued a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:issued ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "date issued"@en ; rdfs:comment "dc.date.issued"@en .
+infs:dateAccepted a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:dateAccepted ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "date accepted"@en ; rdfs:comment "dc.date.accepted"@en .
+infs:language a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:language ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "language"@en ; rdfs:comment "dc.language.iso"@en .
+infs:publisher a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:publisher ; rdfs:range xsd:string ;
+    rdfs:label "publisher"@en ; rdfs:comment "dc.publisher (publications & journals)."@en .
+infs:publisherPlace a owl:DatatypeProperty ; rdfs:domain infs:Publication ; rdfs:range xsd:string ;
+    rdfs:label "publisher place"@en ; rdfs:comment "dc.publisher.place"@en .
+infs:source a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:source ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "source"@en ; rdfs:comment "dc.source"@en .
+infs:size a owl:DatatypeProperty ; rdfs:subPropertyOf dcterms:extent ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "size"@en ; rdfs:comment "dc.size"@en .
+infs:sponsorship a owl:DatatypeProperty ; rdfs:domain infs:Publication ; rdfs:range xsd:string ;
+    rdfs:label "sponsorship"@en ; rdfs:comment "dc.description.sponsorship (funding acknowledgement)."@en .
+infs:fullText a owl:DatatypeProperty ; rdfs:subPropertyOf schema:text ; rdfs:domain infs:Publication ;
+    rdfs:range xsd:string ; rdfs:label "full text"@en ;
+    rdfs:comment "Extracted full text of an OA publication (DSpace TEXT bundle; ~100k chars/file cap; ~42%)."@en .
+# thesis-specific (epfl.thesis.*)
+infs:doctoralSchool a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "doctoral school"@en ; rdfs:comment "epfl.thesis.doctoralSchool"@en .
+infs:faculty a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "faculty"@en ; rdfs:comment "epfl.thesis.faculty"@en .
+infs:institute a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "institute"@en ; rdfs:comment "epfl.thesis.institute"@en .
+infs:thesisNumber a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "thesis number"@en ; rdfs:comment "epfl.thesis.number"@en .
+infs:jury a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "thesis jury"@en ; rdfs:comment "epfl.thesis.jury"@en .
+infs:publicDefenseYear a owl:DatatypeProperty ; rdfs:domain infs:Thesis ; rdfs:range xsd:string ;
+    rdfs:label "public defense date"@en ; rdfs:comment "epfl.thesis.publicDefenseYear"@en .
+infs:writtenAt a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:label "written at"@en ; rdfs:comment "epfl.writtenAt"@en .
+
+#################################################################
+#  ORGUNIT / JOURNAL / EVENT / PATENT / FUNDING
+#################################################################
+
+infs:acronym a owl:DatatypeProperty ; rdfs:subPropertyOf skos:altLabel ; rdfs:domain infs:OrgUnit ;
+    rdfs:range xsd:string ; rdfs:label "acronym"@en ; rdfs:comment "oairecerif.acronym"@en .
+infs:unitCode a owl:DatatypeProperty ; rdfs:domain infs:OrgUnit ; rdfs:range xsd:string ;
+    rdfs:label "unit code"@en ; rdfs:comment "epfl.unit.code"@en .
+infs:unitInfoscienceCode a owl:DatatypeProperty ; rdfs:domain infs:OrgUnit ; rdfs:range xsd:string ;
+    rdfs:label "unit Infoscience code"@en ; rdfs:comment "epfl.unit.infoscienceCode"@en .
+infs:orgUnitActive a owl:DatatypeProperty ; rdfs:domain infs:OrgUnit ; rdfs:range xsd:boolean ;
+    rdfs:label "org unit active"@en ; rdfs:comment "epfl.orgUnit.active"@en .
+infs:orgUnitLevel a owl:DatatypeProperty ; rdfs:domain infs:OrgUnit ; rdfs:range xsd:string ;
+    rdfs:label "org unit level"@en ; rdfs:comment "epfl.orgUnit.level (School/Institute/Laboratory)."@en .
+infs:foundingDate a owl:DatatypeProperty ; rdfs:subPropertyOf schema:foundingDate ; rdfs:domain infs:OrgUnit ;
+    rdfs:range xsd:string ; rdfs:label "founding date"@en ; rdfs:comment "organization.foundingDate"@en .
+
+infs:issn a owl:DatatypeProperty ; rdfs:subPropertyOf prism:issn ; rdfs:domain infs:Journal ;
+    rdfs:range xsd:string ; rdfs:label "ISSN"@en ; rdfs:comment "dc.identifier.issn"@en .
+infs:eissn a owl:DatatypeProperty ; rdfs:domain infs:Journal ; rdfs:range xsd:string ;
+    rdfs:label "e-ISSN"@en ; rdfs:comment "dc.identifier.eissn"@en .
+
+infs:eventPlace a owl:DatatypeProperty ; rdfs:domain infs:Event ; rdfs:range xsd:string ;
+    rdfs:label "event place"@en ; rdfs:comment "oairecerif.event.place"@en .
+infs:conferenceDate a owl:DatatypeProperty ; rdfs:domain infs:Event ; rdfs:range xsd:string ;
+    rdfs:label "conference date"@en ; rdfs:comment "oaire.citation.conferenceDate"@en .
+infs:eventAcronym a owl:DatatypeProperty ; rdfs:subPropertyOf skos:altLabel ; rdfs:domain infs:Event ;
+    rdfs:range xsd:string ; rdfs:label "event acronym"@en ; rdfs:comment "oairecerif.acronym"@en .
+
+infs:patentNumber a owl:DatatypeProperty ; rdfs:domain infs:Patent ; rdfs:range xsd:string ;
+    rdfs:label "patent number"@en ; rdfs:comment "dc.identifier.patentno"@en .
+infs:patentCountry a owl:DatatypeProperty ; rdfs:domain infs:Patent ; rdfs:range xsd:string ;
+    rdfs:label "patent country"@en ; rdfs:comment "oairecerif.patent.country"@en .
+infs:patentKindCode a owl:DatatypeProperty ; rdfs:domain infs:Patent ; rdfs:range xsd:string ;
+    rdfs:label "patent kind code"@en ; rdfs:comment "epfl.patent.kindcode"@en .
+infs:patentDate a owl:DatatypeProperty ; rdfs:domain infs:Patent ; rdfs:range xsd:string ;
+    rdfs:label "patent date"@en ; rdfs:comment "epfl.patent.date"@en .
+
+infs:awardNumber a owl:DatatypeProperty ; rdfs:subPropertyOf frapo:hasGrantNumber ; rdfs:domain infs:Funding ;
+    rdfs:range xsd:string ; rdfs:label "award number"@en .
+infs:funderName a owl:DatatypeProperty ; rdfs:subPropertyOf schema:name ; rdfs:domain infs:Funding ;
+    rdfs:range xsd:string ; rdfs:label "funder name"@en .
+
+#################################################################
+#  Inline scholar-hub alignment (explicit — usable stand-alone)
+#################################################################
+infs:Publication rdfs:subClassOf scholar:Work .
+infs:Person      rdfs:subClassOf scholar:Person .
+infs:OrgUnit     rdfs:subClassOf scholar:Organization .
+infs:doi   rdfs:subPropertyOf scholar:doi .
+infs:orcid rdfs:subPropertyOf scholar:orcid .

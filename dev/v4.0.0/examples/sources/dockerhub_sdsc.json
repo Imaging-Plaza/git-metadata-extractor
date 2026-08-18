@@ -1,0 +1,13 @@
+{
+ "request": {
+  "url": "https://hub.docker.com/v2/repositories/sdscordes/?page_size=3"
+ },
+ "captured_at": "2026-08-07T05:59:21Z",
+ "status_code": 200,
+ "response": {
+  "count": 0,
+  "next": null,
+  "previous": null,
+  "results": []
+ }
+}
