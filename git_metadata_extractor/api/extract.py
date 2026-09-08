@@ -372,6 +372,9 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         field_name="agent_runtime",
     )
     total_started_at = perf_counter()
+    # A wall clock as well as the monotonic one: `prov:startedAtTime` is a
+    # timestamp, and `perf_counter()` has no epoch.
+    run_started_at = datetime.now(timezone.utc)
     link_veracity_seconds = 0.0
     logger.info(
         "extract: run_id=%s url=%s detected_type=%s runtime=%s",
@@ -502,6 +505,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         cache=pipeline_cache,
         buckets=typed_entity_buckets,
         warnings=warnings,
+        started_at=run_started_at,
     )
     try:
         for chain in (
@@ -672,6 +676,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         context_summary_markdown=context_summary_markdown,
         warnings=warnings,
         stats=stats,
+        extraction_run=pipeline_state.extras.get("extraction_run"),
     )
 
     if pipeline_cache is not None and pipeline_cache_key is not None:

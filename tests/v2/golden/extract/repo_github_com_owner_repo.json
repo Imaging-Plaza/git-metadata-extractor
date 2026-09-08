@@ -4,37 +4,22 @@
   "output_format": "jsonld",
   "output": {
     "@context": {
-      "sh": "http://www.w3.org/ns/shacl#",
-      "xsd": "http://www.w3.org/2001/XMLSchema#",
-      "schema": "http://schema.org/",
-      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-      "org": "http://www.w3.org/ns/org#",
-      "time": "http://www.w3.org/2006/time#",
       "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "sh": "http://www.w3.org/ns/shacl#",
+      "schema": "http://schema.org/",
+      "org": "http://www.w3.org/ns/org#",
+      "prov": "http://www.w3.org/ns/prov#",
+      "time": "http://www.w3.org/2006/time#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
       "owl": "http://www.w3.org/2002/07/owl#",
-      "dct": "http://purl.org/dc/terms/",
       "wd": "http://www.wikidata.org/entity/",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
       "skos": "http://www.w3.org/2004/02/skos/core#",
-      "schema:author": {
-        "@type": "@id",
-        "@container": "@set"
-      },
-      "schema:sourceOrganization": {
-        "@type": "@id"
-      },
-      "schema:url": {
-        "@type": "@id"
-      },
-      "schema:license": {
-        "@type": "@id"
-      },
-      "schema:citation": {
-        "@type": "@id"
-      },
-      "org:organization": {
-        "@type": "@id"
-      },
+      "dct": "http://purl.org/dc/terms/",
+      "coar-access": "http://purl.org/coar/access_right/",
+      "coar-resource": "http://purl.org/coar/resource_type/",
+      "datacite": "http://purl.org/spar/datacite/",
       "org:hasMembership": {
         "@type": "@id",
         "@container": "@set"
@@ -43,70 +28,367 @@
         "@type": "@id",
         "@container": "@set"
       },
-      "org:unitOf": {
+      "org:organization": {
         "@type": "@id"
       },
-      "pulse:hasContribution": {
+      "org:unitOf": {
         "@type": "@id",
+        "@container": "@set"
+      },
+      "prov:endedAtTime": {
+        "@type": "xsd:dateTime"
+      },
+      "prov:generatedAtTime": {
+        "@type": "xsd:dateTime"
+      },
+      "prov:startedAtTime": {
+        "@type": "xsd:dateTime"
+      },
+      "prov:wasGeneratedBy": {
+        "@type": "@id"
+      },
+      "pulse:accessRight": {
+        "@type": "@id"
+      },
+      "pulse:archived": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:branchCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:codeOfConduct": {
+        "@type": "@id"
+      },
+      "pulse:collectionIncludes": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:collectionOwnedBy": {
+        "@type": "@id"
+      },
+      "pulse:configuration": {
+        "@container": "@set"
+      },
+      "pulse:contributionCount": {
+        "@type": "xsd:integer",
         "@container": "@set"
       },
       "pulse:contributionTo": {
         "@type": "@id"
       },
-      "pulse:owns": {
+      "pulse:contributor": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:curator": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:datasetSplit": {
+        "@container": "@set"
+      },
+      "pulse:dependencyCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:dependencyOf": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:dependentCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:dependsOn": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:depositOf": {
+        "@type": "@id"
+      },
+      "pulse:discipline": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:doi": {
+        "@container": "@set"
+      },
+      "pulse:downloadCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:externalReference": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:extractedBy": {
+        "@type": "@id"
+      },
+      "pulse:extractionSeed": {
+        "@container": "@set"
+      },
+      "pulse:fileCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:firstContributionDate": {
+        "@type": "xsd:dateTime",
+        "@container": "@set"
+      },
+      "pulse:followerCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:followingCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:fundingConfig": {
+        "@type": "@id"
+      },
+      "pulse:gated": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:gitTagCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:hasAuthoredArticle": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasContribution": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasDeposit": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasDiscussions": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:hasExternalIdentifier": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasFunding": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasOrganizationProfile": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasPages": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:hasProfile": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:hasWiki": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:identifierScheme": {
+        "@type": "@id"
+      },
+      "pulse:isForkOf": {
+        "@type": "@id"
+      },
+      "pulse:isTemplate": {
+        "@type": "xsd:boolean"
+      },
+      "pulse:keyword": {
+        "@container": "@set"
+      },
+      "pulse:language": {
+        "@container": "@set"
+      },
+      "pulse:lastContributionDate": {
+        "@type": "xsd:dateTime",
+        "@container": "@set"
+      },
+      "pulse:lfsObjectCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:likeCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:memberOfCommunity": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:membershipType": {
+        "@type": "@id"
+      },
+      "pulse:modality": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:openIssueCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:orcidIdentifier": {
+        "@container": "@set"
+      },
+      "pulse:organizationProfileOf": {
+        "@type": "@id"
+      },
+      "pulse:organizationType": {
         "@type": "@id",
         "@container": "@set"
       },
       "pulse:ownedBy": {
         "@type": "@id"
       },
-      "pulse:isForkOf": {
+      "pulse:owns": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:ownsCollection": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:partOfRun": {
         "@type": "@id"
       },
-      "affiliations": {
-        "@id": "pulse:affiliations",
+      "pulse:platform": {
+        "@type": "@id"
+      },
+      "pulse:platformInstance": {
+        "@type": "@id"
+      },
+      "pulse:platformUsername": {
+        "@container": "@set"
+      },
+      "pulse:profileOf": {
+        "@type": "@id"
+      },
+      "pulse:projectOutput": {
         "@type": "@id",
         "@container": "@set"
       },
-      "pulse:discipline": {
+      "pulse:publicCodeManifest": {
+        "@type": "@id"
+      },
+      "pulse:publicGistCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:publicRepositoryCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:publicationType": {
         "@type": "@id",
         "@container": "@set"
+      },
+      "pulse:pushedDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:readme": {
+        "@type": "@id"
+      },
+      "pulse:references": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:relatedRepository": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:releaseCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:repositoryForks": {
+        "@type": "xsd:integer"
+      },
+      "pulse:repositoryStars": {
+        "@type": "xsd:integer"
       },
       "pulse:repositoryType": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:ror": {
+        "@container": "@set"
+      },
+      "pulse:runtimeStatus": {
         "@type": "@id"
       },
-      "pulse:OrganizationType": {
+      "pulse:sdk": {
         "@type": "@id"
+      },
+      "pulse:securityPolicy": {
+        "@type": "@id"
+      },
+      "pulse:socialLink": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:tag": {
+        "@container": "@set"
+      },
+      "pulse:task": {
+        "@container": "@set"
+      },
+      "pulse:visibility": {
+        "@type": "@id"
+      },
+      "pulse:watcherCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:xetObjectCount": {
+        "@type": "xsd:integer"
+      },
+      "schema:author": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:citation": {
+        "@type": "@id",
+        "@container": "@set"
       },
       "schema:dateCreated": {
+        "@type": "xsd:dateTime",
+        "@container": "@set"
+      },
+      "schema:dateModified": {
         "@type": "xsd:dateTime"
       },
       "schema:datePublished": {
         "@type": "xsd:date"
       },
+      "schema:email": {
+        "@container": "@set"
+      },
+      "schema:funder": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:image": {
+        "@type": "@id"
+      },
+      "schema:license": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:member": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:name": {
+        "@container": "@set"
+      },
+      "schema:programmingLanguage": {
+        "@container": "@set"
+      },
+      "schema:sourceOrganization": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:url": {
+        "@type": "@id",
+        "@container": "@set"
+      },
       "time:hasBeginning": {
-        "@type": "xsd:date"
+        "@type": "xsd:date",
+        "@container": "@set"
       },
       "time:hasEnd": {
         "@type": "xsd:date"
-      },
-      "pulse:firstContributionDate": {
-        "@type": "xsd:dateTime"
-      },
-      "pulse:lastContributionDate": {
-        "@type": "xsd:dateTime"
-      },
-      "pulse:contributionCount": {
-        "@type": "xsd:integer"
-      },
-      "pulse:githubRepoStars": {
-        "@type": "xsd:integer"
-      },
-      "pulse:githubRepoForks": {
-        "@type": "xsd:integer"
-      },
-      "pulse:githubOrgFollowers": {
-        "@type": "xsd:integer"
       }
     },
     "@graph": [
@@ -114,10 +396,6 @@
         "@id": "https://github.com/octocat",
         "@type": "schema:Person",
         "schema:name": "The Octocat",
-        "pulse:githubUsername": "https://github.com/octocat",
-        "pulse:orcidIdentifier": null,
-        "pulse:infosciencePersonIdentifier": null,
-        "org:hasMembership": [],
         "pulse:hasContribution": [
           {
             "@id": "https://github.com/octocat__https://github.com/octocat/Hello-World"
@@ -127,25 +405,25 @@
           {
             "@id": "https://github.com/octocat/Hello-World"
           }
+        ],
+        "pulse:hasProfile": [
+          {
+            "@id": "urn:pulse:profile:github:octocat"
+          }
         ]
       },
       {
         "@id": "https://github.com/octocat/Hello-World",
         "@type": "schema:SoftwareSourceCode",
         "schema:name": "Hello-World",
-        "pulse:githubRepositoryHandle": "https://github.com/octocat/Hello-World",
         "schema:author": [
           {
             "@id": "https://github.com/octocat"
           }
         ],
-        "pulse:githubRepoStars": 80,
-        "pulse:githubRepoForks": 9,
-        "schema:dateCreated": null,
         "schema:license": {
           "@id": "https://spdx.org/licenses/MIT.html"
         },
-        "schema:citation": null,
         "schema:programmingLanguage": [
           "Python",
           "Shell"
@@ -153,20 +431,31 @@
         "pulse:ownedBy": {
           "@id": "https://github.com/octocat"
         },
-        "pulse:isForkOf": null,
         "pulse:repositoryType": "pulse:Software",
-        "pulse:discipline": []
+        "pulse:repositoryHandle": "octocat/Hello-World",
+        "pulse:platform": "pulse:GitHub",
+        "pulse:repositoryStars": 80,
+        "pulse:repositoryForks": 9
       },
       {
         "@id": "https://github.com/octocat__https://github.com/octocat/Hello-World",
         "@type": "pulse:Contribution",
+        "schema:author": {
+          "@id": "https://github.com/octocat"
+        },
         "pulse:contributionTo": {
           "@id": "https://github.com/octocat/Hello-World"
         },
-        "pulse:contributionCount": 32,
-        "pulse:firstContributionDate": null,
-        "pulse:lastContributionDate": null,
-        "schema:author": {
+        "pulse:contributionCount": 32
+      },
+      {
+        "@id": "urn:pulse:profile:github:octocat",
+        "@type": "pulse:PlatformProfile",
+        "pulse:platform": "pulse:GitHub",
+        "pulse:platformUsername": [
+          "octocat"
+        ],
+        "pulse:profileOf": {
           "@id": "https://github.com/octocat"
         }
       }
@@ -175,7 +464,7 @@
   "warnings": [],
   "stats": {
     "entities_count": 3,
-    "triples_count": 20,
+    "triples_count": 25,
     "stages_completed": [
       "context_gather",
       "repo_agent",

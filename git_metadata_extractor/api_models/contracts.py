@@ -124,6 +124,12 @@ class V2ExtractResponse(BaseModel):
     context_summary_markdown: str | None = None
     warnings: list[str] = Field(default_factory=list)
     stats: V2Stats
+    #: A two-node JSON-LD graph describing this run as a `pulse:ExtractionRun`
+    #: plus the `prov:SoftwareAgent` that produced it. Sibling of `output`, not
+    #: part of it: the four-layer model keeps runs in the provenance layer
+    #: while `output` carries what was extracted. Optional, so older consumers
+    #: and cached responses predating the field stay valid.
+    extraction_run: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def output_matches_format(self) -> V2ExtractResponse:

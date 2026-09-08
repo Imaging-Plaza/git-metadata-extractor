@@ -837,11 +837,20 @@ def _shacl_gate(state: PipelineState) -> None:
     from git_metadata_extractor.api import _helpers  # noqa: PLC0415
     from git_metadata_extractor.validation import (  # noqa: PLC0415
         SHACLValidator,
+        canonical_shapes_available,
+        load_canonical_shapes_graph,
         load_ontology_shapes_graph,
     )
     from git_metadata_extractor.validation.shacl_validation import (  # noqa: PLC0415
         SHACLRuntimeUnavailableError,
     )
+
+    # Validate against the shapes that describe the graph actually built. Once
+    # `canonical_projection` has run the payload is v3, and the v2.1.2 bundle
+    # would report every profile node as an unknown class — noise, not signal.
+    projected = bool(state.timings.get("canonical_projection") is not None)
+    use_canonical = projected and canonical_shapes_available()
+    shapes = load_canonical_shapes_graph() if use_canonical else load_ontology_shapes_graph()
 
     data_graph = _helpers._jsonld_to_graph(state.payload)  # noqa: SLF001
     if data_graph is None:
@@ -852,10 +861,7 @@ def _shacl_gate(state: PipelineState) -> None:
         return
 
     try:
-        result = SHACLValidator().validate_graph(
-            data_graph,
-            load_ontology_shapes_graph(),
-        )
+        result = SHACLValidator().validate_graph(data_graph, shapes)
     except SHACLRuntimeUnavailableError as exc:
         # pyshacl missing or unusable is an environment problem, not a graph
         # problem, so it must not read as a conformance failure.
@@ -882,10 +888,84 @@ def _shacl_gate(state: PipelineState) -> None:
             f"message={shacl_warning.get('message')}",
         )
     logger.info(
-        "shacl_gate: conforms=%s violations=%d warnings=%d",
+        "shacl_gate: conforms=%s violations=%d warnings=%d shapes=%s",
         result.conforms,
         len(result.violations),
         len(result.warnings),
+        "canonical-v3" if use_canonical else "v2.1.2",
+    )
+
+
+def _record_extraction_run(state: PipelineState) -> None:
+    """Describe this run as a `pulse:ExtractionRun`, beside the graph.
+
+    Last in the chain because `prov:endedAtTime` should cover everything that
+    happened to the graph, the SHACL gate included.
+
+    Deliberately not added to `state.payload["@graph"]`: the four-layer model
+    puts runs in the substrate/provenance layer, and `graph:canonical` holds
+    what was produced rather than how. The route returns it as a sibling of
+    `output`, so the corpus signature — which reads `output["@graph"]` — is
+    unaffected.
+    """
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    from git_metadata_extractor.api._helpers import (  # noqa: PLC0415
+        PACKAGE_NAME,
+        PACKAGE_VERSION,
+    )
+    from git_metadata_extractor.pipeline.stages.extraction_run import (  # noqa: PLC0415
+        build_extraction_run,
+    )
+
+    started = state.started_at or datetime.now(timezone.utc)
+    state.extras["extraction_run"] = build_extraction_run(
+        run_id=state.run_id,
+        seeds=[state.source_url],
+        started_at=started,
+        package_name=PACKAGE_NAME,
+        package_version=PACKAGE_VERSION,
+    )
+    logger.info(
+        "extraction_run: id=%s seeds=1 agent=%s",
+        state.run_id,
+        PACKAGE_VERSION,
+    )
+
+
+def _project_canonical(state: PipelineState) -> None:
+    """Replace the built graph with its v3 canonical projection.
+
+    Runs after `jsonld_build`, and *on* its output rather than instead of it:
+    `build_jsonld_output` reads the v2 context to decide which values serialise
+    as `{"@id": ...}` references and it normalises node ids, so it still
+    produces the intermediate this projects from. What changes is which graph
+    reaches the caller, and under which context.
+
+    The `@context` becomes the generated one, because the graph it describes is
+    now v3. The v2 context stays internal, describing the intermediate.
+
+    `excluded_entities` passes through unprojected on purpose: it explains why
+    entities were *dropped* during v2 validation, which is diagnostic output
+    about a v2 process rather than canonical graph data.
+    """
+    from git_metadata_extractor.pipeline.stages.canonical_projection import (  # noqa: PLC0415
+        project_canonical,
+    )
+    from git_metadata_extractor.schema import load_generated_context  # noqa: PLC0415
+
+    nodes = state.payload.get("@graph")
+    if not isinstance(nodes, list):
+        return
+    projected = project_canonical(nodes)
+    state.payload["@graph"] = projected["@graph"]
+    state.payload["@context"] = load_generated_context()
+    _log(
+        "canonical_projection",
+        "in=%d out=%d",
+        len(nodes),
+        len(projected["@graph"]),
+        state=state,
     )
 
 
@@ -903,9 +983,22 @@ PAYLOAD_CHAIN: list[Stage] = [
         fail_open=True,
     ),
     Stage("jsonld_build", _build_jsonld, fail_open=False),
+    # Before the gate, not after: the gate must validate the graph the caller
+    # actually receives. Fail-closed, because a failed projection would serve
+    # the v2 graph under the v3 context — a document that describes itself
+    # wrongly, which is worse than an error.
+    Stage(
+        "canonical_projection",
+        _project_canonical,
+        applies=_gate("_canonical_output_enabled"),
+        fail_open=False,
+    ),
     # The gate handles its own failure modes and never raises, so fail_open is
     # moot here; declared False to match the route, where it was unwrapped.
     Stage("shacl_gate", _shacl_gate, fail_open=False),
+    # Fail-open: a malformed run descriptor must not cost the caller a graph
+    # that is otherwise complete.
+    Stage("extraction_run", _record_extraction_run, fail_open=True),
 ]
 
 

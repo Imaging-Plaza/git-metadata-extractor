@@ -164,10 +164,16 @@ concept_tagging     [gated]    EPFL Graph concepts/keywords/disciplines from
                                as internal _concepts/_keywords/_disciplines
                                (off by default: V2_CONCEPT_TAGGING_ENABLED)
 tag_rule_based_disciplines     deterministic discipline fallback
-build_jsonld_output            final JSON-LD graph; strips redundant pulse:ror
-                               from any org:Organization whose @id is already
-                               the ROR (closed-shape violation fix)
-shacl_gate                     SHACL validation — warning-only (see below)
+build_jsonld_output            v2-shaped JSON-LD graph; strips redundant
+                               pulse:ror from any org:Organization whose @id is
+                               already the ROR (closed-shape violation fix)
+canonical_projection           project the graph into the v3 canonical shapes
+                               and swap in the generated @context; the v2 graph
+                               above becomes an internal intermediate
+                               (V2_CANONICAL_OUTPUT_ENABLED, default true)
+shacl_gate                     SHACL validation — warning-only (see below).
+                               Validates against the v3 canonical shapes when
+                               the projection ran, the v2.1.2 bundle otherwise
 compute_stats                  response counters/timings
 ```
 
@@ -230,6 +236,44 @@ addressed deterministically:
   repos). Prevents the owner from leaking as a bare-string ref in
   `pulse:ownedBy` / `schema:author` with no backing entity.
 
+## Output shape (v3 canonical, since 2026-09-08)
+
+`/v2/extract` returns the graph in the **v3 canonical shapes**. What changed
+from the v2 form:
+
+- **Identity is a profile, not a field.** A Person's `pulse:githubUsername` is
+  gone; it is now `pulse:hasProfile` → a `pulse:PlatformProfile` node carrying
+  `pulse:platform` + `pulse:platformUsername`. Organizations use
+  `pulse:hasOrganizationProfile` → `pulse:OrganizationProfile`. This is what
+  lets one person's GitHub and ORCID identities be linked without collapsing
+  them, and it is what the store-side unifier keys on.
+- **Repositories are not profiles.** `pulse:platform` and
+  `pulse:repositoryHandle` sit directly on `schema:SoftwareSourceCode`;
+  `pulse:githubRepoStars` / `Forks` are renamed `pulse:repositoryStars` /
+  `repositoryForks`.
+- **Identifiers go bare**: `pulse:orcidIdentifier` is `0000-...`,
+  `pulse:doi` is `10.x/y`, `pulse:repositoryHandle` is `owner/name`.
+  `pulse:ror` deliberately stays a URL.
+- **Articles carry a `pulse:Deposit`**, which holds `schema:datePublished` —
+  `ArticleShape` has no date of its own.
+- **Not carried by the canonical layer**: follower counts, biographies,
+  locations, avatars, a person's homepage. These are not lost from the
+  ontology — `RawPlatformProfileShape` declares `pulse:followerCount`,
+  `pulse:biography`, `pulse:location`, `pulse:company`, `pulse:socialLink`,
+  `schema:image`, `schema:url` and more. They belong to the **raw** layer,
+  which the current projection does not yet emit, so today they are dropped
+  on the way to canonical. The `affiliations` context alias is genuinely gone.
+
+The `@context` is now generated from the SHACL shapes
+(`schema/generated/context.jsonld`). The hand-written v2 context is still used
+*internally* — `build_jsonld_output` reads it to decide which values serialise
+as `{"@id": ...}` references, and it describes the intermediate the projection
+consumes.
+
+Measured 120/120 SHACL-conformant against `ontology-shapes-canonical.ttl` over
+the 120-repo corpus. Regenerate the measurement with
+`python scripts/v2/canonical_conformance.py <corpus dir>`.
+
 ## API surface
 
 - `GET  /v2/health` — health check (open, no auth)
@@ -254,6 +298,7 @@ addressed deterministically:
 | `SELENIUM_REMOTE_URL` | unset | enables Selenium-backed link veracity + selenium-fetch tool |
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | swap in mock GitHub/ORCID/Infoscience/ROR providers |
+| `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `/v2/extract` returns the graph in the **v3 canonical shapes** — platform profiles instead of flat handles, bare identifiers, deposits. Set `false` to restore the v2-shaped output without a redeploy. See "Output shape" below. |
 | `V2_LINK_VERACITY_ENABLED` | `true` | turn off to skip the link-veracity stage in LLM mode (rule-based mode skips unconditionally) |
 | `V2_CONTEXT_SUMMARY_SCOUT_MODE` | `false` | upgrade `context_summary` LLM stage to scout mode: broad RAG-search toolkit (orcid/ror/infoscience/openalex/zenodo/ethz/huggingface/renkulab/snsf/epfl_graph + selenium_fetch) on top of the legacy `grep_repository_corpus` + DuckDuckGo pair, plus a structured-brief prompt with explicit People / Organizations / Articles / Affiliations / Caveats sections. Per-entity LLM agents (person, org, article, membership, contribution) automatically benefit since they already consume the `summary_markdown`. Trade-off: heavier upfront LLM call, but per-entity calls send less context and duplicate ORCID/ROR lookups across entities collapse into the scout's shared brief. |
 | `V2_INFOSCIENCE_RAG_ENABLED` | `true` | enables the Infoscience RAG agent tools (Qdrant-backed semantic search + on-demand chunk/record fetch). Construction degrades gracefully when Qdrant or RCP is unreachable. |

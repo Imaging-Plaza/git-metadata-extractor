@@ -136,6 +136,26 @@ def _should_apply_critic_pruning() -> bool:
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
 
 
+def _canonical_output_enabled() -> bool:
+    """Read `V2_CANONICAL_OUTPUT_ENABLED` (default **true**).
+
+    `/v2/extract` returns the graph in the **v3 canonical shapes**: platform
+    profiles instead of flat handles, bare identifiers, deposits carrying
+    publication dates. Measured at 119/119 SHACL-conformant against the real
+    `ontology-shapes-canonical.ttl` over the 120-repo corpus — see
+    `scripts/v2/canonical_conformance.py`.
+
+    Kept as a switch rather than deleted because this is a breaking change for
+    consumers: setting it `false` restores the v2-shaped output without a
+    redeploy. Property renames and value-format changes are listed in §2.4 and
+    §2.6 of ONTOLOGY_V3_REQUIREMENTS.md.
+    """
+    raw = os.getenv("V2_CANONICAL_OUTPUT_ENABLED")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "f", "no", "n", "off"}
+
+
 def _resolve_company_to_ror_enabled() -> bool:
     """Read `V2_RESOLVE_COMPANY_TO_ROR` env var (default true).
 

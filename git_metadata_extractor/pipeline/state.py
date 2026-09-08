@@ -48,6 +48,9 @@ class PipelineState:
     #: context rather than a payload: `llm_critic` passes it through so a
     #: repeated critic call on a known-good graph skips the LLM.
     cache: Any = None
+    #: When the extraction began, for `prov:startedAtTime`. Set by the route,
+    #: which is where the request clock starts.
+    started_at: Any = None
 
     # Agent-stage products the later stages read for prompt context.
     pipeline_outputs: dict[str, Any] = field(default_factory=dict)

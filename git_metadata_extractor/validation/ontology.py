@@ -51,6 +51,45 @@ def ontology_ttl_path() -> Path:
     return _PACKAGED_PATH
 
 
+#: The v3 canonical layer, from the vendored ontology submodule. Four files,
+#: not one: `sh:class` on every enumerated property needs the enumeration
+#: *instance* triples to resolve, and the raw enumerations file extends
+#: `pulse:PublicationTypeEnumeration` that the canonical shapes reference.
+#: Loading only the shapes makes every platform, discipline and repository-type
+#: value a violation.
+_CANONICAL_FILES = (
+    "ontology-shapes-canonical.ttl",
+    "ontology-definitions-canonical.ttl",
+    "ontology-enumerations-canonical.ttl",
+    "ontology-enumerations-raw.ttl",
+)
+
+_SUBMODULE_ONTOLOGY_DIR = (
+    Path(__file__).resolve().parents[2] / "vendor" / "open-pulse-ontology" / "src" / "ontology"
+)
+
+
+def canonical_shapes_available() -> bool:
+    """Whether the vendored v3 canonical layer is present and prepared."""
+    return all((_SUBMODULE_ONTOLOGY_DIR / name).exists() for name in _CANONICAL_FILES)
+
+
+@lru_cache(maxsize=1)
+def load_canonical_shapes_graph() -> Graph:
+    """The v3 canonical shapes, for validating the projected output.
+
+    Separate from `load_ontology_shapes_graph`, which serves the v2.1.2 bundle
+    and still describes the intermediate `build_jsonld_output` produces. Once
+    the canonical projection runs, the graph the caller receives is v3 and
+    validating it against v2.1.2 shapes reports nothing useful — every profile
+    node is an unknown class and every renamed property an unknown term.
+    """
+    graph = Graph()
+    for name in _CANONICAL_FILES:
+        graph.parse(str(_SUBMODULE_ONTOLOGY_DIR / name), format="turtle")
+    return graph
+
+
 @lru_cache(maxsize=1)
 def load_ontology_shapes_graph() -> Graph:
     for candidate in _candidate_paths():
