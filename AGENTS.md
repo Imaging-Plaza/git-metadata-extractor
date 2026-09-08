@@ -188,7 +188,7 @@ from `PLAN_BY_TYPE`, the stage banners, and the `STAGE_*` constants on
 **Hallucination guards baked into agents:**
 
 - `force_server_uuid` overwrites whatever UUID the LLM emitted with a server-generated one in `identifiers.uuid` only — never as a top-level field (additionalProperties violations).
-- Repository agent post-LLM: stars/forks from GitHub REST (deterministic, not LLM-derived); discipline fallback `wd:Q428691` (computer engineering) when LLM emits empty/null; `pulse:repositoryType` keyword heuristic in rule-based mode.
+- Repository agent post-LLM: stars/forks from GitHub REST (deterministic, not LLM-derived); `pulse:repositoryType` keyword heuristic in rule-based mode. **No discipline fallback** — both the LLM and rule-based agents leave `pulse:discipline` empty when no domain signal is found. `pulse:DisciplineShape` has no `sh:minCount`, so `[]` validates. The former `wd:Q428691` (computer engineering) catch-all was removed because it hid the absence of signal: 77% of a 441-repo batch carried it *only*.
 - Contribution agent post-LLM: stamps `schema:author = target_person.id` and `pulse:contributionTo = target_repository.id` from the orchestrator's authoritative pair, regardless of what the LLM emits.
 - Article agent post-LLM: drops the entity if `schema:identifier` is a placeholder DOI (`10.0000/...`) or sentinel string (`UNKNOWN`, `N/A`, `TBD`, etc.) and no `pulse:infoscienceArticleIdentifier` is present.
 - Article agent (rule-based) defaults to repo-name-only Infoscience queries; opt in to the wider `include_person_queries=True` / `include_organization_queries=True` blend only when over-attribution risk is low.
@@ -353,15 +353,27 @@ isolated and independently invalidatable.
 
 ## Schema change rules
 
-JSON Schemas live in **three byte-identical copies** that must stay in sync:
+JSON Schemas live in **one** place:
 
-1. `git_metadata_extractor/schema/json/{type}/{entity}.schema.json` (source)
-2. `dev/ontology-v2-json-response/a-001/json-schema/{type}/pulse_{Entity}Shape.schema.json` (promoted)
-3. `tests/v2/fixtures/schema/{type}/{entity}.schema.json` (test fixture)
+    git_metadata_extractor/schema/json/{agent,strict}/{entity}.schema.json
 
-After any schema edit: copy to all three and run `just v2-models-generate`
-to regenerate Pydantic models in `git_metadata_extractor/schema/models/`. `just v2-models-check`
-in CI catches drift.
+These are the files the service opens at runtime —
+`agents/models.py::load_agent_schema` and
+`validation/schema_validation.py::_load_strict_schema`. Nothing copies them,
+and nothing should: there were previously three copies kept byte-identical by
+hand (source, a promoted set under `dev/`, and a test fixture set), and by the
+time they were removed on 2026-09-08 four of the agent copies had drifted,
+missing `pattern` constraints the real schemas carry. The whole test suite was
+therefore asserting a laxer contract than production enforces, which hid five
+invalid Person stubs per 120-repo corpus run.
+
+After any schema edit, run `just v2-models-generate` to regenerate the Pydantic
+models in `git_metadata_extractor/schema/models/`. `just v2-models-check` in CI
+catches drift. Two invariants are enforced by `tests/v2/test_json_schemas.py`:
+each schema is valid JSON Schema, and the agent (permissive) schema is a
+superset of the strict schema's property names — a field strict demands but
+agent omits is unreachable, since `validate_permissive` soft-drops what it does
+not know about.
 
 The check regenerates and compares **byte-for-byte**, so the codegen toolchain
 is part of the contract: `datamodel-code-generator` and `ruff` are pinned

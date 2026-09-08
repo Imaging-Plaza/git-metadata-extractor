@@ -499,11 +499,16 @@ async def test_real_provider_call():
 
 ### Schemas
 
-LLM output is validated against two schema layers. When your agent introduces a new entity type, you must update schemas in **all three** locations (see `AGENTS.md` for the triplication rule):
+LLM output is validated against two schema layers, each with a single home (the
+former triplication was removed on 2026-09-08 — see `AGENTS.md`):
 
 1. `git_metadata_extractor/schema/json/agent/{entity}.schema.json` — permissive, LLM I/O
-2. `dev/ontology-v2-json-response/a-001/json-schema/agent/pulse_{Entity}Shape.schema.json` — promoted
-3. `tests/v2/fixtures/schema/agent/{entity}.schema.json` — test fixture
+2. `git_metadata_extractor/schema/json/strict/{entity}.schema.json` — strict, post-reconciliation
+
+Note the agent schema pattern-matches identifiers in **canonical URL form**
+(`pulse:githubUsername` must be `https://github.com/<handle>`, not the bare
+handle). `validate_permissive` soft-drops fields that fail, so an agent emitting
+the bare form loses the value silently rather than erroring.
 
 Then regenerate Pydantic models:
 ```bash
