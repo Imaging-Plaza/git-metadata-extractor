@@ -15,8 +15,7 @@ from uuid import uuid4
 from fastapi import Depends, Path, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from git_metadata_extractor.agents import AgentRuntime, ProviderSet, parse_agent_runtime
-from git_metadata_extractor.agents.llm.refiners.ror_parent.agent import RorParentSelectorAgent
+from git_metadata_extractor.agents import ProviderSet, parse_agent_runtime
 from git_metadata_extractor.agents.llm.runtime import (
     reset_request_model_override,
     set_request_model_override,
@@ -45,65 +44,25 @@ from git_metadata_extractor.providers.cache import (
 from git_metadata_extractor.providers.detection import UnsupportedGitHubURL, classify_github_url
 from git_metadata_extractor.jobs import JobStore
 from git_metadata_extractor.observation.query_log import QueryLog, query_log_var
+from git_metadata_extractor.pipeline.run import (
+    ASSEMBLED_CHAIN,
+    OUTPUT_CHAIN,
+    PAYLOAD_CHAIN,
+    RECONCILE_CHAIN,
+    RECONCILED_CHAIN,
+    REFINEMENT_CHAIN,
+    RESOLVER_CHAIN,
+)
+from git_metadata_extractor.pipeline.runner import StageError, run_pipeline
+from git_metadata_extractor.pipeline.state import PipelineState
 from git_metadata_extractor.pipeline.stages import (
     AssembledOutput,
     RootEntityValidationError,
-    apply_link_pruning_to_assembled_output,
-    assemble_output,
     build_json_output,
-    build_jsonld_output,
     compute_stats,
-    demote_github_props_to_units,
-    emit_fork_parent_stubs,
-    guarantee_repo_author,
-    infer_article_source_organization,
-    infer_github_handle_parents,
-    infer_org_units,
-    infer_owners,
-    promote_failed_id_entities,
-    prune_dangling_refs,
-    reconcile_entities,
-    run_concept_tagging_stage,
-    run_link_veracity_stage,
-    run_llm_critic_stage,
-    run_llm_dedup_stage,
-    run_org_relationships_stage,
-    run_refine_with_llm_stage,
-    run_resolve_bio_to_ror_llm_stage,
-    run_resolve_bio_to_ror_stage,
-    run_resolve_company_to_ror_stage,
-    run_resolve_placeholder_orgs_to_ror_stage,
-    tag_rule_based_disciplines,
-    validate_articles,
-    validate_author_classes,
-    validate_ownership,
-)
-from git_metadata_extractor.pipeline.stages.concept_tagging import (
-    is_enabled as _concept_tagging_is_enabled,
-)
-from git_metadata_extractor.pipeline.stages.concept_tagging import (
-    resolve_backend as _resolve_concept_tagging_backend,
-)
-from git_metadata_extractor.pipeline.stages.concept_tagging import (
-    resolve_epfl_min_score as _resolve_concept_tagging_epfl_min_score,
-)
-from git_metadata_extractor.pipeline.stages.concept_tagging import (
-    resolve_related_enrichment as _resolve_concept_tagging_related_enrichment,
 )
 from git_metadata_extractor.pipeline.stages.context_gather import RequiredProviderUnavailableError
-from git_metadata_extractor.pipeline.stages.refine_with_llm import (
-    is_enabled as _hybrid_refiner_is_enabled,
-)
-from git_metadata_extractor.pipeline.stages.validate_org_github_handles import (
-    validate_org_github_handles,
-)
 from git_metadata_extractor.schema import load_jsonld_context
-from git_metadata_extractor.validation import (
-    SHACLValidator,
-    StrictSchemaValidator,
-    load_ontology_shapes_graph,
-)
-from git_metadata_extractor.validation.shacl_validation import SHACLRuntimeUnavailableError
 
 MIN_SUPPORTED_PYTHON = (3, 10)
 PACKAGE_NAME = "git-metadata-extractor"
@@ -521,799 +480,123 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     )
 
     typed_entity_buckets = pipeline_result.resolved_typed_entity_buckets().to_dict()
-    permissive_entity_count = sum(len(bucket) for bucket in typed_entity_buckets.values())
-    logger.info("%s: entity_count=%d", _helpers.STAGE_PERMISSIVE_VALIDATION, permissive_entity_count)
-
-    llm_dedup_executed = False
-    if resolved_runtime == AgentRuntime.LLM:
-        llm_dedup_executed = True
-        stage_started_at = perf_counter()
-        try:
-            dedup_result = await run_llm_dedup_stage(
-                typed_entity_buckets=typed_entity_buckets,
-                source_url=classification.normalized_url,
-                detected_type=classification.detected_type.value,
-                providers=providers,
-                pipeline_outputs=pipeline_outputs_for_prompt,
-                initial_context=gathered_context,
-                max_concurrency=orchestrator.max_concurrent_agents,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_LLM_DEDUP)
-            _append_unique_warning(warnings, f"llm_dedup stage failed: {exc}")
-        else:
-            typed_entity_buckets = dedup_result.typed_entity_buckets
-            logger.info(
-                "%s: accepted=%d rejected=%d remap=%d in %.2fs",
-                _helpers.STAGE_LLM_DEDUP,
-                dedup_result.accepted_cluster_count,
-                dedup_result.rejected_cluster_count,
-                dedup_result.remap_count,
-                perf_counter() - stage_started_at,
-            )
-            for warning in dedup_result.warnings:
-                _append_unique_warning(warnings, warning)
-
-    llm_critic_executed = False
-    critic_pruned_excluded_entities: list[dict[str, Any]] = []
-    stage_started_at = perf_counter()
-    reconciled = reconcile_entities(typed_entity_buckets)
-    logger.info(
-        "%s: persons=%d orgs=%d repos=%d articles=%d memberships=%d contributions=%d in %.2fs",
-        _helpers.STAGE_RECONCILIATION,
-        len(reconciled.entities.get("persons", [])),
-        len(reconciled.entities.get("organizations", [])),
-        len(reconciled.entities.get("repositories", [])),
-        len(reconciled.entities.get("articles", [])),
-        len(reconciled.memberships),
-        len(reconciled.contributions),
-        perf_counter() - stage_started_at,
+    # === entity chains ============================================
+    # permissive_validation -> llm_dedup -> reconciliation
+    #   -> the four ROR resolvers
+    #   -> llm_critic / refine_with_llm
+    #   -> guarantee_repo_author -> validate_org_github_handles
+    #
+    # One state threaded through all four chains rather than four separately
+    # constructed ones: `buckets` becomes `reconciled` in the first chain and
+    # every later stage reads it from the same object, which is what
+    # PipelineState exists for. Order, gates and per-stage fail-open behaviour
+    # all live in pipeline/run.py.
+    entity_state = PipelineState(
+        run_id=run_id,
+        classification=classification,
+        runtime=resolved_runtime,
+        providers=providers,
+        max_concurrent_agents=orchestrator.max_concurrent_agents,
+        pipeline_outputs=pipeline_outputs_for_prompt,
+        gathered_context=gathered_context,
+        cache=pipeline_cache,
+        buckets=typed_entity_buckets,
+        warnings=warnings,
     )
-    for warning in reconciled.link_warnings:
-        _append_unique_warning(warnings, warning)
+    try:
+        for chain in (
+            RECONCILE_CHAIN,
+            RESOLVER_CHAIN,
+            REFINEMENT_CHAIN,
+            RECONCILED_CHAIN,
+        ):
+            await run_pipeline(entity_state, chain)
+    except StageError as exc:
+        # Re-raise the original error so FastAPI's handler sees the same
+        # exception type the inline sequence used to let escape.
+        raise exc.cause from None
 
-    # === resolve_company_to_ror stage ============================
-    # Stamp `schema:affiliation` on persons whose `gme-internal:company`
-    # string resolves confidently against the ROR RAG. Runs after
-    # reconciliation so we don't touch entities the critic would later
-    # drop, but before the LLM critic / refiner — that way the critic
-    # sees the resolved affiliations and refine_with_llm doesn't waste
-    # cycles re-resolving the same companies via its rescue path.
-    if _helpers._resolve_company_to_ror_enabled():
-        stage_started_at = perf_counter()
-        try:
-            company_result = await run_resolve_company_to_ror_stage(
-                reconciled=reconciled,
-                provider=getattr(providers, "ror_rag", None),
-                github_provider=getattr(providers, "github", None),
-            )
-            logger.info(
-                "%s: persons_examined=%d persons_resolved=%d "
-                "memberships=%d organizations=%d "
-                "queries=%d accepted=%d in %.2fs",
-                _helpers.STAGE_RESOLVE_COMPANY_TO_ROR,
-                company_result.persons_examined,
-                company_result.persons_resolved,
-                company_result.memberships_created,
-                company_result.organizations_created,
-                company_result.queries_attempted,
-                company_result.queries_accepted,
-                perf_counter() - stage_started_at,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_COMPANY_TO_ROR)
-            _append_unique_warning(
-                warnings,
-                f"resolve_company_to_ror stage failed: {exc}",
-            )
+    llm_dedup_executed = bool(entity_state.extras.get("llm_dedup_executed", False))
+    llm_critic_executed = bool(entity_state.extras.get("llm_critic_executed", False))
 
-    # === resolve_bio_to_ror stage ================================
-    # Backstop for persons the company-string stage missed: pulls
-    # affiliation hints from `_bio` / `_orcid_biography` / `_blog`.
-    # Runs in the same slot as company-resolution (after reconciliation,
-    # before critic) and reuses the same strict acceptance gate, so its
-    # output looks identical to the critic / refiner — they see the same
-    # `schema:affiliation` triples regardless of which extractor stamped
-    # them.
-    if _helpers._resolve_bio_to_ror_enabled():
-        stage_started_at = perf_counter()
-        try:
-            bio_result = await run_resolve_bio_to_ror_stage(
-                reconciled=reconciled,
-                provider=getattr(providers, "ror_rag", None),
-            )
-            logger.info(
-                "%s: persons_examined=%d persons_resolved=%d "
-                "memberships=%d organizations=%d "
-                "candidates=%d queries=%d accepted=%d in %.2fs",
-                _helpers.STAGE_RESOLVE_BIO_TO_ROR,
-                bio_result.persons_examined,
-                bio_result.persons_resolved,
-                bio_result.memberships_created,
-                bio_result.organizations_created,
-                bio_result.candidates_extracted,
-                bio_result.queries_attempted,
-                bio_result.queries_accepted,
-                perf_counter() - stage_started_at,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_BIO_TO_ROR)
-            _append_unique_warning(
-                warnings,
-                f"resolve_bio_to_ror stage failed: {exc}",
-            )
-
-    # === resolve_bio_to_ror_llm stage (LLM / hybrid only) =========
-    # One LLM call per person STILL missing `schema:affiliation` after
-    # Stage A. Costly enough that it's gated behind the LLM runtime —
-    # under rule-based it never runs even when the flag is on. The
-    # caller-side acceptance gate (confidence >= 0.7, verbatim quote
-    # in `reason`) matches the system prompt; the agent additionally
-    # blanks out the ROR field below that floor before the patch
-    # reaches this stage.
-    if (
-        resolved_runtime in (AgentRuntime.LLM, AgentRuntime.HYBRID)
-        and _helpers._resolve_bio_to_ror_llm_enabled()
-    ):
-        stage_started_at = perf_counter()
-        try:
-            bio_llm_result = await run_resolve_bio_to_ror_llm_stage(
-                reconciled=reconciled,
-                provider=getattr(providers, "ror_rag", None),
-            )
-            logger.info(
-                "%s: persons_examined=%d called=%d resolved=%d failed=%d "
-                "memberships=%d organizations=%d in %.2fs",
-                _helpers.STAGE_RESOLVE_BIO_TO_ROR_LLM,
-                bio_llm_result.persons_examined,
-                bio_llm_result.persons_called,
-                bio_llm_result.persons_resolved,
-                bio_llm_result.persons_failed,
-                bio_llm_result.memberships_created,
-                bio_llm_result.organizations_created,
-                perf_counter() - stage_started_at,
-            )
-            for warning in bio_llm_result.warnings:
-                _append_unique_warning(warnings, warning)
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_RESOLVE_BIO_TO_ROR_LLM)
-            _append_unique_warning(
-                warnings,
-                f"resolve_bio_to_ror_llm stage failed: {exc}",
-            )
-
-    # === resolve_placeholder_orgs_to_ror stage ====================
-    # Late pass that re-queries the ROR RAG against the `schema:name`
-    # of every `idSource == "uuid"` Organization (the breadcrumb
-    # carried by rescue / fallback paths that minted a placeholder
-    # Org without a registry id). Rewrites successful hits in place
-    # and patches every referring Membership composite. Runs after
-    # the three Person-side resolvers because it's strictly weaker —
-    # those stages have richer signal (`_company`, `_bio`, etc.) and
-    # should win first.
-    if _helpers._resolve_placeholder_orgs_to_ror_enabled():
-        stage_started_at = perf_counter()
-        try:
-            placeholder_result = await run_resolve_placeholder_orgs_to_ror_stage(
-                reconciled=reconciled,
-                provider=getattr(providers, "ror_rag", None),
-            )
-            logger.info(
-                "%s: examined=%d resolved=%d memberships_rewritten=%d "
-                "queries=%d accepted=%d in %.2fs",
-                _helpers.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
-                placeholder_result.placeholders_examined,
-                placeholder_result.placeholders_resolved,
-                placeholder_result.memberships_rewritten,
-                placeholder_result.queries_attempted,
-                placeholder_result.queries_accepted,
-                perf_counter() - stage_started_at,
-            )
-        except Exception as exc:
-            logger.exception(
-                "%s stage failed", _helpers.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR,
-            )
-            _append_unique_warning(
-                warnings,
-                f"resolve_placeholder_orgs_to_ror stage failed: {exc}",
-            )
-
-    apply_critic_pruning = _helpers._should_apply_critic_pruning()
-    if resolved_runtime == AgentRuntime.LLM and not apply_critic_pruning:
-        logger.info(
-            "%s: skipped (V2_APPLY_CRITIC_PRUNING=false — entities preserved)",
-            _helpers.STAGE_LLM_CRITIC,
-        )
-    if resolved_runtime == AgentRuntime.LLM and apply_critic_pruning:
-        llm_critic_executed = True
-        stage_started_at = perf_counter()
-        try:
-            critic_result = await run_llm_critic_stage(
-                reconciled=reconciled,
-                source_url=classification.normalized_url,
-                detected_type=classification.detected_type.value,
-                providers=providers,
-                initial_context=gathered_context,
-                pipeline_outputs=pipeline_outputs_for_prompt,
-                max_concurrency=orchestrator.max_concurrent_agents,
-                cache=pipeline_cache,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_LLM_CRITIC)
-            _append_unique_warning(warnings, f"llm_critic stage failed: {exc}")
-        else:
-            reconciled = critic_result.reconciled
-            critic_pruned_excluded_entities = critic_result.pruned_excluded_entities
-            logger.info(
-                "%s: proposed_drop=%d applied_drop=%d protected_roots=%d in %.2fs",
-                _helpers.STAGE_LLM_CRITIC,
-                critic_result.applied.get("proposed_drop_count", 0),
-                critic_result.applied.get("applied_drop_count", 0),
-                len(critic_result.applied.get("protected_root_ids", [])),
-                perf_counter() - stage_started_at,
-            )
-            for warning in critic_result.warnings:
-                _append_unique_warning(warnings, warning)
-
-    if resolved_runtime == AgentRuntime.HYBRID and _hybrid_refiner_is_enabled():
-        stage_started_at = perf_counter()
-        try:
-            refine_result = await run_refine_with_llm_stage(
-                reconciled=reconciled,
-                gathered_context=gathered_context,
-                epfl_graph_provider=providers.epfl_graph_rag,
-                providers=providers,
-                max_concurrency=orchestrator.max_concurrent_agents,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_REFINE_WITH_LLM)
-            _append_unique_warning(
-                warnings,
-                f"refine_with_llm stage failed: {exc}",
-            )
-        else:
-            reconciled = refine_result.reconciled
-            logger.info(
-                "%s: refined=%d skipped=%d failed=%d in %.2fs",
-                _helpers.STAGE_REFINE_WITH_LLM,
-                refine_result.refined_count,
-                refine_result.skipped_count,
-                refine_result.failed_count,
-                perf_counter() - stage_started_at,
-            )
-            for warning in refine_result.warnings:
-                _append_unique_warning(warnings, warning)
-
-    # KNOWN BUG salvage: when reconciliation drops unresolvable
-    # `schema:author` references, a repository can end up with an empty
-    # author array, which strict validation rejects (schema requires
-    # non-empty). Fall back to the github owner if it's in the graph.
-    stage_started_at = perf_counter()
-    reconciled, repo_author_warnings = guarantee_repo_author(reconciled)
-    logger.info(
-        "guarantee_repo_author: salvaged=%d in %.2fs",
-        len(repo_author_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in repo_author_warnings:
-        _append_unique_warning(warnings, warning)
-
-    # Validate `@handle`-style org names against GitHub before strict
-    # validation so we either stamp the missing handle or drop the
-    # hallucinated entity (rather than just losing it to anyOf).
-    stage_started_at = perf_counter()
-    reconciled, org_handle_warnings = validate_org_github_handles(reconciled, providers)
-    logger.info(
-        "validate_org_github_handles: actions=%d in %.2fs",
-        len(org_handle_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in org_handle_warnings:
-        _append_unique_warning(warnings, warning)
-
-    stage_started_at = perf_counter()
-    strict_validation_entities = _iter_reconciled_entities(
-        reconciled_entities=reconciled.entities,
-        memberships=reconciled.memberships,
-        contributions=reconciled.contributions,
-    )
-    strict_batch = StrictSchemaValidator().validate_batch(strict_validation_entities)
-    logger.info(
-        "%s: valid=%d invalid=%d in %.2fs",
-        _helpers.STAGE_STRICT_VALIDATION,
-        len(strict_batch.valid_entities),
-        len(strict_batch.invalid_entities),
-        perf_counter() - stage_started_at,
-    )
-    for warning in strict_batch.warnings:
-        _append_unique_warning(warnings, f"Strict validation: {warning}")
 
     jsonld_context = _extract_jsonld_context()
-    stage_started_at = perf_counter()
+
+    # === output chain =============================================
+    # strict_validation -> output_assembly -> critic exclusions ->
+    # link_veracity (with its id-promotion and pruning follow-ups).
+    # `reconciled` becomes `assembled` here.
+    entity_state.output_format = output_format
+    entity_state.include_internal_fields = bool(include_internal_fields)
+    entity_state.include_context_summary = bool(include_context_summary)
+    entity_state.jsonld_context = jsonld_context
     try:
-        assembled_output = assemble_output(
-            reconciled,
-            strict_batch,
-            root_entity_type=_root_entity_type_for_detected_type(
-                classification.detected_type.value,
-            ),
-        )
-    except RootEntityValidationError as exc:
-        failure_message = (
-            f"Root {exc.entity_type} entity '{exc.entity_id}' failed strict validation"
-        )
-        logger.warning("%s: %s", _helpers.STAGE_OUTPUT_ASSEMBLY, failure_message)
-        error_payload = V2ErrorResponse(
-            error_type=V2ErrorType.VALIDATION_ERROR,
-            detail=failure_message,
-            source_url=classification.normalized_url,
-            errors=[
-                V2FieldError(
-                    field=error.get("path", "<root>"),
-                    message=error.get("message", "validation error"),
-                    value=error.get("expected"),
-                )
-                for error in exc.validation_errors
-            ],
-        )
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=error_payload.model_dump(mode="json", exclude_none=True),
-        )
-    except ValueError as exc:
-        logger.warning("%s: rootless output — %s", _helpers.STAGE_OUTPUT_ASSEMBLY, exc)
-        assembled_output = _build_rootless_assembled_output(
-            reconciled=reconciled,
-            strict_batch=strict_batch,
-            root_warning=str(exc),
-        )
-    logger.info(
-        "%s: related=%d excluded=%d warnings=%d in %.2fs",
-        _helpers.STAGE_OUTPUT_ASSEMBLY,
-        len(assembled_output.related_entities),
-        len(assembled_output.excluded_entities),
-        len(assembled_output.warnings),
-        perf_counter() - stage_started_at,
-    )
-
-    if critic_pruned_excluded_entities:
-        for excluded_entity in critic_pruned_excluded_entities:
-            if not isinstance(excluded_entity, dict):
-                continue
-            assembled_output.excluded_entities.append(deepcopy(excluded_entity))
-            entity_payload = excluded_entity.get("entity")
-            entity_id = entity_payload.get("id") if isinstance(entity_payload, dict) else None
-            assembled_output.warnings.append(
-                (
-                    f"Excluded {excluded_entity.get('entity_type', 'entity')} entity "
-                    f"'{entity_id}' due to critic pruning"
-                ),
+        await run_pipeline(entity_state, OUTPUT_CHAIN)
+    except StageError as exc:
+        if isinstance(exc.cause, RootEntityValidationError):
+            # A root that fails strict validation is a request error, not a
+            # server error: the response lists the offending fields. Mapping
+            # the domain exception to a status code stays here, in the HTTP
+            # layer, rather than inside the stage.
+            root_error = exc.cause
+            failure_message = (
+                f"Root {root_error.entity_type} entity "
+                f"'{root_error.entity_id}' failed strict validation"
             )
-
-    for warning in assembled_output.warnings:
-        _append_unique_warning(warnings, warning)
-
-    entities_for_link_validation: list[dict[str, Any]] = []
-    if isinstance(assembled_output.root_entity, dict):
-        entities_for_link_validation.append(deepcopy(assembled_output.root_entity))
-    entities_for_link_validation.extend(
-        deepcopy(entity)
-        for entity in assembled_output.related_entities
-        if isinstance(entity, dict)
-    )
-
-    provider_cache = getattr(request.app.state, "v2_provider_cache", None)
-    if not isinstance(provider_cache, ProviderCache):
-        provider_cache = None
-
-    link_veracity_started_at = perf_counter()
-    link_veracity_result = None
-    if resolved_runtime != AgentRuntime.LLM:
-        # link_veracity calls an LLM per link, so it has no place in
-        # `agent_runtime=rule_based` (the whole point of rule-based mode is
-        # zero LLM calls). The `V2_LINK_VERACITY_ENABLED` env var still
-        # gates the stage *within* LLM mode for users who want fast LLM
-        # extracts without per-link verification.
-        logger.info(
-            "%s: skipped (agent_runtime=%s — link veracity is LLM-only)",
-            _helpers.STAGE_LINK_VERACITY,
-            resolved_runtime.value,
-        )
-    elif not _helpers._is_link_veracity_enabled():
-        logger.info(
-            "%s: skipped (V2_LINK_VERACITY_ENABLED=false)",
-            _helpers.STAGE_LINK_VERACITY,
-        )
-    else:
-        try:
-            link_veracity_result = await run_link_veracity_stage(
-                entities=entities_for_link_validation,
+            logger.warning("%s: %s", _helpers.STAGE_OUTPUT_ASSEMBLY, failure_message)
+            error_payload = V2ErrorResponse(
+                error_type=V2ErrorType.VALIDATION_ERROR,
+                detail=failure_message,
                 source_url=classification.normalized_url,
-                providers=providers,
-                max_concurrency=orchestrator.max_concurrent_agents,
-                cache=provider_cache,
-            )
-        except Exception as exc:
-            logger.exception("%s stage failed", _helpers.STAGE_LINK_VERACITY)
-            _append_unique_warning(warnings, f"Link veracity stage failed: {exc}")
-        else:
-            logger.info(
-                "%s: checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d in %.2fs",
-                _helpers.STAGE_LINK_VERACITY,
-                link_veracity_result.checked_count,
-                link_veracity_result.supported_count,
-                link_veracity_result.unsupported_count,
-                link_veracity_result.failed_count,
-                len(link_veracity_result.invalid_links),
-                perf_counter() - link_veracity_started_at,
-            )
-            _append_unique_warning(
-                warnings,
-                (
-                    "Link veracity summary: "
-                    f"checked={link_veracity_result.checked_count}, "
-                    f"supported={link_veracity_result.supported_count}, "
-                    f"unsupported={link_veracity_result.unsupported_count}, "
-                    f"failed={link_veracity_result.failed_count}"
-                ),
-            )
-            for warning in link_veracity_result.warnings:
-                _append_unique_warning(warnings, warning)
-
-            invalid_links = set(link_veracity_result.invalid_links)
-            if invalid_links:
-                assembled_output, id_rewrites, promotion_warnings = promote_failed_id_entities(
-                    assembled=assembled_output,
-                    invalid_links=invalid_links,
-                )
-                for warning in promotion_warnings:
-                    _append_unique_warning(warnings, warning)
-                if id_rewrites:
-                    logger.info(
-                        "%s: promoted %d entity id(s) past failed url(s)",
-                        _helpers.STAGE_LINK_VERACITY,
-                        len(id_rewrites),
+                errors=[
+                    V2FieldError(
+                        field=error.get("path", "<root>"),
+                        message=error.get("message", "validation error"),
+                        value=error.get("expected"),
                     )
-                    # The rewritten entities now expose their new id; remove the
-                    # old urls from invalid_links so we don't also try to prune them.
-                    invalid_links = invalid_links - set(id_rewrites)
-                    # Rebuild entity_link_map with the new ids so downstream pruning
-                    # acts on the right entity references.
-                    rebuilt_entity_link_map: dict[str, list[str]] = {}
-                    for old_id, links in link_veracity_result.entity_link_map.items():
-                        new_id = id_rewrites.get(old_id, old_id)
-                        rebuilt_entity_link_map.setdefault(new_id, []).extend(links)
-                else:
-                    rebuilt_entity_link_map = link_veracity_result.entity_link_map
-
-                if invalid_links:
-                    assembled_output, link_pruning_warnings = apply_link_pruning_to_assembled_output(
-                        assembled=assembled_output,
-                        invalid_links=invalid_links,
-                        entity_link_map=rebuilt_entity_link_map,
-                        article_identifier_link_map=link_veracity_result.article_identifier_link_map,
-                    )
-                    for warning in link_pruning_warnings:
-                        _append_unique_warning(warnings, warning)
-
-    # Article-validation runs whether or not link-veracity ran. If
-    # link-veracity was skipped, supported/unsupported sets will be empty,
-    # and the stage will only drop articles with placeholder/sentinel DOIs
-    # (i.e. its non-veracity-dependent rules still apply).
-    veracity_records = (
-        link_veracity_result.records if link_veracity_result is not None else []
-    )
-    stage_started_at = perf_counter()
-    assembled_output, article_validation_warnings = validate_articles(
-        assembled_output,
-        veracity_records=veracity_records,
-    )
-    logger.info(
-        "validate_articles: warnings=%d in %.2fs",
-        len(article_validation_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in article_validation_warnings:
-        _append_unique_warning(warnings, warning)
-
-    stage_started_at = perf_counter()
-    assembled_output, author_class_warnings = validate_author_classes(assembled_output)
-    logger.info(
-        "author_class_validation: pruned=%d in %.2fs",
-        len(author_class_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in author_class_warnings:
-        _append_unique_warning(warnings, warning)
-
-    link_veracity_seconds = perf_counter() - link_veracity_started_at
-
-    stage_started_at = perf_counter()
-    assembled_output, ownership_warnings = validate_ownership(assembled_output)
-    logger.info(
-        "ownership_check: dropped=%d in %.2fs",
-        len(ownership_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in ownership_warnings:
-        _append_unique_warning(warnings, warning)
-
-    # Run `infer_owners` BEFORE `prune_dangling_refs` so it can materialise
-    # minimal Person stubs for github owners that have no matching entity
-    # (otherwise prune would clear `pulse:ownedBy` first and the stub
-    # opportunity is lost).
-    stage_started_at = perf_counter()
-    assembled_output, owner_inference_warnings = infer_owners(assembled_output)
-    logger.info(
-        "owner_inference: stamped=%d in %.2fs",
-        len(owner_inference_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in owner_inference_warnings:
-        _append_unique_warning(warnings, warning)
-
-    # Second-pass inverse consistency check — `infer_owners` indexes by
-    # github handle and may have just stamped `pulse:owns: [repo]` on
-    # the ROR-side Org instead of (or in addition to) the github-handle
-    # Org. Re-run `validate_ownership` so its dual-identity guard drops
-    # entries on whichever Org doesn't match the repo's actual
-    # `pulse:ownedBy`. Production audit (Bug J) showed this is the
-    # most common path to broken inverses (165 cases on ENAC-CNPA et al.).
-    stage_started_at = perf_counter()
-    assembled_output, inverse_warnings = validate_ownership(assembled_output)
-    logger.info(
-        "inverse_consistency: dropped=%d in %.2fs",
-        len(inverse_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in inverse_warnings:
-        _append_unique_warning(warnings, warning)
-
-    stage_started_at = perf_counter()
-    assembled_output, prune_warnings = prune_dangling_refs(assembled_output)
-    logger.info(
-        "prune_dangling_refs: actions=%d in %.2fs",
-        len(prune_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in prune_warnings:
-        _append_unique_warning(warnings, warning)
-
-    # Fuzzy-search ROR for parent organizations of every github-only org in
-    # the graph. The github org always remains as a standalone entity; ROR
-    # matches get added as additional org entities and the best match
-    # becomes the github org's `unitOf` parent.
-    # Runs before the LLM relationship stage so it sees the new ROR entities
-    # and can refine the unitOf decision; runs before `infer_org_units` so
-    # the token-overlap fallback also gets the broader graph.
-    stage_started_at = perf_counter()
-    # In LLM / hybrid runtimes an LLM agent picks the single correct ROR
-    # parent (or declines) from the fuzzy-search candidates. In rule_based
-    # runtime there is no selector — `infer_github_handle_parents` falls back
-    # to a strict deterministic rule, keeping that mode LLM-free.
-    ror_parent_selector = (
-        RorParentSelectorAgent()
-        if resolved_runtime != AgentRuntime.RULE_BASED
-        else None
-    )
-    assembled_output, github_parent_warnings = await infer_github_handle_parents(
-        assembled_output,
-        providers=providers,
-        parent_selector=ror_parent_selector,
-    )
-    logger.info(
-        "github_handle_parents: actions=%d in %.2fs",
-        len(github_parent_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in github_parent_warnings:
-        _append_unique_warning(warnings, warning)
-
-    if resolved_runtime == AgentRuntime.LLM:
-        stage_started_at = perf_counter()
-        try:
-            assembled_output, org_relationship_warnings = await run_org_relationships_stage(
-                assembled=assembled_output,
-                source_url=classification.normalized_url,
-                providers=providers,
+                    for error in root_error.validation_errors
+                ],
             )
-        except Exception as exc:
-            logger.exception("org_relationships stage failed")
-            _append_unique_warning(warnings, f"org_relationships stage failed: {exc}")
-        else:
-            logger.info(
-                "org_relationships: edges=%d in %.2fs",
-                len(org_relationship_warnings),
-                perf_counter() - stage_started_at,
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content=error_payload.model_dump(mode="json", exclude_none=True),
             )
-            for warning in org_relationship_warnings:
-                _append_unique_warning(warnings, warning)
+        raise exc.cause from None
 
-    stage_started_at = perf_counter()
-    assembled_output, org_unit_warnings = infer_org_units(assembled_output)
-    logger.info(
-        "org_unit_inference: stamped=%d in %.2fs",
-        len(org_unit_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in org_unit_warnings:
-        _append_unique_warning(warnings, warning)
+    assembled_output = entity_state.assembled
 
-    stage_started_at = perf_counter()
-    assembled_output, demote_warnings = demote_github_props_to_units(assembled_output)
-    logger.info(
-        "demote_github_props_to_units: demoted=%d in %.2fs",
-        len(demote_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in demote_warnings:
-        _append_unique_warning(warnings, warning)
 
-    # Emit minimal stubs for fork parents so `pulse:isForkOf` references
-    # satisfy SHACL `sh:class schema:SoftwareSourceCode` without forcing
-    # us to ingest the upstream repo.
-    stage_started_at = perf_counter()
-    assembled_output, fork_stub_warnings = emit_fork_parent_stubs(assembled_output)
-    logger.info(
-        "fork_parent_stubs: emitted=%d in %.2fs",
-        len(fork_stub_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in fork_stub_warnings:
-        _append_unique_warning(warnings, warning)
+    # === assembled-output chain =================================
+    # Twelve stages that all take an AssembledOutput and return
+    # (AssembledOutput, warnings). They live in pipeline/run.py as an ordered
+    # list; see that module for why the names are log names and why almost
+    # every one is fail-closed.
+    pipeline_state = entity_state
+    try:
+        await run_pipeline(pipeline_state, ASSEMBLED_CHAIN)
+    except StageError as exc:
+        # Preserve the route's previous behaviour: these stages were not
+        # wrapped, so the original exception reached FastAPI as a 500.
+        raise exc.cause from None
 
-    # Deterministic inference: stamp `schema:sourceOrganization` on
-    # Articles that don't have one when there is exactly one Org an
-    # author was a confirmed member of on the article's publication
-    # date. Refuses to guess when the answer is ambiguous.
-    stage_started_at = perf_counter()
-    assembled_output, source_org_warnings = infer_article_source_organization(assembled_output)
-    logger.info(
-        "article_source_org_inference: stamped=%d in %.2fs",
-        len(source_org_warnings),
-        perf_counter() - stage_started_at,
-    )
-    for warning in source_org_warnings:
-        _append_unique_warning(warnings, warning)
-
-    # Deterministic discipline tagging via the EPFL Graph disciplines
-    # Qdrant RAG. Runs only when the root is a repository and the field
-    # is still empty (does not overwrite upstream agent output). Result
-    # is gated on the SHACL DisciplineEnumeration so output is always
-    # schema-valid.
-    if classification.detected_type.value == "repository":
-        stage_started_at = perf_counter()
-        readme_text_for_disciplines: str | None = None
-        github_description_for_disciplines: str | None = None
-        repository_context = (
-            gathered_context.get("repository")
-            if isinstance(gathered_context, dict)
-            else None
-        )
-        if isinstance(repository_context, dict):
-            candidate = repository_context.get("readme_content")
-            if isinstance(candidate, str):
-                readme_text_for_disciplines = candidate
-            # The GitHub REST `description` field carries the repo's one-line
-            # pitch, which is far more discriminative for discipline matching
-            # than the first 4k of the README (often HTML/badge soup).
-            metadata = repository_context.get("metadata")
-            if isinstance(metadata, dict):
-                gh_desc = metadata.get("description")
-                if isinstance(gh_desc, str) and gh_desc.strip():
-                    github_description_for_disciplines = gh_desc.strip()
-        assembled_output, discipline_warnings = await tag_rule_based_disciplines(
-            assembled_output,
-            readme_text=readme_text_for_disciplines,
-            github_description=github_description_for_disciplines,
-        )
-        logger.info(
-            "rule_based_disciplines: emitted=%d in %.2fs",
-            sum(1 for w in discipline_warnings if "Inferred pulse:discipline" in w),
-            perf_counter() - stage_started_at,
-        )
-        for warning in discipline_warnings:
-            _append_unique_warning(warnings, warning)
-
-    if _concept_tagging_is_enabled() and classification.detected_type.value == "repository":
-        repository_context = (
-            gathered_context.get("repository")
-            if isinstance(gathered_context, dict)
-            else None
-        )
-        readme_text = (
-            repository_context.get("readme_content")
-            if isinstance(repository_context, dict)
-            else None
-        )
-        backend = _resolve_concept_tagging_backend()
-        stage_started_at = perf_counter()
-        try:
-            tagged_root, tagging_result = await run_concept_tagging_stage(
-                root_entity=assembled_output.root_entity,
-                readme_text=readme_text,
-                backend=backend,
-                epfl_min_score=_resolve_concept_tagging_epfl_min_score(),
-                enable_related_openalex=_resolve_concept_tagging_related_enrichment(),
-            )
-        except Exception as exc:
-            logger.exception("concept_tagging stage failed")
-            _append_unique_warning(warnings, f"concept_tagging stage failed: {exc}")
-        else:
-            assembled_output.root_entity = tagged_root
-            logger.info(
-                "concept_tagging: backend=%s keywords=%d concepts=%d disciplines=%d in %.2fs",
-                tagging_result.backend,
-                len(tagging_result.keywords),
-                len(tagging_result.concepts),
-                len(tagging_result.disciplines),
-                perf_counter() - stage_started_at,
-            )
-            for warning in tagging_result.warnings:
-                _append_unique_warning(warnings, warning)
-
-    stage_started_at = perf_counter()
-    shacl_graph_payload = build_jsonld_output(
-        assembled=assembled_output,
-        jsonld_context=jsonld_context,
-        include_internal_fields=include_internal_fields,
-    )
-    graph_nodes = shacl_graph_payload.get("@graph")
-    logger.info(
-        "%s: entities=%d context_terms=%d in %.2fs",
-        _helpers.STAGE_JSONLD_BUILD,
-        len(graph_nodes) if isinstance(graph_nodes, list) else 0,
-        len(jsonld_context),
-        perf_counter() - stage_started_at,
+    assembled_output = pipeline_state.assembled
+    link_veracity_seconds = pipeline_state.extras.get(
+        "link_veracity_seconds",
+        link_veracity_seconds,
     )
 
-    shacl_data_graph = _helpers._jsonld_to_graph(shacl_graph_payload)
-    if shacl_data_graph is None:
-        logger.warning("%s: skipped — unable to parse assembled graph payload", _helpers.STAGE_SHACL_GATE)
-        _append_unique_warning(
-            warnings,
-            "SHACL validation skipped: unable to parse assembled graph payload",
-        )
-    else:
-        try:
-            shacl_result = SHACLValidator().validate_graph(
-                shacl_data_graph,
-                load_ontology_shapes_graph(),
-            )
-        except SHACLRuntimeUnavailableError as exc:
-            logger.warning("%s: skipped — %s", _helpers.STAGE_SHACL_GATE, exc)
-            _append_unique_warning(warnings, str(exc))
-        except Exception as exc:
-            logger.exception("%s failed", _helpers.STAGE_SHACL_GATE)
-            _append_unique_warning(warnings, f"SHACL validation failed: {exc}")
-        else:
-            for violation in shacl_result.violations:
-                _append_unique_warning(
-                    warnings,
-                    (
-                        "SHACL violation: "
-                        f"focus={violation.get('focusNode')}, "
-                        f"path={violation.get('path')}, "
-                        f"message={violation.get('message')}"
-                    ),
-                )
-            for shacl_warning in shacl_result.warnings:
-                _append_unique_warning(
-                    warnings,
-                    (
-                        "SHACL warning: "
-                        f"focus={shacl_warning.get('focusNode')}, "
-                        f"path={shacl_warning.get('path')}, "
-                        f"message={shacl_warning.get('message')}"
-                    ),
-                )
-            logger.info(
-                "%s: conforms=%s violations=%d warnings=%d",
-                _helpers.STAGE_SHACL_GATE,
-                shacl_result.conforms,
-                len(shacl_result.violations),
-                len(shacl_result.warnings),
-            )
+    # === payload chain ============================================
+    # rule_based_disciplines -> concept_tagging -> jsonld_build ->
+    # shacl_gate. `assembled` becomes `payload`; the sequence ends here and
+    # the response is built below.
+    try:
+        await run_pipeline(pipeline_state, PAYLOAD_CHAIN)
+    except StageError as exc:
+        raise exc.cause from None
+
+    assembled_output = pipeline_state.assembled
+    shacl_graph_payload = pipeline_state.payload
+
 
     response_output: V2JSONLDOutput | V2JSONOutputEnvelope
     if output_format == "jsonld":
