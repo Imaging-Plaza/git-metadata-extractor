@@ -11,8 +11,10 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import RDF, XSD
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-JSON_DIR = REPO_ROOT / "dev" / "ontology-v2-json-response" / "a-001"
-JSONLD_FILE = JSON_DIR / "test" / "jsonld_output.json"
+# Fixtures moved out of `dev/` so the test suite does not depend on a
+# scratch directory that is excluded from the Docker build context.
+JSON_DIR = REPO_ROOT / "tests" / "v2" / "fixtures" / "roundtrip"
+JSONLD_FILE = JSON_DIR / "jsonld_output.json"
 EXPECTED_ENTITY_COUNT = 33
 EXPECTED_ENTITY_TYPES = 6
 

@@ -70,12 +70,12 @@ def _valid_person_payload() -> dict[str, Any]:
         "identifiers": {
             "pulse:orcid": None,
             "pulse:infosciencePersonIdentifier": None,
-            "pulse:githubUsername": "octocat",
+            "pulse:githubUsername": "https://github.com/octocat",
             "uuid": "f887181e-9b8c-4c55-8ee6-d34285fdbed4",
         },
         "idSource": "pulse:githubUsername",
         "schema:name": "The Octocat",
-        "pulse:githubUsername": "octocat",
+        "pulse:githubUsername": "https://github.com/octocat",
     }
 
 

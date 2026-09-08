@@ -14,7 +14,7 @@ def test_load_schema_returns_dict(
 def test_load_fixture_supports_nested_groups(
     load_fixture: Callable[[str, str], Any],
 ) -> None:
-    fixture = load_fixture("schema/strict", "person.schema")
+    fixture = load_fixture("schema/invalid", "person_bad_orcid")
     assert isinstance(fixture, dict)
 
 

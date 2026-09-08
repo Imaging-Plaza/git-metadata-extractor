@@ -117,7 +117,14 @@ def v2_test_config() -> V2TestConfig:
         repo_root=repo_root,
         tests_root=V2_TESTS_ROOT,
         fixtures_root=fixtures_root,
-        schema_fixtures_root=fixtures_root / "schema",
+        # The schemas the service loads at runtime, not a copy under
+        # tests/. There used to be three byte-identical copies kept in sync by
+        # hand (source, a promoted set under dev/, and this one) — and by the
+        # time they were removed, four agent schemas here had drifted, missing
+        # `pattern` constraints the real ones carry. Every test using the
+        # `load_schema` fixture was therefore asserting a laxer contract than
+        # production enforces. One source of truth removes that whole class.
+        schema_fixtures_root=repo_root / "git_metadata_extractor" / "schema" / "json",
         golden_root=V2_TESTS_ROOT / "golden",
     )
 
