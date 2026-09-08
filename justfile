@@ -177,6 +177,25 @@ test-offline:
     .venv/bin/python -m pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
 
 # Generate committed v2 Pydantic models from strict schemas
+# Generate Pydantic models from the SHACL shapes (needs ontology-prepare)
+ontology-models-generate:
+    python scripts/v2/prepare_ontology.py
+    python scripts/v2/generate_from_ontology.py
+
+# Fail if the generated models have drifted from the shapes (for CI)
+ontology-models-check:
+    python scripts/v2/prepare_ontology.py --check
+    python scripts/v2/generate_from_ontology.py --check
+
+# Check out the pinned ontology submodule and apply ontology/patches/
+ontology-prepare:
+    git submodule update --init --recursive vendor/open-pulse-ontology
+    python scripts/v2/prepare_ontology.py
+
+# Verify the ontology is prepared without modifying it (for CI)
+ontology-check:
+    python scripts/v2/prepare_ontology.py --check
+
 v2-models-generate:
     PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py
 

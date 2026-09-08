@@ -135,6 +135,19 @@ ignore = ["S101","T201", "G004", "E501", "FA100"]
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
+# Generated from the SHACL shapes by scripts/v2/generate_from_ontology.py.
+# These three are inherent to generated code rather than fixable in it:
+#   N815 — field names mirror ontology property names (pulse_githubUsername),
+#          which is the point; renaming them would break the alias mapping.
+#   COM812 — trailing-comma rule that conflicts with `ruff format`, which the
+#          generator runs over its own output.
+#   TC003 — `datetime`/`Decimal` are needed at runtime by Pydantic, so they
+#          cannot move into a TYPE_CHECKING block.
+#   TC001 — same reason, for the generated enumeration `Literal` aliases.
+#          Pydantic resolves annotations at runtime to build its validators, so
+#          a name imported only under TYPE_CHECKING raises NameError on model
+#          construction. The enumerations are load-bearing, not just hints.
+"git_metadata_extractor/schema/generated/*.py" = ["N815", "COM812", "TC001", "TC003"]
 
 [tool.pytest.ini_options]
 markers = [
