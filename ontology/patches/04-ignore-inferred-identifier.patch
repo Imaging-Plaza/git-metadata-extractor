@@ -1,0 +1,35 @@
+diff --git a/src/ontology/ontology-shapes-canonical.ttl b/src/ontology/ontology-shapes-canonical.ttl
+index dd657e3..c15298d 100644
+--- a/src/ontology/ontology-shapes-canonical.ttl
++++ b/src/ontology/ontology-shapes-canonical.ttl
+@@ -281,7 +281,7 @@ pulse:ArticleShape
+     a sh:NodeShape ;
+     sh:targetClass schema:ScholarlyArticle ;
+     sh:closed true ;
+-    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
++    sh:ignoredProperties ( rdf:type owl:sameAs schema:identifier ) ;
+     sh:property pulse:NameShape ;
+     sh:property pulse:DoiShape ;
+     sh:property [ sh:path schema:author ; sh:class schema:Person ; sh:minCount 1 ; sh:name "Author"; sh:description "The author of this article"   ] ;
+@@ -337,7 +337,7 @@ pulse:OrganizationShape
+     a sh:NodeShape ;
+     sh:targetClass org:Organization ;
+     sh:closed true ;
+-    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
++    sh:ignoredProperties ( rdf:type owl:sameAs schema:identifier ) ;
+     sh:property pulse:NameShape ;
+     sh:property pulse:RorShape ;
+     sh:property pulse:OrganizationTypeShape ;
+diff --git a/src/ontology/ontology-shapes-raw.ttl b/src/ontology/ontology-shapes-raw.ttl
+index cd2bf63..fc3fd72 100644
+--- a/src/ontology/ontology-shapes-raw.ttl
++++ b/src/ontology/ontology-shapes-raw.ttl
+@@ -274,7 +274,7 @@ pulse:RawArticleShape
+     a sh:NodeShape ;
+     sh:targetClass schema:ScholarlyArticle ;
+     sh:closed true ;
+-    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
++    sh:ignoredProperties ( rdf:type owl:sameAs schema:identifier ) ;
+     sh:property [ sh:path schema:name ; sh:datatype xsd:string ] ;
+     sh:property [
+         sh:path pulse:doi ;
