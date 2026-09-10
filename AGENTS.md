@@ -63,10 +63,33 @@ git_metadata_extractor/
 
   pipeline/
     orchestrator.py              # stage runner, fan-out concurrency, retries
+    run.py                       # the post-agent sequence, as ordered chains
+    runner.py                    # one Stage signature + the loop that runs them
+    state.py                     # PipelineState: the value the chains thread
     stages/                      # the actual stages — see "Pipeline" below
+      raw_projection.py          # flat v2 -> the v3 *raw* shapes
+      canonical_projection.py    # flat v2 -> the v3 *canonical* shapes
+      substrate.py               # the raw layer grouped into named graphs
+      extraction_run.py          # pulse:ExtractionRun + prov:SoftwareAgent
+
+  store/                         # the WRITE layer, counterpart to providers/
+    oxigraph.py                  # load quads, run SPARQL, check health
+    terms.py                     # SPARQL term serialisation + the prefix table.
+                                 #   The one place an injection can happen, so
+                                 #   it is written and tested once
+
+  unify/                         # store-side unification: substrate -> canonical
+    policy.py                    # per-type match keys + per-property dispositions
+    cluster.py                   # union-find over match keys (type-agnostic)
+    merge.py                     # union / select / drop, and why (type-agnostic)
+    remap.py                     # rewrite refs, composite ids and selections
+    provenance.py                # the decisions, as RDF-star in graph:prov
+    runner.py                    # read the store, decide, write both graphs
 
   schema/                        # JSON Schemas (agent + strict) + JSON-LD context
   validation/                    # strict-schema + SHACL validators
+    layers.py                    # which shape set validates which layer,
+                                 #   and which layer refuses vs reports
   canonicalization/              # ID resolution, string normalisation
 
   experimental/                  # not production: pi terminal-agent PoC
@@ -167,6 +190,12 @@ tag_rule_based_disciplines     deterministic discipline fallback
 build_jsonld_output            v2-shaped JSON-LD graph; strips redundant
                                pulse:ror from any org:Organization whose @id is
                                already the ROR (closed-shape violation fix)
+substrate_projection [gated]   project the SAME intermediate into the v3 raw
+                               shapes, grouped into one named graph per
+                               pulse:ExtractionOutput (one platform's slice of
+                               one run). Must run before canonical_projection,
+                               which overwrites the intermediate both read
+                               (off by default: V2_SUBSTRATE_ENABLED)
 canonical_projection           project the graph into the v3 canonical shapes
                                and swap in the generated @context; the v2 graph
                                above becomes an internal intermediate
@@ -174,6 +203,13 @@ canonical_projection           project the graph into the v3 canonical shapes
 shacl_gate                     SHACL validation — warning-only (see below).
                                Validates against the v3 canonical shapes when
                                the projection ran, the v2.1.2 bundle otherwise
+extraction_run                 describe this run as a pulse:ExtractionRun +
+                               prov:SoftwareAgent, returned beside `output`
+substrate_write     [gated]    fold the run descriptor into the substrate's
+                               meta graph and POST the quads to Oxigraph.
+                               Last, because the run descriptor only exists
+                               once extraction_run has run
+                               (V2_SUBSTRATE_ENABLED + V2_SUBSTRATE_STORE_URL)
 compute_stats                  response counters/timings
 ```
 
@@ -189,6 +225,12 @@ from `PLAN_BY_TYPE`, the stage banners, and the `STAGE_*` constants on
 - `agent_runtime=hybrid` runs the rule-based generators (stages 4-9) **and** an LLM refiner stage (`refine_with_llm`, between reconciliation and `guarantee_repo_author`). The refiner proposes whitelisted-field patches per entity type: organizations (`pulse:OrganizationType`), repositories (`pulse:discipline`, `pulse:repositoryType` only when current is `pulse:Other`), and persons (`schema:name` only when current looks like a GitHub handle). LLM-only stages (`llm_dedup`, `llm_critic`, `link_veracity`, `org_relationships`) are **skipped** in hybrid mode. Toggle with `V2_HYBRID_REFINER_ENABLED` (default `true`).
 - `llm_critic` is **off by default**. Set `V2_APPLY_CRITIC_PRUNING=true` to enable (LLM mode only).
 - `link_veracity` is **on by default in LLM mode**. Set `V2_LINK_VERACITY_ENABLED=false` to skip even in LLM mode (recommended for batch runs).
+- `substrate_projection` / `substrate_write` are **off by default**. Set
+  `V2_SUBSTRATE_ENABLED=true` to project the raw layer; the write additionally
+  needs `V2_SUBSTRATE_STORE_URL`. With the flag on and no store URL the
+  substrate is projected and returned but stored nowhere — the useful middle
+  state for inspecting the layer. Both fail open: an unreachable store costs a
+  warning, never the graph.
 - `concept_tagging` is **off by default**. Set `V2_CONCEPT_TAGGING_ENABLED=true` to opt in. Backends are pluggable via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph` (default, calls graphai), `wikipedia` (credential-free MediaWiki opensearch), `llm` (pydantic-ai)}. Stamps `_concepts` / `_keywords` / `_disciplines` as internal `_*` metadata (stripped before JSON-LD output and strict validation). Optional OpenAlex enrichment per discipline via `V2_CONCEPT_TAGGING_OPENALEX_RELATED_ENABLED=true` (publications, people, units). Full reference at [`docs/concept-tagging.md`](docs/concept-tagging.md).
 
 **Hallucination guards baked into agents:**
@@ -256,13 +298,24 @@ from the v2 form:
   `pulse:ror` deliberately stays a URL.
 - **Articles carry a `pulse:Deposit`**, which holds `schema:datePublished` —
   `ArticleShape` has no date of its own.
-- **Not carried by the canonical layer**: follower counts, biographies,
+- **Contributions are in the substrate** (since 2026-09-09, ontology patch 06).
+They were excluded as "derived", on the premise that the pipeline computes
+commit counts — it does not: `contribution_agent.py` reads GitHub's
+`contributions` field, so the count is reported and belongs in the layer that
+records what sources said. The canonical `ContributionShape` requires it
+(`sh:minCount 1`), so with the count absent from the substrate the store-side
+canonical graph had **zero** contributions while `/v2/extract` returned 46.
+What is genuinely derived is the aggregate across platforms and runs, which is
+the unifier's `MAX`.
+
+**Not carried by the canonical layer**: follower counts, biographies,
   locations, avatars, a person's homepage. These are not lost from the
   ontology — `RawPlatformProfileShape` declares `pulse:followerCount`,
   `pulse:biography`, `pulse:location`, `pulse:company`, `pulse:socialLink`,
   `schema:image`, `schema:url` and more. They belong to the **raw** layer,
-  which the current projection does not yet emit, so today they are dropped
-  on the way to canonical. The `affiliations` context alias is genuinely gone.
+  which `V2_SUBSTRATE_ENABLED` now emits (see "Substrate layer" below) — so
+  they are dropped from `output` but not lost when the substrate is on. The
+  `affiliations` context alias is genuinely gone.
 
 The `@context` is now generated from the SHACL shapes
 (`schema/generated/context.jsonld`). The hand-written v2 context is still used
@@ -274,13 +327,287 @@ Measured 120/120 SHACL-conformant against `ontology-shapes-canonical.ttl` over
 the 120-repo corpus. Regenerate the measurement with
 `python scripts/v2/canonical_conformance.py <corpus dir>`.
 
+## Substrate layer (opt-in, since 2026-09-09)
+
+`PROVENANCE_ARCHITECTURE.md` phase 3. With `V2_SUBSTRATE_ENABLED=true`,
+`/v2/extract` also returns a `substrate` field: the same extraction in the v3
+**raw** shapes, grouped into named graphs.
+
+```json
+{
+  "output": { "@context": {...}, "@graph": [ ... ] },
+  "extraction_run": { "@graph": [ <ExtractionRun>, <SoftwareAgent> ] },
+  "substrate": {
+    "@context": {...},
+    "@graph": [
+      { "@id": "urn:pulse:output:<run>:github",      "@graph": [ ... ] },
+      { "@id": "urn:pulse:output:<run>:ror",         "@graph": [ ... ] },
+      { "@id": "urn:pulse:run:<run>#meta",           "@graph": [ ... ] }
+    ]
+  }
+}
+```
+
+Four things about it are load-bearing:
+
+- **The unit of grouping is one platform's slice of one run**, not one source.
+  That comes from the shapes: `pulse:partOfRun` points at a
+  `pulse:ExtractionOutput`, which carries `prov:wasGeneratedBy` → the
+  `ExtractionRun` and `pulse:platform`. So `extraction_output_iri` mints the
+  IRI and the grouping only has to route to it.
+- **The graph IRIs embed the run id**, which is what makes the substrate
+  append-only. A second run over the same repository writes beside the first
+  rather than over it — "raw assertions, never rewritten" is enforced by the
+  IRI, not by the writer.
+- **It is a projection of the same intermediate `output` is**, not a step
+  before or after it. `substrate_projection` therefore has to run *before*
+  `canonical_projection`, which replaces `state.payload["@graph"]` in place.
+- **The meta graph holds only the extraction's own description** — the
+  outputs, the run, the agent. An *entity* there is a routing defect, and
+  SHACL cannot see it: the raw entity shapes are open and require no anchor,
+  so a stranded entity conforms perfectly while claiming a fact about the
+  world is a fact about the run. `canonical_conformance.py --layer substrate`
+  counts them for exactly that reason.
+
+Measured 119/119 conformant against `ontology-shapes-raw.ttl` with **zero
+stranded entities**, 434 flat nodes → 1,021 raw nodes across 2-4 named graphs
+per run. Regenerate with:
+
+```bash
+python scripts/v2/canonical_conformance.py <corpus dir> --layer substrate
+```
+
+**A pipeline-cache hit writes nothing to the store.** The cache-hit branch in
+`api/extract.py` returns the stored response before the stage chain runs, so
+`substrate_write` never executes — and the replayed `substrate` field carries
+the *original* run's graph IRIs. That is consistent with `extraction_run`
+(provenance records when the data was produced, and a cache hit produced
+nothing new), but it means accumulating a corpus into the store needs
+`V2_PIPELINE_CACHE_ENABLED=false`, or `refresh` per request. A cached URL will
+otherwise look extracted and be absent from the store.
+
+`V2_SUBSTRATE_STORE_URL` additionally POSTs each run's quads to Oxigraph
+(`gme-oxigraph` in `tools/deploy/docker-compose.yml`). One request per run:
+`POST /store` with **no** `graph` parameter and an N-Quads body dispatches each
+quad to the graph its fourth term names. Adding `?graph=` would silently
+retarget every quad into a single named graph — the whole layer collapsed, and
+still a 204.
+
+## Unification (opt-in, since 2026-09-09)
+
+`PROVENANCE_ARCHITECTURE.md` phase 4. The substrate accumulates one named graph
+per `(platform x run)`; the unifier reads all of it, collapses records that
+describe the same entity, and writes `urn:pulse:graph:canonical`.
+
+```bash
+# report what unification would do, touching nothing
+python scripts/v2/unify.py http://localhost:7878 --dry-run
+
+# do it
+python scripts/v2/unify.py http://localhost:7878
+```
+
+A script rather than an endpoint: the query/provenance API is phase 7, and
+`unify.runner.unify_store` is the entry point either way.
+
+**Split as the architecture doc specifies** — a type-agnostic layer plus a thin
+per-type resolver, which is the only part that varies:
+
+| Module | Varies by type? | Job |
+|---|---|---|
+| `policy.py` | **yes** | match keys, id promotion, per-property disposition |
+| `cluster.py` | no | union-find over the keys |
+| `merge.py` | no | union / select / drop, and a `Selection` explaining each choice |
+| `remap.py` | no | rewrite references and composite ids after a rename |
+
+**Extraction keeps its own identity resolution.** The decision (2026-09-09) is
+that the unifier writes *beside* `canonicalization/id_resolution.py` rather
+than replacing it: same `ORCID -> ROR -> handle -> urn:pulse:{uuid}` priority
+on both sides, so they agree wherever they saw the same evidence, and
+`pulse:samePersonAs` / `pulse:sameOrganizationAs` bridge the divergence where
+the unifier saw more. That keeps `/v2/extract`'s contract intact and makes
+ontology patch 02 load-bearing for the first time.
+
+**Three dispositions, and the interesting one is not `SELECT`:**
+
+- `UNION` — accumulate. `pulse:owns`, `org:hasUnit`, `pulse:hasProfile`. This
+  is where the value is: EPFL's ten units are scattered across ten runs and
+  only the union knows it has ten.
+- `SELECT` — one winner, with the losers and the rule recorded for the
+  provenance writer. `schema:name`, `pulse:ror`, `pulse:doi`.
+- `MAX` / `MIN` — an extremum, for a value that is neither accumulated nor
+  chosen. `pulse:contributionCount` is GitHub's *running total* for a person
+  on a repository, so two runs a week apart report 40 then 43 — **not** 40 and
+  3 more, which is why this is not a `SUM`. `pulse:firstContributionDate` is
+  `MIN`, `lastContributionDate` is `MAX`.
+- `PER_RUN` — never reaches canonical. `pulse:partOfRun` is the substrate's
+  anchor and differs per run *because* that is its job.
+
+The dispositions **cannot be read off the shapes**: 45 of 78 canonical
+properties carry no `sh:maxCount`, and among them `schema:name` is
+semantically single while `pulse:owns` is genuinely many. So `policy.py`
+classifies them by hand and `tests/v2/test_unify_policy.py` guards the table
+against the real TTL — no capped property may be `UNION`, and every uncapped
+one must have an entry. Exactly one property is *shape-dependent*
+(`schema:author`: capped on `pulse:Contribution`, unbounded on articles and
+repositories), which is why `single_valued_for(entity_type)` reads the
+generated per-type cap sets rather than a global set.
+
+**Measured over the 119-run corpus:** 670 records from 185 substrate graphs →
+633 clusters, **16 cross-run**, 0 renames, **0 contested values**. Every
+cross-run difference in the real corpus is either `pulse:partOfRun` or set
+accumulation — so the `SELECT` path has no corpus coverage and is tested
+against purpose-built fixtures instead. `graph:canonical` comes out at 3,278
+triples and **0 SHACL violations** against `ontology-shapes-canonical.ttl`, and
+unification is idempotent (three passes, byte-identical).
+
+**`graph:canonical` is replaced, not merged into.** Unification is a pure
+function of the substrate, so the writer `DROP`s and rewrites it. Losing it
+costs one re-run; losing the substrate — which is append-only and never
+rewritten — loses data.
+
+## Provenance (`graph:prov`, since 2026-09-09)
+
+`PROVENANCE_ARCHITECTURE.md` phase 5. A value the unifier *chose* is a derived
+fact — not what any one source said, but what was decided among what several
+said. `unify/provenance.py` records the decision on the triple itself, as
+RDF-star:
+
+```turtle
+<< <https://orcid.org/0000-0002-1825-0097> schema:name "Jane Doe" >>
+    prov:wasDerivedFrom   <urn:pulse:output:run-b:github> ;
+    pulse:observationKind "most-complete-source" ;
+    pulse:observedOn      "2026-09-09T11:00:00"^^xsd:dateTime ;
+    pulse:firstObservedOn "2026-09-01T09:00:00"^^xsd:dateTime ;
+    pulse:lastConfirmedOn "2026-09-09T11:00:00"^^xsd:dateTime ;
+    pulse:observationCount 2 .
+```
+
+The vocabulary and that exact shape are the pinned ontology's, not this
+repo's: `ontology-definitions-provenance.ttl` documents every annotation
+property with a worked `<< ?s ?p ?o >>` example *and* the query to read it
+back. Nothing here invents a term.
+
+Four rules worth knowing:
+
+- **RDF-star is store-only.** rdflib 6.3.2 cannot serialise a quoted triple and
+  pyshacl 0.28.1 cannot validate one, so the writer emits `INSERT DATA` text
+  through `store.update` rather than going through `substrate.to_nquads`.
+  `graph:prov` is therefore never SHACL-validated and never serialised to
+  JSON-LD — which is why it is not one of the shape sets. Individual *terms*
+  are still serialised by rdflib (`Literal.n3()`), because escaping a
+  `schema:name` that contains a quote, a brace or `<< >>` is not something to
+  hand-roll over data from arbitrary repositories.
+- **Derived-only.** An uncontested value is already attributed by the named
+  graph it sits in, so only contested selections are recorded. The ontology's
+  own example kind `"single-source"` therefore never appears.
+- **Upsert, not replace** — unlike `graph:canonical`. `pulse:observationCount`
+  and `pulse:firstObservedOn` are history: the writer reads them back and
+  carries them forward, so a re-observation bumps the counter and keeps the
+  first date. Superseded values are pruned, which discards their history —
+  the "cheap corner" the cost profile chooses over a full audit trail.
+- **`pulse:samePersonAs` / `sameOrganizationAs` live here as plain triples**,
+  not on the canonical node. The ontology says so, and the shapes require it:
+  `PersonShape` is `sh:closed` and ignores only `( rdf:type owl:sameAs )`, so a
+  *subproperty* of `owl:sameAs` is rejected.
+- **No `pulse:observationConfidence`.** Declared by the ontology, left empty on
+  purpose: the only thing available to derive it from is the selection rule,
+  which `pulse:observationKind` already states.
+
+Verified against `ghcr.io/oxigraph/oxigraph:0.4.11` — insert, upsert with a
+bumped counter, the ontology's documented read-back query, the prune, and
+eight adversarial literals (quotes, backslashes, newlines, braces, a literal
+`<< nested star >>`) all round-tripping. Built against fixtures by decision:
+the 119-run corpus produces **zero** contested selections, so nothing real
+exercises this until a second platform is harvested.
+
+## Validation split (phase 6, since 2026-09-09)
+
+Three layers, three contracts, one place that knows the pairing —
+`validation/layers.py`. Getting it wrong is silent in both directions:
+validating the substrate against the canonical shapes reports the raw layer's
+deliberate openness as violations, and validating canonical against the raw
+shapes checks almost nothing.
+
+| Layer | Shapes | Closed? | On violation |
+|---|---|---|---|
+| substrate | `ontology-shapes-raw.ttl` + 4 | mostly open | **report** (`V2_SUBSTRATE_VALIDATE`) |
+| canonical | `ontology-shapes-canonical.ttl` + 3 | closed | **refuse to publish** |
+| provenance | — | — | cannot be validated at all |
+
+**Why the severities differ.** The substrate is append-only and the only
+durable copy of what a run found, so refusing a slice over one malformed entity
+loses the rest of it permanently — and the raw shapes are open precisely so a
+source can assert something canonical has no slot for. The canonical graph is
+the opposite: a pure function of the substrate, rewritten every pass, and the
+one consumers query. Refusing costs one re-run and leaves the previous valid
+graph answering.
+
+**The order is the whole point.** `write_canonical` validates *before* it
+`DROP`s. Validate first and a bad pass leaves the previous graph intact;
+validate after and a bad pass leaves nothing. Verified live: an invalid graph
+is refused, `graph:canonical` keeps its 3 triples and still answers the query.
+`unify.py --no-enforce` publishes anyway, for inspecting a broken graph; exit
+code 3 marks a refusal.
+
+**This gate is also the sufficiency check.** Each layer passing its own shapes
+does not mean the substrate holds what canonical needs — the substrate was
+119/119 raw-conformant while missing two things `ArticleShape` and
+`OrganizationShape` require (§3j of `REFACTOR_HANDOFF.md`). The only way to
+find that out is to build canonical *from* the substrate and validate the
+result, which is exactly what this call does.
+
+**`graph:prov` is structurally outside all of it.** pyshacl 0.28.1 cannot
+target a quoted triple as a focus node, so no shape can ever apply to an
+RDF-star annotation. `ontology-shapes-provenance.ttl` says so in its own
+header.
+
+Note the in-request `shacl_gate` stage stays **warning-only** and that is not
+an inconsistency: there the alternative is returning nothing to a caller who
+asked for a graph. Store-side, the alternative is leaving a valid graph in
+place. Different trade, different answer.
+
 ## API surface
 
 - `GET  /v2/health` — health check (open, no auth)
+- `GET  /v2/graph/status` — what the accumulated store holds: graph counts,
+  canonical vs provenance triples, runs, canonical entities by type
+- `GET  /v2/graph/entity?iri=…` — one entity from `graph:canonical`, as a
+  JSON-LD node in the same shape `/v2/extract` returns for it
+- `GET  /v2/graph/provenance?subject=…[&property=…]` — for each *chosen*
+  value: the `pulse:ExtractionOutput` it came from, the run that produced that
+  output, the selection rule, and the observation counters. Plus the
+  `owl:sameAs` identity links, which are plain triples in `graph:prov`
 - `POST /v2/extract` — async job. Body: `{source_url, agent_runtime?, output_format?, include_context_summary?}`. Returns `{job_id, status, status_url}`; poll `GET /v2/jobs/{job_id}`.
 - `GET  /v2/jobs/{job_id}` — job status + result when complete
 - `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
 - `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
+
+The three `/v2/graph/*` endpoints are **new**, not a reinterpretation of
+`/v2/extract` — the decision on record is *"version the endpoint rather than
+reinterpret it"*, so `/v2/extract` keeps meaning "extract this URL now" and
+these mean "tell me what the store knows". All three need
+`V2_SUBSTRATE_STORE_URL`; without it they answer **503**, not 404, because
+"nothing about that IRI" and "no store" are different answers and a caller
+that cannot tell them apart will cache the wrong one.
+
+**No endpoint accepts a SPARQL string**, and that is a security property rather
+than a simplification. Oxigraph ships no authentication and its `/store`
+endpoint is writable by anyone who can reach it — which is why the compose
+service is not port-published — so an endpoint that proxied a caller's query
+would be an unauthenticated write primitive one `INSERT` away. Every query is
+fixed text with IRIs substituted through `store.terms.iri_term`, which
+**refuses** anything RDF forbids in an IRIREF rather than escaping it (a bad
+IRI is a 400). `test_no_endpoint_accepts_a_sparql_string` asserts it over the
+whole route table, so a new endpoint with a `query` parameter fails without
+anyone remembering to add a test.
+
+`/v2/graph/provenance` cannot be JSON-LD: `graph:prov` holds RDF-star quoted
+triples and the pinned rdflib cannot serialise one, so it answers with a flat
+list of records built from SPARQL bindings. That is permanent, not a stopgap.
+An empty `records` list means **no value on that subject was contested**, not
+that provenance is missing — which is what every subject answers on real data
+today.
 
 **Auth:** `/v2/extract` and `/v2/jobs/{id}` require
 `Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
@@ -299,6 +626,10 @@ the 120-repo corpus. Regenerate the measurement with
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | swap in mock GitHub/ORCID/Infoscience/ROR providers |
 | `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `/v2/extract` returns the graph in the **v3 canonical shapes** — platform profiles instead of flat handles, bare identifiers, deposits. Set `false` to restore the v2-shaped output without a redeploy. See "Output shape" below. |
+| `V2_SUBSTRATE_ENABLED` | `false` | project the **raw/substrate layer**: the extracted entities in the v3 raw shapes, grouped into one named graph per `pulse:ExtractionOutput` (one platform's slice of one run) and returned as the `substrate` field beside `output`. Off by default — additive, and unconsumed until the store-side unifier. |
+| `V2_SUBSTRATE_STORE_URL` | unset | Oxigraph server root, e.g. `http://gme-oxigraph:7878`. With `V2_SUBSTRATE_ENABLED` on, each run's named graphs are POSTed there as N-Quads. Unset means the substrate is projected and returned but stored nowhere. Fails open: an unreachable store adds a warning, never costs the caller a graph. |
+| `V2_SUBSTRATE_VALIDATE` | `true` | validate each substrate slice against the **raw** shapes at write time. Reports, never refuses — the substrate is append-only and the only durable copy of what a run found, so losing a slice over one malformed entity is worse than keeping it. Turn off for a bulk backfill where the SHACL pass dominates. |
+| `V2_SUBSTRATE_STORE_TIMEOUT_SECONDS` | `30` | HTTP timeout for the substrate write |
 | `V2_LINK_VERACITY_ENABLED` | `true` | turn off to skip the link-veracity stage in LLM mode (rule-based mode skips unconditionally) |
 | `V2_CONTEXT_SUMMARY_SCOUT_MODE` | `false` | upgrade `context_summary` LLM stage to scout mode: broad RAG-search toolkit (orcid/ror/infoscience/openalex/zenodo/ethz/huggingface/renkulab/snsf/epfl_graph + selenium_fetch) on top of the legacy `grep_repository_corpus` + DuckDuckGo pair, plus a structured-brief prompt with explicit People / Organizations / Articles / Affiliations / Caveats sections. Per-entity LLM agents (person, org, article, membership, contribution) automatically benefit since they already consume the `summary_markdown`. Trade-off: heavier upfront LLM call, but per-entity calls send less context and duplicate ORCID/ROR lookups across entities collapse into the scout's shared brief. |
 | `V2_INFOSCIENCE_RAG_ENABLED` | `true` | enables the Infoscience RAG agent tools (Qdrant-backed semantic search + on-demand chunk/record fetch). Construction degrades gracefully when Qdrant or RCP is unreachable. |
@@ -414,7 +745,11 @@ invalid Person stubs per 120-repo corpus run.
 
 After any schema edit, run `just v2-models-generate` to regenerate the Pydantic
 models in `git_metadata_extractor/schema/models/`. `just v2-models-check` in CI
-catches drift. Two invariants are enforced by `tests/v2/test_json_schemas.py`:
+catches drift. The *ontology*-driven generator (`just ontology-models-generate`)
+additionally emits `MODELS_BY_TARGET_CLASS` and
+`SINGLE_VALUED_BY_TARGET_CLASS` per layer — the second is per-`sh:targetClass`
+because exactly one canonical property has shape-dependent cardinality
+(`schema:author`), and the unifier's merge policy has to honour it per type. Two invariants are enforced by `tests/v2/test_json_schemas.py`:
 each schema is valid JSON Schema, and the agent (permissive) schema is a
 superset of the strict schema's property names — a field strict demands but
 agent omits is unreachable, since `validate_permissive` soft-drops what it does
