@@ -69,9 +69,46 @@ _SUBMODULE_ONTOLOGY_DIR = (
 )
 
 
+#: The v3 **raw** layer, for validating the substrate. Five files: the raw
+#: shapes and definitions, plus the canonical definitions and both enumeration
+#: files, because the raw shapes reuse classes and enumerated properties
+#: declared in the canonical layer. `ontology-shapes-raw.ttl`'s own header is
+#: explicit that it must be loaded with those and **never** together with
+#: `ontology-shapes-canonical.ttl`: `sh:targetClass` applies across the whole
+#: shapes graph, so a looser raw `PersonShape` and a closed canonical one in
+#: one graph would validate every person against both.
+_RAW_FILES = (
+    "ontology-shapes-raw.ttl",
+    "ontology-definitions-raw.ttl",
+    "ontology-definitions-canonical.ttl",
+    "ontology-enumerations-canonical.ttl",
+    "ontology-enumerations-raw.ttl",
+)
+
+
 def canonical_shapes_available() -> bool:
     """Whether the vendored v3 canonical layer is present and prepared."""
     return all((_SUBMODULE_ONTOLOGY_DIR / name).exists() for name in _CANONICAL_FILES)
+
+
+def raw_shapes_available() -> bool:
+    """Whether the vendored v3 raw layer is present and prepared."""
+    return all((_SUBMODULE_ONTOLOGY_DIR / name).exists() for name in _RAW_FILES)
+
+
+@lru_cache(maxsize=1)
+def load_raw_shapes_graph() -> Graph:
+    """The v3 raw shapes, for validating a substrate slice at write time.
+
+    Deliberately a separate graph from `load_canonical_shapes_graph`, and not
+    merely a different file list: the two shape sets target the same classes
+    with different strictness, so unioning them would validate every node
+    against both and report the raw layer's openness as canonical violations.
+    """
+    graph = Graph()
+    for name in _RAW_FILES:
+        graph.parse(str(_SUBMODULE_ONTOLOGY_DIR / name), format="turtle")
+    return graph
 
 
 @lru_cache(maxsize=1)
