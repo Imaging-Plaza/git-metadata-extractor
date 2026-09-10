@@ -677,6 +677,7 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         warnings=warnings,
         stats=stats,
         extraction_run=pipeline_state.extras.get("extraction_run"),
+        substrate=pipeline_state.substrate,
     )
 
     if pipeline_cache is not None and pipeline_cache_key is not None:

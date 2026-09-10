@@ -141,8 +141,12 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `infer_article_source_organization` | attribute articles to a source organisation |
 | `concept_tagging` **[off by default]** | EPFL Graph concepts / keywords / disciplines onto the root repo |
 | `tag_rule_based_disciplines` | deterministic discipline fallback |
-| `build_jsonld_output` | final JSON-LD `@graph`; strips redundant `pulse:ror` |
+| `build_jsonld_output` | v2-shaped JSON-LD `@graph`; strips redundant `pulse:ror`. Since the v3 flip this is an *intermediate*, not the response |
+| `substrate_projection` **[off by default]** | project that intermediate into the v3 **raw** shapes, grouped into one named graph per `pulse:ExtractionOutput`. Returned as `substrate` |
+| `canonical_projection` | project the intermediate into the v3 **canonical** shapes and swap in the generated `@context`. This is what `output` carries |
 | `shacl_gate` | SHACL validation — **warning-only**, see below |
+| `extraction_run` | describe the run as a `pulse:ExtractionRun` + `prov:SoftwareAgent`, beside `output` |
+| `substrate_write` **[off by default]** | fold the run descriptor into the substrate's meta graph and POST the quads to Oxigraph |
 | `compute_stats` | response counters and timings |
 
 ### Why `shacl_gate` is warning-only
@@ -245,6 +249,10 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | `V2_EXPAND_OWNED_REPOS` | `false` | Materialise each owned repo as a full entity instead of a `pulse:owns` reference. |
 | `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency. |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
+| `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `output` carries the v3 canonical shapes. `false` restores the v2 shape. |
+| `V2_SUBSTRATE_ENABLED` | `false` | `substrate_projection` + `substrate_write` (the raw layer in named graphs). |
+| `V2_SUBSTRATE_STORE_URL` | unset | Oxigraph root the substrate is written to. Unset: projected and returned, stored nowhere. |
+| `V2_SUBSTRATE_VALIDATE` | `true` | Validate each substrate slice against the raw shapes at write. Reports, never refuses. |
 
 Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 2026-07-29. Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
 

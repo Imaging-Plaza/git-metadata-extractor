@@ -130,6 +130,19 @@ class V2ExtractResponse(BaseModel):
     #: while `output` carries what was extracted. Optional, so older consumers
     #: and cached responses predating the field stay valid.
     extraction_run: dict[str, Any] | None = None
+    #: The raw/substrate layer for this run: a JSON-LD document whose
+    #: top-level `@graph` holds one **named graph** per
+    #: `pulse:ExtractionOutput` — one platform's slice of one run — plus a
+    #: meta graph carrying the outputs and the `ExtractionRun`. Present only
+    #: when `V2_SUBSTRATE_ENABLED` is on.
+    #:
+    #: Sibling of `output` for the same reason `extraction_run` is: `output`
+    #: is the canonical graph, what a consumer should query, and the substrate
+    #: is what each source actually said before anything was chosen between
+    #: them. It is also where the substrate *writer* sends its payload, so
+    #: this field is the same bytes the store received — which is what makes
+    #: a store write checkable from the response alone.
+    substrate: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def output_matches_format(self) -> V2ExtractResponse:
@@ -199,4 +212,75 @@ class V2JobStatus(BaseModel):
     error: V2ErrorResponse | None = None
     result_url: str
 
+# --------------------------------------------------------------------------
+# the graph query API (phase 7)
+# --------------------------------------------------------------------------
 
+
+class V2GraphStatusResponse(BaseModel):
+    """What the accumulated store holds. The operator's first question."""
+
+    store_url: str
+    named_graphs: int
+    triples: int
+    #: Split out because they answer different questions: canonical is what a
+    #: consumer queries, provenance is why. A provenance count of 0 with a
+    #: healthy canonical count is the normal state today — see the note on the
+    #: derived-only grain in `unify/provenance.py`.
+    canonical_triples: int
+    provenance_triples: int
+    extraction_runs: int
+    canonical_entities_by_type: dict[str, int] = Field(default_factory=dict)
+
+
+class V2GraphEntityResponse(BaseModel):
+    """One canonical entity, in the same JSON-LD shape `/v2/extract` returns.
+
+    Deliberately the same shape: a caller reading an entity out of the store
+    and a caller reading one out of an extraction should not need two parsers.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    context: dict[str, Any] = Field(alias="@context")
+    graph: list[dict[str, Any]] = Field(alias="@graph")
+
+
+class V2ProvenanceRecord(BaseModel):
+    """One chosen value, and how it was chosen.
+
+    Flat rather than JSON-LD because it describes an RDF-star quoted triple,
+    and the pinned rdflib cannot serialise one — so this is built from SPARQL
+    bindings. That is a permanent property of `graph:prov`, not a stopgap.
+    """
+
+    property: str
+    value: str | None = None
+    #: The `pulse:ExtractionOutput` the winning value was read from — one
+    #: platform's slice of one run, which is the granularity that answers
+    #: "which source said this".
+    derived_from: str | None = None
+    #: The run that produced that output, resolved through
+    #: `prov:wasGeneratedBy` so a caller needs one request rather than two.
+    run: str | None = None
+    observation_kind: str | None = None
+    observation_count: int | None = None
+    first_observed_on: str | None = None
+    last_confirmed_on: str | None = None
+    observed_on: str | None = None
+
+
+class V2GraphProvenanceResponse(BaseModel):
+    """Why each chosen value for one subject won.
+
+    An empty `records` list means no value on this subject was *contested* —
+    not that provenance is missing. A single-source value is already attributed
+    by the named graph it sits in, so nothing is recorded for it.
+    """
+
+    subject: str
+    records: list[V2ProvenanceRecord] = Field(default_factory=list)
+    #: `owl:sameAs` subproperty links, which live in `graph:prov` as plain
+    #: triples rather than quoted-triple annotations — the ontology is explicit
+    #: about that, and the closed canonical shapes reject them anyway.
+    same_as: list[str] = Field(default_factory=list)

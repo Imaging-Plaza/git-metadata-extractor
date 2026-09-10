@@ -27,6 +27,7 @@ from copy import deepcopy
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from git_metadata_extractor import config
 from git_metadata_extractor.agents.runtime import AgentRuntime
 from git_metadata_extractor.pipeline.runner import Stage, StageGate
 from git_metadata_extractor.pipeline.stages import (
@@ -294,6 +295,18 @@ def _gate(name: str) -> StageGate:
         return bool(getattr(_helpers, name)())
 
     return gate
+
+
+def _substrate_applies(_state: PipelineState) -> bool:
+    """`V2_SUBSTRATE_ENABLED`, read from `config` rather than the API layer.
+
+    Note what is *not* here: the deferred import every other gate in this
+    module needs. `config` imports only `agents.runtime`, so it is outside the
+    `api/__init__ -> api/extract -> pipeline/run` cycle and can be imported at
+    module scope. That is the shape the flags `_gate` reaches for should have —
+    see the layering note there.
+    """
+    return config.substrate_enabled()
 
 
 RESOLVER_CHAIN: list[Stage] = [
@@ -969,6 +982,148 @@ def _project_canonical(state: PipelineState) -> None:
     )
 
 
+def _project_substrate(state: PipelineState) -> None:
+    """Project the built graph into the raw layer, grouped into named graphs.
+
+    Runs between `jsonld_build` and `canonical_projection`, and the position is
+    load-bearing: both layers project the **same** flat v2 intermediate, and
+    `canonical_projection` replaces `state.payload["@graph"]` in place. Anything
+    reading the intermediate has to do it before that. Ordering the two the
+    other way round would silently project the canonical graph into raw
+    shapes — which validates (the raw entity shapes are open) while carrying a
+    v3 graph translated twice.
+
+    The run descriptor is *not* added here. `extraction_run` mints it last, so
+    that `prov:endedAtTime` covers everything that happened to the graph, and
+    `substrate_write` is what folds it into the meta graph. Until then the
+    outputs reference the run by its IRI, which `run_iri(run_id)` already
+    determines.
+    """
+    from git_metadata_extractor.pipeline.stages.substrate import (  # noqa: PLC0415
+        build_substrate,
+        named_graph_sizes,
+    )
+    from git_metadata_extractor.schema import load_generated_context  # noqa: PLC0415
+
+    nodes = state.payload.get("@graph")
+    if not isinstance(nodes, list):
+        return
+    state.substrate = build_substrate(
+        nodes,
+        run_id=state.run_id,
+        context=load_generated_context(),
+    )
+    sizes = named_graph_sizes(state.substrate)
+    state.extras["substrate_graph_sizes"] = sizes
+    _log(
+        "substrate_projection",
+        "in=%d graphs=%d nodes=%d",
+        len(nodes),
+        len(sizes),
+        sum(sizes.values()),
+        state=state,
+    )
+
+
+async def _write_substrate(state: PipelineState) -> None:
+    """Fold the run descriptor into the substrate and load it into the store.
+
+    Last in the chain because the run descriptor only exists once
+    `extraction_run` has run, and a substrate graph that referenced a run node
+    absent from the payload would be a dangling reference rather than a forward
+    declaration — `ExtractionOutputShape` constrains `prov:wasGeneratedBy` with
+    `sh:class pulse:ExtractionRun`, which can only resolve if the run node is
+    in the graph being validated. Carrying it also makes each run's substrate
+    self-describing once loaded.
+
+    Fail-open, and deliberately so: an unreachable store must cost the caller
+    a warning, not the graph they asked for. The substrate is append-only, so a
+    skipped write loses one run's slice and nothing already recorded.
+    """
+    from git_metadata_extractor.pipeline.stages.substrate import (  # noqa: PLC0415
+        meta_graph_iri,
+        to_nquads,
+    )
+    from git_metadata_extractor.store import oxigraph  # noqa: PLC0415
+
+    document = state.substrate
+    if not document:
+        return
+
+    run_nodes = (state.extras.get("extraction_run") or {}).get("@graph") or []
+    if run_nodes:
+        _merge_into_meta_graph(document, meta_graph_iri(state.run_id), run_nodes)
+    else:
+        # `extraction_run` is fail-open, so it can leave nothing behind. Say so
+        # rather than writing a substrate whose outputs point at an
+        # `ExtractionRun` that is not in the graph: the shapes constrain that
+        # reference with `sh:class`, and a dangling one makes the slice
+        # unattributable to any run — which is the layer's entire purpose.
+        state.warn(
+            "substrate_write: no extraction run descriptor; the substrate's "
+            "outputs reference a run node that is not in the graph",
+        )
+
+    # The reporting half of the validation split (phase 6). Deliberately not
+    # enforcing: the substrate is append-only and durable, so refusing to write
+    # a slice because one entity is malformed loses the other entities in it
+    # for good — and the raw shapes are open precisely so a source can assert
+    # something the canonical layer has no slot for. The enforcing gate is on
+    # the canonical side, where refusing leaves the previous valid graph in
+    # place.
+    if config.substrate_validate():
+        from git_metadata_extractor.validation import (  # noqa: PLC0415
+            validate_substrate,
+        )
+
+        validation = validate_substrate(document)
+        state.extras["substrate_validation"] = validation.summary()
+        if not validation.conforms:
+            state.warn(
+                f"substrate_write: {len(validation.violations)} SHACL "
+                f"violation(s) in the substrate slice",
+            )
+        _log("substrate_validation", "%s", validation.summary(), state=state)
+
+    store = oxigraph.store_from_config(
+        config.substrate_store_url(),
+        timeout=config.substrate_store_timeout_seconds(),
+    )
+    if store is None:
+        _log("substrate_write", "no store configured; substrate not written", state=state)
+        return
+
+    nquads = to_nquads(document)
+    written = await store.load_nquads(nquads)
+    # Counting non-blank lines, not newlines: N-Quads is line-oriented, so this
+    # is the exact quad count rather than a proxy for it.
+    quads = sum(1 for line in nquads.splitlines() if line.strip())
+    state.extras["substrate_quads_written"] = quads
+    state.extras["substrate_store_url"] = store.base_url
+    _log(
+        "substrate_write",
+        "store=%s quads=%d bytes=%d",
+        store.base_url,
+        quads,
+        written,
+        state=state,
+    )
+
+
+def _merge_into_meta_graph(
+    document: dict[str, Any],
+    meta_graph: str,
+    nodes: list[dict[str, Any]],
+) -> None:
+    """Append `nodes` to the document's meta graph, creating it if absent."""
+    entries = document.setdefault("@graph", [])
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("@id") == meta_graph:
+            entry.setdefault("@graph", []).extend(nodes)
+            return
+    entries.append({"@id": meta_graph, "@graph": list(nodes)})
+
+
 PAYLOAD_CHAIN: list[Stage] = [
     Stage(
         "rule_based_disciplines",
@@ -983,6 +1138,15 @@ PAYLOAD_CHAIN: list[Stage] = [
         fail_open=True,
     ),
     Stage("jsonld_build", _build_jsonld, fail_open=False),
+    # Before `canonical_projection`, which overwrites the intermediate both
+    # layers project from. Fail-open: the substrate is additive and unconsumed
+    # until phase 4, so a broken projection must not cost the caller a graph.
+    Stage(
+        "substrate_projection",
+        _project_substrate,
+        applies=_substrate_applies,
+        fail_open=True,
+    ),
     # Before the gate, not after: the gate must validate the graph the caller
     # actually receives. Fail-closed, because a failed projection would serve
     # the v2 graph under the v3 context — a document that describes itself
@@ -999,6 +1163,14 @@ PAYLOAD_CHAIN: list[Stage] = [
     # Fail-open: a malformed run descriptor must not cost the caller a graph
     # that is otherwise complete.
     Stage("extraction_run", _record_extraction_run, fail_open=True),
+    # After `extraction_run`, so the run node it mints can be carried in the
+    # substrate's meta graph rather than referenced and missing.
+    Stage(
+        "substrate_write",
+        _write_substrate,
+        applies=_substrate_applies,
+        fail_open=True,
+    ),
 ]
 
 

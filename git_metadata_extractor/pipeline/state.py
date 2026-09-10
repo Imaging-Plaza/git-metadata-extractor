@@ -5,16 +5,28 @@ threaded them by hand through 33 stage calls, which is why the sequence could
 only live inside one 1,110-line function. Collecting them here is what lets
 `pipeline/runner.py` give every stage the same signature.
 
-Four payloads, not one, because that is what the stages actually operate on
-today:
+Five payloads, not one, because that is what the stages actually operate on
+today — a chain of four, and one branch off its end:
 
-    buckets   -> reconciled -> assembled -> payload
-    (dict)       (Reconciled)  (Assembled)  (JSON-LD dict)
+    buckets  ->  reconciled  ->  assembled  ->  payload
+    (dict)       (Reconciled)    (Assembled)    (the flat v2 intermediate)
+                                                    |
+                                    +---------------+---------------+
+                                    v                               v
+                            payload, replaced in            substrate
+                            place by the canonical          (named graphs)
+                            projection
 
-That is deliberately *not* an RDF graph yet. Swapping these four for one graph
-rewrites every stage's internals, so it belongs with the substrate writer (plan
-phase 5) rather than in the mechanical move that introduced this file — a phase
-whose whole value is that the corpus diff stays empty.
+`payload` is the flat v2 intermediate `build_jsonld_output` produces, and the
+last two are both **projections of it** rather than further steps over it: the
+canonical layer replaces `payload` with what a consumer should query, and
+`substrate` holds what each source actually said, grouped into one named graph
+per `pulse:ExtractionOutput`. Neither is derived from the other.
+
+That is deliberately *not* an RDF graph yet. Swapping these for one graph
+rewrites every stage's internals, so it belongs with the domain-model half of
+the refactor rather than in the mechanical move that introduced this file — a
+phase whose whole value is that the corpus diff stays empty.
 """
 
 from __future__ import annotations
@@ -61,6 +73,13 @@ class PipelineState:
     reconciled: ReconciledEntities | None = None
     assembled: AssembledOutput | None = None
     payload: dict[str, Any] = field(default_factory=dict)
+    #: The raw/substrate layer: a JSON-LD document whose top-level `@graph`
+    #: holds one named graph per `pulse:ExtractionOutput`. A fifth payload
+    #: rather than a replacement for `payload`, because it is a *sibling*
+    #: projection of the same intermediate, not a further step over it — the
+    #: canonical layer keeps what a consumer should query, the substrate keeps
+    #: what each source actually said. `None` when the substrate stage is off.
+    substrate: dict[str, Any] | None = None
 
     # ---- accumulators ----
     warnings: list[str] = field(default_factory=list)
