@@ -33,14 +33,17 @@ checks that against the real TTL rather than trusting this docstring.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.pipeline.stages.canonical_projection import (
+    _host_and_path,
     _is_empty,
     _platform_for,
     bare_doi,
     bare_handle,
     bare_orcid,
+    deposit_iri,
     profile_iri,
 )
 
@@ -222,6 +225,20 @@ _PASSTHROUGH: dict[str, tuple[str, ...]] = {
         "schema:sourceOrganization",
         "schema:dateCreated",
     ),
+    # A contribution is a raw fact too — GitHub reports `contributions` per
+    # contributor per repository — so the properties have to survive. The
+    # dates are `xsd:dateTime` in the shape while the flat form sometimes
+    # carries a bare date; `_coerce` leaves them alone, so a bare date would
+    # be a datatype violation the substrate gate reports rather than hides.
+    "pulse:Contribution": (
+        "pulse:contributionTo",
+        "schema:author",
+        "pulse:contributionCount",
+        "pulse:firstContributionDate",
+        "pulse:lastContributionDate",
+        "pulse:gitAuthorName",
+        "pulse:gitAuthorEmail",
+    ),
     # A membership *is* a raw fact — ORCID asserts "X was employed at Y" — so
     # `RawMembershipShape` exists and the properties must survive. Omitting
     # this table entry emitted `<id> a org:Membership .` and nothing else,
@@ -283,6 +300,45 @@ def _raw_profile(
     return profile
 
 
+_ROR_ID = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
+
+
+def _ror_from(node: Mapping[str, Any]) -> str | None:
+    """The organization's ROR, from its own id. `RawOrganizationShape` patterns
+    the URL form, so it is returned as-is rather than made bare — `pulse:ror`
+    is the deliberate exception to v3's bare-identifier rule (§2.4)."""
+    iri = str(node.get("@id") or "")
+    return iri if _ROR_ID.match(iri) else None
+
+
+def _deposit(node: Mapping[str, Any], article_iri: str) -> dict[str, Any] | None:
+    """The platform record an article was found in.
+
+    Mirrors `canonical_projection._deposit` deliberately, including refusing to
+    emit one without both `pulse:platform` and `schema:datePublished`: the
+    canonical `DepositShape` requires both, so a partial deposit in the
+    substrate would be a node that can never be promoted.
+    """
+    platform, instance, internal_id = _platform_for(
+        node.get("pulse:infoscienceArticleIdentifier"),
+    )
+    published = node.get("schema:datePublished")
+    if platform is None or not internal_id or _is_empty(published):
+        return None
+
+    deposit: dict[str, Any] = {
+        "@id": deposit_iri(platform, internal_id),
+        "@type": "pulse:Deposit",
+        "pulse:platform": platform,
+        "pulse:platformInternalId": internal_id,
+        "schema:datePublished": published,
+        "pulse:depositOf": {"@id": article_iri},
+    }
+    if instance:
+        deposit["pulse:platformInstance"] = {"@id": instance}
+    return deposit
+
+
 def _project_person(node: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict]]:
     out = _base(node, "schema:Person")
     profiles: list[dict[str, Any]] = []
@@ -306,6 +362,21 @@ def _project_person(node: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict]
 
 def _project_organization(node: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict]]:
     out = _base(node, "org:Organization")
+
+    # Re-derive `pulse:ror` from the id when the id *is* a ROR.
+    #
+    # `build_jsonld_output` strips the field in that case — the `@id` already
+    # carries it and the v2 Organization shape is closed against it — so the
+    # flat form the substrate projects from has no `pulse:ror` at all. The
+    # canonical projection re-derives it (§3f, the 50% -> 85% fix); the raw
+    # projection did not, and the consequences only showed up when the unifier
+    # read the substrate: 40 of 102 organizations failed `OrganizationShape`'s
+    # identity `sh:or`, and the ROR match key — the *primary* one for
+    # organizations — never fired once, because the field was not there.
+    ror = _ror_from(node)
+    if ror and _is_empty(out.get("pulse:ror")):
+        out["pulse:ror"] = ror
+
     profiles: list[dict[str, Any]] = []
     for key in (
         "pulse:githubOrganizationHandle",
@@ -360,7 +431,34 @@ def _project_repository(node: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _project_article(node: Mapping[str, Any]) -> dict[str, Any]:
+def _project_contribution(node: Mapping[str, Any]) -> dict[str, Any]:
+    """One platform's report of a person's commits on a repository.
+
+    Carries no `pulse:partOfRun`: `RawContributionShape` declares none, for the
+    same reason `RawMembershipShape` does not — the anchor belongs to entities
+    a source describes, not to the edges between them. The named graph it is
+    written into is its attribution, which is why
+    `substrate._NAMES_SUBJECT` has to route it.
+    """
+    return _base(node, "pulse:Contribution")
+
+
+def _project_article(node: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict]]:
+    """An article plus the platform record it was found in.
+
+    The deposit is minted **here** and not only in the canonical projection,
+    which is where it was until unification tried to build canonical from the
+    substrate and found 26 of 26 articles missing a required
+    `pulse:hasDeposit`. The substrate is the durable layer: anything the
+    canonical layer needs and the substrate does not hold is unrecoverable
+    from the store, however conformant the raw graph looks.
+
+    `RawArticleShape` declares `pulse:hasDeposit`, so this was always the
+    intended home; it just had no consumer. Note that raw conformance stayed at
+    119/119 without it — `RawArticleShape` has no `sh:minCount` on the property
+    — which is why measuring the raw layer against the *raw* shapes never
+    caught it. Well-formed and sufficient are different questions.
+    """
     out = _base(node, "schema:ScholarlyArticle")
     doi = bare_doi(node.get("schema:identifier") or node.get("pulse:doi"))
     if doi:
@@ -368,29 +466,91 @@ def _project_article(node: Mapping[str, Any]) -> dict[str, Any]:
     keywords = node.get("_keywords")
     if not _is_empty(keywords):
         out["pulse:keyword"] = keywords
-    return out
+
+    deposit = _deposit(node, out["@id"])
+    if deposit is not None:
+        out["pulse:hasDeposit"] = [{"@id": deposit["@id"]}]
+        return out, [deposit]
+    return out, []
 
 
 _PAIR = {
     "schema:Person": _project_person,
     "org:Organization": _project_organization,
+    # Articles mint a companion node too, since the deposit moved here.
+    "schema:ScholarlyArticle": _project_article,
 }
 _SINGLE = {
     "schema:SoftwareSourceCode": _project_repository,
-    "schema:ScholarlyArticle": _project_article,
     "org:Membership": lambda n: _base(n, "org:Membership"),
+    "pulse:Contribution": _project_contribution,
 }
 
-#: Types the substrate deliberately does not carry.
+#: Types the substrate deliberately does not carry. Empty, and worth knowing
+#: why it exists at all.
 #:
-#: `pulse:Contribution` has **no raw shape at all** — and that is not an
-#: oversight in the ontology, it is the architecture: a contribution is a
-#: *derived* edge (we compute commit counts), so it is asserted by the unifier
-#: into the canonical graph and gets provenance there. Writing one into the
-#: substrate would put a computed fact in the layer reserved for what sources
-#: said. Compare `org:Membership`, which *does* have a raw shape, because ORCID
-#: genuinely asserts employment.
-_DERIVED_TYPES: frozenset[str] = frozenset({"pulse:Contribution"})
+#: `pulse:Contribution` was here, on the reasoning that a contribution is a
+#: *derived* edge because "we compute commit counts". **That was wrong about
+#: the count**: `agents/rule_based/contribution_agent.py` reads GitHub's
+#: `contributions` field, so the number is something a platform *reports*, and
+#: it belongs in the layer that records what sources said. Two further facts
+#: settled it (2026-09-09):
+#:
+#: - `RawPersonShape` already declares `pulse:hasContribution` with
+#:   `sh:class pulse:Contribution`, so the raw layer expects these nodes to
+#:   exist — while no raw shape targeted the class, making it the one entity
+#:   type the raw layer referenced and could not validate.
+#: - The canonical `ContributionShape` requires `pulse:contributionCount`
+#:   (`sh:minCount 1`), so the unifier cannot assert an edge without one. With
+#:   the count absent from the substrate there was nothing to assert, and the
+#:   store-side canonical graph had **no contributions at all** while
+#:   `/v2/extract` returned 46.
+#:
+#: `ontology/patches/06-raw-contribution-shape.patch` adds the missing shape.
+#: What remains derived is the *aggregate* across platforms and runs, which is
+#: the canonical node's business and is where the provenance record goes.
+#:
+#: Kept as an (empty) set rather than deleted: the distinction it encodes is
+#: real and the next derived type — something the unifier computes rather than
+#: reads — belongs here.
+_DERIVED_TYPES: frozenset[str] = frozenset()
+
+
+#: Hosts whose ids name a **registry** rather than an account-hosting platform.
+#:
+#: Deliberately separate from `canonical_projection._PLATFORM_BY_HOST`: adding
+#: `ror.org` there would mint an `OrganizationProfile` for every ROR-identified
+#: organization, and a ROR id is an identity, not an account — there is no
+#: profile page, no handle, no follower count. What is needed here is only the
+#: provenance anchor: which source said this.
+#:
+#: Without an entry, a ROR-identified organization has no platform, so no
+#: `pulse:ExtractionOutput`, so no `pulse:partOfRun` — and it fell through into
+#: the graph that describes the extraction, as though the registry's name for
+#: it were a fact about the run. `pulse:ROR` comes from
+#: `ontology/patches/05-ror-platform.patch`; see §2.7 of
+#: ONTOLOGY_V3_REQUIREMENTS.md for why the enumeration is the right home.
+_REGISTRY_PLATFORM_BY_HOST: dict[str, str] = {
+    "ror.org": "pulse:ROR",
+}
+
+#: Flat-form fields whose **value** is a URL on the source that asserted the
+#: entity, for entities that cannot carry a platform themselves.
+#:
+#: Articles are the only case, and the list is deliberately not "every
+#: Infoscience identifier field". `RawArticleShape` is `sh:closed` and declares
+#: no `pulse:platform`, and an article's id is its DOI — `doi.org` is a
+#: resolver, not the repository that holds the record. So the projected node
+#: offers no platform signal at all, and every article landed in the graph
+#: reserved for extraction metadata. The Infoscience URL it was found through
+#: is the signal, and it exists only on the flat node.
+#:
+#: The person and organization equivalents were in this table until tracing
+#: which signal decided each anchor across the corpus showed they never fire:
+#: a person or organization carrying an Infoscience URL gets an Infoscience
+#: *profile* from the same value, and the profile is checked first. Only the
+#: article field ever reaches here — 26 times per corpus pass, one per article.
+_SOURCE_URL_FIELDS: tuple[str, ...] = ("pulse:infoscienceArticleIdentifier",)
 
 
 #: Only these raw shapes declare `pulse:partOfRun`. `RawMembershipShape` is
@@ -407,15 +567,30 @@ _PART_OF_RUN_TYPES: frozenset[str] = frozenset(
 )
 
 
+def _registry_platform(iri: Any) -> str | None:
+    """The registry that minted this id, for entities held by no platform."""
+    host = _host_and_path(iri)[0]
+    return _REGISTRY_PLATFORM_BY_HOST.get(host) if host else None
+
+
 def _platform_of(
     entity: Mapping[str, Any],
     profiles: list[dict[str, Any]],
+    source: Mapping[str, Any],
 ) -> str | None:
     """Which platform slice this entity belongs to.
 
-    Its own profile first (that is the account the data came from), then a
-    `pulse:platform` already on the entity (repositories carry one directly),
-    then the id as a last resort.
+    Five signals, in descending order of directness: its own profile (that is
+    the account the data came from), a `pulse:platform` already on the entity
+    (repositories carry one directly), the id read as a platform URL, the id
+    read as a registry id, and finally a source URL on the flat node.
+
+    The last two are fallbacks for entities no platform holds an account for,
+    not re-attributions: an organization discovered through its GitHub org and
+    *then* resolved to a ROR keeps the GitHub anchor, because GitHub is what
+    asserted the properties the node carries. Which source asserted each
+    individual value is a finer question than one anchor per entity can answer,
+    and it is what the provenance writer exists to record.
     """
     if profiles:
         from_profile = profiles[0].get("pulse:platform")
@@ -425,7 +600,16 @@ def _platform_of(
     if declared:
         return str(declared)
     platform, _instance, _first = _platform_for(entity["@id"])
-    return platform
+    if platform:
+        return platform
+    registry = _registry_platform(entity["@id"])
+    if registry:
+        return registry
+    for field in _SOURCE_URL_FIELDS:
+        platform, _instance, _first = _platform_for(source.get(field))
+        if platform:
+            return platform
+    return None
 
 
 def _project_one(
@@ -490,7 +674,7 @@ def project_raw(
             continue
         out, profiles = projected_pair
 
-        platform = _platform_of(out, profiles)
+        platform = _platform_of(out, profiles, node)
         if platform and node_type in _PART_OF_RUN_TYPES:
             if platform not in outputs:
                 outputs[platform] = extraction_output(
