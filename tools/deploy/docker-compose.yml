@@ -13,6 +13,11 @@
 #                    repository extraction calls this over HTTP. See
 #                    docs/OPERATIONS_RUNBOOK.md §8.
 #   gme-qdrant       vector store for the RAG indices
+#   gme-oxigraph     RDF quad store holding the substrate: one named graph per
+#                    `pulse:ExtractionOutput`, accumulated across runs. Optional
+#                    — gme-api writes to it only when V2_SUBSTRATE_ENABLED is
+#                    on, and the write fails open, so dropping the service
+#                    costs warnings rather than extractions.
 #   gme-selenium     headless Firefox for link-veracity + Selenium-backed RAG
 #                    ingest (SWISSUbase, ORCID scraping). Optional — drop it and
 #                    unset SELENIUM_REMOTE_URL if you don't need those.
@@ -39,12 +44,19 @@ services:
       # relative to site-packages.
       INDEX_DATA_DIR: /app/data/index
       SELENIUM_REMOTE_URL: http://gme-selenium:4444
+      # The substrate writer's target. Set on the service rather than in .env
+      # like the other inter-service URLs; the writer stays off until
+      # V2_SUBSTRATE_ENABLED is also true, so this is inert by default.
+      V2_SUBSTRATE_STORE_URL: http://gme-oxigraph:7878
       WORKERS: ${WORKERS:-2}
     ports:
       - "${APP_PORT:-1234}:1234"
     volumes:
       # Persist index DuckDB stores + provider cache across restarts.
       - gme-data:/app/data
+    # gme-oxigraph is deliberately absent, like gme-selenium: both are
+    # optional services, and a depends_on entry would make the API refuse to
+    # start for anyone who drops one.
     depends_on:
       - gme-gimie-api
       - gme-qdrant
@@ -117,6 +129,26 @@ services:
     networks:
       - gme
 
+  gme-oxigraph:
+    # The substrate store. Pinned rather than :latest, unlike gme-qdrant: this
+    # holds accumulated provenance that a storage-format change would strand,
+    # and the unifier (phase 4) will depend on RDF-star support that only
+    # exists from 0.4 onwards.
+    image: ghcr.io/oxigraph/oxigraph:0.4.11
+    container_name: gme-oxigraph
+    # `serve` binds 127.0.0.1 by default, which is unreachable from another
+    # container even on the same network.
+    command: serve --location /data --bind 0.0.0.0:7878
+    volumes:
+      - gme-oxigraph-storage:/data
+    # Deliberately not published to the host. The store is writable without
+    # authentication — Oxigraph ships none — so it must stay on the internal
+    # network. Expose it through a reverse proxy that adds auth if you need
+    # external SPARQL access.
+    restart: unless-stopped
+    networks:
+      - gme
+
   gme-selenium:
     image: selenium/standalone-firefox
     container_name: gme-selenium
@@ -131,6 +163,7 @@ services:
 volumes:
   gme-data:
   gme-qdrant-storage:
+  gme-oxigraph-storage:
 
 networks:
   gme:
