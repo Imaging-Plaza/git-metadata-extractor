@@ -172,6 +172,42 @@ curl -s -H "Authorization: Bearer $API_TOKEN" \
 
 Persistence: jobs share the SQLite-backed `ProviderCache` (`V2_PROVIDER_CACHE_PATH`, TTL `V2_PROVIDER_CACHE_TTL_DAYS`) under the `v2-extract-job` namespace. `V2_PROVIDER_CACHE_ENABLED=false` disables the job store entirely.
 
+### `GET /v2/graph/status` · `/v2/graph/entity` · `/v2/graph/provenance`
+
+Read the accumulated graph the substrate writer and the store-side unifier
+populate. All three need `V2_SUBSTRATE_STORE_URL`; without it they answer
+**503** rather than 404, because "nothing about that IRI" and "no store" are
+different answers.
+
+```bash
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/graph/status" | jq
+
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  --get --data-urlencode "iri=https://orcid.org/0000-0002-1825-0097" \
+  "http://localhost:1234/v2/graph/entity" | jq
+
+curl -s -H "Authorization: Bearer $API_TOKEN" \
+  --get --data-urlencode "subject=https://orcid.org/0000-0002-1825-0097" \
+  "http://localhost:1234/v2/graph/provenance" | jq
+```
+
+`/entity` returns the same JSON-LD shape `/v2/extract` returns for that entity.
+`/provenance` cannot: `graph:prov` holds RDF-star quoted triples, which the
+pinned rdflib cannot serialise, so it answers with a flat list of records —
+each naming the `pulse:ExtractionOutput` a chosen value came from, the run
+that produced it, the selection rule and the observation counters.
+
+An empty `records` list means **no value on that subject was contested**, not
+that provenance is missing: a single-source value is already attributed by the
+named graph it sits in, so nothing is recorded for it.
+
+**No endpoint accepts a SPARQL string.** Every query is fixed text with IRIs
+substituted through a serialiser that *refuses* anything RDF forbids in an
+IRIREF (a bad IRI is a 400). Oxigraph ships no authentication and its `/store`
+endpoint is writable by anyone who can reach it, so a pass-through query
+parameter would be an unauthenticated write primitive.
+
 ## Runtime Stage Flow
 
 `/v2/extract` runs the same pipeline regardless of `agent_runtime`. The
@@ -331,6 +367,9 @@ The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
 | `V2_AGENT_RUNTIME_DEFAULT` | `llm` | Default runtime when `/v2/extract` omits `agent_runtime` |
 | `V2_USE_MOCK_PROVIDERS` | `true` | Swap in mock GitHub/ORCID/Infoscience/ROR providers |
 | `V2_LINK_VERACITY_ENABLED` | `true` | Skip the link-veracity stage in LLM mode (rule-based skips unconditionally) |
+| `V2_SUBSTRATE_ENABLED` | `false` | Return the raw/substrate layer as the `substrate` field: one named graph per `pulse:ExtractionOutput` |
+| `V2_SUBSTRATE_STORE_URL` | unset | Oxigraph server root the substrate is written to when the flag above is on, and the store the `/v2/graph/*` endpoints read. Unset: those answer 503 |
+| `V2_SUBSTRATE_VALIDATE` | `true` | Validate each substrate slice against the raw shapes at write. Reports, never refuses |
 | `V2_APPLY_CRITIC_PRUNING` | `false` | Enable critic drop suggestions (LLM mode only) |
 | `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency |
 | `V2_PROVIDER_CACHE_PATH` | `.cache/v2/providers.db` | Shared provider + verdict + pipeline + job-store SQLite path |
