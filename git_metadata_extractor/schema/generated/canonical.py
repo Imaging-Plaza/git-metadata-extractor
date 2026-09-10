@@ -529,3 +529,77 @@ class RepositoryModel(BaseModel):
     schema_programmingLanguage: list[str] | None = Field(
         None, alias="schema:programmingLanguage"
     )
+
+
+#: `sh:targetClass` -> the model generated for its shape.
+MODELS_BY_TARGET_CLASS: dict[str, type[BaseModel]] = {
+    "schema:ScholarlyArticle": ArticleModel,
+    "pulse:Contribution": ContributionModel,
+    "pulse:Deposit": DepositModel,
+    "org:Membership": MembershipModel,
+    "pulse:OrganizationProfile": OrganizationProfileModel,
+    "org:Organization": OrganizationModel,
+    "schema:Person": PersonModel,
+    "pulse:PlatformProfile": PlatformProfileModel,
+    "schema:Project": ProjectModel,
+    "schema:SoftwareSourceCode": RepositoryModel,
+}
+
+
+#: Properties this layer gives `sh:maxCount 1`, per target class. Read off
+#: the shapes at generation time so no consumer has to re-derive it.
+SINGLE_VALUED_BY_TARGET_CLASS: dict[str, frozenset[str]] = {
+    "schema:ScholarlyArticle": frozenset({}),
+    "pulse:Contribution": frozenset(
+        {
+            "pulse:contributionTo",
+            "pulse:gitAuthorEmail",
+            "pulse:gitAuthorName",
+            "schema:author",
+        }
+    ),
+    "pulse:Deposit": frozenset(
+        {
+            "pulse:accessRight",
+            "pulse:depositOf",
+            "pulse:platform",
+            "pulse:platformInternalId",
+            "schema:datePublished",
+            "schema:publisher",
+        }
+    ),
+    "org:Membership": frozenset({"org:organization", "org:role", "time:hasEnd"}),
+    "pulse:OrganizationProfile": frozenset(
+        {
+            "pulse:organizationHandle",
+            "pulse:organizationProfileOf",
+            "pulse:platform",
+            "pulse:platformInstance",
+            "pulse:platformInternalId",
+        }
+    ),
+    "org:Organization": frozenset({}),
+    "schema:Person": frozenset({}),
+    "pulse:PlatformProfile": frozenset(
+        {
+            "pulse:platform",
+            "pulse:platformInstance",
+            "pulse:platformInternalId",
+            "pulse:platformNodeId",
+            "pulse:profileOf",
+        }
+    ),
+    "schema:Project": frozenset({"schema:description", "time:hasEnd"}),
+    "schema:SoftwareSourceCode": frozenset(
+        {
+            "pulse:isForkOf",
+            "pulse:ownedBy",
+            "pulse:platform",
+            "pulse:platformInternalId",
+            "pulse:platformNodeId",
+            "pulse:repositoryForks",
+            "pulse:repositoryHandle",
+            "pulse:repositoryStars",
+        }
+    ),
+}

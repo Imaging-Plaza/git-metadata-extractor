@@ -37,7 +37,7 @@ EXPECTED_ENUMERATIONS = {
     "MembershipType": 3,
     "Modality": 6,
     "OrganizationType": 9,
-    "Platform": 7,
+    "Platform": 8,
     "PublicationType": 15,
     "RepositoryType": 7,
     "SpaceRuntimeStatus": 5,

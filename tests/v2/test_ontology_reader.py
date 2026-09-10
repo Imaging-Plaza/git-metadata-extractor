@@ -43,7 +43,8 @@ def _shapes(filename: str):
     ("filename", "expected"),
     [
         ("ontology-shapes-canonical.ttl", 10),
-        ("ontology-shapes-raw.ttl", 12),
+        # 13 with local patch 06 (`RawContributionShape`); upstream has 12.
+        ("ontology-shapes-raw.ttl", 13),
         ("ontology-shapes-provenance.ttl", 2),
     ],
 )

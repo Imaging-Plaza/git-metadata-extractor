@@ -23,7 +23,9 @@ from git_metadata_extractor.schema.generated import (
 
 @pytest.mark.parametrize(
     ("module", "expected"),
-    [(raw, 12), (canonical, 10), (provenance, 2)],
+    # raw is 13, not the upstream 12: `ontology/patches/06-raw-contribution-shape.patch`
+    # adds `RawContributionShape`. Drop the +1 when PR #25 carries it.
+    [(raw, 13), (canonical, 10), (provenance, 2)],
 )
 def test_layer_model_counts(module: object, expected: int) -> None:
     from pydantic import BaseModel  # noqa: PLC0415

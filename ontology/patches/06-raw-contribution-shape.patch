@@ -1,0 +1,79 @@
+diff --git a/src/ontology/ontology-shapes-raw.ttl b/src/ontology/ontology-shapes-raw.ttl
+index cd2bf63..e3c2f9e 100644
+--- a/src/ontology/ontology-shapes-raw.ttl
++++ b/src/ontology/ontology-shapes-raw.ttl
+@@ -321,6 +321,74 @@ pulse:RawArticleShape
+         sh:name "Part Of Run"
+     ] .
+ 
++pulse:RawContributionShape
++    a sh:NodeShape ;
++    sh:targetClass pulse:Contribution ;
++    sh:closed true ;
++    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
++    # The raw counterpart of pulse:ContributionShape. Needed because
++    # pulse:RawPersonShape already declares
++    #   sh:path pulse:hasContribution ; sh:class pulse:Contribution
++    # so the raw layer expects these nodes to exist in a substrate graph — but
++    # no raw shape targeted the class, leaving them the one entity type the
++    # raw layer referenced and could not validate.
++    #
++    # A commit count is something a platform *reports* (GitHub's contributors
++    # endpoint returns `contributions` per contributor), so it belongs in the
++    # layer that records what sources said. What is derived is the aggregate
++    # across platforms and runs, and that is the canonical node's business.
++    #
++    # No sh:minCount anywhere, unlike the canonical shape which requires
++    # pulse:contributionTo, pulse:contributionCount and schema:author: the raw
++    # layer must never refuse a slice for an incomplete assertion, because it
++    # is append-only and the only durable copy. The requirement bites at the
++    # canonical gate instead.
++    sh:property [
++        sh:path pulse:contributionTo ;
++        sh:class schema:SoftwareSourceCode ;
++        sh:maxCount 1 ;
++        sh:nodeKind sh:IRI ;
++        sh:name "Contribution To"
++    ] ;
++    sh:property [
++        sh:path schema:author ;
++        sh:class schema:Person ;
++        sh:maxCount 1 ;
++        sh:nodeKind sh:IRI ;
++        sh:name "Author"
++    ] ;
++    sh:property [
++        sh:path pulse:contributionCount ;
++        sh:datatype xsd:integer ;
++        sh:maxCount 1 ;
++        sh:name "Contribution Count" ;
++        sh:description "Commits this platform reported for this person on this repository."
++    ] ;
++    sh:property [
++        sh:path pulse:firstContributionDate ;
++        sh:datatype xsd:dateTime ;
++        sh:maxCount 1 ;
++        sh:name "First Contribution Date"
++    ] ;
++    sh:property [
++        sh:path pulse:lastContributionDate ;
++        sh:datatype xsd:dateTime ;
++        sh:maxCount 1 ;
++        sh:name "Last Contribution Date"
++    ] ;
++    sh:property [
++        sh:path pulse:gitAuthorName ;
++        sh:datatype xsd:string ;
++        sh:maxCount 1 ;
++        sh:name "Git Author Name"
++    ] ;
++    sh:property [
++        sh:path pulse:gitAuthorEmail ;
++        sh:nodeKind sh:Literal ;
++        sh:maxCount 1 ;
++        sh:name "Git Author Email"
++    ] .
++
+ pulse:RawMembershipShape
+     a sh:NodeShape ;
+     sh:targetClass org:Membership ;

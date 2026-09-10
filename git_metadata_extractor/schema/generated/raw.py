@@ -221,6 +221,40 @@ class RawArticleModel(BaseModel):
     )
 
 
+class RawContributionModel(BaseModel):
+    """pulse:Contribution
+
+    Closed shape: unknown properties are rejected.
+    """
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    pulse_contributionCount: int | None = Field(
+        None,
+        alias="pulse:contributionCount",
+        description="Commits this platform reported for this person on this repository.",
+    )
+    pulse_contributionTo: str | None = Field(
+        None, alias="pulse:contributionTo", description="Contribution To"
+    )
+    pulse_firstContributionDate: datetime | None = Field(
+        None, alias="pulse:firstContributionDate", description="First Contribution Date"
+    )
+    pulse_gitAuthorEmail: str | None = Field(
+        None, alias="pulse:gitAuthorEmail", description="Git Author Email"
+    )
+    pulse_gitAuthorName: str | None = Field(
+        None, alias="pulse:gitAuthorName", description="Git Author Name"
+    )
+    pulse_lastContributionDate: datetime | None = Field(
+        None, alias="pulse:lastContributionDate", description="Last Contribution Date"
+    )
+    schema_author: str | None = Field(None, alias="schema:author", description="Author")
+
+
 class RawMembershipModel(BaseModel):
     """org:Membership
 
@@ -651,3 +685,157 @@ class RawRepositoryModel(BaseModel):
         None, alias="schema:programmingLanguage"
     )
     schema_url: str | None = Field(None, alias="schema:url", description="Homepage")
+
+
+#: `sh:targetClass` -> the model generated for its shape.
+MODELS_BY_TARGET_CLASS: dict[str, type[BaseModel]] = {
+    "pulse:Collection": CollectionModel,
+    "pulse:Community": CommunityModel,
+    "pulse:ExternalIdentifier": ExternalIdentifierModel,
+    "pulse:ExtractionOutput": ExtractionOutputModel,
+    "pulse:Funding": FundingModel,
+    "schema:ScholarlyArticle": RawArticleModel,
+    "pulse:Contribution": RawContributionModel,
+    "org:Membership": RawMembershipModel,
+    "pulse:OrganizationProfile": RawOrganizationProfileModel,
+    "org:Organization": RawOrganizationModel,
+    "schema:Person": RawPersonModel,
+    "pulse:PlatformProfile": RawPlatformProfileModel,
+    "schema:SoftwareSourceCode": RawRepositoryModel,
+}
+
+
+#: Properties this layer gives `sh:maxCount 1`, per target class. Read off
+#: the shapes at generation time so no consumer has to re-derive it.
+SINGLE_VALUED_BY_TARGET_CLASS: dict[str, frozenset[str]] = {
+    "pulse:Collection": frozenset(
+        {"pulse:collectionOwnedBy", "pulse:platform", "pulse:platformInternalId"}
+    ),
+    "pulse:Community": frozenset(
+        {"pulse:platformInternalId", "schema:description", "schema:image"}
+    ),
+    "pulse:ExternalIdentifier": frozenset(
+        {"pulse:identifierScheme", "schema:identifier"}
+    ),
+    "pulse:ExtractionOutput": frozenset(
+        {"prov:generatedAtTime", "prov:wasGeneratedBy", "pulse:platform"}
+    ),
+    "pulse:Funding": frozenset({"schema:funder", "time:hasEnd"}),
+    "schema:ScholarlyArticle": frozenset(
+        {
+            "pulse:conceptDoi",
+            "pulse:fileCount",
+            "pulse:partOfRun",
+            "pulse:version",
+            "schema:dateCreated",
+            "schema:dateModified",
+            "schema:description",
+            "schema:license",
+        }
+    ),
+    "pulse:Contribution": frozenset(
+        {
+            "pulse:contributionCount",
+            "pulse:contributionTo",
+            "pulse:firstContributionDate",
+            "pulse:gitAuthorEmail",
+            "pulse:gitAuthorName",
+            "pulse:lastContributionDate",
+            "schema:author",
+        }
+    ),
+    "org:Membership": frozenset(
+        {
+            "org:organization",
+            "org:role",
+            "pulse:department",
+            "pulse:membershipType",
+            "pulse:qualification",
+            "time:hasEnd",
+        }
+    ),
+    "pulse:OrganizationProfile": frozenset(
+        {
+            "pulse:followerCount",
+            "pulse:location",
+            "pulse:organizationHandle",
+            "pulse:organizationProfileOf",
+            "pulse:platform",
+            "pulse:platformInstance",
+            "pulse:platformInternalId",
+            "schema:dateModified",
+            "schema:description",
+        }
+    ),
+    "org:Organization": frozenset({"pulse:partOfRun", "pulse:ror"}),
+    "schema:Person": frozenset(
+        {"pulse:biography", "pulse:country", "pulse:orcidIdentifier", "pulse:partOfRun"}
+    ),
+    "pulse:PlatformProfile": frozenset(
+        {
+            "pulse:biography",
+            "pulse:company",
+            "pulse:followerCount",
+            "pulse:followingCount",
+            "pulse:location",
+            "pulse:platform",
+            "pulse:platformInstance",
+            "pulse:platformInternalId",
+            "pulse:platformNodeId",
+            "pulse:profileOf",
+            "pulse:publicGistCount",
+            "pulse:publicRepositoryCount",
+            "schema:dateCreated",
+            "schema:dateModified",
+            "schema:image",
+        }
+    ),
+    "schema:SoftwareSourceCode": frozenset(
+        {
+            "pulse:archived",
+            "pulse:branchCount",
+            "pulse:codeOfConduct",
+            "pulse:defaultBranch",
+            "pulse:dependencyCount",
+            "pulse:dependentCount",
+            "pulse:downloadCount",
+            "pulse:fileCount",
+            "pulse:framework",
+            "pulse:fundingConfig",
+            "pulse:gated",
+            "pulse:gitTagCount",
+            "pulse:hardware",
+            "pulse:hasDiscussions",
+            "pulse:hasPages",
+            "pulse:hasWiki",
+            "pulse:isForkOf",
+            "pulse:isTemplate",
+            "pulse:lfsObjectCount",
+            "pulse:library",
+            "pulse:likeCount",
+            "pulse:openIssueCount",
+            "pulse:ownedBy",
+            "pulse:partOfRun",
+            "pulse:pipelineTag",
+            "pulse:platform",
+            "pulse:platformInternalId",
+            "pulse:platformNodeId",
+            "pulse:publicCodeManifest",
+            "pulse:pushedDate",
+            "pulse:readme",
+            "pulse:releaseCount",
+            "pulse:repositoryForks",
+            "pulse:repositoryHandle",
+            "pulse:repositoryStars",
+            "pulse:runtimeStatus",
+            "pulse:sdk",
+            "pulse:securityPolicy",
+            "pulse:visibility",
+            "pulse:watcherCount",
+            "pulse:xetObjectCount",
+            "schema:dateModified",
+            "schema:description",
+            "schema:url",
+        }
+    ),
+}

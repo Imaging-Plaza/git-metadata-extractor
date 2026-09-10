@@ -236,7 +236,46 @@ def render_layer(
     header.append("from pydantic import BaseModel, ConfigDict, Field, model_validator")
     header.append("")
     header.append("")
-    return "\n".join(header) + "\n\n\n".join(bodies) + "\n"
+
+    # An explicit target-class -> model mapping. The class is already in each
+    # model's docstring, but a consumer that parses a docstring to find it is
+    # one refactor away from silently finding nothing — and the first consumer,
+    # `unify/policy.py`, needs it to know that `schema:author` is capped on
+    # `pulse:Contribution` and unbounded on `schema:ScholarlyArticle`. That is
+    # the only shape-dependent cardinality in the canonical layer, and it is
+    # exactly the kind that a per-property table gets wrong.
+    mapping = [
+        "#: `sh:targetClass` -> the model generated for its shape.",
+        "MODELS_BY_TARGET_CLASS: dict[str, type[BaseModel]] = {",
+        *(
+            f'    "{shape.target_class}": {_class_name(shape)},'
+            for shape in shapes
+        ),
+        "}",
+        "",
+        "",
+        "#: Properties this layer gives `sh:maxCount 1`, per target class. Read off",
+        "#: the shapes at generation time so no consumer has to re-derive it.",
+        "SINGLE_VALUED_BY_TARGET_CLASS: dict[str, frozenset[str]] = {",
+        *(
+            f'    "{shape.target_class}": frozenset({{'
+            + ", ".join(
+                f'"{prop.path}"'
+                for prop in sorted(shape.properties, key=lambda p: p.path)
+                if prop.max_count == 1
+            )
+            + "}),"
+            for shape in shapes
+        ),
+        "}",
+    ]
+    return (
+        "\n".join(header)
+        + "\n\n\n".join(bodies)
+        + "\n\n\n"
+        + "\n".join(mapping)
+        + "\n"
+    )
 
 
 def _screaming(name: str) -> str:

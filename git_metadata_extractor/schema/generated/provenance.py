@@ -56,3 +56,20 @@ class SoftwareAgentModel(BaseModel):
     schema_softwareVersion: str | None = Field(
         None, alias="schema:softwareVersion", description="Version"
     )
+
+
+#: `sh:targetClass` -> the model generated for its shape.
+MODELS_BY_TARGET_CLASS: dict[str, type[BaseModel]] = {
+    "pulse:ExtractionRun": ExtractionRunModel,
+    "prov:SoftwareAgent": SoftwareAgentModel,
+}
+
+
+#: Properties this layer gives `sh:maxCount 1`, per target class. Read off
+#: the shapes at generation time so no consumer has to re-derive it.
+SINGLE_VALUED_BY_TARGET_CLASS: dict[str, frozenset[str]] = {
+    "pulse:ExtractionRun": frozenset(
+        {"prov:endedAtTime", "prov:startedAtTime", "pulse:extractedBy"}
+    ),
+    "prov:SoftwareAgent": frozenset({"schema:name", "schema:softwareVersion"}),
+}
