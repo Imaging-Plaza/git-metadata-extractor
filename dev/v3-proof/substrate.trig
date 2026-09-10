@@ -1,0 +1,74 @@
+@prefix ns1: <urn:pulse:output:proof-0001:> .
+@prefix ns2: <urn:pulse:run:proof-0001#> .
+@prefix org: <http://www.w3.org/ns/org#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix pulse: <https://open-pulse.epfl.ch/ontology#> .
+@prefix schema1: <http://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ns1:github {
+    <https://github.com/ANTsX/ANTs> a schema1:SoftwareSourceCode ;
+        schema1:author <urn:pulse:repo-author:ANTsX/ANTsX> ;
+        schema1:dateCreated "2013-01-23T15:43:41+00:00"^^xsd:dateTime ;
+        schema1:license <https://spdx.org/licenses/Apache-2.0.html> ;
+        schema1:name "ANTs" ;
+        pulse:ownedBy <https://ror.org/03zh00e46> ;
+        pulse:partOfRun ns1:github ;
+        pulse:platform pulse:GitHub ;
+        pulse:repositoryForks 408 ;
+        pulse:repositoryHandle "ANTsX/ANTs" ;
+        pulse:repositoryStars 1497 ;
+        pulse:repositoryType pulse:Software .
+
+    <https://github.com/ANTsX> a org:Organization ;
+        schema1:name "ANTsX" ;
+        org:unitOf <https://ror.org/03zh00e46> ;
+        pulse:hasOrganizationProfile <urn:pulse:org-profile:github:ANTsX> ;
+        pulse:partOfRun ns1:github .
+
+    <urn:pulse:org-profile:github:ANTsX> a pulse:OrganizationProfile ;
+        pulse:organizationHandle "ANTsX" ;
+        pulse:organizationProfileOf <https://github.com/ANTsX> ;
+        pulse:platform pulse:GitHub .
+
+    <urn:pulse:profile:github:ANTsX> a pulse:PlatformProfile ;
+        pulse:platform pulse:GitHub ;
+        pulse:platformUsername "ANTsX" ;
+        pulse:profileOf <urn:pulse:repo-author:ANTsX/ANTsX> .
+
+    <urn:pulse:repo-author:ANTsX/ANTsX> a schema1:Person ;
+        schema1:name "ANTsX" ;
+        pulse:hasProfile <urn:pulse:profile:github:ANTsX> ;
+        pulse:partOfRun ns1:github .
+}
+
+ns1:ror {
+    <https://ror.org/03zh00e46> a org:Organization ;
+        schema1:name "Normalization Housing Foundation" ;
+        org:hasUnit <https://github.com/ANTsX> ;
+        pulse:owns <https://github.com/ANTsX/ANTs> ;
+        pulse:partOfRun ns1:ror .
+}
+
+ns2:meta {
+    <urn:pulse:agent:git-metadata-extractor> a prov:SoftwareAgent ;
+        schema1:name "git-metadata-extractor" ;
+        schema1:softwareVersion "3.0.0" .
+
+    ns1:ror a pulse:ExtractionOutput ;
+        prov:generatedAtTime "2026-09-08T12:00:22+00:00"^^xsd:dateTime ;
+        prov:wasGeneratedBy <urn:pulse:run:proof-0001> ;
+        pulse:platform pulse:ROR .
+
+    <urn:pulse:run:proof-0001> a pulse:ExtractionRun ;
+        prov:endedAtTime "2026-09-08T12:00:22+00:00"^^xsd:dateTime ;
+        prov:startedAtTime "2026-09-08T12:00:00+00:00"^^xsd:dateTime ;
+        pulse:extractedBy <urn:pulse:agent:git-metadata-extractor> ;
+        pulse:extractionSeed "https://github.com/ANTsX/ANTs" .
+
+    ns1:github a pulse:ExtractionOutput ;
+        prov:generatedAtTime "2026-09-08T12:00:22+00:00"^^xsd:dateTime ;
+        prov:wasGeneratedBy <urn:pulse:run:proof-0001> ;
+        pulse:platform pulse:GitHub .
+}
+
