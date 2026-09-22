@@ -1,0 +1,17 @@
+diff --git a/src/ontology/ontology-enumerations-canonical.ttl b/src/ontology/ontology-enumerations-canonical.ttl
+--- a/src/ontology/ontology-enumerations-canonical.ttl
++++ b/src/ontology/ontology-enumerations-canonical.ttl
+@@ -56,6 +56,13 @@
+ pulse:HuggingFace a pulse:PlatformEnumeration ; skos:prefLabel "Hugging Face"@en ; skos:definition "The Hugging Face platform for hosting models, datasets, and Spaces."@en .
+ pulse:Zenodo a pulse:PlatformEnumeration ; skos:prefLabel "Zenodo"@en ; skos:definition "The Zenodo research-data and software archive operated by CERN."@en .
+ 
++# Enumeration Instances - Platforms (indexed sources, local patch 07)
++pulse:OpenAlex a pulse:PlatformEnumeration ; skos:prefLabel "OpenAlex"@en ; skos:definition "The OpenAlex open catalogue of scholarly works, authors and institutions."@en .
++pulse:ETHResearchCollection a pulse:PlatformEnumeration ; skos:prefLabel "ETH Research Collection"@en ; skos:definition "ETH Zurich's institutional publication and research-data repository, the sister repository to Infoscience."@en .
++pulse:SNSF a pulse:PlatformEnumeration ; skos:prefLabel "SNSF"@en ; skos:definition "The Swiss National Science Foundation grant database."@en .
++pulse:RenkuLab a pulse:PlatformEnumeration ; skos:prefLabel "RenkuLab"@en ; skos:definition "The RenkuLab (renkulab.io) platform for reproducible research projects."@en .
++pulse:SWISSUbase a pulse:PlatformEnumeration ; skos:prefLabel "SWISSUbase"@en ; skos:definition "The SWISSUbase repository for Swiss research data and studies."@en .
++
+ # Enumeration Instances - Publication Types
+ # skos:exactMatch/closeMatch align these with the COAR Resource Types vocabulary
+ # (https://vocabularies.coar-repositories.org/resource_types/), which OpenAIRE mandates.

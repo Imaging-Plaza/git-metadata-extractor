@@ -250,6 +250,10 @@ def test_the_meta_graph_holds_only_the_extraction_itself(
         "pulse:ExtractionOutput",
         "pulse:ExtractionRun",
         "prov:SoftwareAgent",
+        # What each output `prov:used` — the source as of one index build. It
+        # describes the extraction, not the world, so the meta graph is its
+        # home rather than the slice of the platform it names.
+        "pulse:SourceSnapshot",
     }
 
 
@@ -786,3 +790,52 @@ def test_the_real_substrate_slice_conforms(
     assert result.conforms, result.violations
     # And the stage reached the same verdict on the way past.
     assert "conforms=True" in state.extras["substrate_validation"]
+
+
+# --------------------------------------------------------------------------
+# routing when one entity has several sources
+# --------------------------------------------------------------------------
+#
+# `raw_projection` emits one node per asserting source, so an id can name
+# several nodes bound for several graphs. Everything below is a way of getting
+# that wrong that SHACL cannot see: the raw shapes are open and require no
+# anchor, so a misrouted node conforms perfectly while attributing a fact to
+# the wrong source.
+
+
+def _multi_source_person() -> list[dict[str, Any]]:
+    return [
+        {
+            "@id": "https://github.com/jdoe",
+            "@type": "schema:Person",
+            "schema:name": "Jane Doe",
+            "pulse:githubUsername": "https://github.com/jdoe",
+            "pulse:orcidIdentifier": "https://orcid.org/0000-0002-1825-0097",
+        },
+    ]
+
+
+def test_each_copy_is_routed_by_its_own_anchor() -> None:
+    """Not by its id: the id is the same in both graphs, the anchor is not."""
+    graphs = _graphs(_substrate(_multi_source_person()))
+    github = f"urn:pulse:output:{RUN_ID}:github"
+    orcid = f"urn:pulse:output:{RUN_ID}:orcid"
+
+    assert "https://github.com/jdoe" in _ids(graphs[github])
+    assert "https://github.com/jdoe" in _ids(graphs[orcid])
+
+    in_orcid = next(n for n in graphs[orcid] if n["@id"] == "https://github.com/jdoe")
+    in_github = next(n for n in graphs[github] if n["@id"] == "https://github.com/jdoe")
+    assert "pulse:orcidIdentifier" in in_orcid
+    assert "pulse:orcidIdentifier" not in in_github
+
+
+def test_a_profile_follows_its_own_platform_not_its_subjects_first_graph() -> None:
+    """A GitHub profile belongs in the GitHub slice even when its subject is
+    also asserted elsewhere — the profile names its platform, so routing it by
+    the subject would be discarding better information."""
+    graphs = _graphs(_substrate(_multi_source_person()))
+    profile = "urn:pulse:profile:github:jdoe"
+    assert profile in _ids(graphs[f"urn:pulse:output:{RUN_ID}:github"])
+    assert profile not in _ids(graphs[f"urn:pulse:output:{RUN_ID}:orcid"])
+

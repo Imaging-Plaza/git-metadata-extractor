@@ -209,11 +209,11 @@ def test_a_malformed_substrate_node_is_reported_not_refused() -> None:
     assert result.layer is Layer.SUBSTRATE
 
 
-def test_the_substrate_is_validated_as_a_union_of_its_named_graphs() -> None:
-    """SHACL has no notion of a graph name, so the union is the target.
+def test_every_named_graph_is_validated_not_just_the_first() -> None:
+    """Each slice is its own validation target, and all of them are checked.
 
-    Which is also why a node in the *wrong* named graph conforms perfectly
-    (§3i) and needs the separate stranded-entity check.
+    A node in the *wrong* named graph still conforms perfectly (§3i) — that is
+    what the separate stranded-entity check exists for.
     """
     document = {
         "@context": _context(),
@@ -265,3 +265,140 @@ def test_a_skipped_gate_is_distinguishable_from_a_clean_one(
     assert result.conforms is True
     assert "not prepared" in (result.reason or "")
     assert "skipped" in result.summary()
+
+
+# --------------------------------------------------------------------------
+# per-slice validation
+# --------------------------------------------------------------------------
+#
+# The substrate's unit is one platform's slice of one run, so that is what gets
+# validated. Merging the slices first turns two correct statements into one
+# incorrect one, and the shapes then report a violation nothing committed.
+
+
+def _meta_graph(run: str = "run-a") -> dict[str, Any]:
+    """The outputs a slice's `pulse:partOfRun` has to resolve against."""
+    return {
+        "@id": f"urn:pulse:run:{run}#meta",
+        "@graph": [
+            {
+                "@id": f"urn:pulse:output:{run}:{platform.lower()}",
+                "@type": "pulse:ExtractionOutput",
+                "pulse:platform": f"pulse:{platform}",
+            }
+            for platform in ("GitHub", "ORCID")
+        ],
+    }
+
+
+def test_one_entity_in_two_slices_conforms() -> None:
+    """The case per-source attribution creates, and the union cannot express.
+
+    `RawPersonShape` caps `pulse:partOfRun` at `sh:maxCount 1`. Each slice
+    honours that — one source, one anchor — but flattening the dataset first
+    gives the merged node two, and reports a violation that describes the
+    merge rather than the data. The same artefact appears with no splitting at
+    all, as soon as two runs over one repository are validated together.
+    """
+    document = {
+        "@context": _context(),
+        "@graph": [
+            _meta_graph(),
+            {
+                "@id": "urn:pulse:output:run-a:github",
+                "@graph": [
+                    {
+                        "@id": "https://github.com/jdoe",
+                        "@type": "schema:Person",
+                        "schema:name": ["Jane Doe"],
+                        "pulse:partOfRun": {"@id": "urn:pulse:output:run-a:github"},
+                    },
+                ],
+            },
+            {
+                "@id": "urn:pulse:output:run-a:orcid",
+                "@graph": [
+                    {
+                        "@id": "https://github.com/jdoe",
+                        "@type": "schema:Person",
+                        "pulse:orcidIdentifier": [ORCID],
+                        "pulse:partOfRun": {"@id": "urn:pulse:output:run-a:orcid"},
+                    },
+                ],
+            },
+        ],
+    }
+
+    result = validate_substrate(document)
+
+    assert result.conforms is True, result.violations
+
+
+def test_a_reference_into_another_slice_still_resolves() -> None:
+    """`sh:class` is checked against the run's types, not the slice's.
+
+    `pulse:owns` names a repository that a per-source split frequently puts in
+    another graph. Validating a slice in true isolation reports every such
+    reference as a class violation — the opposite error to the union's, and
+    just as wrong.
+    """
+    document = {
+        "@context": _context(),
+        "@graph": [
+            _meta_graph(),
+            {
+                "@id": "urn:pulse:output:run-a:orcid",
+                "@graph": [
+                    {
+                        "@id": "https://ror.org/02s376052",
+                        "@type": "org:Organization",
+                        "pulse:owns": [{"@id": "https://github.com/epfl/repo"}],
+                        "pulse:partOfRun": {"@id": "urn:pulse:output:run-a:orcid"},
+                    },
+                ],
+            },
+            {
+                "@id": "urn:pulse:output:run-a:github",
+                "@graph": [
+                    {
+                        "@id": "https://github.com/epfl/repo",
+                        "@type": "schema:SoftwareSourceCode",
+                        "pulse:repositoryHandle": "epfl/repo",
+                        "pulse:partOfRun": {"@id": "urn:pulse:output:run-a:github"},
+                    },
+                ],
+            },
+        ],
+    }
+
+    result = validate_substrate(document)
+
+    assert result.conforms is True, result.violations
+
+
+def test_a_violation_names_the_slice_it_came_from() -> None:
+    """"Which source's slice is malformed" is the first thing a reader needs,
+    and the merged view cannot answer it."""
+    document = {
+        "@context": _context(),
+        "@graph": [
+            _meta_graph(),
+            {
+                "@id": "urn:pulse:output:run-a:github",
+                "@graph": [
+                    {
+                        "@id": "https://github.com/epfl/repo",
+                        "@type": "schema:SoftwareSourceCode",
+                        "pulse:repositoryStars": ["not-a-number"],
+                    },
+                ],
+            },
+        ],
+    }
+
+    result = validate_substrate(document)
+
+    assert result.conforms is False
+    assert {v.get("graph") for v in result.violations} == {
+        "urn:pulse:output:run-a:github",
+    }

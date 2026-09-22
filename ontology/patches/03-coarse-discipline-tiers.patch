@@ -2,42 +2,15 @@ diff --git a/src/ontology/ontology-enumerations-canonical.ttl b/src/ontology/ont
 index 47b9d15..f713881 100644
 --- a/src/ontology/ontology-enumerations-canonical.ttl
 +++ b/src/ontology/ontology-enumerations-canonical.ttl
-@@ -1687,3 +1687,76 @@ wd:Q473750 a pulse:DisciplineEnumeration; skos:prefLabel "World economy"@en; rdf
+@@ -1687,3 +1687,49 @@ wd:Q473750 a pulse:DisciplineEnumeration; skos:prefLabel "World economy"@en; rdf
  wd:Q103495 a pulse:DisciplineEnumeration; skos:prefLabel "World war"@en; rdfs:subClassOf wd:Q198 .
  wd:Q6984185 a pulse:DisciplineEnumeration; skos:prefLabel "Writers"@en; rdfs:subClassOf wd:Q6497044 .
  
-+
-+# ---------------------------------------------------------
-+# Coarse discipline tiers — the faculty divisions and the top-level
-+# categories. Restored from v2.1.2, which declared all 46 as instances.
-+#
-+# These are not new terms. Every one of the 41 categories below already
-+# appears in this file as the object of an `rdfs:subClassOf`, i.e. as the
-+# parent of one or more leaf disciplines. What they lacked was an
-+# `rdf:type`, and `sh:class pulse:DisciplineEnumeration` walks
-+# `rdf:type/rdfs:subClassOf*` FROM the value node — so a node with no
-+# `rdf:type` fails the constraint no matter how many children it has.
-+# The effect was that every coarse discipline tag was a SHACL violation.
-+#
-+# Coarse tagging has to stay expressible: a general-purpose numerical
-+# library really is `wd:Q395` (Mathematics) and nothing narrower, and
-+# forcing leaf-only precision pushes annotators and agents into inventing
-+# specificity they cannot support.
-+# ---------------------------------------------------------
-+
-+# Faculty divisions (top tier). v2.1.2 hung these off wd:Q11862829
-+# ("academic discipline"), which it never declared; that dangling parent is
-+# dropped here rather than reproduced, since a tag of "academic discipline"
-+# carries no signal.
 +wd:Q7112556 a pulse:DisciplineEnumeration; skos:prefLabel "Applied sciences"@en .
 +wd:Q816264 a pulse:DisciplineEnumeration; skos:prefLabel "Formal sciences"@en .
 +wd:Q80083 a pulse:DisciplineEnumeration; skos:prefLabel "Humanities"@en .
 +wd:Q7991 a pulse:DisciplineEnumeration; skos:prefLabel "Natural sciences"@en .
 +wd:Q34749 a pulse:DisciplineEnumeration; skos:prefLabel "Social sciences"@en .
-+
-+# Top-level categories (second tier), each already a parent of leaf
-+# disciplines in this file. wd:Q395 and wd:Q413 had no parent in v2.1.2
-+# either and keep none here rather than have one invented for them.
 +wd:Q3606845 a pulse:DisciplineEnumeration; skos:prefLabel "Agricultural and food sciences"@en; rdfs:subClassOf wd:Q7112556 .
 +wd:Q23404 a pulse:DisciplineEnumeration; skos:prefLabel "Anthropology"@en; rdfs:subClassOf wd:Q34749 .
 +wd:Q12271 a pulse:DisciplineEnumeration; skos:prefLabel "Architecture"@en; rdfs:subClassOf wd:Q7112556 .

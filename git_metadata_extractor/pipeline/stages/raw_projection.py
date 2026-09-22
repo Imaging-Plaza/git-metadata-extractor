@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.pipeline.stages.canonical_projection import (
@@ -46,6 +47,7 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (
     deposit_iri,
     profile_iri,
 )
+from git_metadata_extractor.pipeline.stages.source_attribution import split_by_source
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -70,6 +72,7 @@ def extraction_output(
     platform: str,
     run_iri: str,
     generated_at: str | None = None,
+    snapshot_iri: str | None = None,
 ) -> dict[str, Any]:
     node: dict[str, Any] = {
         "@id": extraction_output_iri(run_id, platform),
@@ -79,7 +82,76 @@ def extraction_output(
     }
     if generated_at:
         node["prov:generatedAtTime"] = generated_at
+    if snapshot_iri:
+        node["prov:used"] = {"@id": snapshot_iri}
     return node
+
+
+#: Platforms whose substrate content this service reads out of an
+#: `open_pulse_sources` index, so the library build that produced that index is
+#: what a result would have to be reproduced against.
+#:
+#: **GitHub is deliberately absent.** Its entity data comes from the live REST
+#: API on every current path, so stamping it with the library version would
+#: claim a reproducibility the data does not have — the repository that answered
+#: yesterday can answer differently today and no version records that. A source
+#: with no version gets no snapshot at all rather than a snapshot asserting
+#: only what `pulse:platform` already says.
+_INDEX_BACKED: frozenset[str] = frozenset(
+    {
+        "pulse:ETHResearchCollection",
+        "pulse:HuggingFace",
+        "pulse:Infoscience",
+        "pulse:ORCID",
+        "pulse:OpenAlex",
+        "pulse:ROR",
+        "pulse:RenkuLab",
+        "pulse:SNSF",
+        "pulse:SWISSUbase",
+        "pulse:Zenodo",
+    },
+)
+
+
+@lru_cache(maxsize=1)
+def index_version() -> str | None:
+    """The `open_pulse_sources` build that produced the indices, or None.
+
+    One place, deliberately: the same pin `pyproject.toml` declares and
+    `tests/v2/test_open_pulse_sources_pin.py` guards, read back through the
+    installed distribution rather than re-parsed. A second copy of the version
+    is how the graph and the code that produced it drift apart.
+    """
+    try:
+        from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415
+
+        return version("open-pulse-sources")
+    except (PackageNotFoundError, ImportError):
+        return None
+
+
+def source_snapshot_iri(platform: str, version: str) -> str:
+    """One source, as of one index build.
+
+    The version is in the IRI because that is what makes the node shared: two
+    runs a month apart against the same build name the same snapshot, which is
+    the distinction between "what the source was" and "what a run made of it".
+    """
+    return f"urn:pulse:snapshot:{platform.removeprefix('pulse:').lower()}:{version}"
+
+
+def source_snapshot(platform: str) -> dict[str, Any] | None:
+    """The `pulse:SourceSnapshot` an output `prov:used`, when there is one."""
+    version = index_version()
+    if platform not in _INDEX_BACKED or not version:
+        return None
+    return {
+        "@id": source_snapshot_iri(platform, version),
+        "@type": "pulse:SourceSnapshot",
+        "schema:name": platform.removeprefix("pulse:").lower(),
+        "schema:softwareVersion": version,
+        "pulse:platform": platform,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -588,9 +660,12 @@ def _platform_of(
     The last two are fallbacks for entities no platform holds an account for,
     not re-attributions: an organization discovered through its GitHub org and
     *then* resolved to a ROR keeps the GitHub anchor, because GitHub is what
-    asserted the properties the node carries. Which source asserted each
-    individual value is a finer question than one anchor per entity can answer,
-    and it is what the provenance writer exists to record.
+    asserted most of the properties the node carries.
+
+    This is the *anchor*, no longer the whole answer. `source_attribution`
+    splits the node into one slice per asserting source and leaves on this
+    anchor only what it cannot attribute — so the ROR in the example above now
+    lands in the ROR slice while the GitHub-described properties stay here.
     """
     if profiles:
         from_profile = profiles[0].get("pulse:platform")
@@ -612,6 +687,28 @@ def _platform_of(
     return None
 
 
+def _slices(
+    out: Mapping[str, Any],
+    profiles: list[dict[str, Any]],
+    *,
+    anchor: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    """`split_by_source`, with the empty case folded back onto the anchor.
+
+    An entity carrying nothing but `@id` and `@type` splits into no slices at
+    all, because every slice is identity-only and `split_by_source` drops
+    those. Emitting nothing would delete the entity from the substrate — and a
+    bare node is still a source saying "this exists", which is exactly the kind
+    of assertion the raw layer is for.
+    """
+    split = [
+        (platform, node)
+        for platform, node in split_by_source(out, profiles, anchor=anchor)
+        if platform is not None
+    ]
+    return split or [(anchor, dict(out))]
+
+
 def _project_one(
     node: Mapping[str, Any],
     node_type: str,
@@ -626,6 +723,39 @@ def _project_one(
     return None
 
 
+def _output_for(  # noqa: PLR0913 — one keyword per piece of run context
+    platform: str,
+    *,
+    outputs: dict[str, dict[str, Any]],
+    snapshots: dict[str, dict[str, Any]],
+    run_id: str,
+    run_iri: str,
+    generated_at: str | None,
+) -> dict[str, Any]:
+    """The `pulse:ExtractionOutput` for `platform`, minting it on first use.
+
+    Mints the platform's `pulse:SourceSnapshot` at the same time, because the
+    two are decided together: an output points at a snapshot only when the
+    source it names has a version, and that is a property of the platform
+    rather than of the entity that happened to arrive first.
+    """
+    existing = outputs.get(platform)
+    if existing is not None:
+        return existing
+    snapshot = source_snapshot(platform)
+    if snapshot is not None:
+        snapshots[snapshot["@id"]] = snapshot
+    output = extraction_output(
+        run_id=run_id,
+        platform=platform,
+        run_iri=run_iri,
+        generated_at=generated_at,
+        snapshot_iri=snapshot["@id"] if snapshot else None,
+    )
+    outputs[platform] = output
+    return output
+
+
 def project_raw(
     nodes: Iterable[Mapping[str, Any]],
     *,
@@ -637,8 +767,15 @@ def project_raw(
     """Project entities into the raw shapes, grouped by extraction output.
 
     Every raw entity gets `pulse:partOfRun` → the `pulse:ExtractionOutput` for
-    its platform, and each output links to the run. That chain is what lets a
-    canonical triple be traced back to the source that asserted it.
+    the source that asserted it, and each output links to the run. That chain
+    is what lets a canonical triple be traced back to the source that asserted
+    it.
+
+    An entity with more than one source is emitted **once per source**, with
+    the properties partitioned between the copies by `source_attribution`.
+    Same `@id` in several named graphs is the substrate's normal shape — it is
+    what two runs over one repository already produce — and `unify.cluster`
+    collapses them by IRI without a vote.
 
     `run_nodes` is the `ExtractionRun` (and its `SoftwareAgent`) as produced by
     `extraction_run.build_extraction_run`, and they are **included in the
@@ -661,6 +798,7 @@ def project_raw(
     projected: list[dict[str, Any]] = []
     minted: dict[str, dict[str, Any]] = {}
     outputs: dict[str, dict[str, Any]] = {}
+    snapshots: dict[str, dict[str, Any]] = {}
     skipped: dict[str, int] = {}
 
     for node in nodes:
@@ -674,18 +812,25 @@ def project_raw(
             continue
         out, profiles = projected_pair
 
-        platform = _platform_of(out, profiles, node)
-        if platform and node_type in _PART_OF_RUN_TYPES:
-            if platform not in outputs:
-                outputs[platform] = extraction_output(
+        anchor = _platform_of(out, profiles, node)
+        if anchor is None or node_type not in _PART_OF_RUN_TYPES:
+            projected.append(out)
+        else:
+            # One node per asserting source. `split_by_source` leaves anything
+            # it cannot attribute on the anchor slice, so an entity with a
+            # single source comes back as the single node it always was.
+            for platform, node_slice in _slices(out, profiles, anchor=anchor):
+                output = _output_for(
+                    platform,
+                    outputs=outputs,
+                    snapshots=snapshots,
                     run_id=run_id,
-                    platform=platform,
                     run_iri=run_iri,
                     generated_at=generated_at,
                 )
-            out["pulse:partOfRun"] = {"@id": outputs[platform]["@id"]}
+                node_slice["pulse:partOfRun"] = {"@id": output["@id"]}
+                projected.append(node_slice)
 
-        projected.append(out)
         for profile in profiles:
             minted[profile["@id"]] = profile
 
@@ -693,12 +838,21 @@ def project_raw(
         logger.info("raw_projection: skipped unmapped types %s", skipped)
 
     return {
-        "@graph": [*projected, *minted.values(), *outputs.values(), *run_nodes],
+        "@graph": [
+            *projected,
+            *minted.values(),
+            *outputs.values(),
+            *snapshots.values(),
+            *run_nodes,
+        ],
     }
 
 
 __all__ = [
     "extraction_output",
     "extraction_output_iri",
+    "index_version",
     "project_raw",
+    "source_snapshot",
+    "source_snapshot_iri",
 ]

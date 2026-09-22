@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from rdflib import Dataset, Graph
+from rdflib import RDF, Dataset, Graph
 
 from git_metadata_extractor.validation.ontology import (
     canonical_shapes_available,
@@ -137,24 +137,92 @@ def _shapes_for(layer: Layer) -> tuple[bool, Graph | None]:
     )
 
 
+#: The graph naming the outputs and the run every slice points at. Matched by
+#: suffix because the run id varies; `substrate.META_GRAPH_SUFFIX` is the same
+#: constant, not imported here to keep `validation` free of a pipeline import.
+_META_GRAPH_SUFFIX = "#meta"
+
+
 def _graph_from_document(document: Mapping[str, Any], *, quads: bool) -> Graph:
     """Parse a JSON-LD layer document into a single graph.
 
-    `quads=True` for a named-graph document — the substrate is one named graph
-    per `pulse:ExtractionOutput`, and the shapes are checked against the
-    **union**, because SHACL has no notion of a graph name. That is also why a
-    node in the wrong named graph conforms perfectly (§3i), and why routing
-    needs its own check.
+    `quads=False` only: a canonical document is one graph. The substrate goes
+    through `substrate_slices`, which keeps the names.
     """
     payload = json.dumps(dict(document))
     if not quads:
         return Graph().parse(data=payload, format="json-ld")
-    dataset = Dataset()
-    dataset.parse(data=payload, format="json-ld")
     merged = Graph()
-    for subject, predicate, obj, _graph in dataset.quads((None, None, None, None)):
-        merged.add((subject, predicate, obj))
+    for _name, graph in substrate_slices(document, merge_meta=False):
+        for triple in graph:
+            merged.add(triple)
     return merged
+
+
+def substrate_slices(
+    document: Mapping[str, Any],
+    *,
+    merge_meta: bool = True,
+) -> list[tuple[str, Graph]]:
+    """One graph per named graph in a substrate document.
+
+    **Why not the union.** The substrate's unit is one platform's slice of one
+    run, and an entity with two sources is asserted in two of them — the same
+    IRI, a different `pulse:partOfRun` in each. That is the layer working as
+    designed, but `RawPersonShape` caps `pulse:partOfRun` at `sh:maxCount 1`,
+    so flattening the dataset first reports every multi-source entity as a
+    violation of a constraint nothing violated. The same artefact appears
+    without any splitting at all, as soon as two *runs* over one repository are
+    validated together: this was latent, and per-source attribution is only
+    what made it show up.
+
+    A slice is validated with two things merged in, and both are needed for a
+    different reason:
+
+    - **The meta graph**, because `pulse:partOfRun` is constrained
+      `sh:class pulse:ExtractionOutput` and the outputs live there. Without it
+      every anchor in every slice is a dangling reference.
+    - **Every `rdf:type` triple in the document**, because the other `sh:class`
+      constraints point *sideways*: `pulse:owns` names a repository, `org:unitOf`
+      names an organization, and the target frequently sits in another slice.
+      Types alone, not the targets' properties — that is the least that lets a
+      reference resolve, and it is what keeps cardinality per-slice. Merging the
+      properties too would be the union again.
+
+    So the target is "this source's assertions, with references resolved against
+    what the whole run knows", which is what a slice actually claims. A node
+    appearing only as an imported type has no properties, and every raw shape is
+    minCount-free, so it conforms trivially rather than being half-checked.
+    """
+    dataset = Dataset()
+    dataset.parse(data=json.dumps(dict(document)), format="json-ld")
+
+    by_name: dict[str, Graph] = {}
+    meta = Graph()
+    types = Graph()
+    for subject, predicate, obj, graph in dataset.quads((None, None, None, None)):
+        name = str(getattr(graph, "identifier", graph))
+        target = meta if name.endswith(_META_GRAPH_SUFFIX) else by_name.setdefault(
+            name,
+            Graph(),
+        )
+        target.add((subject, predicate, obj))
+        if predicate == RDF.type:
+            types.add((subject, predicate, obj))
+
+    if not by_name:
+        return [("", meta)] if len(meta) else []
+    if not merge_meta:
+        return [*by_name.items(), (_META_GRAPH_SUFFIX, meta)]
+
+    slices: list[tuple[str, Graph]] = []
+    for slice_name, slice_graph in by_name.items():
+        combined = Graph()
+        for source in (slice_graph, meta, types):
+            for triple in source:
+                combined.add(triple)
+        slices.append((slice_name, combined))
+    return slices
 
 
 def validate_layer(
@@ -173,7 +241,9 @@ def validate_layer(
             reason="ontology submodule not prepared",
         )
     try:
-        data = _graph_from_document(document, quads=quads)
+        if quads:
+            return _validate_slices(document, layer, shapes)
+        data = _graph_from_document(document, quads=False)
         result = SHACLValidator().validate_graph(data, shapes)
     except SHACLRuntimeUnavailableError as exc:
         return LayerValidationResult(
@@ -188,6 +258,42 @@ def validate_layer(
         violations=list(result.violations),
         warnings=list(result.warnings),
         triples=len(data),
+    )
+
+
+def _validate_slices(
+    document: Mapping[str, Any],
+    layer: Layer,
+    shapes: Graph,
+) -> LayerValidationResult:
+    """Validate each named graph against `shapes`, and aggregate.
+
+    Conforming means *every* slice conforms; the violations are concatenated
+    with the graph name attached, because "which source's slice is malformed"
+    is the first thing anyone reading the report needs and the merged view
+    cannot answer it.
+
+    `triples` counts the union rather than the sum: the meta graph is merged
+    into every slice for reference resolution, and summing would count it once
+    per platform.
+    """
+    validator = SHACLValidator()
+    conforms = True
+    violations: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    for name, graph in substrate_slices(document):
+        result = validator.validate_graph(graph, shapes)
+        conforms = conforms and result.conforms
+        violations.extend({**violation, "graph": name} for violation in result.violations)
+        warnings.extend({**warning, "graph": name} for warning in result.warnings)
+
+    return LayerValidationResult(
+        layer=layer,
+        conforms=conforms,
+        violations=violations,
+        warnings=warnings,
+        triples=len(_graph_from_document(document, quads=True)),
     )
 
 
@@ -226,6 +332,7 @@ __all__ = [
     "Layer",
     "LayerValidationResult",
     "enforce_canonical",
+    "substrate_slices",
     "validate_layer",
     "validate_substrate",
 ]

@@ -10,13 +10,13 @@ shape and constraint so the remaining work is a list rather than a feeling.
     python scripts/v2/canonical_conformance.py data/corpus/after-provrun
 
 `--layer raw` and `--layer substrate` do the same for the other two v3 layers.
-The substrate one is the interesting case: it validates the **union** of the
-named graphs — SHACL has no notion of a graph name — and separately counts
-entities left in the run's meta graph. That count is the one property of the
-substrate no validator can check: a node in the wrong named graph conforms
-exactly as well as one in the right place, so a stranded organization or
-membership passes SHACL while asserting that a fact about the world is a fact
-about the extraction.
+The substrate one is the interesting case: it validates each named graph
+**separately** (merged with the run's meta graph, so the anchors resolve) and
+separately counts entities left in that meta graph. That count is the one
+property of the substrate no validator can check: a node in the wrong named
+graph conforms exactly as well as one in the right place, so a stranded
+organization or membership passes SHACL while asserting that a fact about the
+world is a fact about the extraction.
 
 Needs the ontology prepared (`just ontology-prepare`).
 """
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import dataclasses
 import json
 import sys
 from datetime import datetime, timezone
@@ -42,8 +43,17 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (  # noq
 
 #: What legitimately belongs in a run's meta graph: the extraction's own
 #: description. Anything else there is an entity that found no source.
+#:
+#: `pulse:SourceSnapshot` is what each output `prov:used` — the source as of
+#: one index build. It describes the extraction as much as the run descriptor
+#: does, which is why it is not a stranded entity.
 _META_GRAPH_TYPES = frozenset(
-    {"pulse:ExtractionOutput", "pulse:ExtractionRun", "prov:SoftwareAgent"},
+    {
+        "pulse:ExtractionOutput",
+        "pulse:ExtractionRun",
+        "prov:SoftwareAgent",
+        "pulse:SourceSnapshot",
+    },
 )
 
 #: The enumeration files must be loaded with the shapes: every enumerated
@@ -92,27 +102,56 @@ def _validate(doc: dict, shapes, context: dict, *, quads: bool = False):
     the ontology graph before validating, which is why the live gate can check
     enumerations at all. Measuring any other way measures the wrong thing.
 
-    `quads=True` for the substrate layer: it is a named-graph document, so it
-    parses into a `Dataset` and the shapes are checked against the **union** of
-    its graphs. That is the right target — SHACL has no notion of a graph name,
-    and the union is what the store holds after the load.
+    `quads=True` for the substrate layer: it is a named-graph document, and
+    each named graph is validated **separately**, merged only with the run's
+    meta graph so that `pulse:partOfRun` can resolve to the
+    `pulse:ExtractionOutput` it names. Validating the union instead reports a
+    multi-source entity — the same IRI anchored to a different output in each
+    slice — as exceeding `sh:maxCount 1` on `pulse:partOfRun`, a violation that
+    exists only in the merge. The slicing itself is imported from
+    `validation.layers` rather than repeated here: this function exists to
+    measure what the live gate does, so it has to be the same code.
     """
-    from rdflib import Dataset, Graph  # noqa: PLC0415
+    from rdflib import Graph  # noqa: PLC0415
 
     from git_metadata_extractor.validation import SHACLValidator  # noqa: PLC0415
+    from git_metadata_extractor.validation.layers import (  # noqa: PLC0415
+        substrate_slices,
+    )
 
     payload = dict(doc)
     payload["@context"] = context
-    if quads:
-        dataset = Dataset()
-        dataset.parse(data=json.dumps(payload), format="json-ld")
-        data = Graph()
-        for subject, predicate, obj, _graph in dataset.quads((None, None, None, None)):
-            data.add((subject, predicate, obj))
-    else:
+    validator = SHACLValidator()
+    if not quads:
         data = Graph().parse(data=json.dumps(payload), format="json-ld")
-    result = SHACLValidator().validate_graph(data, shapes)
-    return result, len(data)
+        return validator.validate_graph(data, shapes), len(data)
+
+    aggregate = _SliceResult()
+    union = Graph()
+    for _name, graph in substrate_slices(payload):
+        aggregate.absorb(validator.validate_graph(graph, shapes))
+        for triple in graph:
+            union.add(triple)
+    aggregate.triples = len(union)
+    return aggregate, aggregate.triples
+
+
+@dataclasses.dataclass
+class _SliceResult:
+    """The per-slice results, as one result the reporting code already reads.
+
+    A run conforms when every one of its slices does, and the violations are
+    concatenated. `triples` counts the union — the meta graph rides along with
+    every slice, so summing the slices would count it once per platform.
+    """
+
+    conforms: bool = True
+    violations: list = dataclasses.field(default_factory=list)
+    triples: int = 0
+
+    def absorb(self, result) -> None:
+        self.conforms = self.conforms and result.conforms
+        self.violations.extend(result.violations)
 
 
 RUN_ID = "conformance"

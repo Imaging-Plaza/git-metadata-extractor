@@ -142,7 +142,7 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `concept_tagging` **[off by default]** | EPFL Graph concepts / keywords / disciplines onto the root repo |
 | `tag_rule_based_disciplines` | deterministic discipline fallback |
 | `build_jsonld_output` | v2-shaped JSON-LD `@graph`; strips redundant `pulse:ror`. Since the v3 flip this is an *intermediate*, not the response |
-| `substrate_projection` **[off by default]** | project that intermediate into the v3 **raw** shapes, grouped into one named graph per `pulse:ExtractionOutput`. Returned as `substrate` |
+| `substrate_projection` **[off by default]** | project that intermediate into the v3 **raw** shapes, grouped into one named graph per `pulse:ExtractionOutput`. An entity with two sources is emitted once per source, its properties partitioned between the copies. Each output names the index build it read via `prov:used` → `pulse:SourceSnapshot`. Returned as `substrate` |
 | `canonical_projection` | project the intermediate into the v3 **canonical** shapes and swap in the generated `@context`. This is what `output` carries |
 | `shacl_gate` | SHACL validation — **warning-only**, see below |
 | `extraction_run` | describe the run as a `pulse:ExtractionRun` + `prov:SoftwareAgent`, beside `output` |

@@ -43,6 +43,9 @@
     "prov:startedAtTime": {
       "@type": "xsd:dateTime"
     },
+    "prov:used": {
+      "@type": "@id"
+    },
     "prov:wasGeneratedBy": {
       "@type": "@id"
     },

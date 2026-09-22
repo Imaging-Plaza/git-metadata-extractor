@@ -85,6 +85,23 @@ _NAMES_SUBJECT: tuple[str, ...] = (
 )
 _NAMED_BY_SUBJECT: tuple[str, ...] = ("org:hasMembership", "pulse:hasContribution")
 
+#: Types that describe the *extraction* and therefore always belong in the meta
+#: graph, whatever else they carry.
+#:
+#: The list is load-bearing for `pulse:SourceSnapshot`: a snapshot carries
+#: `pulse:platform`, because naming the source is the point of it — and without
+#: this check the platform route below would file "the run read ORCID's index
+#: v0.1.2" into ORCID's own slice, as though ORCID had asserted the version of
+#: itself that was read. `pulse:ExtractionOutput` is handled separately, before
+#: routing, because the outputs are also what the routing is *keyed* on.
+_META_GRAPH_TYPES: frozenset[str] = frozenset(
+    {
+        "pulse:ExtractionRun",
+        "pulse:SourceSnapshot",
+        "prov:SoftwareAgent",
+    },
+)
+
 
 def group_by_output(
     raw_nodes: Iterable[Mapping[str, Any]],
@@ -117,13 +134,14 @@ def group_by_output(
         for node in nodes
         if str(node.get("@type")) == "pulse:ExtractionOutput"
     }
+    graph_by_platform = {
+        str(node.get("pulse:platform")): str(node["@id"])
+        for node in nodes
+        if str(node.get("@type")) == "pulse:ExtractionOutput"
+        and node.get("pulse:platform")
+    }
 
-    anchored: dict[str, str] = {}
-    for node in nodes:
-        part_of = node.get("pulse:partOfRun")
-        if isinstance(part_of, dict) and str(part_of.get("@id")) in outputs:
-            anchored[str(node["@id"])] = str(part_of["@id"])
-
+    anchored = _anchors(nodes, outputs)
     claimed = _claimed_dependents(nodes, anchored)
 
     by_graph: dict[str, list[dict[str, Any]]] = {name: [] for name in sorted(outputs)}
@@ -131,40 +149,75 @@ def group_by_output(
 
     for node in nodes:
         node_id = str(node["@id"])
-        if node_id in outputs:
+        if node_id in outputs or str(node.get("@type")) in _META_GRAPH_TYPES:
             by_graph[meta_graph].append(node)
             continue
+        # Route *this copy*, not this id: since `raw_projection` emits one node
+        # per asserting source, an id can name several nodes bound for several
+        # graphs, and only the copy's own anchor distinguishes them.
+        own = node.get("pulse:partOfRun")
         target = (
-            anchored.get(node_id)
-            or _named_subject_graph(node, anchored)
-            or claimed.get(node_id)
+            str(own["@id"])
+            if isinstance(own, dict) and str(own.get("@id")) in outputs
+            else (
+                graph_by_platform.get(str(node.get("pulse:platform") or ""))
+                or _named_subject_graph(node, anchored)
+                or claimed.get(node_id)
+            )
         )
         by_graph.setdefault(target or meta_graph, []).append(node)
     return by_graph
 
 
+def _anchors(
+    nodes: Iterable[Mapping[str, Any]],
+    outputs: set[str],
+) -> dict[str, list[str]]:
+    """Entity id -> every graph that holds a copy of it, in first-seen order.
+
+    A list rather than a single graph because a multi-source entity is
+    projected once per source. Dependents that resolve through it get the
+    first, which is the anchor slice `source_attribution` emits first.
+    """
+    anchored: dict[str, list[str]] = {}
+    for node in nodes:
+        part_of = node.get("pulse:partOfRun")
+        if isinstance(part_of, dict) and str(part_of.get("@id")) in outputs:
+            graphs = anchored.setdefault(str(node["@id"]), [])
+            if str(part_of["@id"]) not in graphs:
+                graphs.append(str(part_of["@id"]))
+    return anchored
+
+
 def _named_subject_graph(
     node: Mapping[str, Any],
-    anchored: Mapping[str, str],
+    anchored: Mapping[str, list[str]],
 ) -> str | None:
-    """The graph of the subject this node names, if it names one."""
+    """The graph of the subject this node names, if it names one.
+
+    The subject's *first* graph when it has several: a dependent belongs with
+    one copy of its subject, and the anchor slice — which `source_attribution`
+    emits first — is the one holding everything not attributed elsewhere.
+    """
     for key in _NAMES_SUBJECT:
         subject = node.get(key)
         if isinstance(subject, dict) and subject.get("@id"):
-            return anchored.get(str(subject["@id"]))
+            graphs = anchored.get(str(subject["@id"]))
+            return graphs[0] if graphs else None
     return None
 
 
 def _claimed_dependents(
     nodes: Iterable[Mapping[str, Any]],
-    anchored: Mapping[str, str],
+    anchored: Mapping[str, list[str]],
 ) -> dict[str, str]:
     """Reverse index: dependent id -> the graph of the entity that claims it."""
     claimed: dict[str, str] = {}
     for node in nodes:
-        graph = anchored.get(str(node.get("@id")))
-        if graph is None:
+        graphs = anchored.get(str(node.get("@id")))
+        if not graphs:
             continue
+        graph = graphs[0]
         for key in _NAMED_BY_SUBJECT:
             value = node.get(key)
             for ref in value if isinstance(value, list) else [value]:

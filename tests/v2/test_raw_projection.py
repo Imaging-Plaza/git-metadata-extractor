@@ -584,3 +584,124 @@ def test_the_raw_contribution_shape_requires_nothing() -> None:
         "pulse:contributionTo",
         "schema:author",
     ]
+
+
+# --------------------------------------------------------------------------
+# source snapshots — which build of which index answered
+# --------------------------------------------------------------------------
+#
+# `ExtractionOutputShape` is `sh:closed` over three properties, so before
+# ontology patch 08 an output could name its platform but never the version of
+# that platform's data it saw. `prov:used` -> `pulse:SourceSnapshot` is that
+# slot, and these pin what does and does not get one.
+
+
+def _outputs(document: dict) -> dict[str, dict]:
+    return {
+        str(n["pulse:platform"]): n
+        for n in document["@graph"]
+        if n.get("@type") == "pulse:ExtractionOutput"
+    }
+
+
+def _snapshots(document: dict) -> dict[str, dict]:
+    return {
+        str(n["@id"]): n
+        for n in document["@graph"]
+        if n.get("@type") == "pulse:SourceSnapshot"
+    }
+
+
+def test_an_index_backed_output_names_the_build_it_read() -> None:
+    from git_metadata_extractor.pipeline.stages.raw_projection import (  # noqa: PLC0415
+        index_version,
+        source_snapshot_iri,
+    )
+
+    version = index_version()
+    if not version:
+        pytest.skip("open-pulse-sources not installed")
+
+    document = project_raw(
+        [
+            {
+                "@id": "https://ror.org/02s376052",
+                "@type": "org:Organization",
+                "schema:name": "EPFL",
+            },
+        ],
+        run_id="snap-1",
+    )
+
+    expected = source_snapshot_iri("pulse:ROR", version)
+    assert _outputs(document)["pulse:ROR"]["prov:used"] == {"@id": expected}
+
+    snapshot = _snapshots(document)[expected]
+    assert snapshot["schema:softwareVersion"] == version
+    assert snapshot["pulse:platform"] == "pulse:ROR"
+    assert snapshot["schema:name"] == "ror"
+
+
+def test_github_gets_no_snapshot_because_its_data_is_live() -> None:
+    """A version would claim a reproducibility the live REST API cannot give.
+
+    The repository that answered yesterday can answer differently today, and no
+    library version records that — so the honest output is one with no
+    `prov:used` rather than one pointing at a build that did not produce it.
+    """
+    document = project_raw(
+        [
+            {
+                "@id": "https://github.com/octocat/Hello-World",
+                "@type": "schema:SoftwareSourceCode",
+                "pulse:githubRepositoryHandle": "https://github.com/octocat/Hello-World",
+            },
+        ],
+        run_id="snap-2",
+    )
+
+    assert "prov:used" not in _outputs(document)["pulse:GitHub"]
+    assert _snapshots(document) == {}
+
+
+def test_the_snapshot_iri_is_shared_across_runs_on_one_build() -> None:
+    """"What the source was" is not per-run; "what a run made of it" is.
+
+    Two runs against the same index build name the same snapshot, which is what
+    lets a query ask "everything read from this version" across runs.
+    """
+    from git_metadata_extractor.pipeline.stages.raw_projection import (  # noqa: PLC0415
+        index_version,
+    )
+
+    if not index_version():
+        pytest.skip("open-pulse-sources not installed")
+
+    node = {
+        "@id": "https://ror.org/02s376052",
+        "@type": "org:Organization",
+        "schema:name": "EPFL",
+    }
+    first = _snapshots(project_raw([node], run_id="run-a"))
+    second = _snapshots(project_raw([node], run_id="run-b"))
+
+    assert first.keys() == second.keys()
+    assert "run-a" not in next(iter(first))
+
+
+def test_every_index_backed_platform_is_a_declared_enumeration_member() -> None:
+    """A platform the ontology does not declare cannot name an output.
+
+    `ExtractionOutputShape` and `SourceSnapshotShape` both constrain
+    `pulse:platform` with `sh:class pulse:PlatformEnumeration`, so a member
+    missing from the TTL is a violation on every slice it anchors. Patch 07
+    added the five this service reads and that the enumeration lacked.
+    """
+    from git_metadata_extractor.pipeline.stages.raw_projection import (  # noqa: PLC0415
+        _INDEX_BACKED,
+    )
+    from git_metadata_extractor.schema.generated.enumerations import (  # noqa: PLC0415
+        PLATFORM_MEMBERS,
+    )
+
+    assert _INDEX_BACKED <= PLATFORM_MEMBERS

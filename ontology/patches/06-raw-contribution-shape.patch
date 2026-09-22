@@ -2,7 +2,7 @@ diff --git a/src/ontology/ontology-shapes-raw.ttl b/src/ontology/ontology-shapes
 index cd2bf63..e3c2f9e 100644
 --- a/src/ontology/ontology-shapes-raw.ttl
 +++ b/src/ontology/ontology-shapes-raw.ttl
-@@ -321,6 +321,74 @@ pulse:RawArticleShape
+@@ -321,6 +321,56 @@ pulse:RawArticleShape
          sh:name "Part Of Run"
      ] .
  
@@ -11,23 +11,6 @@ index cd2bf63..e3c2f9e 100644
 +    sh:targetClass pulse:Contribution ;
 +    sh:closed true ;
 +    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
-+    # The raw counterpart of pulse:ContributionShape. Needed because
-+    # pulse:RawPersonShape already declares
-+    #   sh:path pulse:hasContribution ; sh:class pulse:Contribution
-+    # so the raw layer expects these nodes to exist in a substrate graph — but
-+    # no raw shape targeted the class, leaving them the one entity type the
-+    # raw layer referenced and could not validate.
-+    #
-+    # A commit count is something a platform *reports* (GitHub's contributors
-+    # endpoint returns `contributions` per contributor), so it belongs in the
-+    # layer that records what sources said. What is derived is the aggregate
-+    # across platforms and runs, and that is the canonical node's business.
-+    #
-+    # No sh:minCount anywhere, unlike the canonical shape which requires
-+    # pulse:contributionTo, pulse:contributionCount and schema:author: the raw
-+    # layer must never refuse a slice for an incomplete assertion, because it
-+    # is append-only and the only durable copy. The requirement bites at the
-+    # canonical gate instead.
 +    sh:property [
 +        sh:path pulse:contributionTo ;
 +        sh:class schema:SoftwareSourceCode ;
@@ -73,7 +56,6 @@ index cd2bf63..e3c2f9e 100644
 +        sh:maxCount 1 ;
 +        sh:name "Git Author Email"
 +    ] .
-+
  pulse:RawMembershipShape
      a sh:NodeShape ;
      sh:targetClass org:Membership ;

@@ -1,0 +1,80 @@
+diff --git a/src/ontology/ontology-shapes-raw.ttl b/src/ontology/ontology-shapes-raw.ttl
+--- a/src/ontology/ontology-shapes-raw.ttl
++++ b/src/ontology/ontology-shapes-raw.ttl
+@@ -486,4 +486,46 @@
+         sh:datatype xsd:dateTime ;
+         sh:maxCount 1 ;
+         sh:name "Generated At"
++    ] ;
++    sh:property [
++        sh:path prov:used ;
++        sh:class pulse:SourceSnapshot ;
++        sh:maxCount 1 ;
++        sh:name "Used"
++    ] .
++
++pulse:SourceSnapshotShape
++    a sh:NodeShape ;
++    sh:targetClass pulse:SourceSnapshot ;
++    sh:closed true ;
++    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
++    sh:property [
++        sh:path schema:name ;
++        sh:datatype xsd:string ;
++        sh:maxCount 1 ;
++        sh:name "Name"
++    ] ;
++    sh:property [
++        sh:path schema:softwareVersion ;
++        sh:datatype xsd:string ;
++        sh:maxCount 1 ;
++        sh:name "Version"
++    ] ;
++    sh:property [
++        sh:path pulse:platform ;
++        sh:class pulse:PlatformEnumeration ;
++        sh:maxCount 1 ;
++        sh:name "Platform"
++    ] ;
++    sh:property [
++        sh:path prov:generatedAtTime ;
++        sh:datatype xsd:dateTime ;
++        sh:maxCount 1 ;
++        sh:name "Generated At"
++    ] ;
++    sh:property [
++        sh:path schema:url ;
++        sh:nodeKind sh:IRI ;
++        sh:maxCount 1 ;
++        sh:name "URL"
+     ] .
+diff --git a/src/ontology/ontology-definitions-provenance.ttl b/src/ontology/ontology-definitions-provenance.ttl
+--- a/src/ontology/ontology-definitions-provenance.ttl
++++ b/src/ontology/ontology-definitions-provenance.ttl
+@@ -84,6 +84,13 @@
+     skos:prefLabel "Entity" ;
+     skos:definition "A physical, digital, conceptual, or other kind of thing with some fixed aspects (PROV-O). ExtractionOutput and Observation are both entities." .
+ 
++pulse:SourceSnapshot
++    a rdfs:Class ;
++    rdfs:subClassOf prov:Entity ;
++    skos:prefLabel "Source Snapshot" ;
++    skos:definition "The state of one queried source at the moment a run read it — an index build, a registry dump, an API as of a date. Named separately from the ExtractionOutput because the output is what a run produced from the source, while the snapshot is what the source *was*: two runs a month apart against the same index version share a snapshot and produce different outputs." ;
++    rdfs:comment "<output> prov:used <snapshot> . The version is the build that produced the index, so a result can be reproduced against the same data rather than merely re-requested." .
++
+ prov:Bundle
+     a rdfs:Class ;
+     rdfs:subClassOf prov:Entity ;
+@@ -140,6 +147,12 @@
+     skos:prefLabel "ended at time" ;
+     skos:definition "The time an Activity ended." .
+ 
++prov:used
++    a rdf:Property ;
++    skos:prefLabel "used" ;
++    skos:definition "Links an Activity or Entity to something it consumed (PROV-O)." ;
++    rdfs:comment "<output> prov:used <snapshot> — which SourceSnapshot this ExtractionOutput was read from. ExtractionOutputShape is sh:closed, so without this property an output can name its platform but never the version of that platform's data it saw." .
++
+ prov:generatedAtTime
+     a rdf:Property ;
+     rdfs:range xsd:dateTime ;

@@ -69,6 +69,8 @@ git_metadata_extractor/
     stages/                      # the actual stages — see "Pipeline" below
       raw_projection.py          # flat v2 -> the v3 *raw* shapes
       canonical_projection.py    # flat v2 -> the v3 *canonical* shapes
+      source_attribution.py      # which source asserted which property —
+                                 #   splits one entity into one node per source
       substrate.py               # the raw layer grouped into named graphs
       extraction_run.py          # pulse:ExtractionRun + prov:SoftwareAgent
 
@@ -363,15 +365,58 @@ Four things about it are load-bearing:
   before or after it. `substrate_projection` therefore has to run *before*
   `canonical_projection`, which replaces `state.payload["@graph"]` in place.
 - **The meta graph holds only the extraction's own description** — the
-  outputs, the run, the agent. An *entity* there is a routing defect, and
-  SHACL cannot see it: the raw entity shapes are open and require no anchor,
-  so a stranded entity conforms perfectly while claiming a fact about the
-  world is a fact about the run. `canonical_conformance.py --layer substrate`
-  counts them for exactly that reason.
+  outputs, the run, the agent, and each output's source snapshot. An *entity*
+  there is a routing defect, and SHACL cannot see it: the raw entity shapes are
+  open and require no anchor, so a stranded entity conforms perfectly while
+  claiming a fact about the world is a fact about the run.
+  `canonical_conformance.py --layer substrate` counts them for exactly that
+  reason.
 
-Measured 119/119 conformant against `ontology-shapes-raw.ttl` with **zero
-stranded entities**, 434 flat nodes → 1,021 raw nodes across 2-4 named graphs
-per run. Regenerate with:
+**An entity with two sources is emitted twice**, once per source, with its
+properties partitioned between the copies —
+`pipeline/stages/source_attribution.py`. A person resolved from GitHub to an
+ORCID iD had recorded the ORCID as something GitHub said; now the iD sits in
+the `:orcid` slice and the GitHub-described properties stay in `:github`. The
+table is deliberately short (`pulse:orcidIdentifier` → ORCID, `pulse:ror` →
+ROR, profile references → each profile's own platform): a property with no
+entry stays on the anchor slice, so a single-source entity projects exactly as
+it did. Same `@id` in two graphs is the substrate's normal shape — two runs
+over one repository already produce it — and `unify.cluster` collapses them by
+IRI without a vote.
+
+The attribution is derived from **identity evidence on the projected node**,
+not from an observation of which provider call produced which value. When an
+LLM agent reads an ORCID RAG hit and writes the name it found into
+`schema:name`, nothing in the payload records that, and the name stays on the
+anchor slice.
+
+**Each output names the source version it read** — `prov:used` →
+`pulse:SourceSnapshot`, from ontology patch 08. `ExtractionOutputShape` is
+`sh:closed` over three properties, so until that patch an output could say
+*which* source answered but never *which version of that source's data*, which
+is the difference between reproducing a result and merely re-requesting it. The
+snapshot carries `schema:softwareVersion` — the `open_pulse_sources` build that
+produced the index, read from the installed distribution so it stays the single
+pin `pyproject.toml` declares — and its IRI embeds that version, so two runs a
+month apart against one build share a snapshot while producing different
+outputs.
+
+**GitHub gets no snapshot**, deliberately: its entity data comes from the live
+REST API, so a library version there would claim a reproducibility the data does
+not have. A source with no version gets no snapshot rather than one asserting
+only what `pulse:platform` already says — `raw_projection._INDEX_BACKED` is the
+list, and patch 07 added the five enumeration members it needed
+(`pulse:OpenAlex`, `pulse:ETHResearchCollection`, `pulse:SNSF`,
+`pulse:RenkuLab`, `pulse:SWISSUbase`). DuckDuckGo and the EPFL Graph are
+excluded on purpose: a search engine is a discovery mechanism and the EPFL Graph
+supplies discipline vocabulary, so neither can legitimately anchor an output.
+
+Measured over `data/corpus/baseline` (119 runs): **119/119 conformant** against
+`ontology-shapes-raw.ttl` with **zero stranded entities**, 346 flat nodes →
+1,163 raw nodes across 2-5 named graphs per run — against 954 nodes and 2-4
+graphs on the same corpus before per-source attribution, the rest being the
+snapshot nodes. (The 434 → 1,021 figure recorded on 2026-09-09 was measured on
+a different corpus directory.) Regenerate with:
 
 ```bash
 python scripts/v2/canonical_conformance.py <corpus dir> --layer substrate
@@ -534,6 +579,21 @@ shapes checks almost nothing.
 | substrate | `ontology-shapes-raw.ttl` + 4 | mostly open | **report** (`V2_SUBSTRATE_VALIDATE`) |
 | canonical | `ontology-shapes-canonical.ttl` + 3 | closed | **refuse to publish** |
 | provenance | — | — | cannot be validated at all |
+
+**The substrate validates one named graph at a time**, not their union —
+`validation.substrate_slices`. A slice is one source's assertions, and that is
+the unit the raw shapes describe: `RawPersonShape` caps `pulse:partOfRun` at
+`sh:maxCount 1`, which every slice honours and the merge does not, so
+flattening first reports a violation that exists only in the merge. This was
+latent before per-source attribution — two *runs* over one repository produce
+it too — and attribution is what made it show up. Each slice is validated with
+the meta graph merged in (so `pulse:partOfRun` resolves to its
+`pulse:ExtractionOutput`) plus every `rdf:type` triple in the document (so a
+sideways `sh:class` reference like `pulse:owns` resolves to a target in another
+slice). Types only, not the targets' properties — that is the least that lets a
+reference resolve while keeping cardinality per-slice. Violations carry the
+graph name, because "which source's slice is malformed" is what a reader needs
+and the merged view cannot say.
 
 **Why the severities differ.** The substrate is append-only and the only
 durable copy of what a run found, so refusing a slice over one malformed entity

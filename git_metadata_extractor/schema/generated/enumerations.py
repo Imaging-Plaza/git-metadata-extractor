@@ -1853,39 +1853,54 @@ ORGANIZATION_TYPE_LABELS: dict[str, str] = {
 
 
 #: Enumeration of external platforms on which a person can hold a profile.
-#: `pulse:PlatformEnumeration` — 8 members.
+#: `pulse:PlatformEnumeration` — 13 members.
 Platform = Literal[
     "pulse:Bitbucket",
+    "pulse:ETHResearchCollection",
     "pulse:GitHub",
     "pulse:GitLab",
     "pulse:HuggingFace",
     "pulse:Infoscience",
     "pulse:ORCID",
+    "pulse:OpenAlex",
     "pulse:ROR",
+    "pulse:RenkuLab",
+    "pulse:SNSF",
+    "pulse:SWISSUbase",
     "pulse:Zenodo",
 ]
 
 PLATFORM_MEMBERS: frozenset[str] = frozenset(
     {
         "pulse:Bitbucket",
+        "pulse:ETHResearchCollection",
         "pulse:GitHub",
         "pulse:GitLab",
         "pulse:HuggingFace",
         "pulse:Infoscience",
         "pulse:ORCID",
+        "pulse:OpenAlex",
         "pulse:ROR",
+        "pulse:RenkuLab",
+        "pulse:SNSF",
+        "pulse:SWISSUbase",
         "pulse:Zenodo",
     },
 )
 
 PLATFORM_LABELS: dict[str, str] = {
     "pulse:Bitbucket": "Bitbucket",
+    "pulse:ETHResearchCollection": "ETH Research Collection",
     "pulse:GitHub": "GitHub",
     "pulse:GitLab": "GitLab",
     "pulse:HuggingFace": "Hugging Face",
     "pulse:Infoscience": "Infoscience",
     "pulse:ORCID": "ORCID",
+    "pulse:OpenAlex": "OpenAlex",
     "pulse:ROR": "ROR",
+    "pulse:RenkuLab": "RenkuLab",
+    "pulse:SNSF": "SNSF",
+    "pulse:SWISSUbase": "SWISSUbase",
     "pulse:Zenodo": "Zenodo",
 }
 
