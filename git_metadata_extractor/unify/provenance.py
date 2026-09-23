@@ -80,15 +80,21 @@ FIRST_OBSERVED_ON = f"{PULSE}firstObservedOn"
 LAST_CONFIRMED_ON = f"{PULSE}lastConfirmedOn"
 OBSERVATION_COUNT = f"{PULSE}observationCount"
 
-#: The two `owl:sameAs` subproperties, which the ontology is explicit are
+#: The two identity-link properties, which the ontology is explicit are
 #: **plain** triples in `graph:prov` and not quoted-triple annotations.
+#:
+#: Both are `rdfs:subPropertyOf skos:exactMatch`, not `owl:sameAs` — patch 09,
+#: adopting the reading in PR #170: `owl:sameAs` licenses a reasoner to merge
+#: every statement of both nodes, including the per-source facts the raw layer
+#: keeps deliberately separable, so the unifier's own output would contradict
+#: the split it exists to serve. `skos:exactMatch` asserts the match without
+#: the merge.
 #:
 #: They also cannot live in `graph:canonical`, which is how they were emitted
 #: until this module existed: `PersonShape` and `OrganizationShape` are
-#: `sh:closed` and ignore only `( rdf:type owl:sameAs )`, so `pulse:samePersonAs`
-#: — a *subproperty* of `owl:sameAs`, not the term itself — is rejected. The
-#: canonical graph validated at 0 violations anyway, because the 120-repo corpus
-#: never produced a rename and so never emitted one.
+#: `sh:closed` and ignore only `( rdf:type owl:sameAs )`, which neither property
+#: is. The canonical graph validated at 0 violations anyway, because the
+#: 120-repo corpus never produced a rename and so never emitted one.
 SAME_AS_PROPERTIES: tuple[str, ...] = (
     f"{PULSE}samePersonAs",
     f"{PULSE}sameOrganizationAs",

@@ -99,7 +99,8 @@ def extraction_output(
 #: only what `pulse:platform` already says.
 _INDEX_BACKED: frozenset[str] = frozenset(
     {
-        "pulse:ETHResearchCollection",
+        "pulse:EPFLGraph",
+        "pulse:ETHZResearchCollection",
         "pulse:HuggingFace",
         "pulse:Infoscience",
         "pulse:ORCID",

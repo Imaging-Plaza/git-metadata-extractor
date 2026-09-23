@@ -87,14 +87,15 @@ class MergedEntity:
     dropped: tuple[str, ...] = ()
 
     def as_jsonld(self) -> dict[str, Any]:
-        """The canonical node. **Without** the `owl:sameAs` edges.
+        """The canonical node. **Without** the identity-link edges.
 
         Those go to `graph:prov` as plain triples — which is what the ontology
         says ("Plain triple in graph:prov, not a quoted-triple annotation") and
         also what the shapes require: `PersonShape` and `OrganizationShape` are
         `sh:closed` and ignore only `( rdf:type owl:sameAs )`, so
-        `pulse:samePersonAs` — a *subproperty* of `owl:sameAs`, not the term —
-        is rejected.
+        `pulse:samePersonAs` is rejected — it is a subproperty of
+        `skos:exactMatch` (patch 09), and even under the `owl:sameAs` reading it
+        superseded, a *subproperty* is not the ignored term itself.
 
         This method emitted them until `unify/provenance.py` existed, and the
         canonical graph still validated at 0 violations, because the 120-repo

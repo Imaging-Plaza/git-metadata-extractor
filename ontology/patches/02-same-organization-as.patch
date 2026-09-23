@@ -1,5 +1,4 @@
 diff --git a/src/ontology/ontology-definitions-provenance.ttl b/src/ontology/ontology-definitions-provenance.ttl
-index 2718ab6..b810a2d 100644
 --- a/src/ontology/ontology-definitions-provenance.ttl
 +++ b/src/ontology/ontology-definitions-provenance.ttl
 @@ -5,6 +5,7 @@
@@ -16,11 +15,11 @@ index 2718ab6..b810a2d 100644
  
 +pulse:sameOrganizationAs
 +    a rdf:Property ;
-+    rdfs:subPropertyOf owl:sameAs ;
++    rdfs:subPropertyOf skos:exactMatch ;
 +    rdfs:domain org:Organization ; rdfs:range org:Organization ;
 +    skos:prefLabel "same organization as" ;
 +    skos:definition "Links two Organization nodes the unifier has asserted are the same real-world organization. The organization counterpart to pulse:samePersonAs." ;
-+    rdfs:comment "Plain triple in graph:prov, not a quoted-triple annotation: :org1 pulse:sameOrganizationAs :org2 . Also carries the id migration — an organization re-identified from its github handle to its ROR anchor keeps the old id followable." .
++    rdfs:comment "Plain triple in graph:prov, not a quoted-triple annotation: :org1 pulse:sameOrganizationAs :org2 . Also carries the id migration — an organization re-identified from its github handle to its ROR anchor keeps the old id followable. skos:exactMatch rather than owl:sameAs: see patch 09, which makes the same correction to pulse:samePersonAs." .
 +
  pulse:partOfRun
      a rdf:Property ;

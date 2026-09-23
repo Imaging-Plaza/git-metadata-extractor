@@ -405,11 +405,14 @@ outputs.
 REST API, so a library version there would claim a reproducibility the data does
 not have. A source with no version gets no snapshot rather than one asserting
 only what `pulse:platform` already says — `raw_projection._INDEX_BACKED` is the
-list, and patch 07 added the five enumeration members it needed
-(`pulse:OpenAlex`, `pulse:ETHResearchCollection`, `pulse:SNSF`,
-`pulse:RenkuLab`, `pulse:SWISSUbase`). DuckDuckGo and the EPFL Graph are
-excluded on purpose: a search engine is a discovery mechanism and the EPFL Graph
-supplies discipline vocabulary, so neither can legitimately anchor an output.
+list, and patch 07 added the six enumeration members it needed
+(`pulse:OpenAlex`, `pulse:ETHZResearchCollection`, `pulse:SNSF`,
+`pulse:RenkuLab`, `pulse:SWISSUbase`, `pulse:EPFLGraph`). DuckDuckGo is excluded
+on purpose: a search engine is a discovery mechanism, so it cannot legitimately
+anchor an output. The EPFL Graph was excluded on the same reading until
+2026-09-23 — it supplies discipline vocabulary — but it also holds EPFL person,
+unit and publication records keyed by sciper, and that is entity data this
+service can attribute, so for those it is a source of record like any other.
 
 Measured over `data/corpus/baseline` (119 runs): **119/119 conformant** against
 `ontology-shapes-raw.ttl` with **zero stranded entities**, 346 flat nodes →
@@ -553,8 +556,15 @@ Four rules worth knowing:
   the "cheap corner" the cost profile chooses over a full audit trail.
 - **`pulse:samePersonAs` / `sameOrganizationAs` live here as plain triples**,
   not on the canonical node. The ontology says so, and the shapes require it:
-  `PersonShape` is `sh:closed` and ignores only `( rdf:type owl:sameAs )`, so a
-  *subproperty* of `owl:sameAs` is rejected.
+  `PersonShape` is `sh:closed` and ignores only `( rdf:type owl:sameAs )`, which
+  neither property is.
+- **Both are `rdfs:subPropertyOf skos:exactMatch`, not `owl:sameAs`** — patch 09,
+  adopting PR #170 ask #12. `owl:sameAs` licenses a reasoner to merge every
+  statement of both nodes, including the per-source facts the raw layer is built
+  to keep separable, so the unifier's own output would contradict the split it
+  exists to serve: two profile-bearing persons linked by it carry two
+  biographies and two follower counts asserted of one individual.
+  `skos:exactMatch` asserts the match without the merge.
 - **No `pulse:observationConfidence`.** Declared by the ontology, left empty on
   purpose: the only thing available to derive it from is the selection rule,
   which `pulse:observationKind` already states.

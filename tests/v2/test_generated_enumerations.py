@@ -37,10 +37,13 @@ EXPECTED_ENUMERATIONS = {
     "MembershipType": 3,
     "Modality": 6,
     "OrganizationType": 9,
-    # 13 with local patch 07: the five indexed sources — OpenAlex, the ETH
-    # Research Collection, SNSF, RenkuLab, SWISSUbase — that this service reads
-    # and the upstream enumeration had no term for. Upstream has 8.
-    "Platform": 13,
+    # 14 with local patch 07: the six indexed sources — OpenAlex, the ETH
+    # Research Collection, SNSF, RenkuLab, SWISSUbase and the EPFL Graph — that
+    # this service reads and the upstream enumeration had no term for. Upstream
+    # has 8. The EPFL Graph joined on 2026-09-23: it supplies discipline
+    # vocabulary, but it also holds EPFL person, unit and publication records
+    # keyed by sciper, which is entity data an output can be anchored to.
+    "Platform": 14,
     "PublicationType": 15,
     "RepositoryType": 7,
     "SpaceRuntimeStatus": 5,

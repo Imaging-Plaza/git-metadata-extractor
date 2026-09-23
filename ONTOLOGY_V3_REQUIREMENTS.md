@@ -437,6 +437,82 @@ reading that produced the original exclusion. If the class is meant to be
 per-platform in the raw layer and aggregated in canonical — which is what this
 patch assumes — the definition could say so.
 
+## 2.11 `samePersonAs` is an identity axiom, and that contradicts the split — PATCHED
+
+`ontology-definitions-provenance.ttl` declares `pulse:samePersonAs
+rdfs:subPropertyOf owl:sameAs`. Under a reasoner that licenses merging **every**
+statement of both nodes — including the per-source platform facts the raw layer
+exists to keep separable.
+
+The consequence is specific, not theoretical. Two `PlatformProfile`-bearing
+persons linked by `samePersonAs` end up carrying two biographies, two follower
+counts and two `pulse:company` values asserted of one individual, with nothing
+recording which came from where. That is a reasoner-level contradiction produced
+*by* the unifier's own output, and it defeats the reason the raw/canonical split
+exists at all.
+
+It bites this service harder than it bit the ontology, because
+`pipeline/stages/source_attribution.py` makes per-source disagreement a design
+goal rather than an accident: an entity asserted by two sources is deliberately
+emitted twice, with its properties partitioned between the copies. An
+`owl:sameAs` over that collapses precisely the distinction the layer was built
+to preserve.
+
+### Resolved — `ontology/patches/09-same-as-is-not-identity.patch`
+
+Retargets the property to `rdfs:subPropertyOf skos:exactMatch`, which asserts
+the match without licensing the merge. `ontology/patches/02-same-organization-as.patch`
+mints the organization twin with the corrected superproperty, so the two agree.
+
+Taken from [PR #170](https://github.com/Imaging-Plaza/git-metadata-extractor/pull/170)
+ask #12, which takes it in turn from the rete `scholar.ttl` rule: *"When two
+records clearly match but you cannot mint one canonical IRI, link them with
+`skos:exactMatch` (safe) rather than `owl:sameAs` (which merges all
+statements)."*
+
+No code change follows. Both properties were already written to `graph:prov` as
+plain triples and never onto the canonical node — `PersonShape` is `sh:closed`
+and ignores only `( rdf:type owl:sameAs )`, which neither property is under
+either reading. The placement was right; the superproperty was not.
+
+## 2.12 No package concept, so the dependency data we hold cannot be emitted
+
+Adopted from [PR #170](https://github.com/Imaging-Plaza/git-metadata-extractor/pull/170)
+asks #1 and #20; evidence in
+[`dev/ontology-v3-profiles/dependencies-and-dependents.md`](dev/ontology-v3-profiles/dependencies-and-dependents.md).
+
+The raw profile already introduces `pulse:dependsOn`, typed
+`schema:SoftwareSourceCode` → `schema:SoftwareSourceCode`. The data we can
+actually supply is package-shaped, not repository-shaped:
+`providers/github_provider.py::get_repository_sbom` returns
+`[{name, ecosystem, version, spdxId}]` with purl-convention ecosystems. There is
+no term that edge can point at, so a term the PR already added cannot be
+populated from the one source that would populate it. Note the asymmetry in the
+profile's own wording — `pulse:dependencyCount` and `pulse:dependentCount` are
+documented in terms of *packages* while `pulse:dependsOn` is typed
+repository-to-repository.
+
+**Ask #1** — `pulse:Package` plus ecosystem / version / registry / purl
+identifier, `pulse:distributedAs` and `pulse:dependsOnPackage`; or, equivalently,
+widen `pulse:dependsOn`'s range to the union of `schema:SoftwareSourceCode` and
+`pulse:Package`. We have no preference between the two shapes, only that
+package-shaped dependencies be expressible.
+
+**Ask #20** — align that layer to deps.dev rather than minting in parallel:
+`pulse:Package rdfs:subClassOf deps:PackageVersion`, `pulse:packageIdentifier
+rdfs:subPropertyOf deps:purl`, `pulse:dependsOnPackage rdfs:subPropertyOf
+deps:dependsOn`, `pulse:sourceRepository rdfs:subPropertyOf deps:hasProject`.
+The join is free: deps.dev keys projects on **our repository IRIs**, so
+`deps:hasProject <https://github.com/psf/requests>` returns the package and its
+resolved dependencies with no mapping table. Also `pulse:Advisory`, for security
+advisories, which neither profile can express today.
+
+**Not started here.** Nothing in this repo emits either field today — there is
+no `_dependencies` internal field and nothing in
+`schema/json/strict/repository.schema.json`. Both data sources currently exist
+only to inform an LLM agent's reasoning. This section records the ask so the
+term lands before the extraction work, not after.
+
 ## 3. Decisions we need confirmed, not changed
 
 ### 3.1 Substrate openness
@@ -525,6 +601,10 @@ These are ours to do, listed so the ontology side can see the blast radius.
 | 6 | Upstream `04-ignore-inferred-identifier.patch` — ignore the inferred `schema:identifier` (§2.6) | **patched locally**; was blocking every DOI article and ROR organization |
 | 7 | Upstream `05-ror-platform.patch` — `pulse:ROR` as a platform member (§2.7) | **patched locally**; without it registry-sourced organizations have no provenance anchor |
 | 8 | Upstream `06-raw-contribution-shape.patch` — `RawContributionShape` (§2.8) | **patched locally**; without it the raw layer references a class it cannot validate, and canonical has no contributions |
+| 9 | Upstream `07-source-platform-enumerations.patch` — the six indexed-source platform members | **patched locally**; a source with no member cannot anchor an output at all |
+| 10 | Upstream `08-source-snapshot.patch` — `pulse:SourceSnapshot` + `prov:used` | **patched locally**; without it an output names its source but never that source's version |
+| 11 | Upstream `09-same-as-is-not-identity.patch` — `samePersonAs ⊂ skos:exactMatch`, not `owl:sameAs` (§2.11) | **patched locally**; `owl:sameAs` licenses a reasoner to merge the per-source facts the raw layer keeps separable |
+| 12 | `pulse:Package` + the deps.dev alignment (§2.12) | **not started**; `pulse:dependsOn` is in PR #25 and cannot be populated, because SBOM data is package-shaped and the edge is repository-shaped |
 
 **Closed 2026-09-08:** the bare-identifier direction and the `pulse:ror`
 exception are both intentional (§2.4). The looser cardinality on 14 properties
