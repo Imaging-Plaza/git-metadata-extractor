@@ -136,7 +136,7 @@ def test_person_github_handle_becomes_a_platform_profile() -> None:
 def test_self_hosted_instance_is_part_of_profile_identity() -> None:
     """`epfl` on gitlab.epfl.ch and on gitlab.com are two different things.
 
-    Collapsing them is the bug `ontology/patches/01` exists to prevent, so the
+    Collapsing them is the bug ontology patch 01 exists to prevent, so the
     instance has to be in the IRI, not only in a property.
     """
     public = profile_iri("pulse:GitLab", "epfl")

@@ -1,3 +1,4 @@
 [submodule "vendor/open-pulse-ontology"]
 	path = vendor/open-pulse-ontology
 	url = https://github.com/sdsc-ordes/open-pulse-ontology
+	branch = develop

@@ -76,6 +76,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   nothing read. The health tests stub the GitHub rate-limit probe instead of
   calling `api.github.com`. `tests/utils/test_github_token_pool.py`, which no
   test command ran, moved to `tests/v2/`.
+- **The ontology submodule now pins `develop` with no local patches.** The
+  nine patches in `ontology/patches/` were upstreamed
+  (sdsc-ordes/open-pulse-ontology#27, merged with #25), so the submodule moved
+  from the unmerged PR head `290579d` to the merge commit `83074e9` on `develop`
+  and the patch files were deleted. The ontology content is byte-identical, so
+  the generated models did not change. `.gitmodules` records `branch = develop`
+  for `git submodule update --remote`.
 
 ### Fixed
 

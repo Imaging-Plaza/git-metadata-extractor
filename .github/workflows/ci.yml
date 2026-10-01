@@ -90,7 +90,7 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Prepare the vendored ontology
-        # Apply ontology/patches/ to the pinned submodule. Before any test
+        # Apply ontology/patches/ (if any) to the pinned submodule. Before any test
         # step: the ontology-backed tests skip only when the files are
         # missing, so against the unpatched TTL they fail instead.
         run: python scripts/v2/prepare_ontology.py

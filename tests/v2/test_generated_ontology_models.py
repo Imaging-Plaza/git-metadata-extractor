@@ -118,7 +118,7 @@ def test_closed_shapes_reject_unknown_properties() -> None:
 
 
 def test_platform_instance_reaches_the_generated_profile_models() -> None:
-    """End-to-end proof that `ontology/patches/01` flows into the models."""
+    """End-to-end proof that ontology patch 01 flows into the models."""
     profile = canonical.OrganizationProfileModel(
         **{
             "pulse:platform": "pulse:GitLab",

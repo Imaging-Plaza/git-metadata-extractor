@@ -579,7 +579,8 @@ _SINGLE = {
 #:   store-side canonical graph had **no contributions at all** while
 #:   `/v2/extract` returned 46.
 #:
-#: `ontology/patches/06-raw-contribution-shape.patch` adds the missing shape.
+#: Ontology patch 06 (upstreamed; see ontology/patches/README.md) added the
+#: missing shape.
 #: What remains derived is the *aggregate* across platforms and runs, which is
 #: the canonical node's business and is where the provenance record goes.
 #:
@@ -600,8 +601,8 @@ _DERIVED_TYPES: frozenset[str] = frozenset()
 #: Without an entry, a ROR-identified organization has no platform, so no
 #: `pulse:ExtractionOutput`, so no `pulse:partOfRun` — and it fell through into
 #: the graph that describes the extraction, as though the registry's name for
-#: it were a fact about the run. `pulse:ROR` comes from
-#: `ontology/patches/05-ror-platform.patch`; see §2.7 of
+#: it were a fact about the run. `pulse:ROR` came from ontology patch 05
+#: (upstreamed; see ontology/patches/README.md); see §2.7 of
 #: ONTOLOGY_V3_REQUIREMENTS.md for why the enumeration is the right home.
 _REGISTRY_PLATFORM_BY_HOST: dict[str, str] = {
     "ror.org": "pulse:ROR",

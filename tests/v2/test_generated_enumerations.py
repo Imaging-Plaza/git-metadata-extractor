@@ -193,9 +193,9 @@ def test_every_discipline_the_agents_may_emit_is_a_valid_v3_member() -> None:
     absent entirely — so all 46 values the agents can emit failed
     `sh:class pulse:DisciplineEnumeration`. Zero of 46 were valid.
 
-    `ontology/patches/03-coarse-discipline-tiers.patch` restores the two coarse
-    tiers. This asserts the whole emittable vocabulary validates, so the patch
-    silently falling out of the series is a test failure rather than a
+    Ontology patch 03, now upstream (see ontology/patches/README.md), restores
+    the two coarse tiers. This asserts the whole emittable vocabulary validates,
+    so an ontology bump that drops them is a test failure rather than a
     graph-wide violation discovered in production.
     """
     import re  # noqa: PLC0415
@@ -214,7 +214,8 @@ def test_every_discipline_the_agents_may_emit_is_a_valid_v3_member() -> None:
     invalid = sorted(emittable - enumerations.DISCIPLINE_MEMBERS)
     assert not invalid, (
         f"{len(invalid)} agent-emittable disciplines are not v3 enumeration "
-        f"members: {invalid[:10]}. Is patch 03 applied? Run just ontology-prepare."
+        f"members: {invalid[:10]}. Did the ontology pin drop the coarse tiers "
+        f"(patch 03)? Regenerate with just ontology-models-generate."
     )
 
 

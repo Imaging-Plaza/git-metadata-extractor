@@ -233,7 +233,7 @@ def test_the_global_identifier_is_always_the_first_match_key() -> None:
 
 
 def test_the_same_as_predicates_exist_in_the_ontology() -> None:
-    """`pulse:sameOrganizationAs` comes from local patch 02.
+    """`pulse:sameOrganizationAs` comes from ontology patch 02, now upstream.
 
     Which had no consumer until the unifier: it was added for the id migration
     and sat unused. If the patch is ever dropped as unused, this fails — and so

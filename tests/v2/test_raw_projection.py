@@ -547,8 +547,8 @@ def test_the_contribution_passthrough_matches_the_raw_shape() -> None:
     """The shape is `sh:closed`, so an extra property is a violation.
 
     Same guard as the other passthrough tables, listed separately because
-    `RawContributionShape` arrived with local patch 06 rather than upstream —
-    if the patch is dropped when PR #25 merges it, this fails loudly.
+    `RawContributionShape` arrived with ontology patch 06 (upstreamed in
+    open-pulse-ontology#27) — if an ontology bump drops it, this fails loudly.
     """
     declared = _declared_properties("RawContributionShape")
     undeclared = sorted(set(_PASSTHROUGH["pulse:Contribution"]) - declared)

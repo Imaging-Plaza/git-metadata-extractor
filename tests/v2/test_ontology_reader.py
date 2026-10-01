@@ -160,12 +160,12 @@ def test_ontology_version_is_readable() -> None:
 
 
 # --------------------------------------------------------------------------
-# the local patch series
+# the upstreamed patch series (see ontology/patches/README.md)
 # --------------------------------------------------------------------------
 
 
 def test_platform_instance_patch_is_applied() -> None:
-    """`ontology/patches/01` must reach all four profile shapes.
+    """Ontology patch 01 must reach all four profile shapes.
 
     Fails when the ontology has not been prepared — run `just ontology-prepare`.
     Once the patch is upstreamed and deleted, this should still pass.

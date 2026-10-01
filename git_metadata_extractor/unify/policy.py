@@ -182,8 +182,8 @@ RESOLVERS: dict[str, TypeResolver] = {
         entity_type="org:Organization",
         match_keys=("pulse:ror", "pulse:hasOrganizationProfile"),
         id_priority=("pulse:ror",),
-        # From `ontology/patches/02-same-organization-as.patch`, which existed
-        # for this and had no consumer until now.
+        # From ontology patch 02 (now upstream; see ontology/patches/README.md),
+        # which existed for this and had no consumer until now.
         same_as="pulse:sameOrganizationAs",
     ),
     "schema:ScholarlyArticle": TypeResolver(

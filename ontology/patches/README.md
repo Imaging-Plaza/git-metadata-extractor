@@ -1,17 +1,28 @@
 # Ontology patches
 
 Local, reviewable deltas against the pinned `vendor/open-pulse-ontology`
-submodule (`290579d`, PR #25 `feature/platform-profiles`).
+submodule.
 
-The submodule stays on an **immutable upstream commit**. These patches are
-applied at model-generation time, never committed into the submodule, so:
+**There are none at the moment.** The series 01–09 below was upstreamed in
+sdsc-ordes/open-pulse-ontology#27 (merged into #25) and is part of `develop`
+since `83074e9` (2026-10-01), which is now the pin. The table stays as the
+record of why each change exists: code, tests and docs still refer to them as
+"patch NN".
+
+The mechanism stands for future deltas. The submodule stays on an **immutable
+upstream commit**; patches are applied at model-generation time, never
+committed into the submodule, so:
 
 - CI resolves the same upstream SHA every time
 - the entire delta from upstream is reviewable in one place
-- each patch maps 1:1 to a commit for PR #25, with the rationale already
-  written up in `../../ONTOLOGY_V3_REQUIREMENTS.md`
+- each patch maps 1:1 to an upstream commit, with the rationale written up in
+  `../../ONTOLOGY_V3_REQUIREMENTS.md`
 
-## The series
+When a patch lands upstream, re-pin the submodule and delete the patch file in
+the same commit — `prepare_ontology.py` cannot re-apply a delta that is already
+there.
+
+## The upstreamed series (01–09)
 
 | Patch | Ask | Why |
 |---|---|---|
