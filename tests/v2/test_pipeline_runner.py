@@ -8,7 +8,6 @@ from git_metadata_extractor.pipeline.runner import (
     Stage,
     StageError,
     run_pipeline,
-    timing_summary,
 )
 from git_metadata_extractor.pipeline.state import PipelineState
 
@@ -138,13 +137,6 @@ def test_warn_deduplicates_like_the_route_helper() -> None:
     assert state.warnings == ["same", "other"]
 
 
-def test_timing_summary_orders_slowest_first() -> None:
-    state = _state()
-    state.timings.update({"fast": 0.01, "slow": 2.0, "middle": 0.5})
-
-    assert list(timing_summary(state)) == ["slow", "middle", "fast"]
-
-
 def test_state_exposes_classification_shortcuts() -> None:
     state = _state()
 
@@ -171,7 +163,7 @@ def test_adapters_can_log_their_own_duration_mid_stage() -> None:
     def stage(state: PipelineState) -> None:
         time.sleep(slept)
         assert isinstance(state.stage_started_at, float)
-        seen.append(_elapsed("timed", state))
+        seen.append(_elapsed(state))
 
     state = _state()
     asyncio.run(run_pipeline(state, [Stage("timed", stage, fail_open=False)]))
@@ -180,14 +172,3 @@ def test_adapters_can_log_their_own_duration_mid_stage() -> None:
     assert seen[0] >= slept, f"adapter measured {seen[0]:.3f}s for a {slept}s stage"
     # And the runner's own recorded value still agrees.
     assert state.timings["timed"] >= slept
-
-
-def test_elapsed_falls_back_to_the_recorded_timing() -> None:
-    """After the stage returns there is no marker, so the record is the answer."""
-    from git_metadata_extractor.pipeline.run import _elapsed  # noqa: PLC0415
-
-    recorded = 1.5
-    state = _state()
-    state.timings["done"] = recorded
-
-    assert _elapsed("done", state) == recorded

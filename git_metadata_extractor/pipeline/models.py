@@ -16,14 +16,6 @@ from git_metadata_extractor.agents.models import (
 class AgentGroup:
     name: str
     agent_keys: list[str] = field(default_factory=list)
-    parallelizable: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "agent_keys": list(self.agent_keys),
-            "parallelizable": self.parallelizable,
-        }
 
 
 @dataclass(slots=True)
@@ -31,13 +23,6 @@ class Stage:
     name: str
     groups: list[AgentGroup] = field(default_factory=list)
     depends_on: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "groups": [group.to_dict() for group in self.groups],
-            "depends_on": list(self.depends_on),
-        }
 
 
 @dataclass(slots=True)
@@ -69,13 +54,6 @@ class ExecutionPlan:
             return has_cycle
 
         return any(_visit(stage.name) for stage in self.stages)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "detected_type": self.detected_type,
-            "stages": [stage.to_dict() for stage in self.stages],
-            "has_cycle": self.has_circular_dependencies(),
-        }
 
 
 @dataclass(slots=True)

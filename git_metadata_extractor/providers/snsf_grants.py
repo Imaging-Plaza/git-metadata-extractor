@@ -1,6 +1,6 @@
 """SnsfGrantsProvider — thin read-only facade over the SNSF DuckDB store.
 
-Used by the LLM agent tool factories in
+Used by the LLM agent tool factory in
 ``git_metadata_extractor.agents.llm.agent_tools.snsf_grants``.
 
 The provider is cheap to construct (no DB opened at init) and opens a
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 class _ROStore:
     """Minimal shim that exposes ``connect()`` backed by a read-only DuckDB
-    connection.  ``query_grants`` and ``facet_counts`` only call
-    ``store.connect()`` so this is sufficient.
+    connection.  ``query_grants`` only calls ``store.connect()`` so this is
+    sufficient.
     """
 
     def __init__(self, conn: Any) -> None:  # conn: duckdb.DuckDBPyConnection
@@ -84,62 +84,6 @@ class SnsfGrantsProvider:
         except Exception:
             logger.exception("snsf_grants.search failed; returning []")
             return []
-
-    def facets(
-        self,
-        filters: GrantFilters,
-        *,
-        text: str | None = None,
-    ) -> dict[str, Any]:
-        """Facet counts (excluded-self semantics) for the current filter set.
-
-        Returns ``{}`` if the store file is absent or unreadable.
-        """
-        if not self._store_path.exists():
-            return {}
-        try:
-            import duckdb  # noqa: PLC0415
-
-            from open_pulse_sources.index.snsf.facet_query import facet_counts  # noqa: PLC0415
-
-            with duckdb.connect(str(self._store_path), read_only=True) as conn:
-                store = _ROStore(conn)
-                return facet_counts(store, filters, text=text)
-        except Exception:
-            logger.exception("snsf_grants.facets failed; returning {}")
-            return {}
-
-    def fetch(self, grant_number: str) -> dict[str, Any] | None:
-        """Fetch the full grant row (incl. abstract / lay summaries).
-
-        Accepts the canonical grant URL or a bare integer string / int.
-        Returns ``None`` if the store file is absent, the grant is not found,
-        or the store is unreadable.
-        """
-        if not self._store_path.exists():
-            return None
-        try:
-            import duckdb  # noqa: PLC0415
-
-            from git_metadata_extractor.canonicalization.snsf import snsf_grant_iri  # noqa: PLC0415
-
-            canonical = snsf_grant_iri(grant_number) or grant_number
-            with duckdb.connect(str(self._store_path), read_only=True) as conn:
-                cur = conn.execute(
-                    "SELECT * FROM grants WHERE grant_number = ?",
-                    [canonical],
-                )
-                row = cur.fetchone()
-                if row is None:
-                    return None
-                cols = [d[0] for d in cur.description]
-                result: dict[str, Any] = {}
-                for col, val in zip(cols, row, strict=False):
-                    result[col] = val.isoformat() if hasattr(val, "isoformat") else val
-                return result
-        except Exception:
-            logger.exception("snsf_grants.fetch failed; returning None")
-            return None
 
 
 __all__ = ["SnsfGrantsProvider"]

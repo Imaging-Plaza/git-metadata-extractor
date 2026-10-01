@@ -1,13 +1,11 @@
-"""Phase D: SNSF LLM agent tool — SnsfGrantsProvider + tool factories.
+"""Phase D: SNSF LLM agent tool — SnsfGrantsProvider + search tool factory.
 
 Tests cover:
 - provider.search(GrantFilters(state=["Completed"])) returns matching thin rows.
-- provider.fetch(<grant_url>) returns the full row incl. abstract.
-- provider.facets(...) returns a dict of facet counts.
 - make_search_snsf_grants_tool(provider) returns a Tool with the right name,
   and calling its .function(state=["Completed"]) returns the matching rows.
-- Absent-store guard: provider pointed at a non-existent path → search returns [],
-  fetch returns None (no exception).
+- Absent-store guard: provider pointed at a non-existent path → search returns []
+  (no exception).
 """
 
 from __future__ import annotations
@@ -25,9 +23,7 @@ from open_pulse_sources.index.snsf.facet_query import GrantFilters
 from open_pulse_sources.index.snsf.facets import build_facets
 from open_pulse_sources.index.snsf.storage.duckdb_store import SnsfStore
 from git_metadata_extractor.agents.llm.agent_tools.snsf_grants import (
-    make_fetch_snsf_grant_tool,
     make_search_snsf_grants_tool,
-    make_snsf_grant_facets_tool,
 )
 from git_metadata_extractor.providers.snsf_grants import SnsfGrantsProvider
 
@@ -145,43 +141,6 @@ def test_provider_search_limit(provider: SnsfGrantsProvider) -> None:
 
 
 # ---------------------------------------------------------------------------
-# SnsfGrantsProvider.fetch
-# ---------------------------------------------------------------------------
-
-
-def test_provider_fetch_returns_full_row_with_abstract(provider: SnsfGrantsProvider) -> None:
-    row = provider.fetch(_G1)
-    assert row is not None
-    assert row["grant_number"] == _G1
-    # full row includes abstract
-    assert row["abstract"] == "Detailed abstract about cell membrane proteins."
-
-
-def test_provider_fetch_returns_none_for_missing_grant(provider: SnsfGrantsProvider) -> None:
-    row = provider.fetch("https://data.snf.ch/grants/grant/999999")
-    assert row is None
-
-
-# ---------------------------------------------------------------------------
-# SnsfGrantsProvider.facets
-# ---------------------------------------------------------------------------
-
-
-def test_provider_facets_returns_dict(provider: SnsfGrantsProvider) -> None:
-    facets = provider.facets(GrantFilters())
-    assert isinstance(facets, dict)
-    # state facet should contain both Active and Completed
-    state_values = {item["value"] for item in facets.get("state", [])}
-    assert "Active" in state_values
-    assert "Completed" in state_values
-
-
-def test_provider_facets_with_text_filter(provider: SnsfGrantsProvider) -> None:
-    facets = provider.facets(GrantFilters(), text="biology")
-    assert isinstance(facets, dict)
-
-
-# ---------------------------------------------------------------------------
 # Absent-store guard
 # ---------------------------------------------------------------------------
 
@@ -190,18 +149,6 @@ def test_absent_store_search_returns_empty(tmp_path: Path) -> None:
     p = SnsfGrantsProvider(store_path=tmp_path / "nonexistent.duckdb")
     result = p.search(GrantFilters())
     assert result == []
-
-
-def test_absent_store_fetch_returns_none(tmp_path: Path) -> None:
-    p = SnsfGrantsProvider(store_path=tmp_path / "nonexistent.duckdb")
-    result = p.fetch(_G1)
-    assert result is None
-
-
-def test_absent_store_facets_returns_empty_dict(tmp_path: Path) -> None:
-    p = SnsfGrantsProvider(store_path=tmp_path / "nonexistent.duckdb")
-    result = p.facets(GrantFilters())
-    assert result == {}
 
 
 # ---------------------------------------------------------------------------
@@ -238,27 +185,3 @@ def test_make_search_snsf_grants_tool_no_filter(provider: SnsfGrantsProvider) ->
     tool = make_search_snsf_grants_tool(provider)
     rows = _run(tool.function())
     assert len(rows) == 2  # noqa: PLR2004
-
-
-def test_make_snsf_grant_facets_tool_name(provider: SnsfGrantsProvider) -> None:
-    tool = make_snsf_grant_facets_tool(provider)
-    assert tool.name == "snsf_grant_facets"
-    result = _run(tool.function())
-    assert isinstance(result, dict)
-    assert "state" in result
-
-
-def test_make_fetch_snsf_grant_tool_name_and_result(provider: SnsfGrantsProvider) -> None:
-    tool = make_fetch_snsf_grant_tool(provider)
-    assert tool.name == "fetch_snsf_grant"
-
-    row = _run(tool.function(grant_number=_G2))
-    assert row is not None
-    assert row["grant_number"] == _G2
-    assert "abstract" in row
-
-
-def test_make_fetch_snsf_grant_tool_missing(provider: SnsfGrantsProvider) -> None:
-    tool = make_fetch_snsf_grant_tool(provider)
-    row = _run(tool.function(grant_number="https://data.snf.ch/grants/grant/999999"))
-    assert row is None

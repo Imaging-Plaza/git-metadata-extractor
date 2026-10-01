@@ -3,8 +3,8 @@
 Oxigraph is the unification engine the architecture picked, and phase 3 needs
 exactly one thing from it — the ability to land a run's named graphs. So this
 client stays small and does not try to be a SPARQL library: `load_nquads` for
-the write path, `named_graphs` and `graph_triple_count` for verifying that the
-write happened, `is_available` for the health endpoint.
+the write path, `named_graphs` for verifying that the write happened,
+`is_available` for the health endpoint.
 
 **Why the whole run goes in one POST to `/store`.** Oxigraph implements the
 SPARQL 1.1 Graph Store HTTP Protocol, where `PUT|POST /store?graph=<iri>`
@@ -30,12 +30,9 @@ ONTOLOGY_V3_REQUIREMENTS.md.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import httpx
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -177,15 +174,6 @@ class OxigraphStore:
             if "g" in row and "n" in row
         }
 
-    async def graph_triple_count(self, graph_iri: str) -> int:
-        """Triples in one named graph. 0 when the graph does not exist."""
-        bindings = await self.select(
-            f"SELECT (COUNT(*) AS ?n) WHERE {{ GRAPH <{graph_iri}> {{ ?s ?p ?o }} }}",
-        )
-        if not bindings or "n" not in bindings[0]:
-            return 0
-        return int(bindings[0]["n"]["value"])
-
     async def is_available(self) -> bool:
         """Whether the store answers a trivial query. Never raises."""
         try:
@@ -212,16 +200,10 @@ def store_from_config(
     return OxigraphStore(url.strip(), timeout=timeout, transport=transport)
 
 
-def summarise(sizes: Mapping[str, int]) -> str:
-    """`graph=n graph=n` — one log-line summary of what was written."""
-    return " ".join(f"{iri}={count}" for iri, count in sorted(sizes.items()))
-
-
 __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "OxigraphStore",
     "StoreUnavailableError",
     "StoreWriteError",
     "store_from_config",
-    "summarise",
 ]

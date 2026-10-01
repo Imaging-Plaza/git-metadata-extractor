@@ -25,7 +25,6 @@ from git_metadata_extractor.store.oxigraph import (
     StoreUnavailableError,
     StoreWriteError,
     store_from_config,
-    summarise,
 )
 
 NQUADS = (
@@ -97,15 +96,6 @@ def test_an_empty_payload_writes_nothing() -> None:
     assert seen == []
 
 
-def test_a_trailing_slash_on_the_base_url_does_not_double_up() -> None:
-    seen, transport = _recorder()
-    store = OxigraphStore("http://oxigraph:7878/", transport=transport)
-
-    asyncio.run(store.load_nquads(NQUADS))
-
-    assert str(seen[0].url) == "http://oxigraph:7878/store"
-
-
 def test_a_rejected_payload_raises_write_error_with_the_detail() -> None:
     """The parse error and offending line are the only useful part of a 400."""
     _seen, transport = _recorder(status=400, body="Parse error on line 2: bad IRI")
@@ -160,15 +150,6 @@ def test_named_graphs_reports_a_triple_count_per_graph() -> None:
     assert seen[0].headers["accept"] == "application/sparql-results+json"
 
 
-def test_a_missing_graph_counts_zero_rather_than_raising() -> None:
-    _seen, transport = _recorder(status=200, body=_results([]))
-    store = OxigraphStore("http://oxigraph:7878", transport=transport)
-
-    count = asyncio.run(store.graph_triple_count("urn:pulse:output:nope:github"))
-
-    assert count == 0
-
-
 def test_is_available_is_false_rather_than_raising() -> None:
     """The health endpoint must not turn a down store into a 500."""
 
@@ -205,7 +186,3 @@ def test_a_configured_url_is_stripped_of_whitespace_and_trailing_slash() -> None
 
     assert store is not None
     assert store.base_url == "http://oxigraph:7878"
-
-
-def test_summarise_is_stable_for_logs() -> None:
-    assert summarise({"b": 2, "a": 1}) == "a=1 b=2"

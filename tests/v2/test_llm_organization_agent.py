@@ -337,20 +337,6 @@ def test_llm_organization_agent_exposes_github_metadata_tool_without_optional_pr
     ]
 
 
-def test_llm_organization_agent_works_with_minimal_context() -> None:
-    agent = LLMOrganizationAgentV2(
-        llm_runtime=_FakeLLMRuntime(_valid_organization_payload()),
-    )
-
-    result = asyncio.run(
-        agent.run({"org_name": "github"}, _providers()),
-    )
-
-    assert result.data["id"] == "github"
-    assert result.data["type"] == "org:Organization"
-    assert result.stats["agent_runtime"] == "llm"
-
-
 def test_llm_organization_agent_raises_on_empty_context() -> None:
     agent = LLMOrganizationAgentV2(
         llm_runtime=_FakeLLMRuntime(_valid_organization_payload()),

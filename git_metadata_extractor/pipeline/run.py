@@ -61,7 +61,7 @@ import logging
 logger = logging.getLogger("git_metadata_extractor.api.extract")
 
 
-def _elapsed(name: str, state: PipelineState) -> float:
+def _elapsed(state: PipelineState) -> float:
     """Seconds since the current stage started.
 
     `state.timings[name]` is the authoritative duration, but the runner writes
@@ -69,16 +69,18 @@ def _elapsed(name: str, state: PipelineState) -> float:
     the stage. Reading `timings` there reported `0.00s` for every stage, which
     is what the route's real per-stage durations degraded into when this
     sequence moved out of `extract()`. So the runner publishes its start
-    reading and the adapter measures against that.
+    reading and the adapter measures against that. Every adapter runs under
+    `run_pipeline`, which sets the marker before each stage, so the `None`
+    guard only satisfies the field's type.
     """
-    if state.stage_started_at is not None:
-        return perf_counter() - state.stage_started_at
-    return state.timings.get(name, 0.0)
+    if state.stage_started_at is None:
+        return 0.0
+    return perf_counter() - state.stage_started_at
 
 
 def _log(name: str, template: str, *args: object, state: PipelineState) -> None:
     """Reproduce the route's per-stage log line, including its timing field."""
-    logger.info(f"{name}: {template} in %.2fs", *args, _elapsed(name, state))
+    logger.info(f"{name}: {template} in %.2fs", *args, _elapsed(state))
 
 
 # ---- runtime gates, shared by several chains -----------------------------

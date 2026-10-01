@@ -8,7 +8,6 @@ from git_metadata_extractor.canonicalization.infoscience import (
     infoscience_article_iri,
     infoscience_org_iri,
     infoscience_person_iri,
-    parse_infoscience_iri,
 )
 
 _UUID = "f97b60da-bcab-4f2e-ba12-0ee0c4d0d6eb"
@@ -100,28 +99,3 @@ def test_uuid_must_be_v4_not_v1_or_v3():
     bits). Other UUID versions are rejected."""
     # UUID1-shaped string (third group starts with `1` not `4`).
     assert infoscience_person_iri("f97b60da-bcab-1f2e-ba12-0ee0c4d0d6eb") is None
-
-
-# ---------------------------------------------------------------------------
-# parse_infoscience_iri (inverse)
-# ---------------------------------------------------------------------------
-
-
-def test_parse_returns_kind_and_uuid_for_canonical_url():
-    assert parse_infoscience_iri(_PERSON_URL) == ("person", _UUID)
-    assert parse_infoscience_iri(_ORG_URL) == ("orgunit", _UUID)
-    assert parse_infoscience_iri(_ARTICLE_URL) == ("publication", _UUID)
-
-
-def test_parse_handles_trailing_slash():
-    assert parse_infoscience_iri(_PERSON_URL + "/") == ("person", _UUID)
-
-
-def test_parse_returns_none_on_non_canonical_input():
-    assert parse_infoscience_iri(None) is None
-    assert parse_infoscience_iri(_UUID) is None  # bare uuid is not a parseable URL
-    assert parse_infoscience_iri("https://example.com/whatever") is None
-    # Unknown kind path-segment.
-    assert parse_infoscience_iri(
-        f"https://infoscience.epfl.ch/entities/spaceship/{_UUID}",
-    ) is None

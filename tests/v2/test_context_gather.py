@@ -225,7 +225,10 @@ def test_missing_optional_orcid_adds_warning_instead_of_error() -> None:
     assert any("ORCID data unavailable" in warning for warning in bundle.warnings)
 
 
-def test_context_bundle_is_serializable() -> None:
+def test_repository_context_round_trips_through_json() -> None:
+    # The LLM agents json.dumps slices of this context (sort_keys=True, no
+    # default=), so a value JSON cannot encode fails them before any LLM call;
+    # /v2/extract also returns the whole context as `gathered_context`.
     providers = ProviderSet(github=_DummyGitHubProvider())
     url_info = GitHubURLClassification(
         normalized_url="https://github.com/octocat/Hello-World",
@@ -235,10 +238,8 @@ def test_context_bundle_is_serializable() -> None:
     )
 
     bundle = asyncio.run(gather_context("repository", url_info, providers))
-    serialized = bundle.to_dict()
 
-    assert serialized["detected_type"] == "repository"
-    json.dumps(serialized)
+    assert json.loads(json.dumps(bundle.context, sort_keys=True)) == bundle.context
 
 
 def test_repository_context_raises_when_required_github_call_fails() -> None:

@@ -1,21 +1,14 @@
-"""Smoke for the v2-canonicalization DOI re-export.
+"""Behaviour of the v2-canonicalization DOI re-export.
 
-The real implementation lives in `src/index/_shared/doi.py` (used by
-every catalog backend and the citation_cff parser). This test just
-verifies the v2 import alias resolves to the same callable, so v2
-code can `from git_metadata_extractor.canonicalization import doi_iri, parse_doi`
-without reaching across the package boundary.
+The real implementation lives in the ``open_pulse_sources`` library at
+``open_pulse_sources.index._shared.doi``. These tests pin the DOI
+normalisation v2 code gets through
+`from git_metadata_extractor.canonicalization import doi_iri, parse_doi`.
 """
 
 from __future__ import annotations
 
-from open_pulse_sources.index._shared import doi as _shared_doi
 from git_metadata_extractor.canonicalization import doi_iri, parse_doi
-
-
-def test_v2_re_exports_match_shared_implementation():
-    assert doi_iri is _shared_doi.doi_iri
-    assert parse_doi is _shared_doi.parse_doi
 
 
 def test_v2_alias_round_trips_on_canonical_input():

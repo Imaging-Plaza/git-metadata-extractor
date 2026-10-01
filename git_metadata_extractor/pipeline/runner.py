@@ -23,7 +23,7 @@ import inspect
 import logging
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 if TYPE_CHECKING:
     from git_metadata_extractor.pipeline.state import PipelineState
@@ -102,19 +102,3 @@ async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineSta
             state.timings[stage.name] = perf_counter() - started_at
 
     return state
-
-
-def total_seconds(state: PipelineState) -> float:
-    return sum(state.timings.values())
-
-
-def timing_summary(state: PipelineState) -> dict[str, Any]:
-    """Slowest stages first — what you want in a log line after a slow run."""
-    return {
-        name: round(seconds, 3)
-        for name, seconds in sorted(
-            state.timings.items(),
-            key=lambda item: item[1],
-            reverse=True,
-        )
-    }

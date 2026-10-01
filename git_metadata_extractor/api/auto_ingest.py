@@ -33,26 +33,6 @@ from . import _helpers
 _GITHUB_REPOS_AUTO_INGEST_LOCK = threading.Lock()
 _GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
 _GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
-_HF_PAPERS_AUTO_INGEST_LOCK = threading.Lock()
-
-
-def _hf_papers_arxiv_id_from_url(normalized_url: Any) -> str | None:
-    """Extract an arXiv id from a `huggingface.co/papers/<arxiv_id>` URL.
-
-    Only fires for HF Papers URLs — does NOT fire for raw `arxiv.org`
-    URLs or arXiv DOIs, by design (the user opted in for HF Papers
-    URLs specifically). Uses the canonical arXiv id normaliser so
-    version suffixes are stripped.
-    """
-    if not isinstance(normalized_url, str) or "huggingface.co/papers/" not in normalized_url:
-        return None
-    try:
-        from open_pulse_sources.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
-            normalize_arxiv_id,
-        )
-    except Exception:  # noqa: BLE001
-        return None
-    return normalize_arxiv_id(normalized_url)
 
 
 def _github_account_login_from_url(normalized_url: Any) -> str | None:
@@ -363,97 +343,6 @@ def _maybe_schedule_github_orgs_auto_ingest(
         logger.info(
             "github_organizations auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
             run_id, login, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
-
-
-def _maybe_schedule_huggingface_papers_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
-) -> None:
-    """Schedule a background ingest into the huggingface_papers index
-    when `V2_HF_PAPERS_RAG_AUTO_INGEST=true` AND the extract target
-    is a `huggingface.co/papers/<arxiv_id>` URL.
-
-    Unlike the github_users / github_organizations helpers, this one
-    does NOT check `classification.detected_type` — HF Papers URLs
-    don't necessarily have a dedicated detected_type, so we gate
-    purely on the URL pattern. The narrow URL match is the safety
-    net: only true HF Papers URLs trigger; raw arXiv URLs and DOIs
-    are skipped (per the operator's choice when this feature was
-    designed).
-    """
-    if os.getenv("V2_HF_PAPERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "normalized_url"):
-        return
-    arxiv_id = _hf_papers_arxiv_id_from_url(
-        getattr(classification, "normalized_url", None),
-    )
-    if arxiv_id is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.huggingface_papers.config import load_config  # noqa: PLC0415
-            from open_pulse_sources.index.huggingface_papers.embed.pipeline import (
-                embed_papers,
-            )
-            from open_pulse_sources.index.huggingface_papers.ingest.hf_papers_client import (  # noqa: PLC0415
-                HFPapersClient,
-            )
-            from open_pulse_sources.index.huggingface_papers.ingest.papers import (  # noqa: PLC0415
-                ingest_single_paper,
-            )
-            from open_pulse_sources.index.huggingface_papers.storage.duckdb_store import (  # noqa: PLC0415
-                HuggingFacePapersStore,
-            )
-        except Exception:
-            logger.exception(
-                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): module import failed",
-                run_id, arxiv_id,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            with _HF_PAPERS_AUTO_INGEST_LOCK:
-                store = HuggingFacePapersStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_paper(arxiv_id)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = HFPapersClient(
-                        api_base=cfg.huggingface.api_base,
-                        token=cfg.huggingface.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_paper(
-                        config=cfg, store=store, client=client, arxiv_id=arxiv_id,
-                    )
-                    if outcome == "skipped_404":
-                        return (outcome, 0)
-                    embed_summary = embed_papers(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("papers", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): failed",
-                run_id, arxiv_id,
-            )
-            return
-        logger.info(
-            "huggingface_papers auto-ingest (run_id=%s, arxiv_id=%s): %s (chunks_embedded=%d)",
-            run_id, arxiv_id, outcome, embedded,
         )
 
     try:

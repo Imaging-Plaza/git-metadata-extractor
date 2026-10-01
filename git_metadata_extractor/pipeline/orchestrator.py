@@ -538,45 +538,38 @@ class PipelineOrchestrator:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[stage_name],
-                parallelizable=False,
             )
         if stage_name == STAGE_PERSON_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_PERSON_AGENT],
-                parallelizable=True,
             )
         if stage_name == STAGE_REPO_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_REPO_AGENT],
-                parallelizable=True,
             )
         if stage_name == STAGE_ORG_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_ORG_AGENT],
-                parallelizable=True,
             )
         if stage_name == STAGE_ARTICLE_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_ARTICLE_AGENT],
-                parallelizable=True,
             )
         if stage_name == STAGE_MEMBERSHIP_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_MEMBERSHIP_AGENT],
-                parallelizable=True,
             )
         if stage_name == STAGE_CONTRIBUTION_AGENTS:
             return AgentGroup(
                 name=stage_name,
                 agent_keys=[STAGE_CONTRIBUTION_AGENT],
-                parallelizable=True,
             )
-        return AgentGroup(name=stage_name, agent_keys=[], parallelizable=False)
+        return AgentGroup(name=stage_name, agent_keys=[])
 
     @staticmethod
     def _require_url_info(context: dict[str, Any]) -> GitHubURLClassification:

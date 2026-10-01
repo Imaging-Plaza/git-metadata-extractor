@@ -715,10 +715,6 @@ async def extract(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         classification=classification,
         run_id=run_id,
     )
-    auto_ingest._maybe_schedule_huggingface_papers_auto_ingest(
-        classification=classification,
-        run_id=run_id,
-    )
 
     return response_model
 
