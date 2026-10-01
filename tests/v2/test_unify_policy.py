@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from rdflib import OWL, RDF, RDFS, SKOS, Graph
 
 from git_metadata_extractor.unify.policy import (
     PER_RUN_PROPERTIES,
@@ -235,26 +236,27 @@ def test_the_same_as_predicates_exist_in_the_ontology() -> None:
     """`pulse:sameOrganizationAs` comes from local patch 02.
 
     Which had no consumer until the unifier: it was added for the id migration
-    and sat unused. If the patch is ever dropped as unused, this fails.
+    and sat unused. If the patch is ever dropped as unused, this fails — and so
+    it does if patch 09 is, which makes both `skos:exactMatch` subproperties
+    rather than `owl:sameAs` ones.
+
+    Parsed, not grepped. `graph:prov` is never SHACL-validated, so nothing else
+    checks these predicates, and a substring check passed with the
+    `pulse:samePersonAs` declaration deleted: the `sameOrganizationAs`
+    definition mentions it by name.
     """
-    text = (ONTOLOGY / "ontology-definitions-provenance.ttl").read_text(encoding="utf-8")
+    graph = Graph().parse(
+        ONTOLOGY / "ontology-definitions-provenance.ttl",
+        format="turtle",
+    )
     for resolver in RESOLVERS.values():
-        if resolver.same_as:
-            assert resolver.same_as in text, f"{resolver.same_as} not declared"
-
-
-def test_profiles_are_carried_rather_than_skipped() -> None:
-    """`PersonShape` constrains `pulse:hasProfile` with `sh:class`.
-
-    A profile has nothing to unify — its IRI is minted from (platform, handle)
-    and is already canonical — but it still has to reach `graph:canonical`, or
-    every person's profile edge points at a node that is not there. Measured:
-    without these resolvers the real corpus produced a dangling profile
-    reference per person; with them, the only dangling references left are
-    SPDX licence URLs, which are external by nature.
-    """
-    for entity_type in ("pulse:PlatformProfile", "pulse:OrganizationProfile"):
-        resolver = RESOLVERS[entity_type]
-        assert resolver.match_keys == ()
-        assert resolver.id_priority == ()
-        assert resolver.same_as is None
+        if not resolver.same_as:
+            continue
+        predicate = graph.namespace_manager.expand_curie(resolver.same_as)
+        declared = set(graph.objects(predicate, RDF.type))
+        assert declared & {RDF.Property, OWL.ObjectProperty}, (
+            f"{resolver.same_as} not declared"
+        )
+        assert (predicate, RDFS.subPropertyOf, SKOS.exactMatch) in graph, (
+            f"{resolver.same_as} is not a skos:exactMatch subproperty (patch 09)"
+        )

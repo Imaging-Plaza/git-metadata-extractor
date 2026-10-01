@@ -33,7 +33,6 @@ from git_metadata_extractor.unify.cluster import (
     Record,
     cluster_records,
     group_by_type,
-    records_from_nodes,
 )
 from git_metadata_extractor.unify.merge import (
     RULE_FIRST_STABLE,
@@ -61,6 +60,7 @@ RUN_B = "urn:pulse:output:run-b:github"
 ORCID = "0000-0002-1825-0097"
 ORCID_IRI = f"https://orcid.org/{ORCID}"
 PROFILE = "urn:pulse:profile:github:jane"
+ORG_PROFILE = "urn:pulse:org-profile:github:epfl"
 
 EXPECTED_TWO = 2
 
@@ -528,22 +528,25 @@ def test_references_to_a_renamed_entity_are_rewritten() -> None:
     assert report.remapped_references == 1
 
 
-def test_a_composite_id_is_rebuilt_from_its_renamed_endpoints() -> None:
+def test_a_renamed_endpoint_with_an_underscore_rebuilds_the_composite_id() -> None:
     """Renaming an endpoint changes a membership's *identity*, not a field.
 
     Rewriting the reference and leaving the id is how you get a membership
     whose id names one person and whose properties name another. The
     convention is `__`; `AGENTS.md` accepts a single `_` when parsing legacy
-    graphs but splitting on it here would shred any IRI containing one.
+    graphs but splitting on it here would shred any IRI containing one — so
+    the renamed endpoint carries one. With a plain `github.com/jane` a
+    single-`_` split happens to rebuild the same string and proves nothing.
     """
-    old_person = "https://github.com/jane"
+    old_person = "https://github.com/jane_doe"
+    profile = "urn:pulse:profile:github:jane_doe"
     org = "https://ror.org/02s376052"
     records = [
-        _person(old_person, RUN_A, **{"pulse:hasProfile": [{"@id": PROFILE}]}),
+        _person(old_person, RUN_A, **{"pulse:hasProfile": [{"@id": profile}]}),
         _person(
             ORCID_IRI,
             RUN_B,
-            **{"pulse:orcidIdentifier": [ORCID], "pulse:hasProfile": [{"@id": PROFILE}]},
+            **{"pulse:orcidIdentifier": [ORCID], "pulse:hasProfile": [{"@id": profile}]},
         ),
         Record(
             iri=f"{old_person}__{org}",
@@ -556,21 +559,6 @@ def test_a_composite_id_is_rebuilt_from_its_renamed_endpoints() -> None:
 
     assert f"{ORCID_IRI}__{org}" in _by_iri(merged)
     assert f"{old_person}__{org}" not in _by_iri(merged)
-
-
-def test_an_iri_containing_an_underscore_is_not_split() -> None:
-    """`github.com/some_org/repo` must survive the composite parser."""
-    records = [
-        Record(
-            iri="https://github.com/some_org/repo",
-            entity_type="schema:SoftwareSourceCode",
-            graph=RUN_A,
-            properties={"schema:name": ["repo"]},
-        ),
-    ]
-    merged, _report = unify_records(records)
-
-    assert merged[0].iri == "https://github.com/some_org/repo"
 
 
 def test_alias_map_skips_self_mappings() -> None:
@@ -625,15 +613,10 @@ def test_remap_is_a_no_op_without_renames() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_profiles_are_carried_so_their_edges_resolve() -> None:
-    """`PersonShape` constrains `pulse:hasProfile` with `sh:class`.
-
-    A profile has nothing to unify — its IRI is minted from (platform, handle)
-    — but skipping it leaves every person's profile edge pointing at a node
-    that is not in the graph.
-    """
-    merged, _report = unify_records(
-        [
+@pytest.mark.parametrize(
+    ("subject", "profile"),
+    [
+        pytest.param(
             _person(ORCID_IRI, RUN_A, **{"pulse:hasProfile": [{"@id": PROFILE}]}),
             Record(
                 iri=PROFILE,
@@ -644,15 +627,104 @@ def test_profiles_are_carried_so_their_edges_resolve() -> None:
                     "pulse:platformUsername": ["jane"],
                 },
             ),
-        ],
-    )
+            id="person",
+        ),
+        pytest.param(
+            Record(
+                iri="https://ror.org/02s376052",
+                entity_type="org:Organization",
+                graph=RUN_A,
+                properties={"pulse:hasOrganizationProfile": [{"@id": ORG_PROFILE}]},
+            ),
+            Record(
+                iri=ORG_PROFILE,
+                entity_type="pulse:OrganizationProfile",
+                graph=RUN_A,
+                properties={
+                    "pulse:platform": [{"@id": "pulse:GitHub"}],
+                    "pulse:organizationHandle": ["epfl"],
+                },
+            ),
+            id="organization",
+        ),
+    ],
+)
+def test_profiles_are_carried_so_their_edges_resolve(subject: Record, profile: Record) -> None:
+    """`PersonShape` constrains `pulse:hasProfile` with `sh:class`.
 
-    assert PROFILE in _by_iri(merged)
-    # The person's profile edge now resolves. What remains unresolved is the
+    So does `OrganizationShape`, for `pulse:hasOrganizationProfile`. A profile
+    has nothing to unify — its IRI is minted from (platform, handle) — but
+    skipping it leaves every subject's profile edge pointing at a node that is
+    not in the graph.
+    """
+    merged, _report = unify_records([subject, profile])
+
+    assert profile.iri in _by_iri(merged)
+    # The subject's profile edge now resolves. What remains unresolved is the
     # profile's own `pulse:platform`, which points at an enumeration member —
     # vocabulary, not an entity, and the reason `dangling_references` is a
     # diagnostic rather than an invariant.
-    assert ORCID_IRI not in dangling_references(merged)
+    assert subject.iri not in dangling_references(merged)
+
+
+@pytest.mark.parametrize(
+    ("github", "gitlab"),
+    [
+        pytest.param(
+            Record(
+                iri="urn:pulse:profile:github:jane",
+                entity_type="pulse:PlatformProfile",
+                graph=RUN_A,
+                properties={
+                    "pulse:platform": [{"@id": "pulse:GitHub"}],
+                    "pulse:platformUsername": ["jane"],
+                },
+            ),
+            Record(
+                iri="urn:pulse:profile:gitlab:jane",
+                entity_type="pulse:PlatformProfile",
+                graph="urn:pulse:output:run-b:gitlab",
+                properties={
+                    "pulse:platform": [{"@id": "pulse:GitLab"}],
+                    "pulse:platformUsername": ["jane"],
+                },
+            ),
+            id="person",
+        ),
+        pytest.param(
+            Record(
+                iri=ORG_PROFILE,
+                entity_type="pulse:OrganizationProfile",
+                graph=RUN_A,
+                properties={
+                    "pulse:platform": [{"@id": "pulse:GitHub"}],
+                    "pulse:organizationHandle": ["epfl"],
+                },
+            ),
+            Record(
+                iri="urn:pulse:org-profile:gitlab:epfl",
+                entity_type="pulse:OrganizationProfile",
+                graph="urn:pulse:output:run-b:gitlab",
+                properties={
+                    "pulse:platform": [{"@id": "pulse:GitLab"}],
+                    "pulse:organizationHandle": ["epfl"],
+                },
+            ),
+            id="organization",
+        ),
+    ],
+)
+def test_one_handle_on_two_platforms_is_two_profiles(github: Record, gitlab: Record) -> None:
+    """A profile clusters by IRI alone: none of its properties is a match key.
+
+    The IRI is minted from (platform, handle), so one handle on two platforms
+    is two accounts, and nothing says they share an owner. Matching on the
+    handle would fuse them into one profile whose `pulse:platform` — capped at
+    one — then has to pick which of the two platforms the account is on.
+    """
+    merged, _report = unify_records([github, gitlab])
+
+    assert sorted(entity.iri for entity in merged) == sorted([github.iri, gitlab.iri])
 
 
 def test_a_type_with_no_resolver_is_skipped_not_dropped_silently() -> None:
@@ -700,20 +772,6 @@ def test_the_canonical_document_is_one_named_graph() -> None:
 
     assert [entry["@id"] for entry in document["@graph"]] == [CANONICAL_GRAPH]
     assert document["@graph"][0]["@graph"][0]["@id"] == ORCID_IRI
-
-
-def test_records_from_nodes_skips_untyped_nodes() -> None:
-    """A node with no `@type` has no resolver and no shape. Not an entity."""
-    records = records_from_nodes(
-        [
-            {"@id": "https://github.com/jane", "@type": "schema:Person"},
-            {"@id": "https://github.com/nope"},
-            {"@type": "schema:Person"},
-        ],
-        graph=RUN_A,
-    )
-
-    assert [record.iri for record in records] == ["https://github.com/jane"]
 
 
 @pytest.mark.parametrize(

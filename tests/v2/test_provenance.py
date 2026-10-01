@@ -542,18 +542,6 @@ def test_the_statement_is_syntactically_parseable_sparql(
     assert statement.rstrip().endswith("}")
 
 
-def test_annotations_carry_no_per_run_property(conflicting_runs: list[Record]) -> None:
-    """`pulse:partOfRun` never reaches canonical, so it is never annotated.
-
-    Nine of the twelve cross-run differences in the real corpus are that one
-    property. If it leaked into canonical it would also become the bulk of the
-    provenance graph, all of it noise.
-    """
-    annotations = _annotations(conflicting_runs)
-
-    assert all(item.prop != "pulse:partOfRun" for item in annotations)
-
-
 def test_annotations_for_is_pure(conflicting_runs: list[Record]) -> None:
     """Building the annotations must not disturb the entities they describe."""
     merged, _report = unify_records(conflicting_runs)

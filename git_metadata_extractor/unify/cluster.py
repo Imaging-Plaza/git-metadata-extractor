@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Sequence
 
     from git_metadata_extractor.unify.policy import TypeResolver
 
@@ -202,37 +202,9 @@ def group_by_type(records: Iterable[Record]) -> dict[str, list[Record]]:
     return out
 
 
-def records_from_nodes(
-    nodes: Iterable[Mapping[str, Any]],
-    *,
-    graph: str,
-) -> list[Record]:
-    """Build `Record`s from one named graph's JSON-LD nodes."""
-    out: list[Record] = []
-    for node in nodes:
-        iri = node.get("@id")
-        entity_type = node.get("@type")
-        if not iri or not entity_type:
-            continue
-        out.append(
-            Record(
-                iri=str(iri),
-                entity_type=str(entity_type),
-                graph=graph,
-                properties={
-                    key: value
-                    for key, value in node.items()
-                    if key not in {"@id", "@type"}
-                },
-            ),
-        )
-    return out
-
-
 __all__ = [
     "Cluster",
     "Record",
     "cluster_records",
     "group_by_type",
-    "records_from_nodes",
 ]

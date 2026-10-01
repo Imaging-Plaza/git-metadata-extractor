@@ -22,7 +22,6 @@ from git_metadata_extractor.unify.cluster import (
     Cluster,
     Record,
     cluster_records,
-    records_from_nodes,
 )
 from git_metadata_extractor.unify.merge import (
     MergedEntity,
@@ -69,7 +68,6 @@ __all__ = [
     "cluster_records",
     "default_policy",
     "merge_cluster",
-    "records_from_nodes",
     "same_as_edges",
     "unify_records",
     "unify_store",
