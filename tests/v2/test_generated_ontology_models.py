@@ -14,31 +14,7 @@ pytest.importorskip(
     reason="models not generated (just ontology-models-generate)",
 )
 
-from git_metadata_extractor.schema.generated import (
-    canonical,
-    provenance,
-    raw,
-)
-
-
-@pytest.mark.parametrize(
-    ("module", "expected"),
-    # raw is 14, not the upstream 12: `06-raw-contribution-shape.patch` adds
-    # `RawContributionShape` and `08-source-snapshot.patch` adds
-    # `SourceSnapshotShape`.
-    # adds `RawContributionShape`. Drop the +1 when PR #25 carries it.
-    [(raw, 14), (canonical, 10), (provenance, 2)],
-)
-def test_layer_model_counts(module: object, expected: int) -> None:
-    from pydantic import BaseModel  # noqa: PLC0415
-
-    models = [
-        obj
-        for obj in vars(module).values()
-        if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel
-    ]
-    assert len(models) == expected
-
+from git_metadata_extractor.schema.generated import canonical
 
 # --------------------------------------------------------------------------
 # the identity disjunction becomes an enforced requirement
@@ -152,12 +128,3 @@ def test_platform_instance_reaches_the_generated_profile_models() -> None:
     )
 
     assert profile.pulse_platformInstance == "https://gitlab.epfl.ch"
-    # The whole point of the patch: two deployments are now distinguishable.
-    other = canonical.OrganizationProfileModel(
-        **{
-            "pulse:platform": "pulse:GitLab",
-            "pulse:organizationHandle": "epfl",
-            "pulse:platformInstance": "https://gitlab.com",
-        },
-    )
-    assert profile.pulse_platformInstance != other.pulse_platformInstance

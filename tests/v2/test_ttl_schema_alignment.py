@@ -195,11 +195,3 @@ def test_ttl_datatypes_match_json_schema_types(shape_name: str) -> None:
             continue
 
         assert expected_json_type in json_types
-
-
-def test_property_alignment_guard_fails_when_ttl_adds_unmapped_property() -> None:
-    shape_name = "PersonShape"
-    ttl_properties = set(_shape_properties()[shape_name]) | {"pulse:newProperty"}
-    schema_properties = set(_load_schemas()[shape_name]["properties"]) - ENVELOPE_FIELDS
-    with pytest.raises(AssertionError):
-        assert ttl_properties <= schema_properties

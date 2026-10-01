@@ -67,6 +67,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # The v3 shapes live in the vendor/open-pulse-ontology submodule.
+          # Without it every test that reads them skips, and the job still
+          # goes green having checked none of them.
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -84,8 +89,19 @@ jobs:
           # part of the project, with no second pin to keep in sync.
           python -m pip install -e ".[dev]"
 
+      - name: Prepare the vendored ontology
+        # Apply ontology/patches/ to the pinned submodule. Before any test
+        # step: the ontology-backed tests skip only when the files are
+        # missing, so against the unpatched TTL they fail instead.
+        run: python scripts/v2/prepare_ontology.py
+
       - name: Check generated v2 models freshness
         run: just v2-models-check
+
+      - name: Check generated ontology models freshness
+        # schema/generated/ is committed. Re-render it from the patched TTL
+        # and fail on any difference, so the two cannot drift apart unseen.
+        run: python scripts/v2/generate_from_ontology.py --check
 
       - name: Run TTL schema alignment gate
         run: python -m pytest tests/v2/test_ttl_schema_alignment.py -q

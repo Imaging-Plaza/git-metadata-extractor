@@ -4,10 +4,11 @@ The context encodes three things the shapes already carry — `@type: @id` for
 references, `@container: @set` for multi-valued properties, and `@type: xsd:*`
 for typed literals — so hand-maintaining it was a standing invitation to drift.
 
-The generated file is **not yet served**: `load_jsonld_context()` still returns
-the hand-written v2 context. Swapping it changes the wire format (see
-`test_generated_context_is_not_a_drop_in_replacement`), so adoption belongs to
-the phase that moves output to v3, not to the phase that generates the artefact.
+The generated file is what `/v2/extract` serves by default: `canonical_projection`
+swaps it in through `load_generated_context()`. `load_jsonld_context()` still
+returns the hand-written v2 context, which stays internal and describes the
+v2-shaped intermediate. The two are not interchangeable (see
+`test_generated_context_is_not_a_drop_in_replacement`).
 """
 
 from __future__ import annotations
@@ -162,7 +163,7 @@ def test_a_property_expands_to_a_typed_literal(context: dict) -> None:
 
 
 # --------------------------------------------------------------------------
-# why it is not wired in yet
+# why the hand-written context stays, internally
 # --------------------------------------------------------------------------
 
 
@@ -194,11 +195,18 @@ def test_generated_context_is_not_a_drop_in_replacement(context: dict) -> None:
     assert context["schema:url"]["@container"] == "@set"
 
 
-def test_the_served_context_is_still_the_hand_written_one() -> None:
-    """Behaviour freeze: generating the artefact must not change any output.
+def test_the_internal_context_path_is_still_the_hand_written_file() -> None:
+    """Only the response moved to the generated context; this path stays v2.
 
-    Delete this test in the phase that adopts the v3 context — its failure is
-    the signal that adoption happened, and that the corpus needs re-baselining.
+    `build_jsonld_output` reads `JSONLD_CONTEXT_PATH`, through
+    `load_jsonld_context`, to decide which values of the v2-shaped intermediate
+    serialise as `{"@id": ...}`, and with `V2_CANONICAL_OUTPUT_ENABLED=false`
+    that is the `@context` the response carries. Pointed at the generated file,
+    the terms only v2 declares as references (`affiliations`,
+    `pulse:OrganizationType`) lose that typing, so an organization type reads
+    back as a string literal instead of an IRI. The canonical projection
+    replaces both graph and context, so the default response never shows it;
+    this assertion is where it surfaces.
     """
     from git_metadata_extractor.schema import JSONLD_CONTEXT_PATH  # noqa: PLC0415
 

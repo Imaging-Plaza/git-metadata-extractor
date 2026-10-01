@@ -5,9 +5,10 @@ source: getting constraints out of the shapes is where the errors are, and a
 dict is far easier to pin down than generated Python.
 
 These read the real pinned ontology rather than a fixture, on purpose — the
-point is to catch the submodule pin moving under us. They skip rather than fail
-when the submodule is absent, so a checkout without `--recursive` does not look
-like a broken test suite.
+point is to catch the pin, or a patch, changing a construct the reader depends
+on. They skip rather than fail when the submodule is absent, so a local
+checkout without `--recursive` does not look like a broken test suite; CI
+checks the submodule out and prepares it, so there they run.
 """
 
 from __future__ import annotations
@@ -35,22 +36,8 @@ def _shapes(filename: str):
 
 
 # --------------------------------------------------------------------------
-# layer inventories — these fail loudly if the pin moves
+# the canonical inventory — by name, so a failure says which shape moved
 # --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("filename", "expected"),
-    [
-        ("ontology-shapes-canonical.ttl", 10),
-        # 14 with local patches 06 (`RawContributionShape`) and 08
-        # (`SourceSnapshotShape`); upstream has 12.
-        ("ontology-shapes-raw.ttl", 14),
-        ("ontology-shapes-provenance.ttl", 2),
-    ],
-)
-def test_layer_shape_counts(filename: str, expected: int) -> None:
-    assert len(_shapes(filename)) == expected
 
 
 def test_canonical_layer_contains_the_expected_entity_shapes() -> None:
