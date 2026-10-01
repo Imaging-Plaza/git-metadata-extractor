@@ -479,6 +479,7 @@ async def get_provider_set(request: Request) -> ProviderSet:
         snsf_rag=default_provider_set.snsf_rag,
         swissubase_rag=default_provider_set.swissubase_rag,
         renkulab_rag=default_provider_set.renkulab_rag,
+        github_rag=default_provider_set.github_rag,
         epfl_graph_rag=default_provider_set.epfl_graph_rag,
         federated_rag=default_provider_set.federated_rag,
     )
