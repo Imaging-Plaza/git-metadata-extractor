@@ -7,7 +7,6 @@ from git_metadata_extractor.agents.runtime import AgentRuntime, parse_agent_runt
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}
-MISSING_GME_GITHUB_TOKEN_ERROR = "Missing required environment variable: GME_GITHUB_TOKEN"  # noqa: S105
 
 
 def _get_env_bool(name: str, *, default_value: bool) -> bool:
@@ -135,7 +134,3 @@ class V2Config:
         default_factory=lambda: _get_env_int("V2_PROVIDER_CACHE_TTL_DAYS", 30),
     )
     GME_GITHUB_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("GME_GITHUB_TOKEN"))
-
-    def validate_preflight(self) -> None:
-        if not self.GME_GITHUB_TOKEN:
-            raise ValueError(MISSING_GME_GITHUB_TOKEN_ERROR)

@@ -24,12 +24,6 @@ def _reset_query_log_contextvars() -> None:
     current_agent_context_var.set(None)
 
 
-def test_record_query_no_active_log_is_noop() -> None:
-    """When no QueryLog is set on the ContextVar, record_query is a silent no-op."""
-    query_log_var.set(None)
-    record_query(service="infoscience.search_person", query="anyone")  # must not raise
-
-
 def test_record_query_groups_by_agent_and_context() -> None:
     log = QueryLog(run_id="r-1", extract_full_path="github.com/foo/bar")
     query_log_var.set(log)

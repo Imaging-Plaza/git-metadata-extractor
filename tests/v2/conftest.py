@@ -1,21 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
-
-# Module-level env defaults — must land BEFORE pytest discovers tests, since
-# the `_isolate_main_app_state` autouse fixture imports `git_metadata_extractor.app`, which
-# pulls in `src/v1/parsers/orgs_parser.py` whose top-level reads
-# `os.environ["GME_GITHUB_TOKEN"]` unconditionally and raises KeyError when the
-# var is missing (observed in CI where `setup-python` does not provide one).
-# Tests that need to exercise the "token missing" path delete the var via
-# `monkeypatch.delenv(..., raising=False)` so this default is purely a
-# bootstrap; it does not mask real misconfiguration in product code.
-os.environ.setdefault("GME_GITHUB_TOKEN", "ci-test-github-token")
-os.environ.setdefault("API_TOKEN", "ci-test-api-token")
 
 import pytest
 
@@ -32,8 +20,6 @@ V2_APP_STATE_FIELDS = (
 
 @dataclass(frozen=True)
 class V2TestConfig:
-    repo_root: Path
-    tests_root: Path
     fixtures_root: Path
     schema_fixtures_root: Path
     golden_root: Path
@@ -75,8 +61,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 @pytest.fixture(autouse=True)
 def _isolate_v2_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Ensure each test uses isolated local storage and mock providers by default."""
-    monkeypatch.setenv("V2_GRAPH_DB_PATH", str(tmp_path / "v2_graph.db"))
-    monkeypatch.setenv("CACHE_DB_PATH", str(tmp_path / "cache.db"))
+    # Unset, `_resolve_provider_cache` opens the developer's real
+    # `.cache/v2/providers.db` and runs its expired-row DELETE.
+    monkeypatch.setenv("V2_PROVIDER_CACHE_PATH", str(tmp_path / "providers.db"))
     monkeypatch.setenv("V2_USE_MOCK_PROVIDERS", "true")
     # Most tests exercise deterministic rule-based behavior unless they opt into LLM explicitly.
     monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "rule_based")
@@ -114,8 +101,6 @@ def v2_test_config() -> V2TestConfig:
     repo_root = V2_TESTS_ROOT.parents[1]
     fixtures_root = V2_TESTS_ROOT / "fixtures"
     return V2TestConfig(
-        repo_root=repo_root,
-        tests_root=V2_TESTS_ROOT,
         fixtures_root=fixtures_root,
         # The schemas the service loads at runtime, not a copy under
         # tests/. There used to be three byte-identical copies kept in sync by
