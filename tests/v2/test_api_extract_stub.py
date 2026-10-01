@@ -210,67 +210,80 @@ def test_extract_rejects_invalid_output_format() -> None:
     assert "detail" in payload
 
 
-def test_extract_accepts_agent_runtime_llm_for_user_routes() -> None:
-    async def _context_gatherer(
-        _detected_type: str,
-        _url_info: Any,
-        _providers: ProviderSet,
-    ) -> ContextBundle:
-        return ContextBundle(
-            detected_type="user",
-            context={
-                "user": {
-                    "username": "octocat",
-                    "profile": {"login": "octocat"},
-                    "owned_repos": [],
-                    "orcid_data": None,
+async def _context_gatherer(
+    _detected_type: str,
+    _url_info: Any,
+    _providers: ProviderSet,
+) -> ContextBundle:
+    return ContextBundle(
+        detected_type="user",
+        context={
+            "user": {
+                "username": "octocat",
+                "profile": {"login": "octocat"},
+                "owned_repos": [],
+                "orcid_data": None,
+            },
+        },
+    )
+
+
+class _SummaryRunner:
+    async def run(
+        self,
+        context: dict[str, Any],
+        providers: ProviderSet,
+    ) -> AgentResult:
+        del context, providers
+        return AgentResult(data={"summary_markdown": "# Compiled Context\n- Key signal"})
+
+
+class _LLMPersonRunner:
+    async def run(
+        self,
+        context: dict[str, Any],
+        providers: ProviderSet,
+    ) -> AgentResult:
+        del context, providers
+        return AgentResult(
+            data={
+                "id": "octocat",
+                "type": "schema:Person",
+                "shacl": "pulse:PersonShape",
+                "identifiers": {
+                    "pulse:orcid": None,
+                    "pulse:infosciencePersonIdentifier": None,
+                    "pulse:githubUsername": "octocat",
+                    "uuid": "11111111-1111-4111-8111-111111111111",
                 },
+                "idSource": "pulse:githubUsername",
+                "schema:name": "octocat",
+                "schema:url": "https://github.com/octocat",
+                "pulse:githubUsername": "octocat",
+                "pulse:orcidIdentifier": None,
+                "pulse:infosciencePersonIdentifier": None,
+                "org:hasMembership": [],
+                "pulse:hasContribution": [],
+                "pulse:owns": [],
             },
         )
 
-    class _LLMPersonRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del providers
-            username = context.get("username", "octocat")
-            return AgentResult(
-                data={
-                    "id": username,
-                    "type": "schema:Person",
-                    "shacl": "pulse:PersonShape",
-                    "identifiers": {
-                        "pulse:orcid": None,
-                        "pulse:infosciencePersonIdentifier": None,
-                        "pulse:githubUsername": username,
-                        "uuid": "11111111-1111-4111-8111-111111111111",
-                    },
-                    "idSource": "pulse:githubUsername",
-                    "schema:name": username,
-                    "schema:url": f"https://github.com/{username}",
-                    "pulse:githubUsername": username,
-                    "pulse:orcidIdentifier": None,
-                    "pulse:infosciencePersonIdentifier": None,
-                    "org:hasMembership": [],
-                    "pulse:hasContribution": [],
-                    "pulse:owns": [],
-                },
-            )
 
-    class _LLMNoDataRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(data={})
+class _LLMNoDataRunner:
+    async def run(
+        self,
+        context: dict[str, Any],
+        providers: ProviderSet,
+    ) -> AgentResult:
+        del context, providers
+        return AgentResult(data={})
 
-    app = _build_test_app()
-    app.state.v2_orchestrator = PipelineOrchestrator(
+
+def _stub_llm_orchestrator() -> PipelineOrchestrator:
+    """An `llm`-runtime user plan whose agents are the stubs above."""
+    return PipelineOrchestrator(
         context_gatherer=_context_gatherer,
+        llm_context_summary_agent=_SummaryRunner(),
         llm_person_agent=_LLMPersonRunner(),
         llm_repository_agent=_LLMNoDataRunner(),
         llm_organization_agent=_LLMNoDataRunner(),
@@ -280,16 +293,6 @@ def test_extract_accepts_agent_runtime_llm_for_user_routes() -> None:
         retry_max_retries=0,
         retry_backoff_base=0,
     )
-
-    status_code, payload = _get_json_from_app(
-        app,
-        "/v2/extract/github.com/octocat",
-        params={"agent_runtime": "llm"},
-    )
-
-    assert status_code == HTTP_OK
-    assert payload["detected_type"] == "user"
-    assert V2ExtractResponse.model_validate(payload)
 
 
 def test_extract_rejects_invalid_agent_runtime() -> None:
@@ -303,84 +306,8 @@ def test_extract_rejects_invalid_agent_runtime() -> None:
 
 
 def test_extract_can_include_compiled_context_summary_in_response() -> None:
-    class _SummaryRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(data={"summary_markdown": "# Compiled Context\n- Key signal"})
-
-    class _LLMPersonRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(
-                data={
-                    "id": "octocat",
-                    "type": "schema:Person",
-                    "shacl": "pulse:PersonShape",
-                    "identifiers": {
-                        "pulse:orcid": None,
-                        "pulse:infosciencePersonIdentifier": None,
-                        "pulse:githubUsername": "octocat",
-                        "uuid": "11111111-1111-4111-8111-111111111111",
-                    },
-                    "idSource": "pulse:githubUsername",
-                    "schema:name": "octocat",
-                    "schema:url": "https://github.com/octocat",
-                    "pulse:githubUsername": "octocat",
-                    "pulse:orcidIdentifier": None,
-                    "pulse:infosciencePersonIdentifier": None,
-                    "org:hasMembership": [],
-                    "pulse:hasContribution": [],
-                    "pulse:owns": [],
-                },
-            )
-
-    class _LLMNoDataRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(data={})
-
-    async def _context_gatherer(
-        _detected_type: str,
-        _url_info: Any,
-        _providers: ProviderSet,
-    ) -> ContextBundle:
-        return ContextBundle(
-            detected_type="user",
-            context={
-                "user": {
-                    "username": "octocat",
-                    "profile": {"login": "octocat"},
-                    "owned_repos": [],
-                    "orcid_data": None,
-                },
-            },
-        )
-
     app = _build_test_app()
-    app.state.v2_orchestrator = PipelineOrchestrator(
-        context_gatherer=_context_gatherer,
-        llm_context_summary_agent=_SummaryRunner(),
-        llm_person_agent=_LLMPersonRunner(),
-        llm_repository_agent=_LLMNoDataRunner(),
-        llm_organization_agent=_LLMNoDataRunner(),
-        llm_article_agent=_LLMNoDataRunner(),
-        llm_membership_agent=_LLMNoDataRunner(),
-        llm_contribution_agent=_LLMNoDataRunner(),
-        retry_max_retries=0,
-        retry_backoff_base=0,
-    )
+    app.state.v2_orchestrator = _stub_llm_orchestrator()
 
     status_code, payload = _get_json_from_app(
         app,
@@ -400,88 +327,12 @@ def test_extract_can_include_compiled_context_summary_in_response() -> None:
 def test_extract_post_can_include_compiled_context_summary_in_response(
     tmp_path: Any,
 ) -> None:
-    class _SummaryRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(data={"summary_markdown": "# Compiled Context\n- Key signal"})
-
-    class _LLMPersonRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(
-                data={
-                    "id": "octocat",
-                    "type": "schema:Person",
-                    "shacl": "pulse:PersonShape",
-                    "identifiers": {
-                        "pulse:orcid": None,
-                        "pulse:infosciencePersonIdentifier": None,
-                        "pulse:githubUsername": "octocat",
-                        "uuid": "11111111-1111-4111-8111-111111111111",
-                    },
-                    "idSource": "pulse:githubUsername",
-                    "schema:name": "octocat",
-                    "schema:url": "https://github.com/octocat",
-                    "pulse:githubUsername": "octocat",
-                    "pulse:orcidIdentifier": None,
-                    "pulse:infosciencePersonIdentifier": None,
-                    "org:hasMembership": [],
-                    "pulse:hasContribution": [],
-                    "pulse:owns": [],
-                },
-            )
-
-    class _LLMNoDataRunner:
-        async def run(
-            self,
-            context: dict[str, Any],
-            providers: ProviderSet,
-        ) -> AgentResult:
-            del context, providers
-            return AgentResult(data={})
-
-    async def _context_gatherer(
-        _detected_type: str,
-        _url_info: Any,
-        _providers: ProviderSet,
-    ) -> ContextBundle:
-        return ContextBundle(
-            detected_type="user",
-            context={
-                "user": {
-                    "username": "octocat",
-                    "profile": {"login": "octocat"},
-                    "owned_repos": [],
-                    "orcid_data": None,
-                },
-            },
-        )
-
     cache_db = tmp_path / "providers.db"
 
     async def _run() -> dict[str, Any]:
         app = _build_test_app()
         app.state.v2_provider_cache = ProviderCache(cache_db)
-        app.state.v2_orchestrator = PipelineOrchestrator(
-            context_gatherer=_context_gatherer,
-            llm_context_summary_agent=_SummaryRunner(),
-            llm_person_agent=_LLMPersonRunner(),
-            llm_repository_agent=_LLMNoDataRunner(),
-            llm_organization_agent=_LLMNoDataRunner(),
-            llm_article_agent=_LLMNoDataRunner(),
-            llm_membership_agent=_LLMNoDataRunner(),
-            llm_contribution_agent=_LLMNoDataRunner(),
-            retry_max_retries=0,
-            retry_backoff_base=0,
-        )
+        app.state.v2_orchestrator = _stub_llm_orchestrator()
         transport = ASGITransport(app=app)
         async with AsyncClient(
             transport=transport,

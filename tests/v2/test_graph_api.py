@@ -21,15 +21,23 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any, get_args
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from pydantic import BaseModel
 
 from git_metadata_extractor.api import v2_router
+from git_metadata_extractor.app import app as main_app
 from git_metadata_extractor.unify.provenance import PROV_GRAPH
 from git_metadata_extractor.unify.runner import CANONICAL_GRAPH
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from fastapi.dependencies.models import Dependant
 
 HTTP_OK = 200
 HTTP_BAD_REQUEST = 400
@@ -136,7 +144,57 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Any:
 # --------------------------------------------------------------------------
 
 
-def test_no_endpoint_accepts_a_sparql_string(app: FastAPI) -> None:
+# What the SPARQL 1.1 Protocol carries a query or an update under, plus the
+# obvious shorthands.
+SPARQL_PARAMETER_NAMES = {"query", "sparql", "q", "where", "update"}
+
+
+def _model_field_names(annotation: Any, seen: set[type[BaseModel]]) -> Iterator[str]:
+    """Every field name and alias of the Pydantic models inside `annotation`.
+
+    Through `Optional`, unions and containers, so a body of
+    `{"items": [{"sparql": ...}]}` is seen as well as a flat one.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if annotation in seen:
+            return
+        seen.add(annotation)
+        for name, field in annotation.model_fields.items():
+            yield name
+            yield from (
+                alias
+                for alias in (field.alias, field.validation_alias)
+                if isinstance(alias, str)
+            )
+            yield from _model_field_names(field.annotation, seen)
+        return
+    for arg in get_args(annotation):
+        yield from _model_field_names(arg, seen)
+
+
+def _accepted_names(dependant: Dependant) -> Iterator[str]:
+    """Every name a request can hand this endpoint a value under.
+
+    The wire alias as well as the Python name — `prop` arrives as
+    `?property=` — for path, query, header, cookie and body parameters, the
+    fields of any Pydantic model among them, and all of that again for each
+    sub-dependency, since a `Depends` declares parameters of its own.
+    """
+    for param in (
+        *dependant.path_params,
+        *dependant.query_params,
+        *dependant.header_params,
+        *dependant.cookie_params,
+        *dependant.body_params,
+    ):
+        yield param.name
+        yield param.alias
+        yield from _model_field_names(param.field_info.annotation, set())
+    for sub_dependant in dependant.dependencies:
+        yield from _accepted_names(sub_dependant)
+
+
+def test_no_endpoint_accepts_a_sparql_string() -> None:
     """Oxigraph has no auth and `/store` is writable by anyone who reaches it.
 
     So an endpoint that passed a caller's query through would be an
@@ -144,24 +202,41 @@ def test_no_endpoint_accepts_a_sparql_string(app: FastAPI) -> None:
     text with IRIs substituted through `iri_term`, which *refuses* anything
     RDF forbids rather than escaping it.
 
-    Asserted over the route table rather than per endpoint, so a new endpoint
-    with a `query` parameter fails here without anyone remembering to add a
-    test.
+    Asserted over the served app's whole route table rather than per endpoint,
+    so a new endpoint taking a `query` — as a query parameter, a body field or
+    through a dependency, under any path — fails here without anyone
+    remembering to add a test. A route FastAPI cannot describe (a raw
+    Starlette route, a mounted sub-app) declares nothing to inspect, so it
+    fails too unless it is one of FastAPI's own schema and docs pages. A
+    handler reading the raw `Request` is beyond any route table.
     """
-    graph_routes = [
-        route
-        for route in app.routes
-        if getattr(route, "path", "").startswith("/v2/graph")
+    framework_pages = {
+        main_app.openapi_url,
+        main_app.docs_url,
+        main_app.redoc_url,
+        main_app.swagger_ui_oauth2_redirect_url,
+    } - {None}
+    uninspectable = [
+        getattr(route, "path", repr(route))
+        for route in main_app.routes
+        if not isinstance(route, APIRoute)
+        and getattr(route, "path", None) not in framework_pages
     ]
-    assert graph_routes, "no graph routes registered"
+    assert not uninspectable, f"routes with no parameters to inspect: {uninspectable}"
 
-    suspicious = {"query", "sparql", "q", "where", "update"}
-    for route in graph_routes:
-        names = {
-            param.name.lower()
-            for param in getattr(route, "dependant", None).query_params  # type: ignore[union-attr]
-        }
-        assert not (names & suspicious), f"{route.path} accepts {names & suspicious}"
+    endpoints = [route for route in main_app.routes if isinstance(route, APIRoute)]
+    assert any(route.path.startswith("/v2/graph") for route in endpoints), (
+        "no graph routes registered"
+    )
+    offenders = {
+        f"{','.join(sorted(route.methods))} {route.path}": sorted(hits)
+        for route in endpoints
+        if (
+            hits := {name.lower() for name in _accepted_names(route.dependant)}
+            & SPARQL_PARAMETER_NAMES
+        )
+    }
+    assert not offenders, f"endpoints accepting a SPARQL string: {offenders}"
 
 
 def test_a_caller_supplied_iri_cannot_break_the_query(
