@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from typing import Any
+from uuid import UUID
 
 import pytest
 from jsonschema import validate
@@ -25,6 +26,7 @@ requires_llm_credentials = pytest.mark.skipif(
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29
+UUID_VERSION_4 = 4
 
 
 class _FakeLLMRuntime:
@@ -101,6 +103,25 @@ def test_llm_person_agent_validates_payload_and_exposes_model_metadata(
     assert result.tokens_prompt == EXPECTED_PROMPT_TOKENS
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
     assert result.stats["agent_runtime"] == "llm"
+
+
+def test_llm_person_agent_replaces_llm_emitted_uuid_with_server_uuid() -> None:
+    """The LLM's `identifiers.uuid` is replaced even when it is a well-formed
+    UUIDv4: models copy example uuids between entities, and reconciliation
+    uses `identifiers.uuid` as a person lookup token. The sibling identifiers
+    survive, and a top-level `uuid` is removed: the strict schemas are
+    `additionalProperties: false`."""
+    llm_identifiers = _valid_person_payload()["identifiers"]
+    llm_payload = {**_valid_person_payload(), "uuid": llm_identifiers["uuid"]}
+    agent = LLMPersonAgentV2(llm_runtime=_FakeLLMRuntime(llm_payload))
+
+    result = asyncio.run(agent.run({"username": "octocat"}, _providers()))
+
+    identifiers = result.data["identifiers"]
+    assert identifiers["uuid"] != llm_identifiers["uuid"]
+    assert UUID(identifiers["uuid"]).version == UUID_VERSION_4
+    assert identifiers["pulse:githubUsername"] == llm_identifiers["pulse:githubUsername"]
+    assert "uuid" not in result.data
 
 
 def test_llm_person_agent_propagates_llm_runtime_error() -> None:

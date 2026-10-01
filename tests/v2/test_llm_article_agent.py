@@ -63,6 +63,18 @@ def _valid_article_payload() -> dict[str, Any]:
     }
 
 
+def _article_payload_with(identifier: str, infoscience_id: str | None) -> dict[str, Any]:
+    """The valid payload with its DOI (top-level and nested) replaced."""
+    payload = _valid_article_payload()
+    grounding = {
+        "schema:identifier": identifier,
+        "pulse:infoscienceArticleIdentifier": infoscience_id,
+    }
+    payload.update({"id": identifier, **grounding})
+    payload["identifiers"].update(grounding)
+    return payload
+
+
 def test_llm_article_agent_validates_payload_and_exposes_model_metadata(
     load_schema,
 ) -> None:
@@ -85,6 +97,52 @@ def test_llm_article_agent_validates_payload_and_exposes_model_metadata(
     assert result.tokens_prompt == EXPECTED_PROMPT_TOKENS
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
     assert result.stats["agent_runtime"] == "llm"
+    assert result.stats["article_count"] == 1
+    # force_server_uuid: the uuid the LLM emitted never survives.
+    assert result.data["identifiers"]["uuid"] != _valid_article_payload()["identifiers"]["uuid"]
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        pytest.param("https://doi.org/10.0000/placeholder", id="placeholder-doi"),
+        pytest.param("UNKNOWN", id="sentinel"),
+    ],
+)
+def test_llm_article_agent_drops_article_without_a_real_identifier(identifier: str) -> None:
+    """`10.0000/` is reserved for testing, and `UNKNOWN` is what the model
+    writes when it has nothing; neither grounds an article. Nothing is
+    emitted in `stats["articles"]` either, which also feeds the entity
+    buckets."""
+    agent = LLMArticleAgentV2(
+        llm_runtime=_FakeLLMRuntime(_article_payload_with(identifier, infoscience_id=None)),
+    )
+
+    result = asyncio.run(agent.run({"article_seed": "owner/repo"}, _providers()))
+
+    assert result.data == {}
+    assert result.stats["articles"] == []
+
+
+def test_llm_article_agent_keeps_placeholder_doi_article_with_infoscience_id() -> None:
+    """An Infoscience record grounds an article on its own, as it does for
+    `validate_articles` downstream."""
+    infoscience_id = (
+        "https://infoscience.epfl.ch/entities/publication/"
+        "36f14ad6-3b30-4c6a-9118-2346d8f8a83e"
+    )
+    agent = LLMArticleAgentV2(
+        llm_runtime=_FakeLLMRuntime(
+            _article_payload_with(
+                "https://doi.org/10.0000/placeholder",
+                infoscience_id=infoscience_id,
+            ),
+        ),
+    )
+
+    result = asyncio.run(agent.run({"article_seed": "owner/repo"}, _providers()))
+
+    assert result.data.get("pulse:infoscienceArticleIdentifier") == infoscience_id
     assert result.stats["article_count"] == 1
 
 

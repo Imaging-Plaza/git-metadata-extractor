@@ -23,6 +23,8 @@ requires_llm_credentials = pytest.mark.skipif(
 
 EXPECTED_PROMPT_TOKENS = 13
 EXPECTED_COMPLETION_TOKENS = 29
+GITHUB_STARS = 42
+GITHUB_FORKS = 7
 
 
 class _FakeLLMRuntime:
@@ -103,6 +105,60 @@ def test_llm_repository_agent_validates_payload_and_exposes_model_metadata(
     assert result.tokens_prompt == EXPECTED_PROMPT_TOKENS
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
     assert result.stats["agent_runtime"] == "llm"
+    # force_server_uuid: the uuid the LLM emitted never survives.
+    assert result.data["identifiers"]["uuid"] != _valid_repository_payload()["identifiers"]["uuid"]
+
+
+def test_llm_repository_agent_takes_stars_and_forks_from_github_metadata() -> None:
+    """Stars and forks are counts GitHub reports; what the LLM writes there is
+    a guess (observed hallucinated), so the REST metadata wins."""
+    payload = {
+        **_valid_repository_payload(),
+        "pulse:githubRepoStars": 99999,
+        "pulse:githubRepoForks": 12345,
+    }
+    agent = LLMRepositoryAgentV2(llm_runtime=_FakeLLMRuntime(payload))
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "full_name": "octocat/Hello-World",
+                "repository_context": {
+                    "metadata": {
+                        "stargazers_count": GITHUB_STARS,
+                        "forks_count": GITHUB_FORKS,
+                    },
+                },
+            },
+            _providers(),
+        ),
+    )
+
+    assert result.data["pulse:githubRepoStars"] == GITHUB_STARS
+    assert result.data["pulse:githubRepoForks"] == GITHUB_FORKS
+
+
+@pytest.mark.parametrize(
+    ("llm_disciplines", "expected"),
+    [
+        pytest.param(None, [], id="null"),
+        pytest.param([], [], id="empty"),
+        pytest.param(["wd:Q8434"], ["wd:Q8434"], id="grounded"),
+    ],
+)
+def test_llm_repository_agent_adds_no_discipline_the_llm_did_not_ground(
+    llm_disciplines: list[str] | None,
+    expected: list[str],
+) -> None:
+    """No catch-all: `pulse:DisciplineShape` has no `sh:minCount`, and the
+    former `wd:Q428691` default hid the absence of a domain signal (77% of a
+    441-repo batch carried it *only*). A discipline the LLM grounded stays."""
+    payload = {**_valid_repository_payload(), "pulse:discipline": llm_disciplines}
+    agent = LLMRepositoryAgentV2(llm_runtime=_FakeLLMRuntime(payload))
+
+    result = asyncio.run(agent.run({"full_name": "octocat/Hello-World"}, _providers()))
+
+    assert result.data["pulse:discipline"] == expected
 
 
 @llm_integration
