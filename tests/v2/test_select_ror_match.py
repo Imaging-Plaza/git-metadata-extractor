@@ -9,8 +9,9 @@ leaves `pulse:ror` null so the agent-backed parent selector decides.
 
 from __future__ import annotations
 
+import pytest
+
 from git_metadata_extractor.agents.rule_based.organization_agent import (
-    _GENERIC_ORG_TOKENS,
     _select_ror_match,
 )
 
@@ -40,13 +41,25 @@ def test_generic_only_overlap_is_rejected() -> None:
     assert any("phantom" in w for w in warnings)
 
 
-def test_plaza_collision_is_rejected() -> None:
-    """`Imaging-Plaza` vs `Kanazawa Education Plaza` share only 'plaza'."""
+@pytest.mark.parametrize(
+    ("ror_query", "ror_name"),
+    [
+        # Production: `Imaging-Plaza` vs `Kanazawa Education Plaza`.
+        ("Imaging-Plaza", "Kanazawa Education Plaza"),
+        # Each remaining row shares exactly one generic word, so it pins
+        # that word's membership in the generic set by behaviour.
+        ("Imaging Centre", "Kanazawa Centre"),
+        ("Imaging Lab", "Kanazawa Lab"),
+        ("Imaging Laboratory", "Kanazawa Laboratory"),
+    ],
+)
+def test_single_generic_token_collision_is_rejected(ror_query: str, ror_name: str) -> None:
+    """A match sharing only one generic word with the query is declined."""
     result = _select_ror_match(
-        [_ror("Kanazawa Education Plaza", ror_id="https://ror.org/0412v5t33")],
+        [_ror(ror_name, ror_id="https://ror.org/0412v5t33")],
         country_bias=None,
         warnings=[],
-        ror_query="Imaging-Plaza",
+        ror_query=ror_query,
     )
     assert result is None
 
@@ -93,8 +106,3 @@ def test_country_bias_accepts_distinctive_ch_match() -> None:
         ror_query="Swiss Data Science Center",
     )
     assert result is ch_sdsc
-
-
-def test_generic_token_set_covers_the_collision_words() -> None:
-    for token in ("center", "centre", "digital", "plaza", "lab", "laboratory"):
-        assert token in _GENERIC_ORG_TOKENS

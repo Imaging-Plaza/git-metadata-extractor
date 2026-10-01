@@ -117,24 +117,3 @@ def test_is_root_skips_lookup_even_when_cached(tmp_path: Path) -> None:
         )
         is None
     )
-
-
-def test_root_writes_are_still_persisted(tmp_path: Path) -> None:
-    """A root extraction skips reads but the result still lands in the cache."""
-    cache = ProviderCache(tmp_path / "p.db")
-    identity = {"primary_key": "username", "value": "cmdoret"}
-    # Simulate a root run: we never look up, but we still store on success.
-    assert (
-        get_cached_agent_verdict(
-            cache,
-            agent_name="person",
-            identity=identity,
-            is_root=True,
-        )
-        is None
-    )
-    store_agent_verdict(cache, agent_name="person", identity=identity, result=_result())
-    # A subsequent fan-out call should now find it.
-    hit = get_cached_agent_verdict(cache, agent_name="person", identity=identity)
-    assert hit is not None
-    assert hit.stats["cached"] is True

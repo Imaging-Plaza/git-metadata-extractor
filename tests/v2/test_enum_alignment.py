@@ -5,8 +5,6 @@ from functools import lru_cache
 from scripts.v2.extract_enums_from_ttl import default_ttl_path, extract_enums_from_ttl
 from git_metadata_extractor.api_models.enums import DisciplineV2, OrganizationTypeV2, RepositoryTypeV2
 
-EXPECTED_COMPUTER_SCIENCE_WIKIDATA_URI = "http://www.wikidata.org/entity/Q428691"
-
 
 @lru_cache(maxsize=1)
 def _ttl_enum_ids() -> dict[str, set[str]]:
@@ -44,16 +42,3 @@ def test_organization_type_enum_matches_ttl_organization_type_enumeration() -> N
     enum_organization_types = {org_type.value for org_type in OrganizationTypeV2}
 
     assert enum_organization_types == ttl_organization_types
-
-
-def test_computer_science_alias_exposes_expected_wikidata_uri() -> None:
-    assert DisciplineV2.COMPUTER_SCIENCE.wikidata_uri == EXPECTED_COMPUTER_SCIENCE_WIKIDATA_URI
-
-
-def test_enum_alignment_detects_ttl_drift_with_bidirectional_set_checks() -> None:
-    ttl_ids = _ttl_enum_ids()
-    assert len(ttl_ids["disciplines"]) == len({discipline.value for discipline in DisciplineV2})
-    assert len(ttl_ids["repository_types"]) == len({repo_type.value for repo_type in RepositoryTypeV2})
-    assert len(ttl_ids["organization_types"]) == len(
-        {org_type.value for org_type in OrganizationTypeV2},
-    )

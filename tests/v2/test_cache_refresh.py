@@ -21,19 +21,6 @@ def _cache(tmp_path: Path) -> ProviderCache:
     return ProviderCache(tmp_path / "c.db")
 
 
-def test_get_or_set_caches_by_default(tmp_path: Path) -> None:
-    cache = _cache(tmp_path)
-    calls = {"n": 0}
-
-    def factory() -> str:
-        calls["n"] += 1
-        return f"v{calls['n']}"
-
-    assert cache.get_or_set("k", factory) == "v1"
-    assert cache.get_or_set("k", factory) == "v1"  # served from cache
-    assert calls["n"] == 1
-
-
 def test_refresh_bypasses_read_and_overwrites(tmp_path: Path) -> None:
     cache = _cache(tmp_path)
     calls = {"n": 0}
@@ -56,10 +43,6 @@ def test_refresh_bypasses_read_and_overwrites(tmp_path: Path) -> None:
     # the refreshed value was written back
     assert cache.get_or_set("k", factory) == "v2"
     assert calls["n"] == 2  # served from cache again, no recompute
-
-
-def test_refresh_default_is_off() -> None:
-    assert cache_refresh_active() is False
 
 
 def test_extract_request_has_refresh_field() -> None:

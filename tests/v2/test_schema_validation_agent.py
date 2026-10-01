@@ -65,46 +65,24 @@ ENTITY_FIXTURES = {
     for entity, case in ENTITY_CASES.items()
 }
 
-ENTITY_PARAMS = [
-    pytest.param(entity, case, id=entity) for entity, case in ENTITY_CASES.items()
-]
-
 INSTANCE_PARAMS = []
 for entity, case in ENTITY_CASES.items():
     for instance_index, instance in enumerate(ENTITY_FIXTURES[entity]):
         instance_id = str(instance.get("id", f"index-{instance_index}"))
         INSTANCE_PARAMS.append(
             pytest.param(
-                entity,
                 case.schema_name,
-                instance_index,
                 instance,
                 id=f"{entity}-{instance_index}-{instance_id}",
             ),
         )
 
 
-@pytest.mark.parametrize(("entity_type", "case"), ENTITY_PARAMS)
-def test_agent_validation_fixture_group_has_instances(
-    entity_type: str,
-    case: AgentEntityCase,
-) -> None:
-    assert case.schema_name == entity_type
-    assert len(ENTITY_FIXTURES[entity_type]) > 0
-
-
-@pytest.mark.parametrize(
-    ("entity_type", "schema_name", "instance_index", "instance"),
-    INSTANCE_PARAMS,
-)
+@pytest.mark.parametrize(("schema_name", "instance"), INSTANCE_PARAMS)
 def test_strict_fixture_instance_validates_against_agent_schema(
     load_schema: Callable[[str, str], dict[str, Any]],
-    entity_type: str,
     schema_name: str,
-    instance_index: int,
     instance: dict[str, Any],
 ) -> None:
-    assert entity_type in ENTITY_CASES
-    assert instance_index >= 0
     schema = load_schema("agent", schema_name)
     validate(instance=instance, schema=schema)

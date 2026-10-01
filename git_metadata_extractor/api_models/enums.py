@@ -39,7 +39,6 @@ class DisciplineV2(str, Enum):
     BIOLOGY = ("wd:Q420", "http://www.wikidata.org/entity/Q420")
     RESEARCH = ("wd:Q42240", "http://www.wikidata.org/entity/Q42240")
     COMPUTER_ENGINEERING = ("wd:Q428691", "http://www.wikidata.org/entity/Q428691")
-    COMPUTER_SCIENCE = COMPUTER_ENGINEERING
     ELECTRICAL_ENGINEERING = ("wd:Q43035", "http://www.wikidata.org/entity/Q43035")
     BUSINESS = ("wd:Q4830453", "http://www.wikidata.org/entity/Q4830453")
     BIOLOGICAL_ENGINEERING = ("wd:Q580689", "http://www.wikidata.org/entity/Q580689")

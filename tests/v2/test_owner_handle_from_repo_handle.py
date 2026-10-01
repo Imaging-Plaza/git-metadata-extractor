@@ -57,18 +57,6 @@ def test_returns_none_when_there_is_no_owner_repo_pair(handle: object) -> None:
     assert _extract_owner_from_repo_handle(handle) is None
 
 
-def test_never_returns_a_scheme_fragment() -> None:
-    """The specific regression: a URL must not parse as the handle `https:`."""
-    for handle in (
-        "https://github.com/a/b",
-        "http://github.com/a/b",
-        "https://gitlab.com/a/b",
-        "https://example.org/a/b",
-    ):
-        assert _extract_owner_from_repo_handle(handle) != "https:"
-        assert _extract_owner_from_repo_handle(handle) != "http:"
-
-
 def test_url_path_is_parsed_for_any_host() -> None:
     """Host-agnostic on purpose — GitLab handles are coming in phase 4.
 
@@ -77,6 +65,7 @@ def test_url_path_is_parsed_for_any_host() -> None:
     """
     assert _extract_owner_from_repo_handle("https://gitlab.com/a/b") == "a"
     assert _extract_owner_from_repo_handle("https://gitlab.epfl.ch/grp/sub/proj") == "grp"
+    assert _extract_owner_from_repo_handle("https://example.org/a/b") == "a"
 
 
 # --------------------------------------------------------------------------

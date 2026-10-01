@@ -6,18 +6,23 @@ A deployment report claimed that a GitHub USER extracted with
 person is matched to an Infoscience identity (person ``@id`` becomes an
 ``https://infoscience.epfl.ch/...`` URL) — a supposed "fusion bug".
 
-Driving the *real* downstream stage functions — in the exact order
-``git_metadata_extractor/api.py`` runs them for a USER root in hybrid runtime — proves the
-claim wrong: ``pulse:owns`` is byte-identical at every stage whether the
-person is Infoscience-anchored or github-anchored, and the rule-based
-person agent emits the same owns list either way. A live 20-extraction run
+Driving the *real* downstream stage functions — in the order the post-agent
+chains in ``git_metadata_extractor/pipeline/run.py`` run them for a USER root
+in hybrid runtime — proves the claim wrong: ``pulse:owns`` is byte-identical
+at every stage whether the person is Infoscience-anchored or
+github-anchored, and the rule-based person agent emits the same owns list either way. A live 20-extraction run
 confirmed it (every Infoscience-matched user kept its owned repos).
 
 These tests lock that in: if a future change makes the person's canonical
 ``@id`` scheme leak into ``pulse:owns`` handling, they fail.
 
-Downstream stage order for a USER root in hybrid runtime
-(from ``git_metadata_extractor/api.py``):
+Downstream stage order for a USER root in hybrid runtime (from the
+``RECONCILE`` / ``RECONCILED`` / ``OUTPUT`` / ``ASSEMBLED`` chains in
+``git_metadata_extractor/pipeline/run.py``). The replay is a subsequence: it
+skips ``permissive_validation``, the provider- or LLM-backed stages (the ROR
+resolvers, ``refine_with_llm``, ``validate_org_github_handles``,
+``link_veracity``), the critic bookkeeping, and everything after
+``prune_dangling_refs``:
 
   reconcile_entities
   -> guarantee_repo_author

@@ -20,24 +20,5 @@
       "site_admin": false,
       "contributions": 17
     }
-  ],
-  "graphql": {
-    "data": {
-      "repository": {
-        "collaborators": {
-          "totalCount": 2,
-          "nodes": [
-            {
-              "login": "octocat",
-              "name": "The Octocat"
-            },
-            {
-              "login": "hubot",
-              "name": "Hubot"
-            }
-          ]
-        }
-      }
-    }
-  }
+  ]
 }

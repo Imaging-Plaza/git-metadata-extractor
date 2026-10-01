@@ -421,6 +421,9 @@ def test_repository_agent_emits_flat_package_scalars() -> None:
     )
 
     raw = result.raw_output
+    # _container_images is the raw GHCR payload, passed through unchanged;
+    # the flat scalars below are the derived addition.
+    assert raw["_container_images"] == _STUB_CONTAINER_IMAGES
     assert raw["_package_count"] == len(_STUB_CONTAINER_IMAGES)
     assert raw["_package_image_refs"] == [
         "ghcr.io/sdsc-ordes/open-pulse",

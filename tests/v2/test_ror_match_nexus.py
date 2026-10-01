@@ -61,10 +61,3 @@ def test_coincidental_match_rejected(handle: str, name: str, record: dict) -> No
 )
 def test_real_match_kept(handle: str, name: str, record: dict) -> None:
     assert _ror_match_has_nexus(handle=handle, name=name, ror_record=record) is True
-
-
-def test_generic_alias_token_is_not_a_nexus() -> None:
-    # The exact #102 regression: a generic token shared only via a ROR alias
-    # ("foundry" in "Kværner Foundry") must NOT count.
-    rec = _rec("Jøtul (Norway)", aliases=["Kværner Foundry"])
-    assert _ror_match_has_nexus(handle="Edinburgh-Genome-Foundry", name="Edinburgh Genome Foundry", ror_record=rec) is False

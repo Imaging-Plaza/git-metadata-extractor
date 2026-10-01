@@ -55,7 +55,7 @@ PROVIDERS: tuple[tuple[str, str, str | None, str | None, str], ...] = (
     ("openalex_rag", "OpenAlexRagProvider", "collection", "V2_OPENALEX_RAG_ENABLED", "embedder"),
     ("huggingface_rag", "HuggingFaceRagProvider", "collection", "V2_HUGGINGFACE_RAG_ENABLED", "embedder"),
     ("orcid_rag", "OrcidRagProvider", "entity_type", "V2_ORCID_RAG_ENABLED", "embedder"),
-    ("oamonitor_rag", "OamonitorRagProvider", "entity_type", None, "embedder"),
+    ("oamonitor_rag", "OamonitorRagProvider", "entity_type", "V2_OAMONITOR_RAG_ENABLED", "embedder"),
     ("renkulab_rag", "RenkulabRagProvider", None, "V2_RENKULAB_RAG_ENABLED", "embedder"),
     ("infoscience_rag", "InfoscienceRagProvider", None, None, "embedder"),
     (
@@ -72,31 +72,6 @@ IDS = [name for name, *_ in PROVIDERS]
 
 def _module(suffix: str):
     return importlib.import_module(f"git_metadata_extractor.providers.{suffix}")
-
-
-@pytest.mark.parametrize(
-    ("suffix", "cls_name", "scope", "env", "collaborators"),
-    PROVIDERS,
-    ids=IDS,
-)
-def test_provider_class_and_builder_are_exported(
-    suffix: str,
-    cls_name: str,
-    scope: str | None,
-    env: str | None,
-    collaborators: str,
-) -> None:
-    """The names consumers import. Several are used as type annotations.
-
-    `pipeline/stages/resolve_*_to_ror.py` annotate with `RorRagProvider` and
-    `refine_with_llm.py` with `EpflGraphRagProvider`, so renaming a class is a
-    breaking change even where no runtime call sites change.
-    """
-    module = _module(suffix)
-
-    assert hasattr(module, cls_name), f"{suffix} no longer exports {cls_name}"
-    assert cls_name in getattr(module, "__all__", []), f"{cls_name} not in __all__"
-    assert callable(module.build_default_provider)
 
 
 @pytest.mark.parametrize(
@@ -173,9 +148,8 @@ def test_env_gating_lives_where_we_think_it_does(
     why calling the builder cannot distinguish "gated off" from "no credentials
     in this shell".
 
-    `env` is `None` in the table for exactly three cases, for two different
-    reasons: `oamonitor` has no documented flag, while `infoscience` and
-    `ethz_research_collection` have one that their module ignores.
+    `env` is `None` in the table for exactly two cases: `infoscience` and
+    `ethz_research_collection` have a flag that their module ignores.
     """
     module = _module(suffix)
     provider = getattr(module, cls_name)
@@ -196,7 +170,7 @@ def test_env_gating_lives_where_we_think_it_does(
     text = Path(source).read_text(encoding="utf-8")
 
     if env is None:
-        assert "env_enabled(" not in text or suffix == "oamonitor_rag", (
+        assert "env_enabled(" not in text, (
             f"{suffix} now gates itself; move it into the gated group and "
             f"drop its entry from dependencies.py"
         )

@@ -1,347 +1,185 @@
-# ruff: noqa: C901, PLR0912, PLC0206, PERF401, PLR2004
+"""JSON-LD roundtrip gate: the v2 builder's output, read back as RDF.
+
+`build_jsonld_output` serialises the v2 intermediate against the hand-written
+v2 context (`load_jsonld_context`). That JSON-LD is what `/v2/extract` returns
+with `V2_CANONICAL_OUTPUT_ENABLED=false`, and what `shacl_gate` parses and
+validates against the v2.1.2 bundle when the canonical projection did not run.
+
+The context is where a property gets lost in translation without anything
+erroring: drop `@type: @id` from a term and its references read back as string
+literals, drop `@type: xsd:date` and a date becomes an untyped string, switch a
+container to `@list` and a set of values collapses into one list node.
+
+So every property of every strict fixture goes through the real builder and
+the real context, is parsed with rdflib, and is checked against the term kind
+its v2.1.2 SHACL property shape declares. The shapes are the independent
+statement of what each property's objects must be; the context is the thing
+under test.
+"""
+
 from __future__ import annotations
 
 import json
-from collections import defaultdict
-from copy import deepcopy
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
-from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import RDF, XSD
+import pytest
+from rdflib import RDF, XSD, Graph, Literal, Namespace, URIRef
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-# Fixtures moved out of `dev/` so the test suite does not depend on a
-# scratch directory that is excluded from the Docker build context.
-JSON_DIR = REPO_ROOT / "tests" / "v2" / "fixtures" / "roundtrip"
-JSONLD_FILE = JSON_DIR / "jsonld_output.json"
-EXPECTED_ENTITY_COUNT = 33
-EXPECTED_ENTITY_TYPES = 6
+from git_metadata_extractor.pipeline.stages.jsonld_build import (
+    ENTITY_URI_PREFIX,
+    build_jsonld_output,
+)
+from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.schema import load_jsonld_context
+from git_metadata_extractor.validation.ontology import load_ontology_shapes_graph
 
-ARRAY_PROPERTIES_BY_TYPE = {
-    "schema:SoftwareSourceCode": {
-        "schema:author",
-        "pulse:discipline",
-        "schema:programmingLanguage",
-    },
-    "schema:ScholarlyArticle": {"schema:author"},
-    "org:Organization": {"org:hasUnit", "pulse:owns"},
-    "schema:Person": {"org:hasMembership", "pulse:hasContribution"},
-}
-ARRAY_PROPERTIES = {
-    "pulse:discipline",
-    "schema:programmingLanguage",
-    "org:hasUnit",
-    "pulse:owns",
-    "pulse:hasContribution",
-    "org:hasMembership",
+if TYPE_CHECKING:
+    from rdflib.term import Node
+
+SH = Namespace("http://www.w3.org/ns/shacl#")
+
+# How the strict fixtures' CURIEs expand: the namespaces the v2.1.2 shapes use.
+# Deliberately not read from the context, which is what is being tested.
+PREFIXES = {
+    "schema": "http://schema.org/",
+    "pulse": "https://open-pulse.epfl.ch/ontology#",
+    "org": "http://www.w3.org/ns/org#",
+    "time": "http://www.w3.org/2006/time#",
 }
 
-SHAPE_FILES = {
-    "schema:Person": "pulse_PersonShape.json",
-    "schema:SoftwareSourceCode": "pulse_RepositoryShape.json",
-    "org:Organization": "pulse_OrganizationShape.json",
-    "org:Membership": "pulse_MembershipShape.json",
-    "pulse:Contribution": "pulse_ContributionShape.json",
-    "schema:ScholarlyArticle": "pulse_ArticleShape.json",
-}
-
-ENVELOPE_FIELDS = {"shacl", "identifiers", "idSource"}
-
-NAMESPACES = {
-    "http://schema.org/": "schema:",
-    "http://www.w3.org/ns/org#": "org:",
-    "http://www.w3.org/2006/time#": "time:",
-    "https://open-pulse.epfl.ch/ontology#": "pulse:",
-    "http://www.wikidata.org/entity/": "wd:",
-}
+STRICT_FIXTURES = (
+    "pulse_PersonShape",
+    "pulse_OrganizationShape",
+    "pulse_RepositoryShape",
+    "pulse_MembershipShape",
+    "pulse_ContributionShape",
+    "pulse_ArticleShape",
+)
 
 
-def _to_prefixed(iri: str, *, use_pulse_prefix: bool = True) -> str:
-    namespaces = {
-        "https://open-pulse.epfl.ch/ontology#": "pulse:",
-        "http://www.wikidata.org/entity/": "wd:",
-        "http://schema.org/": "schema:",
-        "http://www.w3.org/ns/org#": "org:",
-        "http://www.w3.org/2006/time#": "time:",
-        "https://open-pulse.epfl.ch/data/": "",
-    }
-    for namespace, prefix in namespaces.items():
-        if not iri.startswith(namespace):
-            continue
-        local_name = iri[len(namespace) :]
-        if not prefix or not use_pulse_prefix:
-            return local_name
-        return prefix + local_name
-    return iri
+def _expand(curie: str) -> URIRef:
+    prefix, _, local = curie.partition(":")
+    return URIRef(PREFIXES[prefix] + local)
 
 
-def _shorten_id(iri: str) -> str:
-    pulse_ns = "https://open-pulse.epfl.ch/ontology#"
-    data_ns = "https://open-pulse.epfl.ch/data/"
-    if iri.startswith(data_ns):
-        return iri[len(data_ns) :]
-    if iri.startswith(pulse_ns):
-        return iri[len(pulse_ns) :]
-    return iri
+def _subject(entity_id: str) -> URIRef:
+    if entity_id.startswith(("http://", "https://", "urn:")):
+        return URIRef(entity_id)
+    return URIRef(f"{ENTITY_URI_PREFIX}{entity_id}")
 
 
-def _rdf_value(obj: Any) -> Any:
-    if isinstance(obj, Literal):
-        if obj.datatype == XSD.integer:
-            return int(obj)
-        if obj.datatype in (XSD.date, XSD.dateTime):
-            return str(obj)
-        return str(obj)
-    if isinstance(obj, URIRef):
-        return _to_prefixed(str(obj), use_pulse_prefix=True)
-    return str(obj)
+def _term_kind(term: Node) -> str:
+    if isinstance(term, Literal):
+        # A plain JSON string is JSON-LD's xsd:string; rdflib leaves it implicit.
+        return f"literal {term.datatype or XSD.string}"
+    if isinstance(term, URIRef):
+        return "IRI"
+    return type(term).__name__
 
 
-def _reconstruct_from_graph(graph: Graph) -> dict[str, list[dict[str, Any]]]:
-    entities: dict[str, dict[str, Any]] = {}
-    entity_types: dict[str, str] = {}
-
-    for subject, _, object_value in graph.triples((None, RDF.type, None)):
-        subject_str = str(subject)
-        prefixed_type = _to_prefixed(str(object_value))
-        if prefixed_type.startswith("http://www.w3.org/"):
-            continue
-        if "Shape" in str(object_value) or "Enumeration" in str(object_value):
-            continue
-        if str(object_value) in {
-            "http://www.w3.org/2002/07/owl#Ontology",
-            "http://www.w3.org/2000/01/rdf-schema#Class",
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
-        }:
-            continue
-        entity_types[subject_str] = prefixed_type
-        entities.setdefault(subject_str, {})
-
-    for subject_str in entities:
-        subject_uri = URIRef(subject_str)
-        for predicate, object_value in graph.predicate_objects(subject_uri):
-            predicate_str = str(predicate)
-            if predicate_str == str(RDF.type):
-                continue
-            prefixed_property = _to_prefixed(predicate_str)
-            value = _rdf_value(object_value)
-            if prefixed_property in entities[subject_str]:
-                existing = entities[subject_str][prefixed_property]
-                if isinstance(existing, list):
-                    existing.append(value)
-                else:
-                    entities[subject_str][prefixed_property] = [existing, value]
-                continue
-
-            entity_type = entity_types.get(subject_str)
-            type_specific_arrays = (
-                ARRAY_PROPERTIES_BY_TYPE.get(entity_type, set())
-                if entity_type is not None
-                else set()
-            )
-            if (
-                prefixed_property in type_specific_arrays
-                or prefixed_property in ARRAY_PROPERTIES
-            ):
-                entities[subject_str][prefixed_property] = [value]
-            else:
-                entities[subject_str][prefixed_property] = value
-
-    by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for subject_str, props in entities.items():
-        entity_type = entity_types[subject_str]
-        node = {
-            "id": _shorten_id(subject_str),
-            "type": entity_type,
-        }
-        node.update(props)
-        by_type[entity_type].append(node)
-
-    return dict(by_type)
+def _declared_kind(shapes: Graph, property_shape: Node) -> str:
+    datatype = shapes.value(property_shape, SH.datatype)
+    if datatype is not None:
+        return f"literal {datatype}"
+    if shapes.value(property_shape, SH.nodeKind) == SH.Literal:
+        return "literal"
+    # sh:nodeKind sh:IRI, sh:class, or an sh:or over classes: a reference.
+    return "IRI"
 
 
-def _normalise_for_comparison(obj: dict[str, Any]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in obj.items():
-        if key in ENVELOPE_FIELDS or value is None:
-            continue
-        if isinstance(value, list):
-            if not value:
-                continue
-            result[key] = sorted(str(item) for item in value)
-            continue
-        if isinstance(value, str) and value.endswith("+00:00"):
-            result[key] = value[:-6] + "Z"
-            continue
-        result[key] = value
-    return result
-
-
-def _compare_entities(
-    original: dict[str, Any],
-    reconstructed: dict[str, Any],
-    entity_id: str,
-) -> list[dict[str, Any]]:
-    differences: list[dict[str, Any]] = []
-    original_normalized = _normalise_for_comparison(original)
-    reconstructed_normalized = _normalise_for_comparison(reconstructed)
-
-    original_keys = set(original_normalized)
-    reconstructed_keys = set(reconstructed_normalized)
-
-    for key in sorted(original_keys - reconstructed_keys):
-        differences.append(
-            {
-                "entity": entity_id,
-                "property": key,
-                "type": "lost_property",
-                "original": original_normalized[key],
-                "reconstructed": None,
-            },
+def _property_failures(
+    *,
+    objects: set[Node],
+    values: list[Any],
+    declared: str,
+    where: str,
+) -> list[str]:
+    """What went wrong between one property's input values and its triples."""
+    failures: list[str] = []
+    distinct = {json.dumps(item, sort_keys=True) for item in values}
+    if len(objects) != len(distinct):
+        failures.append(
+            f"{where}: {len(distinct)} value(s) in, {len(objects)} triple(s) out",
         )
+    for term in objects:
+        actual = _term_kind(term)
+        if declared != (actual.split()[0] if declared == "literal" else actual):
+            failures.append(f"{where}: {actual}, shape declares {declared}")
+    if declared.startswith("literal") and objects:
+        # Rebuilt with the datatype it arrived with, so rdflib normalises
+        # both sides alike (`...Z` reads back `...+00:00`).
+        first = next(iter(objects))
+        datatype = first.datatype if isinstance(first, Literal) else None
+        if objects != {Literal(str(item), datatype=datatype) for item in values}:
+            failures.append(f"{where}: literal value changed on the way")
+    return failures
 
-    for key in sorted(reconstructed_keys - original_keys):
-        differences.append(
-            {
-                "entity": entity_id,
-                "property": key,
-                "type": "extra_property",
-                "original": None,
-                "reconstructed": reconstructed_normalized[key],
-            },
-        )
 
-    for key in sorted(original_keys & reconstructed_keys):
-        original_value = original_normalized[key]
-        reconstructed_value = reconstructed_normalized[key]
-        if isinstance(original_value, list) and isinstance(reconstructed_value, list):
-            if original_value != reconstructed_value:
-                differences.append(
-                    {
-                        "entity": entity_id,
-                        "property": key,
-                        "type": "value_mismatch",
-                        "original": original_value,
-                        "reconstructed": reconstructed_value,
-                    },
-                )
-            continue
-        if str(original_value) != str(reconstructed_value):
-            differences.append(
-                {
-                    "entity": entity_id,
-                    "property": key,
-                    "type": "value_mismatch",
-                    "original": original_value,
-                    "reconstructed": reconstructed_value,
-                },
+def _property_shapes(shapes: Graph, target_class: URIRef) -> dict[Node, Node]:
+    node_shape = shapes.value(predicate=SH.targetClass, object=target_class)
+    assert node_shape is not None, f"no v2.1.2 shape targets {target_class}"
+    by_path: dict[Node, Node] = {}
+    for property_shape in shapes.objects(node_shape, SH.property):
+        path = shapes.value(property_shape, SH.path)
+        assert path is not None, f"{property_shape} has no sh:path"
+        by_path[path] = property_shape
+    return by_path
+
+
+@pytest.fixture(scope="module")
+def roundtripped(load_fixture: Callable[[str, str], Any]) -> Graph:
+    """All strict fixtures in one build, so cross-entity references resolve."""
+    entities = [
+        entity for name in STRICT_FIXTURES for entity in load_fixture("schema/strict", name)
+    ]
+    payload = build_jsonld_output(
+        assembled=AssembledOutput(root_entity=None, related_entities=entities),
+        jsonld_context=load_jsonld_context(),
+    )
+    return Graph().parse(data=json.dumps(payload), format="json-ld")
+
+
+@pytest.mark.parametrize("fixture_name", STRICT_FIXTURES)
+def test_every_strict_property_survives_with_the_term_kind_its_shape_declares(
+    fixture_name: str,
+    load_fixture: Callable[[str, str], Any],
+    roundtripped: Graph,
+) -> None:
+    shapes = load_ontology_shapes_graph()
+    entities = load_fixture("schema/strict", fixture_name)
+    target_class = _expand(entities[0]["type"])
+    property_shapes = _property_shapes(shapes, target_class)
+
+    failures: list[str] = []
+    exercised: set[Node] = set()
+    for entity in entities:
+        subject = _subject(entity["id"])
+        if (subject, RDF.type, target_class) not in roundtripped:
+            failures.append(f"{subject}: lost its rdf:type {target_class}")
+        # Strict properties are the CURIE keys; `id`, `type` and the
+        # `shacl` / `identifiers` / `idSource` envelope are not.
+        for key, value in entity.items():
+            values = value if isinstance(value, list) else [value]
+            if ":" not in key or value is None or not values:
+                continue
+            predicate = _expand(key)
+            property_shape = property_shapes.get(predicate)
+            if property_shape is None:
+                failures.append(f"{key}: not declared by the shape for {target_class}")
+                continue
+            exercised.add(predicate)
+            failures.extend(
+                _property_failures(
+                    objects=set(roundtripped.objects(subject, predicate)),
+                    values=values,
+                    declared=_declared_kind(shapes, property_shape),
+                    where=f"{subject} {key}",
+                ),
             )
 
-    return differences
-
-
-def _load_original_entities() -> dict[str, list[dict[str, Any]]]:
-    loaded: dict[str, list[dict[str, Any]]] = {}
-    for entity_type, file_name in SHAPE_FILES.items():
-        payload = json.loads((JSON_DIR / file_name).read_text(encoding="utf-8"))
-        if isinstance(payload, list):
-            loaded[entity_type] = [item for item in payload if isinstance(item, dict)]
-    return loaded
-
-
-def _run_comparison(
-    original_by_type: dict[str, list[dict[str, Any]]],
-    reconstructed_by_type: dict[str, list[dict[str, Any]]],
-) -> dict[str, Any]:
-    differences: list[dict[str, Any]] = []
-    matched_count = 0
-    unmatched_count = 0
-
-    for entity_type, originals in original_by_type.items():
-        reconstructed_lookup = {
-            entity["id"]: entity
-            for entity in reconstructed_by_type.get(entity_type, [])
-            if isinstance(entity.get("id"), str)
-        }
-        for original in originals:
-            entity_id = str(original.get("id", "unknown"))
-            reconstructed = reconstructed_lookup.get(entity_id)
-            if reconstructed is None:
-                differences.append(
-                    {
-                        "entity": entity_id,
-                        "property": None,
-                        "type": "missing_entity",
-                        "original": entity_type,
-                        "reconstructed": None,
-                    },
-                )
-                unmatched_count += 1
-                continue
-            entity_diffs = _compare_entities(original, reconstructed, entity_id)
-            if entity_diffs:
-                differences.extend(entity_diffs)
-            else:
-                matched_count += 1
-
-    return {
-        "matched": matched_count,
-        "unmatched": unmatched_count,
-        "differences": differences,
-    }
-
-
-def _parse_roundtrip_graph() -> dict[str, list[dict[str, Any]]]:
-    payload = json.loads(JSONLD_FILE.read_text(encoding="utf-8"))
-    graph = Graph()
-    graph.parse(data=json.dumps(payload), format="json-ld")
-    return _reconstruct_from_graph(graph)
-
-
-def _difference_message(differences: list[dict[str, Any]]) -> str:
-    if not differences:
-        return ""
-    preview = "\n".join(str(entry) for entry in differences[:5])
-    return f"Roundtrip mismatches ({len(differences)}):\n{preview}"
-
-
-def test_roundtrip_preserves_all_mock_entities_without_differences() -> None:
-    reconstructed = _parse_roundtrip_graph()
-    reconstructed_count = sum(len(entities) for entities in reconstructed.values())
-    comparison = _run_comparison(_load_original_entities(), reconstructed)
-
-    assert len(reconstructed) == EXPECTED_ENTITY_TYPES
-    assert reconstructed_count == EXPECTED_ENTITY_COUNT
-    assert comparison["matched"] == EXPECTED_ENTITY_COUNT
-    assert comparison["unmatched"] == 0
-    assert comparison["differences"] == [], _difference_message(comparison["differences"])
-
-
-def test_roundtrip_preserves_arrays_numeric_fields_and_datetimes() -> None:
-    reconstructed = _parse_roundtrip_graph()
-    repositories = reconstructed["schema:SoftwareSourceCode"]
-    repository = next(
-        entity for entity in repositories if entity["id"] == "EPFL-ENAC/geodata-toolkit"
+    assert failures == [], "\n".join(failures)
+    # Otherwise a property the fixtures never populate is one this gate
+    # silently cannot see, and the test name would overclaim.
+    assert set(property_shapes) <= exercised, (
+        f"no {fixture_name} fixture exercises {sorted(map(str, set(property_shapes) - exercised))}"
     )
-
-    assert sorted(repository["pulse:discipline"]) == ["wd:Q21201", "wd:Q8434"]
-    assert sorted(repository["schema:programmingLanguage"]) == ["Python", "TypeScript"]
-    assert isinstance(repository["pulse:githubRepoStars"], int)
-    assert repository["pulse:githubRepoStars"] == 45
-    assert repository["schema:dateCreated"].replace("+00:00", "Z") == "2023-03-15T10:30:00Z"
-
-
-def test_roundtrip_comparison_reports_field_level_differences() -> None:
-    originals = _load_original_entities()
-    reconstructed = deepcopy(originals)
-    reconstructed["schema:Person"][0]["schema:name"] = "Changed Name"
-
-    comparison = _run_comparison(originals, reconstructed)
-    mismatch = next(
-        difference
-        for difference in comparison["differences"]
-        if difference["type"] == "value_mismatch"
-    )
-    assert mismatch["entity"] == originals["schema:Person"][0]["id"]
-    assert mismatch["property"] == "schema:name"

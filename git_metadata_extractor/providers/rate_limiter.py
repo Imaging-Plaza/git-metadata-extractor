@@ -48,9 +48,6 @@ class RateLimiter:
         # Keep separate locks per provider+loop to avoid cross-loop binding errors.
         self._locks: dict[tuple[str, int], asyncio.Lock] = {}
 
-    def get_remaining(self, provider_name: str) -> int | None:
-        return self._state(provider_name).remaining
-
     async def with_rate_limit(
         self,
         provider_name: str,

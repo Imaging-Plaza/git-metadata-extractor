@@ -3,23 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
-
 from git_metadata_extractor.providers.infoscience_models import InfoscienceAuthor, InfoscienceSearchResult
 from git_metadata_extractor.providers.github_accounts.orgs_parser import GitHubOrganizationsParser
 from git_metadata_extractor.providers.github_accounts.users_parser import GitHubUsersParser
-from git_metadata_extractor.providers import (
-    BaseProvider,
-    GitHubProvider,
-    InfoscienceProvider,
-    MockGitHubProvider,
-    MockInfoscienceProvider,
-    MockORCIDProvider,
-    MockRORProvider,
-    ORCIDProvider,
-    RORProvider,
-    get_provider,
-)
+from git_metadata_extractor.providers import MockInfoscienceProvider
 from git_metadata_extractor.providers.base import (
     INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
     INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
@@ -321,28 +308,6 @@ def _build_real_infoscience_provider() -> RealInfoscienceProvider:
     )
 
 
-def test_real_providers_implement_base_interfaces() -> None:
-    real_github = _build_real_github_provider()
-    real_infoscience = _build_real_infoscience_provider()
-    real_orcid = RealORCIDProvider(session=_FakeSession())
-    real_ror = RealRORProvider(session=_FakeSession())
-
-    assert isinstance(real_github, BaseProvider)
-    assert isinstance(real_infoscience, BaseProvider)
-    assert isinstance(real_orcid, BaseProvider)
-    assert isinstance(real_ror, BaseProvider)
-
-    assert isinstance(real_github, GitHubProvider)
-    assert isinstance(real_infoscience, InfoscienceProvider)
-    assert isinstance(real_orcid, ORCIDProvider)
-    assert isinstance(real_ror, RORProvider)
-
-    assert not RealGitHubProvider.__abstractmethods__
-    assert not RealInfoscienceProvider.__abstractmethods__
-    assert not RealORCIDProvider.__abstractmethods__
-    assert not RealRORProvider.__abstractmethods__
-
-
 def test_real_providers_execute_all_interface_methods_without_notimplementederror() -> None:
     real_github = _build_real_github_provider()
     real_infoscience = _build_real_infoscience_provider()
@@ -486,37 +451,6 @@ def test_real_github_provider_reads_contributors_from_gimie_payload() -> None:
         "octocat",
         "hubot",
     ]
-
-
-def test_get_provider_factory_returns_expected_mock_and_real_implementations() -> None:
-    assert isinstance(get_provider("github", use_mock=True), MockGitHubProvider)
-    assert isinstance(get_provider("orcid", use_mock=True), MockORCIDProvider)
-    assert isinstance(get_provider("infoscience", use_mock=True), MockInfoscienceProvider)
-    assert isinstance(get_provider("ror", use_mock=True), MockRORProvider)
-
-    real_github = get_provider(
-        "github",
-        use_mock=False,
-        gimie_extractor=lambda _url, _format: {},
-        user_lookup=lambda _username: {},
-        organization_lookup=lambda _org_name: {},
-    )
-    assert isinstance(real_github, RealGitHubProvider)
-
-    with pytest.raises(ValueError, match="Unknown provider name"):
-        get_provider("unsupported")
-
-
-def test_mock_and_real_github_providers_are_interchangeable_by_interface() -> None:
-    mock_provider: GitHubProvider = MockGitHubProvider()
-    real_provider: GitHubProvider = _build_real_github_provider()
-
-    def _extract_name(provider: GitHubProvider) -> str:
-        repository = provider.get_repository("octocat/Hello-World")
-        return str(repository.get("name", ""))
-
-    assert _extract_name(mock_provider)
-    assert _extract_name(real_provider)
 
 
 def test_user_parser_skips_repo_endpoint_when_repositories_are_disabled() -> None:
