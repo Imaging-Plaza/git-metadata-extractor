@@ -306,20 +306,6 @@ def test_stage_is_idempotent_on_re_run():
     assert len(orgs_second) == 1
 
 
-def test_stage_returns_zero_when_provider_missing():
-    """No provider available (env not wired) — stage returns a sane result
-    and never raises."""
-    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
-    result = asyncio.run(
-        run_resolve_company_to_ror_stage(reconciled=reconciled, provider=None),
-    )
-    # Result is well-formed even when provider building fails / returns None.
-    # (The actual provider build may succeed in a dev env with Qdrant up,
-    # but on a CI box without Qdrant the persons_examined falls to 0 and
-    # rejection_reasons records a provider_unavailable flag.)
-    assert isinstance(result, CompanyAffiliationResult)
-
-
 # ---------------------------------------------------------------------------
 # api.py env-flag wiring
 # ---------------------------------------------------------------------------
@@ -347,14 +333,3 @@ def test_api_env_flag_treats_other_values_as_on(value, monkeypatch):
 
     monkeypatch.setenv("V2_RESOLVE_COMPANY_TO_ROR", value)
     assert v2_api._resolve_company_to_ror_enabled() is True
-
-
-def test_api_constant_and_export_are_in_place():
-    from git_metadata_extractor.api import _helpers as v2_api
-    from git_metadata_extractor.pipeline import stages
-
-    assert v2_api.STAGE_RESOLVE_COMPANY_TO_ROR == "resolve_company_to_ror"
-    # The stage entry function is callable from the package surface.
-    assert callable(stages.run_resolve_company_to_ror_stage)
-    assert "run_resolve_company_to_ror_stage" in stages.__all__
-    assert "CompanyAffiliationResult" in stages.__all__

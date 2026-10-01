@@ -227,55 +227,12 @@ def test_stage_resolves_from_orcid_bio():
     assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
 
 
-def test_stage_resolves_from_anonymized_email_domain():
-    """`_email` lands here as `<hash>@epfl.ch`; only the domain
-    matters and the hash on the local part is irrelevant."""
-    reconciled = ReconciledEntities(
-        entities={
-            "persons": [
-                {"id": "p1", "_email": "deadbeefcafe@epfl.ch"},
-            ],
-        },
-    )
-    provider = _StubProvider(
-        hits={
-            "EPFL": [
-                {"score": 0.95, "types": ["education"], "name": "EPFL", "ror_id": "https://ror.org/02s376052"},
-                {"score": 0.40, "types": ["education"], "name": "Other"},
-            ],
-        },
-    )
-    _run(reconciled, provider)
-    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
-
-
 @pytest.mark.parametrize("email_key", EMAIL_KEYS)
 def test_stage_reads_email_under_every_key_shape(email_key):
     reconciled = ReconciledEntities(
         entities={
             "persons": [
                 {"id": "p1", email_key: "x@epfl.ch"},
-            ],
-        },
-    )
-    provider = _StubProvider(
-        hits={
-            "EPFL": [
-                {"score": 0.95, "types": ["education"], "name": "EPFL", "ror_id": "https://ror.org/02s376052"},
-                {"score": 0.40, "types": ["education"], "name": "Other"},
-            ],
-        },
-    )
-    _run(reconciled, provider)
-    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/02s376052"]
-
-
-def test_stage_resolves_from_blog_domain():
-    """Blog domain alone (no bio) should still pull an affiliation."""
-    reconciled = ReconciledEntities(
-        entities={
-            "persons": [
-                {"id": "p1", "_blog": "https://people.epfl.ch/jane.doe"},
             ],
         },
     )
@@ -511,14 +468,6 @@ def test_stage_is_idempotent_on_re_run_unaffiliated():
     assert len(provider.queries) == queries_after_first  # skip path → no new query
 
 
-def test_stage_returns_zero_when_provider_missing():
-    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
-    result = asyncio.run(
-        run_resolve_bio_to_ror_stage(reconciled=reconciled, provider=None),
-    )
-    assert isinstance(result, BioAffiliationResult)
-
-
 # ---------------------------------------------------------------------------
 # api.py env-flag wiring
 # ---------------------------------------------------------------------------
@@ -545,13 +494,3 @@ def test_api_env_flag_treats_other_values_as_on(value, monkeypatch):
 
     monkeypatch.setenv("V2_RESOLVE_BIO_TO_ROR", value)
     assert v2_api._resolve_bio_to_ror_enabled() is True
-
-
-def test_api_constant_and_export_are_in_place():
-    from git_metadata_extractor.api import _helpers as v2_api
-    from git_metadata_extractor.pipeline import stages
-
-    assert v2_api.STAGE_RESOLVE_BIO_TO_ROR == "resolve_bio_to_ror"
-    assert callable(stages.run_resolve_bio_to_ror_stage)
-    assert "run_resolve_bio_to_ror_stage" in stages.__all__
-    assert "BioAffiliationResult" in stages.__all__

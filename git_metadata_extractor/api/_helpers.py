@@ -45,27 +45,31 @@ def _auto_ingest_enabled(canonical: str, *aliases: str) -> bool:
     """Return True if the canonical auto-ingest env flag — or a deprecated
     alias — is set to "true".
 
-    The canonical name takes precedence; when a request is enabled via an alias
-    we log a deprecation warning so operators can migrate. This exists because
-    the only historically-documented flag (`V2_GITHUB_RAG_AUTO_INGEST`) never
-    matched the name the code reads (`V2_GITHUB_REPOS_RAG_AUTO_INGEST`), so
-    operators who followed the docs silently got no auto-ingest.
+    The canonical name takes precedence: when it is set, its value alone
+    decides, so an explicit "false" is not overridden by a leftover alias.
+    Aliases are consulted only when the canonical name is unset; when a request
+    is enabled via an alias we log a deprecation warning so operators can
+    migrate. This exists because the only historically-documented flag
+    (`V2_GITHUB_RAG_AUTO_INGEST`) never matched the name the code reads
+    (`V2_GITHUB_REPOS_RAG_AUTO_INGEST`), so operators who followed the docs
+    silently got no auto-ingest.
     """
-    for name in (canonical, *aliases):
+    canonical_raw = os.getenv(canonical)
+    if canonical_raw is not None:
+        return canonical_raw.strip().lower() == "true"
+    for name in aliases:
         raw = os.getenv(name)
         if raw is not None and raw.strip().lower() == "true":
-            if name != canonical:
-                logger.warning(
-                    "auto-ingest enabled via deprecated env var %s; rename it to "
-                    "%s (the alias may be removed in a future release)",
-                    name,
-                    canonical,
-                )
+            logger.warning(
+                "auto-ingest enabled via deprecated env var %s; rename it to "
+                "%s (the alias may be removed in a future release)",
+                name,
+                canonical,
+            )
             return True
     return False
 
 
-STAGE_CLASSIFY_URL = "classify_url"
 STAGE_PERMISSIVE_VALIDATION = "permissive_validation"
 STAGE_STRICT_VALIDATION = "strict_validation"
 STAGE_RECONCILIATION = "reconciliation"
@@ -85,11 +89,6 @@ _JOB_STALE_THRESHOLD_SECONDS = 600.0
 STAGE_OUTPUT_ASSEMBLY = "output_assembly"
 STAGE_JSONLD_BUILD = "jsonld_build"
 STAGE_LINK_VERACITY = "link_veracity"
-STAGE_REFINE_WITH_LLM = "refine_with_llm"
-STAGE_RESOLVE_COMPANY_TO_ROR = "resolve_company_to_ror"
-STAGE_RESOLVE_BIO_TO_ROR = "resolve_bio_to_ror"
-STAGE_RESOLVE_BIO_TO_ROR_LLM = "resolve_bio_to_ror_llm"
-STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR = "resolve_placeholder_orgs_to_ror"
 
 
 
