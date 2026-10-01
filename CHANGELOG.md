@@ -50,6 +50,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   and removed the pipeline doc's pointer to `.internal/v2-pipeline-reference.md`
   — that directory is untracked, so the file is absent from a fresh clone.
 
+- **CI now runs the ontology-backed tests.** The `v2-ci-gates` job checked out
+  the repository without the `vendor/open-pulse-ontology` submodule and never
+  applied `ontology/patches/`, so 51 tests that read the vendored TTL — the
+  unifier's policy table, the validation-layer pairing, the raw projection, the
+  ontology reader — skipped silently in CI. The job now checks out submodules,
+  runs `scripts/v2/prepare_ontology.py` before any test, and checks the
+  committed `schema/generated/*` models against the TTL
+  (`generate_from_ontology.py --check`), which nothing checked before.
+- **Test-suite audit.** Tests that could not fail, duplicated another test, or
+  only kept dead code alive were removed or rewritten at the boundary that owns
+  the behaviour, and each rewrite was shown to fail under a targeted mutation.
+  The SPARQL route guard now walks the whole route table, including body and
+  sub-dependency parameters; a new test requires every route outside the open
+  list to run `verify_token`; the JSON-LD roundtrip gate pushes the strict
+  fixtures through the production `build_jsonld_output` instead of comparing
+  static files with each other. The `__` composite-id rule in the unifier,
+  `unify/runner.read_substrate`, and the documented post-LLM guards
+  (`force_server_uuid`, contribution author/target stamping, the membership date
+  swap, the placeholder-DOI drop) are tested for the first time.
+- **Tests no longer touch the developer's environment.** `tests/v2/conftest.py`
+  points `V2_PROVIDER_CACHE_PATH` at a per-test temporary file — tests used to
+  open, and prune expired rows from, the real `.cache/v2/providers.db` — and
+  drops a stale `GME_GITHUB_TOKEN` / `API_TOKEN` bootstrap and two env vars
+  nothing read. The health tests stub the GitHub rate-limit probe instead of
+  calling `api.github.com`. `tests/utils/test_github_token_pool.py`, which no
+  test command ran, moved to `tests/v2/`.
+
 ### Fixed
 
 - **`test_promoted_strict_schemas` could not pass on a Windows checkout.** It
@@ -59,6 +86,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **The app version no longer drifts from `/v2/health`.** `app.py` hardcoded
   the version string while `/v2/health` reads installed package metadata; both
   now read the metadata, so a bump in `pyproject.toml` propagates to one place.
+- **The LLM repository agent never received the GitHub RAG search tool.**
+  `get_provider_set` resolved the GitHub RAG provider but left `github_rag` out
+  of the `ProviderSet` it returned, so `providers.github_rag` was always `None`
+  and `search_github_rag` was never attached. It is passed through now, and a
+  table-driven test covers every provider field so the next omission fails.
+- **An explicitly disabled auto-ingest flag can no longer be overridden by its
+  deprecated alias.** `V2_GITHUB_REPOS_RAG_AUTO_INGEST=false` together with the
+  old `V2_GITHUB_RAG_AUTO_INGEST=true` used to enable auto-ingest; the canonical
+  name now decides whenever it is set.
+
+### Removed
+
+- **Dead code whose only callers were tests:** `V2Config.validate_preflight`
+  and `MISSING_GME_GITHUB_TOKEN_ERROR`; `OxigraphStore.graph_triple_count`
+  (which also put an IRI into SPARQL without `iri_term`) and `summarise`;
+  `pipeline.runner.timing_summary` and `total_seconds`;
+  `unify.records_from_nodes`; `providers.get_provider`; the `to_dict` methods
+  of the execution-plan and context-bundle models and
+  `AgentGroup.parallelizable`; the never-registered `generate_uuid_v4` agent
+  tools; the `agents.rule_based` package re-exports; the unwired SNSF
+  `fetch` / `facets` provider methods and tool factories (recoverable from
+  `39e559a`); `canonicalization/ethz.py`, `gitlab.py` and `snsf.py` — copies of
+  `open_pulse_sources` helpers left behind by the repo split — and Infoscience's
+  `parse_infoscience_iri` / `infoscience_iri_sql`; six unreferenced `STAGE_*`
+  constants; the `DisciplineV2.COMPUTER_SCIENCE` alias;
+  `RateLimiter.get_remaining`.
+- **The HuggingFace-papers auto-ingest hook and `V2_HF_PAPERS_RAG_AUTO_INGEST`.**
+  The hook could never fire: `classify_github_url` rejects every huggingface.co
+  URL before it runs.
+- **The `just test-offline` recipe**, which ran three test files that no longer
+  exist.
 
 ## [3.0.0] — 2026-07-29
 

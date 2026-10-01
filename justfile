@@ -172,10 +172,6 @@ capture-live:
 test-live:
     .venv/bin/python -m pytest tests/v2/test_live_provider_connectivity.py -m live_provider -v
 
-# Run offline Phase 8 fixture/sanitizer checks
-test-offline:
-    .venv/bin/python -m pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
-
 # Generate committed v2 Pydantic models from strict schemas
 # Generate Pydantic models from the SHACL shapes (needs ontology-prepare)
 ontology-models-generate:

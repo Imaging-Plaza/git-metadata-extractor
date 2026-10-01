@@ -121,9 +121,10 @@ because "add a stage" means different work in each:
    input kind.
 2. **`_run_extract_job`** (`api/extract.py`) — everything after the agents:
    reconciliation, ROR resolvers, validation, inference, output. A flat
-   sequence of direct calls, not a plan object. Stage banners in that file
-   (`# === <name> stage ===`) and the `STAGE_*` constants in
-   `api/_helpers.py` are the naming source of truth.
+   sequence of stages, not a plan object: ordered chains of
+   `Stage(name=...)` in `pipeline/run.py` (e.g. `RESOLVER_CHAIN`), whose
+   names are the naming source of truth — the runner derives each stage's
+   warning text and log line from `stage.name`.
 
 `/v2/extract` runs the same post-agent sequence regardless of
 `agent_runtime`; the runtime selects agent implementations and gates the
@@ -216,7 +217,7 @@ compute_stats                  response counters/timings
 ```
 
 Verify this list against the code before trusting it — it was reconstructed
-from `PLAN_BY_TYPE`, the stage banners, and the `STAGE_*` constants on
+from `PLAN_BY_TYPE` and the stage chains in `pipeline/run.py` on
 2026-07-29. A published, human-facing version lives in
 [`docs/v2-pipeline.md`](docs/v2-pipeline.md).
 
@@ -681,8 +682,11 @@ today.
 
 **Auth:** `/v2/extract` and `/v2/jobs/{id}` require
 `Authorization: Bearer <API_TOKEN>` (see the `API_TOKEN` row below). `/`,
-`/docs`, and `/v2/health` are open. The dependency lives in
-`git_metadata_extractor/auth.py::verify_token`.
+`/docs`, and `/v2/health` are open, as are FastAPI's own `/openapi.json` and
+`/redoc`. The dependency lives in
+`git_metadata_extractor/auth.py::verify_token`, and
+`tests/v2/test_auth.py` asserts the rule over the whole route table: every
+other route must run `verify_token`.
 
 ## Configuration (env vars)
 
@@ -707,6 +711,7 @@ today.
 | `V2_HUGGINGFACE_RAG_ENABLED` | `true` | enables the HuggingFace Hub RAG search tool (collections: `hf_models`, `hf_datasets`, `hf_spaces`, `hf_orgs`). |
 | `V2_OPENALEX_RAG_ENABLED` | `true` | enables the OpenAlex RAG search tool (collections: `works`, `authors`, `institutions`, `sources`, `topics`, `concepts`). |
 | `V2_ZENODO_RAG_ENABLED` | `true` | enables the Zenodo RAG search tool (collection: `zenodo_records`). |
+| `V2_GITHUB_RAG_ENABLED` | `true` | enables the GitHub repositories RAG provider and the LLM repository agent's `search_github_rag` tool. |
 | `V2_ORCID_RAG_ENABLED` | `true` | enables the ORCID RAG search tool (entities: `persons`, `employments`, `educations`; collections namespaced by scope). |
 | `V2_ROR_RAG_ENABLED` | `true` | enables the ROR RAG search tool (scopes: `epfl_ethz`, `switzerland`, `europe`, `worldwide`). |
 | `V2_SWISSUBASE_RAG_ENABLED` | `true` | enables the SWISSUbase RAG search tool (collection: `swissubase_entities`; entities: `studies`, `datasets`, `persons`, `institutions`). Ingest is Selenium-driven; default scope embeds only EPFL/ETHZ/SDSC-affiliated studies. |
@@ -716,7 +721,7 @@ today.
 | `EPFL_GRAPH_USERNAME`, `EPFL_GRAPH_PASSWORD` | unset | required by the `epfl-graph-ingest` recipe (the auth handshake against `graphai.epfl.ch`). Not needed at runtime once the index is hydrated — `search_epfl_graph_disciplines` only hits Qdrant + RCP. |
 | `INDEX_QDRANT_URL` | `http://qdrant:6333` (yaml default) | Qdrant endpoint for every RAG index. Inside the devcontainer use `http://gme-qdrant:6333`. |
 | `V2_APPLY_CRITIC_PRUNING` | `false` | turn on to enable critic drop suggestions |
-| `V2_MAX_CONCURRENT_AGENTS` | `6` | per-stage fan-out concurrency |
+| `V2_MAX_CONCURRENT_AGENTS` | `8` | per-stage fan-out concurrency |
 | `V2_PROVIDER_CACHE_PATH` | `.cache/v2/providers.db` | SQLite path for the provider+verdict+pipeline cache. Use a different path per run profile (e.g. LLM vs rule-based) for isolation. |
 | `V2_PROVIDER_CACHE_TTL_DAYS` | `30` | TTL for cached entries |
 | `V2_PROVIDER_CACHE_ENABLED` | `true` | when `false`, every external lookup is fresh |

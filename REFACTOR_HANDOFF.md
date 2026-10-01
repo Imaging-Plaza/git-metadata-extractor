@@ -188,7 +188,8 @@ which is now **1,234 lines** (from 1,366; 1,528 at the start of the refactor).
 
 All four were already fail-open in the route, and all four keep it: a ROR RAG
 that is down degrades the graph rather than failing the request. Their stage
-names match the `_helpers.STAGE_*` constants exactly, which matters because the
+names are pinned by `tests/v2/test_resolver_chain.py` (the `_helpers.STAGE_*`
+constants that once mirrored them were dead and were removed), which matters because the
 runner derives both the warning text (`f"{stage.name} stage failed: {exc}"`)
 and the exception log from `stage.name` — a renamed stage silently changes both.
 
@@ -255,8 +256,10 @@ What survives from the deleted tests, in `tests/v2/test_json_schemas.py`: each
 schema is valid JSON Schema, and the agent schema is a superset of the strict
 schema's property names (a field strict demands but agent omits is
 unreachable, since `validate_permissive` soft-drops the unknown).
-`test_roundtrip.py` kept its real RDF-fidelity coverage — its fixtures moved to
-`tests/v2/fixtures/roundtrip/`, so `dev/` is no longer a test dependency.
+`test_roundtrip.py` no longer reads `dev/`. (Later found to test only static
+fixtures against each other; it was rewritten to push the strict fixtures
+through the production `build_jsonld_output`, and `tests/v2/fixtures/roundtrip/`
+was removed.)
 `dev/.../deduplication/` is untouched: `PROVENANCE_ARCHITECTURE.md` marks that
 `.pyc`-only material for porting.
 
@@ -1164,8 +1167,8 @@ says so in its docstring — the relocation of the rest is still its own change.
 
 ### What phase 4 inherits
 
-- `store/oxigraph.py` has `select()`, `named_graphs()` and
-  `graph_triple_count()` already, which is the unifier's read path.
+- `store/oxigraph.py` has `select()` and `named_graphs()` already; `select()`
+  is the unifier's read path (`unify/runner.read_substrate`).
 - **RDF-star stays store-only** (§3c). rdflib 6.3.2 cannot serialise quoted
   triples, so the provenance writer cannot go through `load_nquads` — it will
   have to build `INSERT DATA` text. The module docstring records this.
@@ -1587,8 +1590,8 @@ Phase 7 is the API: a query endpoint over `graph:canonical` and a
 provenance-lookup endpoint (`triple → source graph / run / confidence`).
 
 The read paths already exist. `store.select` is generic, the ontology's
-documented provenance query works verbatim (§3k), and `store.named_graphs` /
-`graph_triple_count` cover the inventory. What phase 7 has to decide is the
+documented provenance query works verbatim (§3k), and `store.named_graphs`
+covers the inventory. What phase 7 has to decide is the
 HTTP shape, and one thing is worth settling first: **the architecture's
 decision table says "substrate slice + Phase 9 query API; version the endpoint
 rather than reinterpret it"**, so the query API is a *new* endpoint, not a

@@ -91,7 +91,7 @@ The diagram is deliberately simplified. `classify_url` runs in the API layer *be
 
 ## Stage inventory
 
-Reconstructed from `PLAN_BY_TYPE`, the `# === <name> stage ===` banners in `api/extract.py` and the `STAGE_*` constants in `api/_helpers.py` (2026-07-29). When in doubt, those three are the source of truth.
+Reconstructed from `PLAN_BY_TYPE` and the ordered stage chains in `pipeline/run.py` (2026-07-29). When in doubt, those two are the source of truth: each post-agent stage's name is the `Stage(name=...)` literal in its chain.
 
 ### Phase 1 — agent generation (orchestrator)
 
@@ -247,7 +247,7 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | `V2_LINK_VERACITY_ENABLED` | **`true`** | `link_veracity` (Selenium + LLM URL verification). On in LLM mode; set `false` for batch runs. Rule-based mode skips it unconditionally. |
 | `V2_CONCEPT_TAGGING_ENABLED` | `false` | `concept_tagging`. Backend via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph`, `wikipedia`, `llm`}. |
 | `V2_EXPAND_OWNED_REPOS` | `false` | Materialise each owned repo as a full entity instead of a `pulse:owns` reference. |
-| `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency. |
+| `V2_MAX_CONCURRENT_AGENTS` | `8` | Per-stage fan-out concurrency. |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
 | `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `output` carries the v3 canonical shapes. `false` restores the v2 shape. |
 | `V2_SUBSTRATE_ENABLED` | `false` | `substrate_projection` + `substrate_write` (the raw layer in named graphs). |
