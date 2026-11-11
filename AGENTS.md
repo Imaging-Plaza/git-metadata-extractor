@@ -336,7 +336,7 @@ the 120-repo corpus. Regenerate the measurement with
 
 ## Substrate layer (opt-in, since 2026-09-09)
 
-`PROVENANCE_ARCHITECTURE.md` phase 3. With `V2_SUBSTRATE_ENABLED=true`,
+`dev/refactor/PROVENANCE_ARCHITECTURE.md` phase 3. With `V2_SUBSTRATE_ENABLED=true`,
 `/v2/extract` also returns a `substrate` field: the same extraction in the v3
 **raw** shapes, grouped into named graphs.
 
@@ -452,7 +452,7 @@ still a 204.
 
 ## Unification (opt-in, since 2026-09-09)
 
-`PROVENANCE_ARCHITECTURE.md` phase 4. The substrate accumulates one named graph
+`dev/refactor/PROVENANCE_ARCHITECTURE.md` phase 4. The substrate accumulates one named graph
 per `(platform x run)`; the unifier reads all of it, collapses records that
 describe the same entity, and writes `urn:pulse:graph:canonical`.
 
@@ -526,7 +526,7 @@ rewritten — loses data.
 
 ## Provenance (`graph:prov`, since 2026-09-09)
 
-`PROVENANCE_ARCHITECTURE.md` phase 5. A value the unifier *chose* is a derived
+`dev/refactor/PROVENANCE_ARCHITECTURE.md` phase 5. A value the unifier *chose* is a derived
 fact — not what any one source said, but what was decided among what several
 said. `unify/provenance.py` records the decision on the triple itself, as
 RDF-star:
@@ -633,7 +633,7 @@ code 3 marks a refusal.
 **This gate is also the sufficiency check.** Each layer passing its own shapes
 does not mean the substrate holds what canonical needs — the substrate was
 119/119 raw-conformant while missing two things `ArticleShape` and
-`OrganizationShape` require (§3j of `REFACTOR_HANDOFF.md`). The only way to
+`OrganizationShape` require (§3j of `dev/refactor/REFACTOR_HANDOFF.md`). The only way to
 find that out is to build canonical *from* the substrate and validate the
 result, which is exactly what this call does.
 

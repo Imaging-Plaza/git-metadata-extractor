@@ -16,7 +16,7 @@ committed into the submodule, so:
 - CI resolves the same upstream SHA every time
 - the entire delta from upstream is reviewable in one place
 - each patch maps 1:1 to an upstream commit, with the rationale written up in
-  `../../ONTOLOGY_V3_REQUIREMENTS.md`
+  [ontology requirements](../../dev/refactor/ONTOLOGY_V3_REQUIREMENTS.md)
 
 When a patch lands upstream, re-pin the submodule and delete the patch file in
 the same commit — `prepare_ontology.py` cannot re-apply a delta that is already
@@ -40,7 +40,7 @@ Two earlier asks were **withdrawn** after reading
 `src/ontology/ontology-definitions-provenance.ttl` rather than only the shapes:
 `ExtractionRun rdfs:subClassOf prov:Activity` is already declared upstream, and
 the RDF-star provenance decision is already documented there with the library
-evidence behind it. See §0 of `ONTOLOGY_V3_REQUIREMENTS.md`.
+evidence behind it. See §0 of the [ontology requirements](../../dev/refactor/ONTOLOGY_V3_REQUIREMENTS.md).
 
 ## Applying
 

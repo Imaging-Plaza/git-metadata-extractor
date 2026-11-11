@@ -479,7 +479,7 @@ either reading. The placement was right; the superproperty was not.
 
 Adopted from [PR #170](https://github.com/Imaging-Plaza/git-metadata-extractor/pull/170)
 asks #1 and #20; evidence in
-[`dev/ontology-v3-profiles/dependencies-and-dependents.md`](dev/ontology-v3-profiles/dependencies-and-dependents.md).
+[`dev/ontology-v3-profiles/dependencies-and-dependents.md`](../ontology-v3-profiles/dependencies-and-dependents.md).
 
 The raw profile already introduces `pulse:dependsOn`, typed
 `schema:SoftwareSourceCode` → `schema:SoftwareSourceCode`. The data we can
