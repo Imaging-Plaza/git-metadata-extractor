@@ -1,5 +1,9 @@
 # Git Metadata Extractor
 
+This is the reference documentation. The [visual landing page](guide/index.html)
+introduces the tool and its architecture. For local preview or GitHub Pages
+configuration, see [Documentation publishing](publishing.md).
+
 Turn a GitHub repository, user or organization URL into a research graph:
 software, people, organizations, affiliations and publications. The FastAPI
 service combines deterministic source lookups, indexed research and optional

@@ -164,17 +164,20 @@ inventory, scopes, and storage layout.
 
 ```bash
 uv pip install -e ".[docs]"
-just docs-serve          # local preview
-just docs-build          # strict build
+just docs-serve          # landing page at /, reference docs at /docs/
+just docs-build          # strict build of the complete site
 ```
 
 Publish (CI handles `main` and tag pushes; manual commands available):
 
 ```bash
-just docs-deploy-dev                  # publish dev + latest
-just docs-deploy-release 2.0.1        # publish release + update stable
-just docs-set-default stable
+just docs-deploy-dev                  # dispatch the main publishing workflow
+just docs-deploy-release 3.1.0         # dispatch for an existing v3.1.0 tag
 ```
+
+See [Documentation publishing](publishing.md) for GitHub Pages configuration,
+version routes and preview behavior. Local preview is at
+`http://127.0.0.1:8000/`; rerun `docs-serve` after edits.
 
 ## Local workflow
 

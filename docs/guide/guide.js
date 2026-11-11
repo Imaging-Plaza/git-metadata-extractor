@@ -194,7 +194,7 @@
   showView('context');
   reducedMotion.addEventListener('change', () => sequences.forEach(sequence => { sequence.update(); sequence.positionPacket(); }));
   document.addEventListener('visibilitychange', () => { if (document.hidden) sequences.forEach(sequence => sequence.pause()); });
-  if (window.location.protocol === 'file:') {
+  if (window.location.protocol === 'file:' && !document.documentElement.hasAttribute('data-built-landing')) {
     document.querySelectorAll('[data-doc]').forEach(link => { link.href = `../${link.dataset.doc}`; });
   }
   document.documentElement.classList.add('enhanced');

@@ -19,7 +19,8 @@ and optional LLM agents; extraction SHACL violations are reported as warnings.
 **[Open the visual field guide](docs/guide/index.html)**
 for C4 architecture diagrams, animated extraction sequences and mapping recipes.
 Download the guide directory for offline viewing, or run `just docs-serve` and
-open `/guide/` on the local documentation server.
+open `http://127.0.0.1:8000/`. The guide is the landing page; reference docs live
+under `/docs/`. See [publishing and preview instructions](docs/publishing.md).
 Use the [maintenance guide](docs/architecture/maintenance.md) for searchable
 mapping, ontology and optional run-report instructions.
 
@@ -102,7 +103,10 @@ Swagger UI: <http://localhost:1234/docs>
 | [Ontology proposal adoption](dev/investigations/2026-11-11-proposal-adoption/adoption.txt) | Caviri's 22 requests assessed against Robin's implementation; adopted fixes and remaining ontology work |
 | [.env.example](.env.example) | Every env var with defaults and notes |
 
-Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
+Project site: <https://imaging-plaza.github.io/git-metadata-extractor/>
+
+After the Pages workflow publishes this layout, the visual guide is at the site
+root and versioned reference documentation is under `/docs/`.
 
 ---
 

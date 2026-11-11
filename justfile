@@ -277,29 +277,26 @@ docs:
 # Project Documentation Site (MkDocs + Mike)
 # ============================================================================
 
-# Serve project documentation locally with live reload
+# Build and preview the landing page plus /docs/ locally; rerun after edits
 docs-serve:
-    mkdocs serve
+    python scripts/docs/build_site.py
+    python -m http.server 8000 --bind 127.0.0.1 --directory site
 
 # Build project documentation and fail on warnings
 docs-build:
-    mkdocs build --strict
+    python scripts/docs/build_site.py
 
 # List published documentation versions and aliases
 docs-version-list:
     mike list
 
-# Deploy docs from current branch as dev + latest aliases
+# Publish main through the complete GitHub Pages workflow
 docs-deploy-dev:
-    mike deploy --push --branch gh-pages --update-aliases dev latest
+    gh workflow run docs_pages.yml --ref main
 
 # Deploy docs for a specific release version and update stable alias
 docs-deploy-release VERSION:
-    mike deploy --push --branch gh-pages --update-aliases {{VERSION}} stable
-
-# Set the default docs version/alias
-docs-set-default VERSION:
-    mike set-default --push --branch gh-pages {{VERSION}}
+    gh workflow run docs_pages.yml --ref v{{VERSION}}
 
 # ============================================================================
 # Cleanup

@@ -1,0 +1,90 @@
+Pages landing and reference layout validation - 2026-11-11
+
+Worktree: D:/pro/git-metadata-extractor
+Branch: feat/2026-11-refactor
+Base: 6e3bf60706023d6d37e7b9e3abc84a805dc978b0
+
+Implemented
+- scripts/docs/build_site.py assembles the offline guide at site/index.html and
+  reference docs under site/docs. Local builds invoke strict MkDocs; published
+  builds export declared Mike versions and real-directory aliases from Git.
+- scripts/docs/hooks.py disables Material's version selector for a single local
+  build. Mike's versioned builds retain the selector.
+- .github/workflows/docs_pages.yml now uploads an official GitHub Pages artifact
+  and deploys it through the github-pages environment. Main/tag gates, separate
+  build/deploy permissions and concurrency protect publication. A tagged build
+  takes its landing source from main. gh-pages remains a version archive.
+- CI, justfile and docs entrypoints use the assembled build. Publishing and
+  local preview instructions explain the routes and activation boundary.
+- docs/guide/guide.js preserves generated HTML links when opened through file:;
+  the original standalone guide still rewrites links to Markdown source files.
+- tests/docs/test_build_site.py covers safety, version exports and local builds.
+
+Checks and evidence
+1. .staging/docs-tooling/Scripts/python.exe -m unittest discover -s tests/docs -v
+   PASS: 13 tests. Fixtures use real Git archives and actual strict MkDocs builds.
+   They cover alias copies, omitted unrelated branch files, source/ancestor
+   output rejection, unsafe archives, absent versions, link/fragment rewrites,
+   alternate landing source, fallback versions and preservation of a previous
+   artifact on strict build failure. The intentional bad-link fixture emits a
+   strict-build failure, then the test confirms the previous artifact survives.
+
+2. .staging/docs-tooling/Scripts/python.exe scripts/docs/build_site.py
+   PASS: complete local build at site/. Strict MkDocs exit 0.
+   Tooling environment installs only the docs extra, not application dependencies.
+   Python 3.11.16, MkDocs 1.6.1, Mike 2.2.0, Material 9.8.1.
+
+3. .staging/docs-tooling/Scripts/python.exe .staging/smoke_pages_publish.py
+   PASS: an isolated Git fixture imports the existing gh-pages archive, runs
+   real Mike main/dev/latest and release/3.1.0/stable builds, then assembles both.
+   Earlier versions survive; aliases contain real files; unrelated source-tree
+   files on the mixed-content archive branch are not published. A deliberately
+   changed tagged introduction is not used when the landing source is main.
+   This test never pushes or changes the actual gh-pages branch.
+
+4. python .staging/check_pages_browser.py
+   PASS: Chromium desktop 1440x1000 and mobile 390x844, served under the actual
+   project URL prefix /git-metadata-extractor/ for local and versioned artifacts.
+   Verified root guide controls, all landing documentation links, docs home,
+   reference search results, version-selector destinations, /docs/ redirect,
+   guide redirects preserving query+fragment, and no mobile page overflow.
+   No page JavaScript errors or missing local resources. Root guide makes no
+   external asset requests. Existing reference-theme external assets were
+   blocked during this test; local search and navigation remained functional.
+   Initial local preview failed on /versions.json: source inspection showed
+   Material's extra.version provider was enabled without a Mike build. The hook
+   fixes that; both local and versioned browser checks then passed.
+   Screenshots/results: .staging/pages-browser/.
+
+5. .staging/actionlint/bin/actionlint.exe .github/workflows/docs_pages.yml .github/workflows/ci.yml
+   PASS, exit 0. actionlint v1.7.12 downloaded from its upstream GitHub release;
+   archive SHA256 verified against the published checksum before execution.
+
+6. python -m ruff check scripts/docs tests/docs
+   PASS. The path-loaded MkDocs hook explicitly documents the INP001 exemption.
+   Docker-on-Windows additionally reports EXE002 due to bind-mount executable
+   bits; the native check passes without that platform artifact.
+   node --check docs/guide/guide.js and git diff --check: PASS.
+
+7. Independent review: spec and quality pass, no blocking findings. Reviewed
+   workflow ordering/permissions, archive allowlist, safe output handling,
+   URL prefixes and deployment boundary; no duplicate test runs requested.
+
+Repository configuration (performed and read back)
+- gh api --method PUT repos/Imaging-Plaza/git-metadata-extractor/pages -f build_type=workflow
+  Verified build_type=workflow and existing project URL unchanged.
+- Added github-pages deployment branch policy name=v*, type=tag (id 66346118).
+  Read-back lists main branch, v* tag, and retained legacy gh-pages branch rule.
+- The old source metadata gh-pages:/docs remains in GitHub's API response, but
+  workflow build_type selects the artifact publisher instead of that source.
+
+Limits / follow-ups
+- No application runtime/schema changes; the application test suite was not
+  rerun. No secrets, running services, index stores or virtual environments
+  were modified. The isolated docs tooling environment is ignored local data.
+- No live-site deployment or merge occurred. PR171 targets develop; publication
+  happens only after the configuration reaches main or an eligible v* tag.
+- Tags predating this workflow retain their original workflow definition.
+- Public reference routes move beneath /docs/. Mike versions are retained;
+  older root-level version bookmarks are not rewritten by this change.
+- Versioned artifacts are curated exports; gh-pages remains the durable archive.

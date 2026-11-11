@@ -1,10 +1,13 @@
 site_name: Git Metadata Extractor Documentation
-site_url: https://imaging-plaza.github.io/git-metadata-extractor/
+site_url: https://imaging-plaza.github.io/git-metadata-extractor/docs/
 repo_url: https://github.com/Imaging-Plaza/git-metadata-extractor
 repo_name: Imaging-Plaza/git-metadata-extractor
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
+
+hooks:
+  - scripts/docs/hooks.py
 
 theme:
   name: material
@@ -14,6 +17,8 @@ theme:
 
 plugins:
   - search
+  - mike:
+      alias_type: copy
 
 extra:
   version:
@@ -52,6 +57,7 @@ nav:
       - Migration V1 to V2: migration-v1-to-v2.md
   - Operate it:
       - Operations Runbook: OPERATIONS_RUNBOOK.md
+      - Documentation Publishing: publishing.md
   # Index build/refresh docs live in the open-pulse-sources repo:
   # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
   # (RAG tools the extraction pipeline consumes) is documented here.

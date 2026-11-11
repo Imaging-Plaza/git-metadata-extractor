@@ -19,10 +19,7 @@ on:
     - cron: "0 6 * * 1"
 
 jobs:
-  # The publish workflow (docs_pages.yml) only runs `mkdocs build --strict` on
-  # a push to main or a v* tag — i.e. after merge. A broken nav entry, a dead
-  # internal link or an unparseable mkdocs.yml would surface at publish time,
-  # on main, instead of on the PR that caused it. Same build, run as a gate.
+  # Validate the same landing page + reference layout before publication.
   docs-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -54,11 +51,11 @@ jobs:
           cat /tmp/docs-requirements.txt
           python -m pip install -r /tmp/docs-requirements.txt
 
-      - name: Build the docs site (strict)
-        # --strict promotes warnings to errors, which covers unresolvable
-        # internal links and pages missing from the nav without an explicit
-        # `not_in_nav` entry.
-        run: mkdocs build --strict
+      - name: Test the Pages assembler
+        run: python -m unittest discover -s tests/docs -v
+
+      - name: Build the landing page and reference docs (strict)
+        run: python scripts/docs/build_site.py
 
   v2-ci-gates:
     runs-on: ubuntu-latest

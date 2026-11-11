@@ -1,0 +1,41 @@
+Landing page and GitHub Pages publishing
+
+User request: make the visual guide the landing page, with reference docs in
+a subsection of the same GitHub Pages site.
+
+Design: preserve existing Markdown source paths and Mike version history.
+Build a curated Pages artifact: visual guide at /, reference docs at /docs/,
+and published versions at /docs/<version-or-alias>/. /docs/ redirects to latest
+(then stable/first version as a fallback) in the versioned artifact. Local
+preview builds ordinary reference docs directly at /docs/.
+
+The current Pages setting points to gh-pages:/docs, which is source Markdown;
+the existing publisher writes Mike output at the branch root. Switch to the
+official GitHub Actions artifact publisher. Keep gh-pages as Mike's version
+archive, but export only versions declared in versions.json, never unrelated
+files from that mixed-content branch. Export aliases as real copies because
+Pages artifacts cannot contain symlinks. A tag must not downgrade the landing
+page: workflow assembles it from main, while publishing the tagged reference.
+
+Task 1: scripts/docs/build_site.py + focused stdlib tests. Build strict MkDocs
+locally or export versioned docs from a Git ref, assemble landing assets/links,
+retain reference nav links via guide redirects, validate output paths/archives,
+fail on absent versions, and refuse destructive output locations. No runtime
+dependencies or source moves. Native dry-run in isolated Git fixture.
+
+Task 2: wire docs-build/docs-serve recipes and CI to assembled build; update
+publishing workflow with Pages permissions, environment, concurrency,
+configure-pages/upload-pages-artifact/deploy-pages. Install only docs extras.
+Restrict deployment to main and v* tags; PRs build but cannot deploy. Update
+preview/publishing documentation and public URL examples. Configure repository
+Pages build_type=workflow after build/review; no merge or live deploy requested.
+
+Task 3: strict assembled build, targeted tests, browser routes/assets/search/
+anchors under /git-metadata-extractor/ prefix, version/alias export fixture and
+workflow review. Commit/push PR171 and record result. Existing runtime suite
+need not rerun for docs publishing changes.
+
+Execution: all three tasks complete. Added a small MkDocs configuration hook
+after browser verification found a missing versions.json request in unversioned
+preview. The selector remains active in Mike builds. All checks and the
+GitHub Pages/environment setting read-backs are recorded in validation.txt.
