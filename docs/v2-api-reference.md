@@ -66,9 +66,10 @@ Repository-mode traversal contract:
 Query parameters:
 
 - `output_format`: `jsonld` (default) or `json`
-- `agent_runtime`: `rule_based|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
+- `agent_runtime`: `rule_based|hybrid|llm` (optional; defaults to `V2_AGENT_RUNTIME_DEFAULT=llm`)
   - `agent_runtime=llm` runs LLM agents for repository/user/organization roots and fanout stages.
-  - In LLM runtime, two global fail-open stages are always enabled:
+  - Hybrid uses rule-based generators, LLM refinement and enabled LLM-assisted affiliation/parent resolution. LLM-only deduplication, critic, link-veracity and organization-relationship stages remain separate.
+  - LLM runtime has two global fail-open stages:
     - `llm_dedup` (post-permissive, pre-reconciliation): LLM duplicate-cluster suggestions + deterministic constrained merge/remap.
     - `llm_critic` (post-reconciliation, pre-strict, gated by `V2_APPLY_CRITIC_PRUNING`): LLM prune suggestions + deterministic non-root pruning/cascade cleanup.
   - Both stages are warning-only on failure (pipeline continues).
@@ -77,6 +78,7 @@ Query parameters:
     - user input: `person_agent`
     - organization input: `org_agent`
 - `include_context_summary`: `true|false` (default `false`, includes the compiled LLM context summary markdown used by downstream agents when available)
+- `include_run_report`: `true|false` (default `false`); attaches the optional [run report](#optional-run-report).
 
 Examples:
 
@@ -106,8 +108,9 @@ Request body:
 
 - `source_url` (required): GitHub path or URL (for example `github.com/octocat/Hello-World`)
 - `output_format`: `jsonld|json` (default `jsonld`)
-- `agent_runtime`: `rule_based|llm` (optional)
+- `agent_runtime`: `rule_based|hybrid|llm` (optional)
 - `include_context_summary`: `true|false` (default `false`)
+- `include_run_report`: `true|false` (default `false`); the completed job carries it under `result.run_report`.
 
 Response (`202 Accepted`):
 
@@ -143,6 +146,54 @@ curl -s -X POST "http://localhost:1234/v2/extract" \
   "submitted_at": "2026-04-29T10:31:00.000Z"
 }
 ```
+
+### Optional run report
+
+Set `include_run_report=true` on either extraction method to receive a structured
+`run_report` beside `output`. It uses actual observations across both sequencers;
+the older `stats.stages_completed` field remains a compatibility summary.
+
+```bash
+curl -s -X POST "http://localhost:1234/v2/extract" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source_url":"https://github.com/sdsc-ordes/gimie","agent_runtime":"hybrid","include_run_report":true}'
+```
+
+Poll the returned `status_url`. A completed job includes `result.run_report`;
+a typed extraction failure after the run starts can include `error.run_report`.
+The synchronous equivalent is
+`GET /v2/extract/github.com/sdsc-ordes/gimie?agent_runtime=hybrid&include_run_report=true`.
+
+The versioned report contains:
+
+| Field | Meaning |
+|---|---|
+| `request_run_id`, `output_run_id`, `runtime`, `status` | Current execution identity and the run that produced the returned graph; status distinguishes completed, failed and cache reuse |
+| `stages` | Observed generation/post-processing order, repeated invocations, completed/partial/skipped/failed/cancelled outcomes, timing and activity links |
+| `stages[].changes` | Entity counts and names of added/removed/changed properties, without raw values |
+| `activities` | Agent/model/mapping metadata, parent links, cache/history flags and available usage |
+| `retrievals` | Service, outcome, owning activity, cache/history flags and source URLs stripped of credentials, query strings and fragments |
+| `validations` | Strict entity, output SHACL and optional substrate SHACL outcomes; violations, unavailable validation and execution errors are distinct |
+| `usage` | Known current-run model-call/token/request/tool-call totals, plus completeness and missing-usage counts |
+| `attribution`, `limitations` | Recorded citation/matching-claim counts and what those observations cannot establish |
+
+Changing the report flag does not bypass caches or rerun models. A pipeline cache
+hit produces a fresh report with `status=cache_hit`, the original `output_run_id`,
+empty current stage/activity lists and zero fresh model usage. Historical execution
+evidence remains in `provenance`; it is not counted as new work. The report itself
+is not stored in the shared pipeline cache.
+
+Reports omit prompts, provider response bodies, raw query arguments and exception
+messages. Snapshot comparisons run only when requested. A completed stage does not
+mean its validation passed, a retrieved value is not automatically a citation,
+and usage totals with `complete=false` are known subtotals. Validation/auth errors
+before execution, unexpected framework errors and cancelled jobs do not acquire
+a new persisted report artifact in this version.
+
+Local callers can use `ExtractionOptions(include_run_report=True, ...)` or
+`run_profile(..., include_run_report=True)`; this flag does not change the selected
+profile's fingerprint. Omit the flag to retain the default response shape.
 
 ### `GET /v2/jobs/{job_id}`
 

@@ -112,6 +112,7 @@ async def _run_extract_job(  # noqa: C901, PLR0915 - explicit job lifecycle
             agent_runtime=payload.agent_runtime,
             include_context_summary=payload.include_context_summary,
             include_internal_fields=payload.include_internal_fields,
+            include_run_report=payload.include_run_report,
             providers=providers,
         )
 
@@ -203,6 +204,9 @@ async def extract(  # noqa: PLR0913
         Literal["rule_based", "llm", "hybrid"] | None, Query(),
     ] = None,
     include_context_summary: Annotated[bool, Query()] = False,
+    include_run_report: Annotated[
+        bool, Query(description="Attach the optional execution and observability report."),
+    ] = False,
     include_internal_fields: Annotated[
         bool,
         Query(
@@ -227,6 +231,7 @@ async def extract(  # noqa: PLR0913
         output_format=output_format,
         include_context_summary=include_context_summary,
         include_internal_fields=include_internal_fields,
+        include_run_report=include_run_report,
     )
 
 
@@ -239,6 +244,7 @@ async def _extract_for_request(  # noqa: PLR0913 - public route options
     output_format,
     include_context_summary,
     include_internal_fields,
+    include_run_report=False,
 ):
     options = ExtractionOptions(
         source_url=full_path,
@@ -246,6 +252,7 @@ async def _extract_for_request(  # noqa: PLR0913 - public route options
         output_format=output_format,
         include_context_summary=include_context_summary,
         include_internal_fields=include_internal_fields,
+        include_run_report=include_run_report,
         read_only=bool(getattr(request.state, "v2_read_only", False)),
     )
     try:

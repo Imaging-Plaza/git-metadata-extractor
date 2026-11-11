@@ -127,7 +127,7 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `reconcile_entities` | ID canonicalisation + linkage; anonymises emails |
 | `resolve_company_to_ror` | `_company` → ROR: Membership + Org stub |
 | `resolve_bio_to_ror` | bio / blog / email → ROR: Membership + Org stub |
-| `resolve_bio_to_ror_llm` **[LLM]** | LLM long-tail affiliation resolver |
+| `resolve_bio_to_ror_llm` **[LLM/hybrid]** | LLM long-tail affiliation resolver |
 | `resolve_placeholder_orgs_to_ror` | upgrade placeholder Orgs to real ROR entities |
 | `llm_critic` **[LLM, off by default]** | drop suggestions |
 | `refine_with_llm` **[hybrid]** | whitelisted-field patches over rule-based output |
@@ -248,6 +248,21 @@ The pipeline collects rich metadata the v2 ontology doesn't model — but we sti
 Both namespaces register in `@context` only when `include_internal_fields=true`, so default output stays strictly ontology-conformant.
 
 ---
+
+## Observing one run
+
+Set `include_run_report=true` on GET or POST extraction for the actual generation
+and post-processing timeline. The optional `run_report` includes stage outcomes,
+activity and retrieval links, property-change summaries, validator results and
+model usage. Default requests do not take report snapshots or attach the report.
+Cache hits are labelled reuse and do not claim fresh extraction or model cost.
+See the [API contract and example](v2-api-reference.md#optional-run-report).
+
+The report records function execution and explicit outcomes; stage completion
+does not imply every optional side effect, such as a configured store write,
+took place. Validation conformance and model/retrieval failures remain separately
+inspectable. `stats.stages_completed` is retained for compatibility and is not
+the authoritative execution timeline.
 
 ## Env flags worth knowing
 

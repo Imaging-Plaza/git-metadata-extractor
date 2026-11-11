@@ -1,0 +1,84 @@
+Optional extraction run report
+
+User request: design and add an optional unified run report for observability
+across rule_based, hybrid and llm. This implements the preceding proposal:
+stage -> outcome -> agent/model -> retrieval -> changes -> validation -> usage.
+
+Approaches considered
+1. Derive everything from the existing RDF evidence document. Small, but cannot
+   recover skipped stages, removed fields or actual validator outcomes.
+2. Add an opt-in request-local collector and reuse existing activity evidence.
+   Selected implementation: accurate outcomes without duplicating provider/model
+   instrumentation or changing ontology entities.
+3. Add a tracing backend/dashboard. Useful later, but requires infrastructure
+   beyond this optional report. Deferred.
+
+Public contract
+- include_run_report=false by default on both extraction methods and local
+  ExtractionOptions. POST jobs forward it to the same shared use case.
+- A typed, versioned run_report sibling appears only when requested. It contains
+  current request run ID, output run ID, runtime, status, elapsed time, ordered
+  stage records, activities, retrievals, validation results, field-change
+  summaries, usage totals and explicit limitations/attribution summary.
+- Stage records distinguish generation and post-processing, preserve repeated
+  names, record skipped/no-work and failures, and link to observed activity IDs.
+  The report never infers execution from legacy stats.stages_completed.
+- Changes are counts and property names, not raw before/after values. Capture
+  snapshots only when enabled. Exclude internal/helper fields.
+- Model usage counts only current-run model activities, not enclosing agents or
+  imported historical cache evidence; missing usage stays explicitly incomplete.
+- Retrievals expose service, status, cache flag and sanitized source URLs, never
+  prompts, provider bodies, raw arguments, exception messages or credentials.
+- Validator execution success is distinct from conformance. Strict entity
+  validation, output SHACL and optional substrate SHACL report their real results.
+- Typed domain failures can carry a partial report. Validation/auth failures
+  before a run starts retain existing responses; unexpected framework errors and
+  cancelled jobs do not gain a new durable error-artifact store in this version.
+
+Cache and compatibility
+- Report selection does not change semantic pipeline cache keys or rerun LLMs.
+- Store extraction results without the per-request report. On a cache hit return
+  a fresh report labelled cache_hit, identifying the original output run, with
+  no claimed stage execution or fresh model usage. Historical evidence remains
+  in the existing provenance field, not counted as current work.
+- Opt-out responses omit run_report and maintain existing data/behavior.
+- No schema/ontology pin change, additional dependencies, service restart or
+  external observability backend. Existing worktree/PR remain the integration path.
+
+Internal interfaces (observation/run_report.py)
+- report_scope(enabled: bool): context manager yielding optional recorder.
+- start_report(run_id: str, runtime: str): initialize current recorder.
+- observe_stage(name, *, phase, snapshot=None): context manager yielding an
+  optional mutable StageReport; records timing/error type/activity IDs and changes.
+  snapshot is a zero-argument callable returning current entity containers.
+- record_skipped(name, *, phase, reason): append a zero-work stage record.
+- record_stage_outcome(status, *, reason=None): annotate structured fail-open
+  outcomes on the active stage; nested report/stage scopes restore their parent.
+- record_validation(name, *, status, checked=None, violations=None, warnings=0,
+  reason=None): append typed outcome using constant reason codes.
+- build_run_report(*, output_run_id, status, warning_count=0): return optional
+  RunReport built from collector and current EvidenceTrace.
+Stage phases: generation, post_processing. Stage status: completed, partial,
+failed, skipped, cancelled. Validation status: passed, violations, unavailable,
+error. Report status: completed, failed, cache_hit.
+observe_stage captures exceptions and rethrows; explicit partial/skipped status
+set inside the context is retained on normal completion. Optional error_type
+and reason contain safe codes only. All report contracts use Pydantic DataModel.
+
+Coverage expectations
+Observe actual orchestrator loop stages, including no-work fanout and partial
+agent failures, without wrapping them in new evidence scopes (which would change
+retrieval citation eligibility). Post-processing observes gate errors/skips and
+both fail-open and fatal execution. Context-local isolation protects concurrent
+requests. Snapshots/report construction are off when not requested.
+Adapters with structured item-failure counters annotate partial/all-failed work
+without changing extraction behavior. Negative verification verdicts and valid
+no-match decisions are completed work, not execution failures. Failures reported
+only as unstructured warning text are not inferred into typed outcomes.
+
+Validation plan
+Meaningful failing tests first: optionality, API/job forwarding, cache reuse in
+both flag directions, typed failures, concurrent contexts, partial/no-work and
+gated stages, repeated names, property changes, validator unavailable/violations,
+usage incompleteness/history exclusion and sensitive-data omission. Then full
+offline suite, mapping/model freshness, documentation build and scoped lint.

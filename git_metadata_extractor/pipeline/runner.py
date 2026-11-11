@@ -21,6 +21,7 @@ from git_metadata_extractor.observation.evidence import (
     get_trace,
     state_entities,
 )
+from git_metadata_extractor.observation.run_report import observe_stage
 from git_metadata_extractor.pipeline.state import PipelineState, StageOutcome
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ async def _invoke(stage: Stage, state: PipelineState) -> None:
         await result
 
 
-async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineState:
+async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineState:  # noqa: C901, PLR0915
     """Run `stages` in order against `state`, timing and gating each one.
 
     Stages mutate `state` rather than returning a new one: the sequence
@@ -67,56 +68,70 @@ async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineSta
     touch.
     """
     for stage in stages:
-        try:
-            if not stage.applies(state):
-                state.stage_outcomes.append(StageOutcome(name=stage.name, status="skipped", phase="gate"))
-                logger.debug("%s: skipped by gate", stage.name)
+        with observe_stage(
+            stage.name, phase="post_processing", snapshot=lambda: state_entities(state),
+        ) as report_stage:
+            try:
+                if not stage.applies(state):
+                    if report_stage is not None:
+                        report_stage.status = "skipped"
+                        report_stage.reason = "gate_disabled"
+                    state.stage_outcomes.append(StageOutcome(name=stage.name, status="skipped", phase="gate"))
+                    logger.debug("%s: skipped by gate", stage.name)
+                    continue
+            except Exception as exc:
+                if report_stage is not None:
+                    report_stage.status = "failed"
+                    report_stage.reason = "gate_error"
+                    report_stage.error_type = type(exc).__name__
+                state.stage_outcomes.append(StageOutcome(
+                    name=stage.name, status="failed", phase="gate", error_type=type(exc).__name__,
+                ))
+                if not stage.fail_open:
+                    raise StageError(stage.name, exc) from exc
+                logger.exception("%s: optional gate failed; stage skipped", stage.name)
+                state.warn(f"{stage.name} gate failed; stage skipped")
                 continue
-        except Exception as exc:
-            state.stage_outcomes.append(StageOutcome(
-                name=stage.name, status="failed", phase="gate", error_type=type(exc).__name__,
-            ))
-            if not stage.fail_open:
-                raise StageError(stage.name, exc) from exc
-            logger.exception("%s: optional gate failed; stage skipped", stage.name)
-            state.warn(f"{stage.name} gate failed; stage skipped")
-            continue
 
-        started_at = perf_counter()
-        # Published so an adapter can log its own duration *before* returning.
-        # The authoritative value below is only written once the stage is done,
-        # so an adapter reading `state.timings` mid-stage always saw 0.00s.
-        state.stage_started_at = started_at
-        try:
-            with activity(stage.name, kind="transformation"):
-                await _invoke(stage, state)
-                trace = get_trace()
-                if trace is not None:
-                    trace.observe(state_entities(state))
-        except asyncio.CancelledError:
-            elapsed = perf_counter() - started_at
-            state.timings[stage.name] = elapsed
-            state.stage_outcomes.append(StageOutcome(
-                name=stage.name, status="cancelled", duration_seconds=elapsed,
-            ))
-            raise
-        except Exception as exc:
-            elapsed = perf_counter() - started_at
-            state.timings[stage.name] = elapsed
-            state.stage_outcomes.append(StageOutcome(
-                name=stage.name, status="failed", duration_seconds=elapsed,
-                error_type=type(exc).__name__,
-            ))
-            if not stage.fail_open:
-                logger.exception("%s stage failed (fatal)", stage.name)
-                raise StageError(stage.name, exc) from exc
-            logger.exception("%s stage failed", stage.name)
-            state.warn(f"{stage.name} stage failed: {exc}")
-        else:
-            elapsed = perf_counter() - started_at
-            state.timings[stage.name] = elapsed
-            state.stage_outcomes.append(StageOutcome(
-                name=stage.name, status="completed", duration_seconds=elapsed,
-            ))
+            started_at = perf_counter()
+            # Published so an adapter can log its own duration *before* returning.
+            # The authoritative value below is only written once the stage is done,
+            # so an adapter reading `state.timings` mid-stage always saw 0.00s.
+            state.stage_started_at = started_at
+            try:
+                with activity(stage.name, kind="transformation"):
+                    await _invoke(stage, state)
+                    trace = get_trace()
+                    if trace is not None:
+                        trace.observe(state_entities(state))
+            except asyncio.CancelledError:
+                elapsed = perf_counter() - started_at
+                state.timings[stage.name] = elapsed
+                state.stage_outcomes.append(StageOutcome(
+                    name=stage.name, status="cancelled", duration_seconds=elapsed,
+                ))
+                raise
+            except Exception as exc:
+                if report_stage is not None:
+                    report_stage.status = "failed"
+                    report_stage.reason = "execution_error"
+                    report_stage.error_type = type(exc).__name__
+                elapsed = perf_counter() - started_at
+                state.timings[stage.name] = elapsed
+                state.stage_outcomes.append(StageOutcome(
+                    name=stage.name, status="failed", duration_seconds=elapsed,
+                    error_type=type(exc).__name__,
+                ))
+                if not stage.fail_open:
+                    logger.exception("%s stage failed (fatal)", stage.name)
+                    raise StageError(stage.name, exc) from exc
+                logger.exception("%s stage failed", stage.name)
+                state.warn(f"{stage.name} stage failed: {exc}")
+            else:
+                elapsed = perf_counter() - started_at
+                state.timings[stage.name] = elapsed
+                state.stage_outcomes.append(StageOutcome(
+                    name=stage.name, status="completed", duration_seconds=elapsed,
+                ))
 
     return state

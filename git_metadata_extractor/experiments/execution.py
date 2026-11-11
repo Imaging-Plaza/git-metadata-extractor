@@ -132,6 +132,7 @@ async def run_profile(  # noqa: PLR0913 - explicit local execution dependencies
     catalog: ComponentCatalog | None = None,
     provider_mode: str = "mock",
     providers: ProviderSet | None = None,
+    include_run_report: bool = False,
 ) -> ProfileExecution:
     """Run locally with isolated state, no ingestion/store writes and no env mutation."""
     token = set_request_model_override(None)
@@ -143,6 +144,7 @@ async def run_profile(  # noqa: PLR0913 - explicit local execution dependencies
             catalog=catalog,
             provider_mode=provider_mode,
             providers=providers,
+            include_run_report=include_run_report,
         )
     finally:
         reset_request_model_override(token)
@@ -156,6 +158,7 @@ async def _run_profile(  # noqa: C901, PLR0913 - scoped extraction lifecycle
     catalog,
     provider_mode,
     providers,
+    include_run_report,
 ):
     if provider_mode not in {"mock", "live"}:
         msg = "provider_mode must be mock or live"
@@ -229,6 +232,7 @@ async def _run_profile(  # noqa: C901, PLR0913 - scoped extraction lifecycle
                     source_url=source_url,
                     agent_runtime=profile.runtime,
                     include_context_summary=True,
+                    include_run_report=include_run_report,
                     read_only=True,
                 ),
                 providers=bundle,

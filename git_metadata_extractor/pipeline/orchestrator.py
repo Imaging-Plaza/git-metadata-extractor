@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.observation.evidence import activity, observe_providers
+from git_metadata_extractor.observation.run_report import observe_stage, record_skipped
 
 logger = logging.getLogger(__name__)
 
@@ -361,171 +362,204 @@ class PipelineOrchestrator:
         runtime_context["pipeline_agent_results"] = dict(pipeline_agent_results)
 
         for stage in plan.stages:
-            if stage.name == STAGE_CONTEXT_GATHER:
-                stage_started_at = perf_counter()
-                url_info = self._require_url_info(runtime_context)
-                with activity("context_gather", kind="retrieval"):
-                    context_bundle = await _maybe_await(
-                        self._context_gatherer(plan.detected_type, url_info, providers),
+            with observe_stage(
+                stage.name, phase="generation",
+                snapshot=lambda: [result.data for result in agent_results.values()],
+            ) as report_stage:
+                if stage.name == STAGE_CONTEXT_GATHER:
+                    stage_started_at = perf_counter()
+                    url_info = self._require_url_info(runtime_context)
+                    with activity("context_gather", kind="retrieval"):
+                        context_bundle = await _maybe_await(
+                            self._context_gatherer(plan.detected_type, url_info, providers),
+                        )
+                    runtime_context["context_bundle"] = context_bundle
+                    runtime_context["gathered_context"] = context_bundle.context
+                    runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
+                    for warning in context_bundle.warnings:
+                        _append_unique(warnings, warning)
+                    logger.info(
+                        "%s: warnings=%d context_keys=%s in %.2fs",
+                        STAGE_CONTEXT_GATHER,
+                        len(context_bundle.warnings),
+                        sorted(context_bundle.context.keys()),
+                        perf_counter() - stage_started_at,
                     )
-                runtime_context["context_bundle"] = context_bundle
-                runtime_context["gathered_context"] = context_bundle.context
-                runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
-                for warning in context_bundle.warnings:
-                    _append_unique(warnings, warning)
+
+                    runtime_mode = parse_agent_runtime(
+                        runtime_context.get("agent_runtime"),
+                        default=AgentRuntime.RULE_BASED,
+                        field_name="agent_runtime",
+                    )
+                    if runtime_mode == AgentRuntime.LLM:
+                        with observe_stage(
+                            STAGE_CONTEXT_SUMMARY_AGENT, phase="generation",
+                        ) as summary_report:
+                            summary_context = {
+                                "detected_type": plan.detected_type,
+                                "source_url": runtime_context.get("source_url"),
+                                "gathered_context": deepcopy(context_bundle.context),
+                            }
+                            try:
+                                summary_result = await with_retry(
+                                    self._llm_context_summary_agent.run,
+                                    context=summary_context,
+                                    providers=providers,
+                                    max_retries=self._retry_max_retries,
+                                    backoff_base=self._retry_backoff_base,
+                                    sleep_func=self._retry_sleep_func,
+                                    invalid_result_checker=None,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                if summary_report is not None:
+                                    summary_report.status = "failed"
+                                    summary_report.reason = "execution_error"
+                                    summary_report.error_type = type(exc).__name__
+                                if report_stage is not None:
+                                    report_stage.status = "partial"
+                                    report_stage.reason = "context_summary_failed"
+                                _append_unique(
+                                    warnings,
+                                    (
+                                        "context_summary_agent execution failed; "
+                                        f"continuing without compiled summary: {exc}"
+                                    ),
+                                )
+                            else:
+                                if summary_report is not None and summary_result.is_partial:
+                                    summary_report.status = "partial"
+                                    summary_report.reason = "partial_agent_results"
+                                for warning in summary_result.warnings:
+                                    _append_unique(
+                                        warnings,
+                                        f"{STAGE_CONTEXT_SUMMARY_AGENT}: {warning}",
+                                    )
+                                if summary_result.is_partial and summary_result.failure_reason:
+                                    _append_unique(
+                                        warnings,
+                                        (
+                                            "context_summary_agent returned partial output: "
+                                            f"{summary_result.failure_reason}"
+                                        ),
+                                    )
+                                compiled_summary = summary_result.data.get("summary_markdown")
+                                if isinstance(compiled_summary, str) and compiled_summary.strip():
+                                    runtime_context["compiled_context_markdown"] = compiled_summary
+                                    gathered_context = runtime_context.get("gathered_context")
+                                    if isinstance(gathered_context, dict):
+                                        gathered_context["compiled_context_markdown"] = compiled_summary
+                                        runtime_context["gathered_context"] = gathered_context
+                                else:
+                                    if summary_report is not None:
+                                        summary_report.status = "partial"
+                                        summary_report.reason = "empty_summary"
+                                    _append_unique(
+                                        warnings,
+                                        (
+                                            "context_summary_agent returned an empty summary; "
+                                            "downstream LLM agents will use default prompt context only"
+                                        ),
+                                    )
+                    else:
+                        record_skipped(
+                            STAGE_CONTEXT_SUMMARY_AGENT, phase="generation", reason="runtime_disabled",
+                        )
+                    stages_completed.append(stage.name)
+                    continue
+
+                work_items = self._build_work_items(stage.name, plan.detected_type, runtime_context)
+                # Drain any fanout-cap warnings that `_build_work_items`
+                # stashed on the runtime_context (e.g. when we trimmed an
+                # 88-repo org down to the configured cap).
+                fanout_warnings = runtime_context.pop("_fanout_warnings", None)
+                if isinstance(fanout_warnings, list):
+                    for warning in fanout_warnings:
+                        _append_unique(warnings, str(warning))
+                if stage.name == STAGE_PERSON_AGENTS and work_items:
+                    work_items, pre_stage_warnings = self._filter_person_work_items(
+                        work_items,
+                        providers,
+                    )
+                    for warning in pre_stage_warnings:
+                        _append_unique(warnings, warning)
+                elif stage.name == STAGE_ORG_AGENTS and work_items:
+                    work_items, pre_stage_warnings = self._filter_org_work_items(
+                        work_items,
+                        providers,
+                    )
+                    for warning in pre_stage_warnings:
+                        _append_unique(warnings, warning)
                 logger.info(
-                    "%s: warnings=%d context_keys=%s in %.2fs",
-                    STAGE_CONTEXT_GATHER,
-                    len(context_bundle.warnings),
-                    sorted(context_bundle.context.keys()),
+                    "[%s] starting — %d item(s)",
+                    stage.name,
+                    len(work_items),
+                )
+                if not work_items:
+                    if report_stage is not None:
+                        report_stage.status = "skipped"
+                        report_stage.reason = "no_work_items"
+                    logger.info("[%s] skipped — no items", stage.name)
+                    stages_completed.append(stage.name)
+                    continue
+
+                stage_started_at = perf_counter()
+                stage_results, stage_warnings, stage_errors = await self._execute_stage(
+                    stage_name=stage.name,
+                    work_items=work_items,
+                    runtime_context=runtime_context,
+                    pipeline_outputs=pipeline_outputs,
+                    providers=providers,
+                    detected_type=plan.detected_type,
+                )
+                logger.info(
+                    "[%s] done — %d result(s), %d error(s) in %.1fs",
+                    stage.name,
+                    len(stage_results),
+                    len(stage_errors),
                     perf_counter() - stage_started_at,
                 )
+
+                if report_stage is not None and (stage_errors or any(
+                    result.is_partial for result in stage_results.values()
+                )):
+                    report_stage.status = "partial" if stage_results else "failed"
+                    report_stage.reason = "agent_errors" if stage_errors else "partial_agent_results"
 
                 runtime_mode = parse_agent_runtime(
                     runtime_context.get("agent_runtime"),
                     default=AgentRuntime.RULE_BASED,
                     field_name="agent_runtime",
                 )
-                if runtime_mode == AgentRuntime.LLM:
-                    summary_context = {
-                        "detected_type": plan.detected_type,
-                        "source_url": runtime_context.get("source_url"),
-                        "gathered_context": deepcopy(context_bundle.context),
-                    }
-                    try:
-                        summary_result = await with_retry(
-                            self._llm_context_summary_agent.run,
-                            context=summary_context,
-                            providers=providers,
-                            max_retries=self._retry_max_retries,
-                            backoff_base=self._retry_backoff_base,
-                            sleep_func=self._retry_sleep_func,
-                            invalid_result_checker=None,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        _append_unique(
-                            warnings,
-                            (
-                                "context_summary_agent execution failed; "
-                                f"continuing without compiled summary: {exc}"
-                            ),
-                        )
-                    else:
-                        for warning in summary_result.warnings:
-                            _append_unique(
-                                warnings,
-                                f"{STAGE_CONTEXT_SUMMARY_AGENT}: {warning}",
-                            )
-                        if summary_result.is_partial and summary_result.failure_reason:
-                            _append_unique(
-                                warnings,
-                                (
-                                    "context_summary_agent returned partial output: "
-                                    f"{summary_result.failure_reason}"
-                                ),
-                            )
-                        compiled_summary = summary_result.data.get("summary_markdown")
-                        if isinstance(compiled_summary, str) and compiled_summary.strip():
-                            runtime_context["compiled_context_markdown"] = compiled_summary
-                            gathered_context = runtime_context.get("gathered_context")
-                            if isinstance(gathered_context, dict):
-                                gathered_context["compiled_context_markdown"] = compiled_summary
-                                runtime_context["gathered_context"] = gathered_context
-                        else:
-                            _append_unique(
-                                warnings,
-                                (
-                                    "context_summary_agent returned an empty summary; "
-                                    "downstream LLM agents will use default prompt context only"
-                                ),
-                            )
-                stages_completed.append(stage.name)
-                continue
+                if (
+                    runtime_mode == AgentRuntime.LLM
+                    and stage.name == ROOT_STAGE_BY_DETECTED_TYPE.get(plan.detected_type)
+                    and stage_errors
+                ):
+                    # LLM mode intentionally hard-fails root-stage errors without fallback.
+                    detected_label = {
+                        "repository": "repository",
+                        "user": "user",
+                        "organization": "organization",
+                    }.get(plan.detected_type, plan.detected_type)
+                    message = (
+                        f"LLM {detected_label} runtime failed without fallback: "
+                        f"{stage_errors[0]}"
+                    )
+                    raise RuntimeError(message)
 
-            work_items = self._build_work_items(stage.name, plan.detected_type, runtime_context)
-            # Drain any fanout-cap warnings that `_build_work_items`
-            # stashed on the runtime_context (e.g. when we trimmed an
-            # 88-repo org down to the configured cap).
-            fanout_warnings = runtime_context.pop("_fanout_warnings", None)
-            if isinstance(fanout_warnings, list):
-                for warning in fanout_warnings:
-                    _append_unique(warnings, str(warning))
-            if stage.name == STAGE_PERSON_AGENTS and work_items:
-                work_items, pre_stage_warnings = self._filter_person_work_items(
-                    work_items,
-                    providers,
-                )
-                for warning in pre_stage_warnings:
+                for key, value in stage_results.items():
+                    agent_results[key] = value
+                    pipeline_outputs[key] = value.data
+                    pipeline_agent_results[key] = value
+                    runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
+                    runtime_context["pipeline_agent_results"] = dict(pipeline_agent_results)
+
+                for warning in stage_warnings:
                     _append_unique(warnings, warning)
-            elif stage.name == STAGE_ORG_AGENTS and work_items:
-                work_items, pre_stage_warnings = self._filter_org_work_items(
-                    work_items,
-                    providers,
-                )
-                for warning in pre_stage_warnings:
-                    _append_unique(warnings, warning)
-            logger.info(
-                "[%s] starting — %d item(s)",
-                stage.name,
-                len(work_items),
-            )
-            if not work_items:
-                logger.info("[%s] skipped — no items", stage.name)
+                for error in stage_errors:
+                    _append_unique(errors, error)
+
                 stages_completed.append(stage.name)
-                continue
-
-            stage_started_at = perf_counter()
-            stage_results, stage_warnings, stage_errors = await self._execute_stage(
-                stage_name=stage.name,
-                work_items=work_items,
-                runtime_context=runtime_context,
-                pipeline_outputs=pipeline_outputs,
-                providers=providers,
-                detected_type=plan.detected_type,
-            )
-            logger.info(
-                "[%s] done — %d result(s), %d error(s) in %.1fs",
-                stage.name,
-                len(stage_results),
-                len(stage_errors),
-                perf_counter() - stage_started_at,
-            )
-
-            runtime_mode = parse_agent_runtime(
-                runtime_context.get("agent_runtime"),
-                default=AgentRuntime.RULE_BASED,
-                field_name="agent_runtime",
-            )
-            if (
-                runtime_mode == AgentRuntime.LLM
-                and stage.name == ROOT_STAGE_BY_DETECTED_TYPE.get(plan.detected_type)
-                and stage_errors
-            ):
-                # LLM mode intentionally hard-fails root-stage errors without fallback.
-                detected_label = {
-                    "repository": "repository",
-                    "user": "user",
-                    "organization": "organization",
-                }.get(plan.detected_type, plan.detected_type)
-                message = (
-                    f"LLM {detected_label} runtime failed without fallback: "
-                    f"{stage_errors[0]}"
-                )
-                raise RuntimeError(message)
-
-            for key, value in stage_results.items():
-                agent_results[key] = value
-                pipeline_outputs[key] = value.data
-                pipeline_agent_results[key] = value
-                runtime_context["pipeline_outputs"] = dict(pipeline_outputs)
-                runtime_context["pipeline_agent_results"] = dict(pipeline_agent_results)
-
-            for warning in stage_warnings:
-                _append_unique(warnings, warning)
-            for error in stage_errors:
-                _append_unique(errors, error)
-
-            stages_completed.append(stage.name)
 
         duration_ms = int((perf_counter() - started_at) * 1000)
         return PipelineResult(

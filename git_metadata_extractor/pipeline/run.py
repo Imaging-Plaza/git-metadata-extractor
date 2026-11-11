@@ -29,6 +29,10 @@ from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor import config
 from git_metadata_extractor.agents.runtime import AgentRuntime
+from git_metadata_extractor.observation.run_report import (
+    record_stage_outcome,
+    record_validation,
+)
 from git_metadata_extractor.pipeline.runner import Stage, StageGate
 from git_metadata_extractor.pipeline.stages import (
     demote_github_props_to_units,
@@ -247,6 +251,11 @@ async def _resolve_bio_to_ror_llm(state: PipelineState) -> None:
         reconciled=state.reconciled,
         provider=_ror_rag(state),
     )
+    if result.persons_failed:
+        record_stage_outcome(
+            "partial" if result.persons_called > result.persons_failed else "failed",
+            reason="item_failures",
+        )
     _log(
         "resolve_bio_to_ror_llm",
         "persons_examined=%d called=%d resolved=%d failed=%d "
@@ -414,6 +423,19 @@ async def _refine_with_llm(state: PipelineState) -> None:
         providers=state.providers,
         max_concurrency=state.max_concurrent_agents,
     )
+    if result.failed_count:
+        # Unchanged/rejected patches are completed decisions. Auxiliary
+        # passes expose successes outside the aggregate refined/skipped counts.
+        resolver = result.by_type.get("org_resolver", {})
+        rescue = result.by_type.get("rescue", {})
+        discovery = result.by_type.get("discovery", {})
+        completed = (
+            result.refined_count + result.skipped_count
+            + resolver.get("resolved", 0) + resolver.get("declined", 0)
+            + rescue.get("rescued", 0) + rescue.get("rejected", 0)
+            + discovery.get("proposed", 0)
+        )
+        record_stage_outcome("partial" if completed else "failed", reason="item_failures")
     state.reconciled = result.reconciled
     _log(
         "refine_with_llm",
@@ -519,8 +541,17 @@ def _strict_validation(state: PipelineState) -> None:
         StrictSchemaValidator,
     )
 
-    batch = StrictSchemaValidator().validate_batch(
-        _reconciled_entity_payloads(state.reconciled),
+    try:
+        batch = StrictSchemaValidator().validate_batch(
+            _reconciled_entity_payloads(state.reconciled),
+        )
+    except Exception:
+        record_validation("strict_validation", status="error", reason="validator_error")
+        raise
+    record_validation(
+        "strict_validation", status="violations" if batch.invalid_entities else "passed",
+        checked=len(batch.valid_entities) + len(batch.invalid_entities),
+        violations=len(batch.invalid_entities), warnings=len(batch.warnings),
     )
     state.artifacts.strict_batch = batch
     _log(
@@ -636,6 +667,12 @@ async def _link_veracity(state: PipelineState) -> None:
         max_concurrency=state.max_concurrent_agents,
         cache=state.cache,
     )
+    if result.failed_count:
+        # Unsupported relationships are valid verdicts, not execution failures.
+        record_stage_outcome(
+            "partial" if result.checked_count > result.failed_count else "failed",
+            reason="item_failures",
+        )
     state.artifacts.veracity_records = result.records
     _log(
         "link_veracity",
@@ -862,10 +899,14 @@ def _shacl_gate(state: PipelineState) -> None:
     # would report every profile node as an unknown class — noise, not signal.
     projected = bool(state.timings.get("canonical_projection") is not None)
     use_canonical = projected and canonical_shapes_available()
-    shapes = load_canonical_shapes_graph() if use_canonical else load_ontology_shapes_graph()
-
-    data_graph = settings.jsonld_to_graph(state.payload)  # noqa: SLF001
+    try:
+        shapes = load_canonical_shapes_graph() if use_canonical else load_ontology_shapes_graph()
+        data_graph = settings.jsonld_to_graph(state.payload)
+    except Exception:
+        record_validation("shacl_gate", status="error", reason="validation_setup_error")
+        raise
     if data_graph is None:
+        record_validation("shacl_gate", status="error", reason="graph_parse_error")
         logger.warning(
             "shacl_gate: skipped — unable to parse assembled graph payload",
         )
@@ -875,16 +916,22 @@ def _shacl_gate(state: PipelineState) -> None:
     try:
         result = SHACLValidator().validate_graph(data_graph, shapes)
     except SHACLRuntimeUnavailableError as exc:
+        record_validation("shacl_gate", status="unavailable", reason="runtime_unavailable")
         # pyshacl missing or unusable is an environment problem, not a graph
         # problem, so it must not read as a conformance failure.
         logger.warning("shacl_gate: skipped — %s", exc)
         state.warn(str(exc))
         return
     except Exception as exc:
+        record_validation("shacl_gate", status="error", reason="validator_error")
         logger.exception("shacl_gate failed")
         state.warn(f"SHACL validation failed: {exc}")
         return
 
+    record_validation(
+        "shacl_gate", status="passed" if result.conforms else "violations",
+        violations=len(result.violations), warnings=len(result.warnings),
+    )
     for violation in result.violations:
         state.warn(
             "SHACL violation: "
@@ -1086,7 +1133,20 @@ async def _write_substrate(state: PipelineState) -> None:
             validate_substrate,
         )
 
-        validation = validate_substrate(document)
+        try:
+            validation = validate_substrate(document)
+        except Exception:
+            record_validation("substrate_validation", status="error", reason="validator_error")
+            raise
+        record_validation(
+            "substrate_validation",
+            status="unavailable" if validation.skipped else (
+                "passed" if validation.conforms else "violations"
+            ),
+            violations=None if validation.skipped else len(validation.violations),
+            warnings=len(validation.warnings),
+            reason="validation_unavailable" if validation.skipped else None,
+        )
         state.artifacts.substrate_validation = validation.summary()
         if not validation.conforms:
             state.warn(

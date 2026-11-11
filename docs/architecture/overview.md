@@ -182,13 +182,18 @@ same in all three.
 |---|---|---|---|
 | `rule_based` | deterministic agents | **none** — guaranteed LLM-free, `link_veracity` always skipped | reproducible runs, tests, batch |
 | `llm` | LLM agents (one Pydantic AI run per entity) | `context_summary`, `llm_dedup`, `llm_critic` (gated), `link_veracity`, `org_relationships`, `resolve_bio_to_ror_llm` | best coverage |
-| `hybrid` | rule-based generators **+** `refine_with_llm` | only the refiner — dedup/critic/veracity/org-relationships are skipped | cheap targeted improvement |
+| `hybrid` | rule-based generators **+** `refine_with_llm` | refiners plus enabled bio-affiliation and GitHub-parent LLM resolution; dedup/critic/veracity/org-relationships are skipped | targeted enrichment of deterministic output |
 
-The hybrid refiner patches a **whitelist** only: organization
-`pulse:OrganizationType`; repository `pulse:discipline` and
-`pulse:repositoryType` (the latter only when it is currently `pulse:Other`);
-person `schema:name` (only when it looks like a GitHub handle). Anything
-outside that list is ignored by design — the refiner cannot invent entities.
+Hybrid refinement uses typed patch contracts and acceptance checks for people,
+organizations, repositories and memberships. The accepted fields and rescue/link
+logic live in `pipeline/stages/refine_with_llm.py`; the old three-field summary
+does not describe the expanded implementation. Runtime flags and selected
+components determine which optional work actually runs.
+
+Request `include_run_report=true` for an observed execution report across both
+the generation plan and post-processing stages. It records actual outcomes,
+activity/retrieval links, field-change summaries, validation and usage; cache reuse
+is explicitly separate from fresh work. See the [API contract](../v2-api-reference.md#optional-run-report).
 
 ---
 

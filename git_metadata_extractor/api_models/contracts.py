@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from git_metadata_extractor.api_models.errors import V2ErrorResponse
 from git_metadata_extractor.observation.github_rate_limit import GitHubRateLimitSummary
+from git_metadata_extractor.observation.run_report_models import (
+    RunReport,  # noqa: TC001 - Pydantic schema resolution
+)
 
 # Upper bound on per-request ingest batch size — caps resource use on the
 # (token-gated) /v2/indices/*/ingest endpoints (audit: ingest-list-no-maxlen).
@@ -78,14 +81,22 @@ class V2ExtractRequest(BaseModel):
     agent_runtime: Literal["rule_based", "llm", "hybrid"] | None = Field(
         default=None,
         description=(
-            "Pipeline runtime. `rule_based` is deterministic; `llm` adds the "
-            "agent refiners; `hybrid` runs rule-based then LLM refinement. "
+            "Pipeline runtime. `rule_based` uses deterministic generators; `llm` "
+            "uses LLM generators; `hybrid` runs rule-based then LLM refinement. "
             "Falls back to the server's V2_AGENT_RUNTIME_DEFAULT when omitted."
         ),
     )
     include_context_summary: bool = Field(
         default=False,
         description="When true, attaches the scout context summary to the response.",
+    )
+    include_run_report: bool = Field(
+        default=False,
+        description=(
+            "Attach an execution report with actual stage outcomes, activity, "
+            "retrieval, change, validation and usage summaries. Cached results "
+            "are labelled as reuse, without claiming new execution or model usage."
+        ),
     )
     include_internal_fields: bool = Field(
         default=False,
@@ -124,6 +135,7 @@ class V2ExtractResponse(BaseModel):
     context_summary_markdown: str | None = None
     warnings: list[str] = Field(default_factory=list)
     stats: V2Stats
+    run_report: RunReport | None = None
     #: A two-node JSON-LD graph describing this run as a `pulse:ExtractionRun`
     #: plus the `prov:SoftwareAgent` that produced it. Sibling of `output`, not
     #: part of it: the four-layer model keeps runs in the provenance layer

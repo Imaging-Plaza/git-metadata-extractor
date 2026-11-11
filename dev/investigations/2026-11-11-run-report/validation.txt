@@ -1,0 +1,90 @@
+Optional run report — validation, 2026-11-11
+
+Baseline: 1aa07e10d5b535282c66cde3e608e6d0e3b84085 on feat/2026-11-refactor.
+
+Files and behavior
+
+- observation/run_report.py and run_report_models.py: opt-in ContextVar collector
+  and Pydantic contracts, actual stage timeline, property-change summaries,
+  activity/query links, mapping/model metadata, validation, usage and explicit
+  attribution limitations. Snapshot/report construction fails open.
+- pipeline/orchestrator.py, runner.py and run.py: observe actual generation and
+  post-processing execution without changing evidence scopes; record no-work,
+  gates, partial/fatal failures and structured validator results. Refiner,
+  bio-resolver and link-veracity failure counters annotate partial/all-failed
+  work. Negative link verdicts remain valid completed decisions.
+- services/extraction.py, api/extract.py and api_models/{contracts,errors}.py:
+  include_run_report defaults false; GET and POST jobs expose a typed sibling
+  report when requested. Typed extraction failures can carry partial reports.
+- experiments/execution.py: run_profile supports the same optional flag without
+  changing the profile fingerprint.
+- Four test files (three new run-report suites and API extraction tests) cover
+  collector, real stage adapters, service, GET, POST and local profile behavior.
+- AGENTS.md, architecture overview, API reference and pipeline guide document
+  actual hybrid behavior, optional reports and reporting limits.
+
+Compatibility and data handling
+
+The extracted graph and ontology contracts are unchanged. Report selection does
+not alter the semantic pipeline cache key or trigger fresh extraction. Cached
+responses never store this per-request report; a cache hit returns a fresh reuse
+summary with its own request ID, the original output ID and no claimed current
+stage/model work. Default HTTP responses omit the report.
+
+Report changes contain counts and property names, not values. Sources omit
+userinfo/query/fragment components. Prompt bodies, provider bodies, raw query
+arguments and exception messages are not copied. Usage distinguishes current
+model calls from historical/imported evidence, with explicit completeness flags.
+No secret-bearing files were changed.
+
+Commands and results
+
+Tests ran in Docker image gme-local-contract-validation:20261111, Python 3.12,
+network disabled, worktree mounted at /work/gme. Native just recipes assume a
+POSIX .venv, so their Python commands were invoked directly in this container.
+
+1. Focused pytest runs of test_run_report.py, test_run_report_pipeline.py,
+   test_run_report_service.py and test_api_extract_stub.py established red/green
+   behavior. Missing opt-in flags, absent local-profile option and incorrectly
+   completed structured failures were reproduced before implementation.
+   Snapshot failures, malformed evidence and nested scope restoration are covered.
+2. python -m pytest tests/v2/ -q -n 4 --dist=loadfile
+   -m 'not live_provider and not llm_integration' --no-cov
+   -p no:cacheprovider --tb=short --disable-warnings
+   Final result: 2,006 passed, one skipped, 2,538 dependency/test warnings.
+   This is 70 additional passing cases over the baseline.
+3. python scripts/v2/generate_from_ontology.py --check
+   python scripts/v2/generate_v2_models.py --check
+   Both passed; generated models current. No ontology/schema pin changes.
+4. python -m mkdocs build --strict in an isolated docs/config copy: passed.
+5. Scoped Ruff comparison for every changed/new Python file, using the same
+   configuration and stdin filenames at baseline/current, excluding EXE002
+   caused by Windows bind-mount executable bits:
+   baseline 26 diagnostics, current 25, no additional diagnostic codes/counts.
+6. git diff --check: passed. Changed/untracked files are scanned for credential
+   patterns before staging; staged whitespace verification is repeated at commit.
+
+Review
+
+Independent review found one blocker: adapters returning structured failures
+were recorded as completed because they did not raise. Explicit stage-outcome
+annotation now handles those counters. Added mixed/all-failed and valid-negative
+controls; reviewer confirmed the fix and found no remaining blockers in default
+omission, cache semantics, usage, isolation, redaction or typed failure reports.
+
+Limits and follow-ups
+
+- This is structured JSON/API observability, not an HTML dashboard or telemetry
+  backend. No new infrastructure, deployment or live-provider calls were made.
+- Unexpected framework exceptions and cancelled jobs do not gain a new durable
+  report store; typed domain failures after run initialization do carry reports.
+- Optional snapshots and report serialization add work and response size only
+  when enabled. Existing evidence collection is otherwise unchanged.
+- Stage completion means the function completed, not that every optional side
+  effect (such as a configured store write) ran. Validator conformance and child
+  activity outcomes must be interpreted separately.
+- Auxiliary failures without structured counters are not guessed from warning
+  text. Attribution counts trace claims, not guaranteed final-field coverage;
+  retrieval alone does not establish derivation or correctness.
+- Legacy stats.stages_completed remains a compatibility summary. The optional
+  observed timeline is the accurate execution surface.

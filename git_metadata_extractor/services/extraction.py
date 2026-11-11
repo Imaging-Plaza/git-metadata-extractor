@@ -26,6 +26,11 @@ from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.observation.evidence import VERSION as EVIDENCE_VERSION
 from git_metadata_extractor.observation.evidence import observe_providers
 from git_metadata_extractor.observation.query_log import QueryLog, query_log_var
+from git_metadata_extractor.observation.run_report import (
+    build_run_report,
+    report_scope,
+    start_report,
+)
 from git_metadata_extractor.pipeline import PipelineOrchestrator, settings
 from git_metadata_extractor.pipeline.run import (
     ASSEMBLED_CHAIN,
@@ -68,6 +73,7 @@ class ExtractionOptions(InternalModel, frozen=True):
     output_format: Literal["jsonld", "json"] = "jsonld"
     include_context_summary: bool = False
     include_internal_fields: bool = False
+    include_run_report: bool = False
     read_only: bool = False
 
 
@@ -93,19 +99,32 @@ async def execute_extraction(  # noqa: PLR0913 - explicit dependencies
     execution_profile: dict | None = None,
     classification: GitHubURLClassification | None = None,
 ) -> ExtractionResult:
-    token = query_log_var.set(None)
-    try:
-        with sources_scope(providers.sources):
-            return await _execute(
-                options,
-                providers=providers,
-                orchestrator=orchestrator,
-                cache=cache,
-                execution_profile=execution_profile,
-                classification=classification,
-            )
-    finally:
-        query_log_var.reset(token)
+    with report_scope(options.include_run_report):
+        token = query_log_var.set(None)
+        try:
+            with sources_scope(providers.sources):
+                try:
+                    result = await _execute(
+                        options,
+                        providers=providers,
+                        orchestrator=orchestrator,
+                        cache=cache,
+                        execution_profile=execution_profile,
+                        classification=classification,
+                    )
+                except ExtractionError as exc:
+                    exc.error.run_report = build_run_report(output_run_id=None, status="failed")
+                    raise
+                # The report describes this request, not the cached extraction.
+                # Attach after _execute stores the report-free response.
+                result.response.run_report = build_run_report(
+                    output_run_id=result.response.stats.run_id,
+                    status="cache_hit" if result.cache_hit else "completed",
+                    warning_count=len(result.response.warnings),
+                )
+                return result
+        finally:
+            query_log_var.reset(token)
 
 
 def _extract_jsonld_context() -> dict[str, Any]:
@@ -155,6 +174,7 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
         default=config.V2_AGENT_RUNTIME_DEFAULT,
         field_name="agent_runtime",
     )
+    start_report(run_id, resolved_runtime.value)
     total_started_at = perf_counter()
     # A wall clock as well as the monotonic one: `prov:startedAtTime` is a
     # timestamp, and `perf_counter()` has no epoch.
@@ -471,7 +491,7 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
         try:
             pipeline_cache.set(
                 pipeline_cache_key,
-                response_model.model_dump(mode="json", exclude_none=True),
+                response_model.model_dump(mode="json", exclude_none=True, exclude={"run_report"}),
             )
         except Exception:
             logger.exception(

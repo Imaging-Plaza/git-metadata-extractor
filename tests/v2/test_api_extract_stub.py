@@ -131,6 +131,44 @@ def test_extract_returns_query_and_agent_provenance_beside_canonical_graph() -> 
     assert not any(n.get("@type") == "rdf:Statement" for n in payload["output"]["@graph"])
 
 
+def test_extract_get_run_report_is_optional() -> None:
+    path = "/v2/extract/github.com/octocat/Hello-World"
+    status_code, default = _get_json(path, {"agent_runtime": "rule_based"})
+    assert status_code == HTTP_OK
+    assert "run_report" not in default
+    status_code, requested = _get_json(path, {
+        "agent_runtime": "rule_based", "include_run_report": "true",
+    })
+    assert status_code == HTTP_OK
+    report = requested["run_report"]
+    assert report["runtime"] == "rule_based"
+    assert report["output_run_id"] == requested["stats"]["run_id"]
+    assert "run_report" not in requested["output"]
+
+
+def test_extract_post_job_retains_requested_run_report(tmp_path: Any) -> None:
+    async def run():
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(tmp_path / "providers.db")
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver", headers=_AUTH_HEADERS,
+        ) as client:
+            submitted = await client.post("/v2/extract", json={
+                "source_url": "https://github.com/octocat/Hello-World",
+                "agent_runtime": "rule_based",
+                "include_run_report": True,
+            })
+            assert submitted.status_code == HTTP_ACCEPTED
+            job = await _wait_for_job_completion(client, submitted.json()["job_id"])
+        assert job["status"] == "completed", job
+        report = job["result"]["run_report"]
+        assert report["status"] == "completed"
+        assert report["stages"]
+        assert report["output_run_id"] == job["result"]["stats"]["run_id"]
+
+    asyncio.run(run())
+
+
 def test_extract_user_url_returns_detected_user() -> None:
     status_code, payload = _get_json("/v2/extract/github.com/octocat")
 

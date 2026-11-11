@@ -229,7 +229,7 @@ from `PLAN_BY_TYPE` and the stage chains in `pipeline/run.py` on
 
 - Stages tagged `[LLM]` only run in `agent_runtime=llm`.
 - `link_veracity` is `[LLM]`-only too: in `agent_runtime=rule_based` it is **always skipped** (rule-based mode is guaranteed LLM-free).
-- `agent_runtime=hybrid` runs the rule-based generators (stages 4-9) **and** an LLM refiner stage (`refine_with_llm`, between reconciliation and `guarantee_repo_author`). The refiner proposes whitelisted-field patches per entity type: organizations (`pulse:OrganizationType`), repositories (`pulse:discipline`, `pulse:repositoryType` only when current is `pulse:Other`), and persons (`schema:name` only when current looks like a GitHub handle). LLM-only stages (`llm_dedup`, `llm_critic`, `link_veracity`, `org_relationships`) are **skipped** in hybrid mode. Toggle with `V2_HYBRID_REFINER_ENABLED` (default `true`).
+- `agent_runtime=hybrid` runs rule-based generators and `refine_with_llm`, plus enabled LLM-assisted bio-affiliation and GitHub-parent resolution. Refinement uses typed patch contracts and acceptance checks for people, organizations, repositories and memberships; `pipeline/stages/refine_with_llm.py` defines the current accepted fields and rescue/link logic. LLM-only stages (`llm_dedup`, `llm_critic`, `link_veracity`, `org_relationships`) remain skipped. `V2_HYBRID_REFINER_ENABLED` gates the refiner (default `true`); the observed run report is the source of actual execution outcomes.
 - `llm_critic` is **off by default**. Set `V2_APPLY_CRITIC_PRUNING=true` to enable (LLM mode only).
 - `link_veracity` is **on by default in LLM mode**. Set `V2_LINK_VERACITY_ENABLED=false` to skip even in LLM mode (recommended for batch runs).
 - `substrate_projection` / `substrate_write` are **off by default**. Set
@@ -658,10 +658,22 @@ place. Different trade, different answer.
   value: the `pulse:ExtractionOutput` it came from, the run that produced that
   output, the selection rule, and the observation counters. Plus the
   `owl:sameAs` identity links, which are plain triples in `graph:prov`
-- `POST /v2/extract` — async job. Body: `{source_url, agent_runtime?, output_format?, include_context_summary?}`. Returns `{job_id, status, status_url}`; poll `GET /v2/jobs/{job_id}`.
+- `POST /v2/extract` — async job. Body: `{source_url, agent_runtime?, output_format?, include_context_summary?, include_run_report?}`. Returns `{job_id, status, status_url}`; poll `GET /v2/jobs/{job_id}`.
 - `GET  /v2/jobs/{job_id}` — job status + result when complete
 - `GET  /v2/extract/{full_path:path}` — synchronous extract (single repo)
 - `GET  /docs` — Swagger UI with auto/manual dark-mode toggle (override persisted in `localStorage`)
+
+**Optional run report:** `include_run_report=true` on GET or POST adds a typed
+`run_report` beside `output` (inside a completed job's `result`). It observes both
+sequencers, rather than deriving execution from legacy `stats.stages_completed`.
+The collector and contracts live in `observation/run_report*.py`; instrumentation
+must not add evidence scopes that change query/citation eligibility. Report
+snapshots are opt-in and contain only property-name/count summaries. Validation
+conformance is separate from stage execution. Pipeline cache hits get a fresh
+reuse report identifying the original output run, without historical model cost
+counted as new usage; the shared pipeline cache stores no request report.
+Local `ExtractionOptions` and `run_profile` support the same opt-in. See
+[the report contract](docs/v2-api-reference.md#optional-run-report) for limits.
 
 The three `/v2/graph/*` endpoints are **new**, not a reinterpretation of
 `/v2/extract` — the decision on record is *"version the endpoint rather than
