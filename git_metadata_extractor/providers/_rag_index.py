@@ -35,8 +35,8 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from open_pulse_sources.index._rcp.embed_client import (
     RCPEmbeddingClient,
@@ -44,7 +44,9 @@ from open_pulse_sources.index._rcp.embed_client import (
 )
 from open_pulse_sources.index._rcp.reranker_client import RCPRerankerClient
 from open_pulse_sources.index.openalex.vector.qdrant_store import QdrantStore
+from pydantic import Field
 
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.providers._rag_helpers import (
     apply_rerank_indices,
     env_enabled,
@@ -54,9 +56,6 @@ from git_metadata_extractor.providers._rag_helpers import (
     thin_payload,
     to_simple_filter_payload,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +73,7 @@ def _default_rerank_text(payload: dict[str, Any]) -> str:
     return str(name).strip()
 
 
-@dataclass(frozen=True, slots=True)
-class RagIndexSpec:
+class RagIndexSpec(InternalModel, frozen=True):
     """Everything that differs between two single-collection RAG providers."""
 
     #: Log prefix, and the name operators grep for. Historically the module
@@ -90,7 +88,7 @@ class RagIndexSpec:
     #: `None` means "gated elsewhere" — see the module docstring.
     env_var: str | None = None
     default_top_k: int = DEFAULT_TOP_K
-    rerank_text: Callable[[dict[str, Any]], str] = field(
+    rerank_text: Callable[[dict[str, Any]], str] = Field(
         default=_default_rerank_text,
     )
 

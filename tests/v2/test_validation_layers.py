@@ -259,12 +259,15 @@ def test_a_skipped_gate_is_distinguishable_from_a_clean_one(
         lambda: False,
     )
 
-    result = enforce_canonical(_named(CANONICAL_GRAPH, [_person(**{"pulse:bogus": ["x"]})]))
+    document = _named(CANONICAL_GRAPH, [_person(**{"pulse:bogus": ["x"]})])
+    result = validate_layer(document, Layer.CANONICAL, quads=True)
 
     assert result.skipped is True
     assert result.conforms is True
     assert "not prepared" in (result.reason or "")
     assert "skipped" in result.summary()
+    with pytest.raises(RuntimeError, match="not published"):
+        enforce_canonical(document)
 
 
 # --------------------------------------------------------------------------

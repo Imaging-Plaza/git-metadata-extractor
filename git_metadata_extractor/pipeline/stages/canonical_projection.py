@@ -43,36 +43,14 @@ import re
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from git_metadata_extractor.mapping import load_policy, map_fields
+
+_ONTOLOGY_POLICY = load_policy("policies.ontology")
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
 logger = logging.getLogger(__name__)
-
-#: host -> (`pulse:PlatformEnumeration` member, where the handle sits in the
-#: path). Only hosts we can actually recognise; an unknown host yields no
-#: profile rather than a guessed platform.
-#:
-#: The handle position is not cosmetic. A GitHub profile is
-#: `github.com/{handle}` — first segment — but an Infoscience entity is
-#: `infoscience.epfl.ch/entities/{kind}/{uuid}`, where the first segment is the
-#: literal string "entities". Taking the first segment there produces a profile
-#: whose `pulse:platformUsername` is `"entities"`, which satisfies every SHACL
-#: constraint while being meaningless — a silent data bug no validation would
-#: have caught.
-_PLATFORM_BY_HOST: dict[str, tuple[str, int]] = {
-    "github.com": ("pulse:GitHub", 0),
-    "gitlab.com": ("pulse:GitLab", 0),
-    "bitbucket.org": ("pulse:Bitbucket", 0),
-    "huggingface.co": ("pulse:HuggingFace", 0),
-    "orcid.org": ("pulse:ORCID", -1),
-    "zenodo.org": ("pulse:Zenodo", -1),
-    "infoscience.epfl.ch": ("pulse:Infoscience", -1),
-}
-
-#: Hosts that are *the* public instance of their platform. A profile on any
-#: other host of the same platform needs `pulse:platformInstance` to be
-#: distinguishable — the whole point of patch 01.
-_DEFAULT_HOSTS: frozenset[str] = frozenset(_PLATFORM_BY_HOST)
 
 _ORCID_BARE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
 _DOI_BARE = re.compile(r"^10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+$")
@@ -190,18 +168,23 @@ def profile_iri(
 
 
 def _platform_for(value: Any) -> tuple[str | None, str | None, str | None]:
-    """(platform, instance-or-None, first path segment) for a profile URL."""
+    """(platform, instance-or-None, configured handle segment) for a profile URL.
+
+    The handle position matters: GitHub uses the first segment, while
+    Infoscience uses `entities/{kind}/{uuid}`. Taking its first segment would
+    produce the meaningless but SHACL-valid username "entities".
+    """
     host, segments = _host_and_path(value)
     if not host or not segments:
         return None, None, None
-    entry = _PLATFORM_BY_HOST.get(host)
-    if entry is None:
+    rule = _ONTOLOGY_POLICY.platforms.get(host)
+    if rule is None:
         # A host we do not recognise: guessing the platform would put a wrong
         # `pulse:platform` on a closed shape, which is worse than no profile.
         return None, None, None
-    platform, index = entry
-    instance = None if host in _DEFAULT_HOSTS else f"https://{host}"
-    return platform, instance, segments[index]
+    # Non-default hosts distinguish accounts on separate platform instances.
+    instance = None if rule.default_host else f"https://{host}"
+    return rule.platform, instance, segments[rule.username_index]
 
 
 def _platform_profile(
@@ -215,13 +198,15 @@ def _platform_profile(
     if platform is None or not handle:
         return None
 
-    profile: dict[str, Any] = {
-        "@id": profile_iri(platform, handle, instance=instance),
-        "@type": "pulse:PlatformProfile",
-        "pulse:platform": platform,
-        "pulse:platformUsername": [handle],
-        "pulse:profileOf": {"@id": subject_iri},
-    }
+    profile: dict[str, Any] = map_fields(
+        "canonical.platform_profile",
+        {
+            "id": profile_iri(platform, handle, instance=instance),
+            "platform": platform,
+            "platformUsername": [handle],
+            "profileOf": {"@id": subject_iri},
+        },
+    )
     if instance:
         profile["pulse:platformInstance"] = {"@id": instance}
 
@@ -246,13 +231,15 @@ def _organization_profile(
     platform, instance, handle = _platform_for(handle_value)
     if platform is None or not handle:
         return None
-    profile: dict[str, Any] = {
-        "@id": profile_iri(platform, handle, instance=instance, kind="org-profile"),
-        "@type": "pulse:OrganizationProfile",
-        "pulse:platform": platform,
-        "pulse:organizationHandle": handle,
-        "pulse:organizationProfileOf": {"@id": subject_iri},
-    }
+    profile: dict[str, Any] = map_fields(
+        "canonical.organization_profile",
+        {
+            "id": profile_iri(platform, handle, instance=instance, kind="org-profile"),
+            "platform": platform,
+            "organizationHandle": handle,
+            "organizationProfileOf": {"@id": subject_iri},
+        },
+    )
     if instance:
         profile["pulse:platformInstance"] = {"@id": instance}
     return profile
@@ -264,55 +251,7 @@ def _organization_profile(
 
 #: Properties carried straight through, per type. Everything absent from these
 #: lists is either renamed below or deliberately dropped.
-_PASSTHROUGH: Mapping[str, tuple[str, ...]] = {
-    "schema:Person": (
-        "schema:name",
-        "org:hasMembership",
-        "pulse:hasContribution",
-        "pulse:hasAuthoredArticle",
-        "pulse:owns",
-    ),
-    "org:Organization": (
-        "schema:name",
-        "pulse:ror",
-        "org:hasUnit",
-        "org:unitOf",
-        "pulse:organizationType",
-        "pulse:owns",
-    ),
-    "schema:SoftwareSourceCode": (
-        "schema:name",
-        "schema:author",
-        "schema:license",
-        "schema:citation",
-        "schema:dateCreated",
-        "schema:programmingLanguage",
-        "pulse:ownedBy",
-        "pulse:isForkOf",
-        "pulse:repositoryType",
-        "pulse:discipline",
-    ),
-    "schema:ScholarlyArticle": (
-        "schema:name",
-        "schema:author",
-        "schema:sourceOrganization",
-    ),
-    "org:Membership": (
-        "org:organization",
-        "org:role",
-        "time:hasBeginning",
-        "time:hasEnd",
-    ),
-    "pulse:Contribution": (
-        "schema:author",
-        "pulse:contributionTo",
-        "pulse:contributionCount",
-        "pulse:firstContributionDate",
-        "pulse:lastContributionDate",
-        "pulse:gitAuthorName",
-        "pulse:gitAuthorEmail",
-    ),
-}
+_PASSTHROUGH = _ONTOLOGY_POLICY.canonical_passthrough
 
 
 def _base(node: Mapping[str, Any], node_type: str) -> dict[str, Any]:
@@ -409,12 +348,7 @@ def _project_repository(node: Mapping[str, Any]) -> dict[str, Any]:
     if instance:
         out["pulse:platformInstance"] = {"@id": instance}
 
-    for old, new in (
-        ("pulse:githubRepoStars", "pulse:repositoryStars"),
-        ("pulse:githubRepoForks", "pulse:repositoryForks"),
-    ):
-        if not _is_empty(node.get(old)):
-            out[new] = node[old]
+    out.update(map_fields("canonical.repository_fields", node))
     return out
 
 
@@ -441,14 +375,16 @@ def _deposit(node: Mapping[str, Any], article_iri: str) -> dict[str, Any] | None
     if platform is None or not internal_id or _is_empty(published):
         return None
 
-    deposit: dict[str, Any] = {
-        "@id": deposit_iri(platform, internal_id),
-        "@type": "pulse:Deposit",
-        "pulse:platform": platform,
-        "pulse:platformInternalId": internal_id,
-        "schema:datePublished": published,
-        "pulse:depositOf": {"@id": article_iri},
-    }
+    deposit: dict[str, Any] = map_fields(
+        "canonical.deposit",
+        {
+            "id": deposit_iri(platform, internal_id),
+            "platform": platform,
+            "platformInternalId": internal_id,
+            "datePublished": published,
+            "depositOf": {"@id": article_iri},
+        },
+    )
     if instance:
         deposit["pulse:platformInstance"] = {"@id": instance}
     return deposit

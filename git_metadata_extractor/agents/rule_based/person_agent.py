@@ -5,15 +5,19 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from git_metadata_extractor.canonicalization.github import github_repo_iri, github_user_iri
-from git_metadata_extractor.canonicalization.infoscience import infoscience_person_iri
-from git_metadata_extractor.canonicalization.orcid import orcid_iri
 from git_metadata_extractor.agents.models import (
     AgentResult,
     ProviderSet,
     generate_uuid,
     validate_permissive,
 )
+from git_metadata_extractor.canonicalization.github import (
+    github_repo_iri,
+    github_user_iri,
+)
+from git_metadata_extractor.canonicalization.infoscience import infoscience_person_iri
+from git_metadata_extractor.canonicalization.orcid import orcid_iri
+from git_metadata_extractor.mapping import map_fields
 from git_metadata_extractor.providers.base import ProviderNotFoundError
 
 HASH_LENGTH = 12
@@ -464,41 +468,40 @@ class PersonAgentV2:
             context.get("email") or github_user.get("email"),
         )
 
-        payload = {
-            "id": resolved_id,
-            "type": "schema:Person",
-            "shacl": "pulse:PersonShape",
-            "identifiers": {
-                "pulse:orcid": normalized_orcid,
-                "pulse:infosciencePersonIdentifier": infoscience_id,
-                "pulse:githubUsername": github_username,
-                "uuid": uuid_value,
-            },
-            "idSource": id_source,
-            "schema:name": (
-                (orcid_record or {}).get("name")
+        payload = map_fields(
+            "agent.person",
+            {
+                "id": resolved_id,
+                "identifiers_pulse_orcid": normalized_orcid,
+                "identifiers_pulse_infosciencePersonIdentifier": infoscience_id,
+                "identifiers_pulse_githubUsername": github_username,
+                "identifiers_uuid": uuid_value,
+                "idSource": id_source,
+                "name": (orcid_record or {}).get("name")
                 or (infoscience_match or {}).get("name")
                 or github_user.get("name")
-                or username
-            ),
-            "schema:url": _person_schema_url(
-                infoscience_match=infoscience_match,
-                github_html_url=github_user.get("html_url"),
-                resolved_id=resolved_id,
-            ),
-            "pulse:githubUsername": github_username,
-            "pulse:orcidIdentifier": normalized_orcid,
-            "pulse:infosciencePersonIdentifier": infoscience_id,
-            "org:hasMembership": membership_ids,
-            "pulse:hasContribution": _deduplicate_preserve_order(
-                [
-                    contribution
-                    for contribution in context.get("contributions", [])
-                    if isinstance(contribution, str)
-                ] if isinstance(context.get("contributions"), list) else [],
-            ),
-            "pulse:owns": repository_ownership,
-        }
+                or username,
+                "url": _person_schema_url(
+                    infoscience_match=infoscience_match,
+                    github_html_url=github_user.get("html_url"),
+                    resolved_id=resolved_id,
+                ),
+                "githubUsername": github_username,
+                "orcidIdentifier": normalized_orcid,
+                "infosciencePersonIdentifier": infoscience_id,
+                "hasMembership": membership_ids,
+                "hasContribution": _deduplicate_preserve_order(
+                    [
+                        contribution
+                        for contribution in context.get("contributions", [])
+                        if isinstance(contribution, str)
+                    ]
+                    if isinstance(context.get("contributions"), list)
+                    else [],
+                ),
+                "owns": repository_ownership,
+            },
+        )
         if email is not None:
             payload["schema:email"] = email
 
@@ -507,51 +510,20 @@ class PersonAgentV2:
         # JSON-LD output). Lets the LLM refiners + downstream consumers
         # see the rich GitHub / ORCID profile without losing the data
         # to validation. ORCID profile fields are also surfaced here.
-        github_profile_fields = {
-            "_avatar_url":         github_user.get("avatar_url"),
-            "_html_url":           github_user.get("html_url"),
-            "_blog":               github_user.get("blog"),
-            "_bio":                github_user.get("bio"),
-            "_company":            github_user.get("company"),
-            "_location":           github_user.get("location"),
-            "_twitter_username":   github_user.get("twitter_username"),
-            "_public_repos":       github_user.get("public_repos"),
-            "_followers_count":    github_user.get("followers"),
-            "_following_count":    github_user.get("following"),
-            "_github_created_at":  github_user.get("created_at"),
-            "_github_updated_at":  github_user.get("updated_at"),
-            "_github_account_type": github_user.get("type"),
-            "_hireable":           github_user.get("hireable"),
-            "_profile_readme":     person_profile_readme,
-        }
+        github_profile_fields = map_fields(
+            "github.person", {**github_user, "profile_readme": person_profile_readme},
+        )
         for key, value in github_profile_fields.items():
             if value not in (None, "", []):
                 payload[key] = value
 
         # ORCID record extras (when the person was matched to an ORCID).
         if isinstance(orcid_record, dict):
-            for orcid_key, payload_key in (
-                ("biography",        "_orcid_biography"),
-                ("country",          "_orcid_country"),
-                ("keywords",         "_orcid_keywords"),
-                ("researcher_urls",  "_orcid_researcher_urls"),
-                ("other_names",      "_orcid_other_names"),
-                ("external_identifiers", "_orcid_external_identifiers"),
-            ):
-                value = orcid_record.get(orcid_key)
-                if value not in (None, "", []):
-                    payload[payload_key] = value
+            payload.update(map_fields("orcid.person", orcid_record))
 
         # Infoscience profile extras (when matched).
         if isinstance(infoscience_match, dict):
-            for info_key, payload_key in (
-                ("infoscience_url",  "_infoscience_url"),
-                ("position",         "_infoscience_position"),
-                ("employment_status", "_infoscience_employment_status"),
-            ):
-                value = infoscience_match.get(info_key)
-                if value not in (None, "", []):
-                    payload[payload_key] = value
+            payload.update(map_fields("infoscience.person", infoscience_match))
 
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):

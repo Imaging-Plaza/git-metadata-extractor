@@ -1,0 +1,91 @@
+YAML mapping migration — local verification, 2026-11-11
+
+Worktree: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+No commits/pushes, deployment, service restart, secret-file edits or live calls.
+Existing unrelated changes preserved. All requested work stayed local.
+
+Files added
+git_metadata_extractor/mapping/{__init__,__main__,models,registry,checks,engine}.py
+git_metadata_extractor/mapping/config/github/repository.yaml
+git_metadata_extractor/mapping/config/raw/{person_profile,organization_profile,repository}.yaml
+git_metadata_extractor/mapping/config/README.txt
+tests/v2/test_yaml_mappings.py
+This directory's plan.txt and validation.txt.
+
+Existing files changed in this pass
+agents/rule_based/repository_agent.py: direct GitHub field extraction uses YAML.
+pipeline/stages/raw_projection.py: three detail maps and repository stars/forks
+use YAML; test-facing mapping views are derived from YAML, not duplicate rules.
+observation/evidence.py: mapping activity version/contract/fingerprint metadata.
+agents/llm/_verdict_cache.py and services/extraction.py: mapping fingerprint in
+cache keys. experiments/execution.py: mapping inventory/fingerprint in benchmark
+manifests; YAML included in the code fingerprint.
+pyproject.toml: package the YAML resources and their update guide.
+tests/v2/test_extraction_service.py: changed mapping invalidates pipeline cache.
+Package-relative paths above start at git_metadata_extractor/.
+
+Behavior
+Versioned YAML is validated by Pydantic; unknown transforms, target contracts,
+public target properties and duplicate YAML keys fail. The loader uses a
+SafeLoader subclass, never arbitrary Python YAML constructors. Ordered source
+fallbacks, nested dictionary paths and explicit omit/null policies preserve
+false and zero. Transforms are registered Python functions; source inputs and
+cached specifications are protected from caller mutation.
+The invalid size-in-KB -> file-count assertion was removed. Existing identity
+and semantic inference logic, API contracts and generated ontology models were
+not changed. Mapping source_contract is an identifier, not yet a full upstream
+response schema. Type/cardinality/graph validation remains in existing gates.
+
+Commands and evidence
+All Docker checks used gme-local-contract-validation:20261111 (Python 3.12),
+--network none, worktree bound at /work/gme, workdir /work/gme.
+
+1. New tests initially failed because the mapping package did not exist.
+   Subsequent provenance/cache tests failed on absent serialized mapping version
+   and unchanged verdict key, then passed after integration.
+2. python -m pytest tests/v2/test_yaml_mappings.py tests/v2/test_raw_projection.py
+   tests/v2/test_repository_agent.py tests/v2/test_pipeline_profiles.py
+   tests/v2/test_agent_evidence.py -q --no-cov -p no:cacheprovider --tb=short
+   86 passed before final extra fingerprint/cache coverage.
+3. python -m pytest tests/v2/ -q -n 4 --dist=loadfile
+   -m "not live_provider and not llm_integration" --no-cov -p no:cacheprovider --tb=short
+   FINAL: 1899 passed, 1 skipped, 2504 warnings in 38.95 s.
+4. python scripts/v2/generate_v2_models.py --check
+   agent.py and strict.py up to date.
+   python scripts/v2/generate_from_ontology.py --check
+   generated models up to date.
+5. python -m git_metadata_extractor.mapping --check
+   Validated all four mappings.
+6. ruff check git_metadata_extractor/mapping tests/v2/test_yaml_mappings.py
+   tests/v2/test_extraction_service.py --ignore EXE002
+   All checks passed. For six touched existing Python modules, snapshot-relative
+   lint: 8 baseline diagnostics -> 1 remaining; no new diagnostics. EXE002 is
+   ignored for Windows bind-mount executable flags. Not a repository-wide clean
+   lint claim.
+7. uv lock --check --offline: passed; 235 packages, Python 3.11.16.
+8. Built wheel offline with pip wheel --no-deps --no-build-isolation from an
+   isolated temporary source directory; inspected archive for all four YAML
+   files, extracted it, and ran mapping --check outside the checkout with only
+   the installed wheel directory on PYTHONPATH. Passed. Initial direct wheel
+   build also succeeded but PowerShell treated pip's update notice as an error;
+   the isolated verification disabled that notice and exited 0.
+9. git diff --check: passed; only Git's LF/CRLF conversion warnings.
+
+Independent read-only review found no blockers. Reviewer ran 38 mapping/raw
+projection tests successfully. Suggested actual-YAML fingerprint and pipeline
+cache coverage was added and passed in the final suite. Restart requirements
+are documented in the packaged guide.
+
+Detailed logs/snapshots are retained in D:/pro/git-metadata-extractor/.staging:
+yaml-mappings-before.json, yaml-focused.txt, yaml-full-final.txt,
+yaml-lint-comparison.json; isolated wheel checker: check_mapping_wheel.py.
+
+Remaining migration work
+ROR, ORCID and Infoscience payload mappings, raw passthrough/visibility,
+canonical projections and merge policies remain Python. This is an executable
+first slice, not a claim those paths have already migrated. Future source files
+need explicit adapter wiring plus fixture tests. Existing v2 JSON-schema and
+v3 ontology-generated contracts remain separate until an explicit API/ontology
+migration. Mapping configurations are cached for process lifetime: restart
+after edits. No extra live LLM spend was needed for this deterministic change.

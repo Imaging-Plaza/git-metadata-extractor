@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
+from git_metadata_extractor.pipeline.stages.models import (
+    AssembledOutput,
+    ReconciledEntities,
+)
+from git_metadata_extractor.validation.metadata import strip_internal_metadata
 
 if TYPE_CHECKING:
     from git_metadata_extractor.validation.schema_validation import (
@@ -41,12 +44,22 @@ JSON_ENTITY_BUCKET_BY_TYPE = {
 }
 
 
-@dataclass(slots=True)
 class RootEntityValidationError(ValueError):
-    status_code: int = 422
-    entity_type: str = ""
-    entity_id: str = ""
-    validation_errors: list[dict[str, str]] = field(default_factory=list)
+    """Strict validation failed for the root entity."""
+
+    def __init__(
+        self,
+        *,
+        status_code: int = 422,
+        entity_type: str = "",
+        entity_id: str = "",
+        validation_errors: list[dict[str, str]] | None = None,
+    ) -> None:
+        super().__init__(f"Invalid {entity_type} root entity: {entity_id}")
+        self.status_code = status_code
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.validation_errors = validation_errors if validation_errors is not None else []
 
 
 def _entity_singular_type(entity_type: str) -> str:
@@ -124,12 +137,12 @@ def build_json_output(assembled: AssembledOutput) -> dict[str, Any]:
     if isinstance(assembled.root_entity, dict):
         graph_entities.append(assembled.root_entity)
     graph_entities.extend(assembled.related_entities)
-    return {
-        "root_entity": deepcopy(assembled.root_entity),
-        "related_entities": deepcopy(assembled.related_entities),
-        "excluded_entities": deepcopy(assembled.excluded_entities),
+    return strip_internal_metadata({
+        "root_entity": assembled.root_entity,
+        "related_entities": assembled.related_entities,
+        "excluded_entities": assembled.excluded_entities,
         "entities_by_type": _entities_by_type(graph_entities),
-    }
+    })
 
 
 def assemble_output(  # noqa: C901, PLR0912

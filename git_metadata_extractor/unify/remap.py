@@ -120,8 +120,6 @@ def _remap_selection(selection: Any, mapping: Mapping[str, str], *, subject: str
     The subject is taken from the entity rather than remapped, because a
     composite id is rebuilt from its endpoints and is not itself in `mapping`.
     """
-    from dataclasses import replace  # noqa: PLC0415
-
     winner = mapping.get(str(selection.winner), selection.winner)
     # Losers that remap onto the winner were never a disagreement: two runs
     # named the same entity differently, and resolving identity dissolved the
@@ -135,7 +133,7 @@ def _remap_selection(selection: Any, mapping: Mapping[str, str], *, subject: str
     )
     if (subject, winner, losers) == (selection.subject, selection.winner, selection.losers):
         return selection
-    return replace(selection, subject=subject, winner=winner, losers=losers)
+    return selection.model_copy(update={"subject": subject, "winner": winner, "losers": losers})
 
 
 def stale_references(

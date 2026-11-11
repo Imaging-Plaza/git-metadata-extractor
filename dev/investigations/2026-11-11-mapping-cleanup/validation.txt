@@ -1,0 +1,106 @@
+Mapping simplification and documentation refresh - 2026-11-11
+
+Worktree: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+All work local/uncommitted. No push, service restart or secret-file changes.
+Earlier dirty work preserved; file inventory compares this task's starting
+snapshot, not HEAD.
+
+Three implementation agents handled independent scopes: mapping core/YAML,
+projection/unifier consumers, and documentation. A fourth read-only agent
+reviewed the integrated task diff independently.
+
+Changes
+- Replaced nested field-value evaluation with an explicit, typed helper.
+- Compacted 23 mapping YAML files from 1,271 to 436 lines. All parsed values
+  remain identical; policy files, versions, defaults and public APIs unchanged.
+- Removed three production dictionaries used only by tests. Ontology tests now
+  inspect YAML target properties directly, covering constant targets too.
+- Platform routing consumes typed policy rules directly; redundant copies of
+  already isolated policy dictionaries were removed.
+- Updated seven documentation files: README, agent instructions, architecture,
+  pipeline, enrichment reference, docs index and packaged mapping guide.
+  Short overviews link to one detailed editing guide. Clarified source/entity
+  mapping ownership, Python algorithms, generated schema validation, cache
+  restart requirements and the limits of provenance evidence.
+
+Validation
+Docker image: gme-local-contract-validation:20261111, network disabled,
+Python3.12; worktree mounted /work/gme, workdir /work/gme. Audit scripts mounted
+from D:/pro/git-metadata-extractor/.staging at /audit.
+
+- python -m pytest tests/v2/ -q -n 4 --dist=loadfile
+  -m 'not live_provider and not llm_integration' --no-cov -p no:cacheprovider --tb=short
+  Result: 1923 passed, 1 skipped, 2504 warnings in 41.65s; exit 0.
+- python /audit/check_mapping_docs.py
+  Runs python -m mkdocs build --strict in an isolated temporary copy.
+  Result: passed; the original documentation baseline also passed.
+- python /audit/check_mapping_cleanup.py
+  Result: all 23 changed YAML documents parse identically to the task snapshot;
+  changed Python files have 2 existing Ruff diagnostics and zero new ones.
+  EXE002 excluded because Windows bind mounts do not preserve Unix file modes.
+- python /audit/check_mapping_wheel.py
+  Builds from a temporary copy with read-only source bind. Result: wheel built,
+  all 26 YAML resources + guide packaged; mapping --check passes outside checkout
+  with 23 mappings + 3 policies.
+- git diff --check: passed (Git only emitted line-ending conversion notices).
+- Agent-focused suites: 34 mapping tests and 117 consumer tests passed.
+- Core agent differential check: 1,792 old/new engine cases matched.
+- Independent review: no blocking findings; all changed YAML matched and 2,560
+  packaged field-rule edge cases matched old/new behavior without input mutation.
+- Documentation agent checked eight newly added links/anchors against local
+  targets, including repository-source URLs mapped to the local checkout.
+
+Current mapping fingerprint
+bcef1fa8939437beb3a0ccba0cff05ffbe883614381f03ece46301bdd4f171d0
+
+Risks / follow-ups
+- Formatting and engine code participate in the content fingerprint. Existing
+  mapping-dependent caches will miss under the new fingerprint after restart;
+  there is no output-semantic change and no configuration-version bump.
+- Restart the extractor to load updated configuration/code; no service restart
+  was performed in this local cleanup.
+- Tests were offline; no live provider or LLM calls. Existing dependency/test
+  warnings and lint debt remain. No generated schemas or dependencies changed.
+- Source links in published docs point at repository main; local changes must
+  eventually be published for those remote links to show this revision.
+
+Changed files
+  AGENTS.md
+  README.md
+  docs/architecture/overview.md
+  docs/index.md
+  docs/repository-enrichment-fields.md
+  docs/v2-pipeline.md
+  git_metadata_extractor/mapping/config/README.txt
+  git_metadata_extractor/mapping/config/agent/article.yaml
+  git_metadata_extractor/mapping/config/agent/contribution.yaml
+  git_metadata_extractor/mapping/config/agent/membership.yaml
+  git_metadata_extractor/mapping/config/agent/organization.yaml
+  git_metadata_extractor/mapping/config/agent/person.yaml
+  git_metadata_extractor/mapping/config/agent/repository.yaml
+  git_metadata_extractor/mapping/config/agent/repository_classification.yaml
+  git_metadata_extractor/mapping/config/canonical/deposit.yaml
+  git_metadata_extractor/mapping/config/canonical/organization_profile.yaml
+  git_metadata_extractor/mapping/config/canonical/platform_profile.yaml
+  git_metadata_extractor/mapping/config/canonical/repository_fields.yaml
+  git_metadata_extractor/mapping/config/github/organization.yaml
+  git_metadata_extractor/mapping/config/github/person.yaml
+  git_metadata_extractor/mapping/config/github/repository.yaml
+  git_metadata_extractor/mapping/config/infoscience/organization.yaml
+  git_metadata_extractor/mapping/config/infoscience/person.yaml
+  git_metadata_extractor/mapping/config/orcid/person.yaml
+  git_metadata_extractor/mapping/config/raw/deposit.yaml
+  git_metadata_extractor/mapping/config/raw/organization_profile.yaml
+  git_metadata_extractor/mapping/config/raw/person_profile.yaml
+  git_metadata_extractor/mapping/config/raw/profile_base.yaml
+  git_metadata_extractor/mapping/config/raw/repository.yaml
+  git_metadata_extractor/mapping/config/ror/organization.yaml
+  git_metadata_extractor/mapping/engine.py
+  git_metadata_extractor/pipeline/stages/canonical_projection.py
+  git_metadata_extractor/pipeline/stages/raw_projection.py
+  git_metadata_extractor/pipeline/stages/source_attribution.py
+  git_metadata_extractor/unify/merge.py
+  git_metadata_extractor/unify/policy.py
+  tests/v2/test_raw_projection.py
+  dev/investigations/2026-11-11-mapping-cleanup/validation.txt (this report)

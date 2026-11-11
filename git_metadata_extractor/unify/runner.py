@@ -25,16 +25,23 @@ data.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.store.terms import compact
 from git_metadata_extractor.unify.cluster import (
     Record,
     cluster_records,
     group_by_type,
 )
-from git_metadata_extractor.unify.merge import contested_selections, merge_cluster
+from git_metadata_extractor.unify.merge import (
+    MergedEntity,
+    Selection,
+    contested_selections,
+    merge_cluster,
+)
 from git_metadata_extractor.unify.policy import default_policy
 from git_metadata_extractor.unify.remap import (
     alias_map,
@@ -47,7 +54,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from git_metadata_extractor.store.oxigraph import OxigraphStore
-    from git_metadata_extractor.unify.merge import MergedEntity, Selection
     from git_metadata_extractor.unify.policy import MergePolicy
 
 logger = logging.getLogger(__name__)
@@ -61,8 +67,7 @@ CANONICAL_GRAPH = "urn:pulse:graph:canonical"
 _SUBSTRATE_PREFIX = "urn:pulse:output:"
 
 
-@dataclass(slots=True)
-class UnifyReport:
+class UnifyReport(InternalModel):
     """What one unification pass did, for logs and for a caller to assert on."""
 
     records_read: int = 0
@@ -76,23 +81,23 @@ class UnifyReport:
     #: Entities the unifier renamed — the count of `old -> canonical` mappings
     #: that had to be pushed through every reference.
     remapped_references: int = 0
-    contested: list[Selection] = field(default_factory=list)
-    by_type: dict[str, int] = field(default_factory=dict)
+    contested: list[Selection] = Field(default_factory=list)
+    by_type: dict[str, int] = Field(default_factory=dict)
     #: `entity -> references with no entity behind them`. Reported, not pruned:
     #: the canonical graph legitimately points at nodes the unifier does not
     #: own (profiles, SPDX licences, Wikidata disciplines), so only a caller
     #: can tell a real break from an external reference.
-    dangling: dict[str, list[str]] = field(default_factory=dict)
+    dangling: dict[str, list[str]] = Field(default_factory=dict)
     #: References still pointing at a renamed IRI after the remap pass. Unlike
     #: `dangling`, this must be empty — every entry is broken by construction.
-    stale: dict[str, list[str]] = field(default_factory=dict)
+    stale: dict[str, list[str]] = Field(default_factory=dict)
     #: What the provenance pass wrote, when it ran.
     provenance: Any = None
     #: `property -> how many entities dropped it` because the closed canonical
     #: shape has no slot for it. Not a loss (the substrate keeps them), but a
     #: property dropped for *every* entity of a type usually means the raw
     #: projection and the canonical shapes disagree.
-    dropped_properties: dict[str, int] = field(default_factory=dict)
+    dropped_properties: dict[str, int] = Field(default_factory=dict)
 
     def summary(self) -> str:
         types = " ".join(

@@ -7,9 +7,11 @@ import logging
 import os
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import activity, observe_providers
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +23,8 @@ from git_metadata_extractor.agents import (
     ArticleAgentV2,
     ContributionAgentV2,
     LLMArticleAgentV2,
-    LLMContributionAgentV2,
     LLMContextSummaryAgentV2,
+    LLMContributionAgentV2,
     LLMMembershipAgentV2,
     LLMOrganizationAgentV2,
     LLMPersonAgentV2,
@@ -43,14 +45,21 @@ from git_metadata_extractor.agents.llm.prompt_context import (
 )
 from git_metadata_extractor.agents.models import AgentResult
 from git_metadata_extractor.canonicalization.string_utils import normalize_string
-from git_metadata_extractor.providers.cache import ProviderCache
-from git_metadata_extractor.providers.detection.models import GitHubURLClassification
-from git_metadata_extractor.pipeline.models import AgentGroup, ExecutionPlan, PipelineResult, Stage
+from git_metadata_extractor.pipeline.models import (
+    AgentGroup,
+    ExecutionPlan,
+    PipelineResult,
+    Stage,
+)
 from git_metadata_extractor.pipeline.stages import ContextBundle, gather_context
-from git_metadata_extractor.pipeline.stages.context_gather import should_expand_owned_repos
+from git_metadata_extractor.pipeline.stages.context_gather import (
+    should_expand_owned_repos,
+)
+from git_metadata_extractor.providers.detection.models import GitHubURLClassification
 
 if TYPE_CHECKING:
     from git_metadata_extractor.agents.contracts import RuntimeAgent
+    from git_metadata_extractor.providers.cache import ProviderCache
 
 ContextGatherer = Callable[
     [str, GitHubURLClassification, ProviderSet],
@@ -153,8 +162,7 @@ ROOT_STAGE_BY_DETECTED_TYPE: dict[str, str] = {
 }
 
 
-@dataclass(slots=True)
-class _StageWorkItem:
+class _StageWorkItem(InternalModel):
     result_key: str
     runner_key: str
     context: dict[str, Any]
@@ -245,10 +253,12 @@ class PipelineOrchestrator:
         include_upstream_stage_outputs_in_prompt: bool = True,
         user_prompt_appendix: str | None = None,
         cache: ProviderCache | None = None,
+        plans_by_type: dict[str, list[str]] | None = None,
     ) -> None:
         """Initialize stage runners and runtime-aware routing infrastructure."""
 
         self._context_gatherer = context_gatherer
+        self._plans_by_type = deepcopy(plans_by_type) if plans_by_type is not None else PLAN_BY_TYPE
         self._repository_agent = repository_agent or RepositoryAgentV2()
         self._person_agent = person_agent or PersonAgentV2()
         self._organization_agent = organization_agent or OrganizationAgentV2()
@@ -308,7 +318,7 @@ class PipelineOrchestrator:
 
     def get_execution_plan(self, detected_type: str) -> ExecutionPlan:
         normalized_type = _to_detected_type(detected_type)
-        stage_names = PLAN_BY_TYPE.get(normalized_type)
+        stage_names = self._plans_by_type.get(normalized_type)
         if stage_names is None:
             raise ValueError
 
@@ -337,6 +347,7 @@ class PipelineOrchestrator:
         """Execute an orchestration plan and aggregate stage outputs."""
 
         started_at = perf_counter()
+        providers = observe_providers(providers)
         stages_completed: list[str] = []
         warnings: list[str] = []
         errors: list[str] = []
@@ -353,9 +364,10 @@ class PipelineOrchestrator:
             if stage.name == STAGE_CONTEXT_GATHER:
                 stage_started_at = perf_counter()
                 url_info = self._require_url_info(runtime_context)
-                context_bundle = await _maybe_await(
-                    self._context_gatherer(plan.detected_type, url_info, providers),
-                )
+                with activity("context_gather", kind="retrieval"):
+                    context_bundle = await _maybe_await(
+                        self._context_gatherer(plan.detected_type, url_info, providers),
+                    )
                 runtime_context["context_bundle"] = context_bundle
                 runtime_context["gathered_context"] = context_bundle.context
                 runtime_context["pipeline_outputs"] = dict(pipeline_outputs)

@@ -55,6 +55,8 @@ def _bootstrap_on_start_enabled() -> bool:
     to skip — e.g. when the index data dir is provisioned by a separate
     job/init-container and the serving process should not touch it.
     """
+    if os.getenv("SOURCES_API_URL", "").strip():
+        return False
     raw = os.getenv("INDEX_BOOTSTRAP_ON_START", "true").strip().lower()
     return raw not in {"false", "0", "no", "off"}
 
@@ -73,7 +75,9 @@ def on_starting(server):
         server.log.info("index bootstrap on start disabled; skipping")
         return
     try:
-        from open_pulse_sources.index._federated.bootstrap import bootstrap_all  # noqa: PLC0415
+        from open_pulse_sources.index._federated.bootstrap import (  # noqa: PLC0415
+            bootstrap_all,
+        )
 
         results = bootstrap_all()
     except Exception as exc:  # noqa: BLE001 — never block server start on bootstrap

@@ -44,10 +44,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from git_metadata_extractor.agents.llm.agent_tools.ror_rag import make_ror_rag_search_tool
+from pydantic import Field
+
+from git_metadata_extractor.agents.llm.agent_tools.ror_rag import (
+    make_ror_rag_search_tool,
+)
 from git_metadata_extractor.agents.llm.refiners.bio_resolver import (
     CONFIDENCE_FLOOR,
     BioResolverAgent,
@@ -56,7 +59,7 @@ from git_metadata_extractor.agents.llm.refiners.bio_resolver import (
     UnresolvedPerson,
 )
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError
-from git_metadata_extractor.providers.ror_rag import RorRagProvider
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror import (
     BIO_KEYS,
     BLOG_KEYS,
@@ -77,6 +80,7 @@ STAGE_SOURCE_TAG = "resolve_bio_to_ror_llm"
 
 if TYPE_CHECKING:
     from git_metadata_extractor.pipeline.stages.reconciliation import ReconciledEntities
+    from git_metadata_extractor.providers.ror_rag import RorRagProvider
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +122,7 @@ def _resolve_max_concurrency() -> int:
     return max(1, n)
 
 
-@dataclass(slots=True)
-class BioLLMAffiliationResult:
+class BioLLMAffiliationResult(InternalModel):
     """Summary of one stage run."""
 
     persons_examined: int
@@ -128,7 +131,7 @@ class BioLLMAffiliationResult:
     persons_failed: int
     memberships_created: int = 0
     organizations_created: int = 0
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 def _read_name(person: dict[str, Any]) -> str | None:

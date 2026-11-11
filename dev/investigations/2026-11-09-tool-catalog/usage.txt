@@ -1,0 +1,99 @@
+Adding and comparing tools
+==========================
+The six entity LLM generators and context-summary/scout now get their tools
+from one catalog. Defaults preserve the previous tools, order and provider
+guards. The indices remain in open-pulse-sources; this change only composes
+their existing read tools. No service or dependency has been added.
+
+Discover the built-in tools, bundles, defaults and option schemas:
+  python -m git_metadata_extractor.experiments list
+
+Validate an example:
+  python -m git_metadata_extractor.experiments validate config/pipelines/llm_tools.yaml
+
+Compare it with llm.yaml using the existing benchmark command and a labeled
+corpus. Each profile name must be unique. Tool selections and declared tool
+versions participate in profile fingerprints. Active tool scopes also namespace
+agent verdict and pipeline caches, including direct callers outside benchmarks.
+
+YAML selection (LLM runtime only):
+  toolsets:
+    article_agent:
+      include_defaults: false
+      tools:
+        - component: github.repository
+          options: {max_chars: 12000}
+        - component: publications.search
+          required: false
+
+include_defaults defaults to true (extend existing tools). False replaces them;
+an empty tools list then removes that role's model tools. The provenance runtime
+still adds list_source_evidence and cite_source. This controls the model's tools,
+not deterministic provider lookups, article prefetches or post-processing.
+
+Supported roles: repo_agent, person_agent, org_agent, article_agent,
+membership_agent, contribution_agent, context_summary_agent, context_scout.
+Only the active summary/scout role runs (V2_CONTEXT_SUMMARY_SCOUT_MODE chooses).
+Hybrid/rule_based profiles reject toolsets because these generator/scout roles
+do not use LLM tools there. Existing hybrid refiners keep their own wiring.
+
+Missing providers are skipped for defaults. Explicit additions are required by
+default and fail when dependencies are missing; required:false permits skipping.
+Bundle requirements propagate to members. Bundles are ordered lists; repeated
+components build once, with the last supplied options. To override a bundled
+tool's options, list that individual component after the bundle. Distinct tools
+that expose the same model-facing name are rejected rather than silently shadowed.
+
+Reusable bundles: infoscience.rag, ethz.rag, federated.rag, publications.search.
+The new optional github.repository tool fetches metadata, README, releases or
+auxiliary files through the existing GitHub provider. It uses a worker thread,
+bounds returned text (1000..50000 chars), includes source_url and truncated, and
+does not fetch anything at registration/build time. It is not enabled by default.
+
+Register once in Python
+-----------------------
+  from pydantic import BaseModel, ConfigDict, Field
+  from pydantic_ai import Tool
+  from git_metadata_extractor.experiments.builtins import default_catalog
+
+  class Options(BaseModel):
+      model_config = ConfigDict(extra="forbid")
+      limit: int = Field(default=5, ge=1, le=20)
+
+  def make_search(context, options):
+      async def search_team_records(query: str) -> list[dict]:
+          """Search the team's records; return records with stable source URLs."""
+          return await my_async_provider.search(query, limit=options["limit"])
+      return Tool(search_team_records, takes_ctx=False)
+
+  catalog = default_catalog()
+  catalog.tools.register("team.search", make_search, version="1",
+                         options_model=Options)
+
+my_async_provider above is your injected, separately-owned provider. Factories
+receive ToolContext(providers, cache, context) plus validated options; return a
+Pydantic AI Tool, callable or list of tools. Do not perform I/O in factories.
+Put real I/O in the tool callable, async or synchronous as appropriate. Use
+requires=("ror",) for mandatory ProviderSet fields, or requires_any=("ror",
+"infoscience") for a fallback group. No options schema means no options allowed.
+Factories must honor read-only contracts; arbitrary plugin code is trusted code.
+
+Select team.search by name in YAML and pass catalog=catalog to run_profile or
+run_benchmark. The bundled CLI exposes built-ins only; YAML never imports code.
+For a permanent built-in, add one registration in agents/llm/tool_defaults.py
+and assign it to a default role/bundle if appropriate. Entity agent files need
+no edits. Bump the declared tool version when behavior changes.
+
+Direct agent callers can use:
+  with tool_scope(catalog.tools, {"repo_agent": ToolSelection(...)}):
+      result = await agent.run(context, providers)
+
+Import ToolSelection and tool_scope from agents.tool_catalog. Scopes restore
+on failure and isolate concurrent tasks. Existing runtime observation wraps
+resolved tools, so calls keep their model schema and flow into query/provenance
+records. Return structured records with stable source URLs for useful citations.
+Custom agent implementations must use resolve_tools to participate; profiles
+cannot force an unrelated custom agent to use the shared catalog.
+
+This optimizes extension and composition, not a measured latency guarantee.
+Use smaller toolsets in controlled benchmarks to assess token/time savings.

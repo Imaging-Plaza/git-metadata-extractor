@@ -67,12 +67,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.agents.models import generate_uuid
 from git_metadata_extractor.canonicalization.github import github_org_iri
-from git_metadata_extractor.providers.ror_rag import RorRagProvider, build_default_provider
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.providers.ror_rag import (
+    RorRagProvider,
+    build_default_provider,
+)
 
 if TYPE_CHECKING:
     from git_metadata_extractor.pipeline.stages.reconciliation import ReconciledEntities
@@ -209,8 +212,7 @@ _TRAILING_PUNCT_RE = re.compile(r"[,.;:\-]+\s*$")
 _WS_RE = re.compile(r"\s+")
 
 
-@dataclass(slots=True)
-class CompanyAffiliationResult:
+class CompanyAffiliationResult(InternalModel):
     """Summary of one stage run, returned for logging / observability."""
 
     persons_examined: int
@@ -448,7 +450,7 @@ async def run_resolve_company_to_ror_stage(
             "resolve_company_to_ror: RorRagProvider unavailable (check "
             "V2_ROR_RAG_ENABLED + INDEX_QDRANT_URL); stage skipped",
         )
-        return CompanyAffiliationResult(0, 0, 0, 0, 0, 0, {"provider_unavailable": 1})
+        return CompanyAffiliationResult(persons_examined=0, persons_resolved=0, memberships_created=0, organizations_created=0, queries_attempted=0, queries_accepted=0, rejection_reasons={"provider_unavailable": 1})
 
     persons = reconciled.entities.get("persons") or []
     cache: dict[str, dict[str, Any] | None] = {}

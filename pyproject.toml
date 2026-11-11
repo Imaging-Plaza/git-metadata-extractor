@@ -7,7 +7,9 @@ name = "git-metadata-extractor"
 version = "3.0.0"
 description = "This project is designed to classify imaging software repositories and extract relevant information using AI models."
 readme = "README.md"
-requires-python = ">=3.10"
+# The pinned generator requires Pydantic >=2.12 on Python 3.14+, while this
+# project pins 2.11.7. Keep the declared development toolchain resolvable.
+requires-python = ">=3.10,<3.14"
 license = { text = "MIT" }
 authors = [
     { name = "Quentin Chappuis", email = "quentin.chappuis@epfl.ch" },
@@ -42,6 +44,7 @@ dependencies = [
     "fastapi>=0.122.0",
     "uvicorn[standard]==0.34.3",
     "pydantic==2.11.7",
+    "jsonschema[format-nongpl]>=4.26.0,<5",
     "python-dotenv>=1.2.2",
     "requests>=2.33.0",
     "openai==2.1.0",
@@ -123,6 +126,7 @@ include = ["git_metadata_extractor*"]
 # the wheel — the SHACL gate loads it at runtime from git_metadata_extractor/validation/.
 # The Docker image also gets it via the package COPY; this covers pip installs.
 "*" = ["*.ttl"]
+"git_metadata_extractor.mapping" = ["config/*/*.yaml", "config/README.txt"]
 
 [tool.ruff]
 line-length = 88
@@ -131,6 +135,9 @@ target-version = "py38"
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "TD", "FIX", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
 ignore = ["S101","T201", "G004", "E501", "FA100"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["git_metadata_extractor.models.DataModel", "git_metadata_extractor.models.InternalModel"]
 
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]

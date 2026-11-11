@@ -1,18 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
-from git_metadata_extractor.providers.infoscience_models import InfoscienceAuthor, InfoscienceSearchResult
-from git_metadata_extractor.providers.github_accounts.orgs_parser import GitHubOrganizationsParser
-from git_metadata_extractor.providers.github_accounts.users_parser import GitHubUsersParser
 from git_metadata_extractor.providers import MockInfoscienceProvider
 from git_metadata_extractor.providers.base import (
     INFOSCIENCE_PUBLICATION_OPTIONAL_FIELDS,
     INFOSCIENCE_PUBLICATION_REQUIRED_FIELDS,
 )
+from git_metadata_extractor.providers.github_accounts.orgs_parser import (
+    GitHubOrganizationsParser,
+)
+from git_metadata_extractor.providers.github_accounts.users_parser import (
+    GitHubUsersParser,
+)
 from git_metadata_extractor.providers.github_provider import RealGitHubProvider
-from git_metadata_extractor.providers.infoscience_provider import RealInfoscienceProvider
+from git_metadata_extractor.providers.infoscience_models import (
+    InfoscienceAuthor,
+    InfoscienceSearchResult,
+)
+from git_metadata_extractor.providers.infoscience_provider import (
+    RealInfoscienceProvider,
+)
 from git_metadata_extractor.providers.orcid_provider import RealORCIDProvider
 from git_metadata_extractor.providers.ror_provider import RealRORProvider
 

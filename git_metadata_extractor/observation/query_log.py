@@ -21,11 +21,15 @@ import json
 import logging
 import os
 from contextvars import ContextVar
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
+
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import EvidenceTrace
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +37,17 @@ DEFAULT_QUERY_LOG_DIR = Path("logs/v2_queries")
 QUERY_LOG_DIR_ENV_VAR = "V2_QUERY_LOG_DIR"
 
 
-@dataclass(slots=True)
-class _AgentEntry:
+class _AgentEntry(InternalModel):
     agent: str
     context: dict[str, Any]
-    queries: list[dict[str, Any]] = field(default_factory=list)
+    queries: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class QueryLog:
     """Thread-safe accumulator for one extraction's tool-query history."""
 
     def __init__(self, run_id: str, extract_full_path: str) -> None:
+        self.evidence = EvidenceTrace(run_id)
         self.run_id = run_id
         self.extract_full_path = extract_full_path
         self._lock = Lock()
@@ -156,6 +160,7 @@ def record_query(*, service: str, query: str) -> None:
     log = query_log_var.get()
     if log is None:
         return
+    log.evidence.start_query(service, {"query": query}, status="attempted")
     log.record(
         service=service,
         query=query,

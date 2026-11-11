@@ -38,7 +38,6 @@ import asyncio
 import os
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -48,13 +47,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from git_metadata_extractor.models import InternalModel  # noqa: E402
+
 _ROW_RE = re.compile(
     r"^(?P<handle>[\w.\-]+)\s+->\s+(?P<name>.+?)\s+(?P<ror>[0-9a-z]{9})\s+\d+\s+ov=(?P<ov>\d+)",
 )
 
 
-@dataclass
-class GoldRow:
+class GoldRow(InternalModel):
     handle: str
     old_ror: str
     old_name: str
@@ -127,7 +127,9 @@ async def _resolve(
 
 
 async def run(rows: list[GoldRow], token: str | None) -> None:
-    from git_metadata_extractor.providers.ror_provider import RealRORProvider  # noqa: PLC0415
+    from git_metadata_extractor.providers.ror_provider import (  # noqa: PLC0415
+        RealRORProvider,
+    )
 
     provider = RealRORProvider()
     suspect_total = suspect_resolved_away = 0

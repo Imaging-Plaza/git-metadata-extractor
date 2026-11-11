@@ -21,8 +21,11 @@ researchers — the failure mode that makes dedup worse than no dedup.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -30,8 +33,7 @@ if TYPE_CHECKING:
     from git_metadata_extractor.unify.policy import TypeResolver
 
 
-@dataclass(slots=True)
-class Record:
+class Record(InternalModel):
     """One entity as one run asserted it."""
 
     iri: str
@@ -39,7 +41,7 @@ class Record:
     #: The graph it came from. Kept because it is the provenance handle: the
     #: named graph is what attributes these triples to a source.
     graph: str
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict)
 
     def values(self, prop: str) -> list[Any]:
         """`prop`'s values as a flat list, references reduced to their IRI."""
@@ -58,12 +60,11 @@ class Record:
         return out
 
 
-@dataclass(slots=True)
-class Cluster:
+class Cluster(InternalModel):
     """Records agreed to describe one entity."""
 
     entity_type: str
-    records: list[Record] = field(default_factory=list)
+    records: list[Record] = Field(default_factory=list)
 
     @property
     def iris(self) -> list[str]:

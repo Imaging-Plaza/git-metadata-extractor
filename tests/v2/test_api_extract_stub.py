@@ -11,9 +11,9 @@ from git_metadata_extractor.agents import ProviderSet
 from git_metadata_extractor.agents.models import AgentResult
 from git_metadata_extractor.api import v2_router
 from git_metadata_extractor.api_models.contracts import V2ExtractJob, V2ExtractResponse
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.pipeline import PipelineOrchestrator
 from git_metadata_extractor.pipeline.stages.models import ContextBundle
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
 from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
@@ -116,6 +116,19 @@ def test_extract_repository_url_returns_detected_repository() -> None:
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"
     assert V2ExtractResponse.model_validate(payload)
+
+
+def test_extract_returns_query_and_agent_provenance_beside_canonical_graph() -> None:
+    status_code, payload = _get_json(
+        "/v2/extract/github.com/octocat/Hello-World",
+        {"agent_runtime": "rule_based"},
+    )
+    assert status_code == HTTP_OK
+    provenance = payload["provenance"]
+    nodes = provenance["@graph"]
+    assert any(n.get("gme:service", "").startswith("github.") for n in nodes)
+    assert any(n.get("rdf:predicate") == {"@id": "schema:name"} for n in nodes)
+    assert not any(n.get("@type") == "rdf:Statement" for n in payload["output"]["@graph"])
 
 
 def test_extract_user_url_returns_detected_user() -> None:
@@ -517,6 +530,26 @@ def test_pipeline_cache_round_trip_returns_identical_response(tmp_path: Any) -> 
     assert sc2 == HTTP_OK
     assert payload1 == payload2
     assert row_count >= 1
+
+
+def test_pipeline_cache_distinguishes_tool_scopes(tmp_path: Any) -> None:
+    from git_metadata_extractor.agents.llm.tool_defaults import default_tool_catalog
+    from git_metadata_extractor.agents.tool_catalog import ToolSelection, tool_scope
+
+    async def run() -> None:
+        app = _build_test_app()
+        app.state.v2_provider_cache = ProviderCache(tmp_path / "tools.db")
+        catalog = default_tool_catalog()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver", headers=_AUTH_HEADERS) as client:
+            with tool_scope(catalog, {}):
+                first = await client.get("/v2/extract/github.com/octocat/Hello-World", params={"agent_runtime": "rule_based"})
+                repeated = await client.get("/v2/extract/github.com/octocat/Hello-World", params={"agent_runtime": "rule_based"})
+            with tool_scope(catalog, {"repo_agent": ToolSelection(include_defaults=False)}):
+                changed = await client.get("/v2/extract/github.com/octocat/Hello-World", params={"agent_runtime": "rule_based"})
+        assert first.status_code == repeated.status_code == changed.status_code == HTTP_OK
+        assert first.json() == repeated.json()
+        assert first.json()["stats"]["run_id"] != changed.json()["stats"]["run_id"]
+    asyncio.run(run())
 
 
 def test_pipeline_cache_distinguishes_output_format(tmp_path: Any) -> None:

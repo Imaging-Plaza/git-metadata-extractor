@@ -1,0 +1,11 @@
+schema_version: 1
+name: raw.organization_profile
+version: '1'
+source_contract: extractor.v2.entity
+target_contract: raw.organization_profile
+fields:
+  pulse:followerCount: {sources: [_followers_count]}
+  pulse:location: {sources: [_location]}
+  schema:description: {sources: [_description]}
+  schema:url: {sources: [_blog], transform: iri}
+  schema:dateModified: {sources: [_github_updated_at]}

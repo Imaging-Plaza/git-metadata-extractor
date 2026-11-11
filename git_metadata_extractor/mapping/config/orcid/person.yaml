@@ -1,0 +1,13 @@
+schema_version: 1
+name: orcid.person
+version: '1'
+source_contract: orcid.person.record
+target_contract: agent.person
+fields: {}
+internal_fields:
+  _orcid_biography: {sources: [biography]}
+  _orcid_country: {sources: [country]}
+  _orcid_keywords: {sources: [keywords]}
+  _orcid_researcher_urls: {sources: [researcher_urls]}
+  _orcid_other_names: {sources: [other_names]}
+  _orcid_external_identifiers: {sources: [external_identifiers]}

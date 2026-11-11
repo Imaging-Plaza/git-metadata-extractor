@@ -1,50 +1,45 @@
-"""One signature for every post-agent stage, and the loop that runs them.
+"""Run named post-agent stages against a shared PipelineState.
 
-`api/extract.py` used to inline all 33 stage calls, each with its own
-`perf_counter()` bracket, its own `try/except` and its own warning plumbing.
-The shapes were nearly identical but never quite, so the sequence could not be
-reordered, tested in isolation, or read as a list.
-
-A stage here is a name, a callable that mutates `PipelineState`, an optional
-gate, and — importantly — a declaration of whether it fails open.
-
-    Stage(name="reconcile_entities", run=_reconcile, fail_open=False)
-
-`fail_open` is not cosmetic. Today most stages swallow exceptions and append a
-warning, but a few (`reconcile_entities`, `assemble_output`) let them escape so
-the route returns 500. Making the loop uniformly forgiving would silently turn
-those into partial successes, so each stage keeps the behaviour it has. Reducing
-the number of fail-open stages is plan phase 8's job, not this one's.
+Each stage declares a callable, an applicability gate and a failure policy.
+Fail-open stages append warnings; required stages raise StageError. The runner
+records timing and provenance without changing the declared stage order.
 """
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
-from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import Awaitable, Callable
 
-if TYPE_CHECKING:
-    from git_metadata_extractor.pipeline.state import PipelineState
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import (
+    activity,
+    get_trace,
+    state_entities,
+)
+from git_metadata_extractor.pipeline.state import PipelineState, StageOutcome
 
 logger = logging.getLogger(__name__)
 
-StageFn = Callable[["PipelineState"], "Awaitable[None] | None"]
-StageGate = Callable[["PipelineState"], bool]
+# These aliases are evaluated by Pydantic when constructing Stage validators.
+StageFn = Callable[[PipelineState], Awaitable[None] | None]
+StageGate = Callable[[PipelineState], bool]
 
 
 def _always(_state: PipelineState) -> bool:
     return True
 
 
-@dataclass(slots=True)
-class Stage:
+class Stage(InternalModel):
     """A named, gated step that mutates the pipeline state in place."""
 
     name: str
     run: StageFn
-    applies: StageGate = field(default=_always)
+    applies: StageGate = Field(default=_always)
     fail_open: bool = True
 
 
@@ -68,18 +63,22 @@ async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineSta
 
     Stages mutate `state` rather than returning a new one: the sequence
     threads four payloads plus several accumulators, and returning a fresh
-    dataclass per step would mean every stage restating the fields it did not
+    model per step would mean every stage restating the fields it did not
     touch.
     """
     for stage in stages:
         try:
             if not stage.applies(state):
-                state.extras[f"{stage.name}_skipped"] = True
+                state.stage_outcomes.append(StageOutcome(name=stage.name, status="skipped", phase="gate"))
                 logger.debug("%s: skipped by gate", stage.name)
                 continue
-        except Exception:
-            # A broken gate must not decide the run's fate silently.
-            logger.exception("%s: gate raised; treating stage as skipped", stage.name)
+        except Exception as exc:
+            state.stage_outcomes.append(StageOutcome(
+                name=stage.name, status="failed", phase="gate", error_type=type(exc).__name__,
+            ))
+            if not stage.fail_open:
+                raise StageError(stage.name, exc) from exc
+            logger.exception("%s: optional gate failed; stage skipped", stage.name)
             state.warn(f"{stage.name} gate failed; stage skipped")
             continue
 
@@ -89,16 +88,35 @@ async def run_pipeline(state: PipelineState, stages: list[Stage]) -> PipelineSta
         # so an adapter reading `state.timings` mid-stage always saw 0.00s.
         state.stage_started_at = started_at
         try:
-            await _invoke(stage, state)
+            with activity(stage.name, kind="transformation"):
+                await _invoke(stage, state)
+                trace = get_trace()
+                if trace is not None:
+                    trace.observe(state_entities(state))
+        except asyncio.CancelledError:
+            elapsed = perf_counter() - started_at
+            state.timings[stage.name] = elapsed
+            state.stage_outcomes.append(StageOutcome(
+                name=stage.name, status="cancelled", duration_seconds=elapsed,
+            ))
+            raise
         except Exception as exc:
             elapsed = perf_counter() - started_at
             state.timings[stage.name] = elapsed
+            state.stage_outcomes.append(StageOutcome(
+                name=stage.name, status="failed", duration_seconds=elapsed,
+                error_type=type(exc).__name__,
+            ))
             if not stage.fail_open:
                 logger.exception("%s stage failed (fatal)", stage.name)
                 raise StageError(stage.name, exc) from exc
             logger.exception("%s stage failed", stage.name)
             state.warn(f"{stage.name} stage failed: {exc}")
         else:
-            state.timings[stage.name] = perf_counter() - started_at
+            elapsed = perf_counter() - started_at
+            state.timings[stage.name] = elapsed
+            state.stage_outcomes.append(StageOutcome(
+                name=stage.name, status="completed", duration_seconds=elapsed,
+            ))
 
     return state

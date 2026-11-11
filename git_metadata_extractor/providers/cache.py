@@ -15,6 +15,8 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Callable
 
+from git_metadata_extractor.observation.evidence import mark_cache_hit
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TTL_DAYS = 30
@@ -101,6 +103,7 @@ class ProviderCache:
         value, expires_at = row
         if expires_at < time.time():
             return None
+        mark_cache_hit()
         return json.loads(value)
 
     def set(self, key: str, value: Any, *, ttl_seconds: float | None = None) -> None:

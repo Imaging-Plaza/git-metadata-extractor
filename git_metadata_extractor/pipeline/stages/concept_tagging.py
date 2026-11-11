@@ -44,10 +44,12 @@ import logging
 import os
 import re
 from collections import Counter
-from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 import requests
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +75,11 @@ KEYWORDS_FIELD = "_keywords"
 DISCIPLINES_FIELD = "_disciplines"
 
 
-@dataclass(slots=True)
-class ConceptTaggingResult:
-    keywords: list[str] = field(default_factory=list)
-    concepts: list[dict[str, Any]] = field(default_factory=list)
-    disciplines: list[dict[str, Any]] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+class ConceptTaggingResult(InternalModel):
+    keywords: list[str] = Field(default_factory=list)
+    concepts: list[dict[str, Any]] = Field(default_factory=list)
+    disciplines: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     backend: str = ""
 
 

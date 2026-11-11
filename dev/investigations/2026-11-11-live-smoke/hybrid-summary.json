@@ -1,0 +1,55 @@
+{
+  "status": "completed",
+  "runtime": "hybrid",
+  "scope": "live context + repository agent + normal post-agent stages; no entity fanout",
+  "elapsed_seconds": 75.01,
+  "cache_hit": false,
+  "stats": {
+    "entities_count": 3,
+    "triples_count": 20,
+    "run_id": "9db5516c-075e-48a4-b40a-db30b565e28d",
+    "duration_ms": 15595,
+    "stages_completed": [
+      "context_gather",
+      "repo_agent",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate"
+    ]
+  },
+  "warnings": [
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=caviri",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=cmdoret",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=ksanao",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=marftn",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=raj921",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=rmfranken",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabinem",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabrinaossey",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=supermaxiste",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=vancauwe",
+    "Orphan owner reference from repository: repo=https://github.com/sdsc-ordes/gimie, owner=https://github.com/sdsc-ordes",
+    "discovery_refiner: skipped \u2014 The next request would exceed the request_limit of 4",
+    "repo_signals: set _documentation_urls=['https://sdsc-ordes.github.io/gimie/intro/usage_python.html'] for 'https://github.com/sdsc-ordes/gimie'",
+    "KNOWN BUG (schema:author empty after reconciliation): synthesized owner Person stub 'https://github.com/sdsc-ordes' as schema:author on https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes'). No matching Person or Organization existed in the graph \u2014 typical of solo-user repositories with no extracted contributor data.",
+    "Inferred pulse:owns on https://github.com/sdsc-ordes \u2192 https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes')."
+  ],
+  "internal_field_leaks": [],
+  "response_fields": [
+    "source_url",
+    "detected_type",
+    "output_format",
+    "output",
+    "context_summary_markdown",
+    "warnings",
+    "stats",
+    "extraction_run",
+    "provenance",
+    "execution_profile",
+    "substrate"
+  ]
+}

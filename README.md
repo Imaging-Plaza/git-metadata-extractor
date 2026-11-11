@@ -24,6 +24,13 @@ github.com/X  →  │  /v2/extract                 │  →  JSON-LD graph
 
 A single GitHub URL → a typed graph you can SPARQL. The pipeline combines deterministic provider lookups (GitHub REST, ORCID, ROR, Infoscience, GIMIE), nine RAG indices, and optional LLM agents.
 
+Deterministic mappings live in versioned YAML: source adapters prepare facts,
+entity mappings build agent payloads, and projections map the reconciled graph
+into raw and canonical ontology shapes. Each source/entity has a small mapping;
+shared policies cover routing, classification and merging. Start with the
+[mapping overview](docs/architecture/overview.md#source-to-ontology-mappings)
+or the [mapping editing guide](git_metadata_extractor/mapping/config/README.txt).
+
 ---
 
 ## Try it in 30 seconds

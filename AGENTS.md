@@ -81,12 +81,16 @@ git_metadata_extractor/
                                  #   it is written and tested once
 
   unify/                         # store-side unification: substrate -> canonical
-    policy.py                    # per-type match keys + per-property dispositions
+    policy.py                    # typed views of YAML match/merge policy
     cluster.py                   # union-find over match keys (type-agnostic)
     merge.py                     # union / select / drop, and why (type-agnostic)
     remap.py                     # rewrite refs, composite ids and selections
     provenance.py                # the decisions, as RDF-star in graph:prov
     runner.py                    # read the store, decide, write both graphs
+
+  mapping/                       # deterministic field engine + typed config checks
+    config/                      # per-source/entity YAML mappings + shared policies
+    config/README.txt            # authoritative mapping/policy editing guide
 
   schema/                        # JSON Schemas (agent + strict) + JSON-LD context
   validation/                    # strict-schema + SHACL validators
@@ -405,8 +409,9 @@ outputs.
 **GitHub gets no snapshot**, deliberately: its entity data comes from the live
 REST API, so a library version there would claim a reproducibility the data does
 not have. A source with no version gets no snapshot rather than one asserting
-only what `pulse:platform` already says — `raw_projection._INDEX_BACKED` is the
-list, and patch 07 added the six enumeration members it needed
+only what `pulse:platform` already says — `policies/ontology.yaml` under the
+mapping config owns `index_backed_platforms` (`raw_projection._INDEX_BACKED`
+reads it), and patch 07 added the six enumeration members it needed
 (`pulse:OpenAlex`, `pulse:ETHZResearchCollection`, `pulse:SNSF`,
 `pulse:RenkuLab`, `pulse:SWISSUbase`, `pulse:EPFLGraph`). DuckDuckGo is excluded
 on purpose: a search engine is a discovery mechanism, so it cannot legitimately
@@ -494,8 +499,9 @@ ontology patch 02 load-bearing for the first time.
 
 The dispositions **cannot be read off the shapes**: 45 of 78 canonical
 properties carry no `sh:maxCount`, and among them `schema:name` is
-semantically single while `pulse:owns` is genuinely many. So `policy.py`
-classifies them by hand and `tests/v2/test_unify_policy.py` guards the table
+semantically single while `pulse:owns` is genuinely many. So mapping config
+`policies/merge.yaml` declares the dispositions, `unify/policy.py` exposes them,
+and `tests/v2/test_unify_policy.py` guards the policy
 against the real TTL — no capped property may be `UNION`, and every uncapped
 one must have an entry. Exactly one property is *shape-dependent*
 (`schema:author`: capped on `pulse:Contribution`, unbounded on articles and
@@ -801,6 +807,30 @@ isolated and independently invalidatable.
 - Do not modify secret-bearing files unless explicitly requested.
 - Do not run destructive git/file operations unless explicitly requested.
 - If unrelated local changes exist, do not revert them — work around them and report context.
+
+## Mapping change rules
+
+Deterministic source-to-ontology assignments live in
+`git_metadata_extractor/mapping/config/`, split by source/entity and projection
+contract. Read its [editing guide](git_metadata_extractor/mapping/config/README.txt)
+before changing a mapping. Adapters still fetch, normalize and match records;
+YAML maps prepared facts into agent payloads and maps the reconciled intermediate
+into raw/canonical shapes. Graph construction, reconciliation, inference and
+validation remain Python.
+
+- Edit the relevant YAML and bump its version; do not add a duplicate Python
+  field table or a repository-level config copy. Shared classification, source
+  routing/attribution and merge choices belong in the typed policy YAML.
+- Pydantic validates configuration; generated target models check property
+  names. Strict JSON Schema/SHACL validation and semantic source fixtures still
+  matter. A source's field name or datatype alone does not establish its meaning.
+- Run `python -m git_metadata_extractor.mapping --check` and the affected
+  mapping/agent/projection/unifier tests listed in the guide. The CLI without a
+  flag prints the current inventory; `--schema` prints the editor schema.
+- Restart after edits. The process caches parsed configuration and fingerprints;
+  the fingerprint participates in pipeline/verdict cache keys and mapping
+  evidence, but does not archive source data. Keep execution evidence separate
+  from canonical fields and unifier selection provenance.
 
 ## Schema change rules
 

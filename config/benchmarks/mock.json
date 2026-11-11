@@ -1,0 +1,15 @@
+{
+  "cases": [
+    {
+      "id": "hello-world",
+      "source_url": "https://github.com/octocat/Hello-World",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/octocat/Hello-World",
+          "predicate": "schema:name",
+          "value": "Hello-World"
+        }
+      ]
+    }
+  ]
+}

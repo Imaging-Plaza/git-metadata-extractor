@@ -7,20 +7,14 @@ from copy import deepcopy
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from git_metadata_extractor.agents.llm._loader import load_prompt
-from git_metadata_extractor.agents.llm.agent_tools.duckduckgo_search import (
-    make_duckduckgo_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.repository_corpus_grep import (
-    make_repository_corpus_grep_tool,
-)
 from pydantic_ai.usage import UsageLimits
 
-from git_metadata_extractor.agents.models import AgentResult, ProviderSet
+from git_metadata_extractor.agents.llm._loader import load_prompt
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
-from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.agents.models import AgentResult, ProviderSet
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 
 logger = logging.getLogger(__name__)
 
@@ -265,93 +259,12 @@ def _build_corpus_documents(
 
 
 def _build_scout_tools(
-    *,
-    providers: ProviderSet,
-    cache: ProviderCache | None,
+    *, providers: ProviderSet, cache: ProviderCache | None,
     corpus_documents: list[dict[str, Any]],
 ) -> list[Any]:
-    """Assemble the broad recon toolset for context_summary in scout mode.
-
-    Mirrors the per-entity agents' tool sets (person, org, article,
-    membership, contribution) so the scout sees the same search
-    capabilities collectively. Only RAG `search_*` factories are
-    pulled in — the heavier `fetch_chunks` / `fetch_records` stay out
-    so the scout doesn't burn its budget on full-record retrieval.
-
-    Each `provider.* is not None` guard mirrors how the per-entity
-    agents wire tools — a missing index degrades silently.
-    """
-    # Local imports keep the legacy (non-scout) code path import-cost-free.
-    from git_metadata_extractor.agents.llm.agent_tools.epfl_graph_rag import (  # noqa: PLC0415
-        make_epfl_graph_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.ethz_research_collection_rag import (  # noqa: PLC0415
-        make_ethz_research_collection_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.huggingface_rag import (  # noqa: PLC0415
-        make_huggingface_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.oamonitor_rag import (  # noqa: PLC0415
-        make_oamonitor_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (  # noqa: PLC0415
-        make_infoscience_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.openalex_rag import (  # noqa: PLC0415
-        make_openalex_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.orcid_rag import (  # noqa: PLC0415
-        make_orcid_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.renkulab_rag import (  # noqa: PLC0415
-        make_renkulab_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.ror_rag import (  # noqa: PLC0415
-        make_ror_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (  # noqa: PLC0415
-        make_fetch_link_content_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.snsf_rag import (  # noqa: PLC0415
-        make_snsf_rag_search_tool,
-    )
-    from git_metadata_extractor.agents.llm.agent_tools.zenodo_rag import (  # noqa: PLC0415
-        make_zenodo_rag_search_tool,
-    )
-
-    tools: list[Any] = [
-        # Always-on baseline (no provider dependency).
-        make_repository_corpus_grep_tool(corpus_documents),
-        make_duckduckgo_search_tool(cache=cache),
-        make_fetch_link_content_tool(cache),
-    ]
-    if providers.orcid_rag is not None:
-        tools.append(make_orcid_rag_search_tool(providers.orcid_rag))
-    if providers.ror_rag is not None:
-        tools.append(make_ror_rag_search_tool(providers.ror_rag))
-    if providers.infoscience_rag is not None:
-        tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
-    if providers.openalex_rag is not None:
-        tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
-    if providers.zenodo_rag is not None:
-        tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
-    if providers.oamonitor_rag is not None:
-        tools.append(make_oamonitor_rag_search_tool(providers.oamonitor_rag))
-    if providers.ethz_research_collection_rag is not None:
-        tools.append(
-            make_ethz_research_collection_rag_search_tool(
-                providers.ethz_research_collection_rag,
-            ),
-        )
-    if providers.huggingface_rag is not None:
-        tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
-    if providers.renkulab_rag is not None:
-        tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
-    if providers.snsf_rag is not None:
-        tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
-    if providers.epfl_graph_rag is not None:
-        tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
-    return tools
+    return resolve_tools("context_scout", ToolContext(
+        providers=providers, cache=cache, context={"corpus_documents": corpus_documents},
+    ))
 
 
 def _document_manifest(corpus_documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -456,10 +369,9 @@ class LLMContextSummaryAgentV2:
             )
         else:
             system_prompt = _SYSTEM_PROMPT
-            tools = [
-                make_repository_corpus_grep_tool(corpus_documents),
-                make_duckduckgo_search_tool(cache=self._cache),
-            ]
+            tools = resolve_tools("context_summary_agent", ToolContext(
+                providers=providers, cache=self._cache, context={"corpus_documents": corpus_documents},
+            ))
 
         try:
             run_kwargs: dict[str, Any] = {}

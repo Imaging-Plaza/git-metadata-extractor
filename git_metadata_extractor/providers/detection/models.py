@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
+
+from git_metadata_extractor.models import InternalModel
 
 
 class GitHubURLType(str, Enum):
@@ -10,8 +11,7 @@ class GitHubURLType(str, Enum):
     ORGANIZATION = "organization"
 
 
-@dataclass(frozen=True)
-class GitHubURLClassification:
+class GitHubURLClassification(InternalModel, frozen=True):
     normalized_url: str
     detected_type: GitHubURLType
     owner: str

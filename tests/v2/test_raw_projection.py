@@ -6,13 +6,9 @@ for — follower counts, biographies, branch counts, ~20 repository fields the
 providers already fetch. The raw shapes declare all of them, and the raw layer
 is what a source actually said before anything was chosen between sources.
 
-`raw_projection`'s module docstring has claimed since it was written that
-`test_every_mapping_target_is_declared_by_its_shape` checks its mapping tables
-against the real TTL "rather than trusting this docstring". **The test did not
-exist.** So the tables had no coverage at all, while three of the five raw
-shapes they target are `sh:closed` and reject any property they do not
-declare — exactly the failure mode the citation promised was covered. It exists
-now, and it is the first test in this file.
+`test_every_mapping_target_is_declared_by_its_shape` checks the packaged YAML
+mapping targets against the real TTL. The profile and repository shapes are
+`sh:closed` and reject any property they do not declare.
 
 What the rest covers is the anchoring: which `pulse:ExtractionOutput` an entity
 is attributed to. Every defect found there so far was invisible to SHACL — the
@@ -28,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from git_metadata_extractor.pipeline.stages import raw_projection
+from git_metadata_extractor.mapping import load_mapping
 from git_metadata_extractor.pipeline.stages.raw_projection import (
     _PART_OF_RUN_TYPES,
     _PASSTHROUGH,
@@ -62,12 +58,11 @@ def _by_type(doc: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
 # the mapping tables, against the real shapes
 # --------------------------------------------------------------------------
 
-#: Each mapping table in `raw_projection`, and the shape whose properties it is
-#: allowed to name. Three of these five are `sh:closed`.
-_TABLE_SHAPES = [
-    ("_PROFILE_FIELDS", "RawPlatformProfileShape"),
-    ("_ORGANIZATION_PROFILE_FIELDS", "RawOrganizationProfileShape"),
-    ("_REPOSITORY_FIELDS", "RawRepositoryShape"),
+#: Each raw detail mapping and its closed ontology shape.
+_MAPPING_SHAPES = [
+    ("raw.person_profile", "RawPlatformProfileShape"),
+    ("raw.organization_profile", "RawOrganizationProfileShape"),
+    ("raw.repository", "RawRepositoryShape"),
 ]
 
 _PASSTHROUGH_SHAPES = {
@@ -96,9 +91,9 @@ def _declared_properties(shape_name: str) -> set[str]:
 
 
 @pytest_ontology
-@pytest.mark.parametrize(("table_name", "shape_name"), _TABLE_SHAPES)
+@pytest.mark.parametrize(("mapping_name", "shape_name"), _MAPPING_SHAPES)
 def test_every_mapping_target_is_declared_by_its_shape(
-    table_name: str,
+    mapping_name: str,
     shape_name: str,
 ) -> None:
     """A mapping target the shape does not declare is a closed-shape violation.
@@ -107,10 +102,10 @@ def test_every_mapping_target_is_declared_by_its_shape(
     TTL rather than a copy of it, so a submodule bump that renames or drops a
     property fails here instead of surfacing as a SHACL warning on a live run.
     """
-    table = getattr(raw_projection, table_name)
+    targets = load_mapping(mapping_name).fields
     declared = _declared_properties(shape_name)
 
-    undeclared = sorted(set(table.values()) - declared)
+    undeclared = sorted(set(targets) - declared)
     assert not undeclared, f"{shape_name} does not declare {undeclared}"
 
 

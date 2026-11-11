@@ -10,14 +10,17 @@ fails (`"<name> stage failed: <exc>"`).
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from typing import Any
 
+from git_metadata_extractor.agents.models import ProviderSet
 from git_metadata_extractor.agents.runtime import AgentRuntime
 from git_metadata_extractor.pipeline.run import RESOLVER_CHAIN
 from git_metadata_extractor.pipeline.runner import run_pipeline
 from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
 from git_metadata_extractor.pipeline.state import PipelineState
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
 
 
 class _UnreachableRor:
@@ -39,9 +42,9 @@ def test_unreachable_ror_degrades_each_resolver_to_a_named_warning(monkeypatch):
         monkeypatch.delenv(flag, raising=False)
     state = PipelineState(
         run_id="run-1",
-        classification=None,
+        classification=classify_github_url("https://github.com/acme/widget", probe_accounts=False),
         runtime=AgentRuntime.RULE_BASED,
-        providers=SimpleNamespace(ror_rag=_UnreachableRor(), github=None),
+        providers=ProviderSet(ror_rag=_UnreachableRor(), github=None),
         reconciled=ReconciledEntities(
             entities={
                 "persons": [

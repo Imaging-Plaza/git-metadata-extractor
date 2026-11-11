@@ -47,6 +47,9 @@ from git_metadata_extractor.pipeline.stages.substrate import (
     to_nquads,
 )
 from git_metadata_extractor.pipeline.state import PipelineState
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
 from git_metadata_extractor.schema import load_generated_context
 from git_metadata_extractor.store import oxigraph
 from git_metadata_extractor.validation import raw_shapes_available, validate_substrate
@@ -414,16 +417,10 @@ def test_the_context_is_the_generated_one_not_the_v2_file(
 
 
 def _pipeline_state(**kwargs: Any) -> PipelineState:
-    class _Detected:
-        value = "repository"
-
-    class _Classification:
-        detected_type = _Detected()
-        normalized_url = "https://github.com/ANTsX/ANTs"
 
     return PipelineState(
         run_id=RUN_ID,
-        classification=_Classification(),
+        classification=classify_github_url("https://github.com/ANTsX/ANTs", probe_accounts=False),
         runtime=AgentRuntime.RULE_BASED,
         providers=None,
         **kwargs,
@@ -537,7 +534,7 @@ def test_the_projection_stage_populates_state_when_enabled(
 
     assert state.substrate is not None
     assert set(_graphs(state.substrate)) == {GITHUB_OUTPUT, ROR_OUTPUT, META}
-    assert state.extras["substrate_graph_sizes"][GITHUB_OUTPUT] == EXPECTED_GITHUB_NODES
+    assert state.artifacts.substrate_graph_sizes[GITHUB_OUTPUT] == EXPECTED_GITHUB_NODES
     # The graph the caller receives is untouched by the projection.
     assert state.payload["@graph"] == flat_graph
 
@@ -606,10 +603,10 @@ def test_the_write_stage_posts_the_quads_when_a_store_is_configured(
     body = seen[0].content.decode()
     assert f"<{GITHUB_OUTPUT}> ." in body
     assert f"<{ROR_OUTPUT}> ." in body
-    assert state.extras["substrate_quads_written"] == len(
+    assert state.artifacts.substrate_quads_written == len(
         [line for line in body.splitlines() if line.strip()],
     )
-    assert state.extras["substrate_store_url"] == "http://oxigraph:7878"
+    assert state.artifacts.substrate_store_url == "http://oxigraph:7878"
 
 
 def test_an_unreachable_store_warns_and_keeps_the_graph(
@@ -732,7 +729,7 @@ def test_the_substrate_write_reports_violations_without_refusing(
     assert any("SHACL violation" in warning for warning in state.warnings)
     # The substrate was still produced.
     assert state.substrate is not None
-    assert state.extras["substrate_validation"]
+    assert state.artifacts.substrate_validation
 
 
 def test_substrate_validation_can_be_switched_off(
@@ -789,7 +786,7 @@ def test_the_real_substrate_slice_conforms(
 
     assert result.conforms, result.violations
     # And the stage reached the same verdict on the way past.
-    assert "conforms=True" in state.extras["substrate_validation"]
+    assert "conforms=True" in state.artifacts.substrate_validation
 
 
 # --------------------------------------------------------------------------

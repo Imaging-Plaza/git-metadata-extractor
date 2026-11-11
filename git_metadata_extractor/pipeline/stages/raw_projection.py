@@ -24,7 +24,7 @@ architecture document's open gap 3.
 
 Note which raw shapes are closed: the entity shapes for Person and
 Organization are open, but `RawRepositoryShape`, `RawArticleShape` and both
-profile shapes are **closed**. So the mapping tables below may only name
+profile shapes are **closed**. So the packaged raw mappings may only name
 properties those shapes declare;
 `tests/v2/test_raw_projection.py::test_every_mapping_target_is_declared_by_its_shape`
 checks that against the real TTL rather than trusting this docstring.
@@ -37,6 +37,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from git_metadata_extractor.mapping import load_policy, map_fields
 from git_metadata_extractor.pipeline.stages.canonical_projection import (
     _host_and_path,
     _is_empty,
@@ -48,6 +49,8 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (
     profile_iri,
 )
 from git_metadata_extractor.pipeline.stages.source_attribution import split_by_source
+
+_ONTOLOGY_POLICY = load_policy("policies.ontology")
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -97,21 +100,7 @@ def extraction_output(
 #: yesterday can answer differently today and no version records that. A source
 #: with no version gets no snapshot at all rather than a snapshot asserting
 #: only what `pulse:platform` already says.
-_INDEX_BACKED: frozenset[str] = frozenset(
-    {
-        "pulse:EPFLGraph",
-        "pulse:ETHZResearchCollection",
-        "pulse:HuggingFace",
-        "pulse:Infoscience",
-        "pulse:ORCID",
-        "pulse:OpenAlex",
-        "pulse:ROR",
-        "pulse:RenkuLab",
-        "pulse:SNSF",
-        "pulse:SWISSUbase",
-        "pulse:Zenodo",
-    },
-)
+_INDEX_BACKED = frozenset(_ONTOLOGY_POLICY.index_backed_platforms)
 
 
 @lru_cache(maxsize=1)
@@ -155,105 +144,15 @@ def source_snapshot(platform: str) -> dict[str, Any] | None:
     }
 
 
-# --------------------------------------------------------------------------
-# mapping tables: internal `_field` -> raw shape property
-#
-# Only properties the corresponding shape declares may appear here; the closed
-# shapes reject anything else. A test asserts that against the TTL.
-# --------------------------------------------------------------------------
-
-#: Person/organization platform detail. Lands on the *profile*, not the entity:
-#: a follower count is a fact about an account, not about a person.
-_PROFILE_FIELDS: dict[str, str] = {
-    "_avatar_url": "schema:image",
-    "_blog": "schema:url",
-    "_company": "pulse:company",
-    "_followers_count": "pulse:followerCount",
-    "_following_count": "pulse:followingCount",
-    "_github_created_at": "schema:dateCreated",
-    "_github_updated_at": "schema:dateModified",
-    "_location": "pulse:location",
-    "_public_repos": "pulse:publicRepositoryCount",
-    "_bio": "pulse:biography",
-    "_orcid_biography": "pulse:biography",
-    "_twitter_username": "pulse:socialLink",
-}
-
-_ORGANIZATION_PROFILE_FIELDS: dict[str, str] = {
-    "_followers_count": "pulse:followerCount",
-    "_location": "pulse:location",
-    "_description": "schema:description",
-    "_blog": "schema:url",
-    "_github_updated_at": "schema:dateModified",
-}
-
-#: Repository detail. `RawRepositoryShape` is closed and declares ~60
-#: properties; these are the ones the providers actually populate today.
-_REPOSITORY_FIELDS: dict[str, str] = {
-    "_archived": "pulse:archived",
-    "_default_branch": "pulse:defaultBranch",
-    "_description": "schema:description",
-    "_git_tag_count": "pulse:gitTagCount",
-    "_has_discussions": "pulse:hasDiscussions",
-    "_has_pages": "pulse:hasPages",
-    "_has_wiki": "pulse:hasWiki",
-    "_open_issues_count": "pulse:openIssueCount",
-    "_primary_language": "pulse:language",
-    "_pushed_at": "pulse:pushedDate",
-    "_release_count": "pulse:releaseCount",
-    # `_watchers_count` is deliberately absent: GitHub's `watchers_count` is
-    # the *star* count (identical to `stargazers_count`), so mapping it to
-    # `pulse:likeCount` just duplicates `pulse:repositoryStars`. The field
-    # holding actual watchers is `subscribers_count`.
-    "_subscribers_count": "pulse:watcherCount",
-    "_updated_at": "schema:dateModified",
-    "_homepage": "schema:url",
-    "_code_of_conduct_url": "pulse:codeOfConduct",
-    "_security_url": "pulse:securityPolicy",
-    "_publiccode_url": "pulse:publicCodeManifest",
-    "_keywords": "pulse:tag",
-    "_size_kb": "pulse:fileCount",
-}
-
 #: Properties whose value is an IRI reference rather than a literal, so they
 #: serialise as `{"@id": ...}`. Taken from the shapes' `sh:nodeKind sh:IRI`.
-_IRI_VALUED: frozenset[str] = frozenset(
-    {
-        "schema:url",
-        "schema:image",
-        "pulse:codeOfConduct",
-        "pulse:securityPolicy",
-        "pulse:publicCodeManifest",
-        "pulse:fundingConfig",
-        "pulse:readme",
-        "pulse:externalReference",
-        "schema:license",
-        "schema:citation",
-    },
-)
-
-#: `pulse:VisibilityEnumeration` members, keyed by the GitHub API's wording.
-_VISIBILITY: dict[str, str] = {
-    "public": "pulse:PublicVisibility",
-    "private": "pulse:PrivateVisibility",
-    "internal": "pulse:InternalVisibility",
-}
+_IRI_VALUED = frozenset(_ONTOLOGY_POLICY.iri_properties)
 
 
 def _coerce(prop: str, value: Any) -> Any:
     if prop in _IRI_VALUED:
         return {"@id": value} if isinstance(value, str) else None
     return value
-
-
-def _apply(target: dict[str, Any], node: Mapping[str, Any], table: Mapping[str, str]) -> None:
-    for field, prop in table.items():
-        value = node.get(field)
-        if _is_empty(value):
-            continue
-        coerced = _coerce(prop, value)
-        if not _is_empty(coerced):
-            target[prop] = coerced
 
 
 # --------------------------------------------------------------------------
@@ -264,68 +163,7 @@ def _apply(target: dict[str, Any], node: Mapping[str, Any], table: Mapping[str, 
 #: shapes for Person and Organization are open, so an unmapped property is
 #: tolerated there — but passing junk through would defeat the point of having
 #: shapes, so these lists stay explicit.
-_PASSTHROUGH: dict[str, tuple[str, ...]] = {
-    "schema:Person": (
-        "schema:name",
-        "org:hasMembership",
-        "pulse:hasContribution",
-        "pulse:hasAuthoredArticle",
-        "pulse:owns",
-    ),
-    "org:Organization": (
-        "schema:name",
-        "pulse:ror",
-        "org:hasUnit",
-        "org:unitOf",
-        "pulse:organizationType",
-        "pulse:owns",
-    ),
-    "schema:SoftwareSourceCode": (
-        "schema:name",
-        "schema:author",
-        "schema:license",
-        "schema:citation",
-        "schema:dateCreated",
-        "schema:programmingLanguage",
-        "pulse:ownedBy",
-        "pulse:isForkOf",
-        "pulse:repositoryType",
-        "pulse:discipline",
-    ),
-    "schema:ScholarlyArticle": (
-        "schema:name",
-        "schema:author",
-        "schema:sourceOrganization",
-        "schema:dateCreated",
-    ),
-    # A contribution is a raw fact too — GitHub reports `contributions` per
-    # contributor per repository — so the properties have to survive. The
-    # dates are `xsd:dateTime` in the shape while the flat form sometimes
-    # carries a bare date; `_coerce` leaves them alone, so a bare date would
-    # be a datatype violation the substrate gate reports rather than hides.
-    "pulse:Contribution": (
-        "pulse:contributionTo",
-        "schema:author",
-        "pulse:contributionCount",
-        "pulse:firstContributionDate",
-        "pulse:lastContributionDate",
-        "pulse:gitAuthorName",
-        "pulse:gitAuthorEmail",
-    ),
-    # A membership *is* a raw fact — ORCID asserts "X was employed at Y" — so
-    # `RawMembershipShape` exists and the properties must survive. Omitting
-    # this table entry emitted `<id> a org:Membership .` and nothing else,
-    # which validated cleanly because the shape has no required properties.
-    "org:Membership": (
-        "org:organization",
-        "org:role",
-        "pulse:department",
-        "pulse:membershipType",
-        "pulse:qualification",
-        "time:hasBeginning",
-        "time:hasEnd",
-    ),
-}
+_PASSTHROUGH = _ONTOLOGY_POLICY.raw_passthrough
 
 
 def _base(node: Mapping[str, Any], node_type: str) -> dict[str, Any]:
@@ -349,21 +187,24 @@ def _raw_profile(
         return None
 
     kind = "org-profile" if organization else "profile"
-    profile: dict[str, Any] = {
-        "@id": profile_iri(platform, handle, instance=instance, kind=kind),
-        "@type": (
-            "pulse:OrganizationProfile" if organization else "pulse:PlatformProfile"
-        ),
-        "pulse:platform": platform,
-    }
+    profile: dict[str, Any] = map_fields(
+        "raw.profile_base",
+        {
+            "id": profile_iri(platform, handle, instance=instance, kind=kind),
+            "type": "pulse:OrganizationProfile"
+            if organization
+            else "pulse:PlatformProfile",
+            "platform": platform,
+        },
+    )
     if organization:
         profile["pulse:organizationHandle"] = handle
         profile["pulse:organizationProfileOf"] = {"@id": subject_iri}
-        _apply(profile, node, _ORGANIZATION_PROFILE_FIELDS)
+        profile.update(map_fields("raw.organization_profile", node))
     else:
         profile["pulse:platformUsername"] = [handle]
         profile["pulse:profileOf"] = {"@id": subject_iri}
-        _apply(profile, node, _PROFILE_FIELDS)
+        profile.update(map_fields("raw.person_profile", node))
         email = node.get("schema:email")
         if not _is_empty(email):
             profile["schema:email"] = email if isinstance(email, list) else [email]
@@ -399,14 +240,16 @@ def _deposit(node: Mapping[str, Any], article_iri: str) -> dict[str, Any] | None
     if platform is None or not internal_id or _is_empty(published):
         return None
 
-    deposit: dict[str, Any] = {
-        "@id": deposit_iri(platform, internal_id),
-        "@type": "pulse:Deposit",
-        "pulse:platform": platform,
-        "pulse:platformInternalId": internal_id,
-        "schema:datePublished": published,
-        "pulse:depositOf": {"@id": article_iri},
-    }
+    deposit: dict[str, Any] = map_fields(
+        "raw.deposit",
+        {
+            "id": deposit_iri(platform, internal_id),
+            "platform": platform,
+            "platformInternalId": internal_id,
+            "datePublished": published,
+            "depositOf": {"@id": article_iri},
+        },
+    )
     if instance:
         deposit["pulse:platformInstance"] = {"@id": instance}
     return deposit
@@ -489,18 +332,8 @@ def _project_repository(node: Mapping[str, Any]) -> dict[str, Any]:
     if platform:
         out["pulse:platform"] = platform
 
-    for old_key, new_key in (
-        ("pulse:githubRepoStars", "pulse:repositoryStars"),
-        ("pulse:githubRepoForks", "pulse:repositoryForks"),
-    ):
-        if not _is_empty(node.get(old_key)):
-            out[new_key] = node[old_key]
+    out.update(map_fields("raw.repository", node))
 
-    _apply(out, node, _REPOSITORY_FIELDS)
-
-    visibility = _VISIBILITY.get(str(node.get("_visibility") or "").lower())
-    if visibility:
-        out["pulse:visibility"] = visibility
     return out
 
 
@@ -592,7 +425,7 @@ _DERIVED_TYPES: frozenset[str] = frozenset()
 
 #: Hosts whose ids name a **registry** rather than an account-hosting platform.
 #:
-#: Deliberately separate from `canonical_projection._PLATFORM_BY_HOST`: adding
+#: Deliberately separate from the account-hosting policy: adding
 #: `ror.org` there would mint an `OrganizationProfile` for every ROR-identified
 #: organization, and a ROR id is an identity, not an account — there is no
 #: profile page, no handle, no follower count. What is needed here is only the
@@ -604,9 +437,7 @@ _DERIVED_TYPES: frozenset[str] = frozenset()
 #: it were a fact about the run. `pulse:ROR` came from ontology patch 05
 #: (upstreamed; see ontology/patches/README.md); see §2.7 of
 #: ONTOLOGY_V3_REQUIREMENTS.md for why the enumeration is the right home.
-_REGISTRY_PLATFORM_BY_HOST: dict[str, str] = {
-    "ror.org": "pulse:ROR",
-}
+_REGISTRY_PLATFORM_BY_HOST = _ONTOLOGY_POLICY.registry_platforms
 
 #: Flat-form fields whose **value** is a URL on the source that asserted the
 #: entity, for entities that cannot carry a platform themselves.
@@ -624,21 +455,14 @@ _REGISTRY_PLATFORM_BY_HOST: dict[str, str] = {
 #: a person or organization carrying an Infoscience URL gets an Infoscience
 #: *profile* from the same value, and the profile is checked first. Only the
 #: article field ever reaches here — 26 times per corpus pass, one per article.
-_SOURCE_URL_FIELDS: tuple[str, ...] = ("pulse:infoscienceArticleIdentifier",)
+_SOURCE_URL_FIELDS = tuple(_ONTOLOGY_POLICY.source_url_fields)
 
 
 #: Only these raw shapes declare `pulse:partOfRun`. `RawMembershipShape` is
 #: closed and does not, so stamping every entity with it makes memberships
 #: violate — the anchor belongs to the entities a source describes, not to the
 #: edges between them, which are derived.
-_PART_OF_RUN_TYPES: frozenset[str] = frozenset(
-    {
-        "schema:Person",
-        "org:Organization",
-        "schema:SoftwareSourceCode",
-        "schema:ScholarlyArticle",
-    },
-)
+_PART_OF_RUN_TYPES = frozenset(_ONTOLOGY_POLICY.part_of_run_types)
 
 
 def _registry_platform(iri: Any) -> str | None:

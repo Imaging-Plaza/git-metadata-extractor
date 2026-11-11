@@ -25,11 +25,12 @@ from __future__ import annotations
 
 import argparse
 import collections
-import dataclasses
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from pydantic import Field
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from prepare_ontology import ONTOLOGY_DIR  # noqa: E402
 
+from git_metadata_extractor.models import InternalModel  # noqa: E402
 from git_metadata_extractor.pipeline.stages.canonical_projection import (  # noqa: E402
     project_canonical,
 )
@@ -136,8 +138,7 @@ def _validate(doc: dict, shapes, context: dict, *, quads: bool = False):
     return aggregate, aggregate.triples
 
 
-@dataclasses.dataclass
-class _SliceResult:
+class _SliceResult(InternalModel):
     """The per-slice results, as one result the reporting code already reads.
 
     A run conforms when every one of its slices does, and the violations are
@@ -146,7 +147,7 @@ class _SliceResult:
     """
 
     conforms: bool = True
-    violations: list = dataclasses.field(default_factory=list)
+    violations: list = Field(default_factory=list)
     triples: int = 0
 
     def absorb(self, result) -> None:

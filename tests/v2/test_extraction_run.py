@@ -32,6 +32,9 @@ from git_metadata_extractor.pipeline.stages.extraction_run import (
     run_iri,
     software_agent,
 )
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
 
 PULSE = Namespace("https://open-pulse.epfl.ch/ontology#")
 PROV = Namespace("http://www.w3.org/ns/prov#")
@@ -186,16 +189,10 @@ def test_stage_records_the_run_outside_the_canonical_graph() -> None:
 
     stage: Stage = next(s for s in PAYLOAD_CHAIN if s.name == "extraction_run")
 
-    class _Detected:
-        value = "repository"
-
-    class _Classification:
-        detected_type = _Detected()
-        normalized_url = "https://github.com/octocat/Hello-World"
 
     state = PipelineState(
         run_id="run-1",
-        classification=_Classification(),
+        classification=classify_github_url("https://github.com/octocat/Hello-World", probe_accounts=False),
         runtime=AgentRuntime.RULE_BASED,
         providers=None,
         started_at=STARTED,
@@ -204,7 +201,7 @@ def test_stage_records_the_run_outside_the_canonical_graph() -> None:
 
     asyncio.run(run_pipeline(state, [stage]))
 
-    doc = state.extras["extraction_run"]
+    doc = state.artifacts.extraction_run
     assert _nodes(doc).keys() == {run_iri("run-1"), SOFTWARE_AGENT_IRI}
     # The graph the caller receives is untouched.
     assert state.payload["@graph"] == [

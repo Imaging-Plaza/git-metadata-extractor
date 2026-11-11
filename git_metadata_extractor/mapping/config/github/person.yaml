@@ -1,0 +1,22 @@
+schema_version: 1
+name: github.person
+version: '1'
+source_contract: github.rest.user
+target_contract: agent.person
+fields: {}
+internal_fields:
+  _avatar_url: {sources: [avatar_url]}
+  _html_url: {sources: [html_url]}
+  _blog: {sources: [blog]}
+  _bio: {sources: [bio]}
+  _company: {sources: [company]}
+  _location: {sources: [location]}
+  _twitter_username: {sources: [twitter_username]}
+  _public_repos: {sources: [public_repos]}
+  _followers_count: {sources: [followers]}
+  _following_count: {sources: [following]}
+  _github_created_at: {sources: [created_at]}
+  _github_updated_at: {sources: [updated_at]}
+  _github_account_type: {sources: [type]}
+  _hireable: {sources: [hireable]}
+  _profile_readme: {sources: [profile_readme]}

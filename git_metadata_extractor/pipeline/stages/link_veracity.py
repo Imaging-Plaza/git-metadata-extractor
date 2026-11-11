@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+
+from pydantic import Field
 
 from git_metadata_extractor.agents import LLMLinkVeracityAgentV2, ProviderSet
 from git_metadata_extractor.canonicalization.id_resolution import (
@@ -13,8 +14,11 @@ from git_metadata_extractor.canonicalization.id_resolution import (
     resolve_person_id,
     resolve_repository_id,
 )
-from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+
+if TYPE_CHECKING:
+    from git_metadata_extractor.providers.cache import ProviderCache
 
 HTTP_SCHEMES = {"http", "https"}
 IDENTITY_KEYS = {"id", "@id", "type", "@type"}
@@ -105,17 +109,16 @@ def _is_supportable_predicate(predicate: Any) -> bool:
     return predicate not in _ASYMMETRIC_PREDICATES
 
 
-@dataclass(slots=True)
-class LinkVeracityStageResult:
-    records: list[dict[str, Any]] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+class LinkVeracityStageResult(InternalModel):
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     checked_count: int = 0
     supported_count: int = 0
     unsupported_count: int = 0
     failed_count: int = 0
-    invalid_links: list[str] = field(default_factory=list)
-    entity_link_map: dict[str, list[str]] = field(default_factory=dict)
-    article_identifier_link_map: dict[str, str] = field(default_factory=dict)
+    invalid_links: list[str] = Field(default_factory=list)
+    entity_link_map: dict[str, list[str]] = Field(default_factory=dict)
+    article_identifier_link_map: dict[str, str] = Field(default_factory=dict)
 
 
 def _is_http_url(value: Any) -> bool:

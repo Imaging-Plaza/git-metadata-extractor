@@ -54,17 +54,20 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from git_metadata_extractor.providers.ror_rag import RorRagProvider, build_default_provider
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
     _existing_membership_keys,
     _existing_org_ids,
     _materialise,
     _person_canonical_id,
     _resolve_one,
+)
+from git_metadata_extractor.providers.ror_rag import (
+    RorRagProvider,
+    build_default_provider,
 )
 
 STAGE_SOURCE_TAG = "resolve_bio_to_ror"
@@ -194,8 +197,7 @@ _STOPWORD_CANDIDATES: frozenset[str] = frozenset({
 })
 
 
-@dataclass(slots=True)
-class BioAffiliationResult:
+class BioAffiliationResult(InternalModel):
     """Summary of one stage run."""
 
     persons_examined: int
@@ -336,7 +338,7 @@ async def run_resolve_bio_to_ror_stage(
             "resolve_bio_to_ror: RorRagProvider unavailable (check "
             "V2_ROR_RAG_ENABLED + INDEX_QDRANT_URL); stage skipped",
         )
-        return BioAffiliationResult(0, 0, 0, 0, 0, 0, 0, {"provider_unavailable": 1})
+        return BioAffiliationResult(persons_examined=0, persons_resolved=0, memberships_created=0, organizations_created=0, candidates_extracted=0, queries_attempted=0, queries_accepted=0, rejection_reasons={"provider_unavailable": 1})
 
     persons = reconciled.entities.get("persons") or []
     cache: dict[str, Any] = {}

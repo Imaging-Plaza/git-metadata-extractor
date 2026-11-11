@@ -20,12 +20,19 @@ unusable models.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
 from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, Namespace
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from git_metadata_extractor.models import InternalModel  # noqa: E402
 
 SH = Namespace("http://www.w3.org/ns/shacl#")
 PULSE = Namespace("https://open-pulse.epfl.ch/ontology#")
@@ -62,8 +69,7 @@ PREFIXES: tuple[tuple[str, str], ...] = (
 )
 
 
-@dataclass(slots=True)
-class PropertyConstraint:
+class PropertyConstraint(InternalModel):
     """One `sh:property` on a node shape, flattened."""
 
     path: str
@@ -79,7 +85,7 @@ class PropertyConstraint:
     #: value may be a Person or an Organization. Distinct from the node-level
     #: `sh:or` in `NodeShape.identity_alternatives`: that one says which
     #: properties identify a node, this one says which types a value may have.
-    class_alternatives: list[str] = field(default_factory=list)
+    class_alternatives: list[str] = Field(default_factory=list)
 
     @property
     def required(self) -> bool:
@@ -106,19 +112,18 @@ class PropertyConstraint:
         )
 
 
-@dataclass(slots=True)
-class NodeShape:
+class NodeShape(InternalModel):
     """One `sh:NodeShape` with a `sh:targetClass`."""
 
     shape_iri: str
     target_class: str
     closed: bool = False
-    ignored_properties: list[str] = field(default_factory=list)
-    properties: list[PropertyConstraint] = field(default_factory=list)
+    ignored_properties: list[str] = Field(default_factory=list)
+    properties: list[PropertyConstraint] = Field(default_factory=list)
     #: Each entry is one alternative from an `sh:or`: the property paths that
     #: branch requires. `[["pulse:orcidIdentifier"], ["pulse:hasProfile"]]`
     #: means "ORCID or at least one profile".
-    identity_alternatives: list[list[str]] = field(default_factory=list)
+    identity_alternatives: list[list[str]] = Field(default_factory=list)
 
     @property
     def local_name(self) -> str:
@@ -245,13 +250,12 @@ def read_shapes(path: Path) -> list[NodeShape]:
     return sorted(shapes, key=lambda s: s.local_name)
 
 
-@dataclass(slots=True)
-class Enumeration:
+class Enumeration(InternalModel):
     """One `rdfs:subClassOf schema:Enumeration` class and its instances."""
 
     curie: str
-    members: list[str] = field(default_factory=list)
-    labels: dict[str, str] = field(default_factory=dict)
+    members: list[str] = Field(default_factory=list)
+    labels: dict[str, str] = Field(default_factory=dict)
     definition: str | None = None
 
     @property

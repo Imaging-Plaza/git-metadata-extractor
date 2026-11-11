@@ -20,14 +20,16 @@ import logging
 import os
 import re
 from copy import deepcopy
-from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import requests
+from pydantic import Field
 
-from git_metadata_extractor.agents.llm.agent_tools.graph_neighbors import make_get_entity_neighbors_tool
+from git_metadata_extractor.agents.llm.agent_tools.graph_neighbors import (
+    make_get_entity_neighbors_tool,
+)
 from git_metadata_extractor.agents.llm.refiners import (
     MembershipRefinerAgent,
     MembershipRefinerInput,
@@ -61,12 +63,18 @@ from git_metadata_extractor.agents.llm.refiners.rescue import (
     RescueRefinerInput,
 )
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError
-from git_metadata_extractor.agents.rule_based._repo_signals import extract_doc_candidate_urls
+from git_metadata_extractor.agents.rule_based._repo_signals import (
+    extract_doc_candidate_urls,
+)
 from git_metadata_extractor.api_models.enums import OrganizationTypeV2
-from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import activity, get_trace
 from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
 from git_metadata_extractor.parsers.publiccode import parse_publiccode
 from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+
+if TYPE_CHECKING:
+    from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
 
 logger = logging.getLogger(__name__)
 
@@ -130,16 +138,15 @@ def _epfl_graph_min_score() -> float:
         return EPFL_GRAPH_MIN_SCORE_DEFAULT
 
 
-@dataclass(slots=True)
-class RefineWithLLMResult:
+class RefineWithLLMResult(InternalModel):
     """Outcome of the refinement stage across all entity types."""
 
     reconciled: ReconciledEntities
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     refined_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
-    by_type: dict[str, dict[str, int]] = field(default_factory=dict)
+    by_type: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 def is_enabled() -> bool:
@@ -321,7 +328,12 @@ async def _run_refiner_safely(
 
     name = entity.get("schema:name") or entity.get("id", "?")
     try:
-        patch = await coro
+        entity_id = str(entity.get("@id") or entity.get("id") or "")
+        with activity(f"{type_label}_refiner", kind="refiner", entity_id=entity_id):
+            patch = await coro
+            trace = get_trace()
+            if trace is not None:
+                trace.observe(patch, entity_id=entity_id)
         return entity, patch, []
     except LLMRuntimeError as exc:
         warning = f"refine_with_llm: {type_label} refiner failed for {name!r}: {exc}"
@@ -1094,8 +1106,9 @@ def _query_communities_index(query: str) -> list[dict[str, Any]]:
         return []
     try:
         import duckdb  # noqa: PLC0415
-
-        from open_pulse_sources.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
+        from open_pulse_sources.index.zenodo_communities.paths import (
+            duckdb_path,  # noqa: PLC0415
+        )
     except Exception:  # noqa: BLE001
         return []
     db_path = duckdb_path()
@@ -1236,7 +1249,9 @@ async def _gather_federated_evidence(
         """
         try:
 
-            from open_pulse_sources.index.infoscience.paths import duckdb_path  # noqa: PLC0415
+            from open_pulse_sources.index.infoscience.paths import (
+                duckdb_path,  # noqa: PLC0415
+            )
         except Exception:  # noqa: BLE001
             return
         db_path = duckdb_path()
@@ -1612,7 +1627,9 @@ async def _run_org_resolver_pass(
     from git_metadata_extractor.agents.llm.agent_tools.snsf_grants import (  # noqa: PLC0415
         make_search_snsf_grants_tool,
     )
-    from git_metadata_extractor.providers.snsf_grants import SnsfGrantsProvider  # noqa: PLC0415
+    from git_metadata_extractor.providers.snsf_grants import (
+        SnsfGrantsProvider,  # noqa: PLC0415
+    )
 
     tools: list[Any] = []
     if getattr(providers, "ror_rag", None) is not None:

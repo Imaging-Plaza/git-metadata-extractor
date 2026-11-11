@@ -1,0 +1,10 @@
+schema_version: 1
+name: infoscience.person
+version: '1'
+source_contract: infoscience.person.record
+target_contract: agent.person
+fields: {}
+internal_fields:
+  _infoscience_url: {sources: [infoscience_url]}
+  _infoscience_position: {sources: [position]}
+  _infoscience_employment_status: {sources: [employment_status]}

@@ -1,0 +1,36 @@
+schema_version: 1
+name: agent.organization
+version: '1'
+source_contract: prepared.agent.organization
+target_contract: agent.organization
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'org:Organization', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:OrganizationShape', empty: preserve, missing: 'null'}
+  identifiers.pulse:ror: {sources: [identifiers_pulse_ror], empty: preserve, missing: 'null'}
+  identifiers.pulse:infoscienceOrganizationIdentifier:
+    sources: [identifiers_pulse_infoscienceOrganizationIdentifier]
+    empty: preserve
+    missing: 'null'
+  identifiers.pulse:githubOrganizationHandle:
+    sources: [identifiers_pulse_githubOrganizationHandle]
+    empty: preserve
+    missing: 'null'
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {sources: [idSource], empty: preserve, missing: 'null'}
+  schema:name: {sources: [name], empty: preserve, missing: 'null'}
+  schema:identifier: {sources: [identifier], empty: preserve, missing: 'null'}
+  pulse:githubOrganizationHandle: {sources: [githubOrganizationHandle], empty: preserve, missing: 'null'}
+  pulse:infoscienceOrganizationIdentifier:
+    sources: [infoscienceOrganizationIdentifier]
+    empty: preserve
+    missing: 'null'
+  pulse:OrganizationType: {sources: [OrganizationType], empty: preserve, missing: 'null'}
+  org:hasUnit: {sources: [hasUnit], empty: preserve, missing: 'null'}
+  org:unitOf: {sources: [unitOf], empty: preserve, missing: 'null'}
+  pulse:owns: {sources: [owns], empty: preserve, missing: 'null'}
+internal_fields:
+  _aliases: {sources: [aliases], empty: preserve, missing: 'null'}
+  _acronyms: {sources: [acronyms], empty: preserve, missing: 'null'}
+  _labels: {sources: [labels], empty: preserve, missing: 'null'}
+  _profile_readme: {sources: [profile_readme], empty: preserve, missing: 'null'}

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+
+from pydantic import Field
 
 from git_metadata_extractor.agents.runtime import AgentRuntime, parse_agent_runtime
+from git_metadata_extractor.models import InternalModel
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}
@@ -115,22 +117,25 @@ def substrate_store_timeout_seconds() -> float:
         raise ValueError(message) from exc
 
 
-@dataclass(slots=True)
-class V2Config:
-    V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = field(
+class V2Config(InternalModel):
+    V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = Field(
         default_factory=lambda: parse_agent_runtime(
             os.getenv("V2_AGENT_RUNTIME_DEFAULT"),
             default=AgentRuntime.LLM,
             field_name="V2_AGENT_RUNTIME_DEFAULT",
         ),
     )
-    V2_PROVIDER_CACHE_PATH: str = field(
+    V2_PROVIDER_CACHE_PATH: str = Field(
         default_factory=lambda: os.getenv(
             "V2_PROVIDER_CACHE_PATH",
             ".cache/v2/providers.db",
         ),
     )
-    V2_PROVIDER_CACHE_TTL_DAYS: int = field(
+    V2_PROVIDER_CACHE_TTL_DAYS: int = Field(
         default_factory=lambda: _get_env_int("V2_PROVIDER_CACHE_TTL_DAYS", 30),
     )
-    GME_GITHUB_TOKEN: str | None = field(default_factory=lambda: _get_optional_env("GME_GITHUB_TOKEN"))
+    GME_GITHUB_TOKEN: str | None = Field(
+        default_factory=lambda: _get_optional_env("GME_GITHUB_TOKEN"),
+        exclude=True,
+        repr=False,
+    )

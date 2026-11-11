@@ -1,0 +1,98 @@
+Contracts, sources integration and schema audit — 2026-11-11
+
+Workspace: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+All changes remain local and uncommitted. Prior dirty changes were preserved.
+No secret-bearing files changed; no services restarted or deployed; no push.
+
+Behavior and files changed in this pass
+- models.py; pipeline/state.py, runner.py, run.py; services/extraction.py:
+  typed data/artifacts/outcomes, JSON-only extension metadata, required gate
+  error enforcement, cancellation recording and source-aware pipeline caching.
+- experiments/execution.py and benchmark.py: typed extraction responses and
+  serialization at export boundaries; isolated CSV export helper.
+- providers/sources_service.py, runtime.py; agents/models.py;
+  agents/llm/agent_tools/sources_service.py, tool_defaults.py, _verdict_cache.py;
+  observation/evidence.py; tools/config/gunicorn_conf.py:
+  optional typed remote search/manifest tools, ownership and cache isolation,
+  typed-result provenance, and no default local index construction/bootstrap
+  in configured remote mode.
+- validation/json_schema.py, metadata.py, schema_validation.py, layers.py,
+  __init__.py; agents/models.py; pipeline/stages/output_assembly.py and
+  jsonld_build.py: URI formats, recursive internal-metadata boundaries,
+  nested permissive cleanup, and refusal of unchecked canonical publication.
+- scripts/v2/generate_from_ontology.py and schema/generated/canonical.py:
+  generated list min/max cardinalities. Other regenerated ontology files
+  have no semantic change from the pre-task snapshot.
+- pyproject.toml and uv.lock: explicit format-checker dependency, Python
+  compatibility bound, runtime model lint configuration and refreshed lock.
+  The existing immutable sources dependency pin was preserved.
+- New tests: test_pipeline_contracts.py, test_sources_service.py,
+  test_validation_boundaries.py under tests/v2.
+- Adapted tests: test_agent_evidence.py, test_dependencies.py,
+  test_extraction_run.py, test_pipeline_profiles.py, test_pipeline_runner.py,
+  test_resolver_chain.py, test_substrate.py, test_tool_catalog.py,
+  test_validation_layers.py. Updated org extraction golden output only to
+  remove leaked internal metadata. Added this report, usage.txt and plan.txt.
+Paths above are relative to git_metadata_extractor/ unless otherwise stated.
+
+Schema inventory verified against this checkout
+The twelve source JSON schemas live under schema/json/{agent,strict}/.
+The former promoted copies were deliberately removed; the similarly named
+strict fixtures contain example entity arrays, not duplicate JSON schemas.
+No source JSON schema was changed. Both JSON-schema and ontology-generated
+model families were checked. No removed directories were recreated.
+
+Verification
+Docker image gme-local-contract-validation:20261111 derives from the existing
+local validation image, adding jsonschema[format-nongpl]==4.26.0. Tests ran with
+network disabled, Python 3.12 and the worktree mounted at /work/gme.
+
+Command prefix:
+docker run --rm --network none --entrypoint python --mount
+type=bind,source=D:/pro/git-metadata-extractor-provenance,target=/work/gme
+--workdir /work/gme gme-local-contract-validation:20261111
+
+Arguments and results:
+- -m pytest tests/v2/ -q -n 4 --dist=loadfile -m "not live_provider and not
+  llm_integration" --no-cov -p no:cacheprovider --tb=short
+  1889 passed, 1 skipped, 2503 warnings in 37.79 seconds.
+- scripts/v2/generate_v2_models.py --check
+  Both generated JSON-schema model files are up to date.
+- scripts/v2/generate_from_ontology.py --check
+  Ontology-generated models are up to date.
+- Native uv lock --check --offline
+  Passed; resolved 235 packages, using Python 3.11.16.
+- Scoped Ruff check against the pre-task file snapshot:
+  82 baseline diagnostics, 7 remaining, no new diagnostics. EXE002 is excluded
+  because Windows bind mounts report executable flags. Existing complexity
+  diagnostics were compared by rule/location with numeric counts normalized
+  so reduced complexity does not appear as a new warning. This is not a claim
+  that the entire repository is lint-clean.
+- git diff --check: passed (Git may warn about LF/CRLF conversion).
+
+New tests cover required gate failures, cancellation, repeated stage outcomes,
+URI formats, nested field cleanup and metadata output, generated cardinality,
+zero store mutations when canonical validation is unavailable, HTTP status and
+HTTP-200 error envelopes, credential requirements, local-provider suppression,
+cache isolation, tool construction, and provenance through the actual installed
+sources FastAPI router using an in-process ASGI transport.
+
+Independent read-only reviews found two further edge cases: internal metadata
+on excluded-output wrappers, and upstream errors returned with HTTP 200. Both
+were reproduced by failing regression tests and fixed before the final suite.
+
+Detailed command logs and the pre-task snapshot are retained outside the
+worktree in D:/pro/git-metadata-extractor/.staging/contracts-*.
+
+Limits and follow-ups
+- No paid/live LLM or external provider calls were made in this pass. Offline
+  router compatibility is verified; deployed endpoint availability is not.
+- Remote record/chunk hydration requires new endpoints in open-pulse-sources.
+  Source snapshot/embedding metadata still depends on that server's contract.
+- The sources library remains a dependency; full import/storage decoupling
+  is a separate follow-up. Legacy local mode remains available.
+- Python 3.14+ is excluded pending a coordinated generator/Pydantic upgrade;
+  this pass did not test every version in the declared 3.10–3.13 range.
+- Seven scoped pre-existing lint diagnostics and dependency deprecation
+  warnings remain. No whole-repository type-check result is claimed.

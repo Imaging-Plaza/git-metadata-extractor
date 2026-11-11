@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import pytest
+
+from git_metadata_extractor.models import InternalModel
 
 V2_TESTS_ROOT = Path(__file__).resolve().parent
 V2_APP_STATE_FIELDS = (
@@ -18,8 +19,7 @@ V2_APP_STATE_FIELDS = (
 )
 
 
-@dataclass(frozen=True)
-class V2TestConfig:
+class V2TestConfig(InternalModel, frozen=True):
     fixtures_root: Path
     schema_fixtures_root: Path
     golden_root: Path

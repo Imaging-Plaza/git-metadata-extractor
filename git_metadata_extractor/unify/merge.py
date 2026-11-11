@@ -25,9 +25,12 @@ for information the substrate already holds.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
+
+from git_metadata_extractor.mapping import load_policy
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.unify.policy import (
     Disposition,
     canonical_properties_for,
@@ -49,8 +52,7 @@ RULE_MOST_COMPLETE_SOURCE = "most-complete-source"
 RULE_FIRST_STABLE = "first-stable"
 
 
-@dataclass(frozen=True, slots=True)
-class Selection:
+class Selection(InternalModel, frozen=True):
     """One contested property, resolved. The unit phase 5 will reify."""
 
     subject: str
@@ -67,13 +69,12 @@ class Selection:
         return bool(self.losers)
 
 
-@dataclass(slots=True)
-class MergedEntity:
+class MergedEntity(InternalModel):
     """A canonical node plus everything needed to explain and link it."""
 
     iri: str
     entity_type: str
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict)
     #: Source IRIs that are not the canonical one. Each becomes an
     #: `owl:sameAs` subproperty edge, so an id this run re-identified stays
     #: followable — the bridge the id-migration decision requires.
@@ -136,12 +137,7 @@ def _promoted_iri(cluster: Cluster, resolver: TypeResolver) -> tuple[str, tuple[
 #: Bare identifier value -> the IRI form the canonical layer uses as a node id.
 #: v3 stores identifiers bare (§2.4 of the requirements) while node ids stay
 #: URLs, so promotion has to re-expand exactly one of them.
-_IRI_TEMPLATES: dict[str, str] = {
-    "pulse:orcidIdentifier": "https://orcid.org/{}",
-    "pulse:doi": "https://doi.org/{}",
-    # `pulse:ror` is the deliberate exception: it is already URL-shaped.
-    "pulse:ror": "{}",
-}
+_IRI_TEMPLATES = load_policy("policies.merge").iri_templates
 
 
 def _iri_for(prop: str, value: Any) -> str | None:

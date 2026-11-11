@@ -119,7 +119,7 @@ def _permissive_validation(state: PipelineState) -> None:
     rather than becoming a stray log call.
     """
     count = sum(len(bucket) for bucket in state.buckets.values())
-    state.extras["permissive_entity_count"] = count
+    state.artifacts.permissive_entity_count = count
     logger.info("permissive_validation: entity_count=%d", count)
 
 
@@ -128,7 +128,7 @@ async def _llm_dedup(state: PipelineState) -> None:
         run_llm_dedup_stage,
     )
 
-    state.extras["llm_dedup_executed"] = True
+    state.artifacts.llm_dedup_executed = True
     result = await run_llm_dedup_stage(
         typed_entity_buckets=state.buckets,
         source_url=state.source_url,
@@ -173,12 +173,12 @@ def _reconcile_entities(state: PipelineState) -> None:
 
 
 RECONCILE_CHAIN: list[Stage] = [
-    Stage("permissive_validation", _permissive_validation, fail_open=False),
-    Stage("llm_dedup", _llm_dedup, applies=_is_llm, fail_open=True),
+    Stage(name="permissive_validation", run=_permissive_validation, fail_open=False),
+    Stage(name="llm_dedup", run=_llm_dedup, applies=_is_llm, fail_open=True),
     # Fail-closed, as in the route: a graph that cannot be reconciled has no
     # meaningful partial form, so the request becomes a 500 rather than a
     # response missing every id.
-    Stage("reconciliation", _reconcile_entities, fail_open=False),
+    Stage(name="reconciliation", run=_reconcile_entities, fail_open=False),
 ]
 
 
@@ -281,20 +281,12 @@ async def _resolve_placeholder_orgs_to_ror(state: PipelineState) -> None:
 
 
 def _gate(name: str) -> StageGate:
-    """A stage gate reading one of the API layer's env flags.
-
-    The import is deferred on purpose. `api/__init__` imports `api/extract`,
-    which imports this module, so importing `api._helpers` at module scope is a
-    cycle — and the direction of that cycle is the tell: these flags read
-    process configuration, not requests, so they belong in `config.py` rather
-    than in the HTTP layer. Relocating them is its own change; this phase moves
-    the sequence without touching what the stages read.
-    """
+    """A stage gate reading transport-independent pipeline settings."""
 
     def gate(_state: PipelineState) -> bool:
-        from git_metadata_extractor.api import _helpers  # noqa: PLC0415
+        from git_metadata_extractor.pipeline import settings  # noqa: PLC0415
 
-        return bool(getattr(_helpers, name)())
+        return bool(getattr(settings, name.lstrip("_"))())
 
     return gate
 
@@ -313,27 +305,27 @@ def _substrate_applies(_state: PipelineState) -> bool:
 
 RESOLVER_CHAIN: list[Stage] = [
     Stage(
-        "resolve_company_to_ror",
-        _resolve_company_to_ror,
+        name="resolve_company_to_ror",
+        run=_resolve_company_to_ror,
         applies=_gate("_resolve_company_to_ror_enabled"),
         fail_open=True,
     ),
     Stage(
-        "resolve_bio_to_ror",
-        _resolve_bio_to_ror,
+        name="resolve_bio_to_ror",
+        run=_resolve_bio_to_ror,
         applies=_gate("_resolve_bio_to_ror_enabled"),
         fail_open=True,
     ),
     Stage(
-        "resolve_bio_to_ror_llm",
-        _resolve_bio_to_ror_llm,
+        name="resolve_bio_to_ror_llm",
+        run=_resolve_bio_to_ror_llm,
         applies=lambda s: _is_llm_or_hybrid(s)
         and _gate("_resolve_bio_to_ror_llm_enabled")(s),
         fail_open=True,
     ),
     Stage(
-        "resolve_placeholder_orgs_to_ror",
-        _resolve_placeholder_orgs_to_ror,
+        name="resolve_placeholder_orgs_to_ror",
+        run=_resolve_placeholder_orgs_to_ror,
         applies=_gate("_resolve_placeholder_orgs_to_ror_enabled"),
         fail_open=True,
     ),
@@ -376,7 +368,7 @@ async def _llm_critic(state: PipelineState) -> None:
 
     # Set before the call, as the route did: the response reports that the
     # critic ran even when it then raised and failed open.
-    state.extras["llm_critic_executed"] = True
+    state.artifacts.llm_critic_executed = True
     result = await run_llm_critic_stage(
         reconciled=state.reconciled,
         source_url=state.source_url,
@@ -388,7 +380,7 @@ async def _llm_critic(state: PipelineState) -> None:
         cache=state.cache,
     )
     state.reconciled = result.reconciled
-    state.extras["critic_pruned_excluded_entities"] = result.pruned_excluded_entities
+    state.artifacts.critic_pruned_excluded_entities = result.pruned_excluded_entities
     _log(
         "llm_critic",
         "proposed_drop=%d applied_drop=%d protected_roots=%d",
@@ -435,8 +427,8 @@ async def _refine_with_llm(state: PipelineState) -> None:
 
 
 REFINEMENT_CHAIN: list[Stage] = [
-    Stage("llm_critic", _llm_critic, applies=_critic_applies, fail_open=True),
-    Stage("refine_with_llm", _refine_with_llm, applies=_refiner_applies, fail_open=True),
+    Stage(name="llm_critic", run=_llm_critic, applies=_critic_applies, fail_open=True),
+    Stage(name="refine_with_llm", run=_refine_with_llm, applies=_refiner_applies, fail_open=True),
 ]
 
 
@@ -530,7 +522,7 @@ def _strict_validation(state: PipelineState) -> None:
     batch = StrictSchemaValidator().validate_batch(
         _reconciled_entity_payloads(state.reconciled),
     )
-    state.extras["strict_batch"] = batch
+    state.artifacts.strict_batch = batch
     _log(
         "strict_validation",
         "valid=%d invalid=%d",
@@ -550,7 +542,7 @@ def _assemble_output(state: PipelineState) -> None:
         RootEntityValidationError,
     )
 
-    batch = state.extras["strict_batch"]
+    batch = state.artifacts.strict_batch
     try:
         state.assembled = assemble_output(
             state.reconciled,
@@ -586,7 +578,7 @@ def _apply_critic_exclusions(state: PipelineState) -> None:
     in the sequence: it is the only place the critic's decision reaches the
     response, and it has to happen after assembly.
     """
-    pruned = state.extras.get("critic_pruned_excluded_entities") or []
+    pruned = state.artifacts.critic_pruned_excluded_entities or []
     for excluded in pruned:
         if not isinstance(excluded, dict):
             continue
@@ -644,7 +636,7 @@ async def _link_veracity(state: PipelineState) -> None:
         max_concurrency=state.max_concurrent_agents,
         cache=state.cache,
     )
-    state.extras["veracity_records"] = result.records
+    state.artifacts.veracity_records = result.records
     _log(
         "link_veracity",
         "checked=%d supported=%d unsupported=%d failed=%d invalid_links=%d",
@@ -707,18 +699,18 @@ def _mark_link_veracity_start(state: PipelineState) -> None:
     skipped entirely. Preserved rather than corrected — see
     `_record_link_veracity_seconds`.
     """
-    state.extras["link_veracity_started_at"] = perf_counter()
+    state.artifacts.link_veracity_started_at = perf_counter()
 
 
 OUTPUT_CHAIN: list[Stage] = [
-    Stage("strict_validation", _strict_validation, fail_open=False),
-    Stage("output_assembly", _assemble_output, fail_open=False),
-    Stage("critic_exclusions", _apply_critic_exclusions, fail_open=False),
-    Stage("assembled_warnings", _propagate_assembled_warnings, fail_open=False),
-    Stage("link_veracity_start", _mark_link_veracity_start, fail_open=False),
+    Stage(name="strict_validation", run=_strict_validation, fail_open=False),
+    Stage(name="output_assembly", run=_assemble_output, fail_open=False),
+    Stage(name="critic_exclusions", run=_apply_critic_exclusions, fail_open=False),
+    Stage(name="assembled_warnings", run=_propagate_assembled_warnings, fail_open=False),
+    Stage(name="link_veracity_start", run=_mark_link_veracity_start, fail_open=False),
     Stage(
-        "link_veracity",
-        _link_veracity,
+        name="link_veracity",
+        run=_link_veracity,
         applies=_link_veracity_applies,
         fail_open=True,
     ),
@@ -849,7 +841,7 @@ def _shacl_gate(state: PipelineState) -> None:
     Producing a SHACL-clean graph is the upstream stages' job; this gate
     reports. Turning it enforcing is plan phase 8.
     """
-    from git_metadata_extractor.api import _helpers  # noqa: PLC0415
+    from git_metadata_extractor.pipeline import settings  # noqa: PLC0415
     from git_metadata_extractor.validation import (  # noqa: PLC0415
         SHACLValidator,
         canonical_shapes_available,
@@ -867,7 +859,7 @@ def _shacl_gate(state: PipelineState) -> None:
     use_canonical = projected and canonical_shapes_available()
     shapes = load_canonical_shapes_graph() if use_canonical else load_ontology_shapes_graph()
 
-    data_graph = _helpers._jsonld_to_graph(state.payload)  # noqa: SLF001
+    data_graph = settings.jsonld_to_graph(state.payload)  # noqa: SLF001
     if data_graph is None:
         logger.warning(
             "shacl_gate: skipped — unable to parse assembled graph payload",
@@ -925,7 +917,7 @@ def _record_extraction_run(state: PipelineState) -> None:
     """
     from datetime import datetime, timezone  # noqa: PLC0415
 
-    from git_metadata_extractor.api._helpers import (  # noqa: PLC0415
+    from git_metadata_extractor.pipeline.settings import (  # noqa: PLC0415
         PACKAGE_NAME,
         PACKAGE_VERSION,
     )
@@ -934,13 +926,20 @@ def _record_extraction_run(state: PipelineState) -> None:
     )
 
     started = state.started_at or datetime.now(timezone.utc)
-    state.extras["extraction_run"] = build_extraction_run(
+    state.artifacts.extraction_run = build_extraction_run(
         run_id=state.run_id,
         seeds=[state.source_url],
         started_at=started,
         package_name=PACKAGE_NAME,
         package_version=PACKAGE_VERSION,
     )
+    from git_metadata_extractor.observation.evidence import get_trace  # noqa: PLC0415
+
+    trace = get_trace()
+    if trace is not None:
+        state.artifacts.provenance = trace.document(
+            state.payload.get("@graph", []), context=state.payload.get("@context"),
+        )
     logger.info(
         "extraction_run: id=%s seeds=1 agent=%s",
         state.run_id,
@@ -1016,7 +1015,7 @@ def _project_substrate(state: PipelineState) -> None:
         context=load_generated_context(),
     )
     sizes = named_graph_sizes(state.substrate)
-    state.extras["substrate_graph_sizes"] = sizes
+    state.artifacts.substrate_graph_sizes = sizes
     _log(
         "substrate_projection",
         "in=%d graphs=%d nodes=%d",
@@ -1052,7 +1051,11 @@ async def _write_substrate(state: PipelineState) -> None:
     if not document:
         return
 
-    run_nodes = (state.extras.get("extraction_run") or {}).get("@graph") or []
+    run_nodes = (state.artifacts.extraction_run or {}).get("@graph") or []
+    provenance = state.artifacts.provenance
+    if provenance is not None:
+        document.setdefault("@context", {}).update(provenance["@context"])
+        _merge_into_meta_graph(document, f"urn:pulse:run:{state.run_id}#evidence", provenance["@graph"])
     if run_nodes:
         _merge_into_meta_graph(document, meta_graph_iri(state.run_id), run_nodes)
     else:
@@ -1079,7 +1082,7 @@ async def _write_substrate(state: PipelineState) -> None:
         )
 
         validation = validate_substrate(document)
-        state.extras["substrate_validation"] = validation.summary()
+        state.artifacts.substrate_validation = validation.summary()
         if not validation.conforms:
             state.warn(
                 f"substrate_write: {len(validation.violations)} SHACL "
@@ -1087,6 +1090,8 @@ async def _write_substrate(state: PipelineState) -> None:
             )
         _log("substrate_validation", "%s", validation.summary(), state=state)
 
+    if state.read_only:
+        return
     store = oxigraph.store_from_config(
         config.substrate_store_url(),
         timeout=config.substrate_store_timeout_seconds(),
@@ -1100,8 +1105,8 @@ async def _write_substrate(state: PipelineState) -> None:
     # Counting non-blank lines, not newlines: N-Quads is line-oriented, so this
     # is the exact quad count rather than a proxy for it.
     quads = sum(1 for line in nquads.splitlines() if line.strip())
-    state.extras["substrate_quads_written"] = quads
-    state.extras["substrate_store_url"] = store.base_url
+    state.artifacts.substrate_quads_written = quads
+    state.artifacts.substrate_store_url = store.base_url
     _log(
         "substrate_write",
         "store=%s quads=%d bytes=%d",
@@ -1128,24 +1133,24 @@ def _merge_into_meta_graph(
 
 PAYLOAD_CHAIN: list[Stage] = [
     Stage(
-        "rule_based_disciplines",
-        _tag_rule_based_disciplines,
+        name="rule_based_disciplines",
+        run=_tag_rule_based_disciplines,
         applies=_is_repository_root,
         fail_open=False,
     ),
     Stage(
-        "concept_tagging",
-        _concept_tagging,
+        name="concept_tagging",
+        run=_concept_tagging,
         applies=_concept_tagging_applies,
         fail_open=True,
     ),
-    Stage("jsonld_build", _build_jsonld, fail_open=False),
+    Stage(name="jsonld_build", run=_build_jsonld, fail_open=False),
     # Before `canonical_projection`, which overwrites the intermediate both
     # layers project from. Fail-open: the substrate is additive and unconsumed
     # until phase 4, so a broken projection must not cost the caller a graph.
     Stage(
-        "substrate_projection",
-        _project_substrate,
+        name="substrate_projection",
+        run=_project_substrate,
         applies=_substrate_applies,
         fail_open=True,
     ),
@@ -1154,22 +1159,22 @@ PAYLOAD_CHAIN: list[Stage] = [
     # the v2 graph under the v3 context — a document that describes itself
     # wrongly, which is worse than an error.
     Stage(
-        "canonical_projection",
-        _project_canonical,
+        name="canonical_projection",
+        run=_project_canonical,
         applies=_gate("_canonical_output_enabled"),
         fail_open=False,
     ),
     # The gate handles its own failure modes and never raises, so fail_open is
     # moot here; declared False to match the route, where it was unwrapped.
-    Stage("shacl_gate", _shacl_gate, fail_open=False),
+    Stage(name="shacl_gate", run=_shacl_gate, fail_open=False),
     # Fail-open: a malformed run descriptor must not cost the caller a graph
     # that is otherwise complete.
-    Stage("extraction_run", _record_extraction_run, fail_open=True),
+    Stage(name="extraction_run", run=_record_extraction_run, fail_open=True),
     # After `extraction_run`, so the run node it mints can be carried in the
     # substrate's meta graph rather than referenced and missing.
     Stage(
-        "substrate_write",
-        _write_substrate,
+        name="substrate_write",
+        run=_write_substrate,
         applies=_substrate_applies,
         fail_open=True,
     ),
@@ -1188,7 +1193,7 @@ PAYLOAD_CHAIN: list[Stage] = [
 def _validate_articles(state: PipelineState) -> None:
     state.assembled, produced = validate_articles(
         state.assembled,
-        veracity_records=state.extras.get("veracity_records") or [],
+        veracity_records=state.artifacts.veracity_records or [],
     )
     _log("validate_articles", "warnings=%d", len(produced), state=state)
     state.warn_all(produced)
@@ -1207,11 +1212,11 @@ def _record_link_veracity_seconds(state: PipelineState) -> None:
     certainly unintentional, but it is what the current stats report, so the
     position is preserved rather than corrected here.
     """
-    started_at = state.extras.get("link_veracity_started_at")
+    started_at = state.artifacts.link_veracity_started_at
     if started_at is not None:
         from time import perf_counter  # noqa: PLC0415
 
-        state.extras["link_veracity_seconds"] = perf_counter() - started_at
+        state.artifacts.link_veracity_seconds = perf_counter() - started_at
 
 
 def _ownership_check(state: PipelineState) -> None:
@@ -1312,20 +1317,20 @@ def _article_source_org(state: PipelineState) -> None:
 
 #: The assembled-output segment, in the order the route ran it.
 ASSEMBLED_CHAIN: list[Stage] = [
-    Stage("validate_articles", _validate_articles, fail_open=False),
-    Stage("author_class_validation", _author_class_validation, fail_open=False),
-    Stage("link_veracity_seconds", _record_link_veracity_seconds, fail_open=False),
-    Stage("ownership_check", _ownership_check, fail_open=False),
-    Stage("owner_inference", _owner_inference, fail_open=False),
-    Stage("inverse_consistency", _inverse_consistency, fail_open=False),
-    Stage("prune_dangling_refs", _prune_dangling_refs, fail_open=False),
-    Stage("github_handle_parents", _github_handle_parents, fail_open=False),
+    Stage(name="validate_articles", run=_validate_articles, fail_open=False),
+    Stage(name="author_class_validation", run=_author_class_validation, fail_open=False),
+    Stage(name="link_veracity_seconds", run=_record_link_veracity_seconds, fail_open=False),
+    Stage(name="ownership_check", run=_ownership_check, fail_open=False),
+    Stage(name="owner_inference", run=_owner_inference, fail_open=False),
+    Stage(name="inverse_consistency", run=_inverse_consistency, fail_open=False),
+    Stage(name="prune_dangling_refs", run=_prune_dangling_refs, fail_open=False),
+    Stage(name="github_handle_parents", run=_github_handle_parents, fail_open=False),
     # The only stage the route wrapped in try/except.
-    Stage("org_relationships", _org_relationships, applies=_is_llm, fail_open=True),
-    Stage("org_unit_inference", _org_unit_inference, fail_open=False),
-    Stage("demote_github_props_to_units", _demote_github_props, fail_open=False),
-    Stage("fork_parent_stubs", _fork_parent_stubs, fail_open=False),
-    Stage("article_source_org_inference", _article_source_org, fail_open=False),
+    Stage(name="org_relationships", run=_org_relationships, applies=_is_llm, fail_open=True),
+    Stage(name="org_unit_inference", run=_org_unit_inference, fail_open=False),
+    Stage(name="demote_github_props_to_units", run=_demote_github_props, fail_open=False),
+    Stage(name="fork_parent_stubs", run=_fork_parent_stubs, fail_open=False),
+    Stage(name="article_source_org_inference", run=_article_source_org, fail_open=False),
 ]
 
 
@@ -1366,6 +1371,6 @@ def _validate_org_github_handles(state: PipelineState) -> None:
 
 #: The reconciled segment, in the order the route ran it.
 RECONCILED_CHAIN: list[Stage] = [
-    Stage("guarantee_repo_author", _guarantee_repo_author, fail_open=False),
-    Stage("validate_org_github_handles", _validate_org_github_handles, fail_open=False),
+    Stage(name="guarantee_repo_author", run=_guarantee_repo_author, fail_open=False),
+    Stage(name="validate_org_github_handles", run=_validate_org_github_handles, fail_open=False),
 ]

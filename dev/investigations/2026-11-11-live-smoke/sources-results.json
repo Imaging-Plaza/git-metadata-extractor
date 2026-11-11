@@ -1,0 +1,28 @@
+[
+  {
+    "call": "manifest",
+    "status": "ok",
+    "stores": 25,
+    "elapsed_seconds": 0.08
+  },
+  {
+    "call": "ror",
+    "status": "ok",
+    "hits": 3,
+    "ids": [
+      "https://ror.org/02s376052",
+      "https://ror.org/01rvn4p91",
+      "https://ror.org/02z9ca723"
+    ],
+    "error": null,
+    "elapsed_seconds": 2.35
+  },
+  {
+    "call": "epfl_graph",
+    "status": "no_matches",
+    "hits": 0,
+    "ids": [],
+    "error": null,
+    "elapsed_seconds": 0.3
+  }
+]

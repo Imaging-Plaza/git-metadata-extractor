@@ -15,9 +15,9 @@ clusters them back together unconditionally — `cluster.py` treats the same IRI
 as the same entity, first and without a vote — so splitting costs nothing
 downstream and buys the attribution.
 
-**Why a hand-written table rather than something read off the shapes.** The
-same reason `unify/policy.py` is hand-written: the shapes describe what a
-property *is*, not who said it. `pulse:ror` and `schema:name` are both plain
+**Why a configured policy rather than something read off the shapes.** As with
+the unifier's merge policy, the shapes describe what a property *is*, not who
+said it. `pulse:ror` and `schema:name` are both plain
 properties of an organization; that the first can only have come from ROR and
 the second from whatever platform described the org is knowledge about the
 pipeline, not about the ontology. What a test *can* check against the TTL is
@@ -36,13 +36,18 @@ produced which value. When an LLM agent reads an ORCID RAG hit and writes the
 name it found there into `schema:name`, nothing in the payload records that,
 and this module will leave that name on the anchor slice. Recording the *asking*
 is a different mechanism with a different honesty guarantee — see
-`extraction_run.build_query_activities`, which writes what each run queried
-without claiming which triple it produced.
+`observation.evidence`, which records agent/model executions, retrievals and
+checked citations in a separate evidence graph. This legacy platform routing
+table does not consume those citations or override that graph's attribution.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+from git_metadata_extractor.mapping import load_policy
+
+_ONTOLOGY_POLICY = load_policy("policies.ontology")
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -55,19 +60,13 @@ if TYPE_CHECKING:
 #: why the table is short — `schema:name` is *not* here, because a name on a
 #: GitHub-anchored person may equally have come from GitHub or from ORCID and
 #: the projected node does not say which.
-SOURCE_BY_PROPERTY: dict[str, str] = {
-    "pulse:orcidIdentifier": "pulse:ORCID",
-    "pulse:ror": "pulse:ROR",
-}
+SOURCE_BY_PROPERTY = _ONTOLOGY_POLICY.source_by_property
 
 #: Properties whose *values* are references to profile nodes, each of which
 #: names its own platform. Routed per value rather than per property: a person
 #: with both a GitHub and an Infoscience profile has one reference belonging in
 #: each slice, which no property-level entry could express.
-PROFILE_REF_PROPERTIES: tuple[str, ...] = (
-    "pulse:hasProfile",
-    "pulse:hasOrganizationProfile",
-)
+PROFILE_REF_PROPERTIES = tuple(_ONTOLOGY_POLICY.profile_ref_properties)
 
 #: Never routed away from the anchor: they identify the node rather than say
 #: anything about it, so every slice needs its own copy.

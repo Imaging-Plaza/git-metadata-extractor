@@ -10,6 +10,7 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from git_metadata_extractor.mapping import load_policy, map_fields
 from git_metadata_extractor.providers.base import ProviderNotFoundError
 
 
@@ -204,17 +205,11 @@ def _select_ror_match(
 
 def _classify_organization_type(ror_types: list[str]) -> str:
     normalized = [value.lower() for value in ror_types]
-    if any("education" in value for value in normalized):
-        return "pulse:University"
-    if any("government" in value for value in normalized):
-        return "pulse:GovernmentAgency"
-    if any("nonprofit" in value or "non-profit" in value for value in normalized):
-        return "pulse:NonProfitOrganization"
-    if any("company" in value for value in normalized):
-        return "pulse:PrivateCompany"
-    if any("research" in value for value in normalized):
-        return "pulse:ResearchInstitution"
-    return "pulse:OtherOrganizationType"
+    policy = load_policy("policies.extraction")
+    for rule in policy.organization_rules:
+        if any(keyword in value for value in normalized for keyword in rule.keywords):
+            return rule.value
+    return policy.organization_default
 
 
 class OrganizationAgentV2:
@@ -303,7 +298,9 @@ class OrganizationAgentV2:
             warnings.append("ROR provider not configured for organization enrichment")
 
         from git_metadata_extractor.canonicalization.github import github_org_iri
-        from git_metadata_extractor.canonicalization.infoscience import infoscience_org_iri
+        from git_metadata_extractor.canonicalization.infoscience import (
+            infoscience_org_iri,
+        )
 
         ror_id = ror_record.get("id") if isinstance(ror_record, dict) else None
         # v3.0.0: stamp Infoscience IDs in canonical URL form
@@ -422,97 +419,47 @@ class OrganizationAgentV2:
                 merged_aliases.append(org_name)
 
         payload = {
-            "id": resolved_id,
-            "type": "org:Organization",
-            "shacl": "pulse:OrganizationShape",
-            "identifiers": {
-                "pulse:ror": ror_id if isinstance(ror_id, str) else None,
-                "pulse:infoscienceOrganizationIdentifier": (
-                    infoscience_id if isinstance(infoscience_id, str) else None
-                ),
-                "pulse:githubOrganizationHandle": github_handle_url,
-                "uuid": uuid_value,
-            },
-            "idSource": id_source,
-            "schema:name": (
-                resolved_name
+            **map_fields(
+                "agent.organization",
+                {
+                    "id": resolved_id,
+                    "identifiers_pulse_ror": ror_id
+                    if isinstance(ror_id, str)
+                    else None,
+                    "identifiers_pulse_infoscienceOrganizationIdentifier": infoscience_id
+                    if isinstance(infoscience_id, str)
+                    else None,
+                    "identifiers_pulse_githubOrganizationHandle": github_handle_url,
+                    "identifiers_uuid": uuid_value,
+                    "idSource": id_source,
+                    "name": resolved_name,
+                    "identifier": ror_id if isinstance(ror_id, str) else None,
+                    "githubOrganizationHandle": github_handle_url,
+                    "infoscienceOrganizationIdentifier": infoscience_id
+                    if isinstance(infoscience_id, str)
+                    else None,
+                    "OrganizationType": organization_type,
+                    "hasUnit": has_units,
+                    "unitOf": [parent_org]
+                    if isinstance(parent_org, str) and parent_org
+                    else [],
+                    "owns": owns,
+                    "aliases": merged_aliases,
+                    "acronyms": ror_acronyms,
+                    "labels": ror_labels,
+                    "profile_readme": org_profile_readme,
+                },
             ),
-            "schema:identifier": ror_id if isinstance(ror_id, str) else None,
-            "pulse:githubOrganizationHandle": github_handle_url,
-            "pulse:infoscienceOrganizationIdentifier": (
-                infoscience_id if isinstance(infoscience_id, str) else None
+            **map_fields(
+                "github.organization",
+                github_org if isinstance(github_org, dict) else {},
             ),
-            "pulse:OrganizationType": organization_type,
-            "pulse:githubOrgFollowers": github_org.get("followers"),
-            "org:hasUnit": has_units,
-            "org:unitOf": [parent_org] if isinstance(parent_org, str) and parent_org else [],
-            "pulse:owns": owns,
-            # Internal lookup keys (`_`-prefix is stripped before strict
-            # validation and JSON-LD output by default; surfaced when
-            # the caller passes `?include_internal_fields=true`). Used
-            # by `membership_agent` to resolve `org:hasMembership`
-            # composite IDs and by downstream consumers / LLM refiners
-            # to access the rich GitHub-org + ROR + Infoscience
-            # metadata that the v2 ontology doesn't yet model.
-            "_aliases": merged_aliases,
-            "_acronyms": ror_acronyms,
-            "_labels": ror_labels,
-            # GitHub organization profile (when the org has a GitHub presence).
-            "_avatar_url":         github_org.get("avatar_url"),
-            "_html_url":           github_org.get("html_url"),
-            "_blog":               github_org.get("blog"),
-            "_description":        github_org.get("description"),
-            "_company":            github_org.get("company"),
-            "_location":           github_org.get("location"),
-            "_profile_readme":     org_profile_readme,
-            "_email":              github_org.get("email"),
-            "_twitter_username":   github_org.get("twitter_username"),
-            "_public_repos":       github_org.get("public_repos"),
-            "_followers_count":    github_org.get("followers"),
-            "_github_created_at":  github_org.get("created_at"),
-            "_github_updated_at":  github_org.get("updated_at"),
-            "_github_account_type": github_org.get("type"),
-            # GitHub trust + activity signals we previously dropped on the
-            # floor. `is_verified` is GitHub's domain-ownership verification
-            # flag — when true, GitHub has confirmed the org owns the
-            # domain(s) listed on its profile, and the downstream
-            # `org_resolver` can short-circuit (the org is real, the
-            # ROR lookup is the only remaining question). `archived_at`
-            # is the org-level archival timestamp (distinct from per-repo
-            # `_archived`); pruning rollups against this is much cheaper
-            # than scanning all repos.
-            "_is_verified":            github_org.get("is_verified"),
-            "_archived_at":            github_org.get("archived_at"),
-            "_public_gists":           github_org.get("public_gists"),
-            "_following_count":        github_org.get("following"),
-            "_has_organization_projects": github_org.get("has_organization_projects"),
-            "_has_repository_projects":   github_org.get("has_repository_projects"),
-            # ROR profile extras.
-            "_ror_country":        ror_record.get("country") if isinstance(ror_record, dict) else None,
-            "_ror_types":          ror_record.get("types") if isinstance(ror_record, dict) else None,
-            "_ror_status":         ror_record.get("status") if isinstance(ror_record, dict) else None,
-            "_ror_established":    ror_record.get("established") if isinstance(ror_record, dict) else None,
-            "_ror_links":          ror_record.get("links") if isinstance(ror_record, dict) else None,
-            # Infoscience profile extras (uses the new structured columns
-            # we backfilled: acronym, infoscience_code, unit_code,
-            # parent_acronym, director_name, org_type_dspace).
-            "_infoscience_code":         (
-                infoscience_match.get("infoscience_code") if isinstance(infoscience_match, dict) else None
+            **map_fields(
+                "ror.organization", ror_record if isinstance(ror_record, dict) else {},
             ),
-            "_unit_code":                (
-                infoscience_match.get("unit_code") if isinstance(infoscience_match, dict) else None
-            ),
-            "_parent_acronym":           (
-                infoscience_match.get("parent_acronym") if isinstance(infoscience_match, dict) else None
-            ),
-            "_director_name":            (
-                infoscience_match.get("director_name") if isinstance(infoscience_match, dict) else None
-            ),
-            "_org_type_dspace":          (
-                infoscience_match.get("org_type_dspace") if isinstance(infoscience_match, dict) else None
-            ),
-            "_infoscience_url":          (
-                infoscience_match.get("infoscience_url") if isinstance(infoscience_match, dict) else None
+            **map_fields(
+                "infoscience.organization",
+                infoscience_match if isinstance(infoscience_match, dict) else {},
             ),
         }
 

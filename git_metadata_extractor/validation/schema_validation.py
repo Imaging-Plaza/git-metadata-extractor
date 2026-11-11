@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from jsonschema import Draft7Validator  # type: ignore[import-untyped]
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.validation.json_schema import schema_validator
+from git_metadata_extractor.validation.metadata import strip_internal_metadata
+
+if TYPE_CHECKING:
+    from jsonschema import Draft7Validator
 
 ENTITY_SCHEMA_NAME_MAP = {
     "person": "person",
@@ -24,20 +30,18 @@ ENTITY_SCHEMA_NAME_MAP = {
 }
 
 
-@dataclass(slots=True)
-class ValidationResult:
+class ValidationResult(InternalModel):
     entity_type: str
     is_valid: bool
-    errors: list[dict[str, str]] = field(default_factory=list)
+    errors: list[dict[str, str]] = Field(default_factory=list)
 
 
-@dataclass(slots=True)
-class BatchValidationResult:
-    valid_entities: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
-    invalid_entities: list[tuple[str, dict[str, Any], ValidationResult]] = field(
+class BatchValidationResult(InternalModel):
+    valid_entities: list[tuple[str, dict[str, Any]]] = Field(default_factory=list)
+    invalid_entities: list[tuple[str, dict[str, Any], ValidationResult]] = Field(
         default_factory=list,
     )
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 def _schema_name_for_entity(entity_type: str) -> str:
@@ -80,7 +84,7 @@ class StrictSchemaValidator:
         schema_name = _schema_name_for_entity(entity_type)
         validator = self._validator_cache.get(schema_name)
         if validator is None:
-            validator = Draft7Validator(_load_strict_schema(schema_name))
+            validator = schema_validator(_load_strict_schema(schema_name))
             self._validator_cache[schema_name] = validator
         return validator
 
@@ -96,7 +100,7 @@ class StrictSchemaValidator:
     def validate(self, entity_type: str, data: dict[str, Any]) -> ValidationResult:
         validator = self._validator_for_entity(entity_type)
         clean_data = {
-            k: v for k, v in data.items() if not k.startswith("_") and v is not None
+            k: v for k, v in strip_internal_metadata(data).items() if v is not None
         }
         errors = sorted(
             validator.iter_errors(clean_data),

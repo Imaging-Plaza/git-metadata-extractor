@@ -18,8 +18,8 @@ It does work in the *other* direction, and that asymmetry is the guard:
 `sh:maxCount 1` means a union would produce data the shapes reject, so a capped
 property may never be `UNION`. `tests/v2/test_unify_policy.py` asserts that
 against the real TTL, and asserts that every uncapped canonical property has an
-explicit entry here — so a submodule bump that adds one fails loudly instead of
-silently defaulting.
+explicit entry in `mapping/config/policies/merge.yaml` — so a submodule bump
+that adds one fails loudly instead of silently defaulting.
 
 **What the corpus says the payoff is.** Measured over 119 real substrates
 (2026-09-09): 17 entities appear in more than one run, 44 of their properties
@@ -37,8 +37,14 @@ fixtures, and that is stated rather than implied.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from enum import Enum
+
+from pydantic import Field
+
+from git_metadata_extractor.mapping import load_policy
+from git_metadata_extractor.models import InternalModel
+
+_MERGE_RULES = load_policy("policies.merge")
 
 logger = logging.getLogger(__name__)
 
@@ -78,66 +84,19 @@ class Disposition(Enum):
 
 #: Properties that belong to the substrate and never to canonical, whatever
 #: shape declares them.
-PER_RUN_PROPERTIES: frozenset[str] = frozenset({"pulse:partOfRun"})
+PER_RUN_PROPERTIES = frozenset(_MERGE_RULES.per_run_properties)
 
 
 #: Explicit disposition for every canonical property with **no** `sh:maxCount`.
 #: Capped properties default to `SELECT` (a union would violate the shape), so
 #: they are deliberately absent — this table is exactly the set the shapes
 #: cannot classify.
-UNCAPPED_DISPOSITIONS: dict[str, Disposition] = {
-    # -- genuinely many: accumulate ------------------------------------------
-    "org:hasMembership": Disposition.UNION,
-    "org:hasUnit": Disposition.UNION,
-    "org:unitOf": Disposition.UNION,
-    "pulse:discipline": Disposition.UNION,
-    "pulse:hasAuthoredArticle": Disposition.UNION,
-    "pulse:hasContribution": Disposition.UNION,
-    "pulse:hasDeposit": Disposition.UNION,
-    "pulse:hasOrganizationProfile": Disposition.UNION,
-    "pulse:hasProfile": Disposition.UNION,
-    "pulse:owns": Disposition.UNION,
-    "pulse:platformUsername": Disposition.UNION,
-    "pulse:projectOutput": Disposition.UNION,
-    "schema:author": Disposition.UNION,
-    "schema:citation": Disposition.UNION,
-    "schema:email": Disposition.UNION,
-    "schema:funder": Disposition.UNION,
-    "schema:member": Disposition.UNION,
-    "schema:programmingLanguage": Disposition.UNION,
-    "schema:sourceOrganization": Disposition.UNION,
-    "schema:url": Disposition.UNION,
-    # -- semantically one, loosely typed: choose ------------------------------
-    #
-    # Each of these is a list in the shapes and a single fact in the world.
-    # `pulse:doi` and `pulse:orcidIdentifier` are the sharpest cases: an
-    # article has one DOI and a person one ORCID, and unioning two would
-    # produce an entity claiming two identities — which validates.
-    "pulse:doi": Disposition.SELECT,
-    "pulse:orcidIdentifier": Disposition.SELECT,
-    "pulse:organizationType": Disposition.SELECT,
-    "pulse:publicationType": Disposition.SELECT,
-    "pulse:repositoryType": Disposition.SELECT,
-    "pulse:ror": Disposition.SELECT,
-    "schema:dateCreated": Disposition.SELECT,
-    "schema:license": Disposition.SELECT,
-    "schema:name": Disposition.SELECT,
-    "time:hasBeginning": Disposition.SELECT,
-    # -- aggregated, not chosen -----------------------------------------------
-    #
-    # The substrate now carries contributions (patch 06), so these are merged
-    # rather than asserted, and merging them is neither a union nor a choice.
-    # A count is a cumulative total and the dates are an observed range, so
-    # the answer is an extremum — see `Disposition.MAX` for why it is not a
-    # sum.
-    "pulse:contributionCount": Disposition.MAX,
-    "pulse:firstContributionDate": Disposition.MIN,
-    "pulse:lastContributionDate": Disposition.MAX,
+UNCAPPED_DISPOSITIONS = {
+    key: Disposition(value) for key, value in _MERGE_RULES.dispositions.items()
 }
 
 
-@dataclass(frozen=True, slots=True)
-class TypeResolver:
+class TypeResolver(InternalModel, frozen=True):
     """The per-type half: how to recognise one entity and what to call it.
 
     `match_keys` is **ordered by precision**, and the order is load-bearing:
@@ -167,85 +126,20 @@ class TypeResolver:
 #: One resolver per canonical type. The registry *is* the extension point:
 #: adding a type is adding a row, and the type-agnostic machinery in
 #: `unify.cluster` / `unify.merge` does not change.
-RESOLVERS: dict[str, TypeResolver] = {
-    "schema:Person": TypeResolver(
-        entity_type="schema:Person",
-        # ORCID is a global identifier and settles it. A shared platform
-        # profile is next: it is what lets a person known by a GitHub handle in
-        # one run and by an ORCID in another be recognised as one person —
-        # which is the whole reason the profile model exists.
-        match_keys=("pulse:orcidIdentifier", "pulse:hasProfile", "schema:email"),
-        id_priority=("pulse:orcidIdentifier",),
-        same_as="pulse:samePersonAs",
-    ),
-    "org:Organization": TypeResolver(
-        entity_type="org:Organization",
-        match_keys=("pulse:ror", "pulse:hasOrganizationProfile"),
-        id_priority=("pulse:ror",),
-        # From ontology patch 02 (now upstream; see ontology/patches/README.md),
-        # which existed for this and had no consumer until now.
-        same_as="pulse:sameOrganizationAs",
-    ),
-    "schema:ScholarlyArticle": TypeResolver(
-        entity_type="schema:ScholarlyArticle",
-        match_keys=("pulse:doi", "pulse:hasDeposit"),
-        id_priority=("pulse:doi",),
-    ),
-    "schema:SoftwareSourceCode": TypeResolver(
-        entity_type="schema:SoftwareSourceCode",
-        # Link, don't merge: a repository's identity *is* its platform handle,
-        # there is no global id to promote to, and cross-platform relatedness
-        # is modelled as `schema:Project` + `pulse:projectOutput` rather than
-        # an identity merge. Clustering still runs, because two runs seeing the
-        # same handle are the same repository and their properties accumulate.
-        match_keys=("pulse:repositoryHandle",),
-    ),
-    # --- carried, not unified ------------------------------------------------
-    #
-    # A profile's IRI is already canonical by construction: `profile_iri` mints
-    # it from (platform, handle, kind), so two runs seeing the same account
-    # produce the same node and there is nothing to promote or alias. But they
-    # still have to *reach* `graph:canonical`, because `PersonShape` constrains
-    # `pulse:hasProfile` with `sh:class pulse:PlatformProfile` — skip them and
-    # every person's profile edge dangles against a closed shape.
-    #
-    # Empty `match_keys` is what expresses "cluster by IRI only", so these need
-    # no new machinery: the registry already means what they need.
-    "pulse:PlatformProfile": TypeResolver(
-        entity_type="pulse:PlatformProfile",
-        match_keys=(),
-    ),
-    "pulse:OrganizationProfile": TypeResolver(
-        entity_type="pulse:OrganizationProfile",
-        match_keys=(),
-    ),
-    "pulse:Deposit": TypeResolver(
-        entity_type="pulse:Deposit",
-        match_keys=(),
-    ),
-    "pulse:Contribution": TypeResolver(
-        entity_type="pulse:Contribution",
-        # A composite `{person}__{repo}`, so identity follows the endpoints and
-        # clustering by IRI is exactly right — two runs reporting the same pair
-        # produce the same id. `remap` rebuilds it when an endpoint is renamed.
-        match_keys=(),
-    ),
-    "org:Membership": TypeResolver(
-        entity_type="org:Membership",
-        # A composite `{person}__{org}`, so identity follows the endpoints.
-        # Recomputed rather than matched once the endpoints canonicalise —
-        # `unify.merge` rebuilds the id from the resolved pair.
-        match_keys=(),
-    ),
+RESOLVERS = {
+    kind: TypeResolver(
+        entity_type=kind,
+        **rule.model_dump(exclude={"legacy_match_contracts"}),
+    )
+    for kind, rule in _MERGE_RULES.resolvers.items()
 }
 
 
-@dataclass(slots=True)
-class MergePolicy:
+class MergePolicy(InternalModel):
     """Everything `unify.merge` needs, assembled once per run."""
 
-    dispositions: dict[str, Disposition] = field(default_factory=dict)
-    resolvers: dict[str, TypeResolver] = field(default_factory=dict)
+    dispositions: dict[str, Disposition] = Field(default_factory=dict)
+    resolvers: dict[str, TypeResolver] = Field(default_factory=dict)
 
     def disposition(self, prop: str, *, capped: bool = False) -> Disposition:
         """How to merge `prop`. `capped` is the shape's `sh:maxCount 1`.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import fields
 from unittest.mock import MagicMock
 
 from fastapi import FastAPI
@@ -34,6 +33,7 @@ from git_metadata_extractor.providers.orcid_rag import OrcidRagProvider
 from git_metadata_extractor.providers.renkulab_rag import RenkulabRagProvider
 from git_metadata_extractor.providers.ror_rag import RorRagProvider
 from git_metadata_extractor.providers.snsf_rag import SnsfRagProvider
+from git_metadata_extractor.providers.sources_service import SourcesClient
 from git_metadata_extractor.providers.swissubase_rag import SwissubaseRagProvider
 from git_metadata_extractor.providers.zenodo_rag import ZenodoRagProvider
 
@@ -41,6 +41,7 @@ from git_metadata_extractor.providers.zenodo_rag import ZenodoRagProvider
 # each ProviderSet field. `package_registry` is the one field it builds from
 # the environment rather than app state, so it has nothing to inject.
 _APP_STATE_PROVIDER_TYPES: dict[str, type] = {
+    "sources": SourcesClient,
     "github": GitHubProvider,
     "orcid": ORCIDProvider,
     "infoscience": InfoscienceProvider,
@@ -100,16 +101,16 @@ def test_get_provider_set_uses_mock_providers_when_flag_unset(monkeypatch) -> No
 
 
 def test_get_provider_set_returns_every_provider_injected_on_app_state() -> None:
-    # Driven by the dataclass, so a field added to ProviderSet without a type
+    # Driven by the model, so a field added to ProviderSet without a type
     # above fails here instead of being silently left out of the bundle.
     request = _build_request()
     stand_ins: dict[str, MagicMock] = {}
-    for field in fields(ProviderSet):
-        if field.name == "package_registry":
+    for name in ProviderSet.model_fields:
+        if name == "package_registry":
             continue
-        stand_in = MagicMock(spec=_APP_STATE_PROVIDER_TYPES[field.name])
-        setattr(request.app.state, f"v2_{field.name}_provider", stand_in)
-        stand_ins[field.name] = stand_in
+        stand_in = MagicMock(spec=_APP_STATE_PROVIDER_TYPES[name])
+        setattr(request.app.state, f"v2_{name}_provider", stand_in)
+        stand_ins[name] = stand_in
 
     provider_set = asyncio.run(get_provider_set(request))
 

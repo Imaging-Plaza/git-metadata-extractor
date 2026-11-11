@@ -53,7 +53,7 @@ git_metadata_extractor/
   api/                the HTTP surface (URL prefix /v2 — the public contract)
     _router.py        the single APIRouter
     _helpers.py       env gates, stage constants, app-state resolution
-    extract.py        GET/POST /extract, _run_extract_job, post-agent sequencing
+    extract.py        GET/POST /extract, _run_extract_job, HTTP/job adapters
     auto_ingest.py    post-extract index write-through (opt-in, off by default)
     jobs.py           /jobs/{id}, cancel, /crawl
     system.py         /cache/clear, /health
@@ -65,7 +65,12 @@ git_metadata_extractor/
 
   pipeline/
     orchestrator.py   agent plans (PLAN_BY_TYPE), fan-out concurrency, retries
+    run.py            ordered post-agent stage chains
     stages/           one module per stage
+
+  services/extraction.py  extraction lifecycle, cache lookup, stage-chain execution
+  mapping/            typed YAML loader, field engine, target/policy checks
+    config/           per-source/entity mappings + shared policies (packaged)
 
   agents/
     models.py         AgentResult, ProviderSet, TypedEntityBuckets
@@ -89,6 +94,52 @@ Two conventions that are easy to trip over:
   until `3.0.0`. Docs or notes referring to `src/v2/api.py` predate the split.
 - **`experimental/` is quarantined on purpose.** Nothing in it is wired into
   the request path; treat it as a sketchpad.
+
+---
+
+## Source-to-ontology mappings
+
+The deterministic path is **source records → prepared facts → agent payloads →
+reconciled intermediate graph → raw/canonical projections**. Providers and
+adapters fetch records, normalize identifiers/dates and match people or
+organizations. YAML maps those facts into ontology fields; Python still builds
+relationships and runs reconciliation, inference and graph validation.
+
+Mappings are split by source and entity under
+`git_metadata_extractor/mapping/config/`: `github/`, `orcid/`, `ror/` and
+`infoscience/` enrich source fields; `agent/` builds the six rule-based entity
+payloads; `raw/` and `canonical/` define projection fields. This keeps a source's
+meaning and a target's shape local instead of combining every source into one
+large mapping. Raw and canonical projections consume the same intermediate;
+raw projection runs first so canonical projection cannot discard source facts.
+
+Three shared policy files hold ontology routing/source attribution, extraction
+classification, and unifier identity/merge choices. The unifier consumes the
+stored raw graphs to build a canonical graph; its graph algorithms remain Python.
+YAML does not replace LLM prompts or change pipeline stage order.
+
+Pydantic validates mapping and policy configuration. Target names are checked
+against generated models: agent models come from the agent JSON Schemas;
+raw/canonical models come from the pinned ontology. Runtime strict JSON Schema
+and SHACL validation still check actual outputs. A valid field name alone does
+not prove that a source value has the right meaning.
+
+Use the [mapping editing guide](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/git_metadata_extractor/mapping/config/README.txt)
+as the detailed reference for syntax, policy ownership, validation and adding a
+source. Inspect the current inventory without maintaining a second field list:
+
+```bash
+python -m git_metadata_extractor.mapping
+python -m git_metadata_extractor.mapping --check
+python -m git_metadata_extractor.mapping --schema
+```
+
+Mapping/policy content, generated target contracts and mapping code contribute
+to a fingerprint used by pipeline and agent verdict caches. Restart after edits:
+configurations and fingerprints are cached for the process lifetime. Mapping
+activities record the fingerprint and contract/version information in the
+separate evidence graph, not on canonical entities. This identifies the mapping
+used; it does not archive source responses or prove a field's source attribution.
 
 ---
 

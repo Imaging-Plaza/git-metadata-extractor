@@ -43,10 +43,12 @@ per-source reliability weights, which nothing here has.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.store.terms import (
     compact,
     datetime_term,
@@ -109,8 +111,7 @@ PREFIX prov: <{PROV}>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>"""
 
 
-@dataclass(frozen=True, slots=True)
-class Annotation:
+class Annotation(InternalModel, frozen=True):
     """One derived canonical triple, and what the unifier decided about it."""
 
     subject: str
@@ -133,21 +134,19 @@ class Annotation:
         return (self.subject, self.prop, str(self.value), self.is_reference)
 
 
-@dataclass(frozen=True, slots=True)
-class ExistingAnnotation:
+class ExistingAnnotation(InternalModel, frozen=True):
     """The history already in the store for one quoted triple."""
 
     count: int
     first_observed_on: str | None
 
 
-@dataclass(slots=True)
-class ProvenanceReport:
+class ProvenanceReport(InternalModel):
     inserted: int = 0
     reconfirmed: int = 0
     same_as: int = 0
     pruned: bool = False
-    statements: list[str] = field(default_factory=list)
+    statements: list[str] = Field(default_factory=list)
 
     def summary(self) -> str:
         return (

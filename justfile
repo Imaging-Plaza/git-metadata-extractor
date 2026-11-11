@@ -13,6 +13,18 @@ WORKERS := env_var_or_default("WORKERS", "4")
 default:
     @just --list
 
+# List local experiment components (collectors and agent implementations).
+pipeline-list:
+    python -m git_metadata_extractor.experiments list
+
+# Validate a YAML pipeline profile without making model/provider calls.
+pipeline-validate profile:
+    python -m git_metadata_extractor.experiments validate {{quote(profile)}}
+
+# Run a local benchmark matrix; pass --profile, --corpus and a new --output path.
+pipeline-benchmark *args:
+    python -m git_metadata_extractor.experiments benchmark {{args}}
+
 # ============================================================================
 # Installation & Setup
 # ============================================================================

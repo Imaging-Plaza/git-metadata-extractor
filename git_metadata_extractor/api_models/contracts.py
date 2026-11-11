@@ -130,6 +130,11 @@ class V2ExtractResponse(BaseModel):
     #: while `output` carries what was extracted. Optional, so older consumers
     #: and cached responses predating the field stay valid.
     extraction_run: dict[str, Any] | None = None
+    #: Field assertions, agent/model executions and retrieval activities. A
+    #: separate graph so provenance never widens the closed entity schemas.
+    provenance: dict[str, Any] | None = None
+    #: Resolved local component profile and fingerprint, when selected by a host.
+    execution_profile: dict[str, Any] | None = None
     #: The raw/substrate layer for this run: a JSON-LD document whose
     #: top-level `@graph` holds one **named graph** per
     #: `pulse:ExtractionOutput` — one platform's slice of one run — plus a

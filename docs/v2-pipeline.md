@@ -6,8 +6,16 @@ The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with [Open Pulse
 
 > **Two sequencers, not one.** Agent generation runs from a per-input-type
 > plan in the orchestrator (`PLAN_BY_TYPE`); everything after the agents is a
-> flat sequence in `api/extract.py`. The stage inventory below reflects both —
+> set of ordered chains in `pipeline/run.py`, executed by
+> `services/extraction.py`. The stage inventory below reflects both —
 > see [Stage inventory](#stage-inventory).
+
+Field mapping is a separate concern from stage order. Source adapters prepare
+facts; per-source/entity YAML maps rule-based agent payloads and raw/canonical
+projections. Shared YAML policies cover source routing, classification and
+unifier merging. Fetching, matching and graph algorithms remain Python. See
+[Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings)
+for the workflow and the single detailed editing guide.
 
 ---
 
@@ -264,10 +272,11 @@ Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 20
 |---|---|
 | How the layers fit together | [Architecture Overview](architecture/overview.md) |
 | The index-layer split and version pinning | [Cross-Repo Contract](cross-repo-contract.md) |
-| Post-agent stage sequencing | `git_metadata_extractor/api/extract.py` — `_run_extract_job`, with `# === <name> stage ===` banners |
+| Post-agent stage sequencing | `git_metadata_extractor/pipeline/run.py` — ordered chains executed by `services/extraction.py` |
 | Agent plans and fan-out | `git_metadata_extractor/pipeline/orchestrator.py` — `PLAN_BY_TYPE` (line ~120) |
 | Individual stages | `git_metadata_extractor/pipeline/stages/` — one module per stage; resolvers are `resolve_*.py` |
 | Schema source of truth | `git_metadata_extractor/schema/json/` (agent + strict) and `schema/ontology/open-pulse-ontology.ttl` |
+| Deterministic field mappings and policies | [Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings) |
 | Env flags and gates | `git_metadata_extractor/api/_helpers.py` — every `V2_*` reader lives here |
 
 The former "deep reference" pointer (`.internal/v2-pipeline-reference.md`) was

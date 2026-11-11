@@ -2,6 +2,7 @@
 API
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -83,9 +84,21 @@ async def startup_event(app: FastAPI | None = None):
             logger.warning(f"v2 provider cache pre-warm skipped: {exc}")
 
 
-async def shutdown_event():
+async def shutdown_event(app: FastAPI | None = None):
     """Cleanup resources on application shutdown"""
     logger.info("🛑 Application shutdown - cleaning up resources")
+
+    if app is not None:
+        from git_metadata_extractor.providers.runtime import close_shared_providers
+        jobs = list(getattr(app.state, "_v2_job_tasks", ()))
+        for task in jobs:
+            task.cancel()
+        if jobs:
+            await asyncio.gather(*jobs, return_exceptions=True)
+        cleanups = list(getattr(app.state, "_v2_provider_cleanup_tasks", ()))
+        if cleanups:
+            await asyncio.gather(*cleanups, return_exceptions=True)
+        await close_shared_providers(app.state)
 
     # Run garbage collection
     import gc
@@ -100,7 +113,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await shutdown_event()
+        await shutdown_event(app)
 
 
 app = FastAPI(

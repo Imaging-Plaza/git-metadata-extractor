@@ -39,16 +39,22 @@ class ArticleModel(BaseModel):
 
     pulse_doi: list[
         Annotated[str, Field(pattern="^10\\.\\d{4,9}/[-._;()/:a-zA-Z0-9]+$")]
-    ] = Field(..., alias="pulse:doi", description="Standard DOI validation.")
+    ] = Field(
+        ..., alias="pulse:doi", min_length=1, description="Standard DOI validation."
+    )
     pulse_hasDeposit: list[str] = Field(
         ...,
         alias="pulse:hasDeposit",
+        min_length=1,
         description="Platform-specific deposits of this article (e.g. its Zenodo record, its Infoscience entry, its arXiv submission). Each carries that platform's own internal ID, access right, publisher and publication date.",
     )
     schema_author: list[str] = Field(
-        ..., alias="schema:author", description="The author of this article"
+        ...,
+        alias="schema:author",
+        min_length=1,
+        description="The author of this article",
     )
-    schema_name: list[str] = Field(..., alias="schema:name")
+    schema_name: list[str] = Field(..., alias="schema:name", min_length=1)
     schema_sourceOrganization: list[str] | None = Field(
         None, alias="schema:sourceOrganization", description="Source Organization"
     )
@@ -66,7 +72,10 @@ class ContributionModel(BaseModel):
     )
 
     pulse_contributionCount: list[int] = Field(
-        ..., alias="pulse:contributionCount", description="Number of commits made."
+        ...,
+        alias="pulse:contributionCount",
+        min_length=1,
+        description="Number of commits made.",
     )
     pulse_contributionTo: str = Field(
         ...,
@@ -252,7 +261,7 @@ class OrganizationModel(BaseModel):
     pulse_ror: (
         list[Annotated[str, Field(pattern="^https://ror\\.org/[0-9a-z]{9}$")]] | None
     ) = Field(None, alias="pulse:ror", description="Standard ROR ID validation.")
-    schema_name: list[str] = Field(..., alias="schema:name")
+    schema_name: list[str] = Field(..., alias="schema:name", min_length=1)
 
     @model_validator(mode="after")
     def _identity_present(self) -> OrganizationModel:
@@ -310,7 +319,7 @@ class PersonModel(BaseModel):
     pulse_owns: list[str] | None = Field(
         None, alias="pulse:owns", description="Owns Repository"
     )
-    schema_name: list[str] = Field(..., alias="schema:name")
+    schema_name: list[str] = Field(..., alias="schema:name", min_length=1)
 
     @model_validator(mode="after")
     def _identity_present(self) -> PersonModel:
@@ -438,7 +447,7 @@ class ProjectModel(BaseModel):
         alias="schema:member",
         description="A person participating in this project.",
     )
-    schema_name: list[str] = Field(..., alias="schema:name")
+    schema_name: list[str] = Field(..., alias="schema:name", min_length=1)
     schema_sourceOrganization: list[str] | None = Field(
         None,
         alias="schema:sourceOrganization",
@@ -514,7 +523,10 @@ class RepositoryModel(BaseModel):
         description="Must be a valid IRI from the Repository Type enumeration (e.g., pulse:Software).",
     )
     schema_author: list[str] = Field(
-        ..., alias="schema:author", description="The author of this repository."
+        ...,
+        alias="schema:author",
+        min_length=1,
+        description="The author of this repository.",
     )
     schema_citation: list[str] | None = Field(
         None, alias="schema:citation", description="Citation"
@@ -525,7 +537,7 @@ class RepositoryModel(BaseModel):
     schema_license: list[str] | None = Field(
         None, alias="schema:license", description="License"
     )
-    schema_name: list[str] = Field(..., alias="schema:name")
+    schema_name: list[str] = Field(..., alias="schema:name", min_length=1)
     schema_programmingLanguage: list[str] | None = Field(
         None, alias="schema:programmingLanguage"
     )

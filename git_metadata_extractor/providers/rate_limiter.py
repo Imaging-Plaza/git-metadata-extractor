@@ -4,10 +4,10 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from typing import Any, Awaitable, Callable, TypeVar
 
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.providers.base import ProviderRateLimitError
 
 ResponseT = TypeVar("ResponseT")
@@ -17,8 +17,7 @@ LOGGER = logging.getLogger(__name__)
 HTTP_RATE_LIMIT = 429
 
 
-@dataclass(slots=True)
-class _ProviderRateLimitState:
+class _ProviderRateLimitState(InternalModel):
     remaining: int | None = None
     reset_epoch: float | None = None
     next_allowed_at: float = 0.0

@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
+from git_metadata_extractor.validation.metadata import strip_internal_metadata
+
 if TYPE_CHECKING:
     from git_metadata_extractor.pipeline.stages.models import AssembledOutput
 
@@ -127,15 +129,6 @@ def _normalize_jsonld_value(
     return deepcopy(value)
 
 
-def _drop_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``entity`` without top-level `_`-prefixed keys."""
-    return {
-        key: value
-        for key, value in entity.items()
-        if not (isinstance(key, str) and key.startswith("_"))
-    }
-
-
 def _internal_term(key: str) -> str:
     """Map a `_`-prefixed internal field to its `gme-internal:` JSON-LD
     term (`_avatar_url` -> `gme-internal:avatar_url`)."""
@@ -175,17 +168,17 @@ def _hoist_publiccode_scalars(
     return out
 
 
-def _rewrite_internal_keys(entity: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``entity`` with top-level `_`-prefixed keys
-    renamed to their `gme-internal:` terms, so they expand to real IRI
-    predicates instead of being dropped as undefined JSON-LD terms."""
-    out: dict[str, Any] = {}
-    for key, value in entity.items():
-        if isinstance(key, str) and key.startswith("_"):
-            out[_internal_term(key)] = value
-        else:
-            out[key] = value
-    return out
+def _rewrite_internal_keys(value: Any) -> Any:
+    """Copy debug output, naming internal fields explicitly at every depth."""
+    if isinstance(value, dict):
+        return {
+            _internal_term(key) if isinstance(key, str) and key.startswith("_") else key:
+            _rewrite_internal_keys(child)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_rewrite_internal_keys(child) for child in value]
+    return deepcopy(value)
 
 
 def build_jsonld_output(
@@ -295,20 +288,8 @@ def build_jsonld_output(
         "@context": context,
         "@graph": graph,
     }
+    clean = _rewrite_internal_keys if include_internal_fields else strip_internal_metadata
+    payload["@graph"] = clean(graph)
     if assembled.excluded_entities:
-        excluded = deepcopy(assembled.excluded_entities)
-        # `excluded_entities` carry the same `_`-prefixed internal fields
-        # as `@graph` nodes (nested under each record's `entity`). Honour
-        # the flag here too: drop them when off, rename them to
-        # `gme-internal:` terms when on — so the whole response is
-        # consistent (zero `_` fields, or all of them as real IRIs).
-        for record in excluded:
-            inner = record.get("entity") if isinstance(record, dict) else None
-            if isinstance(inner, dict):
-                record["entity"] = (
-                    _rewrite_internal_keys(inner)
-                    if include_internal_fields
-                    else _drop_internal_keys(inner)
-                )
-        payload["excluded_entities"] = excluded
+        payload["excluded_entities"] = clean(assembled.excluded_entities)
     return payload

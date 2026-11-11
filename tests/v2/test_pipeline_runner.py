@@ -10,21 +10,15 @@ from git_metadata_extractor.pipeline.runner import (
     run_pipeline,
 )
 from git_metadata_extractor.pipeline.state import PipelineState
-
-
-class _DetectedType:
-    value = "repository"
-
-
-class _Classification:
-    detected_type = _DetectedType()
-    normalized_url = "https://github.com/acme/widget"
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
 
 
 def _state() -> PipelineState:
     return PipelineState(
         run_id="run-1",
-        classification=_Classification(),
+        classification=classify_github_url("https://github.com/acme/widget", probe_accounts=False),
         runtime="rule_based",
         providers=None,
     )
@@ -70,7 +64,7 @@ def test_gate_skips_stage_without_running_it() -> None:
     state = _run([Stage(name="gated", run=run, applies=lambda _s: False)])
 
     assert "ran" not in state.extras
-    assert state.extras["gated_skipped"] is True
+    assert state.stage_outcomes[-1].status == "skipped"
     assert "gated" not in state.timings
 
 
@@ -166,7 +160,7 @@ def test_adapters_can_log_their_own_duration_mid_stage() -> None:
         seen.append(_elapsed(state))
 
     state = _state()
-    asyncio.run(run_pipeline(state, [Stage("timed", stage, fail_open=False)]))
+    asyncio.run(run_pipeline(state, [Stage(name="timed", run=stage, fail_open=False)]))
 
     assert seen, "stage did not run"
     assert seen[0] >= slept, f"adapter measured {seen[0]:.3f}s for a {slept}s stage"

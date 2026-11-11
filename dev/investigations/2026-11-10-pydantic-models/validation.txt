@@ -1,0 +1,133 @@
+Pydantic consistency migration ? local validation record
+
+Worktree: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+No commits, pushes, service restarts or secret-file edits.
+
+Changes
+- 53 production data records, 7 development-script records and 5 test records
+  migrated from dataclasses to Pydantic. The remaining exception declaration
+  became an ordinary ValueError subclass. No hand-written dataclass declarations
+  remain in production, scripts or tests.
+- InternalModel shares extra=forbid and arbitrary_types_allowed configuration;
+  frozen records use frozen=True. Mutable defaults retain isolated factories.
+- Provider clients retain identity, duck-typed injection and observation proxies.
+  SkipValidation is limited to injected primary clients; data records validate.
+- Async cleanup tasks use PrivateAttr. Credentials in V2Config are excluded from
+  model dumps and repr. API schemas and generated model files are unchanged.
+- PipelineResult and TypedEntityBuckets serialize with model_dump instead of
+  parallel hand-maintained field dictionaries. Pipeline state/runner docs are
+  shorter and describe current behavior.
+- Internal constructors use Pydantic keyword arguments, copies use model_copy,
+  and introspection uses class.model_fields. There is no positional shim.
+- Dataclasses helpers remain only for third-party data/tool interoperability in
+  observation/evidence.py (including Pydantic AI's function_schema).
+
+Regression findings resolved
+- Pydantic copies mutable constructor data: extraction now reads warnings and
+  compiled context from final pipeline state. The service regression test adds
+  a failing optional stage and verifies its warnings in fresh/cached responses.
+  Confirmed failure before the fix, then success after it.
+- Standalone scripts bootstrap the repository path before importing the shared
+  model base; verified without an editable checkout at its installed location.
+- Reviewer rechecked both fixes and reported no remaining blockers.
+
+Commands and results
+Tests ran with this offline Docker prefix:
+  docker run --rm --network none --entrypoint python
+    --mount type=bind,source=D:/pro/git-metadata-extractor-provenance,target=/work/gme
+    --workdir /work/gme gme-local-validation:20261109
+
+  -m pytest tests/v2/ -q -n 4 --dist=loadfile
+    -m "not live_provider and not llm_integration"
+    --no-cov -p no:cacheprovider --tb=short
+  Result: 1860 passed, 1 skipped, 2503 dependency deprecation warnings, 33.75s.
+
+  scripts/v2/generate_v2_models.py --check
+  Result: strict.py and agent.py up to date.
+
+Separate offline containers mounted the checkout read-only at /checkout, cwd
+/tmp, so the image's editable path could not hide a script bootstrap error:
+  python /checkout/scripts/v2/generate_from_ontology.py --help       exit 0
+  python /checkout/scripts/v2/canonical_conformance.py --help        exit 0
+  python /checkout/scripts/v2/validate_ror_resolution.py --self-test exit 0
+
+Ruff check over migration-touched Python files with --extend-ignore EXE002
+(Windows Docker bind marks files executable), compared against the exact
+pre-migration source snapshot under the same configuration:
+  268 previous diagnostics -> 150 current diagnostics; zero new diagnostics.
+Existing complexity/style debt remains; this is not a globally clean lint run.
+  git diff --check: clean.
+
+Compatibility and limits
+- Python callers of migrated records must use keyword arguments. Invalid field
+  values now raise Pydantic ValidationError; frozen mutation does likewise.
+- Pydantic validates/copies input containers. Mutate the resulting model state,
+  not an external list/dict that was passed to its constructor.
+- model_copy(update=...) is used only for trusted internal transformations; it
+  does not validate updates and is not an untrusted-input boundary.
+- No live LLM/provider requests or deployment validation were performed.
+- Existing unrelated worktree changes were retained.
+
+Changed files for this migration (Python inventory plus configuration):
+git_metadata_extractor/config.py
+git_metadata_extractor/agents/models.py
+git_metadata_extractor/agents/tool_catalog.py
+git_metadata_extractor/experiments/catalog.py
+git_metadata_extractor/experiments/execution.py
+git_metadata_extractor/observation/evidence.py
+git_metadata_extractor/observation/query_log.py
+git_metadata_extractor/pipeline/models.py
+git_metadata_extractor/pipeline/orchestrator.py
+git_metadata_extractor/pipeline/run.py
+git_metadata_extractor/pipeline/runner.py
+git_metadata_extractor/pipeline/state.py
+git_metadata_extractor/providers/rate_limiter.py
+git_metadata_extractor/providers/runtime.py
+git_metadata_extractor/providers/_rag_index.py
+git_metadata_extractor/services/extraction.py
+git_metadata_extractor/unify/cluster.py
+git_metadata_extractor/unify/merge.py
+git_metadata_extractor/unify/policy.py
+git_metadata_extractor/unify/provenance.py
+git_metadata_extractor/unify/remap.py
+git_metadata_extractor/unify/runner.py
+git_metadata_extractor/validation/crossref.py
+git_metadata_extractor/validation/layers.py
+git_metadata_extractor/validation/schema_validation.py
+git_metadata_extractor/validation/shacl_validation.py
+git_metadata_extractor/agents/llm/runtime.py
+git_metadata_extractor/agents/rule_based/article_agent.py
+git_metadata_extractor/pipeline/stages/concept_tagging.py
+git_metadata_extractor/pipeline/stages/link_veracity.py
+git_metadata_extractor/pipeline/stages/models.py
+git_metadata_extractor/pipeline/stages/output_assembly.py
+git_metadata_extractor/pipeline/stages/refine_with_llm.py
+git_metadata_extractor/pipeline/stages/resolve_bio_to_ror.py
+git_metadata_extractor/pipeline/stages/resolve_bio_to_ror_llm.py
+git_metadata_extractor/pipeline/stages/resolve_company_to_ror.py
+git_metadata_extractor/pipeline/stages/resolve_placeholder_orgs_to_ror.py
+git_metadata_extractor/pipeline/stages/validate_org_github_handles.py
+git_metadata_extractor/providers/detection/models.py
+tests/v2/conftest.py
+tests/v2/test_agent_evidence.py
+tests/v2/test_dependencies.py
+tests/v2/test_extraction_service.py
+tests/v2/test_internal_models.py
+tests/v2/test_llm_runtime_adapter.py
+tests/v2/test_pipeline_profiles.py
+tests/v2/test_pipeline_runner.py
+tests/v2/test_provider_interfaces.py
+tests/v2/test_schema_validation_agent.py
+tests/v2/test_schema_validation_strict.py
+tests/v2/test_tool_catalog.py
+scripts/v2/canonical_conformance.py
+scripts/v2/ontology_reader.py
+scripts/v2/run_llm_repo_and_persons.py
+scripts/v2/run_llm_repo_persons_and_orgs.py
+scripts/v2/validate_ror_resolution.py
+git_metadata_extractor/models.py
+tests/v2/test_internal_models.py
+pyproject.toml
+dev\investigations\2026-11-10-pydantic-models\plan.txt
+dev\investigations\2026-11-10-pydantic-models\validation.txt

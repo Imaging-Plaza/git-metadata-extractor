@@ -39,12 +39,13 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
 from rdflib import RDF, Dataset, Graph
 
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.validation.ontology import (
     canonical_shapes_available,
     load_canonical_shapes_graph,
@@ -97,12 +98,15 @@ class CanonicalValidationError(RuntimeError):
         self.violations = violations
 
 
-@dataclass(slots=True)
-class LayerValidationResult:
+class CanonicalValidationUnavailableError(RuntimeError):
+    """Canonical publication was refused because validation did not run."""
+
+
+class LayerValidationResult(InternalModel):
     layer: Layer
     conforms: bool
-    violations: list[dict[str, Any]] = field(default_factory=list)
-    warnings: list[dict[str, Any]] = field(default_factory=list)
+    violations: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
     triples: int = 0
     #: True when the shapes were not available, so nothing was checked. Not
     #: the same as conforming, and the caller must be able to tell them apart:
@@ -320,8 +324,8 @@ def enforce_canonical(document: Mapping[str, Any]) -> LayerValidationResult:
     """
     result = validate_layer(document, Layer.CANONICAL, quads=True)
     if result.skipped:
-        logger.warning("canonical gate %s", result.summary())
-        return result
+        message = f"Canonical validation unavailable ({result.reason}); graph not published"
+        raise CanonicalValidationUnavailableError(message)
     if not result.conforms:
         raise CanonicalValidationError(result.violations)
     return result
@@ -329,6 +333,7 @@ def enforce_canonical(document: Mapping[str, Any]) -> LayerValidationResult:
 
 __all__ = [
     "CanonicalValidationError",
+    "CanonicalValidationUnavailableError",
     "Layer",
     "LayerValidationResult",
     "enforce_canonical",

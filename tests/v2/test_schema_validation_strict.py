@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 import pytest
 from jsonschema import validate
 
+from git_metadata_extractor.models import InternalModel
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STRICT_FIXTURE_DIR = REPO_ROOT / "tests" / "v2" / "fixtures" / "schema" / "strict"
 
 
-@dataclass(frozen=True)
-class StrictEntityCase:
+class StrictEntityCase(InternalModel, frozen=True):
     schema_name: str
     fixture_file_name: str
     minimum_count: int

@@ -1,0 +1,35 @@
+Full declarative mapping migration
+
+Continue the accepted YAML architecture in the existing local worktree. Keep
+all changes local and uncommitted. Preserve matching, reconciliation and graph
+construction algorithms in Python; move editable field/shape/policy declarations
+out of payload builders and lookup tables. No API-version or ontology change.
+
+1. Extend field rules with explicit constants, nested target paths, preservation
+   of empty prepared facts, and typed enum transforms. Extend contract checks
+   to every generated agent/raw/canonical model, including nested identifiers.
+   Tests first: constants versus sources, unsafe/colliding paths, unknown nested
+   targets, zero/false/empty semantics and unknown policy terms.
+2. Migrate all six rule-based payload builders from prepared semantic facts to
+   YAML mappings. Migrate GitHub/ORCID/Infoscience profile extras and ROR-backed
+   organization mapping; keep the fact-selection and matching code unchanged.
+3. Migrate raw/canonical passthrough, renames, profile/deposit payloads, visibility,
+   platform host rules and IRI coercion declarations. Preserve node construction,
+   source attribution and conditional graph edges in Python.
+4. Migrate unifier dispositions, identity priorities and IRI templates, plus
+   repository classification keywords/auxiliary file paths, into typed YAML
+   policies. Validate all policy property/type references against generated
+   contracts (raw and canonical kept separate). Include policies in fingerprints,
+   provenance configuration identifiers and CLI inventory/schema/check commands.
+5. Add migration coverage/behavior tests, update packaged guide, run existing
+   agent/projection/unifier suites and full deterministic suite, generator checks,
+   wheel check, scoped lint and independent read-only review. Document precisely
+   which remaining Python rules are algorithms rather than mapping declarations.
+
+Review focus: constant null versus missing; array cardinality; nested collisions;
+identity priority ordering; per-type maxCount versus union; stale caches after
+YAML edits; no undeclared ontology terms on closed shapes; package completeness.
+
+Execution ledger
+All five steps completed locally. Final evidence, scope and limitations are
+recorded in validation.txt. Independent review findings fixed and retested.

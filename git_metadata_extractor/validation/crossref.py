@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import Field
 
-@dataclass
-class CrossRefReport:
+from git_metadata_extractor.models import InternalModel
+
+
+class CrossRefReport(InternalModel):
     """Cross-reference validation summary for generated v2 entities."""
 
     valid_refs_count: int = 0
-    invalid_refs: list[dict[str, Any]] = field(default_factory=list)
-    warnings: list[dict[str, Any]] = field(default_factory=list)
+    invalid_refs: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _entity_id(entity: dict[str, Any]) -> str | None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,7 +11,12 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
-from git_metadata_extractor.canonicalization.string_utils import normalize_string, strip_accents
+from git_metadata_extractor.canonicalization.string_utils import (
+    normalize_string,
+    strip_accents,
+)
+from git_metadata_extractor.mapping import map_fields
+from git_metadata_extractor.models import InternalModel
 
 DEFAULT_QUERY_CAP = 8
 DOI_PREFIX = "doi"
@@ -32,8 +36,7 @@ YEAR_ONLY_DATE_PATTERN = re.compile(r"^\d{4}$")
 MIN_REPOSITORY_PATH_SEGMENTS = 2
 
 
-@dataclass(slots=True)
-class _PublicationCandidate:
+class _PublicationCandidate(InternalModel):
     publication: dict[str, Any]
     query: str
     query_index: int
@@ -672,23 +675,22 @@ def _build_article_payload(
         article_id = article_uuid
         id_source = "uuid"
 
-    return {
-        "id": article_id,
-        "type": "schema:ScholarlyArticle",
-        "shacl": "pulse:ArticleShape",
-        "identifiers": {
-            "schema:identifier": doi,
-            "pulse:infoscienceArticleIdentifier": infoscience_id,
-            "uuid": article_uuid,
+    return map_fields(
+        "agent.article",
+        {
+            "id": article_id,
+            "identifiers_schema_identifier": doi,
+            "identifiers_pulse_infoscienceArticleIdentifier": infoscience_id,
+            "identifiers_uuid": article_uuid,
+            "idSource": id_source,
+            "name": _as_string(publication.get("title")) or "Untitled article",
+            "identifier": identifier_value,
+            "datePublished": publication_date,
+            "author": author_ids,
+            "infoscienceArticleIdentifier": infoscience_id,
+            "sourceOrganization": source_organization,
         },
-        "idSource": id_source,
-        "schema:name": _as_string(publication.get("title")) or "Untitled article",
-        "schema:identifier": identifier_value,
-        "schema:datePublished": publication_date,
-        "schema:author": author_ids,
-        "pulse:infoscienceArticleIdentifier": infoscience_id,
-        "schema:sourceOrganization": source_organization,
-    }
+    )
 
 
 class ArticleAgentV2:

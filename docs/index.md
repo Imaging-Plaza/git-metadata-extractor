@@ -25,6 +25,7 @@ The system is **two cooperating services in two repositories**:
 |---|---|
 | [Getting Started](getting-started.md) | install, first run, common commands |
 | [Architecture Overview](architecture/overview.md) | the layers, request lifecycle, runtimes, caches, guards |
+| [Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings) | the YAML workflow, validation boundaries and link to the editing guide |
 | [V2 Extract Pipeline](v2-pipeline.md) | every stage, the load-bearing assumptions, env gates |
 | [Cross-Repo Contract](cross-repo-contract.md) | the index-layer split, version pinning, shared-state rules |
 

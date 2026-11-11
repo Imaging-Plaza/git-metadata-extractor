@@ -125,6 +125,11 @@ def _annotation(
 def _field(prop: PropertyConstraint) -> str:
     args: list[str] = ["..." if prop.required else "None"]
     args.append(f'alias="{prop.path}"')
+    if not prop.single_valued:
+        if prop.min_count is not None:
+            args.append(f"min_length={prop.min_count}")
+        if prop.max_count is not None:
+            args.append(f"max_length={prop.max_count}")
     if prop.pattern and prop.single_valued:
         args.append(f'pattern="{_escape(prop.pattern)}"')
     description = prop.description or prop.name

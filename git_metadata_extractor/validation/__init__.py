@@ -6,6 +6,7 @@ from git_metadata_extractor.validation.crossref import (
 )
 from git_metadata_extractor.validation.layers import (
     CanonicalValidationError,
+    CanonicalValidationUnavailableError,
     Layer,
     LayerValidationResult,
     enforce_canonical,
@@ -34,6 +35,7 @@ from git_metadata_extractor.validation.shacl_validation import (
 __all__ = [
     "BatchValidationResult",
     "CanonicalValidationError",
+    "CanonicalValidationUnavailableError",
     "CrossRefReport",
     "Layer",
     "LayerValidationResult",

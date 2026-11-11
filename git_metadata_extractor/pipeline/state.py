@@ -1,78 +1,92 @@
-"""The value that flows through the post-agent pipeline.
+"""Context and mutable state shared by post-agent stages.
 
-Before this existed, `api/extract.py::extract` held ~30 local variables and
-threaded them by hand through 33 stage calls, which is why the sequence could
-only live inside one 1,110-line function. Collecting them here is what lets
-`pipeline/runner.py` give every stage the same signature.
-
-Five payloads, not one, because that is what the stages actually operate on
-today — a chain of four, and one branch off its end:
-
-    buckets  ->  reconciled  ->  assembled  ->  payload
-    (dict)       (Reconciled)    (Assembled)    (the flat v2 intermediate)
-                                                    |
-                                    +---------------+---------------+
-                                    v                               v
-                            payload, replaced in            substrate
-                            place by the canonical          (named graphs)
-                            projection
-
-`payload` is the flat v2 intermediate `build_jsonld_output` produces, and the
-last two are both **projections of it** rather than further steps over it: the
-canonical layer replaces `payload` with what a consumer should query, and
-`substrate` holds what each source actually said, grouped into one named graph
-per `pulse:ExtractionOutput`. Neither is derived from the other.
-
-That is deliberately *not* an RDF graph yet. Swapping these for one graph
-rewrites every stage's internals, so it belongs with the domain-model half of
-the refactor rather than in the mechanical move that introduced this file — a
-phase whose whole value is that the corpus diff stays empty.
+The data flows from buckets through reconciled and assembled entities into
+payload. Canonical output and the source-attributed substrate are separate
+projections of that payload. Warnings, timings and extras accumulate per run.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Literal
+
+from pydantic import Field, JsonValue
+
+from git_metadata_extractor.agents.models import ProviderSet
+from git_metadata_extractor.agents.runtime import AgentRuntime
+from git_metadata_extractor.models import DataModel, InternalModel
+from git_metadata_extractor.pipeline.stages.models import (
+    AssembledOutput,
+    ReconciledEntities,
+)
+from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.providers.detection.models import GitHubURLClassification
+from git_metadata_extractor.validation.schema_validation import BatchValidationResult
 
 if TYPE_CHECKING:
-    from git_metadata_extractor.agents.runtime import AgentRuntime
-    from git_metadata_extractor.pipeline.stages.models import (
-        AssembledOutput,
-        ReconciledEntities,
-    )
+    from collections.abc import Iterable
 
 
-@dataclass(slots=True)
-class PipelineState:
+class StageOutcome(DataModel, frozen=True):
+    """One invocation; repeated stage names retain separate outcomes."""
+
+    name: str
+    status: Literal["completed", "skipped", "failed", "cancelled"]
+    phase: Literal["gate", "run"] = "run"
+    duration_seconds: float = Field(default=0, ge=0)
+    error_type: str | None = None
+
+
+class PipelineArtifacts(DataModel, validate_assignment=True):
+    """Named products used across stage boundaries and response assembly."""
+
+    permissive_entity_count: int = Field(default=0, ge=0)
+    llm_dedup_executed: bool = False
+    llm_critic_executed: bool = False
+    critic_pruned_excluded_entities: list[dict[str, JsonValue]] = Field(default_factory=list)
+    strict_batch: BatchValidationResult | None = None
+    veracity_records: list[dict[str, JsonValue]] = Field(default_factory=list)
+    link_veracity_started_at: float | None = None
+    link_veracity_seconds: float = Field(default=0, ge=0)
+    extraction_run: dict[str, JsonValue] | None = None
+    provenance: dict[str, JsonValue] | None = None
+    substrate_graph_sizes: dict[str, int] = Field(default_factory=dict)
+    substrate_validation: str | None = None
+    substrate_quads_written: int = Field(default=0, ge=0)
+    substrate_store_url: str | None = None
+
+
+class PipelineState(InternalModel, validate_assignment=True):
     """Context, payloads and accumulators for one `/v2/extract` run."""
 
     # ---- context: set once before the sequence starts, never reassigned ----
     run_id: str
-    classification: Any
+    classification: GitHubURLClassification
     runtime: AgentRuntime
-    providers: Any
-    output_format: str = "jsonld"
+    providers: ProviderSet | None = Field(exclude=True, repr=False)
+    output_format: Literal["jsonld", "json"] = "jsonld"
     include_context_summary: bool = False
     include_internal_fields: bool = False
-    max_concurrent_agents: int = 6
-    jsonld_context: dict[str, Any] = field(default_factory=dict)
+    max_concurrent_agents: int = Field(default=6, ge=1, le=128)
+    read_only: bool = False
+    jsonld_context: dict[str, Any] = Field(default_factory=dict)
     #: The shared SQLite cache (provider + agent-verdict + pipeline). Stage
     #: context rather than a payload: `llm_critic` passes it through so a
     #: repeated critic call on a known-good graph skips the LLM.
-    cache: Any = None
+    cache: ProviderCache | None = Field(default=None, exclude=True, repr=False)
     #: When the extraction began, for `prov:startedAtTime`. Set by the route,
     #: which is where the request clock starts.
-    started_at: Any = None
+    started_at: datetime | None = None
 
     # Agent-stage products the later stages read for prompt context.
-    pipeline_outputs: dict[str, Any] = field(default_factory=dict)
-    gathered_context: dict[str, Any] = field(default_factory=dict)
+    pipeline_outputs: dict[str, Any] = Field(default_factory=dict)
+    gathered_context: dict[str, Any] = Field(default_factory=dict)
 
     # ---- payloads: each stage reads one and may replace it ----
-    buckets: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    buckets: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     reconciled: ReconciledEntities | None = None
     assembled: AssembledOutput | None = None
-    payload: dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     #: The raw/substrate layer: a JSON-LD document whose top-level `@graph`
     #: holds one named graph per `pulse:ExtractionOutput`. A fifth payload
     #: rather than a replacement for `payload`, because it is a *sibling*
@@ -82,8 +96,8 @@ class PipelineState:
     substrate: dict[str, Any] | None = None
 
     # ---- accumulators ----
-    warnings: list[str] = field(default_factory=list)
-    timings: dict[str, float] = field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    timings: dict[str, float] = Field(default_factory=dict)
     #: `perf_counter()` reading from when the running stage began, published by
     #: `runner.run_pipeline`. Adapters log their own per-stage line while still
     #: inside the stage, when `timings` has no entry yet — reading `timings`
@@ -91,11 +105,10 @@ class PipelineState:
     #: an `extras` key: `extras` carries values bound for the response, and a
     #: private runner marker does not belong in it.
     stage_started_at: float | None = None
-    # Per-stage bookkeeping the response and stats need (`llm_dedup_executed`,
-    # `critic_pruned_excluded_entities`, `link_veracity_seconds`, ...). Kept as
-    # a bag rather than 12 typed fields so adding a stage does not touch this
-    # module; `compute_stats` is the only consumer that cares about the keys.
-    extras: dict[str, Any] = field(default_factory=dict)
+    artifacts: PipelineArtifacts = Field(default_factory=PipelineArtifacts)
+    stage_outcomes: list[StageOutcome] = Field(default_factory=list)
+    # Extension-owned JSON metadata only; production stages use artifacts.
+    extras: dict[str, JsonValue] = Field(default_factory=dict)
 
     @property
     def detected_type(self) -> str:
@@ -108,13 +121,13 @@ class PipelineState:
     def warn(self, message: str) -> None:
         """Record a warning, ignoring exact duplicates.
 
-        Mirrors `api/extract.py::_append_unique_warning`. Stages emit the same
+        Stages emit the same
         message once per affected entity, and the response carried duplicates
         before that helper existed.
         """
         if message and message not in self.warnings:
             self.warnings.append(message)
 
-    def warn_all(self, messages: Any) -> None:
+    def warn_all(self, messages: Iterable[str] | None) -> None:
         for message in messages or ():
             self.warn(str(message))

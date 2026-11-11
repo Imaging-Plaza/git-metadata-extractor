@@ -11,7 +11,11 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
-from git_metadata_extractor.canonicalization.string_utils import normalize_string, strip_accents
+from git_metadata_extractor.canonicalization.string_utils import (
+    normalize_string,
+    strip_accents,
+)
+from git_metadata_extractor.mapping import map_fields
 
 LOOKUP_SPLIT_PATTERN = re.compile(r"\s*[-–—|/&]\s*|;|,")
 PARENTHETICAL_PATTERN = re.compile(r"\s*\([^)]*\)")
@@ -371,20 +375,18 @@ def _build_membership_payload(
     end_date = _safe_date(end_date)
     if start_date and end_date and start_date > end_date:
         start_date, end_date = end_date, start_date
-    return {
-        "id": composite_id,
-        "type": "org:Membership",
-        "shacl": "pulse:MembershipShape",
-        "identifiers": {
-            "pulse:composite": composite_id,
-            "uuid": generate_uuid(),
+    return map_fields(
+        "agent.membership",
+        {
+            "id": composite_id,
+            "identifiers_pulse_composite": composite_id,
+            "identifiers_uuid": generate_uuid(),
+            "organization": organization_id,
+            "role": role,
+            "hasBeginning": start_date,
+            "hasEnd": end_date,
         },
-        "idSource": "pulse:composite",
-        "org:organization": organization_id,
-        "org:role": role,
-        "time:hasBeginning": start_date,
-        "time:hasEnd": end_date,
-    }
+    )
 
 
 class MembershipAgentV2:

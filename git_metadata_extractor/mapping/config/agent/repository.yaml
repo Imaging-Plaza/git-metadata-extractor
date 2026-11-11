@@ -1,0 +1,50 @@
+schema_version: 1
+name: agent.repository
+version: '1'
+source_contract: prepared.agent.repository
+target_contract: agent.repository
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'schema:SoftwareSourceCode', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:RepositoryShape', empty: preserve, missing: 'null'}
+  identifiers.pulse:githubRepositoryHandle:
+    sources: [identifiers_pulse_githubRepositoryHandle]
+    empty: preserve
+    missing: 'null'
+  identifiers.schema:citation: {sources: [identifiers_schema_citation], empty: preserve, missing: 'null'}
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {value: 'pulse:githubRepositoryHandle', empty: preserve, missing: 'null'}
+  schema:name: {sources: [name], empty: preserve, missing: 'null'}
+  pulse:githubRepositoryHandle: {sources: [githubRepositoryHandle], empty: preserve, missing: 'null'}
+  schema:author: {sources: [author], empty: preserve, missing: 'null'}
+  schema:dateCreated: {sources: [dateCreated], empty: preserve, missing: 'null'}
+  schema:license: {sources: [license], empty: preserve, missing: 'null'}
+  schema:citation: {sources: [citation], empty: preserve, missing: 'null'}
+  schema:programmingLanguage: {sources: [programmingLanguage], empty: preserve, missing: 'null'}
+  pulse:ownedBy: {sources: [ownedBy], empty: preserve, missing: 'null'}
+  pulse:isForkOf: {sources: [isForkOf], empty: preserve, missing: 'null'}
+internal_fields:
+  _publiccode: {sources: [publiccode], empty: preserve, missing: 'null'}
+  _citation_cff: {sources: [citation_cff], empty: preserve, missing: 'null'}
+  _releases: {sources: [releases], empty: preserve, missing: 'null'}
+  _latest_version: {sources: [latest_version], empty: preserve, missing: 'null'}
+  _container_images: {sources: [container_images], empty: preserve, missing: 'null'}
+  _badges: {sources: [badges], empty: preserve, missing: 'null'}
+  _badge_count: {sources: [badge_count], empty: preserve, missing: 'null'}
+  _conda_channel: {sources: [conda_channel], empty: preserve, missing: 'null'}
+  _maven_group_id: {sources: [maven_group_id], empty: preserve, missing: 'null'}
+  _maven_artifact_id: {sources: [maven_artifact_id], empty: preserve, missing: 'null'}
+  _funding_urls: {sources: [funding_urls], empty: preserve, missing: 'null'}
+  _community_health_percentage: {sources: [community_health_percentage], empty: preserve, missing: 'null'}
+  _has_code_of_conduct: {sources: [has_code_of_conduct], empty: preserve, missing: 'null'}
+  _has_issue_template: {sources: [has_issue_template], empty: preserve, missing: 'null'}
+  _has_pull_request_template: {sources: [has_pull_request_template], empty: preserve, missing: 'null'}
+  _git_tags: {sources: [git_tags], empty: preserve, missing: 'null'}
+  _git_tag_count: {sources: [git_tag_count], empty: preserve, missing: 'null'}
+  _compose_files: {sources: [compose_files], empty: preserve, missing: 'null'}
+  _compose_file_count: {sources: [compose_file_count], empty: preserve, missing: 'null'}
+  _compose_images: {sources: [compose_images], empty: preserve, missing: 'null'}
+  _compose_image_urls: {sources: [compose_image_urls], empty: preserve, missing: 'null'}
+  _has_ci: {sources: [has_ci], empty: preserve, missing: 'null'}
+  _test_coverage: {sources: [test_coverage], empty: preserve, missing: 'null'}
+  _docker_hub_url: {sources: [docker_hub_url], empty: preserve, missing: 'null'}

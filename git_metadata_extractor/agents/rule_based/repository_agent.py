@@ -23,9 +23,15 @@ from git_metadata_extractor.agents.rule_based._repo_signals import (
     summarize_registry_package,
     summarize_releases,
 )
-from git_metadata_extractor.canonicalization.github import github_repo_iri, github_user_iri
+from git_metadata_extractor.canonicalization.github import (
+    github_repo_iri,
+    github_user_iri,
+)
+from git_metadata_extractor.mapping import load_policy, map_fields
 from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
 from git_metadata_extractor.parsers.publiccode import parse_publiccode
+
+_EXTRACTION_POLICY = load_policy("policies.extraction")
 
 CompiledContextStage = Callable[[dict[str, Any], ProviderSet], dict[str, Any] | Awaitable[dict[str, Any]]]
 StructuredOutputStage = Callable[
@@ -49,21 +55,8 @@ STRICT_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 # (`get_repository_aux_files`) is responsible for fetching these; the
 # agent only stamps a URL pointer so downstream stages (LLM refiners,
 # graph consumers) can quote the source.
-_REPO_AUX_FILE_LOOKUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("_citation_cff_url",  ("citation.cff",)),
-    ("_authors_url",       ("authors", "authors.md", "authors.rst", "authors.txt")),
-    # CONTRIBUTING is the standard spelling; CONTRIBUTION is rarer but
-    # ships in a handful of older research projects.
-    ("_contributing_url",  ("contributing.md", "contribution.md")),
-    ("_publiccode_url",    ("publiccode.yml", "publiccode.yaml")),
-    # SECURITY.md — GitHub's first-class security policy file. Surfacing
-    # this lets dashboards flag repos with explicit vulnerability-
-    # reporting guidance separately from undocumented ones, and gives
-    # LLM agents a place to read for embargo / disclosure timelines.
-    ("_security_url",      ("security.md",)),
-    # CODE_OF_CONDUCT — already fetched into aux_files; surface its URL like
-    # the other governance files.
-    ("_code_of_conduct_url", ("code_of_conduct.md", "code_of_conduct")),
+_REPO_AUX_FILE_LOOKUPS = tuple(
+    (key, tuple(values)) for key, values in _EXTRACTION_POLICY.auxiliary_files.items()
 )
 
 
@@ -260,33 +253,11 @@ async def _maybe_await(value: Any) -> Any:
 
 # Keyword sets for `pulse:repositoryType` classification. Order matters: the
 # first matching set wins, so the more-specific categories come first.
-_REPO_TYPE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        "pulse:EducationalResource",
-        ("course", "tutorial", "training", "workshop", "exercise", "lesson"),
-    ),
-    (
-        "pulse:Documentation",
-        (
-            "documentation",
-            "best-practice-documentation",
-            "best practice",
-            "user guide",
-            "handbook",
-            "spec",
-            "specification",
-            "rfc",
-        ),
-    ),
-    (
-        "pulse:Data",
-        ("dataset", "data-archive", "corpus", "benchmark"),
-    ),
+_REPO_TYPE_KEYWORDS = tuple(
+    (rule.value, tuple(rule.keywords)) for rule in _EXTRACTION_POLICY.repository_rules
 )
 # Languages that, on their own, indicate a documentation-shaped repo.
-_DOC_ONLY_LANGUAGES: frozenset[str] = frozenset(
-    {"markdown", "rst", "text", "asciidoc", "tex", "html"},
-)
+_DOC_ONLY_LANGUAGES = frozenset(_EXTRACTION_POLICY.documentation_languages)
 
 
 def _classify_repository_type(*, language_names: list[str], haystack: str) -> str:
@@ -306,8 +277,8 @@ def _classify_repository_type(*, language_names: list[str], haystack: str) -> st
     if language_names and all(
         language in _DOC_ONLY_LANGUAGES for language in language_names
     ):
-        return "pulse:Documentation"
-    return "pulse:Software"
+        return _EXTRACTION_POLICY.documentation_type
+    return _EXTRACTION_POLICY.repository_default
 
 
 class RepositoryAgentV2:
@@ -440,138 +411,20 @@ class RepositoryAgentV2:
         owner_url = github_user_iri(owner_handle) if owner_handle else None
 
         return {
-            "id": github_repo_url or full_name,
-            "type": "schema:SoftwareSourceCode",
-            "shacl": "pulse:RepositoryShape",
-            "identifiers": {
-                "pulse:githubRepositoryHandle": github_repo_url,
-                "schema:citation": doi_value,
-                "uuid": uuid_value,
-            },
-            "idSource": "pulse:githubRepositoryHandle",
-            "schema:name": repository.get("name") or full_name.split("/", maxsplit=1)[-1],
-            "pulse:githubRepositoryHandle": github_repo_url,
-            "schema:author": author_ids,
-            "pulse:githubRepoStars": repository.get("stargazers_count"),
-            "pulse:githubRepoForks": repository.get("forks_count"),
-            "schema:dateCreated": _normalize_created_at(repository.get("created_at")),
-            "schema:license": _normalize_license_url(
-                repository.get("license", {}).get("spdx_id"),
-            ),
-            "schema:citation": f"https://doi.org/{doi_value}" if doi_value else None,
-            "schema:programmingLanguage": programming_languages,
-            "pulse:ownedBy": owner_url or owner_handle,
-            "pulse:isForkOf": _resolve_fork_parent_url(repository),
-            # Internal-only fields (`_` prefix is stripped before the
-            # SHACL gate and JSON-LD output by default; surfaced when
-            # the caller passes `?include_internal_fields=true`). They
-            # preserve signal the v2.1.2 ontology can't express
-            # (`pulse:RepositoryShape` is `sh:closed true`), so
-            # downstream consumers — the LLM hybrid refiner especially
-            # — get the full GitHub + gimie metadata for context
-            # without violating the ontology contract. When the
-            # ontology adds these paths we can promote them to
-            # canonical SHACL fields in one place.
-            "_description": repository.get("description") or None,
-            "_keywords": [
-                t for t in (repository.get("topics") or []) if isinstance(t, str) and t
-            ] or None,
-            "_homepage": repository.get("homepage") or None,
-            "_default_branch": repository.get("default_branch") or None,
-            "_primary_language": repository.get("language") or None,
-            "_size_kb": repository.get("size"),
-            "_archived": repository.get("archived"),
-            "_disabled": repository.get("disabled"),
-            "_pushed_at": repository.get("pushed_at"),
-            "_updated_at": repository.get("updated_at"),
-            "_open_issues_count": repository.get("open_issues_count"),
-            "_watchers_count": repository.get("watchers_count"),
-            "_subscribers_count": repository.get("subscribers_count"),
-            "_network_count": repository.get("network_count"),
-            "_has_wiki": repository.get("has_wiki"),
-            "_has_pages": repository.get("has_pages"),
-            "_has_discussions": repository.get("has_discussions"),
-            "_has_issues": repository.get("has_issues"),
-            "_has_projects": repository.get("has_projects"),
-            "_license_name": (repository.get("license") or {}).get("name"),
-            "_license_url": (repository.get("license") or {}).get("url"),
-            "_avatar_url": (repository.get("owner") or {}).get("avatar_url"),
-            "_visibility": repository.get("visibility"),
-            # Pointers to supplementary metadata files at the repo root
-            # (CITATION.cff, AUTHORS, CONTRIBUTING.md, publiccode.yml).
-            # The provider already fetches the *contents* into the
-            # `aux_files` slice of compiled_context for the LLM
-            # refiners; we surface a URL pointer here so non-LLM
-            # consumers (graph queries, dashboards) can link out to
-            # the source-of-truth file even when they don't have the
-            # content in hand. Each value is None when no case-
-            # insensitive match for that field's filename is present.
+            **map_fields("github.repository", repository),
             **_resolve_aux_file_urls(
-                compiled_context.get("aux_files"),
-                full_name=full_name,
+                compiled_context.get("aux_files"), full_name=full_name,
             ),
-            # Parsed publiccode.yml payload (when present). Keys are the
-            # camelCase publiccode v0.4 field names — caller-side
-            # consumers don't have to re-parse YAML. Future work
-            # (separate PR): promote selected fields (license, repoOwner,
-            # softwareType, developmentStatus) to first-class
-            # ontology terms via a `publiccode:` JSON-LD prefix.
-            "_publiccode": _resolve_publiccode_payload(
-                compiled_context.get("aux_files"),
-            ),
-            # Parsed CITATION.cff payload (when present). Same Layer-1
-            # contract as `_publiccode` — pure data, no automatic
-            # enrichment of `schema:*` fields. A future stage
-            # (`enrich_repo_from_citation_cff`) is the right place to
-            # backfill `schema:citation` / `schema:dateCreated` /
-            # `schema:author` from the parsed payload; that's an
-            # opinionated policy (does CITATION.cff trump what an
-            # agent emitted?) and lives separately.
-            "_citation_cff": _resolve_citation_cff_payload(
-                compiled_context.get("aux_files"),
-            ),
-            # Published releases (raw, newest-first) + GHCR container
-            # (Docker) images. Layer-1 internal fields until a v3.0.0
-            # enrichment stage promotes them to canonical `schema:`/`pulse:`
-            # terms. `_latest_version` is the newest release's tag.
-            "_releases": (repository.get("releases") or None),
-            "_latest_version": (
-                (repository.get("releases") or [{}])[0].get("tag_name")
-                if isinstance(repository.get("releases"), list) and repository["releases"]
-                else None
-            ),
-            # Flat, RDF-friendly release scalars for "Release Frequency".
-            # The raw `_releases` list-of-objects collapses to empty blank
-            # nodes on JSON-LD expansion (inner keys unmapped in @context),
-            # so these single-value `gme-internal:release_count /
-            # first_release_date / latest_release_date` triples are what
-            # downstream consumers actually query. Always present (None when
-            # no release data), like `_latest_version`.
             **{
                 f"_{k}": v
                 for k, v in summarize_releases(repository.get("releases")).items()
             },
-            "_container_images": (repository.get("container_images") or None),
-            # Flat, RDF-friendly package scalars for "Container distribution".
-            # The raw `_container_images` list-of-objects collapses to empty
-            # blank nodes on JSON-LD expansion (inner keys unmapped in
-            # @context), so these single-value `gme-internal:package_count /
-            # package_names / package_image_refs / package_tags /
-            # latest_package_updated_at` triples are what consumers query.
-            # Always present (None when no package data). GHCR scope only —
-            # needs the `read:packages` token scope, else reads None.
             **{
                 f"_{k}": v
                 for k, v in summarize_packages(
                     repository.get("container_images"),
                 ).items()
             },
-            # Published npm / PyPI packages — discovered by context_gather
-            # from the manifest name + public-registry back-reference, stored
-            # as `npm_package` / `pypi_package`. Flat, RDF-friendly scalars
-            # (`gme-internal:npm_* / pypi_*`): package / latest_version /
-            # versions / latest_release_date / registry_url / link. Always
-            # present (all None when no manifest / provider disabled / drop).
             **{
                 f"_npm_{k}": v
                 for k, v in summarize_registry_package(
@@ -584,40 +437,16 @@ class RepositoryAgentV2:
                     repository.get("pypi_package"),
                 ).items()
             },
-            # README badges — parsed from the raw README by context_gather
-            # into a list of {label, image_url, link_url} records, stored as
-            # repository_metadata["badges"]. `_badges` is the raw list (or
-            # None); `_badge_count` is the count (or None when no badges).
-            "_badges": (repository.get("badges") or None),
-            "_badge_count": (
-                len(repository["badges"])
-                if isinstance(repository.get("badges"), list)
-                else None
-            ),
-            # Flat, RDF-friendly badge scalars. The raw `_badges`
-            # list-of-objects collapses to content-free blank nodes on JSON-LD
-            # expansion (inner keys unmapped in @context), so these index-aligned
-            # `gme-internal:badge_labels / badge_image_urls / badge_links` literal
-            # lists are what downstream consumers actually query to tell badges
-            # apart. Always present (None when no badges).
             **{
                 f"_{k}": v
                 for k, v in summarize_badges(repository.get("badges")).items()
             },
-            # Published conda / crates.io / RubyGems packages — discovered by
-            # context_gather from README badge coordinates (+ cargo.toml for
-            # crates) and the public-registry back-reference, stored as
-            # `conda_package` / `crates_package` / `rubygems_package`. Same
-            # flat `gme-internal:*` scalars as `_npm_*` / `_pypi_*`. conda
-            # also emits `_conda_channel` (the Anaconda channel). Always
-            # present (all None when no badge / provider disabled / drop).
             **{
                 f"_conda_{k}": v
                 for k, v in summarize_registry_package(
                     repository.get("conda_package"),
                 ).items()
             },
-            "_conda_channel": (repository.get("conda_package") or {}).get("channel"),
             **{
                 f"_crates_{k}": v
                 for k, v in summarize_registry_package(
@@ -630,103 +459,114 @@ class RepositoryAgentV2:
                     repository.get("rubygems_package"),
                 ).items()
             },
-            # Go module — discovered by context_gather from `go.mod`'s
-            # `module` directive, queried against the Go module proxy, and
-            # verified by the module path back-referencing this repo. Same
-            # flat scalars as the others; `_go_package` carries the module
-            # path (e.g. github.com/owner/repo[/v2]).
             **{
                 f"_go_{k}": v
                 for k, v in summarize_registry_package(
                     repository.get("go_module"),
                 ).items()
             },
-            # Maven Central artifact — discovered from `pom.xml`
-            # (`groupId:artifactId`) or a maven-central badge. `_maven_package`
-            # is the `group:artifact` coordinate; `_maven_group_id` /
-            # `_maven_artifact_id` carry the split coordinates.
             **{
                 f"_maven_{k}": v
                 for k, v in summarize_registry_package(
                     repository.get("maven_package"),
                 ).items()
             },
-            "_maven_group_id": (repository.get("maven_package") or {}).get("group_id"),
-            "_maven_artifact_id": (
-                (repository.get("maven_package") or {}).get("artifact_id")
-            ),
-            # NuGet (.NET) package — discovered from a nuget.org / shields
-            # badge; back-reference verified via the package's Source-Link
-            # `repository` URL (homepage `projectUrl` is intentionally not used).
             **{
                 f"_nuget_{k}": v
                 for k, v in summarize_registry_package(
                     repository.get("nuget_package"),
                 ).items()
             },
-            # Funding / sponsorship URLs parsed from .github/FUNDING.yml
-            # (GitHub Sponsors, Patreon, Open Collective, Ko-fi, …). List of
-            # canonical URLs, or None when no FUNDING file / no platforms.
-            "_funding_urls": (parse_funding_urls(compiled_context.get("aux_files")) or None),
-            # GitHub community health profile (GET /community/profile): overall
-            # health %, plus presence of code-of-conduct / issue / PR templates.
-            # None when the profile was unavailable.
-            "_community_health_percentage": (
-                (repository.get("community_profile") or {}).get("health_percentage")
-            ),
-            "_has_code_of_conduct": (
-                (repository.get("community_profile") or {}).get("has_code_of_conduct")
-            ),
-            "_has_issue_template": (
-                (repository.get("community_profile") or {}).get("has_issue_template")
-            ),
-            "_has_pull_request_template": (
-                (repository.get("community_profile") or {}).get(
-                    "has_pull_request_template",
-                )
-            ),
-            # Git tags (newest first) — versioning for repos that tag without
-            # cutting GitHub Releases. Raw list + count; None when no tags.
-            "_git_tags": (repository.get("git_tags") or None),
-            "_git_tag_count": (
-                len(repository["git_tags"])
-                if isinstance(repository.get("git_tags"), list)
-                else None
-            ),
-            # Docker Compose files found anywhere in the repo (root,
-            # .devcontainer/, docker/ …): URL pointers + the image references
-            # (name:tag / name@digest) parsed from their `services.*.image`.
-            "_compose_files": (
-                [c["html_url"] for c in repository["compose_files"]
-                 if isinstance(c, dict) and isinstance(c.get("html_url"), str)]
-                if isinstance(repository.get("compose_files"), list)
-                else None
-            ),
-            "_compose_file_count": (
-                len(repository["compose_files"])
-                if isinstance(repository.get("compose_files"), list)
-                else None
-            ),
-            "_compose_images": (
-                parse_compose_images(repository.get("compose_files")) or None
-            ),
-            # Full registry web URLs for the compose images — Docker Hub (the
-            # "docker" images), plus GHCR / Quay where resolvable.
-            "_compose_image_urls": (
-                compose_image_urls(repository.get("compose_files")) or None
-            ),
-            # CI presence — detected from the repo root listing by
-            # context_gather and stored in repository_metadata["has_ci"].
-            # None when the listing was unavailable.
-            "_has_ci": repository.get("has_ci"),
-            # Test-coverage percentage parsed from the README (regex only;
-            # LLM fallback is a separate later phase). None when not found.
-            "_test_coverage": parse_test_coverage(readme_content),
-            # Docker Hub URL parsed from README + aux-files. None when
-            # no confident match is found.
-            "_docker_hub_url": parse_docker_hub_url(
-                readme_content,
-                compiled_context.get("aux_files"),
+            **map_fields(
+                "agent.repository",
+                {
+                    "id": github_repo_url or full_name,
+                    "identifiers_pulse_githubRepositoryHandle": github_repo_url,
+                    "identifiers_schema_citation": doi_value,
+                    "identifiers_uuid": uuid_value,
+                    "name": repository.get("name")
+                    or full_name.split("/", maxsplit=1)[-1],
+                    "githubRepositoryHandle": github_repo_url,
+                    "author": author_ids,
+                    "dateCreated": _normalize_created_at(repository.get("created_at")),
+                    "license": _normalize_license_url(
+                        repository.get("license", {}).get("spdx_id"),
+                    ),
+                    "citation": f"https://doi.org/{doi_value}" if doi_value else None,
+                    "programmingLanguage": programming_languages,
+                    "ownedBy": owner_url or owner_handle,
+                    "isForkOf": _resolve_fork_parent_url(repository),
+                    "publiccode": _resolve_publiccode_payload(
+                        compiled_context.get("aux_files"),
+                    ),
+                    "citation_cff": _resolve_citation_cff_payload(
+                        compiled_context.get("aux_files"),
+                    ),
+                    "releases": repository.get("releases") or None,
+                    "latest_version": (repository.get("releases") or [{}])[0].get(
+                        "tag_name",
+                    )
+                    if isinstance(repository.get("releases"), list)
+                    and repository["releases"]
+                    else None,
+                    "container_images": repository.get("container_images") or None,
+                    "badges": repository.get("badges") or None,
+                    "badge_count": len(repository["badges"])
+                    if isinstance(repository.get("badges"), list)
+                    else None,
+                    "conda_channel": (repository.get("conda_package") or {}).get(
+                        "channel",
+                    ),
+                    "maven_group_id": (repository.get("maven_package") or {}).get(
+                        "group_id",
+                    ),
+                    "maven_artifact_id": (repository.get("maven_package") or {}).get(
+                        "artifact_id",
+                    ),
+                    "funding_urls": parse_funding_urls(
+                        compiled_context.get("aux_files"),
+                    )
+                    or None,
+                    "community_health_percentage": (
+                        repository.get("community_profile") or {}
+                    ).get("health_percentage"),
+                    "has_code_of_conduct": (
+                        repository.get("community_profile") or {}
+                    ).get("has_code_of_conduct"),
+                    "has_issue_template": (
+                        repository.get("community_profile") or {}
+                    ).get("has_issue_template"),
+                    "has_pull_request_template": (
+                        repository.get("community_profile") or {}
+                    ).get("has_pull_request_template"),
+                    "git_tags": repository.get("git_tags") or None,
+                    "git_tag_count": len(repository["git_tags"])
+                    if isinstance(repository.get("git_tags"), list)
+                    else None,
+                    "compose_files": [
+                        c["html_url"]
+                        for c in repository["compose_files"]
+                        if isinstance(c, dict) and isinstance(c.get("html_url"), str)
+                    ]
+                    if isinstance(repository.get("compose_files"), list)
+                    else None,
+                    "compose_file_count": len(repository["compose_files"])
+                    if isinstance(repository.get("compose_files"), list)
+                    else None,
+                    "compose_images": parse_compose_images(
+                        repository.get("compose_files"),
+                    )
+                    or None,
+                    "compose_image_urls": compose_image_urls(
+                        repository.get("compose_files"),
+                    )
+                    or None,
+                    "has_ci": repository.get("has_ci"),
+                    "test_coverage": parse_test_coverage(readme_content),
+                    "docker_hub_url": parse_docker_hub_url(
+                        readme_content, compiled_context.get("aux_files"),
+                    ),
+                },
             ),
         }
 
@@ -770,10 +610,10 @@ class RepositoryAgentV2:
         # in a 441-repo production batch 77% landed with the catch-all
         # ONLY, drowning honest per-domain aggregation.
 
-        return {
-            "pulse:repositoryType": repository_type,
-            "pulse:discipline": disciplines,
-        }
+        return map_fields(
+            "agent.repository_classification",
+            {"repositoryType": repository_type, "discipline": disciplines},
+        )
 
     async def run(
         self,

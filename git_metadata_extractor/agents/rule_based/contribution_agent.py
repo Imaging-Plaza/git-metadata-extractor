@@ -9,6 +9,7 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from git_metadata_extractor.mapping import map_fields
 
 
 def _as_string(value: Any) -> str | None:
@@ -242,21 +243,19 @@ def _build_contribution_payload(  # noqa: PLR0913
     first_contribution_date: str | None,
     last_contribution_date: str | None,
 ) -> dict[str, Any]:
-    return {
-        "id": composite_id,
-        "type": "pulse:Contribution",
-        "shacl": "pulse:ContributionShape",
-        "identifiers": {
-            "pulse:composite": composite_id,
-            "uuid": generate_uuid(),
+    return map_fields(
+        "agent.contribution",
+        {
+            "id": composite_id,
+            "identifiers_pulse_composite": composite_id,
+            "identifiers_uuid": generate_uuid(),
+            "contributionTo": repository_id,
+            "contributionCount": contribution_count,
+            "firstContributionDate": first_contribution_date,
+            "lastContributionDate": last_contribution_date,
+            "author": person_id,
         },
-        "idSource": "pulse:composite",
-        "pulse:contributionTo": repository_id,
-        "pulse:contributionCount": contribution_count,
-        "pulse:firstContributionDate": first_contribution_date,
-        "pulse:lastContributionDate": last_contribution_date,
-        "schema:author": person_id,
-    }
+    )
 
 
 def _person_github_login(person: Any) -> str | None:
