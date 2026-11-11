@@ -1,0 +1,40 @@
+Visual documentation design
+
+Intent: introduce Git Metadata Extractor to users and contributors with a
+human-readable, accurate, attractive HTML guide. User requested C4 diagrams,
+sources, mapping and ontology maintenance, sequence diagrams and animation.
+
+Approach: a standalone offline HTML field guide inside docs/guide/, linked
+from MkDocs and README. Keep Markdown reference pages for searchable detail.
+An embedded dashboard would constrain the diagrams; an external framework
+would introduce an unnecessary build/dependency. Native HTML/CSS/SVG/JS is
+the implementation choice. No runtime/API changes or production deployment.
+
+Visual direction: a research atlas, cool paper #f2f6fa, ink #162d46, blue
+#245dcc, teal #087e83, violet #7755aa, white #ffffff. System humanist sans
+(Segoe UI) for prose, Georgia italic for a small editorial accent; diagrams
+carry the identity through labeled graph edges and meaningful motion.
+Left-aligned introduction and a large graph illustration; chapter navigation;
+wide architecture plates; practical maintenance recipes. Avoid a dashboard
+of identical cards. Everything must be legible at 390px and 1440px.
+
+Contents: introduction, C4 system/context/container/component views with
+explicit boundaries and labeled relationships, source families and actual
+service boundary, runtime-selectable extraction sequence, mapping-update
+sequence, YAML recipe, ontology/schema workflow, optional run report.
+Animations illustrate message flow, are user controlled, stop on pause and
+respect prefers-reduced-motion. Diagrams have text equivalents; important
+content remains readable with JavaScript disabled. No external assets/CDNs.
+
+Accuracy: /v2 API is distinct from v3 ontology. Source index writes belong
+to open-pulse-sources; existing local-library reads still share Qdrant and
+DuckDB. Do not claim all reads use HTTP or all records are Parquet. Distinguish
+canonical output, raw substrate, execution evidence and store selection
+provenance. Hybrid has typed refiners and affiliation resolution; do not
+describe it as the old three-field whitelist. User instructions and current
+code take precedence over stale introductory docs.
+
+Verification: strict MkDocs build, local link checks, browser screenshots
+at desktop/mobile, sequence/architecture controls, keyboard and reduced
+motion, no-JS readability. Review docs against implementation. No live
+provider calls needed for documentation-only work.

@@ -1,5 +1,9 @@
 # Architecture Overview
 
+Start with the [visual field guide](../guide/index.html) for C4 diagrams and
+animated sequences, or the [maintenance guide](maintenance.md) for mapping and
+ontology changes.
+
 How the service is put together: the layers, what each owns, and the seams
 where things go wrong. For the stage-by-stage tour see
 [V2 Extract Pipeline](../v2-pipeline.md); for the index-layer split see
@@ -78,7 +82,7 @@ git_metadata_extractor/
     llm/<kind>/       per-entity LLM agents (one Pydantic AI run each)
     llm/agent_tools/  tool factories (selenium, ROR, ORCID, *_rag.py per index)
     rule_based/       deterministic counterparts, no LLM
-    refiners/         hybrid-runtime patchers over rule-based output
+    llm/refiners/     typed hybrid refiners and affiliation/rescue agents
 
   providers/          the READ layer: GitHub, ROR, ORCID, Infoscience, gimie,
                       *_rag.py Qdrant-backed readers, cache.py (SQLite/WAL)

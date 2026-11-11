@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="An offline visual field guide to Git Metadata Extractor: architecture, sources, extraction runtimes, YAML mappings and ontology maintenance.">
+<title>Git Metadata Extractor · A visual field guide</title>
+<link rel="stylesheet" href="guide.css">
+<script src="guide.js" defer>
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+<a class="brand" href="#main">
+<svg viewBox="0 0 30 30" aria-hidden="true">
+<path d="M7 7 23 15 7 24M7 7V24" fill="none" stroke="#245dcc" stroke-width="2"/>
+<g fill="#087e83">
+<circle cx="7" cy="7" r="4"/>
+<circle cx="23" cy="15" r="4"/>
+<circle cx="7" cy="24" r="4"/>
+</g>
+</svg>Git Metadata Extractor</a>
+<a href="../" data-doc="index.md">Documentation home</a>
+</header>
+<main id="main">
+<section class="hero" aria-labelledby="hero-title">
+<div>
+<p class="edition">A visual field guide</p>
+<h1 id="hero-title">From a GitHub URL<br>to a research graph.</h1>
+<p>Connect software to its people, organizations and publications. Follow the evidence from source records through extraction, mapping and validation.</p>
+<p class="small">The public API is <code>/v2</code>. The default output uses the pinned v3 development ontology. These are separate version contracts.</p>
+<div class="hero-links">
+<a class="button-link" href="#architecture">Explore the architecture</a>
+<a href="#extraction">Follow an extraction</a>
+</div>
+</div>
+<svg class="hero-art" viewBox="0 0 530 390" role="img" aria-labelledby="hero-graph-title hero-graph-desc">
+<title id="hero-graph-title">A repository in its research context</title>
+<desc id="hero-graph-desc">An illustrative repository connects to a person through contribution, an organization through ownership, and a publication through citation. A membership connects the person and organization. The platform profile belongs to the person.</desc>
+<defs>
+<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+<circle cx="1" cy="1" r="1" fill="#cfdae6"/>
+</pattern>
+</defs>
+<rect width="530" height="390" fill="url(#dots)"/>
+<g fill="none" stroke-width="1.8">
+<path d="M270 170 109 83" stroke="#245dcc"/>
+<path d="M300 180 430 98" stroke="#087e83"/>
+<path d="M285 220 403 313" stroke="#7755aa"/>
+<path d="M114 100 406 99" stroke="#607993" stroke-dasharray="5 5"/>
+<path d="M100 109V302" stroke="#245dcc"/>
+</g>
+<g class="edge-label">
+<text x="152" y="127" transform="rotate(28 152 127)">contribution</text>
+<text x="348" y="130" transform="rotate(-32 348 130)">ownership</text>
+<text x="334" y="277" transform="rotate(38 334 277)">citation</text>
+<text x="215" y="88">membership</text>
+<text x="89" y="249" transform="rotate(-90 89 249)">profile</text>
+</g>
+<g>
+<rect x="181" y="158" width="180" height="76" rx="9" fill="#245dcc"/>
+<text x="271" y="191" text-anchor="middle" style="fill:white;font-size:21px;font-weight:650">Repository</text>
+<text x="271" y="213" text-anchor="middle" style="fill:#dce8ff;font-size:12px">the starting point</text>
+<circle cx="100" cy="67" r="42" fill="#fff" stroke="#245dcc"/>
+<text class="entity" x="100" y="72" text-anchor="middle">Person</text>
+<rect x="365" y="37" width="154" height="65" rx="32" fill="#e3f2f0" stroke="#087e83"/>
+<text class="entity" x="442" y="75" text-anchor="middle">Organization</text>
+<rect x="341" y="307" width="168" height="61" rx="6" fill="#f0eaf7" stroke="#7755aa"/>
+<text class="entity" x="425" y="343" text-anchor="middle">Publication</text>
+<rect x="25" y="302" width="144" height="61" rx="6" fill="white" stroke="#245dcc"/>
+<text class="entity" x="97" y="329" text-anchor="middle">Platform profile</text>
+<text class="small" x="97" y="349" text-anchor="middle">source-specific identity</text>
+</g>
+</svg>
+</section>
+<nav class="chapters" aria-label="Guide chapters">
+<a href="#architecture">Architecture</a>
+<a href="#sources">Sources</a>
+<a href="#extraction">Extraction</a>
+<a href="#mapping">Mapping recipe</a>
+<a href="#ontology">Ontology</a>
+<a href="#report">Run report</a>
+</nav>
+<noscript>
+<p>All architecture plates, recipes and sequence steps are available below. Enable JavaScript for view switching and user-controlled animation.</p>
+</noscript>
+<section class="section" id="architecture">
+<div class="section-head">
+<h2>One system.<br>Three levels of detail.</h2>
+<p>Start at the system boundary, then look inside the deployment and the Python service. C4 containers describe running applications and stores; components describe responsibilities inside the extractor.</p>
+</div>
+<div class="controls js-only" role="group" aria-label="Architecture level">
+<button type="button" data-view="context" aria-pressed="true" aria-controls="view-context">System context</button>
+<button type="button" data-view="containers" aria-pressed="false" aria-controls="view-containers">Containers</button>
+<button type="button" data-view="components" aria-pressed="false" aria-controls="view-components">Components</button>
+</div>
+<div class="architecture-view" id="view-context">
+<figure class="plate">
+<div class="plate-title">
+<h3>System context</h3>
+<span>C4 · level 1</span>
+</div>
+<div class="diagram-scroll" tabindex="0" aria-label="System context diagram, scroll horizontally on small screens">
+<svg class="c4" viewBox="0 0 1080 460" role="img" aria-label="C4 context: a GitHub URL becomes a connected research graph">
+<title>C4 context: a GitHub URL becomes a connected research graph</title>
+<desc>A researcher sends a GitHub URL to Git Metadata Extractor. It reads live providers and source indices, optionally calls model providers, and returns a graph to research applications.</desc>
+<defs>
+<marker id="arrow-context" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M0 0 10 5 0 10Z" fill="#607993"/>
+</marker>
+</defs>
+<g>
+<rect class="node" x="30" y="178" width="180" height="76" rx="6"/>
+<text class="title" x="120" y="206" text-anchor="middle">Researcher / client</text>
+<text class="meta" x="120" y="227" text-anchor="middle">Person or API consumer</text>
+</g>
+<g>
+<rect class="node service" x="355" y="178" width="300" height="76" rx="6"/>
+<text class="title" x="505" y="206" text-anchor="middle">Git Metadata Extractor</text>
+<text class="meta" x="505" y="227" text-anchor="middle">Software system · this repository</text>
+<text class="meta" x="505" y="243" text-anchor="middle">Extracts a connected ontology graph</text>
+</g>
+<g>
+<rect class="node" x="830" y="178" width="220" height="76" rx="6"/>
+<text class="title" x="940" y="206" text-anchor="middle">Research applications</text>
+<text class="meta" x="940" y="227" text-anchor="middle">External software systems</text>
+</g>
+<g>
+<rect class="node" x="350" y="25" width="260" height="76" rx="6"/>
+<text class="title" x="480" y="53" text-anchor="middle">Source catalogues</text>
+<text class="meta" x="480" y="74" text-anchor="middle">External systems · live APIs</text>
+</g>
+<g>
+<rect class="node" x="70" y="360" width="260" height="76" rx="6"/>
+<text class="title" x="200" y="388" text-anchor="middle">open-pulse-sources</text>
+<text class="meta" x="200" y="409" text-anchor="middle">External system · index management</text>
+</g>
+<g>
+<rect class="node optional" x="680" y="360" width="300" height="76" rx="6"/>
+<text class="title" x="830" y="388" text-anchor="middle">Model / browser services</text>
+<text class="meta" x="830" y="409" text-anchor="middle">External systems · runtime-dependent</text>
+</g>
+<path class="edge" style="marker-end:url(#arrow-context)" d="M210 205H355"/>
+<text class="edge-label" x="282" y="194" text-anchor="middle">GitHub URL · HTTPS</text>
+<path class="edge" style="marker-end:url(#arrow-context)" d="M655 215H830"/>
+<text class="edge-label" x="743" y="202" text-anchor="middle">JSON-LD response</text>
+<path class="edge" style="marker-end:url(#arrow-context)" d="M480 178V101"/>
+<text class="edge-label" x="550" y="141" text-anchor="middle">Read source records</text>
+<path class="edge" style="marker-end:url(#arrow-context)" d="M430 254V318H200V360"/>
+<text class="edge-label" x="270" y="310" text-anchor="middle">Read indexed research</text>
+<path class="edge optional-edge" style="marker-end:url(#arrow-context)" d="M600 254V315H830V360"/>
+<text class="edge-label" x="784" y="307" text-anchor="middle">Enrich / verify (optional)</text>
+</svg>
+</div>
+<figcaption>A GitHub repository, user or organization URL is the entry point. External research catalogues enrich the graph; optional model and browser services depend on the selected runtime.<details class="text-equivalent">
+<summary>Read the relationships</summary>
+<p>A client sends a URL to the extractor over HTTP. The extractor retrieves live records and indexed research, may call models or a browser, and returns JSON-LD that a client can pass to a research application.</p>
+</details>
+</figcaption>
+</figure>
+</div>
+<div class="architecture-view" id="view-containers">
+<figure class="plate">
+<div class="plate-title">
+<h3>Containers &amp; service boundaries</h3>
+<span>C4 · level 2</span>
+</div>
+<div class="diagram-scroll" tabindex="0" aria-label="Container diagram, scroll horizontally on small screens">
+<svg class="c4" viewBox="0 0 1080 645" role="img" aria-label="C4 containers: deployment and storage boundaries">
+<title>C4 containers: deployment and storage boundaries</title>
+<desc>The extractor deployment contains gme-api, its SQLite cache and a GIMIE sidecar. The independent sources writer manages shared Qdrant and DuckDB state. Optional quads go from gme-api to Oxigraph.</desc>
+<defs>
+<marker id="arrow-containers" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M0 0 10 5 0 10Z" fill="#607993"/>
+</marker>
+</defs>
+<rect class="boundary" x="20" y="20" width="450" height="465" rx="10"/>
+<text class="meta" x="36" y="44">Git Metadata Extractor deployment</text>
+<g>
+<rect class="node service" x="65" y="75" width="360" height="76" rx="6"/>
+<text class="title" x="245" y="104" text-anchor="middle">gme-api</text>
+<text class="meta" x="245" y="127" text-anchor="middle">Python / FastAPI · /v2/extract + /v2/jobs</text>
+</g>
+<g>
+<rect class="node" x="65" y="225" width="290" height="76" rx="6"/>
+<text class="title" x="210" y="254" text-anchor="middle">GIMIE sidecar</text>
+<text class="meta" x="210" y="277" text-anchor="middle">Repository metadata · production dependency</text>
+</g>
+<g>
+<rect class="node store" x="65" y="380" width="360" height="76" rx="6"/>
+<text class="title" x="245" y="409" text-anchor="middle">Three cache scopes</text>
+<text class="meta" x="245" y="432" text-anchor="middle">SQLite · provider / verdict / pipeline</text>
+</g>
+<g>
+<rect class="node" x="645" y="75" width="365" height="76" rx="6"/>
+<text class="title" x="827.5" y="104" text-anchor="middle">Live source APIs</text>
+<text class="meta" x="827.5" y="127" text-anchor="middle">External services · HTTPS</text>
+</g>
+<g>
+<rect class="node store" x="595" y="250" width="190" height="76" rx="6"/>
+<text class="title" x="690" y="279" text-anchor="middle">Qdrant</text>
+<text class="meta" x="690" y="302" text-anchor="middle">Vector search</text>
+</g>
+<g>
+<rect class="node store" x="820" y="250" width="190" height="76" rx="6"/>
+<text class="title" x="915" y="279" text-anchor="middle">DuckDB files</text>
+<text class="meta" x="915" y="302" text-anchor="middle">Indexed records</text>
+</g>
+<g>
+<rect class="node" x="650" y="400" width="320" height="76" rx="6"/>
+<text class="title" x="810" y="429" text-anchor="middle">gme-sources</text>
+<text class="meta" x="810" y="452" text-anchor="middle">Separate service · ingest / embed / reset</text>
+</g>
+<g>
+<rect class="node optional" x="65" y="550" width="360" height="76" rx="6"/>
+<text class="title" x="245" y="579" text-anchor="middle">Oxigraph (optional)</text>
+<text class="meta" x="245" y="602" text-anchor="middle">Substrate quads + store-side unification</text>
+</g>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M190 151V225"/>
+<text class="edge-label" x="280" y="190" text-anchor="middle">HTTP extraction</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M400 151V380"/>
+<text class="edge-label" x="413" y="345" text-anchor="middle">Cache I/O</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M425 105H645"/>
+<text class="edge-label" x="535" y="92" text-anchor="middle">Fetch records</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M425 130H530V288H595"/>
+<text class="edge-label" x="543" y="230" text-anchor="middle">Library reads</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M530 288V350H915V326"/>
+<text class="edge-label" x="734" y="343" text-anchor="middle">Hydrate records</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M750 400V326"/>
+<text class="edge-label" x="741" y="372" text-anchor="middle">Write vectors</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M900 400V326"/>
+<text class="edge-label" x="953" y="372" text-anchor="middle">Write records</text>
+<path class="edge optional-edge" style="marker-end:url(#arrow-containers)" d="M65 113H38V588H65"/>
+<text class="edge-label" x="204" y="530" text-anchor="middle">gme-api → optional quads / SPARQL</text>
+<path class="edge optional-edge" style="marker-end:url(#arrow-containers)" d="M425 144H555V438H650"/>
+<text class="edge-label" x="548" y="422" text-anchor="middle">HTTP search</text>
+</svg>
+</div>
+<figcaption>The <code>open_pulse_sources</code> library is imported inside gme-api; it is not another process. Library reads still share Qdrant and DuckDB with the independent index writer. An optional HTTP client supports search and manifest access; it does not make all hydration remote. Model providers and optional Selenium are omitted from this storage-focused plate; see the context view for that runtime-dependent boundary.<details class="text-equivalent">
+<summary>Read the deployment relationships</summary>
+<p>FastAPI uses SQLite for three cache scopes and fetches live records through providers and the GIMIE sidecar. It reads Qdrant and DuckDB using the pinned source library. The gme-sources service writes these stores. Optional substrate writes go to Oxigraph, where the separate store-side unifier can build canonical graphs. Selenium and model services support enabled LLM paths. GIMIE is a required dependency in the production Compose setup.</p>
+</details>
+</figcaption>
+</figure>
+<p class="note">Keep the source library and writer aligned: <code>open-pulse-sources@v0.1.2</code> in <code>pyproject.toml</code> pairs with the <code>gme-sources:0.1.2</code> image. A shared store is a compatibility boundary.</p>
+</div>
+<div class="architecture-view" id="view-components">
+<figure class="plate">
+<div class="plate-title">
+<h3>Inside the extraction service</h3>
+<span>C4 · level 3</span>
+</div>
+<div class="diagram-scroll" tabindex="0" aria-label="Component diagram, scroll horizontally on small screens">
+<svg class="c4" viewBox="0 0 1080 550" role="img" aria-label="C4 components: two sequencers in one extraction service">
+<title>C4 components: two sequencers in one extraction service</title>
+<desc>HTTP adapters call the extraction lifecycle. The orchestrator selects a plan by input type and runs agents. Post-agent chains reconcile, project and validate their output. Mapping and provider components support this work; observation records it.</desc>
+<defs>
+<marker id="arrow-components" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M0 0 10 5 0 10Z" fill="#607993"/>
+</marker>
+</defs>
+<rect class="boundary" x="20" y="20" width="1040" height="510" rx="10"/>
+<text class="meta" x="37" y="42">gme-api container · Python components (not separate services)</text>
+<g>
+<rect class="node" x="50" y="75" width="230" height="76" rx="6"/>
+<text class="title" x="165" y="103" text-anchor="middle">HTTP + jobs</text>
+<text class="meta" x="165" y="124" text-anchor="middle">api/ · request / response adapters</text>
+</g>
+<g>
+<rect class="node service" x="405" y="75" width="280" height="76" rx="6"/>
+<text class="title" x="545" y="103" text-anchor="middle">Extraction lifecycle</text>
+<text class="meta" x="545" y="124" text-anchor="middle">services/extraction.py</text>
+</g>
+<g>
+<rect class="node" x="805" y="75" width="220" height="76" rx="6"/>
+<text class="title" x="915" y="103" text-anchor="middle">Observation</text>
+<text class="meta" x="915" y="124" text-anchor="middle">observation/ · reports / evidence</text>
+</g>
+<g>
+<rect class="node service" x="55" y="260" width="290" height="76" rx="6"/>
+<text class="title" x="200" y="288" text-anchor="middle">Generation orchestrator</text>
+<text class="meta" x="200" y="309" text-anchor="middle">pipeline/orchestrator.py · PLAN_BY_TYPE</text>
+</g>
+<g>
+<rect class="node service" x="435" y="260" width="260" height="76" rx="6"/>
+<text class="title" x="565" y="288" text-anchor="middle">Post-agent chains</text>
+<text class="meta" x="565" y="309" text-anchor="middle">pipeline/run.py · Stage runner</text>
+</g>
+<g>
+<rect class="node" x="795" y="260" width="230" height="76" rx="6"/>
+<text class="title" x="910" y="288" text-anchor="middle">Graph boundaries</text>
+<text class="meta" x="910" y="309" text-anchor="middle">validation/ · projection stages</text>
+</g>
+<g>
+<rect class="node" x="55" y="430" width="290" height="76" rx="6"/>
+<text class="title" x="200" y="458" text-anchor="middle">Agents + providers</text>
+<text class="meta" x="200" y="479" text-anchor="middle">Rule-based / hybrid / LLM</text>
+</g>
+<g>
+<rect class="node" x="435" y="430" width="260" height="76" rx="6"/>
+<text class="title" x="565" y="458" text-anchor="middle">Mapping engine</text>
+<text class="meta" x="565" y="479" text-anchor="middle">mapping/ · packaged YAML</text>
+</g>
+<g>
+<rect class="node optional" x="795" y="430" width="230" height="76" rx="6"/>
+<text class="title" x="910" y="458" text-anchor="middle">Store + unifier</text>
+<text class="meta" x="910" y="479" text-anchor="middle">store/ · unify/ (optional)</text>
+</g>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M280 113H405"/>
+<text class="edge-label" x="343" y="100" text-anchor="middle">Start extraction</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M685 113H805"/>
+<text class="edge-label" x="745" y="98" text-anchor="middle">Record activity</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M450 151V205H200V260"/>
+<text class="edge-label" x="285" y="193" text-anchor="middle">Generate entity buckets</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M345 297H435"/>
+<text class="edge-label" x="390" y="283" text-anchor="middle">Reconcile</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M695 297H795"/>
+<text class="edge-label" x="746" y="283" text-anchor="middle">Project / validate</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M200 336V430"/>
+<text class="edge-label" x="287" y="387" text-anchor="middle">Fetch / generate</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M565 430V336"/>
+<text class="edge-label" x="645" y="386" text-anchor="middle">Map fields</text>
+<path class="edge" style="marker-end:url(#arrow-components)" d="M345 468H435"/>
+<text class="edge-label" x="390" y="454" text-anchor="middle">Map facts</text>
+<path class="edge optional-edge" style="marker-end:url(#arrow-components)" d="M910 336V430"/>
+<text class="edge-label" x="988" y="384" text-anchor="middle">Optional write</text>
+</svg>
+</div>
+<figcaption>There are two sequencers. <code>PLAN_BY_TYPE</code> controls generation and fan-out for the input kind. Ordered chains in <code>pipeline/run.py</code> control reconciliation, resolution, projection and validation afterward.<details class="text-equivalent">
+<summary>Read the component relationships</summary>
+<p>HTTP and job adapters call the extraction lifecycle, which checks caches and runs generation followed by post-processing. Agents use providers and mappings to create payloads. Post-agent chains reconcile those payloads, project them into ontology shapes and validate the graph. Observation records execution alongside the pipeline. Optional store and unifier components operate on persisted raw graphs.</p>
+</details>
+</figcaption>
+</figure>
+</div>
+<div class="legend">
+<span>Extraction service</span>
+<span class="teal">Stored data</span>
+<span class="violet">Optional path</span>
+</div>
+<p class="small" style="margin-top:1rem">On a narrow screen, scroll diagrams sideways. Each plate has a text equivalent.</p>
+</section>
+<section class="section" id="sources">
+<div class="section-head">
+<h2>Sources have<br>different jobs.</h2>
+<p>A repository record, an identity registry and a semantic search result offer different kinds of evidence. A successful lookup establishes access; it does not by itself prove where a final property came from.</p>
+</div>
+<div class="source-list">
+<article class="source-row">
+<span class="source-symbol" aria-hidden="true">↗</span>
+<div>
+<h3>Software &amp; repository facts</h3>
+<p>GitHub REST and account data supply handles, ownership and repository metrics. GIMIE contributes repository metadata. Hugging Face and RenkuLab are available through indexed research tools.</p>
+</div>
+</article>
+<article class="source-row">
+<span class="source-symbol" aria-hidden="true">≈</span>
+<div>
+<h3>People &amp; organizations</h3>
+<p>ORCID and ROR help resolve identity and affiliation. A GitHub handle remains useful evidence, but an identity match and a copied property are different claims.</p>
+</div>
+</article>
+<article class="source-row">
+<span class="source-symbol" aria-hidden="true">§</span>
+<div>
+<h3>Publications &amp; research outputs</h3>
+<p>Infoscience, ETH Research Collection, OpenAlex and Zenodo provide scholarly context. SNSF and SWISSUbase broaden the available indexed research sources.</p>
+</div>
+</article>
+<article class="source-row">
+<span class="source-symbol" aria-hidden="true">∈</span>
+<div>
+<h3>Disciplines &amp; web context</h3>
+<p>EPFL Graph supports discipline search. Optional concept tagging and enabled search/browser tools add context. Availability depends on configuration, credentials and index state.</p>
+</div>
+</article>
+</div>
+<div class="two-col" style="margin-top:1.2rem">
+<div>
+<h3>Records carry facts; vectors find candidates.</h3>
+<p>DuckDB holds indexed records for hydration. Qdrant supports vector similarity search. A search hit is a route to evidence, not a replacement for the source record.</p>
+</div>
+<div>
+<h3>Embedding and extraction are different jobs.</h3>
+<p>An embedding model encodes text for retrieval. An extraction LLM reasons over context and tools to produce structured entities. Their configuration and costs are separate.</p>
+</div>
+</div>
+<p class="note">Index ingest, embedding and reset belong to <a href="https://github.com/sdsc-ordes/open-pulse-sources">open-pulse-sources</a>. This repository owns extraction and read-side integration. The diagrams describe available paths, not a promise that every request queries every source.</p>
+</section>
+<section class="section" id="extraction">
+<div class="section-head">
+<h2>Follow a request<br>through the pipeline.</h2>
+<p>This animated sequence compresses the major boundaries into one readable journey. It illustrates a fresh repository extraction; cache hits and per-input generation plans take different paths.</p>
+</div>
+<div class="controls js-only">
+<label for="runtime">Runtime</label>
+<select id="runtime">
+<option value="rule_based">Rule-based</option>
+<option value="hybrid">Hybrid</option>
+<option value="llm">LLM</option>
+</select>
+</div>
+<p class="runtime-note" id="runtime-note">Rule-based uses deterministic generators and stays LLM-free. Hybrid adds typed refiners and enabled affiliation resolution; LLM uses full agent generation and its enabled LLM-only stages.</p>
+<div class="sequence-layout" data-sequence="extraction">
+<div class="sequence-plate">
+<div class="controls js-only" aria-label="Extraction animation controls">
+<button class="primary" type="button" data-action="play">Play sequence</button>
+<button type="button" data-action="pause">Pause</button>
+<button type="button" data-action="next">Next step</button>
+<button type="button" data-action="reset">Reset</button>
+</div>
+<figure class="plate">
+<div class="diagram-scroll sequence-mount" tabindex="0" aria-label="Extraction sequence diagram, scroll horizontally on small screens">
+</div>
+<details class="sequence-text text-equivalent">
+<summary>Read all extraction steps</summary>
+<ol class="sequence-static">
+<li>Client submits a URL to <code>/v2/extract</code>; the API classifies it and checks the pipeline cache.</li>
+<li>Generation gathers context and runs a root agent followed by entity fan-outs.</li>
+<li>Providers retrieve records. Rule-based and hybrid generators use YAML mappings; LLM agents can use enabled source tools.</li>
+<li>Entity buckets enter the post-agent chains for reconciliation and affiliation resolution.</li>
+<li>Runtime gates select deterministic resolution, hybrid refinement or enabled LLM stages. Rule-based mode stays LLM-free.</li>
+<li>Optional raw projection reads the intermediate before canonical projection. Validation reports graph conformance.</li>
+<li>The service returns output and an extraction-run descriptor; optional evidence, substrate and run report remain separate.</li>
+</ol>
+</details>
+<figcaption>The async API returns a job ID first; poll <code>/v2/jobs/{id}</code> for the completed result. The synchronous route waits for extraction.</figcaption>
+</figure>
+</div>
+<aside class="sequence-summary" aria-live="polite" aria-atomic="true">
+<p class="step-index">A request in motion</p>
+<h3>Fresh extraction</h3>
+<p>Use Play to follow the messages, or Next step to inspect them at your own pace.</p>
+<p class="state">Illustration, not a live execution trace.</p>
+</aside>
+</div>
+<p class="small">Motion starts only when requested. With reduced motion enabled, steps still advance but the moving packet is removed. Pause stops both step advancement and packet motion.</p>
+</section>
+<section class="section" id="mapping">
+<div class="section-head">
+<h2>Change one mapping.<br>Keep its meaning.</h2>
+<p>Small packaged YAML files describe deterministic fields. Python owns fetching, matching, normalization and graph algorithms. YAML alone does not add a provider or a pipeline stage.</p>
+</div>
+<div class="two-col">
+<div>
+<h3>A real field, with a deliberate source</h3><pre class="recipe"><code><span class="comment"># mapping/config/raw/repository.yaml (excerpt)</span>
+<span class="key">schema_version:</span> 1
+<span class="key">name:</span> raw.repository
+<span class="key">version:</span> '2'
+<span class="key">source_contract:</span> extractor.v2.entity
+<span class="key">target_contract:</span> raw.repository
+<span class="key">fields:</span>
+  <span class="key">pulse:watcherCount:</span>
+    <span class="key">sources:</span> [_subscribers_count]
+  <span class="key">schema:url:</span>
+    <span class="key">sources:</span> [_homepage]
+    <span class="key">transform:</span> web_iri</code></pre><p class="small" style="margin-top:.8rem">An excerpt to edit in place, not a replacement for the complete mapping.</p>
+</div>
+<div>
+<h3>Why this mapping is correct</h3>
+<p>GitHub <code>subscribers_count</code> means watchers. Its confusingly named <code>watchers_count</code> means stars. A type check cannot detect that semantic error.</p>
+<p>
+<code>sources</code> is an ordered fallback list. Zero and false count as data. <code>web_iri</code> accepts explicit HTTP(S) URLs and wraps them as an <code>@id</code> reference; it omits invalid links.</p>
+<p>Choose one of <code>sources</code> or <code>value</code>. Targets must exist in a generated contract. Duplicate keys, unknown transforms and conflicting nested targets fail validation.</p>
+<a href="../architecture/maintenance/" data-doc="architecture/maintenance.md">Read the searchable maintenance guide</a>
+</div>
+</div>
+<div class="sequence-layout" data-sequence="mapping" style="margin-top:2rem">
+<div class="sequence-plate">
+<div class="controls js-only" aria-label="Mapping update animation controls">
+<button class="primary" type="button" data-action="play">Play update</button>
+<button type="button" data-action="pause">Pause</button>
+<button type="button" data-action="next">Next step</button>
+<button type="button" data-action="reset">Reset</button>
+</div>
+<figure class="plate">
+<div class="diagram-scroll sequence-mount" tabindex="0" aria-label="Mapping update sequence, scroll horizontally on small screens">
+</div>
+<details class="sequence-text text-equivalent">
+<summary>Read all mapping update steps</summary>
+<ol class="sequence-static">
+<li>Edit the owning YAML file and bump its version string.</li>
+<li>Add a behavior fixture that proves the source field's meaning.</li>
+<li>Run the mapping checker, focused tests and affected model checks.</li>
+<li>Restart the extractor to reload cached configurations and policy views.</li>
+<li>The aggregate fingerprint distinguishes configuration in caches and execution evidence.</li>
+</ol>
+</details>
+<figcaption>Parsed mappings and policy views live for the process lifetime. A restart is part of applying a mapping change.</figcaption>
+</figure>
+</div>
+<aside class="sequence-summary" aria-live="polite" aria-atomic="true">
+<p class="step-index">A maintainable change</p>
+<h3>From edit to execution</h3>
+<p>Follow a mapping update from source semantics to runtime evidence.</p>
+<p class="state">Five steps, with validation before restart.</p>
+</aside>
+</div>
+<div class="two-col" style="margin-top:1.5rem"><pre class="recipe"><code>python -m git_metadata_extractor.mapping --check
+python -m pytest tests/v2/test_yaml_mappings.py \
+  tests/v2/test_full_yaml_migration.py</code></pre><p class="small">Also run tests for the agent, projection or unifier you affected and the relevant ontology model checks. Use <code>python -m git_metadata_extractor.mapping</code> to inspect the current inventory and fingerprint; <code>--schema</code> prints the editor schema.</p>
+</div>
+</section>
+<section class="section" id="ontology">
+<div class="section-head">
+<h2>Maintain the contracts<br>as one change.</h2>
+<p>The current raw and canonical models derive from the pinned v3 development SHACL definitions, plus approved repository patches. The older agent schemas are a separate contract.</p>
+</div>
+<div class="workflow">
+<div>
+<h3>Ontology source</h3>
+<p>
+<code>vendor/open-pulse-ontology</code>
+<br>Immutable submodule pin + <code>ontology/patches/</code>
+</p>
+</div>
+<span aria-hidden="true">→</span>
+<div>
+<h3>Generated contracts</h3>
+<p>Raw/canonical JSON schemas, Python models and context generated from SHACL.</p>
+</div>
+<span aria-hidden="true">→</span>
+<div>
+<h3>Mappings &amp; behavior</h3>
+<p>Update YAML targets and source fixtures together; validate the resulting graph.</p>
+</div>
+</div>
+<div class="two-col">
+<div>
+<h3>For raw / canonical ontology changes</h3>
+<ol class="steps">
+<li>
+<strong>Update the pin and approved patches.</strong>Use the repository ontology tooling; generated files are outputs.</li>
+<li>
+<strong>Regenerate and check.</strong>
+<code>just ontology-models-generate</code>, then <code>just ontology-models-check</code> and the mapping checker.</li>
+<li>
+<strong>Verify graph semantics.</strong>Run affected projection, validation and unifier tests. Property existence alone does not prove cardinality or relationship correctness.</li>
+</ol>
+</div>
+<div>
+<h3>For an agent JSON Schema change</h3>
+<p>Edit the authoritative agent or strict schema under <code>git_metadata_extractor/schema/json/</code>. The generator reads this source directly. Files under <code>tests/v2/fixtures/schema/</code> are example payloads, not duplicate schemas.</p>
+<p>Run <code>just v2-models-generate</code> and <code>just v2-models-check</code>. Preserve the pinned generator toolchain. Update the generated contract and its mapping in the same change.</p>
+</div>
+</div>
+<div class="layer-list">
+<div>
+<h3>Canonical output</h3>
+<p>The consumer-facing entity graph. Default v3 projection gives it canonical shapes.</p>
+</div>
+<div>
+<h3>Raw substrate</h3>
+<p>Optional source-attributed raw shapes grouped into named graphs. Projected before canonical output.</p>
+</div>
+<div>
+<h3>Execution evidence</h3>
+<p>Separate activities, retrievals and mapping fingerprints. Access is not proof of derivation.</p>
+</div>
+<div>
+<h3>Selection provenance</h3>
+<p>The store-side unifier's merge decisions in <code>graph:prov</code>. Separate from extraction evidence.</p>
+</div>
+</div>
+<p class="note">A fingerprint identifies mapping content; it does not archive a configuration or a source record. Keep execution evidence outside canonical entity fields. Internal <code>_</code>-prefixed metadata is stripped at public output boundaries.</p>
+</section>
+<section class="section" id="report">
+<div class="section-head">
+<h2>Inspect what ran.<br>Keep the graph clean.</h2>
+<p>Request <code>include_run_report=true</code> for a compact observation report beside <code>output</code>. This guide's animation is a conceptual model; the report describes observed execution.</p>
+</div>
+<div class="report-grid">
+<div class="report-lines" aria-label="Run report contents">
+<h3>Optional response sibling: run_report</h3>
+<div class="report-line">
+<span>Stages, in observed order</span>
+<span class="status-dot">outcome + duration</span>
+</div>
+<div class="report-line">
+<span>Activities &amp; retrievals</span>
+<span>current / historical</span>
+</div>
+<div class="report-line">
+<span>Validation summaries</span>
+<span>passed / violations / error</span>
+</div>
+<div class="report-line">
+<span>Entity / property changes</span>
+<span>counts, no raw values</span>
+</div>
+<div class="report-line">
+<span>Model usage</span>
+<span>known subtotals</span>
+</div>
+</div>
+<div>
+<h3>A cache hit is its own outcome</h3>
+<p>A pipeline cache hit returns <code>status: "cache_hit"</code>. It does not invent new stage executions or model calls. The request run and the run that produced the cached output can differ.</p>
+<p>When usage is incomplete, totals are known subtotals. Attribution counts trace claims; they are not a factual-correctness score or a measure of final-graph coverage.</p>
+<p>Observation does not launch provider work. The report remains a response sibling, alongside any separate evidence, extraction-run or substrate artifacts.</p>
+<a href="../architecture/maintenance/#observing-an-extraction" data-doc="architecture/maintenance.md#observing-an-extraction">Request and interpretation details</a>
+</div>
+</div>
+</section>
+<section class="section" id="references">
+<div class="section-head">
+<h2>Follow the source.</h2>
+<p>Checked against the repository's current implementation for this guide. Start with the packaged mapping guide when changing behavior; use generated inventories instead of copying a field list.</p>
+</div>
+<ul class="source-links">
+<li>
+<a href="https://github.com/Imaging-Plaza/git-metadata-extractor/blob/feat/2026-11-refactor/git_metadata_extractor/mapping/config/README.txt">Authoritative mapping editing guide</a>
+</li>
+<li>
+<a href="../architecture/maintenance/" data-doc="architecture/maintenance.md">Mapping &amp; ontology maintenance</a>
+</li>
+<li>
+<a href="../architecture/overview/" data-doc="architecture/overview.md">Architecture reference</a>
+</li>
+<li>
+<a href="../v2-pipeline/" data-doc="v2-pipeline.md">Pipeline stages and gates</a>
+</li>
+<li>
+<a href="../cross-repo-contract/" data-doc="cross-repo-contract.md">Source service compatibility contract</a>
+</li>
+<li>
+<a href="../v2-api-reference/" data-doc="v2-api-reference.md">API reference</a>
+</li>
+<li>
+<a href="https://github.com/Imaging-Plaza/git-metadata-extractor/blob/feat/2026-11-refactor/git_metadata_extractor/pipeline/run.py">Post-agent stage chains</a>
+</li>
+<li>
+<a href="https://github.com/Imaging-Plaza/git-metadata-extractor/blob/feat/2026-11-refactor/git_metadata_extractor/observation/run_report_models.py">Run report contracts</a>
+</li>
+</ul>
+</section>
+</main>
+<footer>
+<span>Git Metadata Extractor · Visual field guide</span>
+<span>Offline assets. No external fonts or scripts.</span>
+<a href="#main">Back to top</a>
+</footer>
+</body>
+</html>

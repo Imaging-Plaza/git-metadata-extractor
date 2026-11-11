@@ -1,0 +1,98 @@
+Visual field guide implementation notes
+
+Scope
+  Documentation only. No application/runtime changes, package changes, live
+  provider calls, credential access, commits or pushes.
+
+Files added
+  docs/guide/index.html
+    Standalone offline research-atlas guide. Native inline SVG hero, C4 context,
+    container and component plates; source roles; extraction and mapping-update
+    sequences; YAML excerpt; ontology maintenance; separate output/evidence
+    layers; optional run report; links to source and searchable documentation.
+  docs/guide/guide.css
+    Cool paper/ink palette with blue extraction, teal storage and violet optional
+    paths. System fonts, responsive layouts, accessible focus, scrollable diagrams,
+    print layout, reduced-motion styles. Readable source, no build pipeline.
+  docs/guide/guide.js
+    Progressive enhancement: C4 view switching, runtime-selectable sequence,
+    mapping-update sequence, play/pause/next/reset. Native SVG messages and packet
+    animation. No autoplay; reduced motion removes moving packets. Pause cancels
+    frame scheduling; background tabs pause. Direct-file reference links adapt to
+    Markdown sources. No libraries, external fonts, CDNs, network calls or telemetry.
+  docs/architecture/maintenance.md
+    Searchable companion with ownership table, exact YAML semantics, check/test
+    commands, current ontology and agent-schema workflows, source storage/model
+    distinctions, output layers and run-report interpretation.
+
+Files updated
+  docs/index.md
+    Replaced stale v2.1.2 introduction and outdated overview diagrams with current
+    v3 development/default-output explanation, guide link and concise navigation.
+  README.md
+    Introduced local visual guide, preview instructions and searchable maintenance.
+    Distinguished API version from ontology version and warning-only extraction
+    SHACL. Removed misleading old first-response JSON example. Added bearer header
+    to the introductory extraction command; left later reference sections scoped.
+  mkdocs.yml
+    Added visual guide and maintenance navigation; labeled historical v3 proposal.
+  docs/architecture/overview.md
+    Linked visual/maintenance guides and corrected refiners path to llm/refiners.
+  docs/releases/ontology-v3.0.0.md
+    Marked preserved draft and generated assets as historical, with current source
+    pointer. Did not regenerate historical assets or claim draft terms are active.
+
+Accuracy decisions grounded in source
+  - API /v2 remains distinct from generated v3.0.0-develop ontology output.
+  - Generation uses PLAN_BY_TYPE in pipeline/orchestrator.py; post-agent chains
+    live in pipeline/run.py and are orchestrated by services/extraction.py.
+  - Rule-based is LLM-free. Hybrid uses typed refiners and enabled affiliation
+    resolution, not the obsolete three-field whitelist. LLM-only stages remain
+    gated. The animation describes major boundaries, not exhaustive stage order.
+  - open-pulse-sources library v0.1.2 matches Compose writer image 0.1.2. Library
+    reads still share Qdrant/DuckDB. Optional HTTP search/manifest does not imply
+    all record hydration is remote. GIMIE is a deployed production dependency.
+  - Qdrant retrieval vectors and DuckDB source records have distinct roles;
+    embedding models and extraction models have distinct responsibilities.
+  - raw.repository maps pulse:watcherCount from _subscribers_count. Existing
+    sources/value fallback, web_iri and contract checks are documented exactly.
+  - Mapping configuration is packaged, versioned and process-lifetime cached;
+    restart is required. Fingerprints identify content but do not archive inputs.
+  - Canonical output, optional raw substrate, execution evidence and unifier
+    selection provenance in graph:prov are described separately.
+  - include_run_report is opt-in and remains a response sibling. Cache-hit reports
+    do not invent new execution; usage can be subtotal-only; retrieval is access,
+    not derivation; attribution is not factual accuracy or graph coverage.
+  - Repository instruction prose still described three schema copies. Actual
+    generator reads schema/json/agent and schema/json/strict directly. Promoted
+    dev/ontology-v2-json-response directory is absent; tests/v2/fixtures/schema
+    contains sample payloads, not duplicate schemas. New maintenance documentation
+    follows actual source and does not recreate obsolete copies.
+
+Local checks run by implementation agent
+  node --check docs/guide/guide.js                 PASS
+  git diff --check                               PASS
+  Python HTMLParser checks                       PASS
+    20 unique static IDs, 11 internal anchors and two local CSS/JS assets;
+    duplicate IDs, missing anchors/assets and external runtime assets checked.
+  Current source reviewed: mapping/config/README.txt, raw/repository.yaml,
+    pipeline/run.py, services/extraction.py, observation/run_report*.py,
+    validation/layers.py, generate_v2_models.py, ontology tooling and patch guide,
+    pyproject.toml and production Compose pin.
+
+Root-agent verification / follow-up
+  Root owns final strict MkDocs build, browser screenshots, interaction and
+  independent review. Initial browser feedback reported no JS errors, external
+  requests or page overflow; all runtime/sequence controls and reduced motion
+  passed. Root requested refinements to GIMIE/Oxigraph edges, hero profile
+  ownership, current schema workflow, source formatting and publication links;
+  these are incorporated. See validation.txt for final verification evidence.
+
+Limits
+  Diagrams deliberately summarize complex runtime paths. Actual execution is
+  available in the optional run report; enabled paths vary by configuration.
+  Wide diagrams scroll on small screens, with prose equivalents for every C4
+  view and ordered extraction/update steps when JavaScript is disabled.
+  Standalone guide has only local runtime assets. Existing MkDocs theme/search
+  dependencies and older Mermaid pages are outside the offline-guide guarantee.
+  Full docs deployment is separate; this change does not publish a live page.
