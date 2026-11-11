@@ -49,6 +49,7 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (
     profile_iri,
 )
 from git_metadata_extractor.pipeline.stages.source_attribution import split_by_source
+from git_metadata_extractor.validation.metadata import strip_internal_metadata
 
 _ONTOLOGY_POLICY = load_policy("policies.ontology")
 
@@ -200,11 +201,13 @@ def _raw_profile(
     if organization:
         profile["pulse:organizationHandle"] = handle
         profile["pulse:organizationProfileOf"] = {"@id": subject_iri}
-        profile.update(map_fields("raw.organization_profile", node))
+        if platform == "pulse:GitHub":
+            profile.update(map_fields("raw.organization_profile", node))
     else:
         profile["pulse:platformUsername"] = [handle]
         profile["pulse:profileOf"] = {"@id": subject_iri}
-        profile.update(map_fields("raw.person_profile", node))
+        if platform == "pulse:GitHub":
+            profile.update(map_fields("raw.person_profile", node))
         email = node.get("schema:email")
         if not _is_empty(email):
             profile["schema:email"] = email if isinstance(email, list) else [email]
@@ -664,13 +667,13 @@ def project_raw(
         logger.info("raw_projection: skipped unmapped types %s", skipped)
 
     return {
-        "@graph": [
+        "@graph": strip_internal_metadata([
             *projected,
             *minted.values(),
             *outputs.values(),
             *snapshots.values(),
             *run_nodes,
-        ],
+        ]),
     }
 
 

@@ -816,10 +816,15 @@ async def _concept_tagging(state: PipelineState) -> None:
 
 
 def _build_jsonld(state: PipelineState) -> None:
-    from git_metadata_extractor.pipeline.stages import (  # noqa: PLC0415
+    from git_metadata_extractor.pipeline.stages.jsonld_build import (  # noqa: PLC0415
         build_jsonld_output,
+        build_projection_input,
     )
 
+    state.projection_input = build_projection_input(
+        assembled=state.assembled,
+        jsonld_context=state.jsonld_context,
+    )
     state.payload = build_jsonld_output(
         assembled=state.assembled,
         jsonld_context=state.jsonld_context,
@@ -986,13 +991,11 @@ def _project_canonical(state: PipelineState) -> None:
 def _project_substrate(state: PipelineState) -> None:
     """Project the built graph into the raw layer, grouped into named graphs.
 
-    Runs between `jsonld_build` and `canonical_projection`, and the position is
-    load-bearing: both layers project the **same** flat v2 intermediate, and
-    `canonical_projection` replaces `state.payload["@graph"]` in place. Anything
-    reading the intermediate has to do it before that. Ordering the two the
-    other way round would silently project the canonical graph into raw
-    shapes — which validates (the raw entity shapes are open) while carrying a
-    v3 graph translated twice.
+    Reads the private normalized intermediate built by `jsonld_build`, retaining
+    source metadata needed by the raw mappings. Public output strips that
+    metadata (or renames it for debugging). For callers supplying only a flat
+    payload, the fallback must still run before `canonical_projection` replaces
+    that graph. Raw projection only emits allowlisted ontology properties.
 
     The run descriptor is *not* added here. `extraction_run` mints it last, so
     that `prov:endedAtTime` covers everything that happened to the graph, and
@@ -1006,7 +1009,9 @@ def _project_substrate(state: PipelineState) -> None:
     )
     from git_metadata_extractor.schema import load_generated_context  # noqa: PLC0415
 
-    nodes = state.payload.get("@graph")
+    nodes = state.projection_input
+    if nodes is None:
+        nodes = state.payload.get("@graph")
     if not isinstance(nodes, list):
         return
     state.substrate = build_substrate(

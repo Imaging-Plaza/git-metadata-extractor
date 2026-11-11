@@ -1,0 +1,253 @@
+Current adoption of the caviri ontology proposal — 2026-11-11
+
+Scope and evidence
+
+This audit compares the 22 asks in dev/v4.0.0/README.md at source commit
+0908b07b379d0f0b51c2032f478aed94cd08ef46 with the Robin-derived refactor at
+55461aa4409555beeee9481e54d767b0067906e2 and its ontology pin
+83074e9e41de6d813d7352b2ca9706c08f202098. It is not a wholesale merge.
+
+The missing proposal files under dev/v4.0.0, dev/ontology-v3-profiles and
+dev/rete were imported as historical evidence. Existing local files were
+preserved. import-manifest.json names every imported/preserved path and hash.
+Only the three newly imported READMEs have an added historical notice; other
+imported bytes match the source commit. Their old dates, counts, ontology
+claims and implementation status remain historical statements. Their scripts
+were not run. In particular, the reported 52-to-zero SHACL result tested the
+proposal's changed shapes, not this branch's pinned shapes.
+
+In evidence paths below, TTL means
+vendor/open-pulse-ontology/src/ontology/, GME means git_metadata_extractor/,
+and mapping means git_metadata_extractor/mapping/config/.
+
+Classification: already adopted; partially supported; requires ontology
+change; evidence-only (a useful alternative or finding, not approved runtime
+vocabulary). Partial support does not authorize silently substituting a term
+with different semantics. The matrix describes the baseline and distinguishes
+the narrow runtime corrections in this integration from future work.
+
+Adoption matrix
+
+01. Package, distributedAs and package dependencies
+    REQUIRES ONTOLOGY CHANGE. Package and proposed edges are absent. Raw
+    dependsOn still targets schema:SoftwareSourceCode, not a purl/package.
+    Evidence: TTL/ontology-shapes-raw.ttl RawRepositoryShape;
+    ONTOLOGY_V3_REQUIREMENTS.md section 2.12.
+    Follow-up: agree a version-aware package contract upstream. Do not invent
+    repository IRIs for SBOM coordinates or widen dependsOn locally.
+
+02. GitIdentity, hasGitIdentity and RawContributionShape
+    PARTIALLY SUPPORTED. RawContributionShape is adopted, generated and emitted;
+    GitIdentity/hasGitIdentity are absent. Literal git fields remain scalar.
+    Evidence: TTL/ontology-shapes-raw.ttl RawContributionShape;
+    GME/schema/generated/raw.py RawContributionModel;
+    GME/pipeline/stages/raw_projection.py _project_contribution.
+    Follow-up: upstream structured identity design and explicit email policy.
+
+03. Unbounded git author names/emails
+    REQUIRES ONTOLOGY CHANGE. Both raw and canonical contribution shapes retain
+    maxCount 1. Generated models expose scalar fields.
+    Evidence: TTL/ontology-shapes-{raw,canonical}.ttl contribution shapes;
+    GME/schema/generated/{raw,canonical}.py.
+    Follow-up: coordinate multiplicity with #02; no list promotion or email
+    disclosure in this integration.
+
+04. Additional PlatformEnumeration members
+    PARTIALLY SUPPORTED. ROR, OpenAlex, ETHZResearchCollection, SNSF, SWISSUbase,
+    RenkuLab and EPFLGraph are adopted. DockerHub is absent.
+    Evidence: TTL/ontology-enumerations-canonical.ttl PlatformEnumeration;
+    ontology/patches/README.md patches 05 and 07; mapping/policies/ontology.yaml.
+    Follow-up: DockerHub needs an upstream member before typed source anchoring.
+
+05. Infoscience/OpenAlex/ROR identifier schemes
+    REQUIRES ONTOLOGY CHANGE. These are not IdentifierSchemeEnumeration members;
+    PlatformEnumeration membership is not interchangeable. Infoscience already
+    has platform-scoped IDs/deposits; ROR has a dedicated identity property.
+    Evidence: TTL/ontology-enumerations-raw.ttl IdentifierSchemeEnumeration;
+    GME/pipeline/stages/raw_projection.py _deposit and _project_organization.
+
+06. ContainerImage, publishesImage, referencesImage and composeManifest
+    REQUIRES ONTOLOGY CHANGE for structured semantics. Existing externalReference
+    could preserve known resource URLs without implying publish/consume edges.
+    Evidence: TTL/ontology-definitions-raw.ttl pulse:externalReference;
+    mapping/agent/repository.yaml _compose_image_urls and _docker_hub_url.
+    Follow-up: externalReference mapping is compatible but explicitly deferred;
+    do not label every image URL as an artifact the repository publishes.
+
+07. CI, coverage, community health, badges, templates, guide/docs URLs
+    REQUIRES ONTOLOGY CHANGE for the requested properties. Agent mapping keeps
+    these signals internally. Existing security/code-of-conduct/publiccode URLs
+    already have raw terms and mappings; they do not encode CI or coverage.
+    Evidence: mapping/agent/repository.yaml internal_fields;
+    mapping/raw/repository.yaml; TTL/ontology-shapes-raw.ttl RawRepositoryShape.
+    Follow-up: select justified upstream terms, not arbitrary internal promotion.
+
+08. Size, fork network, archived date, primary language, profile README
+    PARTIALLY SUPPORTED. Archived boolean and programming-language facts exist;
+    the proposed additional distinctions/properties do not.
+    Evidence: mapping/github/repository.yaml; mapping/raw/repository.yaml;
+    TTL/ontology-definitions-raw.ttl pulse:language.
+    CURRENT CORRECTION: remove _primary_language -> pulse:language. The ontology
+    defines pulse:language as natural language, explicitly distinct from
+    schema:programmingLanguage. Preserve programming-language facts there.
+    Other new repository fields remain deferred.
+
+09. Registry organization metadata
+    REQUIRES ONTOLOGY CHANGE. establishedYear, registryStatus, acronym and
+    unitCode are absent. Raw Organization openness does not establish accepted
+    canonical terms or an end-to-end mapping contract.
+    Evidence: TTL/ontology-definitions-raw.ttl;
+    TTL/ontology-shapes-{raw,canonical}.ttl organization shapes.
+
+10. skos:altLabel on Person/Organization/Repository
+    REQUIRES ONTOLOGY CHANGE for general support. The closed repository/profile
+    and canonical shapes do not permit it. Open raw anchors alone are not enough.
+    Evidence: TTL/ontology-shapes-{raw,canonical}.ttl.
+    Follow-up: add precise allowed properties upstream; no blanket opening.
+
+11. PackageEcosystemEnumeration
+    REQUIRES ONTOLOGY CHANGE. Absent and dependent on the package design in #01.
+    Evidence: TTL/ontology-enumerations-raw.ttl and generated enumerations.
+
+12. samePersonAs must not imply owl:sameAs
+    ALREADY ADOPTED. samePersonAs and sameOrganizationAs are subproperties of
+    skos:exactMatch. Runtime identity assertions go in provenance, not closed
+    canonical entity nodes.
+    Evidence: TTL/ontology-definitions-provenance.ttl;
+    GME/unify/provenance.py SAME_AS_PROPERTIES; ontology/patches/README.md #09.
+
+13. Make every raw shape open
+    EVIDENCE-ONLY; not adopted and conflicts with current contract. Person and
+    Organization anchors are open, while profiles, repositories, articles and
+    other raw structures intentionally remain closed.
+    Evidence: TTL/ontology-shapes-raw.ttl;
+    GME/pipeline/stages/raw_projection.py module contract;
+    tests/v2/test_raw_projection.py mapping-target declaration checks.
+    Decision: preserve strict mapping validation; no sh:closed relaxation.
+
+14. partOfRun on every raw shape
+    PARTIALLY SUPPORTED THROUGH ANOTHER DESIGN. Four principal entity types
+    carry anchors; dependent nodes use their platform/subject to route to the
+    appropriate named graph. Stamping all nodes would break closed shapes.
+    Evidence: mapping/policies/ontology.yaml part_of_run_types;
+    GME/pipeline/stages/substrate.py _NAMES_SUBJECT and group_by_output.
+    Decision: retain source routing, not experimental anchor properties.
+
+15. Conflicting repository/article values
+    PARTIALLY SUPPORTED THROUGH NAMED GRAPHS. Separate source/run slices retain
+    disagreement without violating each slice's scalar constraints. Multiple
+    conflicting scalar assertions within one slice still need upstream design.
+    Evidence: GME/pipeline/stages/source_attribution.py;
+    GME/validation/layers.py substrate_slices.
+    Decision: do not widen maxCount bounds merely to validate a flattened union.
+
+16. Reified Observation and retrieval provenance properties
+    EVIDENCE-ONLY ALTERNATIVE. Current canonical selection provenance uses
+    store-side RDF-star. Execution/retrieval/citation evidence is separate plain
+    RDF in the extractor namespace; it does not assert proposed pulse terms.
+    Evidence: GME/unify/provenance.py; GME/observation/evidence.py;
+    ONTOLOGY_V3_REQUIREMENTS.md section 3.2.
+    Decision: retain both current layers; no replacement with pulse:Observation.
+    A checked retrieval citation proves more than a coincidentally equal value.
+
+17. UnmappedField retention
+    EVIDENCE-ONLY; new ontology vocabulary remains unapproved. Current evidence
+    excludes provider bodies/prompts and redacts sensitive values. Arbitrary
+    payload retention would conflict with this boundary.
+    Evidence: GME/observation/evidence.py module contract and _safe;
+    GME/pipeline/stages/raw_projection.py declared mappings.
+    CURRENT CORRECTION: preserve source metadata privately long enough for
+    supported raw projection. This is not general UnmappedField export and
+    must not expose underscore-prefixed internals in API artifacts.
+
+18. Qualification/InvitedPosition/Distinction/Service affiliation kinds
+    REQUIRES ONTOLOGY CHANGE. Current kinds are Employment, Education and
+    SocietyMembership. The literal pulse:qualification property is not a kind.
+    Evidence: TTL/ontology-enumerations-raw.ttl MembershipTypeEnumeration;
+    TTL/ontology-shapes-raw.ttl RawMembershipShape.
+
+19. Raw Project, award number and Funding/Project links
+    PARTIALLY SUPPORTED. Canonical Project and raw Funding/ExternalIdentifier
+    models exist; raw Project and requested grant/project links do not. Runtime
+    raw dispatch does not yet support those additional node families.
+    Evidence: GME/schema/generated/{raw,canonical}.py;
+    GME/pipeline/stages/raw_projection.py _PAIR and _SINGLE;
+    TTL/ontology-shapes-raw.ttl FundingShape.
+    Follow-up: upstream raw Project, then explicit projection/routing; generated
+    model availability must not be mistaken for runtime extraction coverage.
+
+20. deps.dev package alignment and Advisory
+    REQUIRES ONTOLOGY CHANGE. Package, Advisory and proposed alignment axioms
+    are absent. Keep the external alignment material as historical evidence.
+    Evidence: TTL/ontology-definitions-raw.ttl; dev/v4.0.0/ontology.ttl proposal.
+
+21. http/https schema.org spelling
+    PARTIALLY SUPPORTED LOCALLY. Pinned ontology, runtime evidence context and
+    store prefixes consistently use http://schema.org/. External https://schema.org/
+    RDF is not normalized by the store prefix helper.
+    Evidence: GME/store/terms.py prefix table; GME/observation/evidence.py CONTEXT;
+    dev/rete/epfl-infoscience.ttl historical comparison.
+    Follow-up: normalize recognized vocabulary IRIs at a real import boundary
+    if that RDF enters production. Do not globally rewrite resource URLs.
+    Runtime namespace normalization is deferred in this integration.
+
+22. Multiple partOfRun values for a multi-source entity
+    ALREADY ADDRESSED FUNCTIONALLY WITHOUT RELAXING SHAPES. The entity occurs
+    in separate source graphs, each with one anchor. Validation operates on
+    each slice plus metadata and cross-graph type references, not the union
+    of all source properties.
+    Evidence: GME/validation/layers.py substrate_slices;
+    GME/pipeline/stages/raw_projection.py project_raw;
+    GME/pipeline/stages/substrate.py group_by_output.
+
+Narrow runtime integration and deferrals
+
+The runtime integration is limited to retaining normalized source metadata
+privately for substrate projection, restricting GitHub extras to GitHub
+profiles, removing an unsupported ORCID biography fallback, and removing the
+programming-language-to-natural-language mapping. These restore source and
+ontology semantics without introducing experimental terms. Regression tests
+exercise the actual JSON-LD/substrate stages, private metadata removal, source
+separation, normalized references, and pinned raw SHACL conformance.
+
+Restoring source fields also exposed bare web/Twitter values becoming relative
+RDF IRIs. Raw URL mappings now use web_iri, which requires an explicit HTTP(S)
+URL and validates/normalizes it through Pydantic. Bare Twitter handles are no
+longer projected into pulse:socialLink. Mapping versions are bumped to 2 for
+raw.repository, raw.person_profile and raw.organization_profile.
+
+Existing schema:email attribution remains unchanged and needs a separate
+source-aware design: the reconciled email may originate in context or GitHub,
+so assigning it exclusively to either profile would invent source certainty.
+
+All other runtime additions are deferred, even if compatible: externalReference
+URLs; existing readme/fundingConfig/isTemplate/platform ID slots; extra entity
+families; external schema.org normalization. Further upstream work should
+prioritize version-aware packages, git identity multiplicity, affiliation kinds
+and raw Project support. No TTL change, pin change or SHACL loosening is part
+of this integration.
+
+Historical-document caveats
+
+PROVENANCE_ARCHITECTURE.md and ONTOLOGY_V3_REQUIREMENTS.md retain historical
+design statements. Resolve conflicts using actual pinned TTL and runtime code.
+ontology/patches/README.md records patches 01-09 as upstreamed into the current
+pin, including the accepted subset of this proposal. Do not reapply those
+patches or import proposed/ TTLs over the vendored ontology.
+
+Verification record
+
+Documentation import uses Python subprocess git show bytes at the immutable
+source commit. import-manifest.json provides exact paths and hashes. The three
+README notices and whitespace cleanup in two files are the only changes to
+imported source bytes; the manifest records the two normalizations and hashes.
+Byte checks account for these changes and the four preserved local files.
+No historical Python scripts or historical validation examples
+were executed. validation.txt records current runtime regression commands and
+results separately; historical measurements are not current results.
+
+Import verification passed: 35 exact source-byte matches, two README files
+whose original bodies match after added notices, one README with notice and
+whitespace cleanup, one whitespace-only cleanup, and four unchanged existing
+files. Staged git diff --check passed after removing the two inherited
+whitespace defects; the audit includes all 22 numbered entries.

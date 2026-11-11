@@ -181,6 +181,66 @@ def _rewrite_internal_keys(value: Any) -> Any:
     return deepcopy(value)
 
 
+def build_projection_input(
+    *,
+    assembled: AssembledOutput,
+    jsonld_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Normalize private source facts for projection; never return this as output.
+
+    Both public JSON-LD and the raw substrate use this identity/reference
+    normalization. Only the raw projection may consume internal metadata,
+    and it emits exclusively declared, allowlisted ontology properties.
+    """
+    entities: list[dict[str, Any]] = []
+    if isinstance(assembled.root_entity, dict):
+        entities.append(assembled.root_entity)
+    entities.extend(assembled.related_entities)
+
+    id_map: dict[str, str] = {}
+    iri_typed_terms = _iri_typed_context_terms(jsonld_context)
+    for index, entity in enumerate(entities):
+        entity_id = entity.get("id")
+        if isinstance(entity_id, str) and entity_id:
+            id_map[entity_id] = _normalize_node_id(entity_id, index=index)
+
+    graph: list[dict[str, Any]] = []
+    for index, entity in enumerate(entities):
+        node: dict[str, Any] = {}
+        node_id = entity.get("id")
+        node["@id"] = _normalize_node_id(node_id, index=index)
+        node_type = _normalize_node_type(entity.get("type"))
+        if node_type is not None:
+            node["@type"] = node_type
+
+        for key, value in entity.items():
+            if key in HELPER_ONLY_FIELDS or key in {"id", "type"}:
+                continue
+            node[key] = _normalize_jsonld_value(
+                value,
+                id_map=id_map,
+                iri_typed_terms=iri_typed_terms,
+                current_property=key,
+            )
+
+        # Strip `pulse:ror` when redundant with the node's own `@id`. The
+        # `org:Organization` SHACL shape is `sh:closed` and does not
+        # declare `pulse:ror`; emitting the field on a ROR-id'd node
+        # triggers a closed-shape violation. The `@id` is already the
+        # ROR, so the field carries no additional information.
+        node_iri = node.get("@id")
+        if (
+            isinstance(node_iri, str)
+            and node.get("pulse:ror") == node_iri
+        ):
+            node.pop("pulse:ror", None)
+
+        graph.append(node)
+
+    graph.sort(key=lambda item: str(item.get("@id", "")))
+    return graph
+
+
 def build_jsonld_output(
     *,
     assembled: AssembledOutput,
@@ -210,74 +270,10 @@ def build_jsonld_output(
     SHACL shapes.
     """
 
-    entities: list[dict[str, Any]] = []
-    if isinstance(assembled.root_entity, dict):
-        entities.append(assembled.root_entity)
-    entities.extend(assembled.related_entities)
-
-    id_map: dict[str, str] = {}
-    iri_typed_terms = _iri_typed_context_terms(jsonld_context)
-    for index, entity in enumerate(entities):
-        entity_id = entity.get("id")
-        if isinstance(entity_id, str) and entity_id:
-            id_map[entity_id] = _normalize_node_id(entity_id, index=index)
-
-    graph: list[dict[str, Any]] = []
-    for index, entity in enumerate(entities):
-        node: dict[str, Any] = {}
-        node_id = entity.get("id")
-        node["@id"] = _normalize_node_id(node_id, index=index)
-        node_type = _normalize_node_type(entity.get("type"))
-        if node_type is not None:
-            node["@type"] = node_type
-
-        for key, value in entity.items():
-            if key in HELPER_ONLY_FIELDS or key in {"id", "type"}:
-                continue
-            out_key = key
-            if isinstance(key, str) and key.startswith("_"):
-                if not include_internal_fields:
-                    continue
-                # Emit as a `gme-internal:` term so it expands to a real
-                # IRI predicate rather than a dropped undefined term.
-                out_key = _internal_term(key)
-            node[out_key] = _normalize_jsonld_value(
-                value,
-                id_map=id_map,
-                iri_typed_terms=iri_typed_terms,
-                current_property=out_key,
-            )
-
-        # Hoist scalar/list top-level publiccode fields to `publiccode:`
-        # predicates so SPARQL queries can hit them directly. The
-        # `gme-internal:publiccode` JSON blob above still carries the
-        # full nested payload for consumers that need the sub-trees.
-        if include_internal_fields:
-            for pc_term, pc_value in _hoist_publiccode_scalars(
-                entity.get("_publiccode"),
-            ).items():
-                node[pc_term] = _normalize_jsonld_value(
-                    pc_value,
-                    id_map=id_map,
-                    iri_typed_terms=iri_typed_terms,
-                    current_property=pc_term,
-                )
-
-        # Strip `pulse:ror` when redundant with the node's own `@id`. The
-        # `org:Organization` SHACL shape is `sh:closed` and does not
-        # declare `pulse:ror`; emitting the field on a ROR-id'd node
-        # triggers a closed-shape violation. The `@id` is already the
-        # ROR, so the field carries no additional information.
-        node_iri = node.get("@id")
-        if (
-            isinstance(node_iri, str)
-            and node.get("pulse:ror") == node_iri
-        ):
-            node.pop("pulse:ror", None)
-
-        graph.append(node)
-
-    graph.sort(key=lambda item: str(item.get("@id", "")))
+    graph = build_projection_input(assembled=assembled, jsonld_context=jsonld_context)
+    if include_internal_fields:
+        for node in graph:
+            node.update(_hoist_publiccode_scalars(node.get("_publiccode")))
     context = deepcopy(jsonld_context)
     if include_internal_fields:
         # Register the prefixes so `gme-internal:*` and `publiccode:*`

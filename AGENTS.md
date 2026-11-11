@@ -367,8 +367,11 @@ Four things about it are load-bearing:
   rather than over it — "raw assertions, never rewritten" is enforced by the
   IRI, not by the writer.
 - **It is a projection of the same intermediate `output` is**, not a step
-  before or after it. `substrate_projection` therefore has to run *before*
-  `canonical_projection`, which replaces `state.payload["@graph"]` in place.
+  before or after it. `jsonld_build` retains a private normalized
+  `state.projection_input` (excluded from serialization) for raw mappings;
+  public output strips internal source facts. `substrate_projection` runs
+  before `canonical_projection`; callers supplying only a flat payload still
+  depend on that ordering. Raw output strips internal keys recursively.
 - **The meta graph holds only the extraction's own description** — the
   outputs, the run, the agent, and each output's source snapshot. An *entity*
   there is a routing defect, and SHACL cannot see it: the raw entity shapes are

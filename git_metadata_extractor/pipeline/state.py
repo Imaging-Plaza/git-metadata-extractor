@@ -1,8 +1,9 @@
 """Context and mutable state shared by post-agent stages.
 
 The data flows from buckets through reconciled and assembled entities into
-payload. Canonical output and the source-attributed substrate are separate
-projections of that payload. Warnings, timings and extras accumulate per run.
+normalized projection input. Public output omits internal metadata; the
+source-attributed substrate maps known source facts from the private input.
+Warnings, timings and extras accumulate per run.
 """
 
 from __future__ import annotations
@@ -87,6 +88,8 @@ class PipelineState(InternalModel, validate_assignment=True):
     reconciled: ReconciledEntities | None = None
     assembled: AssembledOutput | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+    #: Normalized source facts for raw projection, never serialized as output.
+    projection_input: list[dict[str, Any]] | None = Field(default=None, exclude=True, repr=False)
     #: The raw/substrate layer: a JSON-LD document whose top-level `@graph`
     #: holds one named graph per `pulse:ExtractionOutput`. A fifth payload
     #: rather than a replacement for `payload`, because it is a *sibling*

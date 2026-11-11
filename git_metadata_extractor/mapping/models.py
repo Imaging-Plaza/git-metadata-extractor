@@ -18,7 +18,7 @@ from git_metadata_extractor.models import DataModel
 class FieldRule(DataModel, frozen=True):
     sources: list[str] | None = Field(default=None, min_length=1)
     value: JsonValue = None
-    transform: Literal["identity", "iri", "strings", "enum"] = "identity"
+    transform: Literal["identity", "iri", "web_iri", "strings", "enum"] = "identity"
     missing: Literal["omit", "null"] = "omit"
     empty: Literal["missing", "preserve"] = "missing"
     values: dict[str, JsonValue] | None = None

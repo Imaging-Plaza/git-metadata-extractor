@@ -131,6 +131,7 @@ Swagger UI: <http://localhost:1234/docs>
 | [docs/rag-indices.md](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) | Nine RAG indices + federated layer |
 | [docs/v2-rag-tools.md](docs/v2-rag-tools.md) | Agent-side RAG tools wired into the pipeline |
 | [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) | `/v1` → `/v2` endpoint mapping |
+| [Ontology proposal adoption](dev/investigations/2026-11-11-proposal-adoption/adoption.txt) | Caviri's 22 requests assessed against Robin's implementation; adopted fixes and remaining ontology work |
 | [.env.example](.env.example) | Every env var with defaults and notes |
 
 Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>

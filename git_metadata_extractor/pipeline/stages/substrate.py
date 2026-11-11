@@ -236,9 +236,10 @@ def build_substrate(
 ) -> dict[str, Any]:
     """Project `nodes` into the raw shapes and group them into named graphs.
 
-    `nodes` is the flat v2 intermediate `build_jsonld_output` produces — the
-    same input `canonical_projection` consumes. Both layers are projections of
-    it; neither is derived from the other.
+    `nodes` is the normalized intermediate from `build_projection_input`,
+    including private source facts consumed by the raw mappings. Public output
+    strips those facts before canonical projection; neither layer is derived
+    from the other.
 
     Returns a JSON-LD document whose top-level `@graph` holds one named-graph
     entry per `pulse:ExtractionOutput`, plus the meta graph. Empty graphs are

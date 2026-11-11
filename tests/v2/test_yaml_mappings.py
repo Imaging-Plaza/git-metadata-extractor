@@ -51,7 +51,7 @@ def test_github_mapping_preserves_zero_false_and_missing_policy():
     assert source == before
 
 
-def test_raw_profile_fallback_and_iri_mapping():
+def test_raw_github_profile_biography_and_iri_mapping():
     mapped = map_fields(
         "raw.person_profile",
         {
@@ -61,10 +61,20 @@ def test_raw_profile_fallback_and_iri_mapping():
             "_avatar_url": "https://example.org/avatar.png",
         },
     )
-    assert mapped["pulse:biography"] == "ORCID bio"
+    assert mapped["pulse:biography"] == "GitHub bio"
     assert mapped["pulse:followerCount"] == 0
     assert mapped["schema:image"] == {"@id": "https://example.org/avatar.png"}
     assert "schema:url" not in mapped
+
+
+@pytest.mark.parametrize("value", ["example.org", "/blog", "//example.org", "https://", "urn:person:1", 42])
+def test_raw_web_links_omit_relative_or_invalid_values(value):
+    assert "schema:url" not in map_fields("raw.person_profile", {"_blog": value})
+
+
+def test_raw_web_links_use_pydantic_url_normalization():
+    mapped = map_fields("raw.person_profile", {"_blog": "https://example.org/a b"})
+    assert mapped["schema:url"] == {"@id": "https://example.org/a%20b"}
 
 
 def test_raw_repository_does_not_claim_size_is_a_file_count():

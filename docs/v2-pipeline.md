@@ -157,6 +157,14 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `substrate_write` **[off by default]** | fold the run descriptor into the substrate's meta graph and POST the quads to Oxigraph |
 | `compute_stats` | response counters and timings |
 
+Raw projection reads a private normalized intermediate that retains source facts
+such as `_subscribers_count` and `_bio`. Public JSON-LD strips those keys (or
+renames them for debug output), so it cannot supply the raw mappings. The private
+copy is excluded from state serialization, and raw output removes internal keys
+recursively. GitHub profile mappings run only for GitHub profiles; ORCID biography
+does not become a GitHub biography. `schema:programmingLanguage` carries programming
+languages; `pulse:language` is reserved for natural language.
+
 ### Why `shacl_gate` is warning-only
 
 It reports violations as `result.warnings` instead of rejecting the graph, so conformance is the *upstream* stages' job. Four common violations are fixed deterministically rather than left to the gate: `pulse:ownedBy` IRI shape (`infer_owners`), redundant `pulse:ror` on ROR-identified orgs (`build_jsonld_output`), inverted Membership dates (both membership agents), and non-Person `schema:author` refs (`validate_author_classes`). If you add a shape, add the fix upstream — a red gate does not stop a response.

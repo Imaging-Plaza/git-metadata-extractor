@@ -16,6 +16,12 @@ fields; agent mappings build the six rule-based entity payloads from prepared
 facts. Post-agent Python stages reconcile those payloads before raw/canonical
 mappings project the same intermediate into their respective ontology shapes.
 Raw projection runs first, before canonical projection replaces the intermediate.
+It reads a private normalized copy that retains internal source facts. The
+public JSON-LD builder strips them (or renames them in debug output); neither
+representation is the raw mapping input. Raw output strips internal keys at
+every depth. GitHub profile extras are applied only to GitHub profiles, and a
+GitHub biography never falls back to ORCID biography. Programming languages
+belong in schema:programmingLanguage, not the natural-language pulse:language.
 The store-side unifier separately merges stored raw graphs into canonical data.
 
 Use one small mapping per source/entity or projection contract. Do not combine
@@ -73,6 +79,8 @@ and missing: 'null'. Prepared payload mappings preserve existing empty/null
 fields for compatibility; source enrichment usually omits absent data.
 
 Transforms: identity copies the value; iri wraps a string in an @id reference;
+web_iri requires an explicit HTTP(S) URL, validates/normalizes it with Pydantic,
+and wraps it in @id. Bare domains and invalid links are omitted, not guessed.
 strings keeps nonempty string list members; enum lowercases the input lookup
 key and uses the explicit values table. Unknown enum inputs follow missing
 policy. YAML cannot execute Python or import transforms.

@@ -1,6 +1,6 @@
 schema_version: 1
 name: raw.repository
-version: '1'
+version: '2'
 source_contract: extractor.v2.entity
 target_contract: raw.repository
 fields:
@@ -12,15 +12,14 @@ fields:
   pulse:hasPages: {sources: [_has_pages]}
   pulse:hasWiki: {sources: [_has_wiki]}
   pulse:openIssueCount: {sources: [_open_issues_count]}
-  pulse:language: {sources: [_primary_language]}
   pulse:pushedDate: {sources: [_pushed_at]}
   pulse:releaseCount: {sources: [_release_count]}
   pulse:watcherCount: {sources: [_subscribers_count]}
   schema:dateModified: {sources: [_updated_at]}
-  schema:url: {sources: [_homepage], transform: iri}
-  pulse:codeOfConduct: {sources: [_code_of_conduct_url], transform: iri}
-  pulse:securityPolicy: {sources: [_security_url], transform: iri}
-  pulse:publicCodeManifest: {sources: [_publiccode_url], transform: iri}
+  schema:url: {sources: [_homepage], transform: web_iri}
+  pulse:codeOfConduct: {sources: [_code_of_conduct_url], transform: web_iri}
+  pulse:securityPolicy: {sources: [_security_url], transform: web_iri}
+  pulse:publicCodeManifest: {sources: [_publiccode_url], transform: web_iri}
   pulse:tag: {sources: [_keywords]}
   pulse:repositoryStars: {sources: ['pulse:githubRepoStars']}
   pulse:repositoryForks: {sources: ['pulse:githubRepoForks']}
