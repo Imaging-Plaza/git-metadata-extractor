@@ -62,6 +62,9 @@ See the [API reference](docs/v2-api-reference.md) for response fields and the
 
 ## More examples
 
+See [runnable Python examples](examples/README.md) for V2 user and organization
+extraction, ORCID affiliations, and an offline cache demonstration.
+
 ```bash
 # Async extraction (returns a job id)
 curl -X POST http://localhost:1234/v2/extract \
