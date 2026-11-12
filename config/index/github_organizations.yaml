@@ -1,5 +1,5 @@
 # GitHub organizations RAG indexer config.
-# Resolved by `src/index/github_organizations/config.py` and merged with env
+# Resolved by `open_pulse_sources/index/github_organizations/config.py` and merged with env
 # vars (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_URL`,
 # `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`) at startup. No `scope.seeds`
 # block — orgs are ingested organically via `/v2/extract` auto-ingest

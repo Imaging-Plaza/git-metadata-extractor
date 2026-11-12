@@ -108,8 +108,9 @@ git_metadata_extractor/
 # library — a declared, tag-pinned dependency in pyproject.toml (see
 # "Cross-repo version pin" below). This service only READS the indices
 # (Qdrant + DuckDB under data/index/); ingest/embed/reset happen in the
-# open-pulse-sources service. config/index/*.yaml stays here because
-# the library resolves config/data paths CWD-relative.
+# open-pulse-sources service. config/index/*.yaml remains a compatibility
+# copy: most library config loaders resolve paths CWD-relative. See
+# config/README.md for ownership, loader exceptions and removal prerequisites.
 
 tests/v2/                        # default test target
 ```

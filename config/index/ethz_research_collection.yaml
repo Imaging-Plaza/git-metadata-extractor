@@ -1,5 +1,5 @@
 # ETH Research Collection RAG indexer config.
-# Resolved by `src/index/ethz_research_collection/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/ethz_research_collection/config.py` and merged with env vars
 # (`RCP_TOKEN`, `ETHZ_RESEARCH_COLLECTION_TOKEN`, `INDEX_DATA_DIR`) at startup.
 
 rcp:

@@ -1,5 +1,5 @@
 # RenkuLab RAG indexer config.
-# Resolved by `src/index/renkulab/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/renkulab/config.py` and merged with env vars
 # (`RCP_TOKEN`, `RENKULAB_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`,
 # `INDEX_QDRANT_URL`) at startup.
 

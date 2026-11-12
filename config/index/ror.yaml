@@ -1,5 +1,5 @@
 # ROR (Research Organization Registry) RAG indexer config.
-# Resolved by `src/index/ror/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/ror/config.py` and merged with env vars
 # (`RCP_TOKEN`, `INDEX_DATA_DIR`) at startup.
 
 rcp:

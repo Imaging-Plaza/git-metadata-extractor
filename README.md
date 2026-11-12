@@ -133,8 +133,12 @@ git_metadata_extractor/
 # ingest/embed and the /v2/indices management API live in that repo/service.
 
 tests/v2/                # default test target
+config/                  # experiment profiles + sources-library compatibility config
 docs/                    # MkDocs site source
 ```
+
+See [configuration ownership](config/README.md) before editing an index config
+or choosing an extraction/benchmark profile.
 
 ### Cross-repo compatibility
 

@@ -1,5 +1,5 @@
 # Zenodo RAG indexer config.
-# Resolved by `src/index/zenodo/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/zenodo_records/config.py` and merged with env vars
 # (`RCP_TOKEN`, `ZENODO_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`)
 # at startup.
 

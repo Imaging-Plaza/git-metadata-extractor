@@ -29,8 +29,13 @@ Both must be the same release. They share DuckDB stores and Qdrant
 collections, so a version skew shows up as empty search results or a failed
 bootstrap rather than a clean error.
 
-Not moved: `config/index/*.yaml` stays in this repo, because the library
-resolves config and data paths relative to the working directory.
+`config/index/*.yaml` remains a compatibility copy of sources-owned settings.
+Most pinned library loaders resolve it relative to the working directory, and
+the installed package does not bundle these YAML files. SNSF is an exception:
+its default config path is relative to the installed library. The checkout's
+`config/README.md` documents loader exceptions, experiment profiles and the
+path toward removing these copies. Source-to-ontology mappings live under
+`git_metadata_extractor/mapping/config/`.
 
 ---
 

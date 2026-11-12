@@ -17,8 +17,8 @@ rcp:
   timeout_seconds: 120
 
 qdrant:
-  # Compose service `gme-qdrant` on the `dev` network. See
-  # `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  # Default Compose hostname; override with INDEX_QDRANT_URL. See
+  # ../README.md for configuration ownership and deployment overrides.
   url: http://gme-qdrant:6333
   prefer_grpc: false
 

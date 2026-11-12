@@ -1,5 +1,5 @@
 # ORCID RAG indexer config.
-# Resolved by `src/index/orcid/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/orcid/config.py` and merged with env vars
 # (`RCP_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`,
 # `INDEX_ORCID_SCOPE`) at startup.
 

@@ -1,5 +1,5 @@
 # HuggingFace Papers RAG indexer config.
-# Resolved by `src/index/huggingface_papers/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/huggingface_papers/config.py` and merged with env vars
 # (`RCP_TOKEN`, `HF_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
 # `INDEX_QDRANT_PREFER_GRPC`, `INDEX_DATA_DIR`) at startup.
 #

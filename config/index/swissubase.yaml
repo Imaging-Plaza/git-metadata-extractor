@@ -1,5 +1,5 @@
 # SWISSUbase RAG indexer config.
-# Resolved by `src/index/swissubase/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/swissubase/config.py` and merged with env vars
 # (`RCP_TOKEN`, `SELENIUM_REMOTE_URL`, `INDEX_QDRANT_API_KEY`,
 # `INDEX_QDRANT_URL`, `INDEX_DATA_DIR`, `INDEX_SWISSUBASE_SCOPE`) at
 # startup.

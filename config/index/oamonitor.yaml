@@ -1,5 +1,5 @@
 # Open Access Monitor CH (OAM-CH) RAG indexer config.
-# Resolved by `src/index/oamonitor/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/oamonitor/config.py` and merged with env vars
 # (`RCP_TOKEN`, `INDEX_QDRANT_API_KEY`, `INDEX_DATA_DIR`, `OAMONITOR_API_BASE_URL`)
 # at startup.
 

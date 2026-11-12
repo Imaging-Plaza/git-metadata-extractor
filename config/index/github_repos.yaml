@@ -1,5 +1,5 @@
 # GitHub repository RAG indexer config.
-# Resolved by `src/index/github/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/github_repos/config.py` and merged with env vars
 # (`RCP_TOKEN`, `GME_GITHUB_TOKEN`, `INDEX_QDRANT_URL`, `INDEX_QDRANT_API_KEY`,
 # `INDEX_DATA_DIR`, `INDEX_GITHUB_SCOPE`) at startup.
 
@@ -45,8 +45,8 @@ scope:
       - ethz-asl/maplab
 
 qdrant:
-  # Compose service `gme-qdrant` on the `dev` network. See
-  # `.internal/ror/qdrant-setup.md` for the hostname rationale.
+  # Default Compose hostname; override with INDEX_QDRANT_URL. See
+  # ../README.md for configuration ownership and deployment overrides.
   url: http://gme-qdrant:6333
   prefer_grpc: false
 

@@ -1,5 +1,5 @@
 # Infoscience RAG indexer config.
-# Resolved by `src/index/infoscience/config.py` and merged with env vars
+# Resolved by `open_pulse_sources/index/infoscience/config.py` and merged with env vars
 # (`RCP_TOKEN`, `INFOSCIENCE_TOKEN`, `INDEX_DATA_DIR`) at startup.
 
 rcp:

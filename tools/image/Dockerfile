@@ -20,8 +20,9 @@ RUN useradd -ms /bin/bash -u 1000 non-root-user \
 
 WORKDIR /app
 COPY git_metadata_extractor ./git_metadata_extractor
-# Ship the RAG index configs (config/index/*.yaml) — without them every
-# index provider fails `load_config()` and silently disables itself.
+# Local RAG compatibility: most pinned sources-library loaders still read
+# config/index/*.yaml from CWD. These are sources-owned, not ontology mappings;
+# see config/README.md before removing them or changing embedding settings.
 # Deploy-specific values (Qdrant URL, tokens, scope) stay env-overridable.
 COPY config ./config
 # Ship operational scripts (e.g. scripts/v2/migrate_monolith_to_split.py) so
