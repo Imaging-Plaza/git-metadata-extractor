@@ -1,0 +1,105 @@
+Live smoke verification — 2026-11-11
+
+Target: current uncommitted worktree at D:/pro/git-metadata-extractor-provenance.
+Repository analyzed: https://github.com/sdsc-ordes/gimie.
+The older running extractor containers were not used to validate these changes.
+No production source files, secret files or existing service configuration were
+changed in this pass. Only scripts and results in this directory were added.
+
+Observed results
+- Authenticated GitHub repository call: HTTP 200.
+- RCP /v1/models: HTTP 200. Model availability list retained in probe-results.json.
+  Structured agent tests used openai/gpt-oss-120b at the configured RCP endpoint.
+- Selenium, gimie and Qdrant probes: HTTP 200.
+- New SourcesClient over a real temporary HTTP source server: manifest returned
+  25 stores. ROR search returned 3 hits in 2.35 s with EPFL first
+  (https://ror.org/02s376052). This exercised live embeddings/retrieval.
+- EPFL discipline search: no matches. Qdrant confirms the collection exists but
+  has zero points. ROR Europe has 49,229 points; both collections report green.
+- Full rule-based extraction, all standard generation stages: completed in
+  144.34 s, 66 entities / 355 triples; 148 retrieval activities, 615 provenance
+  nodes. Independent response-model and SHACL checks pass; no internal fields
+  leaked into output. Entity counts: 10 people, 15 organizations, 30 memberships,
+  10 contributions and one repository. No scholarly articles survived.
+- Live structured repository and person agent tests: passed. Organization
+  agent test passed with an eight-request cap. These existing integration tests
+  use real LLM requests with fixture-backed provider context, not live GitHub.
+- Bounded hybrid extraction: completed in 75.01 s with 3 entities / 20 triples.
+  Response model and SHACL checks pass; no internal field leaks. Discovery
+  refinement was skipped after reaching the deliberately low four-request cap.
+- Bounded LLM extraction: completed in 175.85 s with 3 entities / 20 triples,
+  62 retrieval activities and 153 provenance nodes. Independent response-model
+  and SHACL validation pass; no internal field leaks. Recorded model activities
+  report success for openai/gpt-oss-120b. Remote source searches were verified
+  separately; this does not assert that the LLM chose every available tool.
+
+Scope and warnings
+The bounded hybrid and LLM profiles run real GitHub context collection and the
+repository agent, then the ordinary post-agent sequence; they omit entity
+fanout to limit smoke-test cost. They are not full LLM quality benchmarks.
+Missing people/org fanout produces orphan-reference warnings and an existing
+owner-Person fallback, including an organization account represented as a
+Person. SHACL conformance does not establish factual accuracy. Use the full
+rule-based output, not the reduced profiles, for meaningful entity counts.
+
+The full rule-based run rejected eight article candidates lacking resolvable
+authors. Strict validation also excluded incomplete ROR organization records;
+some organization stubs need identifier/UUID normalization. The discipline
+tagger still accesses Qdrant/DuckDB directly outside the new remote tool wiring;
+full storage decoupling remains incomplete. The first reduced rule-based trial
+exposed its old Qdrant hostname; later trials set the correct test-network URL.
+
+Harness adjustments, retained as evidence
+The first integration attempt used max_retries=0, which the model configuration
+validator rejects before any LLM call. The harness was corrected to 1; no
+application change was needed. The next run passed 2 tests and exhausted the
+four-request cap for the organization agent. A focused retry with a cap of 8
+requests / 12 tool calls passed in 21.66 s. Initial and retry logs are retained.
+
+Isolation and commands
+Runtime image: gme-local-contract-validation:20261111, Python 3.12.
+Each invocation mounted this worktree at /work/gme and ran from /work/gme.
+The existing .env was mounted read-only at /run/gme.env and loaded into memory.
+Credentials were not printed. Test settings were process-local. The source
+server borrowed API_TOKEN for its test auth, and clients used the same token;
+SOURCES_API_TOKEN was not written to an env file.
+
+Source server command inside Docker:
+  python dev/investigations/2026-11-11-live-smoke/source_server.py
+Network: gme-preview_default. No host port was published. Existing index files
+were mounted read-only at /work/gme/data/index. Only manifest/search were called;
+no ingest, embed, reset or canonical graph publication was requested.
+
+Client commands inside Docker on the same network:
+  python dev/investigations/2026-11-11-live-smoke/probe.py
+  python dev/investigations/2026-11-11-live-smoke/live.py sources
+  python dev/investigations/2026-11-11-live-smoke/live.py integration
+  python dev/investigations/2026-11-11-live-smoke/live.py integration_org
+  python dev/investigations/2026-11-11-live-smoke/live.py rule_based
+  python dev/investigations/2026-11-11-live-smoke/live.py rule_based_full
+  python dev/investigations/2026-11-11-live-smoke/live.py hybrid
+  python dev/investigations/2026-11-11-live-smoke/live.py llm
+  python dev/investigations/2026-11-11-live-smoke/index_health.py
+Offline post-run verification:
+  python dev/investigations/2026-11-11-live-smoke/audit.py
+
+Extraction used provider_mode=live, pipeline cache disabled, fresh per-container
+cache directories, read_only=True, and graph persistence disabled. Link veracity
+and optional concept tagging were disabled. The source search server accessed
+existing shared Qdrant data; no reindexing or embedding-model migration occurred.
+
+Artifacts
+*-response.json: full extracted responses including provenance.
+*-summary.json: timing, stage list, warnings and internal-field leak check.
+output-audit.json: independent response-model and SHACL validation results.
+sources-results.json and index-health.json: live source results and point counts.
+llm-*.txt: pytest results and bounded extraction log.
+probe-results.json: endpoint availability/model inventory, no credentials.
+
+Final verification and cleanup
+All four saved extraction responses pass the independent response-model and
+SHACL checks (output-audit.json). Python scripts parse and JSON artifacts load.
+check_artifacts.py scans artifacts for loaded credential values without printing
+those values. No credential leaks were found. The temporary sources container
+was stopped and removed; no smoke-test containers remain. Existing services
+were left running. No commits or pushes were made.

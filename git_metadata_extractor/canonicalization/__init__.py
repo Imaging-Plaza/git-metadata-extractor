@@ -19,7 +19,6 @@ from git_metadata_extractor.canonicalization.infoscience import (
     infoscience_article_iri,
     infoscience_org_iri,
     infoscience_person_iri,
-    parse_infoscience_iri,
 )
 from git_metadata_extractor.canonicalization.orcid import ORCID_BARE_RE, orcid_iri, parse_orcid
 from git_metadata_extractor.canonicalization.string_utils import normalize_string
@@ -39,7 +38,6 @@ __all__ = [
     "parse_github_org_iri",
     "parse_github_repo_iri",
     "parse_github_user_iri",
-    "parse_infoscience_iri",
     "parse_orcid",
     "resolve_article_id",
     "resolve_organization_id",

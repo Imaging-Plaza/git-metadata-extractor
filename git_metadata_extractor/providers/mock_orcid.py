@@ -33,8 +33,6 @@ class MockORCIDProvider(ORCIDProvider):
                 self._load_record_fixture("multiple_employment"),
             ]
         }
-        # Keep malformed/invalid fixture on disk for test coverage.
-        self._load_json_fixture("invalid_checksum")
 
     @staticmethod
     def _default_fixture_root() -> Path:

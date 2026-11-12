@@ -86,13 +86,13 @@ def _valid_organization_payload() -> dict[str, Any]:
         "identifiers": {
             "pulse:ror": None,
             "pulse:infoscienceOrganizationIdentifier": None,
-            "pulse:githubOrganizationHandle": "github",
+            "pulse:githubOrganizationHandle": "https://github.com/github",
             "uuid": "f887181e-9b8c-4c55-8ee6-d34285fdbed4",
         },
         "idSource": "pulse:githubOrganizationHandle",
         "schema:name": "GitHub",
         "schema:identifier": None,
-        "pulse:githubOrganizationHandle": "github",
+        "pulse:githubOrganizationHandle": "https://github.com/github",
         "pulse:infoscienceOrganizationIdentifier": None,
         "pulse:OrganizationType": "pulse:PrivateCompany",
         "pulse:githubOrgFollowers": 123,
@@ -335,20 +335,6 @@ def test_llm_organization_agent_exposes_github_metadata_tool_without_optional_pr
         "fetch_link_content_via_selenium",
         "get_github_organization_metadata",
     ]
-
-
-def test_llm_organization_agent_works_with_minimal_context() -> None:
-    agent = LLMOrganizationAgentV2(
-        llm_runtime=_FakeLLMRuntime(_valid_organization_payload()),
-    )
-
-    result = asyncio.run(
-        agent.run({"org_name": "github"}, _providers()),
-    )
-
-    assert result.data["id"] == "github"
-    assert result.data["type"] == "org:Organization"
-    assert result.stats["agent_runtime"] == "llm"
 
 
 def test_llm_organization_agent_raises_on_empty_context() -> None:

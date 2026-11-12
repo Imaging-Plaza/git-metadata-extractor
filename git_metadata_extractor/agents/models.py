@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-import contextlib
 import json
+import re
 import uuid
-from copy import deepcopy
-from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from jsonschema import Draft7Validator  # type: ignore[import-untyped]
+from pydantic import Field, SkipValidation
 
-if TYPE_CHECKING:
-    from git_metadata_extractor.providers.base import (
-        GitHubProvider,
-        InfoscienceProvider,
-        ORCIDProvider,
-        RORProvider,
-    )
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.providers.base import (
+    GitHubProvider,
+    InfoscienceProvider,
+    ORCIDProvider,
+    RORProvider,
+)
+from git_metadata_extractor.providers.sources_service import SourcesClient
+from git_metadata_extractor.validation.json_schema import schema_validator
+from git_metadata_extractor.validation.metadata import (
+    restore_internal_metadata,
+    strip_internal_metadata,
+)
 
 MAX_PERMISSIVE_PASSES = 5
 ENTITY_BUCKET_KEYS: tuple[str, ...] = (
@@ -119,16 +123,15 @@ def infer_entity_bucket(
     return None
 
 
-@dataclass(slots=True)
-class TypedEntityBuckets:
+class TypedEntityBuckets(InternalModel):
     """Fixed six-bucket runtime collection for pipeline entity aggregation."""
 
-    repositories: list[dict[str, Any]] = field(default_factory=list)
-    persons: list[dict[str, Any]] = field(default_factory=list)
-    organizations: list[dict[str, Any]] = field(default_factory=list)
-    articles: list[dict[str, Any]] = field(default_factory=list)
-    memberships: list[dict[str, Any]] = field(default_factory=list)
-    contributions: list[dict[str, Any]] = field(default_factory=list)
+    repositories: list[dict[str, Any]] = Field(default_factory=list)
+    persons: list[dict[str, Any]] = Field(default_factory=list)
+    organizations: list[dict[str, Any]] = Field(default_factory=list)
+    articles: list[dict[str, Any]] = Field(default_factory=list)
+    memberships: list[dict[str, Any]] = Field(default_factory=list)
+    contributions: list[dict[str, Any]] = Field(default_factory=list)
 
     def _bucket(self, bucket_name: str) -> list[dict[str, Any]] | None:
         normalized_name = normalize_entity_bucket_key(bucket_name)
@@ -159,20 +162,18 @@ class TypedEntityBuckets:
         return any(getattr(self, bucket_name) for bucket_name in ENTITY_BUCKET_KEYS)
 
     def to_dict(self) -> dict[str, list[dict[str, Any]]]:
-        return {
-            bucket_name: [dict(entity) for entity in getattr(self, bucket_name)]
-            for bucket_name in ENTITY_BUCKET_KEYS
-        }
+        return self.model_dump()
 
 
-@dataclass(slots=True, frozen=True)
-class ProviderSet:
+class ProviderSet(InternalModel, frozen=True):
     """Dependency injection bundle for v2 agents."""
 
-    github: GitHubProvider
-    orcid: ORCIDProvider | None = None
-    infoscience: InfoscienceProvider | None = None
-    ror: RORProvider | None = None
+    # Clients are injected runtime objects, including observation proxies and
+    # duck-typed adapters. Validate data records, not the clients themselves.
+    github: SkipValidation[GitHubProvider]
+    orcid: SkipValidation[ORCIDProvider | None] = None
+    infoscience: SkipValidation[InfoscienceProvider | None] = None
+    ror: SkipValidation[RORProvider | None] = None
     package_registry: Any | None = None
     infoscience_rag: Any | None = None
     ethz_research_collection_rag: Any | None = None
@@ -188,32 +189,32 @@ class ProviderSet:
     github_rag: Any | None = None
     epfl_graph_rag: Any | None = None
     federated_rag: Any | None = None
+    sources: SkipValidation[SourcesClient | None] = None
 
     def close(self) -> None:
-        """Best-effort release of any provider that holds a closeable resource
-        (e.g. a pooled `requests.Session`), so it isn't leaked once per
-        extraction (Bug 03). Providers without a `close()` are skipped."""
-        for provider in (self.github, self.orcid, self.infoscience, self.ror):
-            close = getattr(provider, "close", None)
-            if callable(close):
-                with contextlib.suppress(Exception):  # best-effort cleanup
-                    close()
+        """Legacy sync cleanup for primary clients explicitly owned by the caller."""
+        from git_metadata_extractor.providers.runtime import close_resources_sync
+        close_resources_sync((self.github, self.orcid, self.infoscience, self.ror))
+
+    async def aclose(self) -> None:
+        """Close a wholly caller-owned bundle, including asynchronous providers."""
+        from git_metadata_extractor.providers.runtime import close_resources
+        await close_resources(getattr(self, name) for name in type(self).model_fields)
 
 
-@dataclass(slots=True)
-class AgentResult:
+class AgentResult(InternalModel):
     """Normalized result contract for v2 agent wrappers."""
 
     data: dict[str, Any]
-    warnings: list[str] = field(default_factory=list)
-    raw_output: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    raw_output: dict[str, Any] = Field(default_factory=dict)
     is_partial: bool = False
     failure_reason: str | None = None
     model: str | None = None
     provider: str | None = None
     tokens_prompt: int | None = None
     tokens_completion: int | None = None
-    stats: dict[str, Any] = field(default_factory=dict)
+    stats: dict[str, Any] = Field(default_factory=dict)
 
 
 def _warn_once(warnings: list[str], warning: str) -> None:
@@ -259,14 +260,14 @@ def validate_permissive(
 ) -> tuple[dict[str, Any], list[str]]:
     """Validate against agent schema while soft-dropping invalid optional fields."""
     schema = load_agent_schema(schema_name)
-    validator = Draft7Validator(schema)
+    validator = schema_validator(schema)
     required_fields = {
         field_name
         for field_name in schema.get("required", [])
         if isinstance(field_name, str)
     }
 
-    validated_payload = deepcopy(payload)
+    validated_payload = strip_internal_metadata(payload)
     warnings: list[str] = []
 
     # `_`-prefixed keys are internal pipeline metadata (per the convention
@@ -274,16 +275,10 @@ def validate_permissive(
     # output, and RDF serialisation. They don't need to appear in the agent
     # JSON Schema — pull them aside before running the schema validator so
     # they don't trip `additionalProperties`, then restore them at the end.
-    internal_metadata = {
-        key: validated_payload.pop(key)
-        for key in list(validated_payload)
-        if isinstance(key, str) and key.startswith("_")
-    }
-
     for _ in range(MAX_PERMISSIVE_PASSES):
         errors = sorted(validator.iter_errors(validated_payload), key=lambda err: list(err.path))
         if not errors:
-            validated_payload.update(internal_metadata)
+            restore_internal_metadata(payload, validated_payload)
             return validated_payload, warnings
 
         changed = False
@@ -293,7 +288,7 @@ def validate_permissive(
             path_text = _json_path(error_path)
 
             if error.validator == "additionalProperties" and isinstance(error.instance, dict):
-                properties = schema.get("properties", {})
+                properties = error.schema.get("properties", {})
                 valid_keys = (
                     {key for key in properties if isinstance(key, str)}
                     if isinstance(properties, dict)
@@ -301,13 +296,14 @@ def validate_permissive(
                 )
                 unexpected = sorted(
                     key for key in error.instance if key not in valid_keys
+                    and not any(re.search(pattern, key) for pattern in error.schema.get("patternProperties", {}))
                 )
                 if unexpected:
                     for extra_field in unexpected:
-                        validated_payload.pop(extra_field, None)
+                        error.instance.pop(extra_field, None)
                     _warn_once(
                         warnings,
-                        f"Removed unexpected fields: {', '.join(unexpected)}",
+                        f"Removed unexpected fields at {path_text}: {', '.join(unexpected)}",
                     )
                     changed = True
                 continue
@@ -340,6 +336,6 @@ def validate_permissive(
         )
 
     # Re-attach internal metadata pulled aside before the schema check.
-    validated_payload.update(internal_metadata)
+    restore_internal_metadata(payload, validated_payload)
 
     return validated_payload, warnings

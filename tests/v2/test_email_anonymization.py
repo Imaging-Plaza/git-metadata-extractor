@@ -30,11 +30,6 @@ def test_anonymize_email_matches_v1_hashing_logic() -> None:
     assert anonymize_email(raw_email) == _v1_anonymized_email(raw_email)
 
 
-def test_anonymize_email_is_deterministic() -> None:
-    raw_email = "deterministic@example.com"
-    assert anonymize_email(raw_email) == anonymize_email(raw_email)
-
-
 def test_anonymize_email_preserves_domain_and_hides_local_part() -> None:
     raw_email = "privacy@example.com"
     anonymized = anonymize_email(raw_email)

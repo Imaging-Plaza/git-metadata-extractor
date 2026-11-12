@@ -1,0 +1,8 @@
+schema_version: 1
+name: canonical.repository_fields
+version: '1'
+source_contract: extractor.v2.entity
+target_contract: canonical.repository
+fields:
+  pulse:repositoryStars: {sources: ['pulse:githubRepoStars']}
+  pulse:repositoryForks: {sources: ['pulse:githubRepoForks']}

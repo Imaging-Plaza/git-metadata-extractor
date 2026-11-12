@@ -1,6 +1,6 @@
 # Git Metadata Extractor
 
-Turn a GitHub URL into a SHACL-validated [Open Pulse Ontology](https://open-pulse.epfl.ch/ontology) graph — repositories, the people who built them, the organizations behind them, and the papers they cite.
+Turn a GitHub URL into an [Open Pulse Ontology](https://open-pulse.epfl.ch/ontology) graph with SHACL validation feedback — repositories, the people who built them, the organizations behind them, and the papers they cite.
 
 > 🌐 **In production at**
 > - **[imagingplaza.epfl.ch](https://imagingplaza.epfl.ch)** — discovery portal for EPFL imaging software.
@@ -10,19 +10,26 @@ Turn a GitHub URL into a SHACL-validated [Open Pulse Ontology](https://open-puls
 
 ## What it does
 
-```
-                 ┌──────────────────────────────┐
-github.com/X  →  │  /v2/extract                 │  →  JSON-LD graph
-                 │   classify → gather context  │
-                 │   → root + fan-out agents    │     - schema:SoftwareSourceCode
-                 │   → reconcile + resolve ROR  │     - schema:Person
-                 │   → SHACL validate           │     - org:Organization
-                 └──────────────────────────────┘     - org:Membership
-                                                     - pulse:Contribution
-                                                     - schema:ScholarlyArticle
-```
+The `/v2` API connects a repository, user or organization to software, people,
+affiliations and publications. Default output uses the **pinned v3 development
+ontology**, including platform profiles. API and ontology versions are separate.
+The pipeline combines deterministic provider lookups, indexed research sources
+and optional LLM agents; extraction SHACL violations are reported as warnings.
 
-A single GitHub URL → a typed graph you can SPARQL. The pipeline combines deterministic provider lookups (GitHub REST, ORCID, ROR, Infoscience, GIMIE), nine RAG indices, and optional LLM agents.
+**[Open the visual field guide](docs/guide/index.html)**
+for C4 architecture diagrams, animated extraction sequences and mapping recipes.
+Download the guide directory for offline viewing, or run `just docs-serve` and
+open `http://127.0.0.1:8000/`. The guide is the landing page; reference docs live
+under `/docs/`. See [publishing and preview instructions](docs/publishing.md).
+Use the [maintenance guide](docs/architecture/maintenance.md) for searchable
+mapping, ontology and optional run-report instructions.
+
+Deterministic mappings live in versioned YAML: source adapters prepare facts,
+entity mappings build agent payloads, and projections map the reconciled graph
+into raw and canonical ontology shapes. Each source/entity has a small mapping;
+shared policies cover routing, classification and merging. Start with the
+[mapping overview](docs/architecture/overview.md#source-to-ontology-mappings)
+or the [mapping editing guide](git_metadata_extractor/mapping/config/README.txt).
 
 ---
 
@@ -39,52 +46,24 @@ cp .env.example .env   # fill in API_TOKEN, GME_GITHUB_TOKEN + one LLM credentia
 just serve-dev         # starts on http://localhost:1234
 
 # 3. Extract
-curl "http://localhost:1234/v2/extract/github.com/Imaging-Plaza/git-metadata-extractor?output_format=jsonld"
+curl -H "Authorization: Bearer $API_TOKEN" \
+  "http://localhost:1234/v2/extract/github.com/Imaging-Plaza/git-metadata-extractor?output_format=jsonld"
 ```
 
-You'll get a JSON-LD `@graph` like:
-
-```json
-{
-  "@context": "https://open-pulse.epfl.ch/ontology/v2.1.2.jsonld",
-  "@graph": [
-    {
-      "@id": "urn:pulse:Imaging-Plaza/git-metadata-extractor",
-      "@type": "schema:SoftwareSourceCode",
-      "schema:name": "git-metadata-extractor",
-      "schema:license": "https://spdx.org/licenses/MIT.html",
-      "schema:author": [
-        { "@id": "urn:pulse:caviri" }
-      ],
-      "pulse:githubRepositoryHandle": "Imaging-Plaza/git-metadata-extractor"
-    },
-    {
-      "@id": "urn:pulse:caviri",
-      "@type": "schema:Person",
-      "schema:name": "Carlos Vivar Rios",
-      "org:hasMembership": [
-        { "@id": "urn:pulse:caviri__https://ror.org/02hdt9m26" }
-      ]
-    },
-    {
-      "@id": "urn:pulse:caviri__https://ror.org/02hdt9m26",
-      "@type": "org:Membership",
-      "org:organization": { "@id": "https://ror.org/02hdt9m26" }
-    },
-    {
-      "@id": "https://ror.org/02hdt9m26",
-      "@type": "org:Organization",
-      "schema:name": "Swiss Data Science Center"
-    }
-  ]
-}
-```
-
-That person → membership → organization chain was inferred by the ROR resolver stages — the pipeline reads `_company: "@SwissDataScienceCenter"` from GitHub, hits the ROR index, and materializes a proper `org:Membership` triple. See [`docs/v2-pipeline.md`](docs/v2-pipeline.md) for the full stage walkthrough.
+The response wraps a JSON-LD graph in `output`, with an extraction-run
+descriptor beside it. The default generated context follows the pinned
+`v3.0.0-develop` ontology; repository metrics and platform profiles use that
+contract. Add `include_run_report=true` to inspect observed stages, retrievals,
+validation and known model-usage subtotals without mixing them into entity data.
+See the [API reference](docs/v2-api-reference.md) for response fields and the
+[pipeline walkthrough](docs/v2-pipeline.md) for execution gates.
 
 ---
 
 ## More examples
+
+See [runnable Python examples](examples/README.md) for V2 user and organization
+extraction, ORCID affiliations, and an offline cache demonstration.
 
 ```bash
 # Async extraction (returns a job id)
@@ -124,9 +103,14 @@ Swagger UI: <http://localhost:1234/docs>
 | [docs/rag-indices.md](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) | Nine RAG indices + federated layer |
 | [docs/v2-rag-tools.md](docs/v2-rag-tools.md) | Agent-side RAG tools wired into the pipeline |
 | [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md) | `/v1` → `/v2` endpoint mapping |
+| [Ontology proposal adoption](dev/investigations/2026-11-11-proposal-adoption/adoption.txt) | Caviri's 22 requests assessed against Robin's implementation; adopted fixes and remaining ontology work |
+| [Refactor development notes](dev/refactor/README.md) | Architecture, ontology requirements and historical handoffs |
 | [.env.example](.env.example) | Every env var with defaults and notes |
 
-Versioned doc site: <https://imaging-plaza.github.io/git-metadata-extractor/>
+Project site: <https://imaging-plaza.github.io/git-metadata-extractor/>
+
+After the Pages workflow publishes this layout, the visual guide is at the site
+root and versioned reference documentation is under `/docs/`.
 
 ---
 
@@ -145,42 +129,38 @@ git_metadata_extractor/
   experimental/          # pi terminal-agent PoC (not production)
 
 # RAG indices moved to https://github.com/sdsc-ordes/open-pulse-sources —
-# the read-side providers import it as the `open_pulse_sources` library;
-# ingest/embed and the /v2/indices management API live in that repo/service.
+# extraction providers call that service over HTTP; retrieval, ingest/embed
+# and all index configuration/storage live in that repo/service.
 
 tests/v2/                # default test target
+config/                  # extractor experiment profiles and benchmark corpora
 docs/                    # MkDocs site source
 ```
 
-### Cross-repo compatibility
+See [configuration ownership](config/README.md) before editing an index config
+or choosing an extraction/benchmark profile.
 
-The index layer is consumed twice — as an imported **library** (read side) and
-as the **`gme-sources` service image** (write side) — and both share the same
-DuckDB stores and Qdrant collections. They must be the same release:
+### Sources service compatibility
 
-| git-metadata-extractor | open-pulse-sources library | `gme-sources` image | Notes |
-|---|---|---|---|
-| `3.0.0` (this release) | `v0.1.2` | `ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2` | first split release |
-| `< 3.0.0` | — | — | monolith; index layer was in-tree |
+The extractor uses HTTP; it no longer installs the sources Python library or
+opens DuckDB/Qdrant indices. Local development keeps sources as an independent
+Git checkout in `dev/open-pulse-sources`, excluded from this repository and its
+image build context. The current refactor requires that checkout's new
+`/v2/retrieval/*` and `/v2/extractor/*` routes; published sources `0.1.2` is not
+compatible with this boundary yet.
 
-`v0.1.1` and earlier are **not** supported by `3.0.0`: they return a raw 500
-instead of a 503 when a credential is missing, which the extract-side error
-handling reads as an unexpected failure rather than a degraded index.
+```bash
+docker compose -f tools/deploy/docker-compose.yml build gme-api gme-sources
+# Start only after configuring API_TOKEN and provider credentials in your environment.
+docker compose -f tools/deploy/docker-compose.yml up -d
+```
 
-The library version lives in exactly one place — the
-`open-pulse-sources @ git+…@<tag>` entry in `pyproject.toml` — and every
-install path (`just install-dev`, CI, the Docker image) inherits it from
-there. `tests/v2/test_open_pulse_sources_pin.py` fails the build if the
-`gme-sources` image tag drifts from it, or if either default slips back to a
-mutable ref (`main` / `latest`).
+`SOURCES_API_URL` and `SOURCES_API_TOKEN` connect the extractor to sources.
+Compose wires these and gives sources exclusive access to the existing index
+volume; the extractor gets a separate cache/output volume. No indices are reset
+or moved when updating the Compose configuration. See the
+[cross-repo contract](docs/cross-repo-contract.md) for endpoints and migration.
 
-Bumping the child version therefore means: edit the pin in `pyproject.toml`,
-match the image tag in `tools/deploy/docker-compose.yml`, add a matrix row
-here, and run the test. For local cross-repo work, `just install-dev`
-re-installs a checkout found at `./open-pulse-sources` or
-`../open-pulse-sources` as editable, overriding the pin.
-
----
 
 ## Configuration
 

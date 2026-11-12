@@ -1,0 +1,23 @@
+{
+ "request": {
+  "url": "https://huggingface.co/api/models?author=SDSC&limit=3"
+ },
+ "captured_at": "2026-08-07T05:59:21Z",
+ "status_code": 200,
+ "response": [
+  {
+   "_id": "6874d0984cff9f1a0432d52f",
+   "id": "SDSC/open-pulse-graph-classifier",
+   "likes": 0,
+   "trendingScore": 0,
+   "private": false,
+   "downloads": 0,
+   "tags": [
+    "license:mit",
+    "region:us"
+   ],
+   "createdAt": "2025-07-14T09:40:40.000Z",
+   "modelId": "SDSC/open-pulse-graph-classifier"
+  }
+ ]
+}

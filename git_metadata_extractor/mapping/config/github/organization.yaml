@@ -1,0 +1,27 @@
+schema_version: 1
+name: github.organization
+version: '1'
+source_contract: github.organization.record
+target_contract: agent.organization
+fields:
+  pulse:githubOrgFollowers: {sources: [followers], empty: preserve, missing: 'null'}
+internal_fields:
+  _avatar_url: {sources: [avatar_url], empty: preserve, missing: 'null'}
+  _html_url: {sources: [html_url], empty: preserve, missing: 'null'}
+  _blog: {sources: [blog], empty: preserve, missing: 'null'}
+  _description: {sources: [description], empty: preserve, missing: 'null'}
+  _company: {sources: [company], empty: preserve, missing: 'null'}
+  _location: {sources: [location], empty: preserve, missing: 'null'}
+  _email: {sources: [email], empty: preserve, missing: 'null'}
+  _twitter_username: {sources: [twitter_username], empty: preserve, missing: 'null'}
+  _public_repos: {sources: [public_repos], empty: preserve, missing: 'null'}
+  _followers_count: {sources: [followers], empty: preserve, missing: 'null'}
+  _github_created_at: {sources: [created_at], empty: preserve, missing: 'null'}
+  _github_updated_at: {sources: [updated_at], empty: preserve, missing: 'null'}
+  _github_account_type: {sources: [type], empty: preserve, missing: 'null'}
+  _is_verified: {sources: [is_verified], empty: preserve, missing: 'null'}
+  _archived_at: {sources: [archived_at], empty: preserve, missing: 'null'}
+  _public_gists: {sources: [public_gists], empty: preserve, missing: 'null'}
+  _following_count: {sources: [following], empty: preserve, missing: 'null'}
+  _has_organization_projects: {sources: [has_organization_projects], empty: preserve, missing: 'null'}
+  _has_repository_projects: {sources: [has_repository_projects], empty: preserve, missing: 'null'}

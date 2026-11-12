@@ -1,0 +1,54 @@
+{
+  "status": "completed",
+  "runtime": "rule_based",
+  "scope": "live context + repository agent + normal post-agent stages; no entity fanout",
+  "elapsed_seconds": 27.02,
+  "cache_hit": false,
+  "stats": {
+    "entities_count": 3,
+    "triples_count": 19,
+    "run_id": "0552cfd5-fcd2-4131-bacf-220d83579093",
+    "duration_ms": 18985,
+    "stages_completed": [
+      "context_gather",
+      "repo_agent",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate"
+    ]
+  },
+  "warnings": [
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=caviri",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=cmdoret",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=ksanao",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=marftn",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=raj921",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=rmfranken",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabinem",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabrinaossey",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=supermaxiste",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=vancauwe",
+    "Orphan owner reference from repository: repo=https://github.com/sdsc-ordes/gimie, owner=https://github.com/sdsc-ordes",
+    "KNOWN BUG (schema:author empty after reconciliation): synthesized owner Person stub 'https://github.com/sdsc-ordes' as schema:author on https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes'). No matching Person or Organization existed in the graph \u2014 typical of solo-user repositories with no extracted contributor data.",
+    "Inferred pulse:owns on https://github.com/sdsc-ordes \u2192 https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes').",
+    "rule_based_disciplines: qdrant search failed \u2014 [Errno -2] Name or service not known"
+  ],
+  "internal_field_leaks": [],
+  "response_fields": [
+    "source_url",
+    "detected_type",
+    "output_format",
+    "output",
+    "context_summary_markdown",
+    "warnings",
+    "stats",
+    "extraction_run",
+    "provenance",
+    "execution_profile",
+    "substrate"
+  ]
+}

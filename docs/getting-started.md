@@ -8,14 +8,11 @@ This project uses [`uv`](https://docs.astral.sh/uv/) for dependency management.
 just install-dev          # uv pip install -e ".[dev]"
 ```
 
-That single command is enough. The RAG index layer
-([open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)) is a
-declared dependency pinned to a release tag in `pyproject.toml`, so it comes
-in with the install — see
-[Cross-repo compatibility](https://github.com/Imaging-Plaza/git-metadata-extractor#cross-repo-compatibility)
-for the supported version pairs. Working on both repos at once? Clone the
-child at `./open-pulse-sources` or `../open-pulse-sources` and `just
-install-dev` re-installs it editable, overriding the pin.
+This installs only the extractor. Indexed retrieval runs in the separate
+sources service, whose local checkout belongs at `dev/open-pulse-sources`.
+Build it with `just sources-build`, or run the matching development branch on
+another host. See the [service contract](cross-repo-contract.md) for the
+required branch, Docker setup and connection settings.
 
 ## 2. Configure environment
 
@@ -67,8 +64,9 @@ and `.env.example`):
 - `V2_<INDEX>_RAG_ENABLED` (default `true`) — toggle RAG tools per index
   (`INFOSCIENCE`, `ETHZ_RESEARCH_COLLECTION`, `HUGGINGFACE`, `OPENALEX`,
   `ZENODO`, `ORCID`, `ROR`).
-- `INDEX_QDRANT_URL` — Qdrant endpoint. **Inside the devcontainer use
-  `http://gme-qdrant:6333`**, not `localhost:6333`.
+- `SOURCES_API_URL` and `SOURCES_API_TOKEN` — authenticated retrieval service.
+  The devcontainer wires `http://gme-sources:8080`; Qdrant and index settings
+  belong to that service, not the extractor.
 - `GIMIE_API_URL` — **required for repository extraction.** GIMIE runs as the
   `gme-gimie-api` sidecar (the `gimie` package was removed from the image); the
   devcontainer compose sets this to `http://gme-gimie-api:15400` for you. Outside
@@ -154,8 +152,8 @@ just gme-search "Swiss German LLM" --top-k 10
 just gme-entity 0000-0001-9534-3870              # by ORCID, ROR, DOI, HF slug, …
 ```
 
-This service only *reads* the resulting stores (Qdrant + DuckDB under
-`INDEX_DATA_DIR`) through the `open_pulse_sources` library.
+The extractor requests records over the sources HTTP API. Only sources opens
+the resulting Qdrant and DuckDB stores under its `INDEX_DATA_DIR`.
 
 See [RAG Indices Overview](https://github.com/sdsc-ordes/open-pulse-sources/blob/main/docs/rag-indices.md) for the full per-index
 inventory, scopes, and storage layout.
@@ -164,17 +162,20 @@ inventory, scopes, and storage layout.
 
 ```bash
 uv pip install -e ".[docs]"
-just docs-serve          # local preview
-just docs-build          # strict build
+just docs-serve          # landing page at /, reference docs at /docs/
+just docs-build          # strict build of the complete site
 ```
 
 Publish (CI handles `main` and tag pushes; manual commands available):
 
 ```bash
-just docs-deploy-dev                  # publish dev + latest
-just docs-deploy-release 2.0.1        # publish release + update stable
-just docs-set-default stable
+just docs-deploy-dev                  # dispatch the main publishing workflow
+just docs-deploy-release 3.1.0         # dispatch for an existing v3.1.0 tag
 ```
+
+See [Documentation publishing](publishing.md) for GitHub Pages configuration,
+version routes and preview behavior. Local preview is at
+`http://127.0.0.1:8000/`; rerun `docs-serve` after edits.
 
 ## Local workflow
 

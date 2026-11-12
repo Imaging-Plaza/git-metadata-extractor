@@ -1,0 +1,12 @@
+schema_version: 1
+name: raw.deposit
+version: '1'
+source_contract: prepared.raw.deposit
+target_contract: canonical.deposit
+fields:
+  '@id': {sources: [id], empty: preserve, missing: 'null'}
+  '@type': {value: 'pulse:Deposit', empty: preserve, missing: 'null'}
+  pulse:platform: {sources: [platform], empty: preserve, missing: 'null'}
+  pulse:platformInternalId: {sources: [platformInternalId], empty: preserve, missing: 'null'}
+  schema:datePublished: {sources: [datePublished], empty: preserve, missing: 'null'}
+  pulse:depositOf: {sources: [depositOf], empty: preserve, missing: 'null'}

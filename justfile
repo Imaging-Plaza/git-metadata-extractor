@@ -13,6 +13,18 @@ WORKERS := env_var_or_default("WORKERS", "4")
 default:
     @just --list
 
+# List local experiment components (collectors and agent implementations).
+pipeline-list:
+    python -m git_metadata_extractor.experiments list
+
+# Validate a YAML pipeline profile without making model/provider calls.
+pipeline-validate profile:
+    python -m git_metadata_extractor.experiments validate {{quote(profile)}}
+
+# Run a local benchmark matrix; pass --profile, --corpus and a new --output path.
+pipeline-benchmark *args:
+    python -m git_metadata_extractor.experiments benchmark {{args}}
+
 # ============================================================================
 # Installation & Setup
 # ============================================================================
@@ -21,25 +33,13 @@ default:
 install:
     uv pip install .
 
-# Install in development mode with all dependencies.
-# The RAG-index layer lives in the open-pulse-sources repo; the v2 read-side
-# providers import it as a library. It is a declared dependency of this
-# project (pinned to an immutable tag in pyproject.toml), so the install
-# below already brings it in — no separate pin to keep in sync.
-# For cross-repo development, a checkout found either nested
-# (./open-pulse-sources) or beside this repo (../open-pulse-sources) is then
-# re-installed editable so local child edits take effect immediately.
+# Install extractor dependencies. Sources runs in its own environment/container.
 install-dev:
     uv pip install -e ".[dev]"
-    @if [ -d open-pulse-sources ]; then \
-        echo "open-pulse-sources: nested checkout -> editable install"; \
-        uv pip install -e ./open-pulse-sources; \
-    elif [ -d ../open-pulse-sources ]; then \
-        echo "open-pulse-sources: sibling checkout -> editable install"; \
-        uv pip install -e ../open-pulse-sources; \
-    else \
-        echo "open-pulse-sources: using the pinned release from pyproject.toml"; \
-    fi
+
+# Build and run the independent local sources checkout with the development stack.
+sources-build:
+    docker compose -f tools/deploy/docker-compose.yml build gme-sources
 
 # Set up development environment (install + create .env if needed)
 setup:
@@ -172,11 +172,26 @@ capture-live:
 test-live:
     .venv/bin/python -m pytest tests/v2/test_live_provider_connectivity.py -m live_provider -v
 
-# Run offline Phase 8 fixture/sanitizer checks
-test-offline:
-    .venv/bin/python -m pytest tests/v2/test_provider_connectivity_preflight.py tests/v2/test_provider_snapshot_sanitizer.py tests/v2/test_live_snapshot_fixture_contract.py -v
-
 # Generate committed v2 Pydantic models from strict schemas
+# Generate Pydantic models from the SHACL shapes (needs ontology-prepare)
+ontology-models-generate:
+    python scripts/v2/prepare_ontology.py
+    python scripts/v2/generate_from_ontology.py
+
+# Fail if the generated models have drifted from the shapes (for CI)
+ontology-models-check:
+    python scripts/v2/prepare_ontology.py --check
+    python scripts/v2/generate_from_ontology.py --check
+
+# Check out the pinned ontology submodule and apply ontology/patches/
+ontology-prepare:
+    git submodule update --init --recursive vendor/open-pulse-ontology
+    python scripts/v2/prepare_ontology.py
+
+# Verify the ontology is prepared without modifying it (for CI)
+ontology-check:
+    python scripts/v2/prepare_ontology.py --check
+
 v2-models-generate:
     PYTHONPATH=. .venv/bin/python scripts/v2/generate_v2_models.py
 
@@ -250,29 +265,26 @@ docs:
 # Project Documentation Site (MkDocs + Mike)
 # ============================================================================
 
-# Serve project documentation locally with live reload
+# Build and preview the landing page plus /docs/ locally; rerun after edits
 docs-serve:
-    mkdocs serve
+    python scripts/docs/build_site.py
+    python -m http.server 8000 --bind 127.0.0.1 --directory site
 
 # Build project documentation and fail on warnings
 docs-build:
-    mkdocs build --strict
+    python scripts/docs/build_site.py
 
 # List published documentation versions and aliases
 docs-version-list:
     mike list
 
-# Deploy docs from current branch as dev + latest aliases
+# Publish main through the complete GitHub Pages workflow
 docs-deploy-dev:
-    mike deploy --push --branch gh-pages --update-aliases dev latest
+    gh workflow run docs_pages.yml --ref main
 
 # Deploy docs for a specific release version and update stable alias
 docs-deploy-release VERSION:
-    mike deploy --push --branch gh-pages --update-aliases {{VERSION}} stable
-
-# Set the default docs version/alias
-docs-set-default VERSION:
-    mike set-default --push --branch gh-pages {{VERSION}}
+    gh workflow run docs_pages.yml --ref v{{VERSION}}
 
 # ============================================================================
 # Cleanup
@@ -291,7 +303,7 @@ clean-test:
 
 # Clean up all cache and temporary files
 clean-all: clean-py clean-test
-    rm -f api_cache.db test_output.json
+    rm -f data/api_cache.db test_output.json
     @echo "Cleaned up all cache and temporary files"
 
 # ============================================================================
@@ -365,5 +377,5 @@ pre-commit-clean:
 # All index build/refresh tooling (ingest / embed / search / serve / reset,
 # the federated CLI, and the /v2/indices/* management API) lives in
 # https://github.com/sdsc-ordes/open-pulse-sources — see its justfile.
-# The extraction service only *reads* the indices (Qdrant + DuckDB via the
-# open_pulse_sources library).
+# The extraction service requests records over HTTP; only sources opens
+# Qdrant and DuckDB stores.

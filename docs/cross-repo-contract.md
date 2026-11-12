@@ -1,151 +1,94 @@
-# Cross-Repo Contract
+# Sources service contract
 
-Since `3.0.0` the RAG index layer lives in
-[open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources). This
-page is the contract between the two repos: which side owns what, how versions
-are pinned, and the sharp edges of a shared data volume.
+The extractor and `open-pulse-sources` are separate processes and separate
+Git repositories. The extractor calls sources over authenticated HTTP; it no
+longer installs its Python package or opens its index files.
 
----
+| Responsibility | Extractor | Sources |
+| --- | --- | --- |
+| Graph construction | Agents, ontology mappings, reconciliation, validation, provenance | Source facts only |
+| Retrieval | Typed HTTP adapters and tool-facing contracts | Search, filters, scopes, hydration, lineage, federated lookup |
+| Index operations | Opt-in job submission | Ingest, embedding, reranking, DuckDB/Qdrant storage, bootstrap |
+| Configuration | Pipeline/benchmark profiles, API settings, ontology mappings | Index YAML, embedding models, collections, source scopes |
+| Local state | Extraction/provider cache and outputs | Index files and source service cache/jobs |
 
-## Who owns what
+## Local checkout and deployment
 
-| | `git-metadata-extractor` (this repo) | `open-pulse-sources` |
-|---|---|---|
-| Role | extraction service — **reads** indices | index layer — **writes** indices |
-| HTTP surface | `/v2/extract`, `/v2/jobs/*`, `/v2/health` | `/v2/manifest`, `/v2/indices/*` (ingest, embed, reset, stats) |
-| Deployable | `gme-api` | `gme-sources` |
-| Code | `providers/*_rag.py` readers, agent RAG tools | ingest pipelines, embedding, DuckDB stores, federated search |
-| Ops | extraction runbook | ingest/embed recipes, seeds, migration scripts |
+The independent sources checkout lives at `dev/open-pulse-sources`. It is
+ignored by this Git repository and excluded from the extractor image's build
+context. Work there is committed separately; never stage it as a nested Git
+repository or copy its implementation back into the extractor.
 
-Consumed **twice**, which is the thing to keep straight:
+The current development pairing is the extractor refactor branch and the
+sources `feat/extractor-service-boundary` branch (`0.2.0.dev0`). This is local
+unpublished work. Published sources `0.1.2` does not provide the new retrieval
+and auxiliary routes and must not be substituted for it.
 
-1. As a **library** — `import open_pulse_sources`, used by the read-side
-   providers, `canonicalization/doi.py`, and the gunicorn startup bootstrap.
-   Imported unconditionally, so it is a hard dependency, not an extra.
-2. As a **service image** — the `gme-sources` container that owns the write
-   side.
-
-Both must be the same release. They share DuckDB stores and Qdrant
-collections, so a version skew shows up as empty search results or a failed
-bootstrap rather than a clean error.
-
-Not moved: `config/index/*.yaml` stays in this repo, because the library
-resolves config and data paths relative to the working directory.
-
----
-
-## Version pinning
-
-The library version lives in **exactly one place** — the
-`open-pulse-sources @ git+…@<tag>` entry in `pyproject.toml` `dependencies`.
-Every install path inherits it: `just install`, `just install-dev`, CI, and
-`tools/image/Dockerfile`.
-
-| Supported pair | Library | `gme-sources` image |
-|---|---|---|
-| `3.0.0` | `v0.1.2` | `ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2` |
-
-`v0.1.1` and earlier are **not** supported by `3.0.0`: they answer a missing
-credential with a raw 500 instead of a 503.
-
-### Rules
-
-- **Never add a second pin.** No extra
-  `pip install "open-pulse-sources @ git+…@<tag>"` anywhere.
-  `tests/v2/test_open_pulse_sources_pin.py` fails on a hardcoded second pin.
-- **Pins must be immutable** — a release tag (`vX.Y.Z`) or a full commit SHA.
-  A `main` or `latest` default fails the same test.
-- **The compose image tag must match the library pin.** Also enforced by that
-  test.
-- **`OPEN_PULSE_SOURCES_REF`** (Docker build arg) defaults to *empty* and is an
-  override-only escape hatch for testing an unreleased child revision. A
-  permanent bump belongs in `pyproject.toml`.
-
-### Bumping the child version
-
-1. Edit the pin in `pyproject.toml`.
-2. Match the `gme-sources` image tag in `tools/deploy/docker-compose.yml`.
-3. Add a row to the table above (and to the README matrix).
-4. `pytest tests/v2/test_open_pulse_sources_pin.py`.
-
-Published images record the resolved ref as the
-`ch.sdsc.pulse.open-pulse-sources-ref` OCI label, so a deployment smoke test
-can compare `gme-api`'s library revision against the running `gme-sources`
-image without rebuilding anything.
-
-### Local cross-repo development
-
-`just install-dev` re-installs a checkout found at `./open-pulse-sources` **or**
-`../open-pulse-sources` as editable, overriding the pin, and echoes which path
-it took. Without a checkout it uses the pinned release.
-
----
-
-## Shared state, and the writer problem
-
-`gme-api` and `gme-sources` share the `gme-data` volume (DuckDB stores) and a
-Qdrant instance.
-
-```mermaid
-flowchart TB
-    subgraph W["write side"]
-        S[gme-sources<br/>ingest · embed · reset]
-    end
-    subgraph R["read side"]
-        A[gme-api<br/>providers + RAG tools]
-    end
-    S -->|mutates| D[(DuckDB · gme-data)]
-    S -->|upserts| Q[(Qdrant)]
-    A -->|reads| D
-    A -->|searches| Q
-    A -.->|"opt-in auto-ingest (off by default)"| D
+```bash
+docker compose -f tools/deploy/docker-compose.yml build gme-api gme-sources
+docker compose -f tools/deploy/docker-compose.yml up -d
 ```
 
-**DuckDB's file lock is per-process, and both services' locks are
-process-local.** Nothing enforces a single writer across services. Practical
-rules:
+The development container also builds sources from that checkout. A fresh
+clone needs the matching sources branch placed there before building the
+stack. A standalone extractor install needs only its own Python dependencies.
 
-- Keep bulk ingest / embed / reset on `gme-sources`.
-- Leave extract-side auto-ingest **off** (the default) unless you know no
-  ingest is running; it is the one path where `gme-api` writes.
-- The child publishes atomic read-only snapshots (`.ro.duckdb`), which is the
-  correct isolation mechanism — but two read paths in this repo still open the
-  live files, so a read during a write can observe partial state. Tracked as
-  task 06.
+Compose keeps the existing `gme-data` volume attached to sources and assigns a
+new `gme-api-data` volume to the extractor. Existing index contents are neither
+reset nor copied. The extractor cache path is `/app/data/cache/providers.db`.
+For devcontainer use, sources mounts the existing `data/index` directory.
 
-An architectural fix (making `gme-sources` the only writer, with this service
-posting jobs to it) is task 05 in `dev/split-rag-indices/`.
+Sources runs with **one worker**: DuckDB writes and asynchronous job locks are
+process-local. Moving index access into a service removes competing extractor
+writers; it does not make multi-process DuckDB writes safe.
 
----
+## Connection settings
 
-## Required deployment settings
+| Extractor variable | Meaning |
+| --- | --- |
+| `SOURCES_API_URL` | Service root, e.g. `http://gme-sources:8080` |
+| `SOURCES_API_TOKEN` | Bearer credential matching the sources service's `API_TOKEN` |
+| `SOURCES_API_TIMEOUT_SECONDS` | HTTP timeout, default 30 seconds, maximum 300 |
 
-`INDEX_DATA_DIR` must be set explicitly on **both** services
-(`/app/data/index` in the shipped compose file). Without it, a wheel-installed
-library resolves its data root relative to the package — i.e.
-`site-packages/data` — and every store fails to bootstrap with a permission
-error. `INDEX_QDRANT_URL` points at Qdrant (`http://gme-qdrant:6333` in
-compose).
+Compose uses `SOURCES_API_TOKEN`, falling back to `API_TOKEN` if no separate
+credential is supplied. Source-specific tokens, Qdrant URLs, index paths and
+embedding settings belong on sources. Missing configuration or an unavailable
+service yields explicit disabled/unavailable retrieval and stage warnings;
+there is no local-library fallback.
 
----
+## HTTP surfaces
 
-## Read-side feature flags
+Existing `/v2/manifest` and `/v2/indices/*` management/search routes remain.
+The new operations preserve the extractor's retrieval behavior:
 
-Each RAG index has an on/off switch, all defaulting to `true`, and each
-degrades gracefully when Qdrant or the credential is unavailable:
-`V2_INFOSCIENCE_RAG_ENABLED`, `V2_ETHZ_RESEARCH_COLLECTION_RAG_ENABLED`,
-`V2_HUGGINGFACE_RAG_ENABLED`, `V2_OPENALEX_RAG_ENABLED`,
-`V2_ZENODO_RAG_ENABLED`, `V2_ORCID_RAG_ENABLED`, `V2_ROR_RAG_ENABLED`,
-`V2_SWISSUBASE_RAG_ENABLED`, `V2_RENKULAB_RAG_ENABLED`,
-`V2_EPFL_GRAPH_RAG_ENABLED`.
+- `/v2/retrieval/{provider}/{method}`: bounded, typed provider search,
+  hydration, lineage, federated lookup and SNSF grant queries. Requests retain
+  scopes, filters and explicit rerank controls; results retain existing
+  tool-facing shapes.
+- `/v2/extractor/*`: fixed source operations for discipline ancestry, exact
+  Infoscience acronym and Zenodo-community lookup, EPFL concept annotation,
+  related research facts, and GitHub ensure-indexed job submission. No route
+  accepts arbitrary SQL or an arbitrary callable name.
 
-"Degrades gracefully" means the provider disables itself and the pipeline runs
-without it. That is convenient in development and dangerous in production — it
-is exactly how a dead HuggingFace provider went unnoticed for weeks. The
-import-contract test (`tests/v2/test_open_pulse_sources_contract.py`) exists
-because of that incident: it walks every `open_pulse_sources` reference in the
-package with AST and fails if any cannot be resolved against the installed
-library.
+All new routes require bearer authentication. Source exceptions are sanitized
+before returning across the boundary. Consult the sources OpenAPI `/docs` for
+request models and individual operation names.
 
-See [V2 Agent RAG Tools](v2-rag-tools.md) for what each index provides to the
-agents.
+An extraction auto-ingest flag authorizes **submission**, not completed work.
+The source service checks whether the record is already indexed, owns the
+write/embedding lifecycle, and exposes job status through its job API.
+
+## Provenance and verification
+
+Successful responses identify the actual running sources build. The extractor
+records that metadata within the extraction scope, including concurrent agent
+calls. Missing or conflicting versions produce no invented source snapshot;
+no installed-library version is used. The build identifies service software,
+not an immutable export of every upstream record.
+
+The boundary is guarded by `tests/v2/test_sources_boundary.py`: no sources,
+DuckDB, Qdrant or graph-index implementation imports, no index-library package
+dependency, and API startup with those imports blocked. HTTP adapter tests
+cover request/response contracts, failure handling and version-scope isolation.
+Sources tests cover migrated retrieval implementations and authenticated
+operation routes using fake or temporary backends.

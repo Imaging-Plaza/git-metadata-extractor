@@ -6,8 +6,16 @@ The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with [Open Pulse
 
 > **Two sequencers, not one.** Agent generation runs from a per-input-type
 > plan in the orchestrator (`PLAN_BY_TYPE`); everything after the agents is a
-> flat sequence in `api/extract.py`. The stage inventory below reflects both —
+> set of ordered chains in `pipeline/run.py`, executed by
+> `services/extraction.py`. The stage inventory below reflects both —
 > see [Stage inventory](#stage-inventory).
+
+Field mapping is a separate concern from stage order. Source adapters prepare
+facts; per-source/entity YAML maps rule-based agent payloads and raw/canonical
+projections. Shared YAML policies cover source routing, classification and
+unifier merging. Fetching, matching and graph algorithms remain Python. See
+[Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings)
+for the workflow and the single detailed editing guide.
 
 ---
 
@@ -91,7 +99,7 @@ The diagram is deliberately simplified. `classify_url` runs in the API layer *be
 
 ## Stage inventory
 
-Reconstructed from `PLAN_BY_TYPE`, the `# === <name> stage ===` banners in `api/extract.py` and the `STAGE_*` constants in `api/_helpers.py` (2026-07-29). When in doubt, those three are the source of truth.
+Reconstructed from `PLAN_BY_TYPE` and the ordered stage chains in `pipeline/run.py` (2026-07-29). When in doubt, those two are the source of truth: each post-agent stage's name is the `Stage(name=...)` literal in its chain.
 
 ### Phase 1 — agent generation (orchestrator)
 
@@ -119,7 +127,7 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `reconcile_entities` | ID canonicalisation + linkage; anonymises emails |
 | `resolve_company_to_ror` | `_company` → ROR: Membership + Org stub |
 | `resolve_bio_to_ror` | bio / blog / email → ROR: Membership + Org stub |
-| `resolve_bio_to_ror_llm` **[LLM]** | LLM long-tail affiliation resolver |
+| `resolve_bio_to_ror_llm` **[LLM/hybrid]** | LLM long-tail affiliation resolver |
 | `resolve_placeholder_orgs_to_ror` | upgrade placeholder Orgs to real ROR entities |
 | `llm_critic` **[LLM, off by default]** | drop suggestions |
 | `refine_with_llm` **[hybrid]** | whitelisted-field patches over rule-based output |
@@ -141,9 +149,21 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `infer_article_source_organization` | attribute articles to a source organisation |
 | `concept_tagging` **[off by default]** | EPFL Graph concepts / keywords / disciplines onto the root repo |
 | `tag_rule_based_disciplines` | deterministic discipline fallback |
-| `build_jsonld_output` | final JSON-LD `@graph`; strips redundant `pulse:ror` |
+| `build_jsonld_output` | v2-shaped JSON-LD `@graph`; strips redundant `pulse:ror`. Since the v3 flip this is an *intermediate*, not the response |
+| `substrate_projection` **[off by default]** | project that intermediate into the v3 **raw** shapes, grouped into one named graph per `pulse:ExtractionOutput`. An entity with two sources is emitted once per source, its properties partitioned between the copies. Each output names the index build it read via `prov:used` → `pulse:SourceSnapshot`. Returned as `substrate` |
+| `canonical_projection` | project the intermediate into the v3 **canonical** shapes and swap in the generated `@context`. This is what `output` carries |
 | `shacl_gate` | SHACL validation — **warning-only**, see below |
+| `extraction_run` | describe the run as a `pulse:ExtractionRun` + `prov:SoftwareAgent`, beside `output` |
+| `substrate_write` **[off by default]** | fold the run descriptor into the substrate's meta graph and POST the quads to Oxigraph |
 | `compute_stats` | response counters and timings |
+
+Raw projection reads a private normalized intermediate that retains source facts
+such as `_subscribers_count` and `_bio`. Public JSON-LD strips those keys (or
+renames them for debug output), so it cannot supply the raw mappings. The private
+copy is excluded from state serialization, and raw output removes internal keys
+recursively. GitHub profile mappings run only for GitHub profiles; ORCID biography
+does not become a GitHub biography. `schema:programmingLanguage` carries programming
+languages; `pulse:language` is reserved for natural language.
 
 ### Why `shacl_gate` is warning-only
 
@@ -229,6 +249,21 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 
 ---
 
+## Observing one run
+
+Set `include_run_report=true` on GET or POST extraction for the actual generation
+and post-processing timeline. The optional `run_report` includes stage outcomes,
+activity and retrieval links, property-change summaries, validator results and
+model usage. Default requests do not take report snapshots or attach the report.
+Cache hits are labelled reuse and do not claim fresh extraction or model cost.
+See the [API contract and example](v2-api-reference.md#optional-run-report).
+
+The report records function execution and explicit outcomes; stage completion
+does not imply every optional side effect, such as a configured store write,
+took place. Validation conformance and model/retrieval failures remain separately
+inspectable. `stats.stages_completed` is retained for compatibility and is not
+the authoritative execution timeline.
+
 ## Env flags worth knowing
 
 | Flag | Default | Effect |
@@ -243,8 +278,12 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | `V2_LINK_VERACITY_ENABLED` | **`true`** | `link_veracity` (Selenium + LLM URL verification). On in LLM mode; set `false` for batch runs. Rule-based mode skips it unconditionally. |
 | `V2_CONCEPT_TAGGING_ENABLED` | `false` | `concept_tagging`. Backend via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph`, `wikipedia`, `llm`}. |
 | `V2_EXPAND_OWNED_REPOS` | `false` | Materialise each owned repo as a full entity instead of a `pulse:owns` reference. |
-| `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency. |
+| `V2_MAX_CONCURRENT_AGENTS` | `8` | Per-stage fan-out concurrency. |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
+| `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `output` carries the v3 canonical shapes. `false` restores the v2 shape. |
+| `V2_SUBSTRATE_ENABLED` | `false` | `substrate_projection` + `substrate_write` (the raw layer in named graphs). |
+| `V2_SUBSTRATE_STORE_URL` | unset | Oxigraph root the substrate is written to. Unset: projected and returned, stored nowhere. |
+| `V2_SUBSTRATE_VALIDATE` | `true` | Validate each substrate slice against the raw shapes at write. Reports, never refuses. |
 
 Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 2026-07-29. Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
 
@@ -256,10 +295,11 @@ Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 20
 |---|---|
 | How the layers fit together | [Architecture Overview](architecture/overview.md) |
 | The index-layer split and version pinning | [Cross-Repo Contract](cross-repo-contract.md) |
-| Post-agent stage sequencing | `git_metadata_extractor/api/extract.py` — `_run_extract_job`, with `# === <name> stage ===` banners |
+| Post-agent stage sequencing | `git_metadata_extractor/pipeline/run.py` — ordered chains executed by `services/extraction.py` |
 | Agent plans and fan-out | `git_metadata_extractor/pipeline/orchestrator.py` — `PLAN_BY_TYPE` (line ~120) |
 | Individual stages | `git_metadata_extractor/pipeline/stages/` — one module per stage; resolvers are `resolve_*.py` |
 | Schema source of truth | `git_metadata_extractor/schema/json/` (agent + strict) and `schema/ontology/open-pulse-ontology.ttl` |
+| Deterministic field mappings and policies | [Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings) |
 | Env flags and gates | `git_metadata_extractor/api/_helpers.py` — every `V2_*` reader lives here |
 
 The former "deep reference" pointer (`.internal/v2-pipeline-reference.md`) was

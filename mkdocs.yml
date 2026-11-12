@@ -1,10 +1,13 @@
 site_name: Git Metadata Extractor Documentation
-site_url: https://imaging-plaza.github.io/git-metadata-extractor/
+site_url: https://imaging-plaza.github.io/git-metadata-extractor/docs/
 repo_url: https://github.com/Imaging-Plaza/git-metadata-extractor
 repo_name: Imaging-Plaza/git-metadata-extractor
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
+
+hooks:
+  - scripts/docs/hooks.py
 
 theme:
   name: material
@@ -14,6 +17,8 @@ theme:
 
 plugins:
   - search
+  - mike:
+      alias_type: copy
 
 extra:
   version:
@@ -39,6 +44,8 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Understand the system:
+      - Visual Field Guide: guide/index.html
+      - Mapping and Ontology Maintenance: architecture/maintenance.md
       - Architecture Overview: architecture/overview.md
       - V2 Extract Pipeline: v2-pipeline.md
       - Cross-Repo Contract: cross-repo-contract.md
@@ -50,6 +57,7 @@ nav:
       - Migration V1 to V2: migration-v1-to-v2.md
   - Operate it:
       - Operations Runbook: OPERATIONS_RUNBOOK.md
+      - Documentation Publishing: publishing.md
   # Index build/refresh docs live in the open-pulse-sources repo:
   # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
   # (RAG tools the extraction pipeline consumes) is documented here.
@@ -57,7 +65,7 @@ nav:
       - V2 Agent RAG Tools: v2-rag-tools.md
       - Concept Tagging Stage: concept-tagging.md
   - Ontology:
-      - v3.0.0 Reference (proposed): releases/ontology-v3.0.0.md
+      - Historical v3 Proposal: releases/ontology-v3.0.0.md
       - JSON Schema Graphs: releases/json-schemas.md
   - Project:
       - Roadmap: ROADMAP.md

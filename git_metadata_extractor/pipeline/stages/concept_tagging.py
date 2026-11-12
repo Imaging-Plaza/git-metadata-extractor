@@ -23,8 +23,7 @@ output by adding the corresponding ontology terms to the strict schema.
 Backends are pluggable via ``V2_CONCEPT_TAGGING_BACKEND``:
 
 - ``epfl_graph`` (default) — calls the EPFL Graph (graphai) API via
-  ``open_pulse_sources.module.epfl_graph``. Requires ``EPFL_GRAPH_USERNAME`` /
-  ``EPFL_GRAPH_PASSWORD``.
+  the sources HTTP service. EPFL credentials belong to that service.
 - ``wikipedia`` — deterministic, credential-free. Extracts candidate
   phrases from the README with a simple heuristic and resolves each to a
   Wikipedia page via the MediaWiki opensearch API.
@@ -44,10 +43,13 @@ import logging
 import os
 import re
 from collections import Counter
-from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 import requests
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.providers.sources_service import current_sources_client
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +75,11 @@ KEYWORDS_FIELD = "_keywords"
 DISCIPLINES_FIELD = "_disciplines"
 
 
-@dataclass(slots=True)
-class ConceptTaggingResult:
-    keywords: list[str] = field(default_factory=list)
-    concepts: list[dict[str, Any]] = field(default_factory=list)
-    disciplines: list[dict[str, Any]] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+class ConceptTaggingResult(InternalModel):
+    keywords: list[str] = Field(default_factory=list)
+    concepts: list[dict[str, Any]] = Field(default_factory=list)
+    disciplines: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     backend: str = ""
 
 
@@ -131,172 +132,30 @@ def _dedupe_concepts(
 # Backend: EPFL Graph (graphai) ----------------------------------------------
 
 
-def _epfl_concept_to_dict(item: Any) -> dict[str, Any] | None:
-    if not isinstance(item, dict):
-        return None
-    label = (
-        item.get("concept_name")
-        or item.get("PageTitle")
-        or item.get("page_title")
-        or item.get("title")
-        or item.get("label")
-    )
-    if not isinstance(label, str) or not label.strip():
-        return None
-    wikipedia_url = item.get("WikipediaURL") or item.get("wikipedia_url") or None
-    if not wikipedia_url and label:
-        wikipedia_url = (
-            "https://en.wikipedia.org/wiki/" + label.strip().replace(" ", "_")
-        )
-    # `concept_id` from EPFL Graph is the Wikipedia page ID, not a Wikidata
-    # QID; keep it as a typed reference so callers can disambiguate later.
-    raw_concept_id = item.get("concept_id")
-    concept_id: str | None = None
-    if isinstance(raw_concept_id, (int, str)) and str(raw_concept_id).strip():
-        concept_id = str(raw_concept_id).strip()
-    wikidata_id = item.get("WikidataID") or item.get("wikidata_id") or None
-    raw_score = (
-        item.get("mixed_score")
-        or item.get("MixedScore")
-        or item.get("Score")
-        or item.get("score")
-    )
-    try:
-        score = float(raw_score) if raw_score is not None else None
-    except (TypeError, ValueError):
-        score = None
-    return {
-        "label": label.strip(),
-        "wikipedia_url": wikipedia_url,
-        "wikidata_id": wikidata_id,
-        "concept_id": concept_id,
-        "score": score,
-        "source": BACKEND_EPFL_GRAPH,
-    }
-
-
-def _extract_via_epfl_graph(  # noqa: PLR0913, C901, PLR0912, PLR0915
-    readme: str,
-    *,
-    max_concepts: int,
-    max_keywords: int,
-    min_score: float = DEFAULT_EPFL_MIN_SCORE,
-    enrich_with_disciplines: bool = True,
-    max_disciplines: int = DEFAULT_MAX_DISCIPLINES,
-    discipline_top_concepts: int = DEFAULT_DISCIPLINE_TOP_CONCEPTS,
-    discipline_top_n: int = DEFAULT_DISCIPLINE_TOP_N_PER_CONCEPT,
+async def _source_annotation(
+    operation: str, payload: dict[str, Any],
 ) -> ConceptTaggingResult:
-    result = ConceptTaggingResult(backend=BACKEND_EPFL_GRAPH)
-    try:
-        from open_pulse_sources.module.epfl_graph import (  # noqa: PLC0415
-            category_chain,
-            category_graphsearch_url,
-            category_wikipedia,
-            concept_nearest_categories,
-            extract_concepts_from_text,
-            extract_keywords_from_text,
+    client = current_sources_client()
+    if client is None:
+        return ConceptTaggingResult(
+            backend=BACKEND_EPFL_GRAPH,
+            warnings=["concept_tagging: sources service unavailable"],
         )
-    except Exception as exc:  # noqa: BLE001
-        result.warnings.append(f"epfl_graph backend unavailable: {exc}")
-        return result
-
-    cleaned = _strip_markdown(readme).strip()
-    if not cleaned:
-        result.warnings.append("epfl_graph: empty text after markdown stripping")
-        return result
-
     try:
-        raw_keywords = extract_keywords_from_text(cleaned) or []
-    except Exception as exc:  # noqa: BLE001
-        raw_keywords = []
-        result.warnings.append(f"epfl_graph keyword extraction failed: {exc}")
-
-    try:
-        raw_concepts = extract_concepts_from_text(cleaned) or []
-    except Exception as exc:  # noqa: BLE001
-        raw_concepts = []
-        result.warnings.append(f"epfl_graph concept extraction failed: {exc}")
-
-    result.keywords = _dedupe_keywords(raw_keywords, max_keywords)
-    converted: list[dict[str, Any]] = []
-    for raw in raw_concepts:
-        concept = _epfl_concept_to_dict(raw)
-        if concept is None:
-            continue
-        score = concept.get("score")
-        if isinstance(score, (int, float)) and score < min_score:
-            continue
-        converted.append(concept)
-    result.concepts = _dedupe_concepts(converted, max_concepts)
-
-    if enrich_with_disciplines and result.concepts:
-        seen: set[str] = set()
-        disciplines: list[dict[str, Any]] = []
-        for concept in result.concepts[:discipline_top_concepts]:
-            concept_id = concept.get("concept_id")
-            if not concept_id:
-                continue
-            try:
-                categories = concept_nearest_categories(
-                    concept_id, top_n=discipline_top_n,
-                )
-            except Exception as exc:  # noqa: BLE001
-                result.warnings.append(
-                    f"epfl_graph: discipline lookup failed for "
-                    f"{concept.get('label', concept_id)}: {exc}",
-                )
-                continue
-            for category in categories:
-                if not isinstance(category, dict):
-                    continue
-                category_id = category.get("category_id")
-                if not isinstance(category_id, str) or not category_id:
-                    continue
-                if category_id in seen:
-                    continue
-                seen.add(category_id)
-                chain_ids = category_chain(category_id)
-                chain = []
-                for idx, cid in enumerate(chain_ids):
-                    wiki = category_wikipedia(cid)
-                    chain.append(
-                        {
-                            "category_id": cid,
-                            "label": wiki.get("name"),
-                            "depth": idx,  # 0 = leaf, increases toward root
-                            "wikipedia_url": wiki.get("wikipedia_url"),
-                            "wikipedia_page_id": wiki.get("wikipedia_page_id"),
-                        },
-                    )
-                leaf_wiki = chain[0] if chain else {}
-                disciplines.append(
-                    {
-                        "category_id": category_id,
-                        "label": leaf_wiki.get("label") or category_id,
-                        "score": category.get("score"),
-                        "rank": category.get("rank"),
-                        "from_concept": concept.get("label"),
-                        "source": BACKEND_EPFL_GRAPH,
-                        "graphsearch_url": category_graphsearch_url(category_id),
-                        "wikipedia_url": leaf_wiki.get("wikipedia_url"),
-                        "wikipedia_page_id": leaf_wiki.get("wikipedia_page_id"),
-                        "chain": chain,
-                    },
-                )
-                if len(disciplines) >= max_disciplines:
-                    break
-            if len(disciplines) >= max_disciplines:
-                break
-        # Sort by score desc, then rank asc — EPFL Graph scores are not
-        # bounded, so a simple max() across concepts already orders well.
-        disciplines.sort(
-            key=lambda item: (
-                -(item.get("score") or 0.0),
-                item.get("rank") or 0,
-            ),
+        response = await client.operation(operation, payload)
+        if response.status != "ok":
+            return ConceptTaggingResult(
+                backend=BACKEND_EPFL_GRAPH,
+                warnings=[f"concept_tagging: sources annotation {response.status}"],
+            )
+        return ConceptTaggingResult.model_validate(
+            {**response.data, "backend": BACKEND_EPFL_GRAPH},
         )
-        result.disciplines = disciplines
-    return result
+    except Exception:  # noqa: BLE001 - optional annotation fails open
+        return ConceptTaggingResult(
+            backend=BACKEND_EPFL_GRAPH,
+            warnings=["concept_tagging: sources annotation failed"],
+        )
 
 
 # Backend: Wikipedia (rule-based, credential-free) ---------------------------
@@ -546,69 +405,6 @@ async def _extract_via_llm(
 # Stage entrypoint ------------------------------------------------------------
 
 
-def _enrich_disciplines_with_related(
-    disciplines: list[dict[str, Any]],
-    *,
-    top_disciplines: int,
-    top_topics: int,
-    top_n: int,
-    warnings: list[str],
-) -> None:
-    """Stamp ``openalex_topics`` / ``publications`` / ``people`` / ``units``
-    onto the top disciplines in-place via the OpenAlex API.
-
-    Opt-in (gated by ``V2_CONCEPT_TAGGING_OPENALEX_RELATED_ENABLED``)
-    because each enabled discipline triggers ~4 OpenAlex calls — cheap
-    individually but worth keeping off the default path.
-    """
-    if not disciplines:
-        return
-
-    try:
-        from open_pulse_sources.module.epfl_graph import (  # noqa: PLC0415
-            category_nearest_openalex_topics,
-            people_for_topics,
-            publications_for_topics,
-            units_for_topics,
-        )
-    except Exception as exc:  # noqa: BLE001
-        warnings.append(f"concept_tagging: enrichment imports failed: {exc}")
-        return
-
-    for discipline in disciplines[:top_disciplines]:
-        category_id = discipline.get("category_id")
-        if not isinstance(category_id, str) or not category_id:
-            continue
-
-        try:
-            topics = category_nearest_openalex_topics(
-                category_id, top_n=top_topics,
-            )
-        except Exception as exc:  # noqa: BLE001
-            topics = []
-            warnings.append(
-                f"concept_tagging: openalex topic lookup failed for "
-                f"{category_id}: {exc}",
-            )
-        if not topics:
-            continue
-        discipline["openalex_topics"] = topics
-        topic_ids = [t["topic_id"] for t in topics if t.get("topic_id")]
-        if not topic_ids:
-            continue
-        try:
-            discipline["publications"] = publications_for_topics(
-                topic_ids, top_n=top_n,
-            )
-            discipline["people"] = people_for_topics(topic_ids, top_n=top_n)
-            discipline["units"] = units_for_topics(topic_ids, top_n=top_n)
-        except Exception as exc:  # noqa: BLE001
-            warnings.append(
-                f"concept_tagging: openalex enrichment failed for "
-                f"{category_id}: {exc}",
-            )
-
-
 async def run_concept_tagging_stage(  # noqa: PLR0913
     *,
     root_entity: dict[str, Any] | None,
@@ -652,14 +448,17 @@ async def run_concept_tagging_stage(  # noqa: PLR0913
     truncated = _truncate(readme_text.strip(), max_readme_chars)
 
     if backend_normalized == BACKEND_EPFL_GRAPH:
-        result = await asyncio.to_thread(
-            _extract_via_epfl_graph,
-            truncated,
-            max_concepts=max_concepts,
-            max_keywords=max_keywords,
-            min_score=epfl_min_score,
-            enrich_with_disciplines=enrich_with_disciplines,
-        )
+        result = await _source_annotation("epfl-concepts", {
+            "readme": truncated,
+            "max_concepts": max_concepts,
+            "max_keywords": max_keywords,
+            "min_score": epfl_min_score,
+            "enrich_with_disciplines": enrich_with_disciplines,
+            "enable_related_openalex": enable_related_openalex,
+            "related_top_disciplines": related_top_disciplines,
+            "related_top_topics": related_top_topics,
+            "related_top_n": related_top_n,
+        })
     elif backend_normalized == BACKEND_WIKIPEDIA:
         result = await asyncio.to_thread(
             _extract_via_wikipedia,
@@ -674,15 +473,16 @@ async def run_concept_tagging_stage(  # noqa: PLR0913
             max_keywords=max_keywords,
         )
 
-    if result.disciplines and enable_related_openalex:
-        await asyncio.to_thread(
-            _enrich_disciplines_with_related,
-            result.disciplines,
-            top_disciplines=related_top_disciplines,
-            top_topics=related_top_topics,
-            top_n=related_top_n,
-            warnings=result.warnings,
-        )
+    if result.disciplines and enable_related_openalex and backend_normalized != BACKEND_EPFL_GRAPH:
+        related = await _source_annotation("epfl-related", {
+            "disciplines": result.disciplines,
+            "related_top_disciplines": related_top_disciplines,
+            "related_top_topics": related_top_topics,
+            "related_top_n": related_top_n,
+        })
+        if related.disciplines:
+            result.disciplines = related.disciplines
+        result.warnings.extend(related.warnings)
 
     if result.keywords:
         root_entity[KEYWORDS_FIELD] = result.keywords

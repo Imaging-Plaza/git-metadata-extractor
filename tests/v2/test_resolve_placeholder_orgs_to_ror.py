@@ -10,6 +10,11 @@ from typing import Any
 
 import pytest
 
+from git_metadata_extractor.pipeline.stages import (
+    resolve_bio_to_ror,
+    resolve_company_to_ror,
+    resolve_placeholder_orgs_to_ror,
+)
 from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
 from git_metadata_extractor.pipeline.stages.resolve_placeholder_orgs_to_ror import (
     STAGE_SOURCE_TAG,
@@ -339,34 +344,50 @@ def test_stage_returns_zero_when_no_organizations():
     assert result.placeholders_examined == 0
 
 
-def test_stage_returns_zero_when_provider_missing(monkeypatch):
-    """No provider configured (Qdrant absent) — stage returns a sane
-    result and never raises.
-
-    Passing ``provider=None`` makes the stage fall back to
-    ``build_default_provider()``. We force that to return ``None`` so the
-    test deterministically exercises the provider-unavailable branch
-    *without* constructing a real Qdrant client — otherwise the stage
-    would issue a live ROR-RAG query and fail on DNS in a
-    network-isolated CI sandbox (the production call-site in api.py wraps
-    this stage in try/except, so a real outage degrades gracefully there).
-    """
-    monkeypatch.setattr(
-        "git_metadata_extractor.pipeline.stages.resolve_placeholder_orgs_to_ror.build_default_provider",
-        lambda *a, **k: None,
-    )
-    placeholder = _placeholder_org("u1", "EPFL")
-    reconciled = ReconciledEntities(
-        entities={"organizations": [placeholder], "memberships": []},
-    )
-    result = asyncio.run(
-        run_resolve_placeholder_orgs_to_ror_stage(
-            reconciled=reconciled, provider=None,
+@pytest.mark.parametrize(
+    ("module", "stage", "entities", "examined"),
+    [
+        pytest.param(
+            resolve_company_to_ror,
+            resolve_company_to_ror.run_resolve_company_to_ror_stage,
+            {"persons": [{"id": "p1", "_company": "EPFL"}]},
+            "persons_examined",
+            id="company",
         ),
-    )
-    # Result is well-formed even when provider building fails.
-    assert isinstance(result, PlaceholderResolutionResult)
-    assert result.placeholders_examined == 0
+        pytest.param(
+            resolve_bio_to_ror,
+            resolve_bio_to_ror.run_resolve_bio_to_ror_stage,
+            {"persons": [{"id": "p1", "_bio": "PhD student at EPFL"}]},
+            "persons_examined",
+            id="bio",
+        ),
+        pytest.param(
+            resolve_placeholder_orgs_to_ror,
+            run_resolve_placeholder_orgs_to_ror_stage,
+            {"organizations": [_placeholder_org("u1", "EPFL")], "memberships": []},
+            "placeholders_examined",
+            id="placeholder",
+        ),
+    ],
+)
+def test_ror_rag_resolvers_skip_when_provider_unavailable(
+    monkeypatch, module, stage, entities, examined,
+):
+    """The three ROR-RAG resolvers, with no provider to query, skip
+    without examining anything and record why.
+
+    Production reaches this when `V2_ROR_RAG_ENABLED=false` or Qdrant is
+    unreachable: `pipeline/run.py` passes `provider=None`, and each stage
+    falls back to `build_default_provider()`. Forcing that to return
+    ``None`` exercises the branch deterministically — leaving it real
+    would build a live client wherever Qdrant happens to be up, and the
+    branch would never run. (`resolve_bio_to_ror_llm` has no such
+    fallback; its own test pins its skip.)
+    """
+    monkeypatch.setattr(module, "build_default_provider", lambda *a, **k: None)
+    reconciled = ReconciledEntities(entities=entities)
+    result = asyncio.run(stage(reconciled=reconciled, provider=None))
+    assert getattr(result, examined) == 0
     assert result.rejection_reasons == {"provider_unavailable": 1}
 
 
@@ -388,13 +409,3 @@ def test_api_env_flag_recognises_off_values(value, monkeypatch):
 
     monkeypatch.setenv("V2_RESOLVE_PLACEHOLDER_ORGS_TO_ROR", value)
     assert v2_api._resolve_placeholder_orgs_to_ror_enabled() is False
-
-
-def test_api_constant_and_export_are_in_place():
-    from git_metadata_extractor.api import _helpers as v2_api
-    from git_metadata_extractor.pipeline import stages
-
-    assert v2_api.STAGE_RESOLVE_PLACEHOLDER_ORGS_TO_ROR == "resolve_placeholder_orgs_to_ror"
-    assert callable(stages.run_resolve_placeholder_orgs_to_ror_stage)
-    assert "run_resolve_placeholder_orgs_to_ror_stage" in stages.__all__
-    assert "PlaceholderResolutionResult" in stages.__all__

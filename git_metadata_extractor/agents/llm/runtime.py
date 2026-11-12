@@ -5,7 +5,6 @@ import json
 import logging
 import os
 from contextvars import ContextVar
-from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 
@@ -18,12 +17,18 @@ from git_metadata_extractor.agents.llm.model_config import (
     load_model_config,
     validate_config,
 )
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import (
+    activity,
+    evidence_tools,
+    get_trace,
+    observe_tool,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
-class LLMRuntimeResult:
+class LLMRuntimeResult(InternalModel):
     payload: dict[str, Any]
     model: str
     provider: str
@@ -218,6 +223,12 @@ def reset_request_model_override(token: object) -> None:
     _request_model_override.reset(token)  # type: ignore[arg-type]
 
 
+def get_request_model_override() -> dict[str, Any] | None:
+    """Read the task-local selection without exposing credentials or mutating it."""
+    value = _request_model_override.get()
+    return dict(value) if value else None
+
+
 def _request_override_enabled() -> bool:
     raw = os.getenv(_REQUEST_OVERRIDE_FLAG_ENV)
     return bool(raw) and raw.strip().lower() in _TRUE_ENV_VALUES
@@ -278,6 +289,40 @@ class V2LLMRuntime:
         raise LLMRuntimeConfigError(message)
 
     async def run_json_prompt(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        output_type: Any = None,
+        tools: list[Any] | None = None,
+        usage_limits: UsageLimits | None = None,
+    ) -> LLMRuntimeResult:
+        trace = get_trace()
+        if trace is not None:
+            system_prompt += (
+                "\nProvenance: when copying a scalar value from a retrieved source, use "
+                "list_source_evidence and cite_source to associate its query_id with the "
+                "output entity_id, property and exact value. Cite only successful retrievals "
+                "you actually used. Do not cite inferred values or invent source IDs. "
+                "Evidence is recorded separately; do not add provenance fields to your output."
+            )
+            tools = [*(observe_tool(tool) for tool in tools or []), *evidence_tools()]
+        scope = trace.scope() if trace else None
+        entity_id = trace.activities.get(scope, {}).get("entity_id", "") if trace else ""
+        with activity(self._analysis_type, kind="model", entity_id=entity_id) as invocation:
+            result = await self._run_json_prompt(
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                output_type=output_type, tools=tools, usage_limits=usage_limits,
+            )
+            if invocation is not None:
+                invocation.update(model=result.model, provider=result.provider)
+                invocation.update(tokens_prompt=result.tokens_prompt, tokens_completion=result.tokens_completion,
+                                  requests=result.requests, tool_calls=result.tool_calls)
+            if trace is not None:
+                trace.observe(result.payload, entity_id=entity_id)
+            return result
+
+    async def _run_json_prompt(
         self,
         *,
         system_prompt: str,

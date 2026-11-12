@@ -1,0 +1,115 @@
+Full YAML migration validation - 2026-11-11
+
+Worktree: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+Local and uncommitted; no push, secret-file edits or service restarts.
+Earlier dirty work preserved. The inventory below compares the task-start
+snapshot, not HEAD (which also contains the earlier local refactors).
+
+Behavior
+- All six rule-based entity builders now map prepared facts through YAML.
+- GitHub, ROR, ORCID and Infoscience enrichment mappings are source-specific.
+- Raw/canonical projections, platform/source routing, classification and merge
+  declarations now load YAML policies validated with Pydantic.
+- 23 field mappings + 3 policy documents; constants, nested targets, enum maps,
+  explicit empty/null rules; unknown targets, collisions and policy errors fail.
+- Merge validation checks per-entity identity fields, explicit legacy matching
+  contracts, strongest identity first, template coverage and cardinality rules.
+- Policy content participates in cache/benchmark/provenance fingerprints.
+- Matching, normalization, complex parsing and graph algorithms remain Python.
+  No ontology/API version change; LLM prompts and hybrid logic unchanged.
+
+Commands and results
+Docker checks used image gme-local-contract-validation:20261111, --network none,
+--entrypoint python, worktree bind at /work/gme and --workdir /work/gme.
+Audit helpers are in D:/pro/git-metadata-extractor/.staging, mounted at /audit.
+
+1. -m pytest tests/v2/ -q -n 4 --dist=loadfile
+   -m 'not live_provider and not llm_integration' --no-cov -p no:cacheprovider --tb=short
+   RESULT: 1923 passed, 1 skipped, 2505 warnings in 40.55s
+2. scripts/v2/generate_v2_models.py --check
+   RESULT: strict.py and agent.py up-to-date.
+3. scripts/v2/generate_from_ontology.py --check
+   RESULT: generated ontology models up-to-date.
+4. /audit/check_mapping_cli.py
+   RESULT: CLI inventory parses; exported JSON Schema validates all 26 YAML docs.
+   Fingerprint: f46ceace889f9f44ecab5f207cd7de769060e6fa399b87c95cddfe5ed388e5d1
+5. /audit/check_mapping_wheel.py (read-only source bind; build in temporary copy)
+   RESULT: wheel built; all 26 YAML resources + guide included; installed wheel's
+   mapping --check passes from outside checkout.
+6. /audit/check_full_mapping_lint_delta.py
+   RESULT: 20 Python files compared; 45 baseline diagnostics -> 29 existing
+   diagnostics; zero added diagnostics. EXE002 excluded for Windows bind modes.
+7. uv lock --check --offline (native uv)
+   RESULT: exit 0; 235 packages resolved.
+8. git diff --check
+   RESULT: exit 0; only Git line-ending conversion notices.
+
+Independent review
+Read-only reviewer inspected task-only diffs and compared 80 sparse/empty
+repository-builder cases. Two findings were fixed: empty transform output must
+normalize to null under missing:null, and identity rules must reject cross-entity
+properties. Added regression tests; reviewer verified fixes with 44 passing
+tests and reported no remaining blocking issue. Parent's subsequent focused run
+passed 114 tests; the full final run above includes both fixes.
+
+Limits / follow-ups
+- Restart the extractor after editing YAML; configuration and module views are
+  cached for the process lifetime. No deployment/restart was requested here.
+- No live providers or LLM calls in this migration verification.
+- Existing dependency deprecations and async-test warnings remain in the suite;
+  the skipped test and repository-wide lint debt are not new completion claims.
+- Generated-contract checks cover targets and selected policy invariants; strict
+  JSON Schema/SHACL and semantic fixtures remain required. Same-as predicates
+  are checked against pinned ontology TTL by unifier tests, not runtime models.
+- Source_contract labels describe inputs; they are not upstream REST schemas.
+- Read mapping/config/README.txt for the editing and ontology-update workflow.
+
+Modified files relative to task start
+  git_metadata_extractor/agents/rule_based/article_agent.py
+  git_metadata_extractor/agents/rule_based/contribution_agent.py
+  git_metadata_extractor/agents/rule_based/membership_agent.py
+  git_metadata_extractor/agents/rule_based/organization_agent.py
+  git_metadata_extractor/agents/rule_based/person_agent.py
+  git_metadata_extractor/agents/rule_based/repository_agent.py
+  git_metadata_extractor/mapping/__init__.py
+  git_metadata_extractor/mapping/__main__.py
+  git_metadata_extractor/mapping/checks.py
+  git_metadata_extractor/mapping/config/README.txt
+  git_metadata_extractor/mapping/config/raw/repository.yaml
+  git_metadata_extractor/mapping/engine.py
+  git_metadata_extractor/mapping/models.py
+  git_metadata_extractor/pipeline/stages/canonical_projection.py
+  git_metadata_extractor/pipeline/stages/raw_projection.py
+  git_metadata_extractor/pipeline/stages/source_attribution.py
+  git_metadata_extractor/unify/merge.py
+  git_metadata_extractor/unify/policy.py
+  tests/v2/test_yaml_mappings.py
+
+Added files
+  git_metadata_extractor/mapping/config/agent/article.yaml
+  git_metadata_extractor/mapping/config/agent/contribution.yaml
+  git_metadata_extractor/mapping/config/agent/membership.yaml
+  git_metadata_extractor/mapping/config/agent/organization.yaml
+  git_metadata_extractor/mapping/config/agent/person.yaml
+  git_metadata_extractor/mapping/config/agent/repository.yaml
+  git_metadata_extractor/mapping/config/agent/repository_classification.yaml
+  git_metadata_extractor/mapping/config/canonical/deposit.yaml
+  git_metadata_extractor/mapping/config/canonical/organization_profile.yaml
+  git_metadata_extractor/mapping/config/canonical/platform_profile.yaml
+  git_metadata_extractor/mapping/config/canonical/repository_fields.yaml
+  git_metadata_extractor/mapping/config/github/organization.yaml
+  git_metadata_extractor/mapping/config/github/person.yaml
+  git_metadata_extractor/mapping/config/infoscience/organization.yaml
+  git_metadata_extractor/mapping/config/infoscience/person.yaml
+  git_metadata_extractor/mapping/config/orcid/person.yaml
+  git_metadata_extractor/mapping/config/policies/extraction.yaml
+  git_metadata_extractor/mapping/config/policies/merge.yaml
+  git_metadata_extractor/mapping/config/policies/ontology.yaml
+  git_metadata_extractor/mapping/config/raw/deposit.yaml
+  git_metadata_extractor/mapping/config/raw/profile_base.yaml
+  git_metadata_extractor/mapping/config/ror/organization.yaml
+  git_metadata_extractor/mapping/policies.py
+  tests/v2/test_full_yaml_migration.py
+  dev/investigations/2026-11-11-full-mappings/plan.txt
+  dev/investigations/2026-11-11-full-mappings/validation.txt

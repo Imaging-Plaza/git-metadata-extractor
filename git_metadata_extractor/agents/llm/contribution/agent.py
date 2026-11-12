@@ -6,22 +6,23 @@ import logging
 from copy import deepcopy
 from typing import Any
 
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
+
 logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
 from git_metadata_extractor.agents.llm._loader import load_prompt
 from git_metadata_extractor.agents.llm._payload_helpers import force_server_uuid
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.agent import AgentContributionShape
 from git_metadata_extractor.schema.models.strict import ContributionModel
-from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 MAX_CONTEXT_ENTITIES = 30
 
@@ -144,7 +145,6 @@ class LLMContributionAgentV2:
         context: dict[str, Any],
         providers: ProviderSet,
     ) -> AgentResult:
-        del providers
         contribution_seed = _resolve_contribution_seed(context)
 
         stamp_current_agent(
@@ -189,7 +189,7 @@ class LLMContributionAgentV2:
                     system_prompt=_SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                     output_type=AgentContributionShape,
-                    tools=[make_fetch_link_content_tool(self._cache)],
+                    tools=resolve_tools("contribution_agent", ToolContext(providers=providers, cache=self._cache, context=context)),
                 ),
                 timeout=self._llm_call_timeout_seconds,
             )

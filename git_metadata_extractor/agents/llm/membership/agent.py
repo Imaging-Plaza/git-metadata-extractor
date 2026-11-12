@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
+
 logger = logging.getLogger(__name__)
 
 import asyncio
@@ -14,18 +16,15 @@ from pydantic import ValidationError
 
 from git_metadata_extractor.agents.llm._loader import load_prompt
 from git_metadata_extractor.agents.llm._payload_helpers import force_server_uuid
-from git_metadata_extractor.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
-from git_metadata_extractor.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
+from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.agent import AgentMembershipShape
 from git_metadata_extractor.schema.models.strict import MembershipModel
-from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 
 MAX_CONTEXT_ENTITIES = 30
 
@@ -254,15 +253,7 @@ class LLMMembershipAgentV2:
         context_json = json.dumps(llm_input, ensure_ascii=True, sort_keys=True, default=str)
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
-        tools = [make_fetch_link_content_tool(self._cache)]
-        if providers.orcid is not None:
-            tools.append(make_orcid_person_tool(providers.orcid))
-            tools.append(
-                make_query_orcid_tool(
-                    providers.orcid,
-                    orcid_rag_provider=providers.orcid_rag,
-                ),
-            )
+        tools = resolve_tools("membership_agent", ToolContext(providers=providers, cache=self._cache, context=context))
 
         try:
             llm_result = await asyncio.wait_for(

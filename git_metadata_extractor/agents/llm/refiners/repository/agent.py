@@ -42,7 +42,14 @@ class RepositoryRefinerPatch(BaseModel):
     discipline: list[str] | None = Field(
         default=None,
         alias="pulse:discipline",
-        description="Wikidata QIDs (e.g., ['wd:Q428691']). At most 3.",
+        description=(
+            "Wikidata QIDs for the repository's research domain, most specific "
+            "first (e.g. ['wd:Q128570'] for a bioinformatics tool, "
+            "['wd:Q2539', 'wd:Q844240'] for a computer-vision model). "
+            "At most 3. Leave unset when the repository shows no clear domain "
+            "signal — an empty discipline list is valid and preferred over a "
+            "broad guess."
+        ),
     )
     repository_type: RepositoryTypeLiteral | None = Field(
         default=None,

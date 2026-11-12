@@ -39,50 +39,6 @@
       "node_id": "MDc6TGljZW5zZW1pdA=="
     }
   },
-  "graphql": {
-    "data": {
-      "repository": {
-        "id": "R_kgDOGM5x",
-        "name": "Hello-World",
-        "nameWithOwner": "octocat/Hello-World",
-        "isPrivate": false,
-        "repositoryTopics": {
-          "nodes": [
-            {
-              "topic": {
-                "name": "metadata"
-              }
-            },
-            {
-              "topic": {
-                "name": "ai"
-              }
-            }
-          ]
-        },
-        "licenseInfo": {
-          "key": "mit",
-          "name": "MIT License"
-        },
-        "languages": {
-          "edges": [
-            {
-              "size": 52310,
-              "node": {
-                "name": "Python"
-              }
-            },
-            {
-              "size": 1210,
-              "node": {
-                "name": "Shell"
-              }
-            }
-          ]
-        }
-      }
-    }
-  },
   "languages": {
     "Python": 52310,
     "Shell": 1210

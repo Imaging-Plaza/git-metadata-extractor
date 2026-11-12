@@ -20,14 +20,16 @@ import logging
 import os
 import re
 from copy import deepcopy
-from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import requests
+from pydantic import Field
 
-from git_metadata_extractor.agents.llm.agent_tools.graph_neighbors import make_get_entity_neighbors_tool
+from git_metadata_extractor.agents.llm.agent_tools.graph_neighbors import (
+    make_get_entity_neighbors_tool,
+)
 from git_metadata_extractor.agents.llm.refiners import (
     MembershipRefinerAgent,
     MembershipRefinerInput,
@@ -61,12 +63,18 @@ from git_metadata_extractor.agents.llm.refiners.rescue import (
     RescueRefinerInput,
 )
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError
-from git_metadata_extractor.agents.rule_based._repo_signals import extract_doc_candidate_urls
+from git_metadata_extractor.agents.rule_based._repo_signals import (
+    extract_doc_candidate_urls,
+)
 from git_metadata_extractor.api_models.enums import OrganizationTypeV2
-from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.observation.evidence import activity, get_trace
 from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
 from git_metadata_extractor.parsers.publiccode import parse_publiccode
 from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+
+if TYPE_CHECKING:
+    from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
 
 logger = logging.getLogger(__name__)
 
@@ -130,16 +138,15 @@ def _epfl_graph_min_score() -> float:
         return EPFL_GRAPH_MIN_SCORE_DEFAULT
 
 
-@dataclass(slots=True)
-class RefineWithLLMResult:
+class RefineWithLLMResult(InternalModel):
     """Outcome of the refinement stage across all entity types."""
 
     reconciled: ReconciledEntities
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     refined_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
-    by_type: dict[str, dict[str, int]] = field(default_factory=dict)
+    by_type: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 def is_enabled() -> bool:
@@ -321,7 +328,12 @@ async def _run_refiner_safely(
 
     name = entity.get("schema:name") or entity.get("id", "?")
     try:
-        patch = await coro
+        entity_id = str(entity.get("@id") or entity.get("id") or "")
+        with activity(f"{type_label}_refiner", kind="refiner", entity_id=entity_id):
+            patch = await coro
+            trace = get_trace()
+            if trace is not None:
+                trace.observe(patch, entity_id=entity_id)
         return entity, patch, []
     except LLMRuntimeError as exc:
         warning = f"refine_with_llm: {type_label} refiner failed for {name!r}: {exc}"
@@ -1082,103 +1094,24 @@ def _flatten_handle_concat(query: str) -> list[str]:
     return candidates
 
 
-def _query_communities_index(query: str) -> list[dict[str, Any]]:
-    """SQL lookup against the local `communities` DuckDB.
-
-    Matches an org name against `source_slug`, `title`, and
-    `description` (case-insensitive), preferring exact-slug hits.
-    Also strips a leading `@` so GitHub-handle-shaped queries work.
-    """
-
-    if not isinstance(query, str) or not query.strip():
+async def _query_source_records(
+    client: Any, operation: str, payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Read bounded source evidence without opening the source index locally."""
+    if client is None:
+        logger.warning(
+            "org_resolver: %s unavailable: sources service is not configured", operation,
+        )
         return []
-    try:
-        import duckdb  # noqa: PLC0415
-
-        from open_pulse_sources.index.zenodo_communities.paths import duckdb_path  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
+    result = await client.operation(operation, payload)
+    if result.status != "ok":
+        logger.warning("org_resolver: %s unavailable: %s", operation, result.status)
         return []
-    db_path = duckdb_path()
-    if not db_path.exists():
+    records = result.data.get("records")
+    if not isinstance(records, list):
+        logger.warning("org_resolver: %s returned invalid records", operation)
         return []
-    q = query.strip().lstrip("@").strip()
-    try:
-        con = duckdb.connect(str(db_path), read_only=True)
-    except Exception:  # noqa: BLE001
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        result = con.execute(
-            """
-            SELECT community_id, source_slug, parent_org, title, description, url
-            FROM communities
-            WHERE source_slug = ?
-               OR LOWER(source_slug) = LOWER(?)
-               OR title ILIKE ?
-               OR description ILIKE ?
-            ORDER BY
-                CASE WHEN source_slug = ? THEN 0 ELSE 1 END,
-                LENGTH(COALESCE(title, '')) ASC
-            LIMIT 5
-            """,
-            [q, q, f"%{q}%", f"%{q}%", q],
-        ).fetchall()
-        columns = [d[0] for d in con.description]
-        for row in result:
-            rows.append(dict(zip(columns, row, strict=False)))
-    except Exception:  # noqa: BLE001
-        return []
-    finally:
-        try:
-            con.close()
-        except Exception:  # noqa: BLE001
-            pass
-    return rows
-
-
-def _query_infoscience_acronym(db_path: str, query: str) -> list[dict[str, Any]]:
-    """Look up an Infoscience orgunit by acronym (exact match, then prefix).
-
-    Returns a list of `{org_uuid, name, acronym, parent_org_uuid, url}`
-    dicts. The lookup is intentionally narrow — only hits when the
-    query has the code-shape (uppercase / alphanumeric / no whitespace);
-    free-text names go through the live-API and federated branches.
-    """
-
-    import duckdb  # noqa: PLC0415
-
-    if not _looks_like_infoscience_code(query):
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        con = duckdb.connect(db_path, read_only=True)
-    except Exception:  # noqa: BLE001
-        return []
-    try:
-        result = con.execute(
-            """
-            SELECT org_uuid, name, acronym, parent_org_uuid
-            FROM organizations
-            WHERE acronym = ?
-            LIMIT 5
-            """,
-            [query],
-        ).fetchall()
-        columns = [d[0] for d in con.description] if result else []
-        for row in result:
-            record = dict(zip(columns, row, strict=False))
-            record["url"] = (
-                f"https://infoscience.epfl.ch/entities/orgunit/{record['org_uuid']}"
-            )
-            rows.append(record)
-    except Exception:  # noqa: BLE001
-        return []
-    finally:
-        try:
-            con.close()
-        except Exception:  # noqa: BLE001
-            pass
-    return rows
+    return [record for record in records if isinstance(record, dict)]
 
 
 async def _gather_federated_evidence(
@@ -1223,53 +1156,34 @@ async def _gather_federated_evidence(
         return out
     normalized_query = query.strip()
 
-    # --- DuckDB direct (FAST + AUTHORITATIVE for codes) ----------------
+    # Source-owned exact lookups complement semantic search for opaque codes.
     async def _safe_duckdb_infoscience() -> None:
-        """SQL `WHERE acronym = ?` against the local Infoscience DuckDB.
-
-        After the ingest fix (parsers.py extracts `oairecerif.acronym`
-        into the `acronym` column) and the one-shot backfill, this
-        returns the exact orgunit for codes like `UPMWMATHIS` /
-        `UPAMATHIS` / `U13781` in ~1ms with zero noise — bypassing the
-        semantic-vector search's confusion on opaque acronyms.
-        Best signal in the whole aggregator for code-shaped queries.
-        """
-        try:
-
-            from open_pulse_sources.index.infoscience.paths import duckdb_path  # noqa: PLC0415
-        except Exception:  # noqa: BLE001
-            return
-        db_path = duckdb_path()
-        if not db_path.exists():
+        if not _looks_like_infoscience_code(normalized_query):
             return
         try:
             rows = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _query_infoscience_acronym, str(db_path), normalized_query,
+                _query_source_records(
+                    getattr(providers, "sources", None), "infoscience-acronym",
+                    {"acronym": normalized_query, "limit": min(max_per_source, 5)},
                 ),
                 timeout=4.0,
             )
-        except Exception:  # noqa: BLE001
-            return
-        out["infoscience_duckdb_hits"] = rows[:max_per_source]
+            out["infoscience_duckdb_hits"] = rows[:max_per_source]
+        except Exception:  # noqa: BLE001 - optional evidence branch fails open
+            logger.warning("org_resolver: source acronym lookup unavailable")
 
-    # --- Communities DuckDB (lab / group registry) ---------------------
     async def _safe_communities() -> None:
-        """Search the local `communities` DuckDB.
-
-        Best signal when the dropped org is a GitHub-shaped lab handle
-        (`@AdaptiveMotorControlLab`) or a free-text lab name — the
-        index merges curated EPFL/ETHZ/CERN/CERN-openlab slugs plus
-        ~700 auto-discovered communities, all keyed by parent org.
-        """
         try:
             rows = await asyncio.wait_for(
-                asyncio.to_thread(_query_communities_index, normalized_query),
+                _query_source_records(
+                    getattr(providers, "sources", None), "zenodo-community",
+                    {"query": normalized_query.lstrip("@").strip(), "limit": min(max_per_source, 5)},
+                ),
                 timeout=4.0,
             )
-        except Exception:  # noqa: BLE001
-            return
-        out["communities_hits"] = rows[:max_per_source]
+            out["communities_hits"] = rows[:max_per_source]
+        except Exception:  # noqa: BLE001 - optional evidence branch fails open
+            logger.warning("org_resolver: source community lookup unavailable")
 
     # --- Direct calls (sync providers, run in threadpool) -------------
     async def _safe_infoscience() -> None:
@@ -1612,7 +1526,9 @@ async def _run_org_resolver_pass(
     from git_metadata_extractor.agents.llm.agent_tools.snsf_grants import (  # noqa: PLC0415
         make_search_snsf_grants_tool,
     )
-    from git_metadata_extractor.providers.snsf_grants import SnsfGrantsProvider  # noqa: PLC0415
+    from git_metadata_extractor.providers.snsf_grants import (
+        SnsfGrantsProvider,  # noqa: PLC0415
+    )
 
     tools: list[Any] = []
     if getattr(providers, "ror_rag", None) is not None:
@@ -1623,7 +1539,8 @@ async def _run_org_resolver_pass(
         tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
     if getattr(providers, "github", None) is not None:
         tools.append(make_github_organization_metadata_tool(providers.github))
-    tools.append(make_search_snsf_grants_tool(SnsfGrantsProvider()))
+    if getattr(providers, "sources", None) is not None:
+        tools.append(make_search_snsf_grants_tool(SnsfGrantsProvider(client=providers.sources)))
 
     if not tools:
         return (

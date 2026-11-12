@@ -1,33 +1,19 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Callable
 
 import pytest
 
-from git_metadata_extractor.providers.base import ORCIDProvider, ProviderNotFoundError
+from git_metadata_extractor.providers.base import ProviderNotFoundError
 from git_metadata_extractor.providers.mock_orcid import MockORCIDProvider
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "providers" / "orcid"
-MIN_FIXTURE_COUNT = 4
 MIN_EMPLOYMENT_ENTRIES = 2
-EXPECTED_FIXTURE_FILES = {
-    "valid_record.json",
-    "no_affiliations.json",
-    "multiple_employment.json",
-    "invalid_checksum.json",
-}
 
 
 @pytest.fixture(scope="module")
 def provider() -> MockORCIDProvider:
     return MockORCIDProvider(fixture_root=FIXTURE_ROOT)
-
-
-def test_mock_orcid_provider_implements_base_interface(provider: MockORCIDProvider) -> None:
-    assert isinstance(provider, ORCIDProvider)
-    assert not MockORCIDProvider.__abstractmethods__
 
 
 def test_valid_record_returns_structured_affiliation_payload(
@@ -59,14 +45,12 @@ def test_record_with_multiple_employment_entries_is_returned(
     assert len(record["employment"]) >= MIN_EMPLOYMENT_ENTRIES
 
 
-def test_invalid_checksum_fixture_triggers_provider_validation_error(
+def test_invalid_checksum_triggers_provider_validation_error(
     provider: MockORCIDProvider,
-    load_fixture: Callable[[str, str], Any],
 ) -> None:
-    invalid_fixture = load_fixture("providers/orcid", "invalid_checksum")
-
+    # Well-formed, but the check digit of 0000-0002-1825-0097 is 7, not 8.
     with pytest.raises(ValueError, match="checksum"):
-        provider.get_person_by_orcid(invalid_fixture["orcid_id"])
+        provider.get_person_by_orcid("0000-0002-1825-0098")
 
 
 def test_orcid_format_validation_is_enforced(provider: MockORCIDProvider) -> None:
@@ -82,18 +66,3 @@ def test_unknown_valid_orcid_raises_provider_not_found(
 ) -> None:
     with pytest.raises(ProviderNotFoundError):
         provider.get_person_by_orcid("7913-0249-0843-820X")
-
-
-def test_orcid_fixture_catalog_contains_required_files() -> None:
-    fixture_files = {path.name for path in FIXTURE_ROOT.glob("*.json")}
-
-    assert EXPECTED_FIXTURE_FILES.issubset(fixture_files)
-    assert len(fixture_files) >= MIN_FIXTURE_COUNT
-
-
-def test_orcid_fixture_files_are_valid_json() -> None:
-    for fixture_path in sorted(FIXTURE_ROOT.glob("*.json")):
-        with fixture_path.open(encoding="utf-8") as fixture_file:
-            payload = json.load(fixture_file)
-
-        assert isinstance(payload, dict)

@@ -117,6 +117,28 @@ def test_membership_agent_enriches_role_and_dates_from_affiliation_context() -> 
     assert epfl_membership["time:hasEnd"] is None
 
 
+def test_membership_agent_swaps_inverted_orcid_dates() -> None:
+    """ORCID returns some employments with start and end reversed.
+    `time:hasBeginning` must not fall after `time:hasEnd` (the Membership
+    shape's `sh:lessThanOrEquals`), so the agent swaps them."""
+    providers = ProviderSet(github=MockGitHubProvider())
+    agent = MembershipAgentV2()
+    context = deepcopy(_membership_context())
+    context["known_persons"][0]["orcid_affiliations"][0].update(
+        {"start_date": "2023-06-30", "end_date": "2019-01-01"},
+    )
+
+    result = asyncio.run(agent.run(context, providers))
+    epfl_membership = next(
+        membership
+        for membership in result.stats["memberships"]
+        if membership["org:organization"] == "https://ror.org/02s376052"
+    )
+
+    assert epfl_membership["time:hasBeginning"] == "2019-01-01"
+    assert epfl_membership["time:hasEnd"] == "2023-06-30"
+
+
 def test_membership_agent_handles_unresolved_organizations_with_warnings() -> None:
     providers = ProviderSet(github=MockGitHubProvider())
     agent = MembershipAgentV2()

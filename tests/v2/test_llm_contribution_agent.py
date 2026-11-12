@@ -108,6 +108,80 @@ def test_llm_contribution_agent_validates_payload_and_exposes_model_metadata(
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
     assert result.stats["agent_runtime"] == "llm"
     assert result.stats["contribution_count"] == 1
+    # force_server_uuid: the uuid the LLM emitted never survives.
+    assert result.data["identifiers"]["uuid"] != _valid_contribution_payload()["identifiers"]["uuid"]
+
+
+def test_llm_contribution_agent_stamps_the_orchestrators_pair_over_llm_output() -> None:
+    """The LLM sometimes echoes another person or repository from
+    `pipeline_outputs`. The orchestrator's `target_person` /
+    `target_repository` pair wins, and the composite id is rebuilt from it,
+    so dedup-by-id cannot collapse distinct contributions."""
+    payload = _valid_contribution_payload()
+    payload.update(
+        {
+            "id": "bob__bob/fork",
+            "identifiers": {**payload["identifiers"], "pulse:composite": "bob__bob/fork"},
+            "schema:author": "bob",
+            "pulse:contributionTo": "bob/fork",
+        },
+    )
+    agent = LLMContributionAgentV2(llm_runtime=_FakeLLMRuntime(payload))
+
+    result = asyncio.run(
+        agent.run(
+            {"contribution_seed": "owner/repo", **_person_and_repo_context()},
+            _providers(),
+        ),
+    )
+
+    assert result.data["schema:author"] == "alice"
+    assert result.data["pulse:contributionTo"] == "owner/repo"
+    assert result.data["id"] == "alice__owner/repo"
+    assert result.data["identifiers"]["pulse:composite"] == "alice__owner/repo"
+
+
+@pytest.mark.parametrize(
+    ("context_update", "llm_update"),
+    [
+        pytest.param({"target_person": None}, {}, id="no-target-person"),
+        pytest.param({"target_repository": None}, {}, id="no-target-repository"),
+        pytest.param(
+            {},
+            {
+                "pulse:contributionCount": 0,
+                "pulse:firstContributionDate": None,
+                "pulse:lastContributionDate": None,
+            },
+            id="empty-edge",
+        ),
+    ],
+)
+def test_llm_contribution_agent_emits_nothing_for_an_orphan_or_empty_edge(
+    context_update: dict[str, Any],
+    llm_update: dict[str, Any],
+) -> None:
+    """`pulse:ContributionShape` needs one author and one contributionTo, so
+    a missing half of the orchestrator's pair emits nothing rather than an
+    orphan; so does an edge with no count and no dates. Nothing means nothing
+    in `stats["contributions"]` either, which also feeds the entity buckets."""
+    agent = LLMContributionAgentV2(
+        llm_runtime=_FakeLLMRuntime({**_valid_contribution_payload(), **llm_update}),
+    )
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "contribution_seed": "owner/repo",
+                **_person_and_repo_context(),
+                **context_update,
+            },
+            _providers(),
+        ),
+    )
+
+    assert result.data == {}
+    assert result.stats["contributions"] == []
 
 
 def test_llm_contribution_agent_propagates_llm_runtime_error() -> None:

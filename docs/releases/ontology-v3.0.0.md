@@ -1,9 +1,12 @@
-# Open Pulse Ontology — v3.0.0 (proposed)
+# Historical v3 ontology proposal
 
-!!! warning "Draft / proposed"
-    This is a **proposed v3.0.0 draft**, not a released version. The current
-    production ontology is
-    [v2.1.2](https://sdsc-ordes.github.io/open-pulse-ontology/versions/v2.1.2/).
+!!! warning "Historical design reference"
+    This preserved proposal and its linked generated assets predate the current
+    pinned v3 development ontology. Draft terms listed here are not a statement
+    of today's output contract. The extractor now generates its default canonical
+    output from `vendor/open-pulse-ontology` plus approved repository patches.
+    Use the [maintenance guide](../architecture/maintenance.md) for current sources
+    and regeneration instructions.
 
 <div class="md-button-group" markdown>
 [:material-file-document-outline: Open the full reference](v3.0.0/index.html){ .md-button .md-button--primary }
@@ -17,7 +20,7 @@ provider fields. It merges three sources:
 
 | Source | Contents |
 |---|---|
-| `git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl` | All current (v2.1.2) terms, carried forward |
+| `git_metadata_extractor/validation/open-pulse-ontology-v2.1.2.ttl` | Historical v2.1.2 terms, carried forward in this proposal |
 | `.internal/ontology-v3/07-ttl-draft.md` | The proposed v3 additions |
 | `docs/gme-internal.ttl` | The internal (`gme-internal:`) provider vocabulary |
 

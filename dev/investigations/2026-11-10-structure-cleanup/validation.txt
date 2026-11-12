@@ -1,0 +1,81 @@
+Structure cleanup validation - 2026-11-10
+=========================================
+Workspace: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+All work is local and uncommitted. No pushes, deployments, live model calls or
+secret-file changes. Earlier provenance, profile and tool-catalog work retained.
+
+Implemented scope / files
+-------------------------
+services/{__init__,extraction}.py: shared use case with ExtractionOptions,
+ExtractionResult and ExtractionError; orchestration, cache and graph/provenance
+generation work without HTTP objects. Query-log context restored on every exit.
+
+api/extract.py: slim HTTP adapter shared by GET and async jobs; retains status
+mapping, auth routes and auto-ingest hooks. Four uncalled helpers removed.
+835 -> 371 lines compared with this task's starting worktree.
+
+pipeline/settings.py: single implementation of pipeline gates/constants/shared
+format helpers. api/_helpers.py retains explicit compatibility references.
+pipeline/run.py consumes settings directly; pipeline/state.py stale comment fixed.
+
+providers/runtime.py: 14-entry RAG registration table, plain provider composition,
+ownership-aware ProviderResources and shared-resource cleanup. Injected clients
+are borrowed, owned primary clients are closed per request/job, shared RAG clients
+are closed by the application/state owner. Missing optional providers retain
+retry-on-next-resolution behavior. Partial primary construction is cleaned up.
+
+dependencies.py: thin HTTP dependency adapter with deferred job ownership and
+compatibility exports for scripts. 485 -> 83 lines.
+agents/models.py: shared cleanup delegation; async caller-owned bundle cleanup.
+app.py: cancels/awaits tracked jobs and deferred cleanup before shared shutdown.
+Cleanup survives caller cancellation and may be awaited again without duplication.
+
+experiments/execution.py: calls the service directly and uses provider resources;
+no fabricated FastAPI/Starlette requests. Existing profile/CLI interface retained.
+tests/v2/test_extraction_service.py: 12 new regression/architecture checks.
+tests/v2/test_pipeline_profiles.py: lifecycle fixture targets plain provider builder.
+
+Verification
+------------
+Python checks used gme-local-validation:20261109 with --network none, source bind
+at /work/gme and working directory /work/gme.
+
+  python -m pytest tests/v2/test_extraction_service.py tests/v2/test_dependencies.py tests/v2/test_api_extract_stub.py tests/v2/test_pipeline_profiles.py tests/v2/test_benchmark_profiles.py -q --no-cov -p no:cacheprovider --tb=short
+  Initial integration: 48 passed.
+
+Regression tests reproduced missing service/boundaries, partial-construction
+leaks, optional-provider retry regression, shutdown ordering and interrupted
+cleanup before their fixes. The full suite exposed removed compatibility
+exports; these are now explicit references to the shared implementation.
+
+  python -m pytest tests/v2/ -q -n 4 --dist=loadfile -m "not live_provider and not llm_integration" --no-cov -p no:cacheprovider --tb=short
+  Final: 1855 passed, 1 skipped, 2503 warnings in 34.96 seconds.
+  Log: D:/pro/git-metadata-extractor/.staging/structure-full-final.txt
+
+  ruff check git_metadata_extractor/services git_metadata_extractor/providers/runtime.py git_metadata_extractor/pipeline/settings.py git_metadata_extractor/api/extract.py git_metadata_extractor/api/_helpers.py git_metadata_extractor/dependencies.py git_metadata_extractor/experiments/execution.py tests/v2/test_extraction_service.py --ignore EXE002
+  All checks passed. EXE002 excluded for Windows bind-mount executable bits.
+  This is scoped lint, not repository-wide lint-debt remediation.
+
+  git diff --check
+  Passed.
+
+  python -m git_metadata_extractor.experiments benchmark --profile config/pipelines/rule_based.yaml --profile config/pipelines/metadata_readme.yaml --corpus config/benchmarks/mock.json --output /artifacts/structure-smoke-20261110 --repeats 1
+  2/2 trials completed, zero model calls, zero pipeline cache hits.
+  Full: 4 entities, 25 triples. Metadata+README: 3 entities, 18 triples.
+  Both SHACL conformant and supplied expected fact matched (recall 1.0).
+  Counts match the pre-refactor smoke comparison. Timings are smoke observations
+  under concurrent test load, not a performance ranking.
+  Artifacts: D:/pro/git-metadata-extractor/.staging/structure-smoke-20261110
+
+Independent read-only review verified the provider lifetime fixes, including
+synthetic network-disabled cancellation/shutdown tests. No unresolved material
+ownership findings remained. Architecture tests prevent services, pipeline,
+provider runtime and benchmark execution from importing HTTP/API dependencies.
+
+Limits / follow-ups
+-------------------
+Live GitHub/LLM/index behavior was not exercised. Disconnected smoke runs retain
+existing auxiliary lookup warnings. No schemas, prompts or stage order changed.
+Large domain-stage splits and bounded job scheduling remain separate follow-ups;
+this batch implements the three approved structural cleanup steps only.

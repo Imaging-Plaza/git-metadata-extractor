@@ -1,0 +1,25 @@
+schema_version: 1
+name: agent.article
+version: '1'
+source_contract: prepared.agent.article
+target_contract: agent.article
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'schema:ScholarlyArticle', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:ArticleShape', empty: preserve, missing: 'null'}
+  identifiers.schema:identifier: {sources: [identifiers_schema_identifier], empty: preserve, missing: 'null'}
+  identifiers.pulse:infoscienceArticleIdentifier:
+    sources: [identifiers_pulse_infoscienceArticleIdentifier]
+    empty: preserve
+    missing: 'null'
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {sources: [idSource], empty: preserve, missing: 'null'}
+  schema:name: {sources: [name], empty: preserve, missing: 'null'}
+  schema:identifier: {sources: [identifier], empty: preserve, missing: 'null'}
+  schema:datePublished: {sources: [datePublished], empty: preserve, missing: 'null'}
+  schema:author: {sources: [author], empty: preserve, missing: 'null'}
+  pulse:infoscienceArticleIdentifier:
+    sources: [infoscienceArticleIdentifier]
+    empty: preserve
+    missing: 'null'
+  schema:sourceOrganization: {sources: [sourceOrganization], empty: preserve, missing: 'null'}

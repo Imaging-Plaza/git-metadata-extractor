@@ -4,6 +4,7 @@ Users Parser
 
 import base64
 import json
+import logging
 import os
 import re
 import time
@@ -15,7 +16,6 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -31,7 +31,15 @@ from .user_models import (
 
 load_dotenv()
 
-SELENIUM_REMOTE_URL = os.environ.get("SELENIUM_REMOTE_URL", "http://localhost:4444")
+logger = logging.getLogger(__name__)
+
+# No default: an unset value means "Selenium is not available", the same
+# contract as `agents/llm/agent_tools/selenium_fetch.py`. Defaulting to a
+# localhost grid made every ORCID scrape attempt a connection that fails and
+# then used to fall back to launching a browser on the operator's desktop.
+# Read at call time so tests and operators can set it per-process.
+def _selenium_remote_url() -> str:
+    return os.environ.get("SELENIUM_REMOTE_URL", "").strip()
 
 
 class GitHubUsersParser:
@@ -229,7 +237,11 @@ class GitHubUsersParser:
             orcid_url = f"https://orcid.org/{orcid_id}"
 
             options = FirefoxOptions()
-            options.headless = True
+            # `options.headless = True` was a silent no-op: the attribute was
+            # deprecated in Selenium 4.10 and removed in 4.23, and this repo
+            # pins selenium>=4.36 — so the assignment just set an unused Python
+            # attribute and the browser started with a visible window.
+            options.add_argument("--headless")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--width=1920")
@@ -238,20 +250,24 @@ class GitHubUsersParser:
                 "--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
             )
 
-            # Try remote Selenium Grid first, fallback to local browser
-            try:
-                # Set Firefox capabilities
-                capabilities = DesiredCapabilities.FIREFOX.copy()
-                capabilities["browserName"] = "firefox"
-
-                driver = webdriver.Remote(
-                    command_executor=SELENIUM_REMOTE_URL,
-                    options=options,
+            # Remote grid only. There is deliberately no local-browser
+            # fallback: this runs inside a server process, often unattended
+            # under scripts/v2/batch_extract.sh, and `webdriver.Firefox()`
+            # spawned a real browser on whoever's machine was hosting it.
+            # Degrade the way the rest of this parser does — return None and
+            # let the caller carry on without ORCID activities.
+            remote_url = _selenium_remote_url()
+            if not remote_url:
+                logger.debug(
+                    "ORCID activities skipped for %s: SELENIUM_REMOTE_URL is unset",
+                    orcid_id,
                 )
-            except Exception as e:
-                print(f"Remote Selenium failed ({e}), trying local Firefox...")
-                # Fallback to local Firefox
-                driver = webdriver.Firefox(options=options)
+                return None
+
+            driver = webdriver.Remote(
+                command_executor=remote_url,
+                options=options,
+            )
             driver.get(orcid_url)
 
             # Wait for the page to load
