@@ -25,13 +25,25 @@ unpublished work. Published sources `0.1.2` does not provide the new retrieval
 and auxiliary routes and must not be substituted for it.
 
 ```bash
+just sources-setup   # fetch the exact commit in config/services/sources.lock.json
+just sources-check   # offline verification; no changes to an existing checkout
 docker compose -f tools/deploy/docker-compose.yml build gme-api gme-sources
+just sources-smoke   # exercise both built images with temporary fixtures
 docker compose -f tools/deploy/docker-compose.yml up -d
 ```
 
-The development container also builds sources from that checkout. A fresh
-clone needs the matching sources branch placed there before building the
-stack. A standalone extractor install needs only its own Python dependencies.
+The setup/check commands require only Python 3.10+ and Git. Without `just`, run
+`python scripts/dev/sources_checkout.py` (add `--check` for offline verification).
+A new checkout uses a detached HEAD at the recorded commit. Existing checkouts
+are validated without switching branches or discarding work; a dirty checkout,
+different origin or revision fails with an explanation. Create a feature branch
+in sources when developing there, and deliberately update the lock after its
+changes are tested. The commands never update the lock automatically.
+
+The development container builds sources from that checkout too: run setup on
+the host before opening it. A standalone extractor install needs only its own
+Python dependencies. A fresh remote checkout **cannot yet fetch the local-only
+sources commit**; publication is a prerequisite, not something setup performs.
 
 Compose keeps the existing `gme-data` volume attached to sources and assigns a
 new `gme-api-data` volume to the extractor. Existing index contents are neither
@@ -92,3 +104,44 @@ dependency, and API startup with those imports blocked. HTTP adapter tests
 cover request/response contracts, failure handling and version-scope isolation.
 Sources tests cover migrated retrieval implementations and authenticated
 operation routes using fake or temporary backends.
+
+## Automated checks and release ordering
+
+`config/services/sources.lock.json` records the repository, full tested commit
+and reported service version. It is a development/test compatibility lock, not
+a dependency installed into GME. CI's reusable `sources-contract.yml` workflow:
+
+1. Tests the safe checkout command and fetches that exact sources commit.
+2. Installs both packages in a dedicated contract-test environment and runs
+   `tests/contracts/test_sources_http_contract.py`. A missing sources import
+   fails the job rather than silently skipping those tests.
+3. Builds each production image separately and runs
+   `python scripts/dev/smoke_sources.py` on an internal Docker network.
+
+The smoke creates a temporary DuckDB fixture inside sources, checks authenticated
+HTTP lookup and the reported version, and exercises mock rule-based extraction.
+It checks that the extractor image contains no sources/DuckDB/Qdrant libraries.
+There are no host ports, shared data volumes, upstream APIs or model calls;
+only containers/network created for that invocation are removed afterward.
+
+The ordinary extractor test job still installs only GME. Image publication also
+requires the paired-service job, and labels the GME image with
+`ch.sdsc.pulse.sources-contract-revision`. This label describes the tested remote
+service, not code embedded in the extractor image.
+
+Release in this order:
+
+1. Publish the reviewed sources commit/branch. Its current local revision is
+   recorded in the lock. Until that commit is fetchable, remote contract CI
+   intentionally fails; it never substitutes `main` or the incompatible 0.1.2.
+2. For a stable release, set the sources version and lockfile together, run its
+   CI, then update GME's compatibility lock to that tested commit/version.
+3. Require the GME contract workflow to pass against the published revision.
+   Publish the matching sources image and record its immutable registry digest
+   in deployment configuration (`SOURCES_IMAGE`). Retain single-worker operation.
+4. Publish/deploy the paired GME image only after those checks pass. Configure
+   `GME_IMAGE` and `SOURCES_IMAGE` explicitly for deployment; the checked-in
+   Compose defaults intentionally remain local development images.
+
+No registry digest or stable release is claimed for the current local branch.
+Preparing this configuration does not publish either repository or image.

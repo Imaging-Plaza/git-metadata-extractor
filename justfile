@@ -37,9 +37,21 @@ install:
 install-dev:
     uv pip install -e ".[dev]"
 
-# Build and run the independent local sources checkout with the development stack.
-sources-build:
+# Fetch the tested sources commit; preserve existing checkouts and local work.
+sources-setup:
+    python scripts/dev/sources_checkout.py
+
+# Validate the local pairing without fetching or changing either checkout.
+sources-check:
+    python scripts/dev/sources_checkout.py --check
+
+# Build the independent sources image after checking its compatibility lock.
+sources-build: sources-check
     docker compose -f tools/deploy/docker-compose.yml build gme-sources
+
+# Exercise both built images over HTTP with temporary stores and no upstream access.
+sources-smoke:
+    python scripts/dev/smoke_sources.py
 
 # Set up development environment (install + create .env if needed)
 setup:

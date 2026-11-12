@@ -784,6 +784,15 @@ Local development uses the independent checkout in `dev/open-pulse-sources`
 and builds its image through the deploy/devcontainer Compose configuration.
 The service owns all index configuration, storage and embedding operations.
 
+- `config/services/sources.lock.json` records the tested commit/version. Run
+  `just sources-setup` for a new checkout, `just sources-check` for offline
+  validation, and `just sources-smoke` after building both images. Setup never
+  resets existing branches or local changes. Publish the paired sources commit
+  before expecting fresh machines or remote CI to fetch it.
+- `.github/workflows/sources-contract.yml` gates CI and image publishing with
+  ASGI contracts and isolated two-image HTTP checks; missing imports/checkouts
+  must fail rather than silently skip.
+
 - Set `SOURCES_API_URL` and `SOURCES_API_TOKEN` on the extractor. Missing or
   unreachable sources must never cause an in-process index fallback.
 - `/v2/retrieval/*` preserves per-provider search/hydration/lineage contracts;

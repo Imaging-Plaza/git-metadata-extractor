@@ -48,6 +48,11 @@ changing a benchmark definition, and retain its generated manifest with results.
 
 ## Index configuration belongs to sources
 
+`services/sources.lock.json` records the remote sources repository, exact tested
+commit and service version. `just sources-setup` fetches or verifies that pairing;
+`just sources-check` only verifies. This is extractor/service compatibility
+configuration, not an index configuration or installed-library dependency.
+
 All index YAML files now live in the independent sources checkout at
 `dev/open-pulse-sources/config/index/`. Its container loads them and owns
 DuckDB/Qdrant access, embedding, reranking, ingestion and bootstrap. The

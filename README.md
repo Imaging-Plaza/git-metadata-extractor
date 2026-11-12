@@ -133,7 +133,7 @@ git_metadata_extractor/
 # and all index configuration/storage live in that repo/service.
 
 tests/v2/                # default test target
-config/                  # extractor experiment profiles and benchmark corpora
+config/                  # experiment profiles, benchmark corpora, service compatibility
 docs/                    # MkDocs site source
 ```
 
@@ -150,12 +150,17 @@ image build context. The current refactor requires that checkout's new
 compatible with this boundary yet.
 
 ```bash
+just sources-setup   # fetch/check the exact sources revision in config/services/sources.lock.json
 docker compose -f tools/deploy/docker-compose.yml build gme-api gme-sources
+just sources-smoke   # isolated HTTP checks using temporary data
 # Start only after configuring API_TOKEN and provider credentials in your environment.
 docker compose -f tools/deploy/docker-compose.yml up -d
 ```
 
 `SOURCES_API_URL` and `SOURCES_API_TOKEN` connect the extractor to sources.
+The pinned sources commit must be published before setup can fetch it on a new
+machine; the current local checkout already contains it. Setup preserves existing
+branches and rejects dirty or mismatched checkouts instead of resetting them.
 Compose wires these and gives sources exclusive access to the existing index
 volume; the extractor gets a separate cache/output volume. No indices are reset
 or moved when updating the Compose configuration. See the
@@ -171,7 +176,10 @@ Everything is in `.env` — copy `.env.example` and fill in what you need. Requi
 - `GIMIE_API_URL` — points at the `gme-gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); **required for repository extraction** (the `gimie` package was removed from the image).
 - **One LLM credential** — `RCP_TOKEN` (EPFL), `OPENAI_API_KEY`, or `OPENROUTER_API_KEY`.
 
-Optional (only when you use the feature): `INFOSCIENCE_TOKEN`, `SELENIUM_REMOTE_URL`, `HF_TOKEN`, `ZENODO_TOKEN`, `OPENALEX_MAILTO`, `EPFL_GRAPH_USERNAME` / `EPFL_GRAPH_PASSWORD`.
+Optional extractor settings include `INFOSCIENCE_TOKEN`, `SELENIUM_REMOTE_URL`,
+`SOURCES_API_URL` and `SOURCES_API_TOKEN`. Indexed-source credentials such as
+`HF_TOKEN`, `ZENODO_TOKEN`, `OPENALEX_MAILTO` and `EPFL_GRAPH_USERNAME` /
+`EPFL_GRAPH_PASSWORD` belong on the sources service.
 
 All ~40 env vars (with defaults + per-feature explanations) are in [`.env.example`](.env.example).
 

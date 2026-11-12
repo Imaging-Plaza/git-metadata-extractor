@@ -19,6 +19,9 @@ on:
     - cron: "0 6 * * 1"
 
 jobs:
+  sources-contract:
+    uses: ./.github/workflows/sources-contract.yml
+
   # Validate the same landing page + reference layout before publication.
   docs-build:
     runs-on: ubuntu-latest

@@ -10,7 +10,11 @@ just install-dev          # uv pip install -e ".[dev]"
 
 This installs only the extractor. Indexed retrieval runs in the separate
 sources service, whose local checkout belongs at `dev/open-pulse-sources`.
-Build it with `just sources-build`, or run the matching development branch on
+Run `just sources-setup` to fetch/verify the commit recorded in
+`config/services/sources.lock.json`, then build it with `just sources-build`.
+The current sources commit is local-only until published, so a fresh machine
+cannot fetch it yet. Existing checkouts are preserved and validated. You can
+also run the matching development branch on
 another host. See the [service contract](cross-repo-contract.md) for the
 required branch, Docker setup and connection settings.
 
