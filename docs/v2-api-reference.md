@@ -409,7 +409,7 @@ If this line is absent after an LLM repository run with
 
 ## V2 Environment Variables
 
-The most-touched knobs (full list in `.env.example` and `CLAUDE.md`):
+The most-touched knobs (full list in `.env.example` and `AGENTS.md`):
 
 | Variable | Default | Notes |
 | --- | --- | --- |

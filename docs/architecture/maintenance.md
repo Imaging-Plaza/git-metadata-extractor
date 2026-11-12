@@ -140,7 +140,7 @@ The extraction service reads index state managed by the separate
 [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) service.
 Search, record hydration, lineage and source lookups all use authenticated HTTP.
 The extractor installs no sources library and opens no index stores. The local
-sources branch is `feat/extractor-service-boundary` (`0.2.0.dev0`); published
+sources branch is `feat/2026-11-refactor` (`0.2.0.dev0`); published
 `0.1.2` does not provide these new operations.
 
 Qdrant supports vector similarity search. DuckDB stores provide indexed records

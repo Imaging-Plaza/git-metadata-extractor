@@ -271,7 +271,7 @@ def validate_permissive(
     warnings: list[str] = []
 
     # `_`-prefixed keys are internal pipeline metadata (per the convention
-    # documented in CLAUDE.md): stripped before strict validation, JSON-LD
+    # documented in AGENTS.md): stripped before strict validation, JSON-LD
     # output, and RDF serialisation. They don't need to appear in the agent
     # JSON Schema — pull them aside before running the schema validator so
     # they don't trip `additionalProperties`, then restore them at the end.

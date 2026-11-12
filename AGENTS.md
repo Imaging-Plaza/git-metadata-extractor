@@ -4,10 +4,26 @@ Operating contract for autonomous and semi-autonomous coding agents working
 in this repository. Goal: safe, reproducible contributions with minimal
 human back-and-forth.
 
+## Workspace and branches
+
+`AGENTS.md` is the repository's agent guide; keep instructions here rather than
+creating tool-specific copies. GME and the independent sources checkout under
+`dev/open-pulse-sources` both use `feat/2026-11-refactor` for the current work.
+They are separate Git repositories: commit each independently, keep the child
+ignored by GME, and never stage it as a nested repository or submodule.
+
+Keep work local unless publication is explicitly requested. The exact tested
+sources revision/version lives in `config/services/sources.lock.json`, not in
+the shared branch name. After committing changes in sources, update that lock
+deliberately and validate the pairing; even a documentation commit changes the
+revision checked by `just sources-check`. Publishing sources must precede remote
+CI fetching its revision. See `docs/cross-repo-contract.md` for release order.
+
 ## What this tool is
 
 A FastAPI service that turns a GitHub URL (repository / user / org) into
-JSON-LD aligned with **Open Pulse Ontology v2.1.2**. The service runs the
+JSON-LD in the **Open Pulse Ontology v3 canonical shapes** by default, using a
+v2.1.2-shaped internal intermediate. The service runs the
 input through a multi-stage pipeline that combines deterministic rules,
 provider lookups (GitHub REST, ROR, ORCID, Infoscience), and optional LLM
 agents to produce a graph of `schema:SoftwareSourceCode`,
@@ -27,7 +43,7 @@ git_metadata_extractor/
     _router.py                   # the single APIRouter
     _helpers.py                  # env gates, stage constants, app-state resolution
     extract.py                   # GET/POST /extract + _run_extract_job + assembly
-    auto_ingest.py               # post-extract index write-through (opt-in flags)
+    auto_ingest.py               # opt-in HTTP indexing-job submission to sources
     jobs.py                      # /jobs/{id}, cancel, /crawl
     system.py                    # /cache/clear, /health
   jobs.py                        # async job store backing POST /v2/extract
@@ -45,7 +61,7 @@ git_metadata_extractor/
       model_config.py            # LLM provider/model profiles + credentials
       <kind>/agent.py            # per-entity LLM agents (one Pydantic AI run each)
       agent_tools/               # Tool factories (selenium, ROR, ORCID, etc.)
-                                  #   *_rag.py: per-index Qdrant search tools
+                                  #   *_rag.py: source-service retrieval tools
                                   #   — see docs/v2-rag-tools.md
     rule_based/
       <kind>_agent.py            # deterministic counterparts (no LLM)
@@ -55,7 +71,8 @@ git_metadata_extractor/
   providers/                     # the provider/READ layer (was "ingest" pre-split)
     cache.py                     # ProviderCache (SQLite, WAL)
     github_provider.py etc.      # github / ror / orcid / infoscience clients
-                                  # *_rag.py: async Qdrant-backed RAG providers
+                                  # *_rag.py: async HTTP retrieval adapters
+    sources_service.py          # shared sources client and scoped remote metadata
     gimie_api_client.py          # gimie sidecar client (TTL → JSON-LD bridge)
     gimie_extract.py             # extract_gimie intermediate (sidecar/in-process seam)
     github_accounts/             # GitHub user/org GraphQL parsers + models
@@ -109,6 +126,10 @@ git_metadata_extractor/
 # Never import open_pulse_sources or open index files from the extractor.
 
 tests/v2/                        # default test target
+tests/contracts/                 # optional paired-service HTTP contracts + Docker fixtures
+tests/dev/                       # stdlib tests for safe sources checkout
+scripts/dev/                     # pinned checkout and isolated Docker smoke commands
+config/services/sources.lock.json # tested sources commit/version; not a Python dependency
 ```
 
 ## Pipeline (the actual stages, in order)
@@ -762,7 +783,7 @@ The `justfile` is the source of truth. Prefer `just <recipe>` over ad-hoc shell.
 |---|---|
 | `just install-dev` | install with dev extras |
 | `just setup` | install + scaffold `.env` |
-| `just serve-dev` | uvicorn + auto-reload (watches only `src/**/*.py`) |
+| `just serve-dev` | uvicorn + auto-reload (watches `git_metadata_extractor/`) |
 | `just serve-gunicorn` | gunicorn with 4 workers (production-shape) |
 | `just serve-stop` | stop whatever's bound to `:$PORT` |
 | `just test` | fast tests via testmon |
@@ -792,7 +813,6 @@ The service owns all index configuration, storage and embedding operations.
 - `.github/workflows/sources-contract.yml` gates CI and image publishing with
   ASGI contracts and isolated two-image HTTP checks; missing imports/checkouts
   must fail rather than silently skip.
-
 - Set `SOURCES_API_URL` and `SOURCES_API_TOKEN` on the extractor. Missing or
   unreachable sources must never cause an in-process index fallback.
 - `/v2/retrieval/*` preserves per-provider search/hydration/lineage contracts;
