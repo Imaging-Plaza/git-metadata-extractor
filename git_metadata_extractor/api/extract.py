@@ -282,7 +282,11 @@ async def _extract_for_request(  # noqa: PLR0913 - public route options
             auto_ingest._maybe_schedule_github_users_auto_ingest,
             auto_ingest._maybe_schedule_github_orgs_auto_ingest,
         ):
-            schedule(classification=result.classification, run_id=result.run_id)
+            schedule(
+                classification=result.classification,
+                run_id=result.run_id,
+                sources_client=providers.sources,
+            )
     return result.response
 
 

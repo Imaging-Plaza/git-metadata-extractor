@@ -231,6 +231,7 @@ def test_a_membership_goes_with_the_person_who_holds_it() -> None:
 
 def test_the_meta_graph_holds_only_the_extraction_itself(
     flat_graph: list[dict[str, Any]],
+    monkeypatch,
 ) -> None:
     """An entity in the meta graph is a routing defect, not a category.
 
@@ -238,6 +239,10 @@ def test_the_meta_graph_holds_only_the_extraction_itself(
     *how* the extraction ran, and an entity there is a fact about the world
     filed as a fact about the run.
     """
+    monkeypatch.setattr(
+        "git_metadata_extractor.pipeline.stages.raw_projection.current_sources_version",
+        lambda: "observed-source-build",
+    )
     run_doc = build_extraction_run(
         run_id=RUN_ID,
         seeds=["https://github.com/ANTsX/ANTs"],

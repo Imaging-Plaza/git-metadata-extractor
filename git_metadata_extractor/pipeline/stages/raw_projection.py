@@ -34,10 +34,10 @@ from __future__ import annotations
 
 import logging
 import re
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.mapping import load_policy, map_fields
+from git_metadata_extractor.providers.sources_service import current_sources_version
 from git_metadata_extractor.pipeline.stages.canonical_projection import (
     _host_and_path,
     _is_empty,
@@ -92,8 +92,8 @@ def extraction_output(
 
 
 #: Platforms whose substrate content this service reads out of an
-#: `open_pulse_sources` index, so the library build that produced that index is
-#: what a result would have to be reproduced against.
+#: remote sources index. Snapshot metadata comes from the service consulted
+#: during this extraction, never a locally installed library distribution.
 #:
 #: **GitHub is deliberately absent.** Its entity data comes from the live REST
 #: API on every current path, so stamping it with the library version would
@@ -104,21 +104,9 @@ def extraction_output(
 _INDEX_BACKED = frozenset(_ONTOLOGY_POLICY.index_backed_platforms)
 
 
-@lru_cache(maxsize=1)
 def index_version() -> str | None:
-    """The `open_pulse_sources` build that produced the indices, or None.
-
-    One place, deliberately: the same pin `pyproject.toml` declares and
-    `tests/v2/test_open_pulse_sources_pin.py` guards, read back through the
-    installed distribution rather than re-parsed. A second copy of the version
-    is how the graph and the code that produced it drift apart.
-    """
-    try:
-        from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415
-
-        return version("open-pulse-sources")
-    except (PackageNotFoundError, ImportError):
-        return None
+    """Observed remote service build for this run; absent means no snapshot."""
+    return current_sources_version()
 
 
 def source_snapshot_iri(platform: str, version: str) -> str:

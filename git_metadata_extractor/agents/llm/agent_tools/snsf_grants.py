@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Tool
 
 from git_metadata_extractor.observation.query_log import record_query
+from git_metadata_extractor.providers.snsf_grants import GrantFilters
 
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.snsf_grants import SnsfGrantsProvider
@@ -52,7 +53,7 @@ def _service_name(op: str) -> str:
 def make_search_snsf_grants_tool(provider: SnsfGrantsProvider) -> Tool:
     """Tool factory: faceted + free-text search over SNSF grants."""
 
-    async def search_snsf_grants(  # noqa: PLR0913
+    async def search_snsf_grants(  # noqa: PLR0913, PLR0917
         funding_instrument: list[str] | None = None,
         research_institution: list[str] | None = None,
         state: list[str] | None = None,
@@ -68,7 +69,6 @@ def make_search_snsf_grants_tool(provider: SnsfGrantsProvider) -> Tool:
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         """Faceted + free-text search over SNSF P3 grants. See tool description."""
-        from open_pulse_sources.index.snsf.facet_query import GrantFilters  # noqa: PLC0415
 
         logger.info(
             "tool call: search_snsf_grants — state=%r institution=%r text=%r limit=%d",
@@ -90,7 +90,7 @@ def make_search_snsf_grants_tool(provider: SnsfGrantsProvider) -> Tool:
             start_from=start_from,
             start_to=start_to,
         )
-        return provider.search(filters, text=text, sort=sort, limit=limit)
+        return await provider.search(filters, text=text, sort=sort, limit=limit)
 
     return Tool(
         search_snsf_grants,

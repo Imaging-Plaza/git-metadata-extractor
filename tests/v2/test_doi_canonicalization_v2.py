@@ -1,10 +1,4 @@
-"""Behaviour of the v2-canonicalization DOI re-export.
-
-The real implementation lives in the ``open_pulse_sources`` library at
-``open_pulse_sources.index._shared.doi``. These tests pin the DOI
-normalisation v2 code gets through
-`from git_metadata_extractor.canonicalization import doi_iri, parse_doi`.
-"""
+"""Pin DOI normalization owned by the extraction API contract."""
 
 from __future__ import annotations
 

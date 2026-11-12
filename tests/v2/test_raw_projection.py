@@ -607,15 +607,17 @@ def _snapshots(document: dict) -> dict[str, dict]:
     }
 
 
-def test_an_index_backed_output_names_the_build_it_read() -> None:
+def test_an_index_backed_output_names_the_build_it_read(monkeypatch) -> None:
     from git_metadata_extractor.pipeline.stages.raw_projection import (  # noqa: PLC0415
         index_version,
         source_snapshot_iri,
     )
 
+    monkeypatch.setattr(
+        "git_metadata_extractor.pipeline.stages.raw_projection.current_sources_version",
+        lambda: "remote-test-build",
+    )
     version = index_version()
-    if not version:
-        pytest.skip("open-pulse-sources not installed")
 
     document = project_raw(
         [
@@ -659,18 +661,16 @@ def test_github_gets_no_snapshot_because_its_data_is_live() -> None:
     assert _snapshots(document) == {}
 
 
-def test_the_snapshot_iri_is_shared_across_runs_on_one_build() -> None:
+def test_the_snapshot_iri_is_shared_across_runs_on_one_build(monkeypatch) -> None:
     """"What the source was" is not per-run; "what a run made of it" is.
 
     Two runs against the same index build name the same snapshot, which is what
     lets a query ask "everything read from this version" across runs.
     """
-    from git_metadata_extractor.pipeline.stages.raw_projection import (  # noqa: PLC0415
-        index_version,
+    monkeypatch.setattr(
+        "git_metadata_extractor.pipeline.stages.raw_projection.current_sources_version",
+        lambda: "remote-test-build",
     )
-
-    if not index_version():
-        pytest.skip("open-pulse-sources not installed")
 
     node = {
         "@id": "https://ror.org/02s376052",
@@ -682,6 +682,20 @@ def test_the_snapshot_iri_is_shared_across_runs_on_one_build() -> None:
 
     assert first.keys() == second.keys()
     assert "run-a" not in next(iter(first))
+
+
+def test_no_remote_version_means_no_source_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "git_metadata_extractor.pipeline.stages.raw_projection.current_sources_version",
+        lambda: None,
+    )
+    document = project_raw(
+        [{"@id": "https://ror.org/02s376052", "@type": "org:Organization",
+          "schema:name": "EPFL"}],
+        run_id="without-source-version",
+    )
+    assert _snapshots(document) == {}
+    assert "prov:used" not in _outputs(document)["pulse:ROR"]
 
 
 def test_every_index_backed_platform_is_a_declared_enumeration_member() -> None:

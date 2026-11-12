@@ -211,36 +211,48 @@ def test_failed_primary_construction_closes_previously_created_clients(monkeypat
 def test_shared_rag_retries_unavailable_then_closes_only_at_shutdown(monkeypatch):
     from types import SimpleNamespace
 
+    import httpx
+
     from git_metadata_extractor.providers import runtime
+    from git_metadata_extractor.providers.sources_service import SourcesClient
 
     closed, attempts = [], []
 
-    class Rag:
+    def handle(request):
+        attempts.append(request.url.path)
+        if len(attempts) == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"data": [{"id": "record"}]})
+
+    class Client(SourcesClient):
+        def __init__(self, url, token, **kwargs):
+            super().__init__(url, token, transport=httpx.MockTransport(handle), **kwargs)
+
         async def aclose(self):
-            closed.append("rag")
+            closed.append("sources")
+            await super().aclose()
 
-    shared = Rag()
+    monkeypatch.setattr(runtime, "SourcesClient", Client)
+    monkeypatch.setenv("SOURCES_API_URL", "http://sources")
+    monkeypatch.setenv("SOURCES_API_TOKEN", "test")
 
-    def build():
-        attempts.append(1)
-        return None if len(attempts) == 1 else shared
+    async def run():
+        state = SimpleNamespace()
+        first = runtime.build_provider_resources(state, use_mock=True)
+        second = runtime.build_provider_resources(state, use_mock=True)
+        assert first.bundle.sources is second.bundle.sources
+        assert first.bundle.infoscience_rag is second.bundle.infoscience_rag
+        assert await first.bundle.infoscience_rag.search("query") == []
+        assert await second.bundle.infoscience_rag.search("query") == [{"id": "record"}]
+        await first.aclose()
+        await second.aclose()
+        assert not closed
+        await runtime.close_shared_providers(state)
+        await runtime.close_shared_providers(state)
+        assert closed == ["sources"]
+        assert len(attempts) == 2
 
-    spec = runtime.ProviderRegistration(
-        name="infoscience_rag", env_var="TEST_RAG_ENABLED", builder=build, expected_type=Rag,
-    )
-    monkeypatch.setattr(runtime, "RAG_PROVIDERS", (spec,))
-    state = SimpleNamespace()
-    first = runtime.build_provider_resources(state, use_mock=True)
-    second = runtime.build_provider_resources(state, use_mock=True)
-    third = runtime.build_provider_resources(state, use_mock=True)
-    assert first.bundle.infoscience_rag is None
-    assert second.bundle.infoscience_rag is third.bundle.infoscience_rag is shared
-    for resources in (first, second, third):
-        asyncio.run(resources.aclose())
-    assert not closed
-    asyncio.run(runtime.close_shared_providers(state))
-    assert closed == ["rag"]
-    assert len(attempts) == 2
+    asyncio.run(run())
 
 
 def test_http_dependency_closes_owned_clients_on_error(monkeypatch):

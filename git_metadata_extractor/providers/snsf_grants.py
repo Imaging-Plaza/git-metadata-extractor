@@ -1,89 +1,48 @@
-"""SnsfGrantsProvider — thin read-only facade over the SNSF DuckDB store.
-
-Used by the LLM agent tool factory in
-``git_metadata_extractor.agents.llm.agent_tools.snsf_grants``.
-
-The provider is cheap to construct (no DB opened at init) and opens a
-read-only DuckDB connection only for the duration of each method call, so
-it is safe to run alongside a concurrent writer.
-"""
+"""HTTP-only SNSF faceted grant retrieval."""
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING, Any
+from pydantic import BaseModel, ConfigDict
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from open_pulse_sources.index.snsf.facet_query import GrantFilters
-
-logger = logging.getLogger(__name__)
+from git_metadata_extractor.providers._remote_retrieval import RemoteRetrievalProvider
 
 
-class _ROStore:
-    """Minimal shim that exposes ``connect()`` backed by a read-only DuckDB
-    connection.  ``query_grants`` only calls ``store.connect()`` so this is
-    sufficient.
-    """
+class GrantFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    funding_instrument: list[str] | None = None
+    research_institution: list[str] | None = None
+    state: list[str] | None = None
+    main_discipline: list[str] | None = None
+    main_field_of_research: list[str] | None = None
+    call_decision_year: list[int] | None = None
+    country: list[str] | None = None
+    person_number: int | None = None
+    person_role: str | None = None
+    has_output: list[str] | None = None
+    start_from: str | None = None
+    start_to: str | None = None
+    end_from: str | None = None
+    end_to: str | None = None
 
-    def __init__(self, conn: Any) -> None:  # conn: duckdb.DuckDBPyConnection
-        self._conn = conn
 
-    def connect(self) -> Any:
-        return self._conn
+class SnsfGrantsProvider(RemoteRetrievalProvider):
+    provider_name = "snsf_grants"
 
-
-class SnsfGrantsProvider:
-    """Read-only query provider for the SNSF P3 DuckDB store.
-
-    Parameters
-    ----------
-    store_path:
-        Path to the ``snsf.duckdb`` file.  Defaults to the canonical path
-        returned by :func:`open_pulse_sources.index.snsf.paths.duckdb_path`.  The file is
-        **not** opened at construction time.
-    """
-
-    def __init__(self, store_path: Path | None = None) -> None:
-        if store_path is None:
-            from open_pulse_sources.index.snsf.paths import duckdb_path  # noqa: PLC0415
-
-            store_path = duckdb_path()
-        self._store_path = store_path
-
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
-
-    def search(
+    async def search(
         self,
         filters: GrantFilters,
         *,
         text: str | None = None,
         sort: str = "start_date_desc",
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        """Faceted + free-text grant search.
-
-        Returns the thin result rows (grant_number, title, state, dates,
-        amount, output counts …) produced by :func:`query_grants`.  Returns
-        ``[]`` if the store file is absent or unreadable.
-        """
-        if not self._store_path.exists():
-            return []
-        try:
-            import duckdb  # noqa: PLC0415
-
-            from open_pulse_sources.index.snsf.facet_query import query_grants  # noqa: PLC0415
-
-            with duckdb.connect(str(self._store_path), read_only=True) as conn:
-                store = _ROStore(conn)
-                result = query_grants(store, filters, text=text, sort=sort, limit=limit)
-                return result["results"]
-        except Exception:
-            logger.exception("snsf_grants.search failed; returning []")
-            return []
-
-
-__all__ = ["SnsfGrantsProvider"]
+    ) -> list[dict]:
+        return await self._call(
+            "search",
+            {
+                "filters": filters.model_dump(exclude_none=True),
+                "text": text,
+                "sort": sort,
+                "limit": limit,
+            },
+            empty=[],
+        )

@@ -27,8 +27,21 @@ from git_metadata_extractor.models import DataModel
 
 IndexName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=100)]
 _INDEX = TypeAdapter(IndexName)
+_OPERATION = TypeAdapter(Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$", max_length=100)])
 MAX_TIMEOUT_SECONDS = 300
+MAX_VERSION_LENGTH = 100
 _backend: ContextVar[str | None] = ContextVar("sources_backend", default=None)
+_scope: ContextVar[dict | None] = ContextVar("sources_run", default=None)
+
+
+def current_sources_client() -> SourcesClient | None:
+    state = _scope.get()
+    return state.get("client") if state else None
+
+
+def current_sources_version() -> str | None:
+    state = _scope.get()
+    return state.get("version") if state else None
 
 
 def current_sources_fingerprint() -> str | None:
@@ -38,9 +51,11 @@ def current_sources_fingerprint() -> str | None:
 @contextmanager
 def sources_scope(client: SourcesClient | None):
     token = _backend.set(client.cache_identity if client is not None else None)
+    scope_token = _scope.set({"client": client, "version": None, "conflict": False})
     try:
         yield
     finally:
+        _scope.reset(scope_token)
         _backend.reset(token)
 
 
@@ -106,6 +121,30 @@ class SourceResult(DataModel):
     error: str | None = None
 
 
+class SourceOperationResult(DataModel):
+    status: str
+    data: dict[str, JsonValue] = Field(default_factory=dict)
+    error: str | None = None
+    service_version: str | None = None
+
+
+class SourceRetrievalResult(DataModel):
+    status: str
+    data: dict[str, JsonValue] | list[dict[str, JsonValue]] | None = None
+    error: str | None = None
+    service_version: str | None = None
+
+
+class _OperationResponse(DataModel):
+    data: dict[str, JsonValue]
+    service_version: str | None = Field(default=None, max_length=100)
+
+
+class _RetrievalResponse(DataModel):
+    data: dict[str, JsonValue] | list[dict[str, JsonValue]]
+    service_version: str | None = Field(default=None, max_length=100)
+
+
 class SourcesClient:
     """Owns one asynchronous HTTP pool; never opens index stores or embeds text."""
 
@@ -147,6 +186,39 @@ class SourcesClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    def _observe_version(self, version: str | None) -> None:
+        state = _scope.get()
+        if not version or version == "unknown" or not state or state["client"] is not self or state["conflict"]:
+            return
+        if state["version"] is not None and state["version"] != version:
+            state["version"], state["conflict"] = None, True
+        else:
+            state["version"] = version
+
+    async def operation(self, name: str, payload: dict) -> SourceOperationResult:
+        name = _OPERATION.validate_python(name)
+        response = await self._request("POST", f"v2/extractor/{name}", json=payload)
+        if isinstance(response, SourceResult):
+            return SourceOperationResult(status=response.status, error=response.error)
+        try:
+            parsed = _OperationResponse.model_validate_json(response.content)
+        except ValidationError:
+            return SourceOperationResult(status="invalid_response", error="Sources response violates the operation contract")
+        self._observe_version(parsed.service_version)
+        return SourceOperationResult(status="ok", **parsed.model_dump())
+
+    async def retrieve(self, provider: str, method: str, payload: dict) -> SourceRetrievalResult:
+        provider, method = _INDEX.validate_python(provider), _INDEX.validate_python(method)
+        response = await self._request("POST", f"v2/retrieval/{provider}/{method}", json=payload)
+        if isinstance(response, SourceResult):
+            return SourceRetrievalResult(status=response.status, error=response.error)
+        try:
+            parsed = _RetrievalResponse.model_validate_json(response.content)
+        except ValidationError:
+            return SourceRetrievalResult(status="invalid_response", error="Sources response violates the retrieval contract")
+        self._observe_version(parsed.service_version)
+        return SourceRetrievalResult(status="ok", **parsed.model_dump())
+
     async def _request(
         self, method: str, path: str, **kwargs,
     ) -> httpx.Response | SourceResult:
@@ -157,6 +229,9 @@ class SourcesClient:
                 status="unavailable", error="Sources service request failed",
             )
         if response.is_success:
+            version = response.headers.get("X-Open-Pulse-Sources-Version")
+            if version and len(version) <= MAX_VERSION_LENGTH and version != "unknown":
+                self._observe_version(version)
             return response
         if response.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
             status = "unauthorized"

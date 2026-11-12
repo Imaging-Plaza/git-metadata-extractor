@@ -3,12 +3,9 @@
 #   docker compose -f tools/deploy/docker-compose.yml --env-file .env up -d
 #
 # Services:
-#   gme-api          the extraction API (gunicorn on :1234; bootstraps index
-#                    stores at startup via the on_starting hook)
-#   gme-sources      the RAG index management API (open-pulse-sources repo):
-#                    /v2/manifest + /v2/indices/* ingest/search/stats/reset
-#                    moved here from gme-api in the repo split. Shares the
-#                    gme-data volume (DuckDB stores) and gme-qdrant.
+#   gme-api          extraction API on :1234; HTTP client of sources
+#   gme-sources      owns retrieval, ingest, embedding and index storage;
+#                    built from the independent dev/open-pulse-sources checkout
 #   gme-gimie-api    REQUIRED sidecar — the `gimie` Python dep was removed, so
 #                    repository extraction calls this over HTTP. See
 #                    docs/OPERATIONS_RUNBOOK.md §8.
@@ -27,22 +24,19 @@
 # are set explicitly so they don't need to live in .env.
 services:
   gme-api:
-    image: ${GME_IMAGE:-ghcr.io/imaging-plaza/git-metadata-extractor:latest}
-    # To build locally instead of pulling, comment `image:` and uncomment:
-    # build:
-    #   context: ../..
-    #   dockerfile: tools/image/Dockerfile
+    image: ${GME_IMAGE:-git-metadata-extractor:local}
+    build:
+      context: ../..
+      dockerfile: tools/image/Dockerfile
     container_name: gme-api
     env_file:
       - ../../.env
     environment:
       # GIMIE is served by the sidecar (gimie is no longer in the image).
       GIMIE_API_URL: http://gme-gimie-api:15400
-      INDEX_QDRANT_URL: http://gme-qdrant:6333
-      # Explicit store root on the shared volume — REQUIRED: without it the
-      # wheel-installed open_pulse_sources library resolves its fallback
-      # relative to site-packages.
-      INDEX_DATA_DIR: /app/data/index
+      SOURCES_API_URL: http://gme-sources:8080
+      SOURCES_API_TOKEN: ${SOURCES_API_TOKEN:-${API_TOKEN:-}}
+      V2_PROVIDER_CACHE_PATH: /app/data/cache/providers.db
       SELENIUM_REMOTE_URL: http://gme-selenium:4444
       # The substrate writer's target. Set on the service rather than in .env
       # like the other inter-service URLs; the writer stays off until
@@ -52,45 +46,40 @@ services:
     ports:
       - "${APP_PORT:-1234}:1234"
     volumes:
-      # Persist index DuckDB stores + provider cache across restarts.
-      - gme-data:/app/data
+      # Only extractor cache/output data; no shared index filesystem.
+      - gme-api-data:/app/data
     # gme-oxigraph is deliberately absent, like gme-selenium: both are
     # optional services, and a depends_on entry would make the API refuse to
     # start for anyone who drops one.
     depends_on:
       - gme-gimie-api
-      - gme-qdrant
+      - gme-sources
     restart: unless-stopped
     networks:
       - gme
 
   gme-sources:
-    # Index management API — the write side of the RAG indices (ingest /
-    # embed / reset / stats), same /v2/indices/* paths gme-api used to serve.
-    # Pulled from GHCR (published by open-pulse-sources CI). This tag MUST
-    # match the open-pulse-sources library pin in pyproject.toml — gme-api
-    # imports the library and this service writes the same DuckDB/Qdrant
-    # stores, so a version skew corrupts or silently empties shared state.
-    # tests/v2/test_open_pulse_sources_pin.py fails if the two drift apart.
-    # Bump both together, or override for one run with SOURCES_IMAGE
-    # (e.g. ...:sha-<short>, or a @sha256: digest for production).
-    image: ${SOURCES_IMAGE:-ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2}
+    # The new /v2/retrieval and /v2/extractor operations require this local
+    # branch; the published 0.1.2 image does not implement that contract.
+    image: ${SOURCES_IMAGE:-open-pulse-sources:local}
+    build:
+      context: ../../dev/open-pulse-sources
+      dockerfile: tools/image/Dockerfile
     container_name: gme-sources
     env_file:
       - ../../.env
     environment:
+      API_TOKEN: ${SOURCES_API_TOKEN:-${API_TOKEN:-}}
       INDEX_QDRANT_URL: http://gme-qdrant:6333
-      # Explicit store root on the shared volume (same rationale as gme-api).
+      # Only sources opens the index files.
       INDEX_DATA_DIR: /app/data/index
       SELENIUM_REMOTE_URL: http://gme-selenium:4444
-      WORKERS: ${SOURCES_WORKERS:-1}
+      # DuckDB and job coordination require a single sources writer process.
+      WORKERS: "1"
     ports:
       - "${SOURCES_PORT:-8080}:8080"
     volumes:
-      # SHARED with gme-api: the per-index DuckDB stores live here. DuckDB's
-      # file lock is per-process — keep heavy ingest on this service and
-      # consider V2_*_RAG_AUTO_INGEST=false on gme-api to avoid two writers
-      # contending for the same store file.
+      # Keep the existing sources volume; never reset indices during migration.
       - gme-data:/app/data
     depends_on:
       - gme-qdrant
@@ -161,6 +150,7 @@ services:
       - gme
 
 volumes:
+  gme-api-data:
   gme-data:
   gme-qdrant-storage:
   gme-oxigraph-storage:

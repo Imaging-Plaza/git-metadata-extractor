@@ -138,9 +138,10 @@ artifact, not the contract for the current pinned v3 models.
 
 The extraction service reads index state managed by the separate
 [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources) service.
-The installed library pin is `v0.1.2`; the matching Compose writer image is
-`0.1.2`. Library reads still use shared Qdrant and DuckDB stores. Optional HTTP
-search/manifest access does not imply that record hydration is entirely remote.
+Search, record hydration, lineage and source lookups all use authenticated HTTP.
+The extractor installs no sources library and opens no index stores. The local
+sources branch is `feat/extractor-service-boundary` (`0.2.0.dev0`); published
+`0.1.2` does not provide these new operations.
 
 Qdrant supports vector similarity search. DuckDB stores provide indexed records
 that can be fetched for their actual fields. Embeddings help find candidates;
@@ -148,11 +149,12 @@ they do not replace the source records. An embedding model encodes text for
 retrieval; an extraction LLM reasons over supplied context and tools to produce
 structured entities. Their configuration and costs are separate concerns.
 
-Current Compose shares the `gme-data` volume for records and uses Qdrant for
-vectors. S3 is not the implemented storage boundary described here. Index
+Current Compose assigns `gme-data` exclusively to sources and keeps extractor
+caches in `gme-api-data`. Sources uses Qdrant for vectors. S3 is not the
+implemented storage boundary described here. Index
 ingest, embed and reset operations belong to the sources service. See the
-[cross-repo contract](../cross-repo-contract.md) before changing the library pin
-or writer image; they must stay aligned.
+[cross-repo contract](../cross-repo-contract.md) before changing the sources
+image; its HTTP operations must satisfy the extractor's contracts.
 
 ## Keep the output layers distinct
 

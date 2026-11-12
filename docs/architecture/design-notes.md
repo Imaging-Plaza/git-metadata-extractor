@@ -31,10 +31,10 @@ flowchart TB
     subgraph Providers[git_metadata_extractor/providers/]
         PG[GitHub REST + GIMIE]
         PR[ROR / ORCID / Infoscience]
-        PRAG[*_rag — Qdrant-backed]
+        PRAG[*_rag — HTTP adapters]
     end
 
-    subgraph RAG[RAG indices — open_pulse_sources library / service]
+    subgraph RAG[RAG indices — independent sources HTTP service]
         RH[HuggingFace]
         ROA[OpenAlex]
         RI[Infoscience]
@@ -144,8 +144,8 @@ them isolated and independently invalidatable.
 
 The index layer lives in the
 [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources)
-repo (this service imports its read side as the `open_pulse_sources`
-library). Each index under `open_pulse_sources/index/<name>/` is
+repo, checked out locally at `dev/open-pulse-sources`. The extractor calls its
+HTTP API. Each index under `open_pulse_sources/index/<name>/` is
 independent: its own DuckDB, its own Qdrant collections, its own CLI, its
 own refresh cadence. The federated layer
 (`open_pulse_sources/index/_federated/`) never shares state — it just

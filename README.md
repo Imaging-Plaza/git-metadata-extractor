@@ -129,46 +129,38 @@ git_metadata_extractor/
   experimental/          # pi terminal-agent PoC (not production)
 
 # RAG indices moved to https://github.com/sdsc-ordes/open-pulse-sources —
-# the read-side providers import it as the `open_pulse_sources` library;
-# ingest/embed and the /v2/indices management API live in that repo/service.
+# extraction providers call that service over HTTP; retrieval, ingest/embed
+# and all index configuration/storage live in that repo/service.
 
 tests/v2/                # default test target
-config/                  # experiment profiles + sources-library compatibility config
+config/                  # extractor experiment profiles and benchmark corpora
 docs/                    # MkDocs site source
 ```
 
 See [configuration ownership](config/README.md) before editing an index config
 or choosing an extraction/benchmark profile.
 
-### Cross-repo compatibility
+### Sources service compatibility
 
-The index layer is consumed twice — as an imported **library** (read side) and
-as the **`gme-sources` service image** (write side) — and both share the same
-DuckDB stores and Qdrant collections. They must be the same release:
+The extractor uses HTTP; it no longer installs the sources Python library or
+opens DuckDB/Qdrant indices. Local development keeps sources as an independent
+Git checkout in `dev/open-pulse-sources`, excluded from this repository and its
+image build context. The current refactor requires that checkout's new
+`/v2/retrieval/*` and `/v2/extractor/*` routes; published sources `0.1.2` is not
+compatible with this boundary yet.
 
-| git-metadata-extractor | open-pulse-sources library | `gme-sources` image | Notes |
-|---|---|---|---|
-| `3.0.0` (this release) | `v0.1.2` | `ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2` | first split release |
-| `< 3.0.0` | — | — | monolith; index layer was in-tree |
+```bash
+docker compose -f tools/deploy/docker-compose.yml build gme-api gme-sources
+# Start only after configuring API_TOKEN and provider credentials in your environment.
+docker compose -f tools/deploy/docker-compose.yml up -d
+```
 
-`v0.1.1` and earlier are **not** supported by `3.0.0`: they return a raw 500
-instead of a 503 when a credential is missing, which the extract-side error
-handling reads as an unexpected failure rather than a degraded index.
+`SOURCES_API_URL` and `SOURCES_API_TOKEN` connect the extractor to sources.
+Compose wires these and gives sources exclusive access to the existing index
+volume; the extractor gets a separate cache/output volume. No indices are reset
+or moved when updating the Compose configuration. See the
+[cross-repo contract](docs/cross-repo-contract.md) for endpoints and migration.
 
-The library version lives in exactly one place — the
-`open-pulse-sources @ git+…@<tag>` entry in `pyproject.toml` — and every
-install path (`just install-dev`, CI, the Docker image) inherits it from
-there. `tests/v2/test_open_pulse_sources_pin.py` fails the build if the
-`gme-sources` image tag drifts from it, or if either default slips back to a
-mutable ref (`main` / `latest`).
-
-Bumping the child version therefore means: edit the pin in `pyproject.toml`,
-match the image tag in `tools/deploy/docker-compose.yml`, add a matrix row
-here, and run the test. For local cross-repo work, `just install-dev`
-re-installs a checkout found at `./open-pulse-sources` or
-`../open-pulse-sources` as editable, overriding the pin.
-
----
 
 ## Configuration
 

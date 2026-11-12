@@ -1,7 +1,6 @@
 # Configuration ownership
 
-This directory contains extraction experiment profiles and compatibility
-configuration for the separate sources library. **Source-to-ontology mappings
+This directory contains extraction experiment profiles and benchmark corpora. **Source-to-ontology mappings
 live in [`git_metadata_extractor/mapping/config/`](../git_metadata_extractor/mapping/config/README.txt)**,
 not here.
 
@@ -9,7 +8,6 @@ not here.
 | --- | --- | --- |
 | `pipelines/*.yaml` | Extractor: collectors, agent runtime, toolsets, concurrency and optional model selection | `python -m git_metadata_extractor.experiments` |
 | `benchmarks/mock.json` | Extractor: a small deterministic evaluation corpus | The same CLI's `benchmark` command |
-| `index/*.yaml` | Sources: index layouts, query embedding/reranking, scopes and source-specific settings | The pinned `open_pulse_sources` library, including local RAG readers and optional store bootstrap |
 
 API, provider and pipeline feature flags are configured through environment
 variables; see [environment setup](../docs/getting-started.md#2-configure-environment).
@@ -38,8 +36,8 @@ python -m git_metadata_extractor.experiments benchmark --profile config/pipeline
 
 In PowerShell, set variables with `$env:V2_ROR_RAG_ENABLED = "false"` (and
 likewise for the other variables), then run the same Python command.
-Mock providers alone do not isolate the whole post-processing chain: ROR
-resolution and discipline tagging can construct local index readers directly.
+The lookup flags disable optional source enrichment. Rule-based execution
+makes no model calls; mock providers keep this smoke run independent of live APIs.
 
 The other profiles compare hybrid, full LLM, repository tools, and separate
 metadata/README collectors. Hybrid and LLM trials can make model calls even
@@ -48,49 +46,19 @@ Profile model overrides require `V2_ALLOW_REQUEST_MODEL_OVERRIDE=true` and
 the corresponding model credentials. Increment the profile version when
 changing a benchmark definition, and retain its generated manifest with results.
 
-## Why index configuration is still here
+## Index configuration belongs to sources
 
-Index ingestion, embedding and reset belong to
-[`open-pulse-sources`](https://github.com/sdsc-ordes/open-pulse-sources).
-However, this extractor still imports that library for local retrieval.
-Most loaders in the current pinned release read `config/index/<source>.yaml`
-relative to the working directory, and its Python package does not bundle
-these YAML files. Docker therefore copies them into `/app/config`.
-Deleting or moving them can disable local RAG providers or change their defaults.
+All index YAML files now live in the independent sources checkout at
+`dev/open-pulse-sources/config/index/`. Its container loads them and owns
+DuckDB/Qdrant access, embedding, reranking, ingestion and bootstrap. The
+extractor calls authenticated HTTP operations and has no index-library fallback.
 
-Treat these files as compatibility copies of the sources configuration:
+Configure the extractor with `SOURCES_API_URL`, `SOURCES_API_TOKEN`, and optionally
+`SOURCES_API_TIMEOUT_SECONDS` (default 30). Configure source-specific model,
+collection, scope, data-directory and Qdrant settings on **sources**. Query
+embedding settings must still match the indexed vectors; changing a model does
+not rebuild an index automatically.
 
-- Review them against the sources release whenever the dependency is upgraded.
-  The [cross-repo contract](../docs/cross-repo-contract.md) defines the library
-  and container version pin; this directory does not define another version.
-- Keep query embeddings compatible with the indexed vectors: model, dimension,
-  query instruction, collection names and scope matter on both sides. Changing
-  an embedding model here does not rebuild the index.
-- Prefer the supported environment overrides for deployment addresses, tokens,
-  scopes and data directories. YAML also includes ingest settings because the
-  current library uses one configuration model for reads and writes.
-- `zenodo_communities.yaml` is the parent-organization seed map for the sources
-  build command, not a retrieval provider config. It remains part of the
-  compatibility set used with the pinned sources checkout.
-- The SNSF loader is an exception to the working-directory rule: its default
-  path is relative to the installed library, with model defaults when absent.
-  It supports an explicit file path; editing this checkout's `snsf.yaml` alone
-  does not change the extractor's default SNSF reader configuration.
-
-`SOURCES_API_URL` and `SOURCES_API_TOKEN` enable remote indexed search through
-`providers/sources_service.py`; `SOURCES_API_TIMEOUT_SECONDS` defaults to 30.
-That bypasses local RAG construction in provider wiring and disables Gunicorn's
-index bootstrap. It does **not** yet remove every library dependency: optional
-auto-ingest and discipline tagging still contain local index paths. Do not
-remove all index config merely because remote search is enabled.
-
-The end state is to package source defaults in `open-pulse-sources` and finish
-routing index operations through that service. Then the extractor can retain
-only service connection settings and its own pipeline/mapping configuration.
-
-## Removed legacy configuration
-
-`config/v2/terminal_agent.yml` belonged to the removed terminal-agent PoC;
-no tracked runtime or script loads it. `index/huggingface.yaml` belonged to the
-removed combined index; the current library uses separate model, dataset,
-space, paper, user and organization configs. Their history remains in Git.
+The current local sources branch provides the new retrieval and auxiliary
+operations; the old published 0.1.2 image does not. See the
+[cross-repo contract](../docs/cross-repo-contract.md).

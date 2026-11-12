@@ -1,38 +1,21 @@
+"""Opt-in write-through requests to the sources service."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-import threading
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as package_version
 from typing import Any
 
-
-
-MIN_SUPPORTED_PYTHON = (3, 10)
-PACKAGE_NAME = "git-metadata-extractor"
-try:
-    PACKAGE_VERSION = package_version(PACKAGE_NAME)
-except PackageNotFoundError:
-    PACKAGE_VERSION = "unknown"
-
-MIN_SUBRESOURCE_PATH_SEGMENTS = 3
-SUBRESOURCE_SEGMENT_INDEX = 2
-JSONLD_CONTEXT_FALLBACK = {
-    "schema": "http://schema.org/",
-    "pulse": "https://open-pulse.epfl.ch/ontology#",
-    "org": "http://www.w3.org/ns/org#",
-}
-
-logger = logging.getLogger(__name__)
-
+from git_metadata_extractor.providers.sources_service import (
+    SourcesClient,
+    current_sources_client,
+)
 
 from . import _helpers
 
-_GITHUB_REPOS_AUTO_INGEST_LOCK = threading.Lock()
-_GITHUB_USERS_AUTO_INGEST_LOCK = threading.Lock()
-_GITHUB_ORGS_AUTO_INGEST_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
+_PENDING_TASKS: set[asyncio.Task] = set()
 
 
 def _github_account_login_from_url(normalized_url: Any) -> str | None:
@@ -44,7 +27,9 @@ def _github_account_login_from_url(normalized_url: Any) -> str | None:
     wrong host, an extra path segment (which would indicate a repo),
     or is malformed.
     """
-    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
+    if not isinstance(normalized_url, str) or not normalized_url.startswith(
+        ("https://github.com/", "http://github.com/")
+    ):
         return None
     rest = (
         normalized_url.removeprefix("https://github.com/")
@@ -55,7 +40,7 @@ def _github_account_login_from_url(normalized_url: Any) -> str | None:
         return None
     # `/orgs/<login>` is GitHub's web UI URL for an org; strip the prefix.
     if rest.startswith("orgs/"):
-        rest = rest[len("orgs/"):]
+        rest = rest[len("orgs/") :]
     # User/org URLs are a single path segment — anything with a `/`
     # left is a repo and shouldn't reach this helper.
     if "/" in rest:
@@ -63,291 +48,132 @@ def _github_account_login_from_url(normalized_url: Any) -> str | None:
     return rest or None
 
 
-def _maybe_schedule_github_repos_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
+def _schedule_ingest(
+    *, index: str, target: str, run_id: str, sources_client: SourcesClient | None
 ) -> None:
-    """Schedule a background GitHub RAG ingest when the operator opts in.
-
-    Gates:
-    - `V2_GITHUB_REPOS_RAG_AUTO_INGEST=true` env var (off by default — every
-      existing deployment keeps its current behaviour).
-    - The extract target must be a repository (we have no index for
-      user/org/article cards yet).
-    - `classification.normalized_url` must be a public github.com repo.
-      Private/unreachable repos surface as `skipped_404` inside
-      `ingest_single_repo` and emit one warning; no crash.
-
-    Concurrency: a module-level `threading.Lock` serialises DuckDB
-    writes across uvicorn worker tasks. The single-repo ingest is
-    fast (~1-3s) so contention is negligible.
-    """
-    if not _helpers._auto_ingest_enabled(
-        "V2_GITHUB_REPOS_RAG_AUTO_INGEST", "V2_GITHUB_RAG_AUTO_INGEST",
-    ):
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "repository":
-        return
-    normalized_url = getattr(classification, "normalized_url", None)
-    if not isinstance(normalized_url, str) or "github.com/" not in normalized_url:
-        return
-    full_name = normalized_url.removeprefix("https://github.com/").removeprefix(
-        "http://github.com/",
-    ).strip("/")
-    if not full_name or full_name.count("/") != 1:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_repos.config import (
-                load_config as load_github_config,
-            )
-            from open_pulse_sources.index.github_repos.embed.pipeline import (
-                embed_repos,
-            )
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-            from open_pulse_sources.index.github_repos.ingest.repos import (
-                ingest_single_repo,
-            )
-            from open_pulse_sources.index.github_repos.storage.duckdb_store import (
-                GitHubReposStore,
-            )
-        except Exception:
-            logger.exception(
-                "github auto-ingest (run_id=%s, repo=%s): module import failed",
-                run_id, full_name,
+    async def submit() -> None:
+        client = sources_client or current_sources_client()
+        if client is None:
+            logger.warning(
+                "%s auto-ingest (run_id=%s): sources service unavailable", index, run_id
             )
             return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_github_config()
-            cfg.require_github()
-            with _GITHUB_REPOS_AUTO_INGEST_LOCK:
-                store = GitHubReposStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_repo(full_name)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_repo(
-                        config=cfg, store=store, client=client, full_name=full_name,
-                    )
-                    if outcome == "skipped_404":
-                        return ("skipped_404", 0)
-                    embed_summary = embed_repos(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("repos", 0)))
-                finally:
-                    store.close()
-
         try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github auto-ingest (run_id=%s, repo=%s): failed",
-                run_id, full_name,
+            result = await client.operation(
+                "ensure-indexed",
+                {
+                    "index": index,
+                    "target": target,
+                    "skip_existing": True,
+                    "embed": True,
+                },
+            )
+        except Exception:  # noqa: BLE001 - optional background work fails open
+            logger.warning(
+                "%s auto-ingest (run_id=%s): sources submission failed", index, run_id
+            )
+            return
+        if result.status != "ok":
+            logger.warning(
+                "%s auto-ingest (run_id=%s): sources submission %s",
+                index,
+                run_id,
+                result.status,
             )
             return
         logger.info(
-            "github auto-ingest (run_id=%s, repo=%s): %s (chunks_embedded=%d)",
-            run_id, full_name, outcome, embedded,
+            "%s auto-ingest (run_id=%s): submitted job_id=%s status=%s",
+            index,
+            run_id,
+            result.data.get("job_id"),
+            result.data.get("status"),
         )
 
+    coroutine = submit()
     try:
-        asyncio.create_task(_run())
+        task = asyncio.create_task(coroutine)
     except RuntimeError:
-        # No running event loop (e.g. unit tests that call extract
-        # synchronously). Skip silently — the auto-ingest is a
-        # non-essential background enrichment.
+        coroutine.close()
         return
+    _PENDING_TASKS.add(task)
+    task.add_done_callback(_PENDING_TASKS.discard)
+
+
+def _maybe_schedule_github_repos_auto_ingest(
+    *, classification: Any, run_id: str, sources_client: SourcesClient | None = None
+) -> None:
+    if not _helpers._auto_ingest_enabled(  # noqa: SLF001
+        "V2_GITHUB_REPOS_RAG_AUTO_INGEST", "V2_GITHUB_RAG_AUTO_INGEST"
+    ):
+        return
+    if (
+        getattr(getattr(classification, "detected_type", None), "value", None)
+        != "repository"
+    ):
+        return
+    url = getattr(classification, "normalized_url", None)
+    if not isinstance(url, str) or not url.startswith(
+        ("https://github.com/", "http://github.com/")
+    ):
+        return
+    target = (
+        url.removeprefix("https://github.com/")
+        .removeprefix("http://github.com/")
+        .strip("/")
+    )
+    if target.count("/") != 1 or not all(target.split("/")):
+        return
+    _schedule_ingest(
+        index="github_repos",
+        target=target,
+        run_id=run_id,
+        sources_client=sources_client,
+    )
+
+
+def _maybe_schedule_account_ingest(  # noqa: PLR0913
+    *,
+    classification: Any,
+    run_id: str,
+    sources_client: SourcesClient | None,
+    kind: str,
+    flag: str,
+    index: str,
+) -> None:
+    if os.getenv(flag, "false").strip().lower() != "true":
+        return
+    if getattr(getattr(classification, "detected_type", None), "value", None) != kind:
+        return
+    login = _github_account_login_from_url(
+        getattr(classification, "normalized_url", None)
+    )
+    if login is not None:
+        _schedule_ingest(
+            index=index, target=login, run_id=run_id, sources_client=sources_client
+        )
 
 
 def _maybe_schedule_github_users_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
+    *, classification: Any, run_id: str, sources_client: SourcesClient | None = None
 ) -> None:
-    """Schedule a background ingest into the github_users index when
-    the operator opts in via `V2_GITHUB_USERS_RAG_AUTO_INGEST=true`.
-
-    Same gating shape as `_maybe_schedule_github_repos_auto_ingest` but
-    fires only for `detected_type == "user"` targets. Org-typed
-    extracts are handled by the sibling helper below.
-    """
-    if os.getenv("V2_GITHUB_USERS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "user":
-        return
-    login = _github_account_login_from_url(
-        getattr(classification, "normalized_url", None),
+    _maybe_schedule_account_ingest(
+        classification=classification,
+        run_id=run_id,
+        sources_client=sources_client,
+        kind="user",
+        flag="V2_GITHUB_USERS_RAG_AUTO_INGEST",
+        index="github_users",
     )
-    if login is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-            from open_pulse_sources.index.github_users.config import load_config  # noqa: PLC0415
-            from open_pulse_sources.index.github_users.embed.pipeline import (
-                embed_users,
-            )
-            from open_pulse_sources.index.github_users.ingest.users import (
-                ingest_single_user,
-            )
-            from open_pulse_sources.index.github_users.storage.duckdb_store import (  # noqa: PLC0415
-                GitHubUsersStore,
-            )
-        except Exception:
-            logger.exception(
-                "github_users auto-ingest (run_id=%s, login=%s): module import failed",
-                run_id, login,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            cfg.require_github()
-            with _GITHUB_USERS_AUTO_INGEST_LOCK:
-                store = GitHubUsersStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_user(login)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_user(
-                        config=cfg, store=store, client=client, login=login,
-                    )
-                    if outcome in {"skipped_404", "skipped_org"}:
-                        return (outcome, 0)
-                    embed_summary = embed_users(config=cfg, store=store, limit=None)
-                    return (outcome, int(embed_summary.get("users", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github_users auto-ingest (run_id=%s, login=%s): failed",
-                run_id, login,
-            )
-            return
-        logger.info(
-            "github_users auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
-            run_id, login, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
 
 
 def _maybe_schedule_github_orgs_auto_ingest(
-    *,
-    classification: Any,
-    run_id: str,
+    *, classification: Any, run_id: str, sources_client: SourcesClient | None = None
 ) -> None:
-    """Schedule a background ingest into the github_organizations index
-    when `V2_GITHUB_ORGS_RAG_AUTO_INGEST=true`.
-
-    Fires only for `detected_type == "organization"` targets — uses
-    the v2 detected-type enum (`organization`, not `org`).
-    """
-    if os.getenv("V2_GITHUB_ORGS_RAG_AUTO_INGEST", "false").strip().lower() != "true":
-        return
-    if not hasattr(classification, "detected_type"):
-        return
-    if str(classification.detected_type.value).lower() != "organization":
-        return
-    login = _github_account_login_from_url(
-        getattr(classification, "normalized_url", None),
+    _maybe_schedule_account_ingest(
+        classification=classification,
+        run_id=run_id,
+        sources_client=sources_client,
+        kind="organization",
+        flag="V2_GITHUB_ORGS_RAG_AUTO_INGEST",
+        index="github_organizations",
     )
-    if login is None:
-        return
-
-    async def _run() -> None:
-        try:
-            from open_pulse_sources.index.github_organizations.config import (
-                load_config,
-            )
-            from open_pulse_sources.index.github_organizations.embed.pipeline import (  # noqa: PLC0415
-                embed_organizations,
-            )
-            from open_pulse_sources.index.github_organizations.ingest.organizations import (  # noqa: PLC0415
-                ingest_single_organization,
-            )
-            from open_pulse_sources.index.github_organizations.storage.duckdb_store import (  # noqa: PLC0415
-                GitHubOrganizationsStore,
-            )
-            from open_pulse_sources.index.github_repos.ingest.github_client import (
-                GitHubClient,
-            )
-        except Exception:
-            logger.exception(
-                "github_organizations auto-ingest (run_id=%s, login=%s): module import failed",
-                run_id, login,
-            )
-            return
-
-        def _do_ingest() -> tuple[str, int]:
-            cfg = load_config()
-            cfg.require_github()
-            with _GITHUB_ORGS_AUTO_INGEST_LOCK:
-                store = GitHubOrganizationsStore.open(cfg.paths.duckdb_path)
-                try:
-                    existing = store.fetch_organization(login)
-                    if existing is not None:
-                        return ("skipped_already_indexed", 0)
-                    client = GitHubClient(
-                        api_base=cfg.github.api_base,
-                        token=cfg.github.token,
-                        cache_path=cfg.paths.cache_db_path,
-                    )
-                    outcome = ingest_single_organization(
-                        config=cfg, store=store, client=client, login=login,
-                    )
-                    if outcome in {"skipped_404", "skipped_user"}:
-                        return (outcome, 0)
-                    embed_summary = embed_organizations(
-                        config=cfg, store=store, limit=None,
-                    )
-                    return (outcome, int(embed_summary.get("organizations", 0)))
-                finally:
-                    store.close()
-
-        try:
-            outcome, embedded = await asyncio.to_thread(_do_ingest)
-        except Exception:
-            logger.exception(
-                "github_organizations auto-ingest (run_id=%s, login=%s): failed",
-                run_id, login,
-            )
-            return
-        logger.info(
-            "github_organizations auto-ingest (run_id=%s, login=%s): %s (chunks_embedded=%d)",
-            run_id, login, outcome, embedded,
-        )
-
-    try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        return
-
-

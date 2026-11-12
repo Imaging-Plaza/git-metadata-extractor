@@ -101,16 +101,12 @@ git_metadata_extractor/
   experimental/                  # not production: pi terminal-agent PoC
     terminal/ terminal_subagent/ skills/
 
-# NOTE: the RAG index layer (formerly src/index/ + src/module/ + the
-# /v2/indices/* + /v2/manifest API) lives in a separate repo/service:
+# NOTE: the RAG index layer is an independent HTTP service:
 #   https://github.com/sdsc-ordes/open-pulse-sources
-# The v2 read-side providers import it as the `open_pulse_sources`
-# library — a declared, tag-pinned dependency in pyproject.toml (see
-# "Cross-repo version pin" below). This service only READS the indices
-# (Qdrant + DuckDB under data/index/); ingest/embed/reset happen in the
-# open-pulse-sources service. config/index/*.yaml remains a compatibility
-# copy: most library config loaders resolve paths CWD-relative. See
-# config/README.md for ownership, loader exceptions and removal prerequisites.
+# Local checkout: dev/open-pulse-sources (ignored, separate Git repository).
+# Providers here are HTTP clients. Index configs, DuckDB/Qdrant access,
+# query embedding/reranking, ingestion and bootstrap belong to sources.
+# Never import open_pulse_sources or open index files from the extractor.
 
 tests/v2/                        # default test target
 ```
@@ -404,9 +400,8 @@ anchor slice.
 `sh:closed` over three properties, so until that patch an output could say
 *which* source answered but never *which version of that source's data*, which
 is the difference between reproducing a result and merely re-requesting it. The
-snapshot carries `schema:softwareVersion` — the `open_pulse_sources` build that
-produced the index, read from the installed distribution so it stays the single
-pin `pyproject.toml` declares — and its IRI embeds that version, so two runs a
+snapshot carries `schema:softwareVersion` — the remote sources service build observed during the extraction;
+no locally installed library version is consulted — and its IRI embeds that version, so two runs a
 month apart against one build share a snapshot while producing different
 outputs.
 
@@ -782,26 +777,26 @@ a hardcoded URL list and runs them through `/v2/extract` with configurable
 parallelism. Resumable: skips repos whose result file already exists with
 a non-`running` status.
 
-## Cross-repo version pin
+## Sources HTTP contract
 
-The `open_pulse_sources` library version lives in **exactly one place**: the
-`open-pulse-sources @ git+https://github.com/sdsc-ordes/open-pulse-sources@<tag>`
-entry in `pyproject.toml` `dependencies`. Every install path inherits it —
-`just install-dev`, `just install`, CI, and `tools/image/Dockerfile`.
+The extractor does not install `open-pulse-sources` as a Python dependency.
+Local development uses the independent checkout in `dev/open-pulse-sources`
+and builds its image through the deploy/devcontainer Compose configuration.
+The service owns all index configuration, storage and embedding operations.
 
-- Never add a second `pip install "open-pulse-sources @ git+…@<tag>"` anywhere;
-  `tests/v2/test_open_pulse_sources_pin.py` fails on hardcoded second pins.
-- The `gme-sources` image tag in `tools/deploy/docker-compose.yml` must match
-  the library pin (same test enforces it). The library reads and that service
-  writes the *same* DuckDB/Qdrant stores — skew corrupts shared state.
-- Pins must be immutable: a release tag (`vX.Y.Z`) or a full commit SHA.
-  `main` / `latest` defaults fail the test.
-- Bumping the child = edit the pyproject pin + the compose image tag + add a
-  README compatibility-matrix row.
-- `OPEN_PULSE_SOURCES_REF` (Dockerfile build arg) defaults to **empty** and is
-  an override-only escape hatch for testing unreleased child revisions.
-- For cross-repo development, `just install-dev` re-installs a checkout at
-  `./open-pulse-sources` or `../open-pulse-sources` as editable.
+- Set `SOURCES_API_URL` and `SOURCES_API_TOKEN` on the extractor. Missing or
+  unreachable sources must never cause an in-process index fallback.
+- `/v2/retrieval/*` preserves per-provider search/hydration/lineage contracts;
+  `/v2/extractor/*` supplies bounded source facts and opt-in ingestion jobs.
+  Older published sources 0.1.2 does not implement these new operations.
+- Source snapshots use observed remote service metadata scoped to the run;
+  do not derive source identity from a locally installed distribution.
+- Sources is the sole index writer and runs with one worker. Extractor
+  caches/output use a separate volume; never mount shared index files there.
+- `tests/v2/test_sources_boundary.py` blocks sources/storage implementation
+  imports and verifies API import with those libraries unavailable.
+- Keep both repositories' HTTP contract tests passing. Source changes remain
+  in their independent branch; never accidentally add the nested repo to GME.
 
 ## Pipeline cache topology
 

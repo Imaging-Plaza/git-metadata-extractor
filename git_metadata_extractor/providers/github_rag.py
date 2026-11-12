@@ -1,81 +1,32 @@
-"""Async RAG provider over the GitHub repositories Qdrant index.
-
-Single collection: ``github_repos``. The search flow lives in
-`_rag_index.SingleCollectionRagProvider`; this module is the index's data.
-"""
+"""HTTP retrieval adapter; indexing and storage belong to the sources service."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any
 
-from open_pulse_sources.index.github_repos.embed.pipeline import (
-    GITHUB_REPOS_COLLECTION,
-)
-
-from git_metadata_extractor.providers._rag_index import (
-    RagIndexSpec,
-    SingleCollectionRagProvider,
-    build_provider,
-)
-
-if TYPE_CHECKING:
-    from open_pulse_sources.index.github_repos.config import GitHubIndexConfig
-
-
-def _rerank_text(payload: dict[str, Any]) -> str:
-    """Build the document fed to the cross-encoder reranker.
-
-    The full README isn't in the payload (it's chunked across many points);
-    `repo_id + description` is what we have on every hit and gives the
-    reranker enough signal to compare candidates.
-    """
-    repo_id = payload.get("repo_id") or ""
-    desc = payload.get("description") or ""
-    return f"{repo_id}\n{desc}".strip() or repo_id
-
-
-SPEC = RagIndexSpec(
-    label="github_rag",
-    collection=GITHUB_REPOS_COLLECTION,
-    config_module="open_pulse_sources.index.github_repos.config",
-    env_var="V2_GITHUB_RAG_ENABLED",
-    allowed_filter_keys=frozenset(
-        {
-            # `entity_type` is always "repos" today; kept for federated symmetry.
-            "entity_type",
-            "repo_id",
-            "owner",
-            "primary_language",
-            "license_spdx",
-            "is_archived",
-            "is_fork",
-        },
-    ),
-    thin_keys=(
-        "repo_id",
-        "owner",
-        "name",
-        "primary_language",
-        "license_spdx",
-        "stars",
-        "forks",
-        "pushed_at",
-        "is_archived",
-    ),
-    rerank_text=_rerank_text,
+from git_metadata_extractor.providers._remote_retrieval import (
+    RemoteRetrievalProvider,
+    build_remote_provider,
 )
 
 
-class GitHubRagProvider(SingleCollectionRagProvider):
-    """Async wrapper around the GitHub Qdrant index."""
+class GitHubRagProvider(RemoteRetrievalProvider):
+    provider_name = "github"
 
-    SPEC: ClassVar[RagIndexSpec] = SPEC
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int | None = None,
+        filters: dict[str, Any] | None = None,
+        rerank: bool = False,
+    ) -> list[dict[str, Any]]:
+        return await self._call(
+            "search",
+            {"query": query, "top_k": top_k, "filters": filters, "rerank": rerank},
+            empty=[],
+        )
 
 
-def build_default_provider(
-    cfg: GitHubIndexConfig | None = None,
-) -> GitHubRagProvider | None:
-    return build_provider(GitHubRagProvider, cfg)  # type: ignore[return-value]
-
-
-__all__ = ["GitHubRagProvider", "build_default_provider"]
+def build_default_provider(client=None) -> GitHubRagProvider | None:
+    return build_remote_provider(GitHubRagProvider, client)

@@ -33,25 +33,13 @@ pipeline-benchmark *args:
 install:
     uv pip install .
 
-# Install in development mode with all dependencies.
-# The RAG-index layer lives in the open-pulse-sources repo; the v2 read-side
-# providers import it as a library. It is a declared dependency of this
-# project (pinned to an immutable tag in pyproject.toml), so the install
-# below already brings it in — no separate pin to keep in sync.
-# For cross-repo development, a checkout found either nested
-# (./open-pulse-sources) or beside this repo (../open-pulse-sources) is then
-# re-installed editable so local child edits take effect immediately.
+# Install extractor dependencies. Sources runs in its own environment/container.
 install-dev:
     uv pip install -e ".[dev]"
-    @if [ -d open-pulse-sources ]; then \
-        echo "open-pulse-sources: nested checkout -> editable install"; \
-        uv pip install -e ./open-pulse-sources; \
-    elif [ -d ../open-pulse-sources ]; then \
-        echo "open-pulse-sources: sibling checkout -> editable install"; \
-        uv pip install -e ../open-pulse-sources; \
-    else \
-        echo "open-pulse-sources: using the pinned release from pyproject.toml"; \
-    fi
+
+# Build and run the independent local sources checkout with the development stack.
+sources-build:
+    docker compose -f tools/deploy/docker-compose.yml build gme-sources
 
 # Set up development environment (install + create .env if needed)
 setup:
@@ -389,5 +377,5 @@ pre-commit-clean:
 # All index build/refresh tooling (ingest / embed / search / serve / reset,
 # the federated CLI, and the /v2/indices/* management API) lives in
 # https://github.com/sdsc-ordes/open-pulse-sources — see its justfile.
-# The extraction service only *reads* the indices (Qdrant + DuckDB via the
-# open_pulse_sources library).
+# The extraction service requests records over HTTP; only sources opens
+# Qdrant and DuckDB stores.

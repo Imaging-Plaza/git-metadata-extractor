@@ -356,11 +356,11 @@ def _resolve_registered_provider(state, registration):
 
 
 def _build_index_providers(state) -> dict:
-    """Remote search or local adapters, preserving explicitly borrowed clients."""
+    """Compose HTTP adapters; an unconfigured service has no index backend."""
     remote = getattr(state, "v2_sources_provider", None)
     url = os.getenv("SOURCES_API_URL", "").strip()
     if not url and not isinstance(remote, SourcesClient):
-        return {spec.name: _resolve_registered_provider(state, spec) for spec in RAG_PROVIDERS}
+        return {}
     if not isinstance(remote, SourcesClient):
         remote = SourcesClient(
             url, os.getenv("SOURCES_API_TOKEN", ""),
@@ -368,14 +368,18 @@ def _build_index_providers(state) -> dict:
         )
         state.v2_sources_provider = remote
         _shared_resources(state).owned.append(remote)
-    return {
-        "sources": remote,
-        **{
-            spec.name: provider
-            for spec in RAG_PROVIDERS
-            if isinstance(provider := getattr(state, f"v2_{spec.name}_provider", None), spec.expected_type)
-        },
-    }
+    values = {"sources": remote}
+    for spec in RAG_PROVIDERS:
+        attribute = f"v2_{spec.name}_provider"
+        existing = getattr(state, attribute, None)
+        if isinstance(existing, spec.expected_type):
+            values[spec.name] = existing
+            continue
+        if not _is_truthy_env(os.getenv(spec.env_var, "true")):
+            continue
+        values[spec.name] = spec.expected_type(client=remote)
+        setattr(state, attribute, values[spec.name])
+    return values
 
 
 def build_provider_resources(  # noqa: PLR0913 - provider composition controls

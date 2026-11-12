@@ -169,7 +169,7 @@
 <div class="diagram-scroll" tabindex="0" aria-label="Container diagram, scroll horizontally on small screens">
 <svg class="c4" viewBox="0 0 1080 645" role="img" aria-label="C4 containers: deployment and storage boundaries">
 <title>C4 containers: deployment and storage boundaries</title>
-<desc>The extractor deployment contains gme-api, its SQLite cache and a GIMIE sidecar. The independent sources writer manages shared Qdrant and DuckDB state. Optional quads go from gme-api to Oxigraph.</desc>
+<desc>The extractor deployment contains gme-api, its SQLite cache and a GIMIE sidecar. The sources service exclusively manages Qdrant and DuckDB; extraction calls it over HTTP. Optional quads go from gme-api to Oxigraph.</desc>
 <defs>
 <marker id="arrow-containers" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M0 0 10 5 0 10Z" fill="#607993"/>
@@ -223,27 +223,23 @@
 <text class="edge-label" x="413" y="345" text-anchor="middle">Cache I/O</text>
 <path class="edge" style="marker-end:url(#arrow-containers)" d="M425 105H645"/>
 <text class="edge-label" x="535" y="92" text-anchor="middle">Fetch records</text>
-<path class="edge" style="marker-end:url(#arrow-containers)" d="M425 130H530V288H595"/>
-<text class="edge-label" x="543" y="230" text-anchor="middle">Library reads</text>
-<path class="edge" style="marker-end:url(#arrow-containers)" d="M530 288V350H915V326"/>
-<text class="edge-label" x="734" y="343" text-anchor="middle">Hydrate records</text>
 <path class="edge" style="marker-end:url(#arrow-containers)" d="M750 400V326"/>
-<text class="edge-label" x="741" y="372" text-anchor="middle">Write vectors</text>
+<text class="edge-label" x="741" y="372" text-anchor="middle">Search / upsert</text>
 <path class="edge" style="marker-end:url(#arrow-containers)" d="M900 400V326"/>
-<text class="edge-label" x="953" y="372" text-anchor="middle">Write records</text>
+<text class="edge-label" x="953" y="372" text-anchor="middle">Read / write</text>
 <path class="edge optional-edge" style="marker-end:url(#arrow-containers)" d="M65 113H38V588H65"/>
 <text class="edge-label" x="204" y="530" text-anchor="middle">gme-api → optional quads / SPARQL</text>
-<path class="edge optional-edge" style="marker-end:url(#arrow-containers)" d="M425 144H555V438H650"/>
-<text class="edge-label" x="548" y="422" text-anchor="middle">HTTP search</text>
+<path class="edge" style="marker-end:url(#arrow-containers)" d="M425 144H555V438H650"/>
+<text class="edge-label" x="548" y="422" text-anchor="middle">HTTP retrieval</text>
 </svg>
 </div>
-<figcaption>The <code>open_pulse_sources</code> library is imported inside gme-api; it is not another process. Library reads still share Qdrant and DuckDB with the independent index writer. An optional HTTP client supports search and manifest access; it does not make all hydration remote. Model providers and optional Selenium are omitted from this storage-focused plate; see the context view for that runtime-dependent boundary.<details class="text-equivalent">
+<figcaption>gme-api calls the independent sources service for search, record hydration, lineage and source facts. Only sources opens Qdrant and DuckDB or performs index embedding and writes. Extraction caches and ontology processing stay in gme-api. Model providers and optional Selenium are omitted from this storage-focused plate; see the context view for those dependencies.<details class="text-equivalent">
 <summary>Read the deployment relationships</summary>
-<p>FastAPI uses SQLite for three cache scopes and fetches live records through providers and the GIMIE sidecar. It reads Qdrant and DuckDB using the pinned source library. The gme-sources service writes these stores. Optional substrate writes go to Oxigraph, where the separate store-side unifier can build canonical graphs. Selenium and model services support enabled LLM paths. GIMIE is a required dependency in the production Compose setup.</p>
+<p>FastAPI uses SQLite for three cache scopes and fetches live records through providers and the GIMIE sidecar. It calls gme-sources over authenticated HTTP. The sources service reads and writes Qdrant and DuckDB; no index library runs inside gme-api. Optional substrate writes go to Oxigraph, where the separate store-side unifier can build canonical graphs. Selenium and model services support enabled LLM paths. GIMIE is a required dependency in the production Compose setup.</p>
 </details>
 </figcaption>
 </figure>
-<p class="note">Keep the source library and writer aligned: <code>open-pulse-sources@v0.1.2</code> in <code>pyproject.toml</code> pairs with the <code>gme-sources:0.1.2</code> image. A shared store is a compatibility boundary.</p>
+<p class="note">Use the matching local sources branch under <code>dev/open-pulse-sources</code>. Published sources 0.1.2 lacks the new retrieval operations. Sources owns the index volume; the extractor has a separate cache volume.</p>
 </div>
 <div class="architecture-view" id="view-components">
 <figure class="plate">

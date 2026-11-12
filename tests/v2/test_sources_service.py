@@ -127,7 +127,7 @@ def test_remote_mode_builds_no_local_index_clients(monkeypatch):
         resources = runtime.build_provider_resources(state, use_mock=True)
         try:
             assert isinstance(resources.bundle.sources, SourcesClient)
-            assert resources.bundle.ror_rag is None
+            assert resources.bundle.ror_rag._client is resources.bundle.sources  # noqa: SLF001 - shared pool ownership
         finally:
             await resources.aclose()
             await runtime.close_shared_providers(state)
@@ -135,12 +135,9 @@ def test_remote_mode_builds_no_local_index_clients(monkeypatch):
     asyncio.run(run())
 
 
-def test_remote_mode_disables_gunicorn_store_bootstrap(monkeypatch):
-    from tools.config.gunicorn_conf import _bootstrap_on_start_enabled
-
-    monkeypatch.setenv("SOURCES_API_URL", "http://sources:8080")
-    monkeypatch.setenv("INDEX_BOOTSTRAP_ON_START", "true")
-    assert not _bootstrap_on_start_enabled()
+def test_remote_mode_disables_gunicorn_store_bootstrap():
+    from tools.config import gunicorn_conf
+    assert not hasattr(gunicorn_conf, "_bootstrap_on_start_enabled")
 
 
 def test_remote_mode_requires_explicit_credentials(monkeypatch):
@@ -253,49 +250,5 @@ def test_transport_failure_is_reported_and_cancellation_propagates():
                     assert "credentials" not in result.model_dump_json()
             finally:
                 await client.aclose()
-
-    asyncio.run(run())
-
-
-def test_client_matches_installed_sources_router_and_provenance(monkeypatch):
-    from fastapi import FastAPI
-    from open_pulse_sources.service import api
-    from open_pulse_sources.service.api_models import IndexSearchResponse
-
-    from git_metadata_extractor.observation.evidence import activity, observe_provider
-    from git_metadata_extractor.observation.query_log import QueryLog, query_log_var
-
-    async def search(payload, _state):
-        return IndexSearchResponse(
-            index_name="ror",
-            query=payload.query,
-            hits=[{"id": "https://ror.org/example", "payload": {"name": "EPFL"}}],
-        )
-
-    monkeypatch.setattr(api, "run_ror_search", search)
-    app = FastAPI()
-    app.include_router(api.router)
-    app.dependency_overrides[api.verify_token] = lambda: "test-credential"
-
-    async def run():
-        client = SourcesClient(
-            "http://sources", "test-credential", transport=httpx.ASGITransport(app),
-        )
-        log = QueryLog(
-            run_id="source-contract", extract_full_path="https://github.com/acme/tool",
-        )
-        token = query_log_var.set(log)
-        try:
-            provider = observe_provider(client, "sources")
-            with activity("organization_agent", kind="llm"):
-                result = await provider.search("ror", SourceSearchRequest(query="EPFL"))
-                assert result.status == "ok"
-                assert any(
-                    "https://ror.org/example" in item["sources"]
-                    for item in log.evidence.available_sources()
-                )
-        finally:
-            query_log_var.reset(token)
-            await client.aclose()
 
     asyncio.run(run())

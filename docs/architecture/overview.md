@@ -11,41 +11,34 @@ where things go wrong. For the stage-by-stage tour see
 
 ---
 
-## Two services, one data volume
+## Two services with an HTTP boundary
 
-Since `3.0.0` the system is two deployables. The split is by **read vs write**,
-not by domain:
+The extractor owns ontology graph construction. Sources owns index retrieval,
+embedding and storage; the extractor does not install the sources library.
 
 ```mermaid
 flowchart LR
     CLIENT([client]) -->|"GET/POST /v2/extract"| API
-
-    subgraph GME["gme-api · this repo"]
-        API[FastAPI app<br/>api/ package]
-        PIPE[pipeline/<br/>orchestrator + stages]
-        AGENTS[agents/<br/>llm · rule_based · refiners]
-        PROV[providers/<br/>GitHub · ROR · ORCID · Infoscience · RAG readers]
-        API --> PIPE --> AGENTS --> PROV
+    subgraph GME["gme-api"]
+        API[FastAPI app] --> PIPE[pipeline and agents] --> PROV[HTTP providers]
+        API --> CACHE[(Extraction cache)]
     end
-
-    subgraph SOURCES["gme-sources · open-pulse-sources repo"]
-        MGMT["/v2/indices/* + /v2/manifest<br/>ingest · embed · reset"]
+    subgraph SOURCES["gme-sources"]
+        RET["/v2/retrieval + /v2/extractor"] --> STORE[(DuckDB)]
+        RET --> QDRANT[(Qdrant)]
+        MGMT["/v2/indices management"] --> STORE
+        MGMT --> QDRANT
     end
-
-    PROV -->|read| STORE[(DuckDB stores<br/>gme-data volume)]
-    PROV -->|search| QDRANT[(Qdrant)]
-    MGMT -->|write| STORE
-    MGMT -->|write| QDRANT
-    PROV -->|"library import<br/>open_pulse_sources"| LIB[[pinned wheel]]
-    API -->|HTTP| GIMIE[gme-gimie-api sidecar]
-    AGENTS -->|optional| SEL[gme-selenium]
+    PROV -->|authenticated HTTP| RET
+    API -->|HTTP| GIMIE[GIMIE sidecar]
+    PIPE -->|optional| SEL[Selenium]
 ```
 
-The consequence worth internalising: **this service reads index state that
-another service writes, over a shared volume.** DuckDB's file lock is
-per-process and the locks in either service are process-local, so nothing
-enforces a single writer across the two. Keep heavy ingest on `gme-sources`.
-That gap is tracked as task 05 in `dev/split-rag-indices/`.
+Only sources mounts the index volume. The extractor keeps a separate cache
+volume and submits optional indexing jobs over HTTP. Sources runs one writer
+worker; this separation does not make DuckDB multi-process writes safe.
+Missing sources yields explicit unavailable retrieval, never a local fallback.
+
 
 ---
 
@@ -53,12 +46,12 @@ That gap is tracked as task 05 in `dev/split-rag-indices/`.
 
 ```
 git_metadata_extractor/
-  app.py              FastAPI app: mounts the /v2 router, /docs UI, startup bootstrap
+  app.py              FastAPI app: mounts the /v2 router and /docs UI
   api/                the HTTP surface (URL prefix /v2 — the public contract)
     _router.py        the single APIRouter
     _helpers.py       env gates, stage constants, app-state resolution
     extract.py        GET/POST /extract, _run_extract_job, HTTP/job adapters
-    auto_ingest.py    post-extract index write-through (opt-in, off by default)
+    auto_ingest.py    source indexing job submission (opt-in, off by default)
     jobs.py           /jobs/{id}, cancel, /crawl
     system.py         /cache/clear, /health
   jobs.py             async job store backing POST /v2/extract
@@ -85,7 +78,7 @@ git_metadata_extractor/
     llm/refiners/     typed hybrid refiners and affiliation/rescue agents
 
   providers/          the READ layer: GitHub, ROR, ORCID, Infoscience, gimie,
-                      *_rag.py Qdrant-backed readers, cache.py (SQLite/WAL)
+                      *_rag.py HTTP adapters to sources, cache.py (SQLite/WAL)
   schema/             JSON Schemas (agent + strict), JSON-LD context, models
   validation/         strict-schema + SHACL validators
   canonicalization/   ID resolution, string normalisation
