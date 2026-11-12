@@ -315,7 +315,7 @@ clean-test:
 
 # Clean up all cache and temporary files
 clean-all: clean-py clean-test
-    rm -f api_cache.db test_output.json
+    rm -f data/api_cache.db test_output.json
     @echo "Cleaned up all cache and temporary files"
 
 # ============================================================================
