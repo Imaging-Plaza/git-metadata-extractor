@@ -51,6 +51,18 @@ async def check_sources():
         result = await mcp.call_tool("lookup_infoscience_acronym", {"acronym": "BOUNDARY"})
         assert result.structured_content["data"]["records"][0]["name"] == "Boundary smoke organization"
         assert result.structured_content["service_version"] == os.environ["EXPECTED_SOURCES_VERSION"]
+        # One MCP connection can multiplex calls while the same service handles HTTP.
+        async with httpx.AsyncClient(base_url="http://sources:8080", headers={"Authorization": "Bearer smoke-only"}, timeout=30) as http:
+            results = await asyncio.gather(
+                *(mcp.call_tool("lookup_infoscience_acronym", {"acronym": "BOUNDARY"}) for _ in range(8)),
+                *(http.post("/v2/extractor/infoscience-acronym", json={"acronym": "BOUNDARY"}) for _ in range(4)),
+                http.get("/health"),
+            )
+        assert all(item.structured_content["data"]["records"][0]["name"] == "Boundary smoke organization" for item in results[:8])
+        for response in results[8:12]:
+            response.raise_for_status()
+            assert response.json()["data"]["records"][0]["name"] == "Boundary smoke organization"
+        assert results[-1].status_code == HTTPStatus.OK
 
 
 def main():

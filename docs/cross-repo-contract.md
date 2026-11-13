@@ -20,7 +20,7 @@ context. Work there is committed separately; never stage it as a nested Git
 repository or copy its implementation back into the extractor.
 
 The current development pairing is the extractor refactor branch and the
-sources `feat/2026-11-refactor` branch (`0.2.0.dev1`). This is local
+sources `feat/2026-11-refactor` branch (`0.2.0.dev2`). This is local
 unpublished work. Published sources `0.1.2` does not provide the new retrieval
 and auxiliary routes and must not be substituted for it.
 
@@ -106,6 +106,7 @@ Context/ontology tools, repository corpus grep, graph-neighbor queries, email
 hashing and generic web/browser tools remain in GME. Existing GME agent tools
 and HTTP adapters remain unchanged; adopting MCP in GME is a separate change.
 See the local sources guide at `dev/open-pulse-sources/docs/mcp.md`
+and concurrency measurements at `dev/open-pulse-sources/docs/performance.md`
 for client configuration and extension instructions.
 
 ## Provenance and verification
