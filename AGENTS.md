@@ -818,6 +818,10 @@ The service owns all index configuration, storage and embedding operations.
 - `/v2/retrieval/*` preserves per-provider search/hydration/lineage contracts;
   `/v2/extractor/*` supplies bounded source facts and opt-in ingestion jobs.
   Older published sources 0.1.2 does not implement these new operations.
+- Sources also serves read-only MCP at `/mcp/` on its existing port with the
+  same bearer token. GME's tools and HTTP adapters remain unchanged; keep
+  ontology/context/browser tools in GME and source/index operations in sources.
+  See [the MCP boundary](docs/cross-repo-contract.md#sources-mcp-alongside-http).
 - Source snapshots use observed remote service metadata scoped to the run;
   do not derive source identity from a locally installed distribution.
 - Sources is the sole index writer and runs with one worker. Extractor

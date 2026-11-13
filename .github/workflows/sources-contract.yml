@@ -1,4 +1,4 @@
-name: Sources HTTP contract
+name: Sources HTTP and MCP contracts
 
 on:
   workflow_call:
@@ -31,15 +31,15 @@ jobs:
 
       - name: Verify contract dependencies are present
         # Prevent pytest.importorskip from producing a false green CI result.
-        run: python -c "import open_pulse_sources.service.retrieval"
+        run: python -c "import open_pulse_sources.service.retrieval; import open_pulse_sources.mcp_server.server"
 
-      - name: Run cross-repository HTTP contracts
-        run: python -m pytest tests/contracts/test_sources_http_contract.py -q --no-cov
+      - name: Run cross-repository HTTP and MCP contracts
+        run: python -m pytest tests/contracts/ -q --no-cov
 
       - name: Build production images
         run: |
           docker build -t git-metadata-extractor:local -f tools/image/Dockerfile .
           docker build -t open-pulse-sources:local -f dev/open-pulse-sources/tools/image/Dockerfile dev/open-pulse-sources
 
-      - name: Exercise isolated HTTP services
+      - name: Exercise isolated HTTP and MCP services
         run: python scripts/dev/smoke_sources.py

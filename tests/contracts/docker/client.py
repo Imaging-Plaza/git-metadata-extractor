@@ -10,6 +10,7 @@ import time
 from http import HTTPStatus
 
 import httpx
+from fastmcp import Client
 
 from git_metadata_extractor.providers.sources_service import (
     SourcesClient,
@@ -43,6 +44,13 @@ async def check_sources():
         assert current_sources_version() is None
     finally:
         await client.aclose()
+    async with Client("http://sources:8080/mcp/", auth="smoke-only") as mcp:
+        names = {tool.name for tool in await mcp.list_tools()}
+        assert {"search_github_rag", "fetch_github_repository", "search_sources"} <= names
+        assert not any("reset" in name or "ingest" in name for name in names)
+        result = await mcp.call_tool("lookup_infoscience_acronym", {"acronym": "BOUNDARY"})
+        assert result.structured_content["data"]["records"][0]["name"] == "Boundary smoke organization"
+        assert result.structured_content["service_version"] == os.environ["EXPECTED_SOURCES_VERSION"]
 
 
 def main():
@@ -56,6 +64,8 @@ def main():
         json={"acronym": "BOUNDARY"},
     )
     assert response.status_code == HTTPStatus.UNAUTHORIZED
+    response = httpx.post("http://sources:8080/mcp/", json={})
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
     response = httpx.get(
         "http://extractor:1234/v2/extract/https://github.com/octocat/Hello-World",
         params={"agent_runtime": "rule_based", "include_run_report": "true"},
@@ -67,7 +77,7 @@ def main():
     assert payload["output"]["@graph"]
     assert payload["run_report"]
     print(
-        "HTTP smoke passed: isolated imports, DuckDB lookup, auth, remote version, extraction and run report",
+        "HTTP + MCP smoke passed: isolated imports, DuckDB lookup, auth, tool discovery, remote version, extraction and run report",
     )
 
 

@@ -20,7 +20,7 @@ context. Work there is committed separately; never stage it as a nested Git
 repository or copy its implementation back into the extractor.
 
 The current development pairing is the extractor refactor branch and the
-sources `feat/2026-11-refactor` branch (`0.2.0.dev0`). This is local
+sources `feat/2026-11-refactor` branch (`0.2.0.dev1`). This is local
 unpublished work. Published sources `0.1.2` does not provide the new retrieval
 and auxiliary routes and must not be substituted for it.
 
@@ -89,6 +89,24 @@ request models and individual operation names.
 An extraction auto-ingest flag authorizes **submission**, not completed work.
 The source service checks whether the record is already indexed, owns the
 write/embedding lifecycle, and exposes job status through its job API.
+
+## Sources MCP alongside HTTP
+
+The local sources development build also mounts a curated read-only MCP
+catalog at `http://gme-sources:8080/mcp/` on its existing FastAPI process. It
+uses the sources `API_TOKEN` as a static bearer credential, with no additional
+service, port or OAuth login flow. Successful calls carry structured content
+`{data, service_version}`. Index contents, model settings and upstream
+credentials remain source-owned; MCP does not create or embed indices itself.
+
+The catalog covers indexed search/hydration, direct source lookups and bounded
+source facts. It exposes no ingest/reset/ensure-indexed operations. Direct
+GitHub repository metadata comes from REST, not GME's gimie-derived JSON-LD.
+Context/ontology tools, repository corpus grep, graph-neighbor queries, email
+hashing and generic web/browser tools remain in GME. Existing GME agent tools
+and HTTP adapters remain unchanged; adopting MCP in GME is a separate change.
+See the local sources guide at `dev/open-pulse-sources/docs/mcp.md`
+for client configuration and extension instructions.
 
 ## Provenance and verification
 
