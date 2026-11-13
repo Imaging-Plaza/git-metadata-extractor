@@ -33,11 +33,9 @@ checks that against the real TTL rather than trusting this docstring.
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.mapping import load_policy, map_fields
-from git_metadata_extractor.providers.sources_service import current_sources_version
 from git_metadata_extractor.pipeline.stages.canonical_projection import (
     _host_and_path,
     _is_empty,
@@ -46,9 +44,11 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (
     bare_handle,
     bare_orcid,
     deposit_iri,
+    organization_ror,
     profile_iri,
 )
 from git_metadata_extractor.pipeline.stages.source_attribution import split_by_source
+from git_metadata_extractor.providers.sources_service import current_sources_version
 from git_metadata_extractor.validation.metadata import strip_internal_metadata
 
 _ONTOLOGY_POLICY = load_policy("policies.ontology")
@@ -205,17 +205,6 @@ def _raw_profile(
     return profile
 
 
-_ROR_ID = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
-
-
-def _ror_from(node: Mapping[str, Any]) -> str | None:
-    """The organization's ROR, from its own id. `RawOrganizationShape` patterns
-    the URL form, so it is returned as-is rather than made bare — `pulse:ror`
-    is the deliberate exception to v3's bare-identifier rule (§2.4)."""
-    iri = str(node.get("@id") or "")
-    return iri if _ROR_ID.match(iri) else None
-
-
 def _deposit(node: Mapping[str, Any], article_iri: str) -> dict[str, Any] | None:
     """The platform record an article was found in.
 
@@ -280,7 +269,7 @@ def _project_organization(node: Mapping[str, Any]) -> tuple[dict[str, Any], list
     # read the substrate: 40 of 102 organizations failed `OrganizationShape`'s
     # identity `sh:or`, and the ROR match key — the *primary* one for
     # organizations — never fired once, because the field was not there.
-    ror = _ror_from(node)
+    ror = organization_ror(node)
     if ror and _is_empty(out.get("pulse:ror")):
         out["pulse:ror"] = ror
 
@@ -495,6 +484,11 @@ def _platform_of(
     if platform:
         return platform
     registry = _registry_platform(entity["@id"])
+    # A late-resolved organization may retain its UUID while carrying a ROR
+    # identifier. Use that registry only after the existing profile/platform
+    # routes, so GitHub-described properties retain their original anchor.
+    if not registry and entity.get("@type") == "org:Organization":
+        registry = _registry_platform(organization_ror(source))
     if registry:
         return registry
     for field in _SOURCE_URL_FIELDS:

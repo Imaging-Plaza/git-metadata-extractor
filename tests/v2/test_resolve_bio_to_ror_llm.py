@@ -165,7 +165,7 @@ def test_high_confidence_ror_creates_membership_and_organization():
     agent = _StubAgent(
         patches={
             "p1": BioResolverPatch(
-                pulse_ror="https://ror.org/deepmind",
+                pulse_ror="https://ror.org/000000001",
                 reason="Senior Research Engineer at Google DeepMind",
                 confidence=0.92,
             ),
@@ -173,10 +173,10 @@ def test_high_confidence_ror_creates_membership_and_organization():
     )
     result = _run(reconciled, agent=agent)
     assert _membership_org_ids(reconciled, person_id="p1") == [
-        "https://ror.org/deepmind",
+        "https://ror.org/000000001",
     ]
     org_ids = {o["id"] for o in reconciled.entities.get("organizations", [])}
-    assert "https://ror.org/deepmind" in org_ids
+    assert "https://ror.org/000000001" in org_ids
     assert result.persons_resolved == 1
     assert result.memberships_created == 1
     assert result.organizations_created == 1
@@ -211,14 +211,27 @@ def test_low_confidence_ror_is_dropped_at_apply_time():
     assert _memberships(reconciled) == []
 
 
+def test_malformed_ror_cannot_create_dangling_membership():
+    reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
+    patch = BioResolverPatch(
+        pulse_ror="https://ror.org/invalid", reason="From bio", confidence=0.9,
+    )
+    counts = _apply_patch(
+        person=reconciled.entities["persons"][0], patch=patch,
+        **_apply_kwargs(reconciled=reconciled, existing_org_ids=set(), existing_keys=set()),
+    )
+    assert counts == (0, 0)
+    assert _memberships(reconciled) == []
+
+
 def test_apply_patch_adds_a_second_membership_when_person_has_one_already():
     """An existing Membership to ROR /existing doesn't prevent a new
     Membership to ROR /new from being created — they're distinct
     composites."""
     reconciled = ReconciledEntities(entities={"persons": [{"id": "p1"}]})
-    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/existing")
+    _seed_membership(reconciled, person_id="p1", ror="https://ror.org/000000001")
     patch = BioResolverPatch(
-        pulse_ror="https://ror.org/new",
+        pulse_ror="https://ror.org/000000002",
         reason="From bio: ...",
         confidence=0.9,
     )
@@ -227,14 +240,14 @@ def test_apply_patch_adds_a_second_membership_when_person_has_one_already():
         patch=patch,
         **_apply_kwargs(
             reconciled=reconciled,
-            existing_org_ids={"https://ror.org/existing"},
-            existing_keys={"p1__https://ror.org/existing"},
+            existing_org_ids={"https://ror.org/000000001"},
+            existing_keys={"p1__https://ror.org/000000001"},
         ),
     )
     assert m_added == 1
     assert sorted(_membership_org_ids(reconciled, person_id="p1")) == [
-        "https://ror.org/existing",
-        "https://ror.org/new",
+        "https://ror.org/000000001",
+        "https://ror.org/000000002",
     ]
 
 
@@ -288,7 +301,7 @@ def test_per_person_llm_failure_produces_warning_not_exception():
     agent = _StubAgent(
         patches={
             "good": BioResolverPatch(
-                pulse_ror="https://ror.org/deepmind",
+                pulse_ror="https://ror.org/000000001",
                 reason="...",
                 confidence=0.91,
             ),

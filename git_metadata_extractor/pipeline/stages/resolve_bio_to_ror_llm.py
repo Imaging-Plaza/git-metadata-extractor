@@ -225,10 +225,11 @@ def _apply_patch(
             {"ror_id": patch.pulse_ror, "name": patch.pulse_ror},
             source=STAGE_SOURCE_TAG,
         )
-        if stub is not None:
-            orgs.append(stub)
-            existing_org_ids.add(patch.pulse_ror)
-            o_added = 1
+        if stub is None:
+            return 0, 0
+        orgs.append(stub)
+        existing_org_ids.add(patch.pulse_ror)
+        o_added = 1
 
     memberships.append(
         _build_membership(

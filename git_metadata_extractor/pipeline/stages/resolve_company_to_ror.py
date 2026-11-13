@@ -72,6 +72,9 @@ from typing import TYPE_CHECKING, Any
 from git_metadata_extractor.agents.models import generate_uuid
 from git_metadata_extractor.canonicalization.github import github_org_iri
 from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.pipeline.stages.reconciliation import (
+    normalize_organization_identifiers,
+)
 from git_metadata_extractor.providers.ror_rag import (
     RorRagProvider,
     build_default_provider,
@@ -317,13 +320,12 @@ def _build_org_stub(hit: dict[str, Any], *, source: str) -> dict[str, Any] | Non
     if not isinstance(ror_id, str) or not ror_id:
         return None
     name = _strip_country(str(hit.get("name") or "")) or ror_id
-    return {
+    org = {
         "id": ror_id,
         "type": "org:Organization",
         "shacl": "pulse:OrganizationShape",
         "identifiers": {
             "pulse:ror": ror_id,
-            "uuid": generate_uuid(),
         },
         "idSource": "pulse:ror",
         "schema:name": name,
@@ -332,6 +334,12 @@ def _build_org_stub(hit: dict[str, Any], *, source: str) -> dict[str, Any] | Non
         # purely for tooling/debugging.
         "_source": source,
     }
+    normalize_organization_identifiers(org)
+    # Provider hits must carry the canonical ROR URL. Reject malformed IDs
+    # before they can create an organization or a dangling membership.
+    if org["identifiers"]["pulse:ror"] != ror_id:
+        return None
+    return org
 
 
 def _build_membership(
@@ -398,12 +406,13 @@ def _materialise(
         ror_id = hit.get("ror_id")
         if not isinstance(ror_id, str) or not ror_id:
             continue
+        stub = _build_org_stub(hit, source=source)
+        if stub is None:
+            continue
         if ror_id not in existing_org_ids:
-            stub = _build_org_stub(hit, source=source)
-            if stub is not None:
-                orgs.append(stub)
-                existing_org_ids.add(ror_id)
-                o_added += 1
+            orgs.append(stub)
+            existing_org_ids.add(ror_id)
+            o_added += 1
         composite = f"{person_id}__{ror_id}"
         if composite not in existing_membership_keys:
             memberships.append(

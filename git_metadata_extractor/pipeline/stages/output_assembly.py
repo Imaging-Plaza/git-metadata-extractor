@@ -270,6 +270,7 @@ def assemble_output(  # noqa: C901, PLR0912
     # article's DOI URL into the root repo's `schema:citation` list
     # so the cross-store link is materialised.
     cleaned_root = _clean_relationship_refs(root_entity, excluded_ids)
+    _promote_project_citations([cleaned_root, *related_entities])
     cleaned_root, citation_warnings = _link_articles_to_root_repo(
         cleaned_root, related_entities,
     )
@@ -313,6 +314,26 @@ def _drop_person_url_self_loops(entities: list[dict[str, Any]]) -> None:
                 target = inner.strip()
         if target is not None and target == pid.strip():
             entity.pop("schema:url", None)
+
+
+def _promote_project_citations(entities: list[Any]) -> None:
+    # The strict intermediate's citation slot is scalar/DOI-only. Promote
+    # source-declared primary references after that gate; canonical/raw shapes
+    # accept arbitrary citation IRIs without requiring an Article node.
+    for repository in entities:
+        if not isinstance(repository, dict) or repository.get("type") != "schema:SoftwareSourceCode":
+            continue
+        declared = repository.pop("_project_citations", None)
+        if not isinstance(declared, list) or not declared:
+            continue
+        existing = repository.get("schema:citation")
+        citations = list(existing) if isinstance(existing, list) else [existing] if existing else []
+        for citation in declared:
+            iri = citation.get("iri") if isinstance(citation, dict) else None
+            if isinstance(iri, str) and iri.startswith(("https://doi.org/", "https://arxiv.org/abs/")) and iri not in citations:
+                citations.append(iri)
+        if citations:
+            repository["schema:citation"] = citations
 
 
 def _link_articles_to_root_repo(

@@ -10,6 +10,10 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
+from git_metadata_extractor.canonicalization.organization_evidence import (
+    organization_name_matches,
+    organization_website_matches,
+)
 from git_metadata_extractor.mapping import load_policy, map_fields
 from git_metadata_extractor.providers.base import ProviderNotFoundError
 
@@ -84,67 +88,25 @@ def _pick_best_orgunit_match(
     return None
 
 
-# Generic org-structure / weak-content words. A ROR match whose entire
-# token overlap with the query is drawn from this set is a coincidental
-# collision, not a real identity — production examples: "Center for Digital
-# Trust" ↔ "RISM Digital Center", "Imaging-Plaza" ↔ "Kanazawa Education
-# Plaza". Such matches are declined so the org flows to the LLM-backed
-# `infer_github_handle_parents` selector instead of being finalised here.
-_GENERIC_ORG_TOKENS: frozenset[str] = frozenset(
-    {
-        "center", "centre", "digital", "plaza", "lab", "labs", "laboratory",
-        "group", "team", "institute", "institut", "department", "dept",
-        "division", "school", "college", "faculty", "unit", "office",
-        "foundation", "the", "of", "for", "and", "in", "at", "an", "on",
-    },
-)
-
-
 def _select_ror_match(
     ror_matches: list[dict[str, Any]],
     *,
     country_bias: str | None,
     warnings: list[str],
     ror_query: str,
+    homepage: str | None = None,
 ) -> dict[str, Any] | None:
-    """Pick a ROR match from ``ror_matches`` with optional country bias
-    AND name-token overlap.
-
-    ``country_bias`` is an ISO 3166-1 alpha-2 code. When set, the first
-    match whose ``country.country_code`` equals the bias is preferred.
-
-    Acceptance gate: the chosen match must share at least one
-    *distinctive* (non-generic) ≥2-char alphabetic token with
-    ``ror_query`` (via the record's name, aliases, acronyms, or labels).
-    ROR search returns relevance-ranked best-effort matches even for
-    queries that have no real ROR counterpart — e.g. a free-text
-    affiliation string the indexer spuriously bound to a person — and a
-    match resting only on generic org-structure words ("center", "lab",
-    "digital", "plaza", …) is a coincidental collision. Without this
-    check the top hit gets promoted to the graph as a phantom
-    organisation.
-
-    Background: ROR's HTTP search returns the most-cited org first for
-    a given query. For acronyms that collide across countries (``SDSC``:
-    Swiss Data Science Center vs San Diego Supercomputer Center;
-    ``NIH``: Swiss vs US), the top hit is almost always the US one. When
-    we're enriching an org that already has an Infoscience match, we
-    *know* the Swiss bias is correct.
-    """
+    """Prefer the country-biased candidate only when identity evidence agrees."""
     if not ror_matches:
         return None
 
-    candidate_tokens = _org_name_tokens(ror_query)
-
     def _accepts(record: dict[str, Any]) -> bool:
-        if not candidate_tokens:
+        if not isinstance(record, dict):
             return False
-        overlap = _org_record_tokens(record) & candidate_tokens
-        # Require at least one *distinctive* shared token. A match resting
-        # only on generic org-structure words ("center", "lab", "digital",
-        # "plaza", …) is a coincidental collision; declining it leaves
-        # `pulse:ror` null so the agent-backed parent selector decides.
-        return any(token not in _GENERIC_ORG_TOKENS for token in overlap)
+        website = organization_website_matches(homepage, record)
+        return website is not False and organization_name_matches(
+            record, ror_query, allow_generic_exact=website is True,
+        )
 
     if not country_bias:
         top = ror_matches[0]
@@ -152,7 +114,7 @@ def _select_ror_match(
             return top
         warnings.append(
             f"ROR top hit for {ror_query!r} ({top.get('id') if isinstance(top, dict) else top}) "
-            "shares no name token with the query; skipping enrichment "
+            "lacks consistent name and website evidence; skipping enrichment "
             "to avoid a phantom organisation.",
         )
         return None
@@ -170,7 +132,7 @@ def _select_ror_match(
         if not _accepts(biased):
             warnings.append(
                 f"ROR country-bias hit for {ror_query!r} "
-                f"({biased.get('id')}) shares no name token with the query; "
+                f"({biased.get('id')}) lacks consistent name and website evidence; "
                 "skipping enrichment to avoid a phantom organisation.",
             )
             return None
@@ -190,7 +152,7 @@ def _select_ror_match(
     if not _accepts(top):
         warnings.append(
             f"ROR top hit for {ror_query!r} ({top.get('id') if isinstance(top, dict) else top}) "
-            "shares no name token with the query and no country-bias "
+            "lacks consistent name and website evidence and no country-bias "
             "match exists; skipping enrichment to avoid a phantom organisation.",
         )
         return None
@@ -291,6 +253,7 @@ class OrganizationAgentV2:
                             ),
                             warnings=warnings,
                             ror_query=str(ror_query),
+                            homepage=github_org.get("blog"),
                         )
             except ProviderNotFoundError as exc:
                 warnings.append(f"ROR lookup failed: {exc}")

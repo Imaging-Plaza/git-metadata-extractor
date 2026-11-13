@@ -35,6 +35,10 @@ from git_metadata_extractor.canonicalization.github import (
     github_user_iri,
     parse_github_org_iri,
 )
+from git_metadata_extractor.canonicalization.organization_evidence import (
+    organization_name_matches,
+    organization_website_matches,
+)
 from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 OWNS_KEY = "pulse:owns"
@@ -894,101 +898,22 @@ def _ror_record_score(
     return len(gh_tokens & ror_tokens)
 
 
-# Minimum length for a ROR-name token to count as a substring match against a
-# de-separated handle. Guards against generic 2-3 char fragments ("ai", "bio")
-# matching coincidentally (e.g. "ai" inside "unionai").
-_MIN_SUBSTRING_TOKEN_LEN = 4
-
-
 def _despace(value: str) -> str:
     """Lowercase and strip all non-alphanumerics — turns 'Broad Institute' and
     'broad-institute' both into 'broadinstitute' for substring comparison."""
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
-# Generic organisation words that collide across unrelated orgs and so must
-# NOT count as a name-match nexus on their own. ROR's relevance ranking puts a
-# token-coincident org at #1 for these (`Edinburgh Genome Foundry` -> "Jøtul",
-# whose alias is "Kværner Foundry"; `... Genomics` -> any genomics company),
-# and the github→ROR resolver accepts ROR's #1 without a similarity check. The
-# nexus must be a *distinctive* shared token, not one of these.
-_GENERIC_ORG_TOKENS = frozenset(
-    """
-    foundry research lab labs laboratory laboratories group institute institut
-    institutes university college center centre data hub science sciences scientific
-    bio biotech biosciences genomics genome genomic cloud platform tech technology
-    technologies systems system solutions computational national international
-    corporation corp company foundation association network project team engineering
-    medical medicine health information intelligence machine learning open source
-    global services consulting consultants digital software therapeutics pharma
-    pharmaceuticals biology biological dynamics analytics consortium initiative
-    of the and for de la el du des inc ltd gmbh llc co
-    """.split(),
-)
-
-
-def _distinctive(tokens: set[str]) -> set[str]:
-    """Tokens that distinguish one org from another — drops generic org words
-    and 1-2 char fragments that match coincidentally."""
-    return {t for t in tokens if len(t) >= 3 and t not in _GENERIC_ORG_TOKENS}
-
-
 def _ror_match_has_nexus(
     *, handle: str, name: str | None, ror_record: dict[str, Any],
 ) -> bool:
-    """True when the github org and the ROR record share a *distinctive* signal.
-
-    ROR's free-text ranking happily returns a coincidental top hit whose only
-    overlap with the org is a generic word (`Edinburgh Genome Foundry` -> Jøtul
-    via the alias "Kværner Foundry"; `unionai` -> "Ai Corporation" via "ai"),
-    and the resolver accepts ROR's #1 without verifying the name. This guard is
-    that verification: keep a match only when there is
-
-      1. a shared *distinctive* (non-generic, >=3 char) name token, OR
-      2. an acronym match (acronyms are inherently distinctive), OR
-      3. a distinctive ROR-name token (>=4 chars) appearing as a substring of
-         the de-separated handle/name — recovering concatenated handles
-         (`broadinstitute` -> "Broad Institute", `huggingface` -> "Hugging Face").
-
-    Generic-word-only overlaps (the Jøtul / Ai Corporation failure mode) share
-    no distinctive token and are rejected. Validated against the reported
-    suspect pairs using the live ROR records (incl. Jøtul's aliases).
-    """
-    gh_tokens = _handle_aliases(handle)
-    if isinstance(name, str):
-        gh_tokens |= _name_aliases(name)
-    gh_distinctive = _distinctive(gh_tokens)
-
-    ror_tokens: set[str] = set(_name_aliases(ror_record.get("name")))
-    for alias in ror_record.get("aliases") or []:
-        ror_tokens |= _name_aliases(alias)
-    ror_distinctive = _distinctive(ror_tokens)
-
-    # 1) shared distinctive token
-    if gh_distinctive & ror_distinctive:
-        return True
-    # 2) acronym match
-    acronyms = {a.lower() for a in (ror_record.get("acronyms") or []) if isinstance(a, str)}
-    if gh_tokens & acronyms:
-        return True
-    # 3) distinctive ROR token as a substring of the de-separated handle/name
-    blobs = [_despace(handle)]
-    if isinstance(name, str) and name.strip():
-        blobs.append(_despace(name))
-    return any(
-        len(tok) >= _MIN_SUBSTRING_TOKEN_LEN and any(tok in blob for blob in blobs)
-        for tok in ror_distinctive
-    )
+    """Require a complete distinctive name, alias, or explicit acronym."""
+    return organization_name_matches(ror_record, handle, name)
 
 
-# --- web-domain evidence (Tier A1) -----------------------------------------
-# A web-domain match is the highest-precision, zero-cost owner→ROR signal and
-# resolves the residual token-coincidence cases name comparison can't
-# (cloud.google.com vs deepmind.google; opig.stats.ox.ac.uk vs
-# oxfordresearchgroup.org.uk). Comparison is on the *registrable label* (the
-# name immediately left of the public suffix), so single labels colliding
-# ("google" in both cloud.google.com and deepmind.google) don't false-match —
-# google.com vs deepmind.google differ.
+# Domain labels support metadata hints and diagnostic messages. Acceptance in
+# _select_ror_parent uses organization_website_matches, which compares full
+# hosts (including suffixes) and permits institutional subdomains.
 
 # Common two-label public suffixes, so the registrable label is the org name
 # (opig.stats.ox.ac.uk -> "ox") and not the suffix ("ac").
@@ -1451,6 +1376,7 @@ async def _select_ror_parent(
         return None
 
     org_label = _org_domain_label(org_context)
+    homepage = (org_context or {}).get("homepage")
     org_ext = set((org_context or {}).get("external_ids") or [])
     org_name_keys = _name_keys(org_name, handle)
 
@@ -1461,7 +1387,8 @@ async def _select_ror_parent(
     #   A3 exact name / acronym (normalised equality)
     if org_label:
         domain_matches = [
-            hit for _score, hit in shortlist if org_label in _ror_domain_labels(hit)
+            hit for _score, hit in shortlist
+            if organization_website_matches(homepage, hit) is True
         ]
         chosen = _disambiguate_domain_matches(domain_matches)
         if chosen is not None:
@@ -1479,7 +1406,10 @@ async def _select_ror_parent(
                 return _stamp_match(hit, "A2_external_id", 0.99, handle, warnings)
     if org_name_keys:
         for _score, hit in shortlist:
-            if org_name_keys & (_ror_name_keys(hit) | _ror_acronyms(hit)):
+            if (
+                org_name_keys & (_ror_name_keys(hit) | _ror_acronyms(hit))
+                and organization_website_matches(homepage, hit) is not False
+            ):
                 return _stamp_match(hit, "A3_exact_name", 0.95, handle, warnings)
 
     # --- candidate selection: rule-based unambiguous winner, or the LLM picker ---
@@ -1533,18 +1463,12 @@ async def _select_ror_parent(
         )
         return None
 
-    # Decisive negative: both sides have a web domain and they differ -> they are
-    # different orgs (cloud.google.com vs deepmind.google; ox.ac.uk vs
-    # oxfordresearchgroup.org.uk). Only fires when the org has a usable domain.
-    if org_label:
-        ror_labels = _ror_domain_labels(chosen_hit)
-        if ror_labels and org_label not in ror_labels:
-            warnings.append(
-                f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
-                f"'{handle}' — web-domain mismatch (org '{org_label}' vs ROR "
-                f"{sorted(ror_labels)}).",
-            )
-            return None
+    if organization_website_matches(homepage, chosen_hit) is False:
+        warnings.append(
+            f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
+            f"'{handle}': web-domain mismatch.",
+        )
+        return None
 
     chosen_hit["_ror_match_tier"] = match_tier
     chosen_hit["_ror_match_confidence"] = match_conf

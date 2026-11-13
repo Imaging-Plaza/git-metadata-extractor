@@ -11,13 +11,18 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-from git_metadata_extractor.providers.github_token_pool import (
-    github_auth_headers as _github_auth_headers,
-)
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.providers.base import (
     GitHubProvider,
+    ProviderError,
     ProviderNotFoundError,
+)
+from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.providers.contributors import (
+    ContributorCoverage,
+    ContributorLookup,
+)
+from git_metadata_extractor.providers.github_token_pool import (
+    github_auth_headers as _github_auth_headers,
 )
 
 if TYPE_CHECKING:
@@ -33,6 +38,12 @@ GITHUB_NOREPLY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 logger = logging.getLogger(__name__)
+
+# A fallback must never turn one extraction into an unbounded repository crawl.
+_CONTRIBUTOR_PAGE_SIZE = 100
+_CONTRIBUTOR_MAX_PAGES = 3
+_HTTP_OK = 200
+_HTTP_NO_CONTENT = 204
 
 # Docker Compose filenames (basename), e.g. docker-compose.yml,
 # docker-compose.prod.yaml, compose.yml — anywhere in the tree.
@@ -1806,16 +1817,30 @@ class RealGitHubProvider(GitHubProvider):
         )
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
+        """Legacy list interface; unavailable enumeration is not an empty success."""
+        result = self.get_contributors_with_coverage(full_name)
+        if not result.fetched:
+            message = f"Contributor coverage unavailable for {full_name}: {result.coverage.reason}"
+            raise ProviderError(message)
+        return result.contributors
+
+    def get_contributors_with_coverage(self, full_name: str) -> ContributorLookup:
+        """Prefer GIMIE identities, then enumerate at most 300 linked REST accounts.
+
+        GIMIE does not expose pagination metadata, so even a nonempty list has
+        unknown completeness. REST's completed pagination covers linked accounts
+        only; anonymous commit authors are not GitHub identities. Failures are
+        returned with diagnostics and are never cached as successful empty lists.
+        """
         repository_url = _normalize_repo_url(full_name)
+        fallback_reason = "gimie_no_contributor_identities"
+        try:
+            node = self._get_repository_node(full_name)
+        except Exception:  # noqa: BLE001 - preserve REST fallback on a GIMIE outage
+            node = {}
+            fallback_reason = "gimie_lookup_failed"
         gimie_payload = self._gimie_payload_cache.get(repository_url) or {}
-        node = self._get_repository_node(full_name)
         gimie_contributor_logins = _extract_contributor_logins_from_node(node)
-        if not gimie_contributor_logins:
-            logger.debug(
-                "GIMIE contributor extraction returned no GitHub logins for %s",
-                full_name,
-            )
-            return []
         person_index, org_logins = _classify_graph_nodes(gimie_payload)
         contributors = []
         for login in gimie_contributor_logins:
@@ -1828,9 +1853,81 @@ class RealGitHubProvider(GitHubProvider):
                     "name": _extract_name_from_person_node(person_node),
                     "email": None,
                     "contributions": None,
-                }
+                },
             )
-        return contributors
+        if contributors:
+            return ContributorLookup(
+                contributors=contributors,
+                coverage=ContributorCoverage(
+                    status="unknown", source="gimie", returned_count=len(contributors),
+                    reason="gimie_enumeration_metadata_unavailable",
+                ),
+            )
+        return self._get_rest_contributors(full_name, fallback_reason=fallback_reason)
+
+    def _get_rest_contributors(self, full_name: str, *, fallback_reason: str) -> ContributorLookup:
+        contributors: dict[str, dict[str, Any]] = {}
+        coverage = ContributorCoverage(
+            status="unavailable", source="github_rest", fallback_reason=fallback_reason,
+        )
+        for page in range(1, _CONTRIBUTOR_MAX_PAGES + 1):
+            payload, more, error = self._fetch_contributor_page(full_name, page=page)
+            if error:
+                coverage.reason = error
+                break
+            coverage.pages_fetched += 1
+            invalid = False
+            for row in payload:
+                login = _normalize_github_login(row.get("login")) if isinstance(row, dict) else None
+                if not login or row.get("type") == "Organization":
+                    invalid = True
+                    continue
+                count = row.get("contributions")
+                contributors.setdefault(login.lower(), {
+                    "login": login, "name": None, "email": None,
+                    "contributions": count if type(count) is int and count >= 0 else None,
+                })
+            if invalid:
+                coverage.reason = "github_unusable_contributor_records"
+            if not more:
+                if coverage.reason is None:
+                    coverage.status = "complete" if contributors else "empty"
+                break
+        else:
+            coverage.reason = "page_limit"
+        coverage.returned_count = len(contributors)
+        if coverage.reason:
+            coverage.status = "partial" if contributors else "unavailable"
+        return ContributorLookup(contributors=list(contributors.values()), coverage=coverage)
+
+    def _fetch_contributor_page(
+        self, full_name: str, *, page: int,
+    ) -> tuple[list[Any], bool, str | None]:
+        """Follow only the pagination signal, never a server-provided URL."""
+        try:
+            response = self._run_with_rate_limit(
+                lambda: requests.get(
+                    f"https://api.github.com/repos/{full_name}/contributors",
+                    params={"per_page": _CONTRIBUTOR_PAGE_SIZE, "page": page},
+                    headers=_github_auth_headers(), timeout=15,
+                ),
+            )
+        except Exception:  # noqa: BLE001 - sanitized outcome, no credentials/body in warnings
+            return [], False, "github_request_failed"
+        if response.status_code == _HTTP_NO_CONTENT:  # Empty repository; no JSON body.
+            return [], False, None
+        if response.status_code != _HTTP_OK:
+            return [], False, f"github_http_{response.status_code}"
+        try:
+            payload = response.json()
+        except ValueError:
+            return [], False, "github_invalid_response"
+        if not isinstance(payload, list) or len(payload) > _CONTRIBUTOR_PAGE_SIZE:
+            return [], False, "github_invalid_response"
+        more = any(
+            'rel="next"' in segment for segment in response.headers.get("Link", "").split(",")
+        )
+        return payload, more, None
 
     def get_languages(self, full_name: str) -> dict[str, int]:
         node = self._get_repository_node(full_name)

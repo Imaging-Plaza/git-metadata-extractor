@@ -29,6 +29,7 @@ from git_metadata_extractor.canonicalization.github import (
 )
 from git_metadata_extractor.mapping import load_policy, map_fields
 from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
+from git_metadata_extractor.parsers.project_citations import project_citations
 from git_metadata_extractor.parsers.publiccode import parse_publiccode
 
 _EXTRACTION_POLICY = load_policy("policies.extraction")
@@ -316,6 +317,7 @@ class RepositoryAgentV2:
 
         aux_files: dict[str, str]
         readme_content: str = ""
+        source_citations: list[dict[str, Any]] | None = None
         if reuse_gathered_context and isinstance(repository_context, dict):
             metadata_candidate = repository_context.get("metadata")
             repository = metadata_candidate if isinstance(metadata_candidate, dict) else {}
@@ -336,12 +338,17 @@ class RepositoryAgentV2:
             readme_candidate = repository_context.get("readme_content")
             if isinstance(readme_candidate, str):
                 readme_content = readme_candidate
+            gathered_citations = repository_context.get("project_citations")
+            if isinstance(gathered_citations, list):
+                source_citations = gathered_citations
         else:
             repository = providers.github.get_repository(full_name)
             contributors = providers.github.get_contributors(full_name)
             languages = providers.github.get_languages(full_name)
             aux_files = {}
 
+        if source_citations is None:
+            source_citations = project_citations(readme_content, aux_files)
         return {
             "full_name": full_name,
             "repository": repository,
@@ -349,6 +356,7 @@ class RepositoryAgentV2:
             "languages": languages,
             "aux_files": aux_files,
             "readme_content": readme_content,
+            "project_citations": source_citations,
         }
 
     async def _default_structured_output(  # noqa: C901
@@ -493,6 +501,7 @@ class RepositoryAgentV2:
                         repository.get("license", {}).get("spdx_id"),
                     ),
                     "citation": f"https://doi.org/{doi_value}" if doi_value else None,
+                    "project_citations": compiled_context.get("project_citations"),
                     "programmingLanguage": programming_languages,
                     "ownedBy": owner_url or owner_handle,
                     "isForkOf": _resolve_fork_parent_url(repository),

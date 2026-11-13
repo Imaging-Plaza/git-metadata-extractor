@@ -1,6 +1,6 @@
 schema_version: 1
 name: agent.repository
-version: '1'
+version: '2'
 source_contract: prepared.agent.repository
 target_contract: agent.repository
 fields:
@@ -24,6 +24,7 @@ fields:
   pulse:ownedBy: {sources: [ownedBy], empty: preserve, missing: 'null'}
   pulse:isForkOf: {sources: [isForkOf], empty: preserve, missing: 'null'}
 internal_fields:
+  _project_citations: {sources: [project_citations], empty: preserve, missing: 'null'}
   _publiccode: {sources: [publiccode], empty: preserve, missing: 'null'}
   _citation_cff: {sources: [citation_cff], empty: preserve, missing: 'null'}
   _releases: {sources: [releases], empty: preserve, missing: 'null'}

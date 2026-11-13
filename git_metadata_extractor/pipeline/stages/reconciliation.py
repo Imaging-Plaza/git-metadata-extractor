@@ -209,7 +209,13 @@ def _normalize_article_identifiers(article: dict[str, Any]) -> None:
         article["pulse:infoscienceArticleIdentifier"] = top_info_url
 
 
-def _normalize_organization_identifiers(organization: dict[str, Any]) -> None:
+def normalize_organization_identifiers(organization: dict[str, Any]) -> None:
+    """Normalize accepted identity facts for reconciliation and later producers.
+
+    Mirror ROR into the strict contract's ``schema:identifier`` and retain a
+    server UUID even when a stronger identifier is canonical. This performs
+    syntax normalization, not candidate identity matching.
+    """
     identifiers = organization.get("identifiers")
     normalized_identifiers = (
         deepcopy(identifiers)
@@ -1884,7 +1890,7 @@ def reconcile_entities(  # noqa: C901, PLR0912, PLR0915
 
     for organization in organizations:
         existing_id_source = organization.get("idSource")
-        _normalize_organization_identifiers(organization)
+        normalize_organization_identifiers(organization)
         canonical_id, id_source = resolve_organization_id(organization)
         organization["id"] = canonical_id
         organization["idSource"] = id_source

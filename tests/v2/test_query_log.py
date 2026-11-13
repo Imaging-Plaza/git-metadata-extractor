@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 from git_metadata_extractor.observation.query_log import (
     QueryLog,
@@ -17,11 +21,15 @@ from git_metadata_extractor.observation.query_log import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_query_log_contextvars() -> None:
-    """ContextVars persist across tests — wipe them between every test."""
-    query_log_var.set(None)
-    current_agent_var.set(None)
-    current_agent_context_var.set(None)
+def _reset_query_log_contextvars() -> Iterator[None]:
+    """Restore observation context between tests and when this module finishes."""
+    variables = (query_log_var, current_agent_var, current_agent_context_var)
+    tokens = [variable.set(None) for variable in variables]
+    try:
+        yield
+    finally:
+        for variable, token in zip(variables, tokens, strict=True):
+            variable.reset(token)
 
 
 def test_record_query_groups_by_agent_and_context() -> None:

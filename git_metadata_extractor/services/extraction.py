@@ -134,6 +134,23 @@ def _extract_jsonld_context() -> dict[str, Any]:
         return dict(JSONLD_CONTEXT_FALLBACK)
 
 
+def _has_degraded_contributor_coverage(gathered_context: dict[str, Any]) -> bool:
+    """Inspect root and expanded repositories without relying on warning text."""
+    repositories = [gathered_context.get("repository")]
+    for kind in ("user", "organization"):
+        account = gathered_context.get(kind)
+        expanded = account.get("repository_contexts") if isinstance(account, dict) else None
+        if isinstance(expanded, dict):
+            repositories.extend(expanded.values())
+    for repository in repositories:
+        if not isinstance(repository, dict):
+            continue
+        coverage = repository.get("contributor_coverage")
+        if isinstance(coverage, dict) and coverage.get("status") in {"partial", "unavailable"}:
+            return True
+    return False
+
+
 async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocated stage sequence
     options, *, providers, orchestrator, cache, execution_profile, classification,
 ):
@@ -218,6 +235,9 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
             include_context_summary=bool(include_context_summary),
             include_internal_fields=bool(include_internal_fields),
             evidence_version=EVIDENCE_VERSION,
+            # Older responses can contain silent contributor failures, without
+            # coverage metadata or warnings. Do not replay those as successes.
+            contributor_coverage_version=1,
             canonical_output=settings.canonical_output_enabled(),
             substrate_enabled=runtime_config.substrate_enabled(),
             execution_profile=(execution_profile or {}).get("fingerprint"),
@@ -487,7 +507,11 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
         substrate=pipeline_state.substrate,
     )
 
-    if pipeline_cache is not None and pipeline_cache_key is not None:
+    if (
+        pipeline_cache is not None
+        and pipeline_cache_key is not None
+        and not _has_degraded_contributor_coverage(gathered_context)
+    ):
         try:
             pipeline_cache.set(
                 pipeline_cache_key,

@@ -946,6 +946,24 @@ internal pipeline metadata. They are **stripped** before strict
 validation, JSON-LD output, RDF serialisation, and any external
 artefact. Never expose `_`-prefixed fields in API responses.
 
+## Enrichment quality contracts
+
+- Explicit primary-paper references from fetched CFF/BibTeX/README documents
+  survive as external `schema:citation` IRIs in rule-based/hybrid output even
+  when metadata cannot support a valid Article node. Parsing lives in
+  `parsers/project_citations.py`; the repository YAML owns the prepared-fact
+  assignment. Never fabricate DOI, authors or dates to satisfy ArticleShape.
+- Organization identity and parent selection share
+  `canonicalization/organization_evidence.py`. Retrieval rank or one shared
+  subject word is insufficient; conflicting institutional websites reject
+  name-based matches. Test ANTs and known legitimate aliases together.
+- Late ROR resolvers must reuse `normalize_organization_identifiers` before
+  strict validation. Preserve `identifiers.uuid` when promoting an identity.
+- Contributor coverage is evidence, not an ontology field. Keep partial or
+  unavailable results out of the pipeline cache. GIMIE completeness is unknown;
+  bounded REST pagination describes linked accounts only. Do not report an
+  unavailable lookup as a successful empty contributor list.
+
 ## Reporting contract
 
 Completion reports must include:

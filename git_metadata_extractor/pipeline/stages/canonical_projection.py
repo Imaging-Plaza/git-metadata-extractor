@@ -288,6 +288,20 @@ def _project_person(node: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict]
 _ROR_ID = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
 
 
+def organization_ror(node: Mapping[str, Any]) -> str | None:
+    """Read a validated ROR identity without changing the node's reference ID.
+
+    Late hybrid resolution deliberately retains UUID IDs to preserve inbound
+    references, recording the accepted ROR in ``schema:identifier`` instead.
+    Keep the same canonical URL grammar as the strict intermediate contract.
+    """
+    for field in ("@id", "schema:identifier"):
+        candidate = _iri(node.get(field))
+        if candidate and _ROR_ID.fullmatch(candidate):
+            return candidate
+    return None
+
+
 def _project_organization(node: Mapping[str, Any]) -> tuple[dict, list[dict]]:
     out = _base(node, "org:Organization")
 
@@ -298,8 +312,9 @@ def _project_organization(node: Mapping[str, Any]) -> tuple[dict, list[dict]]:
     # `pulse:ror | pulse:hasOrganizationProfile`, so a ROR-identified
     # organization with the property stripped has no identity at all and
     # fails validation. Without this, every ROR org in the corpus violates.
-    if "pulse:ror" not in out and _ROR_ID.match(str(out["@id"])):
-        out["pulse:ror"] = [out["@id"]]
+    ror = organization_ror(node)
+    if "pulse:ror" not in out and ror:
+        out["pulse:ror"] = [ror]
     profiles: list[dict[str, Any]] = []
     for key in (
         "pulse:githubOrganizationHandle",

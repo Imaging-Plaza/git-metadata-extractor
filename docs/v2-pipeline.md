@@ -217,7 +217,7 @@ These invariants are the contract every stage relies on. Breaking one of them te
 When the resolver stages find a high-confidence ROR match for a Person, they create:
 
 1. **`org:Membership`** linking Person → Organization. No role, no dates (we have no evidence).
-2. **`org:Organization`** stub with `pulse:ror`, `schema:name`, `idSource = pulse:ror` — only when that ROR URL isn't already in the graph.
+2. **`org:Organization`** stub with `pulse:ror`, `schema:identifier`, `identifiers.uuid`, `schema:name`, `idSource = pulse:ror` — only when that ROR URL isn't already in the graph.
 3. **Provenance** via `_source` on both entities. Stripped at output unless `include_internal_fields=true`. Values: `resolve_company_to_ror`, `resolve_bio_to_ror`, `resolve_bio_to_ror_llm`.
 
 ```mermaid
@@ -305,3 +305,46 @@ Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 20
 The former "deep reference" pointer (`.internal/v2-pipeline-reference.md`) was
 removed: that directory is untracked, so the file does not exist in a fresh
 clone. The stage inventory above replaces it.
+
+
+## Enrichment evidence and incomplete coverage
+
+Rule-based and hybrid repository generation preserve explicitly requested paper
+references from `CITATION.cff` (preferred article), `CITATION.bib`, and README
+citation sections. `parsers/project_citations.py` prepares these facts from the original fetched
+README before HTML cleanup;
+`mapping/config/agent/repository.yaml` carries them through the intermediate;
+output assembly emits DOI/arXiv IRIs as `schema:citation`. The canonical and raw
+shapes permit external citation IRIs. A reference can therefore survive without
+inventing the authors or publication date required for a ScholarlyArticle node.
+Article enrichment searches explicit DOI/title evidence before repository-name
+queries. Incidental bibliography entries and software archive DOIs are not
+project-paper evidence.
+
+ROR organization matching requires a complete name, alias, explicit acronym, or
+all distinctive words of one candidate name. A lone shared subject word does not
+establish identity. Conflicting institutional websites block name-based identity
+and parent matches; host comparison includes the domain suffix. Shared hosting
+sites provide no website identity evidence. Exact names made entirely of generic
+words need an affirmative website match in the organization agent. Authoritative
+shared external identifiers remain a separate parent-selection signal.
+
+Resolver-created ROR organizations reuse the identity normalizer, supplying
+`schema:identifier` and retaining a server UUID before strict validation. This
+repairs late-created stubs without relaxing the schema. Raw/canonical projection
+also reads an accepted ROR from `schema:identifier` when a late hybrid resolver
+keeps a UUID node ID; existing references keep the same target.
+
+Contributor retrieval returns structured coverage alongside the accounts. GIMIE
+results have unknown completeness because the sidecar provides no pagination
+metadata. If it provides no usable identities, the provider attempts at most
+three GitHub REST pages of 100 linked accounts. Completed REST pagination does
+not establish coverage of anonymous authors. Failed or truncated retrieval emits
+an incomplete-coverage warning and a partial context-gather outcome in the
+optional run report. Partial/unavailable results are not written to the pipeline
+cache, so subsequent requests can recover. Upstream limits can still leave a
+minimal graph; inspect warnings rather than interpreting missing contributors as
+proof that a repository has none.
+
+Measured results and the remaining inverse-membership routing issue are recorded
+in the [enrichment follow-up](enrichment-fixes-2026-11-13.md).

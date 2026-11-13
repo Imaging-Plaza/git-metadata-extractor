@@ -48,6 +48,9 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field
 
 from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.pipeline.stages.reconciliation import (
+    normalize_organization_identifiers,
+)
 from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
     _resolve_one,
     _strip_country,
@@ -107,11 +110,8 @@ def _rewrite_org_in_place(
     if not isinstance(identifiers, dict):
         identifiers = {}
     identifiers["pulse:ror"] = ror_id
-    # Drop the dangling uuid identifier — it's no longer the canonical
-    # id, and leaving it can confuse downstream consumers that look for
-    # `identifiers.uuid` as a fallback dedupe key.
-    identifiers.pop("uuid", None)
     org["identifiers"] = identifiers
+    normalize_organization_identifiers(org)
     # Prefer the canonical ROR display name when we have it; keep the
     # original placeholder string under `gme-internal:original_name`
     # so the breadcrumb is recoverable with `?include_internal_fields=true`.

@@ -1,0 +1,7 @@
+{
+  "full_name": "ANTsX/ANTs",
+  "readme_content": "",
+  "aux_files": {
+    "CITATION.bib": "% Please cite this article if using ANTs in published research\n% See the project README for additional citations for specific tools\n@article{tustison_antsx_2021,\n\ttitle = {The {ANTsX} ecosystem for quantitative biological and medical imaging},\n\tvolume = {11},\n\tissn = {2045-2322},\n\turl = {https://doi.org/10.1038/s41598-021-87564-6},\n\tdoi = {10.1038/s41598-021-87564-6},\n\tnumber = {1},\n\tjournal = {Scientific Reports},\n\tauthor = {Tustison, Nicholas J. and Cook, Philip A. and Holbrook, Andrew J. and Johnson, Hans J. and Muschelli, John and Devenyi, Gabriel A. and Duda, Jeffrey T. and Das, Sandhitsu R. and Cullen, Nicholas C. and Gillen, Daniel L. and Yassa, Michael A. and Stone, James R. and Gee, James C. and Avants, Brian B.},\n\tmonth = apr,\n\tyear = {2021},\n\tpages = {9068},\n}\n"
+  }
+}

@@ -17,6 +17,8 @@ from git_metadata_extractor.agents.rule_based._repo_signals import (
     parse_pypi_name,
     repo_url_matches,
 )
+from git_metadata_extractor.observation.run_report import record_stage_outcome
+from git_metadata_extractor.parsers.project_citations import project_citations
 from git_metadata_extractor.pipeline.stages.models import ContextBundle
 
 
@@ -79,11 +81,27 @@ def _clean_readme_for_llm(text: str | None) -> str:
 
 if TYPE_CHECKING:
     from git_metadata_extractor.agents.models import ProviderSet
+    from git_metadata_extractor.providers.contributors import ContributorLookup
     from git_metadata_extractor.providers.detection.models import GitHubURLClassification
 
 logger = logging.getLogger(__name__)
 
 _BOOKENDS_TOP_N_DEFAULT = 50
+
+
+def _record_contributor_coverage(
+    full_name: str, lookup: ContributorLookup, warnings: list[str],
+) -> dict[str, Any]:
+    coverage = lookup.coverage
+    if coverage.status in {"partial", "unavailable"}:
+        warnings.append(
+            f"Contributor coverage {coverage.status} for {full_name}: "
+            f"{coverage.reason}; {coverage.returned_count} linked account(s) retrieved "
+            f"from {coverage.source} after {coverage.fallback_reason}. "
+            "Contributor and contribution output is incomplete.",
+        )
+        record_stage_outcome("partial", reason=f"contributors_{coverage.status}")
+    return coverage.model_dump()
 
 
 def _resolve_bookends_top_n() -> int:
@@ -418,12 +436,16 @@ def _optional_repository_context(
         return None
 
     try:
-        contributors = providers.github.get_contributors(full_name)
+        lookup = providers.github.get_contributors_with_coverage(full_name)
+        contributors = lookup.contributors
+        contributor_coverage = _record_contributor_coverage(full_name, lookup, warnings)
     except Exception as exc:  # noqa: BLE001
         warnings.append(
             f"Repository contributors lookup failed for {full_name}: {exc}",
         )
         contributors = []
+        contributor_coverage = {"status": "unavailable", "reason": "provider_exception"}
+        record_stage_outcome("partial", reason="contributors_unavailable")
     else:
         cap_warning = _enrich_contributors_with_commit_bookends(
             full_name, contributors, providers,
@@ -459,6 +481,9 @@ def _optional_repository_context(
         repository_metadata.get("README"),
         repository_metadata.get("description"),
     )
+    # Citation links are source facts: HTML hrefs and standalone URLs vanish
+    # during prompt cleaning. Parse the untouched text when aux files arrive.
+    citation_readme = readme_content
     if not readme_content:
         warnings.append(f"Repository README content is not available for {full_name}")
         readme_content = ""
@@ -567,7 +592,9 @@ def _optional_repository_context(
         "full_name": full_name,
         "metadata": repository_metadata,
         "readme_content": readme_content,
+        "project_citations": project_citations(citation_readme, aux_files),
         "contributors": contributors,
+        "contributor_coverage": contributor_coverage,
         "languages": languages,
         "gimie_jsonld": gimie_jsonld,
         "aux_files": aux_files,
@@ -610,7 +637,8 @@ async def gather_context(  # noqa: C901, PLR0915
             ) from exc
 
         try:
-            contributors = await asyncio.to_thread(providers.github.get_contributors, full_name)
+            lookup = await asyncio.to_thread(providers.github.get_contributors_with_coverage, full_name)
+            contributors = lookup.contributors
         except Exception as exc:  # noqa: BLE001
             raise RequiredProviderUnavailableError(
                 provider="github",
@@ -618,6 +646,7 @@ async def gather_context(  # noqa: C901, PLR0915
                 cause=exc,
             ) from exc
 
+        contributor_coverage = _record_contributor_coverage(full_name, lookup, warnings)
         cap_warning = await asyncio.to_thread(
             _enrich_contributors_with_commit_bookends,
             full_name, contributors, providers,
@@ -648,6 +677,8 @@ async def gather_context(  # noqa: C901, PLR0915
             repository_metadata.get("README"),
             repository_metadata.get("description"),
         )
+        # Preserve citation evidence before the prompt cleaner strips links.
+        citation_readme = readme_content
         if not readme_content:
             warnings.append("Repository README content is not available")
             readme_content = ""
@@ -732,7 +763,9 @@ async def gather_context(  # noqa: C901, PLR0915
             "full_name": full_name,
             "metadata": repository_metadata,
             "readme_content": readme_content,
+            "project_citations": project_citations(citation_readme, aux_files),
             "contributors": contributors,
+            "contributor_coverage": contributor_coverage,
             "languages": languages,
             "gimie_jsonld": gimie_jsonld,
             "aux_files": aux_files,

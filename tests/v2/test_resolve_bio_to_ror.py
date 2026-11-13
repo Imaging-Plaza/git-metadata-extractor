@@ -195,13 +195,13 @@ def test_stage_resolves_from_bio_at_phrase():
     provider = _StubProvider(
         hits={
             "Google DeepMind": [
-                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/deepmind"},
+                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/000000001"},
                 {"score": 0.50, "types": ["company"], "name": "Google"},
             ],
         },
     )
     result = _run(reconciled, provider)
-    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/deepmind"]
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/000000001"]
     assert result.persons_resolved == 1
     assert result.memberships_created == 1
     assert result.queries_accepted == 1
@@ -317,7 +317,7 @@ def test_stage_enriches_when_skip_disabled():
     provider = _StubProvider(
         hits={
             "Google DeepMind": [
-                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/deepmind"},
+                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/000000001"},
                 {"score": 0.40, "types": ["company"], "name": "Other"},
             ],
         },
@@ -326,7 +326,7 @@ def test_stage_enriches_when_skip_disabled():
     # Both Memberships now present — additive enrichment.
     org_ids = sorted(_membership_org_ids(reconciled, person_id="p1"))
     assert "https://ror.org/companyx" in org_ids
-    assert "https://ror.org/deepmind" in org_ids
+    assert "https://ror.org/000000001" in org_ids
 
 
 @pytest.mark.parametrize("bio_key", BIO_KEYS)
@@ -341,13 +341,13 @@ def test_stage_reads_bio_under_every_key_shape(bio_key):
     provider = _StubProvider(
         hits={
             "Google DeepMind": [
-                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/deepmind"},
+                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/000000001"},
                 {"score": 0.40, "types": ["company"], "name": "Other"},
             ],
         },
     )
     _run(reconciled, provider)
-    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/deepmind"]
+    assert _membership_org_ids(reconciled, person_id="p1") == ["https://ror.org/000000001"]
 
 
 @pytest.mark.parametrize("blog_key", BLOG_KEYS)
@@ -452,7 +452,7 @@ def test_stage_is_idempotent_on_re_run_unaffiliated():
     provider = _StubProvider(
         hits={
             "Google DeepMind": [
-                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/deepmind"},
+                {"score": 0.93, "types": ["company"], "name": "Google DeepMind", "ror_id": "https://ror.org/000000001"},
                 {"score": 0.40, "types": ["company"], "name": "Other"},
             ],
         },

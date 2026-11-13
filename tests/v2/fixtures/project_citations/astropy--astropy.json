@@ -1,0 +1,7 @@
+{
+  "full_name": "astropy/astropy",
+  "readme_content": "",
+  "aux_files": {
+    "CITATION.cff": "cff-version: 1.2.0\ndoi: null\npreferred-citation:\n  doi: 10.3847/1538-4357/ac7c74\n  title: 'The Astropy Project: Sustaining and Growing a Community-oriented Open-source\n    Project and the Latest Major Release (v5.0) of the Core Package'\n  type: article\n  year: 2022\ntitle: Astropy\ntype: software\n"
+  }
+}

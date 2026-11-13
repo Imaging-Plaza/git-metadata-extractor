@@ -182,7 +182,7 @@ def test_stage_reads_company_under_every_key_shape(key):
     provider = _StubProvider(
         hits={
             "Google": [
-                {"score": 0.92, "types": ["company"], "name": "Google", "ror_id": "https://ror.org/google"},
+                {"score": 0.92, "types": ["company"], "name": "Google", "ror_id": "https://ror.org/00njsd438"},
                 {"score": 0.50, "types": ["company"], "name": "Calico", "ror_id": "https://ror.org/calico"},
             ],
         },
@@ -194,11 +194,11 @@ def test_stage_reads_company_under_every_key_shape(key):
     assert "http://schema.org/affiliation" not in person
     # Affiliation is modelled as a Membership pointing to the resolved Org.
     assert _membership_org_ids(reconciled, person_id="p1") == [
-        "https://ror.org/google",
+        "https://ror.org/00njsd438",
     ]
     # The resolver also mints a minimal Organization stub for the ROR.
     org_ids = {o["id"] for o in _organizations(reconciled)}
-    assert "https://ror.org/google" in org_ids
+    assert "https://ror.org/00njsd438" in org_ids
     assert result.persons_resolved == 1
     assert result.memberships_created == 1
     assert result.organizations_created == 1
@@ -289,7 +289,7 @@ def test_stage_is_idempotent_on_re_run():
     provider = _StubProvider(
         hits={
             "Google": [
-                {"score": 0.92, "types": ["company"], "name": "Google", "ror_id": "https://ror.org/google"},
+                {"score": 0.92, "types": ["company"], "name": "Google", "ror_id": "https://ror.org/00njsd438"},
             ],
         },
     )

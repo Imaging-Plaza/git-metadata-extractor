@@ -114,8 +114,8 @@ def test_placeholder_with_resolvable_name_gets_rewritten_to_ror():
     assert org["id"] == "https://ror.org/02s376052"
     assert org["idSource"] == "pulse:ror"
     assert org["identifiers"]["pulse:ror"] == "https://ror.org/02s376052"
-    # uuid identifier dropped — no longer canonical.
-    assert "uuid" not in org["identifiers"]
+    # UUID remains required even when ROR becomes the canonical identity.
+    assert org["identifiers"]["uuid"]
     assert org["_source"] == STAGE_SOURCE_TAG
     # schema:name canonicalized to ROR display name; original kept under _original_name.
     assert org["schema:name"] == "EPFL"

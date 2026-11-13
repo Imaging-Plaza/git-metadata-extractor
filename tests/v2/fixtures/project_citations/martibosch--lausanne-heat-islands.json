@@ -1,0 +1,5 @@
+{
+  "full_name": "martibosch/lausanne-heat-islands",
+  "readme_content": "**Citation**: Bosch, M., Locatelli, M., Hamel, P., Remme, R. P., Chenal, J., and Joost, S. 2021. \"A spatially-explicit approach to simulate urban heat mitigation with InVEST (v3.8.0)\". *Geoscientific Model Development 14(6), 3521-3537*. [10.5194/gmd-14-3521-2021](https://doi.org/10.5194/gmd-14-3521-2021)\n\n    The sources for the first two files are detailed [at the Zenodo repository for this paper](https://zenodo.org/record/4384675), whereas the source of `bldg-cover.tif` is detailed at [10.5281/zenodo.4314832](https://doi.org/10.5281/zenodo.4314832). If you use these files, their sources must be properly acknowledged.",
+  "aux_files": {}
+}

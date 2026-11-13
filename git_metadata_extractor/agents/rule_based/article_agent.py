@@ -735,7 +735,23 @@ class ArticleAgentV2:
             ),
         )
 
-        query_terms = _extract_root_terms(context)
+        # Source-declared paper identifiers are stronger search seeds than a
+        # repository slug. Their citation IRIs survive independently of search.
+        query_terms: list[str] = []
+        for repository in context.get("known_repositories", []):
+            if not isinstance(repository, dict):
+                continue
+            for citation in repository.get("_project_citations") or []:
+                if not isinstance(citation, dict):
+                    continue
+                iri = _as_string(citation.get("iri"))
+                if iri:
+                    query_terms.append(
+                        iri.removeprefix("https://doi.org/").removeprefix("https://arxiv.org/abs/"),
+                    )
+                if title := _as_string(citation.get("title")):
+                    query_terms.append(title)
+        query_terms.extend(_extract_root_terms(context))
         if include_person:
             query_terms.extend(
                 _extract_person_terms(_collect_known_persons(context)),
