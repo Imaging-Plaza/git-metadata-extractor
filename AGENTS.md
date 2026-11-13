@@ -798,6 +798,17 @@ a hardcoded URL list and runs them through `/v2/extract` with configurable
 parallelism. Resumable: skips repos whose result file already exists with
 a non-`running` status.
 
+For paired rule-based/hybrid quality checks, use the 20-repository corpus at
+`config/benchmarks/sources-20.json` with
+`python -m git_metadata_extractor.experiments benchmark --include-run-report`.
+Full commands and artifact interpretation are in `docs/sources-benchmark.md`.
+`python scripts/v2/review_benchmark.py <output-directory>` reviews retained
+trials offline, including nested batches. Keep live outputs/caches under ignored
+`data/benchmarks/`. Preserve failures and unknown measurements; repository
+identity recall and final SHACL conformance do not establish citation,
+affiliation or contributor completeness. Live-provider rate limits can confound
+runtime comparisons, and incomplete usage must not be reported as zero cost.
+
 ## Sources HTTP contract
 
 The extractor does not install `open-pulse-sources` as a Python dependency.

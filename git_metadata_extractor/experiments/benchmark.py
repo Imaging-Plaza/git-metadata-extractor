@@ -167,6 +167,7 @@ async def run_benchmark(  # noqa: C901, PLR0913 - explicit matrix controls and t
     provider_mode: str = "mock",
     cache_mode: str = "cold",
     timeout_seconds: float = 1800,
+    include_run_report: bool = False,
 ) -> dict:
     if not profiles or not cases or repeats < 1 or timeout_seconds <= 0:
         msg = "Profiles, cases, positive repeats and timeout are required"
@@ -205,6 +206,7 @@ async def run_benchmark(  # noqa: C901, PLR0913 - explicit matrix controls and t
             "provider_mode": provider_mode,
             "repeats": repeats,
             "timeout_seconds": timeout_seconds,
+            "include_run_report": include_run_report,
             "profiles": [
                 execution_manifest(catalog, p, provider_mode) for p in profiles
             ],
@@ -239,6 +241,7 @@ async def run_benchmark(  # noqa: C901, PLR0913 - explicit matrix controls and t
                             cache_dir=directory / "cache",
                             catalog=catalog,
                             provider_mode=provider_mode,
+                            include_run_report=include_run_report,
                         )
 
                     if cache_mode == "warm_pipeline":

@@ -8,6 +8,57 @@ import json
 import pytest
 
 
+@pytest.mark.parametrize("include_report", [False, True])
+def test_benchmark_run_report_is_opt_in(tmp_path, include_report):
+    from git_metadata_extractor.experiments.benchmark import (
+        BenchmarkCase,
+        run_benchmark,
+    )
+    from git_metadata_extractor.experiments.models import PipelineProfile
+
+    output = tmp_path / "benchmark"
+    options = {"include_run_report": True} if include_report else {}
+    report = asyncio.run(
+        run_benchmark(
+            [PipelineProfile(name="baseline")],
+            [BenchmarkCase(id="known", source_url="https://github.com/octocat/Hello-World")],
+            output_dir=output,
+            **options,
+        ),
+    )
+    assert report["trials"][0]["status"] == "completed"
+    result = json.loads((output / "baseline" / "known" / "1" / "result.json").read_text())
+    assert bool(result.get("run_report")) is include_report
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert manifest["include_run_report"] is include_report
+
+
+@pytest.mark.parametrize("include_report", [False, True])
+def test_benchmark_cli_forwards_run_report_option(tmp_path, monkeypatch, include_report):
+    from git_metadata_extractor.experiments import __main__ as cli
+    from git_metadata_extractor.experiments.models import PipelineProfile
+
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text(json.dumps({"cases": []}))
+    captured = {}
+
+    async def fake_benchmark(*_args, **kwargs):
+        captured.update(kwargs)
+        return {"profiles": {}, "trials": []}
+
+    monkeypatch.setattr(cli, "run_benchmark", fake_benchmark)
+    monkeypatch.setattr(cli, "load_profile", lambda _path: PipelineProfile(name="baseline"))
+    argv = [
+        "experiments", "benchmark", "--profile", "profile.yaml",
+        "--corpus", str(corpus), "--output", str(tmp_path / "out"),
+    ]
+    if include_report:
+        argv.append("--include-run-report")
+    monkeypatch.setattr("sys.argv", argv)
+    assert cli.main() == 0
+    assert captured["include_run_report"] is include_report
+
+
 def test_metrics_do_not_count_historical_or_pipeline_cached_tokens():
     from git_metadata_extractor.experiments.benchmark import BenchmarkCase, measure
 

@@ -1,0 +1,424 @@
+{
+  "cases": [
+    {
+      "id": "sdsc-ordes--gimie",
+      "source_url": "https://github.com/sdsc-ordes/gimie",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "schema:name",
+          "value": "gimie"
+        },
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "pulse:repositoryHandle",
+          "value": "sdsc-ordes/gimie"
+        }
+      ]
+    },
+    {
+      "id": "imaging-plaza--git-metadata-extractor",
+      "source_url": "https://github.com/Imaging-Plaza/git-metadata-extractor",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/Imaging-Plaza/git-metadata-extractor",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/Imaging-Plaza/git-metadata-extractor",
+          "predicate": "schema:name",
+          "value": "git-metadata-extractor"
+        },
+        {
+          "subject": "https://github.com/Imaging-Plaza/git-metadata-extractor",
+          "predicate": "pulse:repositoryHandle",
+          "value": "Imaging-Plaza/git-metadata-extractor"
+        }
+      ]
+    },
+    {
+      "id": "epfl-lcsb--etfl",
+      "source_url": "https://github.com/EPFL-LCSB/etfl",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/EPFL-LCSB/etfl",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/EPFL-LCSB/etfl",
+          "predicate": "schema:name",
+          "value": "etfl"
+        },
+        {
+          "subject": "https://github.com/EPFL-LCSB/etfl",
+          "predicate": "pulse:repositoryHandle",
+          "value": "EPFL-LCSB/etfl"
+        }
+      ]
+    },
+    {
+      "id": "bluebrain--snap",
+      "source_url": "https://github.com/BlueBrain/snap",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/BlueBrain/snap",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/BlueBrain/snap",
+          "predicate": "schema:name",
+          "value": "snap"
+        },
+        {
+          "subject": "https://github.com/BlueBrain/snap",
+          "predicate": "pulse:repositoryHandle",
+          "value": "BlueBrain/snap"
+        }
+      ]
+    },
+    {
+      "id": "ethz-asl--kalibr",
+      "source_url": "https://github.com/ethz-asl/kalibr",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/ethz-asl/kalibr",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/ethz-asl/kalibr",
+          "predicate": "schema:name",
+          "value": "kalibr"
+        },
+        {
+          "subject": "https://github.com/ethz-asl/kalibr",
+          "predicate": "pulse:repositoryHandle",
+          "value": "ethz-asl/kalibr"
+        }
+      ]
+    },
+    {
+      "id": "ethz-adrl--control-toolbox",
+      "source_url": "https://github.com/ethz-adrl/control-toolbox",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "schema:name",
+          "value": "control-toolbox"
+        },
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "pulse:repositoryHandle",
+          "value": "ethz-adrl/control-toolbox"
+        }
+      ]
+    },
+    {
+      "id": "swissdatasciencecenter--renku",
+      "source_url": "https://github.com/SwissDataScienceCenter/renku",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/SwissDataScienceCenter/renku",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/SwissDataScienceCenter/renku",
+          "predicate": "schema:name",
+          "value": "renku"
+        },
+        {
+          "subject": "https://github.com/SwissDataScienceCenter/renku",
+          "predicate": "pulse:repositoryHandle",
+          "value": "SwissDataScienceCenter/renku"
+        }
+      ]
+    },
+    {
+      "id": "martibosch--lausanne-heat-islands",
+      "source_url": "https://github.com/martibosch/lausanne-heat-islands",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "schema:name",
+          "value": "lausanne-heat-islands"
+        },
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "pulse:repositoryHandle",
+          "value": "martibosch/lausanne-heat-islands"
+        }
+      ]
+    },
+    {
+      "id": "epfl-lara--inox",
+      "source_url": "https://github.com/epfl-lara/inox",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/epfl-lara/inox",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/epfl-lara/inox",
+          "predicate": "schema:name",
+          "value": "inox"
+        },
+        {
+          "subject": "https://github.com/epfl-lara/inox",
+          "predicate": "pulse:repositoryHandle",
+          "value": "epfl-lara/inox"
+        }
+      ]
+    },
+    {
+      "id": "lab-cosmo--pet-mad",
+      "source_url": "https://github.com/lab-cosmo/pet-mad",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/lab-cosmo/pet-mad",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/lab-cosmo/pet-mad",
+          "predicate": "schema:name",
+          "value": "pet-mad"
+        },
+        {
+          "subject": "https://github.com/lab-cosmo/pet-mad",
+          "predicate": "pulse:repositoryHandle",
+          "value": "lab-cosmo/pet-mad"
+        }
+      ]
+    },
+    {
+      "id": "astropy--astropy",
+      "source_url": "https://github.com/astropy/astropy",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "schema:name",
+          "value": "astropy"
+        },
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "pulse:repositoryHandle",
+          "value": "astropy/astropy"
+        }
+      ]
+    },
+    {
+      "id": "scipy--scipy",
+      "source_url": "https://github.com/scipy/scipy",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "schema:name",
+          "value": "scipy"
+        },
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "pulse:repositoryHandle",
+          "value": "scipy/scipy"
+        }
+      ]
+    },
+    {
+      "id": "antsx--ants",
+      "source_url": "https://github.com/ANTsX/ANTs",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "schema:name",
+          "value": "ANTs"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "pulse:repositoryHandle",
+          "value": "ANTsX/ANTs"
+        }
+      ]
+    },
+    {
+      "id": "cbfinn--maml",
+      "source_url": "https://github.com/cbfinn/maml",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "schema:name",
+          "value": "maml"
+        },
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "pulse:repositoryHandle",
+          "value": "cbfinn/maml"
+        }
+      ]
+    },
+    {
+      "id": "cheng-zhao--fcfc",
+      "source_url": "https://github.com/cheng-zhao/FCFC",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "schema:name",
+          "value": "FCFC"
+        },
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "pulse:repositoryHandle",
+          "value": "cheng-zhao/FCFC"
+        }
+      ]
+    },
+    {
+      "id": "madler--zlib",
+      "source_url": "https://github.com/madler/zlib",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/madler/zlib",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/madler/zlib",
+          "predicate": "schema:name",
+          "value": "zlib"
+        },
+        {
+          "subject": "https://github.com/madler/zlib",
+          "predicate": "pulse:repositoryHandle",
+          "value": "madler/zlib"
+        }
+      ]
+    },
+    {
+      "id": "jqlang--jq",
+      "source_url": "https://github.com/jqlang/jq",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/jqlang/jq",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/jqlang/jq",
+          "predicate": "schema:name",
+          "value": "jq"
+        },
+        {
+          "subject": "https://github.com/jqlang/jq",
+          "predicate": "pulse:repositoryHandle",
+          "value": "jqlang/jq"
+        }
+      ]
+    },
+    {
+      "id": "torvalds--linux",
+      "source_url": "https://github.com/torvalds/linux",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "schema:name",
+          "value": "linux"
+        },
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "pulse:repositoryHandle",
+          "value": "torvalds/linux"
+        }
+      ]
+    },
+    {
+      "id": "octocat--hello-world",
+      "source_url": "https://github.com/octocat/Hello-World",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/octocat/Hello-World",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/octocat/Hello-World",
+          "predicate": "schema:name",
+          "value": "Hello-World"
+        },
+        {
+          "subject": "https://github.com/octocat/Hello-World",
+          "predicate": "pulse:repositoryHandle",
+          "value": "octocat/Hello-World"
+        }
+      ]
+    },
+    {
+      "id": "google--brotli",
+      "source_url": "https://github.com/google/brotli",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/google/brotli",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/google/brotli",
+          "predicate": "schema:name",
+          "value": "brotli"
+        },
+        {
+          "subject": "https://github.com/google/brotli",
+          "predicate": "pulse:repositoryHandle",
+          "value": "google/brotli"
+        }
+      ]
+    }
+  ]
+}

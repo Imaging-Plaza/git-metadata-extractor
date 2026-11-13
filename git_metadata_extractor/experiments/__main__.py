@@ -32,6 +32,10 @@ def main() -> int:
     )
     benchmark.add_argument("--repeats", type=int, default=1)
     benchmark.add_argument("--timeout", type=float, default=1800)
+    benchmark.add_argument(
+        "--include-run-report", action="store_true",
+        help="Include the per-request execution report in each result artifact",
+    )
     args = parser.parse_args()
     catalog = default_catalog()
     try:
@@ -60,6 +64,7 @@ def main() -> int:
                     provider_mode=args.providers,
                     cache_mode=args.cache_mode,
                     timeout_seconds=args.timeout,
+                    include_run_report=args.include_run_report,
                 ),
             )
             print(json.dumps(report["profiles"], indent=2))

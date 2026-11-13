@@ -57,6 +57,9 @@ nav:
       - Migration V1 to V2: migration-v1-to-v2.md
   - Operate it:
       - Operations Runbook: OPERATIONS_RUNBOOK.md
+      - Sources Benchmark:
+          - Run and Review: sources-benchmark.md
+          - Live Results (2026-11-13): sources-benchmark-results-2026-11-13.md
       - Documentation Publishing: publishing.md
   # Index build/refresh docs live in the open-pulse-sources repo:
   # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
